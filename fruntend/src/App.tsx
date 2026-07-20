@@ -188,7 +188,7 @@ function DashboardPage() {
               letterSpacing: "-0.02em",
             }}
           >
-            AI Website Builder
+            WebNirmaan
           </h1>
 
           <div
@@ -197,7 +197,7 @@ function DashboardPage() {
               opacity: 0.7,
             }}
           >
-            {savedSites.length} saved
+            {savedSites.length} saved websites
           </div>
         </div>
 
