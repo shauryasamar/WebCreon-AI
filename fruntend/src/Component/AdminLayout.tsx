@@ -1,6 +1,8 @@
 import { Link, Outlet, useLocation, useParams } from "react-router-dom";
 import AdminSidebar from "./AdminSidebar";
 
+const BUILDER_TOPBAR_HEIGHT = 64;
+
 const AdminLayout = () => {
   const { siteId } = useParams();
   const location = useLocation();
@@ -12,7 +14,7 @@ const AdminLayout = () => {
   return (
     <div
       style={{
-        minHeight: "calc(100vh - 60px)",
+        minHeight: "calc(100vh - 64px)",
         display: "grid",
         gridTemplateColumns: "280px minmax(0, 1fr)",
         background: "#07101d",
@@ -37,7 +39,7 @@ const AdminLayout = () => {
             gap: "16px",
             flexWrap: "wrap",
             position: "sticky",
-            top: 0,
+            top: `${BUILDER_TOPBAR_HEIGHT}px`,
             zIndex: 20,
             backdropFilter: "blur(10px)",
             background: "rgba(7,16,29,0.86)",

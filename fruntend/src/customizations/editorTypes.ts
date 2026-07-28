@@ -9,7 +9,8 @@ export type EditorFieldType =
   | "select"
   | "color"
   | "number"
-  | "checkbox";
+  | "checkbox"
+  | "json";
 
 export type EditorFieldTarget = "props" | "theme";
 
@@ -23,6 +24,7 @@ export type EditorField = {
   max?: number;
   step?: number;
   placeholder?: string;
+  helpText?: string;
 };
 
 export type EditableBlockConfig = {

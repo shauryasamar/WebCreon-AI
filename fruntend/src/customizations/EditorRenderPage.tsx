@@ -114,7 +114,9 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
     page.flow === "checkout";
 
   const renderBlock = (block: Block, index: number) => {
-    const Component = componentRegistry[block.type];
+    const Component = componentRegistry[block.type] as
+      | React.ComponentType<any>
+      | undefined;
 
     if (!Component) {
       console.warn(`No component registered for block type: ${block.type}`);

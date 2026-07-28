@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   applyFestivalTheme,
   applyThemeMode,
@@ -21,6 +21,14 @@ type EditorSidebarProps = {
   onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
 };
 
+type JsonFieldControlProps = {
+  field: EditorField;
+  currentValue: any;
+  textColor: string;
+  isLightMode: boolean;
+  onChange: (value: any) => void;
+};
+
 function sharedInputStyle(
   isLightMode: boolean,
   textColor: string
@@ -36,6 +44,7 @@ function sharedInputStyle(
     color: textColor,
     fontSize: "14px",
     outline: "none",
+    boxSizing: "border-box",
   };
 }
 
@@ -50,6 +59,7 @@ function colorInputStyle(isLightMode: boolean): React.CSSProperties {
       : "1px solid rgba(255,255,255,0.12)",
     background: isLightMode ? "#ffffff" : "rgba(255,255,255,0.04)",
     cursor: "pointer",
+    boxSizing: "border-box",
   };
 }
 
@@ -63,6 +73,179 @@ function sectionCardStyle(isLightMode: boolean): React.CSSProperties {
       ? "rgba(17,24,39,0.04)"
       : "rgba(255,255,255,0.04)",
   };
+}
+
+function blockFieldCardStyle(isLightMode: boolean): React.CSSProperties {
+  return {
+    display: "grid",
+    gap: "8px",
+    padding: "12px",
+    borderRadius: "12px",
+    border: isLightMode
+      ? "1px solid rgba(17,24,39,0.08)"
+      : "1px solid rgba(255,255,255,0.08)",
+    background: isLightMode ? "#ffffff" : "rgba(255,255,255,0.03)",
+  };
+}
+
+function getJsonEditorValue(value: any) {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (value === undefined || value === null) {
+    return "";
+  }
+
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return "";
+  }
+}
+
+function getFieldGroupTitle(field: EditorField) {
+  if (["brandName", "tagline"].includes(field.key)) return "Brand";
+
+  if (["showSearch", "showAccount", "showCart"].includes(field.key)) {
+    return "Actions";
+  }
+
+  if (
+    [
+      "navbar_variant",
+      "navbar_position",
+      "navbar_height",
+      "navbar_max_width",
+      "navbar_radius",
+      "navbar_padding_x",
+      "navbar_padding_y",
+    ].includes(field.key)
+  ) {
+    return "Layout";
+  }
+
+  if (
+    [
+      "navbar_bg",
+      "navbar_text_color",
+      "navbar_muted_text_color",
+      "navbar_border_color",
+    ].includes(field.key)
+  ) {
+    return "Colors";
+  }
+
+  return "Settings";
+}
+
+function groupFields(fields: EditorField[]) {
+  const groups = new Map<string, EditorField[]>();
+
+  fields.forEach((field) => {
+    const groupTitle = getFieldGroupTitle(field);
+    const existing = groups.get(groupTitle) || [];
+    existing.push(field);
+    groups.set(groupTitle, existing);
+  });
+
+  return Array.from(groups.entries()).map(([title, items]) => ({
+    title,
+    items,
+  }));
+}
+
+function JsonFieldControl({
+  field,
+  currentValue,
+  textColor,
+  isLightMode,
+  onChange,
+}: JsonFieldControlProps) {
+  const [rawValue, setRawValue] = useState(getJsonEditorValue(currentValue));
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRawValue(getJsonEditorValue(currentValue));
+    setError(null);
+  }, [currentValue, field.key]);
+
+  const inputStyle = useMemo(
+    () => ({
+      ...sharedInputStyle(isLightMode, textColor),
+      resize: "vertical" as const,
+      minHeight: "140px",
+      fontFamily:
+        'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+      fontSize: "12px",
+      lineHeight: 1.5,
+      border: error
+        ? "1px solid #ef4444"
+        : isLightMode
+        ? "1px solid rgba(17,24,39,0.12)"
+        : "1px solid rgba(255,255,255,0.12)",
+    }),
+    [error, isLightMode, textColor]
+  );
+
+  const handleBlur = () => {
+    const trimmed = rawValue.trim();
+
+    if (!trimmed) {
+      setError(null);
+      onChange("");
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      setError(null);
+      onChange(parsed);
+    } catch {
+      setError("Invalid JSON. Please fix the format before leaving this field.");
+    }
+  };
+
+  return (
+    <div style={{ display: "grid", gap: "6px" }}>
+      <textarea
+        value={rawValue}
+        placeholder={field.placeholder || ""}
+        onChange={(e) => {
+          setRawValue(e.target.value);
+          if (error) setError(null);
+        }}
+        onBlur={handleBlur}
+        rows={8}
+        style={inputStyle}
+      />
+
+      {field.helpText ? (
+        <div
+          style={{
+            fontSize: "12px",
+            lineHeight: 1.5,
+            opacity: 0.72,
+          }}
+        >
+          {field.helpText}
+        </div>
+      ) : null}
+
+      {error ? (
+        <div
+          style={{
+            fontSize: "12px",
+            lineHeight: 1.4,
+            color: "#ef4444",
+            fontWeight: 500,
+          }}
+        >
+          {error}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function renderFieldControl(
@@ -123,7 +306,7 @@ function renderFieldControl(
     return (
       <input
         type="number"
-        value={currentValue ?? ""}
+        value={currentValue === undefined || currentValue === null ? "" : currentValue}
         min={field.min}
         max={field.max}
         step={field.step}
@@ -141,17 +324,25 @@ function renderFieldControl(
         style={{
           display: "flex",
           alignItems: "center",
-          gap: "10px",
+          justifyContent: "space-between",
+          gap: "12px",
+          padding: "10px 12px",
+          borderRadius: "10px",
+          border: isLightMode
+            ? "1px solid rgba(17,24,39,0.08)"
+            : "1px solid rgba(255,255,255,0.08)",
+          background: isLightMode ? "#ffffff" : "rgba(255,255,255,0.03)",
           fontSize: "14px",
           color: textColor,
+          cursor: "pointer",
         }}
       >
+        <span style={{ fontWeight: 600 }}>{field.label}</span>
         <input
           type="checkbox"
           checked={Boolean(currentValue)}
           onChange={(e) => onChange(e.target.checked)}
         />
-        <span>{field.label}</span>
       </label>
     );
   }
@@ -167,6 +358,18 @@ function renderFieldControl(
         }
         onChange={(e) => onChange(e.target.value)}
         style={colorInputStyle(isLightMode)}
+      />
+    );
+  }
+
+  if (field.type === "json") {
+    return (
+      <JsonFieldControl
+        field={field}
+        currentValue={currentValue}
+        textColor={textColor}
+        isLightMode={isLightMode}
+        onChange={onChange}
       />
     );
   }
@@ -202,6 +405,13 @@ export default function EditorSidebar({
     "holi",
   ];
 
+  const fieldGroups =
+    editableConfig?.fields && editableConfig.fields.length > 0
+      ? groupFields(editableConfig.fields)
+      : [];
+
+  const isNavbarSelected = selectedBlock?.type === "navbar";
+
   const handleFieldChange = (field: EditorField, value: any) => {
     if (field.target === "theme") {
       onSiteDefinitionChange(
@@ -220,7 +430,7 @@ export default function EditorSidebar({
   return (
     <aside
       style={{
-        width: "320px",
+        width: "100%",
         flexShrink: 0,
         borderLeft: isLightMode
           ? "1px solid rgba(17,24,39,0.08)"
@@ -228,11 +438,12 @@ export default function EditorSidebar({
         background: isLightMode
           ? "rgba(255,255,255,0.96)"
           : "rgba(15,23,42,0.96)",
-        position: "sticky",
-        top: 0,
-        height: "100vh",
-        overflowY: "auto",
+        position: "relative",
+        top: "auto",
+        height: "100%",
+        overflowY: "visible",
         padding: "20px",
+        boxSizing: "border-box",
       }}
     >
       <div style={{ display: "flex", gap: "8px", marginBottom: "18px" }}>
@@ -520,22 +731,63 @@ export default function EditorSidebar({
           </section>
         </div>
       ) : (
-        <div>
-          <h3 style={{ marginTop: 0, marginBottom: "8px" }}>
-            {editableConfig?.displayName || "Selected block"}
-          </h3>
+        <div style={{ display: "grid", gap: "16px" }}>
+          <div>
+            <h3 style={{ marginTop: 0, marginBottom: "8px" }}>
+              {editableConfig?.displayName || "Selected block"}
+            </h3>
+
+            {!selectedBlock ? (
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "14px",
+                  opacity: 0.75,
+                  lineHeight: 1.5,
+                }}
+              >
+                Click any block on the page to start editing it.
+              </p>
+            ) : isNavbarSelected ? (
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "14px",
+                  opacity: 0.75,
+                  lineHeight: 1.5,
+                }}
+              >
+                Adjust brand, actions, layout, spacing, and colors for the storefront
+                navbar.
+              </p>
+            ) : (
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "14px",
+                  opacity: 0.75,
+                  lineHeight: 1.5,
+                }}
+              >
+                Update the selected block settings here.
+              </p>
+            )}
+          </div>
 
           {!selectedBlock ? (
-            <p
-              style={{
-                margin: 0,
-                fontSize: "14px",
-                opacity: 0.75,
-                lineHeight: 1.5,
-              }}
-            >
-              Click any block on the page to start editing it.
-            </p>
+            <div style={sectionCardStyle(isLightMode)}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "13px",
+                  opacity: 0.72,
+                  lineHeight: 1.5,
+                }}
+              >
+                Select a visible block from the page canvas to edit its content
+                and appearance.
+              </p>
+            </div>
           ) : !editableConfig ? (
             <div style={sectionCardStyle(isLightMode)}>
               <div>
@@ -564,12 +816,7 @@ export default function EditorSidebar({
               </p>
             </div>
           ) : (
-            <div
-              style={{
-                display: "grid",
-                gap: "16px",
-              }}
-            >
+            <>
               <div style={sectionCardStyle(isLightMode)}>
                 <div
                   style={{
@@ -583,38 +830,82 @@ export default function EditorSidebar({
                 <div style={{ fontWeight: 600 }}>{selectedBlock.type}</div>
               </div>
 
-              {editableConfig.fields.map((field) => {
-                const currentValue =
-                  field.target === "theme"
-                    ? siteDefinition.theme?.[
-                        field.key as keyof typeof siteDefinition.theme
-                      ]
-                    : selectedBlock.props?.[field.key];
-
-                return (
-                  <div key={field.key} style={{ display: "grid", gap: "8px" }}>
-                    {field.type !== "checkbox" ? (
-                      <label
-                        style={{
-                          fontSize: "13px",
-                          fontWeight: 600,
-                        }}
+              {fieldGroups.map((group) => (
+                <section key={group.title} style={sectionCardStyle(isLightMode)}>
+                  <div>
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        marginBottom: "4px",
+                      }}
+                    >
+                      {group.title}
+                    </div>
+                    {isNavbarSelected && group.title === "Layout" ? (
+                      <div
+                        style={{ fontSize: "12px", opacity: 0.72, lineHeight: 1.5 }}
                       >
-                        {field.label}
-                      </label>
+                        Static scrolls with the page, sticky stays visible while
+                        scrolling, and fixed preview position creates a stronger pinned
+                        effect inside the builder preview.
+                      </div>
                     ) : null}
-
-                    {renderFieldControl(
-                      field,
-                      currentValue,
-                      textColor,
-                      isLightMode,
-                      (value) => handleFieldChange(field, value)
-                    )}
                   </div>
-                );
-              })}
-            </div>
+
+                  {group.items.map((field) => {
+                    const currentValue =
+                      field.target === "theme"
+                        ? siteDefinition.theme?.[
+                            field.key as keyof typeof siteDefinition.theme
+                          ]
+                        : selectedBlock.props?.[field.key];
+
+                    return (
+                      <div
+                        key={field.key}
+                        style={
+                          field.type === "checkbox"
+                            ? undefined
+                            : blockFieldCardStyle(isLightMode)
+                        }
+                      >
+                        {field.type !== "checkbox" ? (
+                          <label
+                            style={{
+                              fontSize: "13px",
+                              fontWeight: 600,
+                            }}
+                          >
+                            {field.label}
+                          </label>
+                        ) : null}
+
+                        {renderFieldControl(
+                          field,
+                          currentValue,
+                          textColor,
+                          isLightMode,
+                          (value) => handleFieldChange(field, value)
+                        )}
+
+                        {field.helpText && field.type !== "json" ? (
+                          <div
+                            style={{
+                              fontSize: "12px",
+                              lineHeight: 1.5,
+                              opacity: 0.68,
+                            }}
+                          >
+                            {field.helpText}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </section>
+              ))}
+            </>
           )}
         </div>
       )}
