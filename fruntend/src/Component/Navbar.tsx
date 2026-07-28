@@ -62,8 +62,7 @@ const iconStyle: React.CSSProperties = {
   flexShrink: 0,
 };
 
-const isLightTheme = (theme?: NavbarTheme) =>
-  theme?.mode === "light" || theme?.name === "light";
+const isLightTheme = (theme?: NavbarTheme) => theme?.mode === "light";
 
 const getInitials = (brandName?: string) => {
   if (!brandName) return "SB";
@@ -142,10 +141,11 @@ const Navbar: React.FC<NavbarProps> = ({
   const base = `/builder/${siteId ?? ""}`;
   const light = isLightTheme(theme);
 
-  const textColor =
-    theme?.navbar_text_color ||
-    theme?.text_color ||
-    (light ? "#0f172a" : "#f8fafc");
+  const variant = theme?.navbar_variant || "soft";
+  const position: NavbarPosition = theme?.navbar_position || "sticky";
+
+  const resolvedHomePath = toBuilderPath(base, homeRoute);
+  const resolvedCartPath = toBuilderPath(base, cartRoute);
 
   const accentColor = theme?.accent_color || "#2563eb";
   const primaryBg = theme?.primary_bg || (light ? "#f8fafc" : "#020617");
@@ -155,11 +155,8 @@ const Navbar: React.FC<NavbarProps> = ({
       ? navigation.storefront
       : [];
 
-  const variant = theme?.navbar_variant || "soft";
-  const position: NavbarPosition = theme?.navbar_position || "sticky";
-
-  const resolvedHomePath = toBuilderPath(base, homeRoute);
-  const resolvedCartPath = toBuilderPath(base, cartRoute);
+  const defaultTextColor = theme?.text_color || (light ? "#0f172a" : "#f8fafc");
+  const textColor = theme?.navbar_text_color || defaultTextColor;
 
   const defaultMutedText = light
     ? "rgba(15,23,42,0.64)"
@@ -168,19 +165,10 @@ const Navbar: React.FC<NavbarProps> = ({
 
   const defaultOuterBorder = light
     ? "1px solid rgba(15,23,42,0.06)"
-    : "1px solid rgba(255,255,255,0.06)";
+    : "1px solid rgba(255,255,255,0.05)";
 
   const defaultShellBorder = light
     ? "1px solid rgba(15,23,42,0.08)"
-    : "1px solid rgba(255,255,255,0.08)";
-
-  const borderColor = theme?.navbar_border_color;
-  const outerBorder = borderColor ? `1px solid ${borderColor}` : defaultOuterBorder;
-  const shellBorder = borderColor ? `1px solid ${borderColor}` : defaultShellBorder;
-
-  const softSurface = light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)";
-  const softBorder = light
-    ? "1px solid rgba(15,23,42,0.07)"
     : "1px solid rgba(255,255,255,0.08)";
 
   const navbarHeight = theme?.navbar_height ?? 72;
@@ -189,39 +177,50 @@ const Navbar: React.FC<NavbarProps> = ({
   const navbarPaddingX = theme?.navbar_padding_x;
   const navbarPaddingY = theme?.navbar_padding_y;
 
-  let outerBackground = primaryBg;
-  let shellBg = light ? "rgba(255,255,255,0.84)" : "rgba(15,23,42,0.78)";
+  const hasCustomNavbarBg = Boolean(theme?.navbar_bg);
+  const hasCustomNavbarBorder = Boolean(theme?.navbar_border_color);
+
+  const darkOuterSurface = "#081226";
+  const darkShellSurface = hasCustomNavbarBg ? theme!.navbar_bg! : "#0f172a";
+  const darkSoftSurface = "rgba(255,255,255,0.06)";
+
+  const lightOuterSurface = primaryBg;
+  const lightShellSurface = hasCustomNavbarBg ? theme!.navbar_bg! : "#ffffff";
+  const lightSoftSurface = "rgba(15,23,42,0.04)";
+
+  let outerBackground = light ? lightOuterSurface : darkOuterSurface;
+  let shellBg = light ? lightShellSurface : darkShellSurface;
   let shellBoxShadow = light
     ? "0 10px 30px rgba(15,23,42,0.06)"
-    : "0 12px 32px rgba(0,0,0,0.28)";
+    : "0 12px 32px rgba(0,0,0,0.30)";
   let shellRadius = navbarRadius !== undefined ? `${navbarRadius}px` : "20px";
 
   let wrapperPadding = "14px 16px";
   let shellPadding = "12px 14px";
-  let enableBackdrop = position === "sticky" || position === "fixed";
 
   if (variant === "solid") {
-    outerBackground = theme?.navbar_bg || primaryBg;
+    outerBackground = light ? lightShellSurface : darkShellSurface;
     shellBg = "transparent";
     shellBoxShadow = "none";
     shellRadius = navbarRadius !== undefined ? `${navbarRadius}px` : "0px";
     wrapperPadding = "0";
     shellPadding = "14px 16px";
-    enableBackdrop = false;
   }
 
   if (variant === "floating") {
-    outerBackground = position === "static" ? primaryBg : "transparent";
-    shellBg =
-      theme?.navbar_bg ||
-      (light ? "rgba(255,255,255,0.88)" : "rgba(15,23,42,0.82)");
+    outerBackground =
+      position === "static"
+        ? light
+          ? lightOuterSurface
+          : darkOuterSurface
+        : "transparent";
+    shellBg = light ? lightShellSurface : darkShellSurface;
     shellBoxShadow = light
       ? "0 14px 34px rgba(15,23,42,0.10)"
       : "0 14px 34px rgba(0,0,0,0.34)";
     shellRadius = navbarRadius !== undefined ? `${navbarRadius}px` : "22px";
     wrapperPadding = "16px";
     shellPadding = "12px 14px";
-    enableBackdrop = position === "sticky" || position === "fixed";
   }
 
   if (variant === "transparent") {
@@ -231,15 +230,37 @@ const Navbar: React.FC<NavbarProps> = ({
     shellRadius = navbarRadius !== undefined ? `${navbarRadius}px` : "0px";
     wrapperPadding = "10px 16px";
     shellPadding = "10px 0";
-    enableBackdrop = false;
   }
 
   if (variant === "soft") {
-    outerBackground = primaryBg;
-    shellBg =
-      theme?.navbar_bg ||
-      (light ? "rgba(255,255,255,0.84)" : "rgba(15,23,42,0.78)");
+    outerBackground = light ? lightOuterSurface : darkOuterSurface;
+    shellBg = light ? lightShellSurface : darkShellSurface;
   }
+
+  const outerBorder = hasCustomNavbarBorder
+    ? `1px solid ${theme!.navbar_border_color!}`
+    : defaultOuterBorder;
+
+  const shellBorder = hasCustomNavbarBorder
+    ? `1px solid ${theme!.navbar_border_color!}`
+    : defaultShellBorder;
+
+  const softSurface =
+    variant === "transparent"
+      ? "transparent"
+      : light
+      ? lightSoftSurface
+      : darkSoftSurface;
+
+  const softBorder = hasCustomNavbarBorder
+    ? `1px solid ${theme!.navbar_border_color!}`
+    : light
+    ? "1px solid rgba(15,23,42,0.07)"
+    : "1px solid rgba(255,255,255,0.08)";
+
+  const iconButtonBg = softSurface;
+  const cartButtonBg = light ? "#0f172a" : "#ffffff";
+  const cartButtonText = light ? "#ffffff" : "#0f172a";
 
   const resolvedWrapperPadding =
     navbarPaddingY !== undefined || navbarPaddingX !== undefined
@@ -262,8 +283,6 @@ const Navbar: React.FC<NavbarProps> = ({
       style={{
         ...getNavbarPositionStyle(position, topOffset, fixedBounds),
         padding: resolvedWrapperPadding,
-        backdropFilter: enableBackdrop ? "blur(18px)" : undefined,
-        WebkitBackdropFilter: enableBackdrop ? "blur(18px)" : undefined,
         background: outerBackground,
         borderBottom: variant === "floating" ? "none" : outerBorder,
         boxSizing: "border-box",
@@ -379,8 +398,7 @@ const Navbar: React.FC<NavbarProps> = ({
                   flexWrap: "wrap",
                   padding: "6px",
                   borderRadius: "16px",
-                  background:
-                    variant === "transparent" ? "transparent" : softSurface,
+                  background: softSurface,
                   border: variant === "transparent" ? "none" : softBorder,
                 }}
               >
@@ -432,7 +450,7 @@ const Navbar: React.FC<NavbarProps> = ({
                   height: "42px",
                   borderRadius: "14px",
                   border: softBorder,
-                  background: softSurface,
+                  background: iconButtonBg,
                   color: textColor,
                   display: "flex",
                   alignItems: "center",
@@ -456,7 +474,7 @@ const Navbar: React.FC<NavbarProps> = ({
                   height: "42px",
                   borderRadius: "14px",
                   border: softBorder,
-                  background: softSurface,
+                  background: iconButtonBg,
                   color: textColor,
                   display: "flex",
                   alignItems: "center",
@@ -483,8 +501,8 @@ const Navbar: React.FC<NavbarProps> = ({
                   padding: "0 14px",
                   borderRadius: "14px",
                   border: softBorder,
-                  background: light ? "#0f172a" : "#ffffff",
-                  color: light ? "#ffffff" : "#0f172a",
+                  background: cartButtonBg,
+                  color: cartButtonText,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",

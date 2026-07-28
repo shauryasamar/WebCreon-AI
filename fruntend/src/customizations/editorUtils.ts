@@ -123,37 +123,32 @@ const DEFAULT_DARK_THEME: Partial<ThemeValues> = {
   navbar_padding_y: 14,
 };
 
-const FESTIVAL_THEME_PRESETS: Record<FestivalThemeKey, Partial<ThemeValues>> = {
+const FESTIVAL_THEME_PRESETS: Record<
+  FestivalThemeKey,
+  Omit<Partial<ThemeValues>, "mode">
+> = {
   none: {},
   diwali: {
     festival_theme: "diwali",
     accent_color: "#f59e0b",
-    primary_bg: "#1f172a",
-    text_color: "#fff7ed",
     brand_tone: "Warm and festive",
     visual_style: "Elegant celebration",
   },
   christmas: {
     festival_theme: "christmas",
     accent_color: "#dc2626",
-    primary_bg: "#0f2e1f",
-    text_color: "#f0fdf4",
     brand_tone: "Cozy and joyful",
     visual_style: "Classic festive",
   },
   eid: {
     festival_theme: "eid",
     accent_color: "#14b8a6",
-    primary_bg: "#102a43",
-    text_color: "#f8fafc",
     brand_tone: "Refined and celebratory",
     visual_style: "Modern festive",
   },
   holi: {
     festival_theme: "holi",
     accent_color: "#9333ea",
-    primary_bg: "#fff7ed",
-    text_color: "#1f2937",
     brand_tone: "Playful and vibrant",
     visual_style: "Colorful festive",
   },
@@ -175,6 +170,79 @@ function buildGlobalNavbarBlock(siteDefinition: EditorSiteDefinition): EditorBlo
       showCart: siteDefinition.navbar?.showCart ?? true,
     },
   };
+}
+
+function getFestivalThemeOverrides(
+  preset: FestivalThemeKey,
+  mode: ThemeMode
+): Partial<ThemeValues> {
+  const isDark = mode === "dark";
+
+  switch (preset) {
+    case "diwali":
+      return {
+        ...FESTIVAL_THEME_PRESETS.diwali,
+        primary_bg: isDark ? "#1f172a" : "#fff7ed",
+        text_color: isDark ? "#fff7ed" : "#3b1d12",
+        navbar_bg: isDark ? "#2a1f3d" : "#ffffff",
+        navbar_text_color: isDark ? "#fff7ed" : "#3b1d12",
+        navbar_muted_text_color: isDark
+          ? "rgba(255,247,237,0.74)"
+          : "rgba(59,29,18,0.68)",
+        navbar_border_color: isDark
+          ? "rgba(245,158,11,0.24)"
+          : "rgba(245,158,11,0.18)",
+      };
+
+    case "christmas":
+      return {
+        ...FESTIVAL_THEME_PRESETS.christmas,
+        primary_bg: isDark ? "#0f2e1f" : "#f0fdf4",
+        text_color: isDark ? "#f0fdf4" : "#163a2b",
+        navbar_bg: isDark ? "#163524" : "#ffffff",
+        navbar_text_color: isDark ? "#f0fdf4" : "#163a2b",
+        navbar_muted_text_color: isDark
+          ? "rgba(240,253,244,0.72)"
+          : "rgba(22,58,43,0.68)",
+        navbar_border_color: isDark
+          ? "rgba(220,38,38,0.22)"
+          : "rgba(220,38,38,0.18)",
+      };
+
+    case "eid":
+      return {
+        ...FESTIVAL_THEME_PRESETS.eid,
+        primary_bg: isDark ? "#102a43" : "#f0fdfa",
+        text_color: isDark ? "#f8fafc" : "#123040",
+        navbar_bg: isDark ? "#173552" : "#ffffff",
+        navbar_text_color: isDark ? "#f8fafc" : "#123040",
+        navbar_muted_text_color: isDark
+          ? "rgba(248,250,252,0.74)"
+          : "rgba(18,48,64,0.68)",
+        navbar_border_color: isDark
+          ? "rgba(20,184,166,0.22)"
+          : "rgba(20,184,166,0.18)",
+      };
+
+    case "holi":
+      return {
+        ...FESTIVAL_THEME_PRESETS.holi,
+        primary_bg: isDark ? "#1a1024" : "#fff1f2",
+        text_color: isDark ? "#fdf4ff" : "#1f2937",
+        navbar_bg: isDark ? "#241235" : "#ffffff",
+        navbar_text_color: isDark ? "#fdf4ff" : "#1f2937",
+        navbar_muted_text_color: isDark
+          ? "rgba(253,244,255,0.74)"
+          : "rgba(31,41,55,0.72)",
+        navbar_border_color: isDark
+          ? "rgba(147,51,234,0.24)"
+          : "rgba(147,51,234,0.16)",
+      };
+
+    case "none":
+    default:
+      return {};
+  }
 }
 
 export function findBlockById(
@@ -414,6 +482,10 @@ export function applyThemeMode(
       ...siteDefinition.theme,
       ...base,
       mode,
+      navbar_bg: undefined,
+      navbar_text_color: undefined,
+      navbar_muted_text_color: undefined,
+      navbar_border_color: undefined,
     },
   };
 }
@@ -422,12 +494,36 @@ export function applyFestivalTheme(
   siteDefinition: EditorSiteDefinition,
   preset: FestivalThemeKey
 ): EditorSiteDefinition {
+  if (preset === "none") {
+    return {
+      ...siteDefinition,
+      theme: {
+        ...siteDefinition.theme,
+        festival_theme: undefined,
+        brand_tone: undefined,
+        visual_style: undefined,
+        accent_color: undefined,
+        primary_bg: undefined,
+        text_color: undefined,
+        navbar_bg: undefined,
+        navbar_text_color: undefined,
+        navbar_muted_text_color: undefined,
+        navbar_border_color: undefined,
+      },
+    };
+  }
+
+  const mode: ThemeMode =
+    siteDefinition.theme.mode === "dark" ? "dark" : "light";
+
+  const festivalOverrides = getFestivalThemeOverrides(preset, mode);
+
   return {
     ...siteDefinition,
     theme: {
       ...siteDefinition.theme,
-      ...FESTIVAL_THEME_PRESETS[preset],
-      festival_theme: preset === "none" ? undefined : preset,
+      ...festivalOverrides,
+      festival_theme: preset,
     },
   };
 }
