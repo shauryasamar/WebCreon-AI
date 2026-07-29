@@ -234,6 +234,7 @@ function StorefrontPage({
             selectedProduct={selectedProduct ?? undefined}
             selectedBlockId={selectedBlockId}
             onSelectBlock={onSelectBlock}
+            theme={siteDefinition.theme}
           />
         ) : (
           <RenderPage

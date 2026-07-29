@@ -2,6 +2,15 @@ import React, { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useCart } from "../CartContext";
 
+type CartTheme = {
+  name?: string;
+  mode?: string;
+  primary_bg?: string;
+  text_color?: string;
+  accent_color?: string;
+  festival_theme?: string;
+};
+
 type CartSidebarProps = {
   title?: string;
   empty_title?: string;
@@ -20,9 +29,83 @@ type CartSidebarProps = {
   note?: string;
   show_promo?: boolean;
   show_summary?: boolean;
-  theme?: "dark" | "light";
+  max_width?: number;
+  min_height?: number;
+  border_radius?: number;
+  card_radius?: number;
+  background_color?: string;
+  panel_color?: string;
+  card_color?: string;
+  text_color?: string;
+  muted_text_color?: string;
+  border_color?: string;
+  accent_color?: string;
+  theme?: CartTheme;
   accentColor?: string;
 };
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function normalizeHex(hex?: string) {
+  if (!hex) return null;
+  const cleaned = hex.trim().replace("#", "");
+  if (/^[0-9a-fA-F]{3}$/.test(cleaned)) {
+    return `#${cleaned
+      .split("")
+      .map((char) => char + char)
+      .join("")
+      .toLowerCase()}`;
+  }
+  if (/^[0-9a-fA-F]{6}$/.test(cleaned)) {
+    return `#${cleaned.toLowerCase()}`;
+  }
+  return null;
+}
+
+function hexToRgb(hex?: string) {
+  const normalized = normalizeHex(hex);
+  if (!normalized) return null;
+
+  const value = normalized.slice(1);
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+
+  return { r, g, b };
+}
+
+function rgbToHex(r: number, g: number, b: number) {
+  const toHex = (value: number) =>
+    clamp(Math.round(value), 0, 255)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function mixHex(colorA: string, colorB: string, weight = 0.5) {
+  const a = hexToRgb(colorA);
+  const b = hexToRgb(colorB);
+
+  if (!a && !b) return "#000000";
+  if (!a) return colorB;
+  if (!b) return colorA;
+
+  const w = clamp(weight, 0, 1);
+
+  return rgbToHex(
+    a.r + (b.r - a.r) * w,
+    a.g + (b.g - a.g) * w,
+    a.b + (b.b - a.b) * w
+  );
+}
+
+function alpha(hex: string, opacity: number) {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return `rgba(255,255,255,${opacity})`;
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${clamp(opacity, 0, 1)})`;
+}
 
 const CartSidebar: React.FC<CartSidebarProps> = ({
   title,
@@ -42,8 +125,19 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   note,
   show_promo = true,
   show_summary = true,
-  theme = "dark",
-  accentColor = "#7c3aed",
+  max_width,
+  min_height,
+  border_radius,
+  card_radius,
+  background_color,
+  panel_color,
+  card_color,
+  text_color,
+  muted_text_color,
+  border_color,
+  accent_color,
+  theme,
+  accentColor,
 }) => {
   const { cartItems, updateQuantity, removeFromCart, clearCart } = useCart();
   const { siteId } = useParams();
@@ -67,39 +161,140 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   const footerNote =
     note || "Shipping and taxes are calculated at checkout.";
 
-  const isDark = theme === "dark";
+  const isDark = theme?.mode !== "light";
+  const resolvedAccentColor =
+    accent_color || accentColor || theme?.accent_color || "#7c3aed";
+  const resolvedPrimaryBg =
+    background_color ||
+    theme?.primary_bg ||
+    (isDark ? "#0b1020" : "#f8fafc");
+  const resolvedTextColor =
+    text_color || theme?.text_color || (isDark ? "#e5e7eb" : "#0f172a");
+  const hasFestiveTint = Boolean(theme?.festival_theme);
 
-  const palette = useMemo(
-    () => ({
-      pageBg: isDark ? "#0b1020" : "#f8fafc",
-      shellBg: isDark ? "#0f172a" : "#ffffff",
-      shellBorder: isDark ? "rgba(148,163,184,0.14)" : "rgba(15,23,42,0.08)",
-      headerBg: isDark
-        ? "linear-gradient(180deg, rgba(30,41,59,0.92) 0%, rgba(15,23,42,1) 100%)"
-        : "linear-gradient(180deg, rgba(248,250,252,0.9) 0%, rgba(255,255,255,1) 100%)",
-      panelBg: isDark ? "#111827" : "#f8fafc",
-      cardBg: isDark ? "#162033" : "#ffffff",
-      cardBorder: isDark ? "rgba(148,163,184,0.12)" : "rgba(15,23,42,0.06)",
-      mutedBg: isDark ? "#0f172a" : "#f8fafc",
-      softBg: isDark ? "rgba(255,255,255,0.04)" : "rgba(15,23,42,0.04)",
-      text: isDark ? "#e5e7eb" : "#0f172a",
-      textMuted: isDark ? "#94a3b8" : "#64748b",
-      textSoft: isDark ? "#cbd5e1" : "#475569",
-      danger: isDark ? "#fda4af" : "#dc2626",
-      successBg: isDark ? "rgba(34,197,94,0.16)" : "rgba(34,197,94,0.10)",
-      successText: isDark ? "#86efac" : "#166534",
-      inputBg: isDark ? "#0b1220" : "#ffffff",
-      quantityBg: isDark ? "#0b1220" : "#f8fafc",
-      shadow: isDark
-        ? "0 24px 60px rgba(0,0,0,0.38)"
-        : "0 20px 50px rgba(15,23,42,0.08)",
-      cardShadow: isDark
-        ? "0 12px 28px rgba(0,0,0,0.28)"
-        : "0 8px 24px rgba(15,23,42,0.04)",
-      disabledBg: isDark ? "#334155" : "#cbd5e1",
-    }),
-    [isDark]
-  );
+  const outerRadius = clamp(border_radius ?? 28, 0, 40);
+  const innerRadius = clamp(card_radius ?? 22, 0, 32);
+  const resolvedMaxWidth = clamp(max_width ?? 1240, 240, 1400);
+  const resolvedMinHeight = clamp(min_height ?? 0, 0, 1600);
+
+  const palette = useMemo(() => {
+    if (!isDark) {
+      return {
+        pageBg: resolvedPrimaryBg,
+        shellBg: panel_color || "#ffffff",
+        shellBorder: border_color || "rgba(15,23,42,0.08)",
+        headerBg: panel_color || "#ffffff",
+        panelBg: panel_color || "#f8fafc",
+        cardBg: card_color || "#ffffff",
+        cardBorder: border_color || "rgba(15,23,42,0.06)",
+        mutedBg: panel_color || "#f8fafc",
+        softBg: "rgba(15,23,42,0.04)",
+        text: resolvedTextColor,
+        textMuted: muted_text_color || "#64748b",
+        textSoft: muted_text_color || "#475569",
+        danger: "#dc2626",
+        successBg: "rgba(34,197,94,0.10)",
+        successText: "#166534",
+        inputBg: card_color || "#ffffff",
+        quantityBg: panel_color || "#f8fafc",
+        shadow: "0 20px 50px rgba(15,23,42,0.08)",
+        cardShadow: "0 8px 24px rgba(15,23,42,0.04)",
+        disabledBg: "#cbd5e1",
+      };
+    }
+
+    const pageBg = resolvedPrimaryBg;
+
+    const shellBg =
+      panel_color ||
+      (hasFestiveTint ? mixHex(pageBg, "#ffffff", 0.08) : "#0f172a");
+
+    const panelBg =
+      panel_color ||
+      (hasFestiveTint ? mixHex(pageBg, "#ffffff", 0.12) : "#111827");
+
+    const cardBg =
+      card_color ||
+      (hasFestiveTint
+        ? mixHex(mixHex(pageBg, "#ffffff", 0.14), resolvedAccentColor, 0.06)
+        : "#162033");
+
+    const mutedBg = hasFestiveTint
+      ? mixHex(pageBg, "#000000", 0.12)
+      : "#0f172a";
+
+    const inputBg = card_color
+      ? card_color
+      : hasFestiveTint
+      ? mixHex(pageBg, "#000000", 0.18)
+      : "#0b1220";
+
+    const quantityBg = hasFestiveTint
+      ? mixHex(pageBg, "#000000", 0.14)
+      : "#0b1220";
+
+    const shellBorder =
+      border_color ||
+      (hasFestiveTint
+        ? alpha(resolvedAccentColor, 0.16)
+        : "rgba(148,163,184,0.18)");
+
+    const cardBorder =
+      border_color ||
+      (hasFestiveTint
+        ? alpha(mixHex(resolvedAccentColor, "#ffffff", 0.35), 0.18)
+        : "rgba(148,163,184,0.12)");
+
+    const softBg = hasFestiveTint ? alpha("#ffffff", 0.05) : "rgba(255,255,255,0.04)";
+    const text = resolvedTextColor;
+    const textMuted =
+      muted_text_color ||
+      (hasFestiveTint ? mixHex(resolvedTextColor, pageBg, 0.45) : "#94a3b8");
+    const textSoft =
+      muted_text_color ||
+      (hasFestiveTint ? mixHex(resolvedTextColor, pageBg, 0.28) : "#cbd5e1");
+    const headerBg = panel_color || (hasFestiveTint ? shellBg : "#0f172a");
+    const disabledBg = hasFestiveTint
+      ? mixHex(pageBg, "#94a3b8", 0.35)
+      : "#334155";
+
+    return {
+      pageBg,
+      shellBg,
+      shellBorder,
+      headerBg,
+      panelBg,
+      cardBg,
+      cardBorder,
+      mutedBg,
+      softBg,
+      text,
+      textMuted,
+      textSoft,
+      danger: "#fda4af",
+      successBg: alpha("#22c55e", 0.16),
+      successText: "#86efac",
+      inputBg,
+      quantityBg,
+      shadow: hasFestiveTint
+        ? "0 20px 48px rgba(0,0,0,0.28)"
+        : "0 8px 24px rgba(0,0,0,0.16)",
+      cardShadow: hasFestiveTint
+        ? "0 10px 24px rgba(0,0,0,0.20)"
+        : "0 2px 10px rgba(0,0,0,0.10)",
+      disabledBg,
+    };
+  }, [
+    isDark,
+    resolvedPrimaryBg,
+    resolvedTextColor,
+    resolvedAccentColor,
+    hasFestiveTint,
+    panel_color,
+    card_color,
+    border_color,
+    muted_text_color,
+  ]);
 
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const subtotal = cartItems.reduce(
@@ -124,7 +319,8 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     <section
       style={{
         padding: "20px 12px 36px",
-        maxWidth: "1240px",
+        maxWidth: `${resolvedMaxWidth}px`,
+        minHeight: resolvedMinHeight > 0 ? `${resolvedMinHeight}px` : undefined,
         margin: "0 auto",
         background: palette.pageBg,
       }}
@@ -133,7 +329,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
         style={{
           border: `1px solid ${palette.shellBorder}`,
           background: palette.shellBg,
-          borderRadius: "28px",
+          borderRadius: `${outerRadius}px`,
           overflow: "hidden",
           boxShadow: palette.shadow,
         }}
@@ -217,9 +413,10 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
               style={{
                 padding: "56px 18px",
                 textAlign: "center",
-                borderRadius: "22px",
-                border: `1px dashed ${palette.shellBorder}`,
-                background: palette.cardBg,
+                borderRadius: `${innerRadius}px`,
+                border: `1px solid ${palette.cardBorder}`,
+                background: palette.panelBg,
+                boxShadow: "none",
               }}
             >
               <div style={{ fontSize: "42px", marginBottom: "12px" }}>🛍️</div>
@@ -270,7 +467,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                       gap: "14px",
                       alignItems: "start",
                       padding: "14px",
-                      borderRadius: "22px",
+                      borderRadius: `${innerRadius}px`,
                       background: palette.cardBg,
                       border: `1px solid ${palette.cardBorder}`,
                       boxShadow: palette.cardShadow,
@@ -494,7 +691,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                 {show_promo && (
                   <div
                     style={{
-                      borderRadius: "22px",
+                      borderRadius: `${innerRadius}px`,
                       background: palette.cardBg,
                       border: `1px solid ${palette.cardBorder}`,
                       boxShadow: palette.cardShadow,
@@ -542,7 +739,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                           minHeight: "44px",
                           border: "none",
                           borderRadius: "12px",
-                          background: accentColor,
+                          background: resolvedAccentColor,
                           color: "#ffffff",
                           padding: "0 16px",
                           fontWeight: 700,
@@ -573,7 +770,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                 {show_summary && (
                   <div
                     style={{
-                      borderRadius: "22px",
+                      borderRadius: `${innerRadius}px`,
                       background: palette.cardBg,
                       border: `1px solid ${palette.cardBorder}`,
                       boxShadow: palette.cardShadow,
@@ -712,7 +909,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                           width: "100%",
                           minHeight: "48px",
                           borderRadius: "14px",
-                          background: accentColor,
+                          background: resolvedAccentColor,
                           color: "#ffffff",
                           fontSize: "14px",
                           fontWeight: 700,

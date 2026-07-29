@@ -224,6 +224,235 @@ const navbarPaddingYField = {
   helpText: "Controls top and bottom spacing inside the navbar.",
 };
 
+const cartTitleField = {
+  key: "title",
+  label: "Cart title",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Your cart",
+};
+
+const cartEmptyTitleField = {
+  key: "empty_title",
+  label: "Empty state title",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Your cart is empty",
+};
+
+const cartEmptyMessageField = {
+  key: "empty_message",
+  label: "Empty state message",
+  type: "textarea" as const,
+  target: "props" as const,
+  placeholder: "Add products to continue shopping.",
+};
+
+const cartShowPromoField = {
+  key: "show_promo",
+  label: "Show promo code",
+  type: "checkbox" as const,
+  target: "props" as const,
+};
+
+const cartShowSummaryField = {
+  key: "show_summary",
+  label: "Show summary",
+  type: "checkbox" as const,
+  target: "props" as const,
+};
+
+const cartPromoTitleField = {
+  key: "promo_title",
+  label: "Promo title",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Promo code",
+};
+
+const cartPromoPlaceholderField = {
+  key: "promo_placeholder",
+  label: "Promo placeholder",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Enter promo code",
+};
+
+const cartPromoButtonLabelField = {
+  key: "promo_button_label",
+  label: "Promo button label",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Apply",
+};
+
+const cartSummaryTitleField = {
+  key: "summary_title",
+  label: "Summary title",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Order summary",
+};
+
+const cartCheckoutLabelField = {
+  key: "checkout_label",
+  label: "Checkout button label",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Proceed to checkout",
+};
+
+const cartSubtotalLabelField = {
+  key: "subtotal_label",
+  label: "Subtotal label",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Subtotal",
+};
+
+const cartShippingLabelField = {
+  key: "shipping_label",
+  label: "Shipping label",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Shipping",
+};
+
+const cartTaxLabelField = {
+  key: "tax_label",
+  label: "Tax label",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Estimated tax",
+};
+
+const cartTotalLabelField = {
+  key: "total_label",
+  label: "Total label",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Total",
+};
+
+const cartMaxWidthField = {
+  key: "max_width",
+  label: "Cart width",
+  type: "number" as const,
+  target: "props" as const,
+  min: 240,
+  max: 900,
+  step: 4,
+  helpText: "Maximum width of the cart container.",
+};
+
+const cartMinHeightField = {
+  key: "min_height",
+  label: "Cart height",
+  type: "number" as const,
+  target: "props" as const,
+  min: 200,
+  max: 1200,
+  step: 4,
+  helpText: "Minimum height of the cart container.",
+};
+
+const cartBorderRadiusField = {
+  key: "border_radius",
+  label: "Outer corner radius",
+  type: "number" as const,
+  target: "props" as const,
+  min: 0,
+  max: 40,
+  step: 1,
+};
+
+const cartCardRadiusField = {
+  key: "card_radius",
+  label: "Inner card radius",
+  type: "number" as const,
+  target: "props" as const,
+  min: 0,
+  max: 32,
+  step: 1,
+};
+
+const cartBackgroundColorField = {
+  key: "background_color",
+  label: "Background color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const cartPanelColorField = {
+  key: "panel_color",
+  label: "Panel color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const cartCardColorField = {
+  key: "card_color",
+  label: "Card color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const cartTextColorField = {
+  key: "text_color",
+  label: "Text color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const cartMutedTextColorField = {
+  key: "muted_text_color",
+  label: "Muted text color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const cartBorderColorField = {
+  key: "border_color",
+  label: "Border color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const cartAccentColorField = {
+  key: "accent_color",
+  label: "Accent color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const cartFields = [
+  cartTitleField,
+  cartEmptyTitleField,
+  cartEmptyMessageField,
+  cartShowPromoField,
+  cartShowSummaryField,
+  cartPromoTitleField,
+  cartPromoPlaceholderField,
+  cartPromoButtonLabelField,
+  cartSummaryTitleField,
+  cartCheckoutLabelField,
+  cartSubtotalLabelField,
+  cartShippingLabelField,
+  cartTaxLabelField,
+  cartTotalLabelField,
+  cartMaxWidthField,
+  cartMinHeightField,
+  cartBorderRadiusField,
+  cartCardRadiusField,
+  cartBackgroundColorField,
+  cartPanelColorField,
+  cartCardColorField,
+  cartTextColorField,
+  cartMutedTextColorField,
+  cartBorderColorField,
+  cartAccentColorField,
+];
+
 export const editorRegistry: EditorRegistry = {
   product_grid: {
     displayName: "Product Grid",
@@ -317,5 +546,22 @@ export const editorRegistry: EditorRegistry = {
       navbarShowAccountField,
       navbarShowCartField,
     ],
+  },
+
+  cart_sidebar: {
+    displayName: "Cart",
+    fields: cartFields,
+  },
+  cartsidebar: {
+    displayName: "Cart",
+    fields: cartFields,
+  },
+  cart_items: {
+    displayName: "Cart",
+    fields: cartFields,
+  },
+  cartitems: {
+    displayName: "Cart",
+    fields: cartFields,
   },
 };

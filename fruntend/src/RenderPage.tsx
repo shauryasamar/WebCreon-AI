@@ -88,8 +88,6 @@ const RenderPage: React.FC<RenderPageProps> = ({
     const resolvedDataSource = block.data_source ?? block.datasource ?? undefined;
 
     const blockProps = (block.props ?? {}) as Record<string, any>;
-    const blockTheme = (blockProps.theme as Theme | undefined) ?? theme;
-
     const componentProps = {
       siteId,
       ...blockProps,
@@ -100,7 +98,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
         <Component
           key={blockId}
           {...componentProps}
-          theme={blockTheme}
+          theme={(blockProps.theme as Theme | undefined) ?? theme}
           filters={productCategories}
           selectedFilter={selectedFilter}
           onFilterChange={setSelectedFilter}
@@ -130,7 +128,14 @@ const RenderPage: React.FC<RenderPageProps> = ({
     }
 
     if (resolvedDataSource === "cart") {
-      return <Component key={blockId} {...componentProps} cartItems={cartItems} />;
+      return (
+        <Component
+          key={blockId}
+          {...componentProps}
+          theme={theme}
+          cartItems={cartItems}
+        />
+      );
     }
 
     return <Component key={blockId} {...componentProps} />;
@@ -196,11 +201,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
             alignItems: "start",
           }}
         >
-          <div
-            style={{
-              minWidth: 0,
-            }}
-          >
+          <div style={{ minWidth: 0 }}>
             {addressBlock ? renderBlock(addressBlock, 0) : null}
           </div>
 

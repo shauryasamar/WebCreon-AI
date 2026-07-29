@@ -11,6 +11,14 @@ type Block = {
   actions?: Record<string, any>;
 };
 
+type Theme = {
+  name?: string;
+  mode?: string;
+  primary_bg?: string;
+  text_color?: string;
+  accent_color?: string;
+};
+
 type Page = {
   id?: string;
   name?: string;
@@ -31,6 +39,7 @@ type EditorRenderPageProps = {
   selectedProduct?: Product | null;
   selectedBlockId?: string | null;
   onSelectBlock?: (blockId: string) => void;
+  theme?: Theme;
 };
 
 type EditorBlockWrapperProps = {
@@ -58,19 +67,31 @@ function EditorBlockWrapper({
       }}
       style={{
         position: "relative",
-        outline: selected ? "2px solid #2563eb" : "1px dashed transparent",
-        outlineOffset: "4px",
-        borderRadius: "8px",
-        transition: "outline-color 0.15s ease",
+        marginBottom: "12px",
+        borderRadius: "12px",
         cursor: "pointer",
+        minWidth: 0,
       }}
     >
       <div
         style={{
           position: "absolute",
-          top: "-10px",
-          left: "8px",
-          zIndex: 2,
+          inset: 0,
+          border: selected ? "2px solid #2563eb" : "1px dashed transparent",
+          borderRadius: "12px",
+          pointerEvents: "none",
+          zIndex: 3,
+          transition: "all 0.15s ease",
+          boxShadow: selected ? "0 0 0 2px rgba(37,99,235,0.12)" : "none",
+        }}
+      />
+
+      <div
+        style={{
+          position: "absolute",
+          top: "8px",
+          left: "12px",
+          zIndex: 4,
           padding: "2px 8px",
           borderRadius: "999px",
           background: "#2563eb",
@@ -87,7 +108,15 @@ function EditorBlockWrapper({
         {blockType}
       </div>
 
-      {children}
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          minWidth: 0,
+        }}
+      >
+        {children}
+      </div>
     </div>
   );
 }
@@ -98,6 +127,7 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
   selectedProduct = null,
   selectedBlockId = null,
   onSelectBlock,
+  theme,
 }) => {
   const { products, cartItems } = useCart();
 
@@ -144,7 +174,13 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
     } else if (resolvedDataSource === "products") {
       renderedNode = <Component {...componentProps} products={products} />;
     } else if (resolvedDataSource === "cart") {
-      renderedNode = <Component {...componentProps} cartItems={cartItems} />;
+      renderedNode = (
+        <Component
+          {...componentProps}
+          theme={theme}
+          cartItems={cartItems}
+        />
+      );
     } else {
       renderedNode = <Component {...componentProps} />;
     }
@@ -222,11 +258,7 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
             alignItems: "start",
           }}
         >
-          <div
-            style={{
-              minWidth: 0,
-            }}
-          >
+          <div style={{ minWidth: 0 }}>
             {addressBlock ? renderBlock(addressBlock, 0) : null}
           </div>
 
