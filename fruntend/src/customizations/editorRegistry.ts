@@ -350,7 +350,7 @@ const cartMinHeightField = {
   label: "Cart height",
   type: "number" as const,
   target: "props" as const,
-  min: 200,
+  min: 0,
   max: 1200,
   step: 4,
   helpText: "Minimum height of the cart container.",
@@ -425,6 +425,219 @@ const cartAccentColorField = {
   target: "props" as const,
 };
 
+const deliverySectionLabelField = {
+  key: "sectionLabel",
+  label: "Section label",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Delivery",
+};
+
+const deliveryTitleField = {
+  key: "title",
+  label: "Title",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Delivery details",
+};
+
+const deliveryAccentColorField = {
+  key: "accentColor",
+  label: "Accent color override",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const deliveryCompactField = {
+  key: "compact",
+  label: "Compact layout",
+  type: "checkbox" as const,
+  target: "props" as const,
+};
+
+const paymentSectionLabelField = {
+  key: "sectionLabel",
+  label: "Section label",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Payment",
+};
+
+const paymentTitleField = {
+  key: "title",
+  label: "Title",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Payment method",
+};
+
+const paymentMethodsField = {
+  key: "paymentMethods",
+  label: "Payment methods",
+  type: "json" as const,
+  target: "props" as const,
+  helpText: 'Example: ["COD", "UPI"]',
+};
+
+const paymentAccentColorField = {
+  key: "accentColor",
+  label: "Accent color override",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const paymentCompactField = {
+  key: "compact",
+  label: "Compact layout",
+  type: "checkbox" as const,
+  target: "props" as const,
+};
+
+const placeOrderLabelField = {
+  key: "buttonLabel",
+  label: "Button label",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Place order",
+};
+
+const placeOrderAccentColorField = {
+  key: "accentColor",
+  label: "Button color override",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const placeOrderCompactField = {
+  key: "compact",
+  label: "Compact layout",
+  type: "checkbox" as const,
+  target: "props" as const,
+};
+
+const styleBackgroundColorField = {
+  key: "background_color",
+  label: "Background color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const stylePanelColorField = {
+  key: "panel_color",
+  label: "Panel color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const styleInputColorField = {
+  key: "input_color",
+  label: "Input color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const styleTextColorField = {
+  key: "text_color",
+  label: "Text color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const styleMutedTextColorField = {
+  key: "muted_text_color",
+  label: "Muted text color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const styleSoftTextColorField = {
+  key: "soft_text_color",
+  label: "Label color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const stylePlaceholderColorField = {
+  key: "placeholder_color",
+  label: "Placeholder color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const styleBorderColorField = {
+  key: "border_color",
+  label: "Border color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const styleSoftBorderColorField = {
+  key: "soft_border_color",
+  label: "Soft border color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const styleBorderRadiusField = {
+  key: "border_radius",
+  label: "Corner radius",
+  type: "number" as const,
+  target: "props" as const,
+  min: 0,
+  max: 40,
+  step: 1,
+};
+
+const styleItemRadiusField = {
+  key: "item_radius",
+  label: "Inner item radius",
+  type: "number" as const,
+  target: "props" as const,
+  min: 0,
+  max: 32,
+  step: 1,
+};
+
+const styleFieldRadiusField = {
+  key: "field_radius",
+  label: "Field radius",
+  type: "number" as const,
+  target: "props" as const,
+  min: 0,
+  max: 24,
+  step: 1,
+};
+
+const stylePaddingField = {
+  key: "padding",
+  label: "Padding",
+  type: "number" as const,
+  target: "props" as const,
+  min: 8,
+  max: 40,
+  step: 1,
+};
+
+const styleGapField = {
+  key: "gap",
+  label: "Section gap",
+  type: "number" as const,
+  target: "props" as const,
+  min: 6,
+  max: 32,
+  step: 1,
+};
+
+const styleMaxWidthField = {
+  key: "max_width",
+  label: "Max width",
+  type: "number" as const,
+  target: "props" as const,
+  min: 240,
+  max: 900,
+  step: 4,
+};
+
 const cartFields = [
   cartTitleField,
   cartEmptyTitleField,
@@ -451,6 +664,24 @@ const cartFields = [
   cartMutedTextColorField,
   cartBorderColorField,
   cartAccentColorField,
+];
+
+const checkoutStyleFields = [
+  styleBackgroundColorField,
+  stylePanelColorField,
+  styleInputColorField,
+  styleTextColorField,
+  styleMutedTextColorField,
+  styleSoftTextColorField,
+  stylePlaceholderColorField,
+  styleBorderColorField,
+  styleSoftBorderColorField,
+  styleBorderRadiusField,
+  styleItemRadiusField,
+  styleFieldRadiusField,
+  stylePaddingField,
+  styleGapField,
+  styleMaxWidthField,
 ];
 
 export const editorRegistry: EditorRegistry = {
@@ -563,5 +794,74 @@ export const editorRegistry: EditorRegistry = {
   cartitems: {
     displayName: "Cart",
     fields: cartFields,
+  },
+
+  delivery_form: {
+    displayName: "Delivery Form",
+    fields: [
+      deliverySectionLabelField,
+      deliveryTitleField,
+      deliveryCompactField,
+      deliveryAccentColorField,
+      ...checkoutStyleFields,
+    ],
+  },
+  deliveryform: {
+    displayName: "Delivery Form",
+    fields: [
+      deliverySectionLabelField,
+      deliveryTitleField,
+      deliveryCompactField,
+      deliveryAccentColorField,
+      ...checkoutStyleFields,
+    ],
+  },
+
+  payment_methods: {
+    displayName: "Payment Methods",
+    fields: [
+      paymentSectionLabelField,
+      paymentTitleField,
+      paymentMethodsField,
+      paymentCompactField,
+      paymentAccentColorField,
+      ...checkoutStyleFields,
+    ],
+  },
+  paymentmethods: {
+    displayName: "Payment Methods",
+    fields: [
+      paymentSectionLabelField,
+      paymentTitleField,
+      paymentMethodsField,
+      paymentCompactField,
+      paymentAccentColorField,
+      ...checkoutStyleFields,
+    ],
+  },
+
+  place_order_cta: {
+    displayName: "Place Order Button",
+    fields: [
+      placeOrderLabelField,
+      placeOrderCompactField,
+      placeOrderAccentColorField,
+      styleTextColorField,
+      styleBorderRadiusField,
+      stylePaddingField,
+      styleMaxWidthField,
+    ],
+  },
+  placeordercta: {
+    displayName: "Place Order Button",
+    fields: [
+      placeOrderLabelField,
+      placeOrderCompactField,
+      placeOrderAccentColorField,
+      styleTextColorField,
+      styleBorderRadiusField,
+      stylePaddingField,
+      styleMaxWidthField,
+    ],
   },
 };

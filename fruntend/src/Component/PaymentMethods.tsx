@@ -1,68 +1,236 @@
 import React, { useMemo, useState } from "react";
 
+type ThemeInput =
+  | "dark"
+  | "light"
+  | {
+      mode?: string;
+      primary_bg?: string;
+      text_color?: string;
+      accent_color?: string;
+      festival_theme?: string;
+    };
+
 type PaymentMethodsProps = {
+  sectionLabel?: string;
   title?: string;
-  subtitle?: string;
   paymentMethods?: string[];
-  theme?: "dark" | "light";
+  theme?: ThemeInput;
   accentColor?: string;
+  compact?: boolean;
+  background_color?: string;
+  panel_color?: string;
+  input_color?: string;
+  text_color?: string;
+  muted_text_color?: string;
+  placeholder_color?: string;
+  border_color?: string;
+  soft_border_color?: string;
+  border_radius?: number;
+  item_radius?: number;
+  field_radius?: number;
+  padding?: number;
+  gap?: number;
+  max_width?: number;
 };
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function normalizeHex(hex?: string) {
+  if (!hex) return null;
+  const cleaned = hex.trim().replace("#", "");
+  if (/^[0-9a-fA-F]{3}$/.test(cleaned)) {
+    return `#${cleaned
+      .split("")
+      .map((char) => char + char)
+      .join("")
+      .toLowerCase()}`;
+  }
+  if (/^[0-9a-fA-F]{6}$/.test(cleaned)) {
+    return `#${cleaned.toLowerCase()}`;
+  }
+  return null;
+}
+
+function hexToRgb(hex?: string) {
+  const normalized = normalizeHex(hex);
+  if (!normalized) return null;
+  const value = normalized.slice(1);
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  return { r, g, b };
+}
+
+function rgbToHex(r: number, g: number, b: number) {
+  const toHex = (value: number) =>
+    clamp(Math.round(value), 0, 255).toString(16).padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function mixHex(colorA: string, colorB: string, weight = 0.5) {
+  const a = hexToRgb(colorA);
+  const b = hexToRgb(colorB);
+
+  if (!a && !b) return "#000000";
+  if (!a) return colorB;
+  if (!b) return colorA;
+
+  const w = clamp(weight, 0, 1);
+
+  return rgbToHex(
+    a.r + (b.r - a.r) * w,
+    a.g + (b.g - a.g) * w,
+    a.b + (b.b - a.b) * w
+  );
+}
+
+function alpha(hex: string, opacity: number) {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return `rgba(255,255,255,${opacity})`;
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${clamp(opacity, 0, 1)})`;
+}
+
 export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
-  title = "Payment Methods",
-  subtitle = "Choose how you’d like to pay for this order.",
+  sectionLabel = "Payment",
+  title = "Payment method",
   paymentMethods = ["COD", "UPI"],
   theme = "dark",
-  accentColor = "#2563eb",
+  accentColor,
+  compact = false,
+  background_color,
+  panel_color,
+  input_color,
+  text_color,
+  muted_text_color,
+  placeholder_color,
+  border_color,
+  soft_border_color,
+  border_radius,
+  item_radius,
+  field_radius,
+  padding,
+  gap,
+  max_width,
 }) => {
-  const [selectedMethod, setSelectedMethod] = useState(
-    paymentMethods[0] || "COD"
-  );
+  const [selectedMethod, setSelectedMethod] = useState(paymentMethods[0] || "COD");
   const [upiId, setUpiId] = useState("");
 
-  const isDark = theme === "dark";
+  const themeObject = typeof theme === "object" ? theme : undefined;
+  const isDark = themeObject ? themeObject.mode !== "light" : theme === "dark";
+  const hasFestiveTheme = Boolean(themeObject?.festival_theme);
 
-  const palette = useMemo(
-    () => ({
-      pageBg: isDark ? "#0b1020" : "#f8fafc",
-      shellBg: isDark ? "#0f172a" : "#ffffff",
-      cardBg: isDark ? "#111827" : "#ffffff",
-      panelBg: isDark ? "#162033" : "#f8fafc",
-      headerBg: isDark
-        ? "linear-gradient(180deg, rgba(30,41,59,0.72) 0%, rgba(15,23,42,0.94) 100%)"
-        : "linear-gradient(180deg, rgba(248,250,252,0.95) 0%, rgba(255,255,255,1) 100%)",
-      inputBg: isDark ? "#0b1220" : "#ffffff",
-      border: isDark ? "rgba(148,163,184,0.16)" : "rgba(15,23,42,0.10)",
-      softBorder: isDark ? "rgba(148,163,184,0.10)" : "rgba(15,23,42,0.06)",
-      text: isDark ? "#e5e7eb" : "#0f172a",
-      textMuted: isDark ? "#94a3b8" : "#64748b",
-      textSoft: isDark ? "#cbd5e1" : "#475569",
-      placeholder: isDark ? "#64748b" : "#94a3b8",
-      selectedBg: isDark
-        ? "rgba(37,99,235,0.12)"
-        : "rgba(37,99,235,0.08)",
-      selectedBorder: accentColor,
-      selectedRing: isDark
-        ? "0 0 0 1px rgba(37,99,235,0.28), 0 12px 28px rgba(0,0,0,0.22)"
-        : "0 0 0 1px rgba(37,99,235,0.16), 0 10px 28px rgba(15,23,42,0.06)",
-      shellShadow: isDark
-        ? "0 24px 60px rgba(0,0,0,0.35)"
-        : "0 20px 50px rgba(15,23,42,0.08)",
-      cardShadow: isDark
-        ? "0 10px 24px rgba(0,0,0,0.20)"
-        : "0 8px 24px rgba(15,23,42,0.05)",
-      infoBg: isDark ? "rgba(255,255,255,0.04)" : "rgba(15,23,42,0.04)",
-      successBg: isDark ? "rgba(34,197,94,0.12)" : "rgba(34,197,94,0.08)",
-      successText: isDark ? "#86efac" : "#166534",
-    }),
-    [accentColor, isDark]
-  );
+  const resolvedAccent =
+    accentColor ||
+    themeObject?.accent_color ||
+    (isDark ? "#60a5fa" : "#2563eb");
+
+  const resolvedPrimaryBg =
+    background_color ||
+    themeObject?.primary_bg ||
+    (isDark ? "#0f172a" : "#f8fafc");
+
+  const resolvedText =
+    text_color ||
+    themeObject?.text_color ||
+    (isDark ? "#f9fafb" : "#111827");
+
+  const resolvedPadding = padding ?? (compact ? 16 : 18);
+  const resolvedGap = gap ?? 10;
+  const resolvedBorderRadius = border_radius ?? 20;
+  const resolvedItemRadius = item_radius ?? 16;
+  const resolvedFieldRadius = field_radius ?? 12;
+
+  const palette = useMemo(() => {
+    if (!isDark) {
+      if (hasFestiveTheme) {
+        return {
+          cardBg: background_color || mixHex(resolvedPrimaryBg, "#ffffff", 0.7),
+          panelBg: panel_color || mixHex(resolvedPrimaryBg, "#ffffff", 0.84),
+          inputBg: input_color || "#ffffff",
+          border: border_color || alpha(resolvedAccent, 0.2),
+          softBorder: soft_border_color || alpha(resolvedAccent, 0.14),
+          text: resolvedText,
+          textMuted: muted_text_color || mixHex(resolvedText, resolvedPrimaryBg, 0.38),
+          placeholder:
+            placeholder_color || mixHex(resolvedText, resolvedPrimaryBg, 0.56),
+          selectedBg: panel_color || mixHex(resolvedAccent, "#ffffff", 0.9),
+          shadow: "0 6px 16px rgba(15,23,42,0.05)",
+          selectedRing: `0 0 0 1px ${resolvedAccent}33`,
+          inputRing: `0 0 0 3px ${resolvedAccent}22`,
+        };
+      }
+
+      return {
+        cardBg: background_color || "#ffffff",
+        panelBg: panel_color || "#f8fafc",
+        inputBg: input_color || "#ffffff",
+        border: border_color || "rgba(15,23,42,0.08)",
+        softBorder: soft_border_color || "rgba(15,23,42,0.06)",
+        text: resolvedText,
+        textMuted: muted_text_color || "#64748b",
+        placeholder: placeholder_color || "#94a3b8",
+        selectedBg: `${resolvedAccent}14`,
+        shadow: "0 6px 16px rgba(15,23,42,0.05)",
+        selectedRing: `0 0 0 1px ${resolvedAccent}33`,
+        inputRing: `0 0 0 3px ${resolvedAccent}22`,
+      };
+    }
+
+    if (hasFestiveTheme) {
+      return {
+        cardBg: background_color || mixHex(resolvedPrimaryBg, "#ffffff", 0.08),
+        panelBg: panel_color || mixHex(resolvedPrimaryBg, "#ffffff", 0.14),
+        inputBg: input_color || mixHex(resolvedPrimaryBg, "#000000", 0.14),
+        border: border_color || alpha(resolvedAccent, 0.22),
+        softBorder: soft_border_color || alpha(resolvedAccent, 0.14),
+        text: resolvedText,
+        textMuted: muted_text_color || mixHex(resolvedText, resolvedPrimaryBg, 0.42),
+        placeholder:
+          placeholder_color || mixHex(resolvedText, resolvedPrimaryBg, 0.56),
+        selectedBg: panel_color || alpha(resolvedAccent, 0.16),
+        shadow: "0 10px 24px rgba(0,0,0,0.18)",
+        selectedRing: `0 0 0 1px ${resolvedAccent}55`,
+        inputRing: `0 0 0 3px ${resolvedAccent}2e`,
+      };
+    }
+
+    return {
+      cardBg: background_color || "#111827",
+      panelBg: panel_color || "#1f2937",
+      inputBg: input_color || "#0f172a",
+      border: border_color || "rgba(148,163,184,0.18)",
+      softBorder: soft_border_color || "rgba(148,163,184,0.12)",
+      text: resolvedText,
+      textMuted: muted_text_color || "#cbd5e1",
+      placeholder: placeholder_color || "#64748b",
+      selectedBg: panel_color || "#1f2937",
+      shadow: "0 10px 24px rgba(0,0,0,0.18)",
+      selectedRing: `0 0 0 1px ${resolvedAccent}55`,
+      inputRing: `0 0 0 3px ${resolvedAccent}2e`,
+    };
+  }, [
+    background_color,
+    border_color,
+    hasFestiveTheme,
+    input_color,
+    isDark,
+    muted_text_color,
+    panel_color,
+    placeholder_color,
+    resolvedAccent,
+    resolvedPrimaryBg,
+    resolvedText,
+    soft_border_color,
+  ]);
 
   const inputStyle: React.CSSProperties = {
     width: "100%",
-    minHeight: "46px",
-    padding: "12px 14px",
-    borderRadius: "12px",
+    minHeight: compact ? "42px" : "46px",
+    padding: compact ? "10px 12px" : "12px 14px",
+    borderRadius: `${resolvedFieldRadius}px`,
     border: `1px solid ${palette.border}`,
     background: palette.inputBg,
     color: palette.text,
@@ -74,311 +242,160 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
   return (
     <section
       style={{
-        padding: "20px 12px 36px",
-        maxWidth: "1240px",
-        margin: "0 auto",
-        background: palette.pageBg,
+        width: "100%",
+        maxWidth: max_width ? `${max_width}px` : undefined,
       }}
     >
       <div
         style={{
+          width: "100%",
           border: `1px solid ${palette.border}`,
-          borderRadius: "28px",
-          overflow: "hidden",
-          background: palette.shellBg,
-          boxShadow: palette.shellShadow,
+          borderRadius: `${resolvedBorderRadius}px`,
+          background: palette.cardBg,
+          boxShadow: palette.shadow,
+          boxSizing: "border-box",
+          padding: `${resolvedPadding}px`,
         }}
       >
         <div
           style={{
-            padding: "24px 22px 20px",
+            marginBottom: compact ? "12px" : "14px",
+            paddingBottom: compact ? "10px" : "12px",
             borderBottom: `1px solid ${palette.softBorder}`,
-            background: palette.headerBg,
           }}
         >
           <p
             style={{
-              margin: "0 0 8px",
-              fontSize: "12px",
+              margin: "0 0 6px",
+              fontSize: "11px",
               letterSpacing: "0.12em",
               textTransform: "uppercase",
               color: palette.textMuted,
               fontWeight: 700,
             }}
           >
-            Payment selection
+            {sectionLabel}
           </p>
 
           <h3
             style={{
-              margin: "0 0 6px",
-              fontSize: "clamp(24px, 2vw, 32px)",
-              lineHeight: 1.05,
+              margin: 0,
+              fontSize: compact ? "18px" : "20px",
+              lineHeight: 1.1,
               letterSpacing: "-0.03em",
               color: palette.text,
             }}
           >
             {title}
           </h3>
-
-          <p
-            style={{
-              margin: 0,
-              color: palette.textMuted,
-              fontSize: "14px",
-            }}
-          >
-            {subtitle}
-          </p>
         </div>
 
-        <div style={{ padding: "18px" }}>
-          <fieldset
+        <fieldset
+          style={{
+            margin: 0,
+            padding: 0,
+            border: "none",
+            minWidth: 0,
+          }}
+        >
+          <div
             style={{
-              margin: 0,
-              padding: "20px",
-              border: `1px solid ${palette.softBorder}`,
-              borderRadius: "24px",
-              background: palette.cardBg,
-              boxShadow: palette.cardShadow,
-              minWidth: 0,
+              display: "flex",
+              flexDirection: "column",
+              gap: `${resolvedGap}px`,
             }}
           >
-            <legend
-              style={{
-                padding: "0 8px",
-                fontSize: "13px",
-                fontWeight: 700,
-                color: palette.textMuted,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-              }}
-            >
-              Choose one option
-            </legend>
+            {paymentMethods.map((method) => {
+              const isSelected = selectedMethod === method;
+              const inputId = `payment-method-${method.toLowerCase()}`;
 
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "12px",
-                marginTop: "8px",
-              }}
-            >
-              {paymentMethods.map((method) => {
-                const isSelected = selectedMethod === method;
-                const inputId = `payment-method-${method.toLowerCase()}`;
-
-                return (
-                  <label
-                    key={method}
-                    htmlFor={inputId}
+              return (
+                <label
+                  key={method}
+                  htmlFor={inputId}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                    padding: compact ? "12px" : "14px",
+                    borderRadius: `${resolvedItemRadius}px`,
+                    border: `1px solid ${
+                      isSelected ? resolvedAccent : palette.border
+                    }`,
+                    background: isSelected ? palette.selectedBg : palette.panelBg,
+                    cursor: "pointer",
+                    boxShadow: isSelected ? palette.selectedRing : "none",
+                    transition: "all 180ms ease",
+                  }}
+                >
+                  <div
                     style={{
                       display: "flex",
-                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "space-between",
                       gap: "10px",
-                      padding: "16px",
-                      borderRadius: "18px",
-                      border: isSelected
-                        ? `1px solid ${palette.selectedBorder}`
-                        : `1px solid ${palette.border}`,
-                      background: isSelected
-                        ? palette.selectedBg
-                        : palette.panelBg,
-                      cursor: "pointer",
-                      boxShadow: isSelected
-                        ? palette.selectedRing
-                        : "none",
-                      transition: "all 180ms ease",
+                      flexWrap: "wrap",
                     }}
                   >
                     <div
                       style={{
                         display: "flex",
                         alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: "12px",
-                        flexWrap: "wrap",
+                        gap: "10px",
+                        minWidth: 0,
                       }}
                     >
+                      <input
+                        id={inputId}
+                        type="radio"
+                        name="payment-method"
+                        checked={isSelected}
+                        onChange={() => setSelectedMethod(method)}
+                        style={{
+                          accentColor: resolvedAccent,
+                          width: "16px",
+                          height: "16px",
+                          margin: 0,
+                          flexShrink: 0,
+                        }}
+                      />
+
                       <div
                         style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "12px",
-                          minWidth: 0,
+                          fontWeight: 700,
+                          fontSize: "14px",
+                          color: palette.text,
+                          lineHeight: 1.2,
                         }}
                       >
-                        <input
-                          id={inputId}
-                          type="radio"
-                          name="payment-method"
-                          checked={isSelected}
-                          onChange={() => setSelectedMethod(method)}
-                          style={{
-                            accentColor,
-                            width: "16px",
-                            height: "16px",
-                            margin: 0,
-                            flexShrink: 0,
-                          }}
-                        />
-
-                        <div style={{ minWidth: 0 }}>
-                          <div
-                            style={{
-                              fontWeight: 700,
-                              fontSize: "15px",
-                              color: palette.text,
-                              lineHeight: 1.2,
-                            }}
-                          >
-                            {method}
-                          </div>
-
-                          <div
-                            style={{
-                              fontSize: "13px",
-                              color: palette.textMuted,
-                              marginTop: "4px",
-                              lineHeight: 1.5,
-                            }}
-                          >
-                            {method === "COD"
-                              ? "Pay with cash when your order is delivered."
-                              : "Pay instantly using your UPI ID."}
-                          </div>
-                        </div>
+                        {method}
                       </div>
-
-                      {isSelected && (
-                        <span
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            minHeight: "30px",
-                            padding: "6px 10px",
-                            borderRadius: "999px",
-                            background: isDark
-                              ? "rgba(37,99,235,0.16)"
-                              : "rgba(37,99,235,0.10)",
-                            color: accentColor,
-                            fontSize: "12px",
-                            fontWeight: 700,
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          Selected
-                        </span>
-                      )}
                     </div>
+                  </div>
 
-                    {isSelected && method === "UPI" && (
-                      <div
-                        style={{
-                          marginTop: "2px",
-                          paddingTop: "10px",
-                          borderTop: `1px solid ${palette.softBorder}`,
-                        }}
-                      >
-                        <label
-                          htmlFor="upi-id"
-                          style={{
-                            display: "block",
-                            marginBottom: "8px",
-                            fontSize: "13px",
-                            fontWeight: 600,
-                            color: palette.textSoft,
-                          }}
-                        >
-                          UPI ID
-                        </label>
-
-                        <input
-                          id="upi-id"
-                          type="text"
-                          value={upiId}
-                          onChange={(e) => setUpiId(e.target.value)}
-                          placeholder="Enter UPI ID (e.g. name@upi)"
-                          style={inputStyle}
-                        />
-
-                        <p
-                          style={{
-                            margin: "8px 0 0",
-                            fontSize: "12px",
-                            color: palette.textMuted,
-                            lineHeight: 1.5,
-                          }}
-                        >
-                          Make sure the UPI ID is valid before continuing.
-                        </p>
-                      </div>
-                    )}
-
-                    {isSelected && method === "COD" && (
-                      <div
-                        style={{
-                          marginTop: "2px",
-                          padding: "12px 14px",
-                          borderRadius: "14px",
-                          background: palette.infoBg,
-                          border: `1px solid ${palette.softBorder}`,
-                          fontSize: "13px",
-                          color: palette.textSoft,
-                          lineHeight: 1.55,
-                        }}
-                      >
-                        Cash will be collected at the time of delivery.
-                      </div>
-                    )}
-                  </label>
-                );
-              })}
-            </div>
-
-            <div
-              style={{
-                marginTop: "16px",
-                paddingTop: "14px",
-                borderTop: `1px solid ${palette.softBorder}`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: "12px",
-                flexWrap: "wrap",
-              }}
-            >
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "13px",
-                  color: palette.textMuted,
-                }}
-              >
-                Payment details stay aligned with your selected checkout flow.
-              </p>
-
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  padding: "10px 14px",
-                  borderRadius: "999px",
-                  background: palette.successBg,
-                  color: palette.successText,
-                  fontSize: "13px",
-                  fontWeight: 700,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Secure selection
-              </span>
-            </div>
-          </fieldset>
-        </div>
+                  {isSelected && method === "UPI" && (
+                    <div
+                      style={{
+                        marginTop: "2px",
+                        paddingTop: "10px",
+                        borderTop: `1px solid ${palette.softBorder}`,
+                      }}
+                    >
+                      <input
+                        id="upi-id"
+                        type="text"
+                        value={upiId}
+                        onChange={(e) => setUpiId(e.target.value)}
+                        placeholder="name@upi"
+                        style={inputStyle}
+                      />
+                    </div>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
       </div>
 
       <style>
@@ -389,12 +406,8 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
           }
 
           input[type="text"]:focus {
-            border-color: ${accentColor};
-            box-shadow: ${
-              isDark
-                ? "0 0 0 3px rgba(37,99,235,0.18)"
-                : "0 0 0 3px rgba(37,99,235,0.12)"
-            };
+            border-color: ${resolvedAccent};
+            box-shadow: ${palette.inputRing};
           }
         `}
       </style>

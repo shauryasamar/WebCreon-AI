@@ -12,6 +12,7 @@ type CartTheme = {
 };
 
 type CartSidebarProps = {
+  mode?: "cart" | "checkout_summary";
   title?: string;
   empty_title?: string;
   empty_message?: string;
@@ -108,6 +109,7 @@ function alpha(hex: string, opacity: number) {
 }
 
 const CartSidebar: React.FC<CartSidebarProps> = ({
+  mode = "cart",
   title,
   empty_title,
   empty_message,
@@ -144,7 +146,9 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   const [promoCode, setPromoCode] = useState("");
   const [appliedCode, setAppliedCode] = useState("");
 
-  const heading = title || "Your cart";
+  const isCheckoutSummary = mode === "checkout_summary";
+
+  const heading = title || (isCheckoutSummary ? "Order summary" : "Your cart");
   const emptyHeading = empty_title || "Your cart is empty";
   const emptyText = empty_message || "Add a few products to see them here.";
   const clearText = clear_label || "Clear cart";
@@ -165,16 +169,18 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   const resolvedAccentColor =
     accent_color || accentColor || theme?.accent_color || "#7c3aed";
   const resolvedPrimaryBg =
-    background_color ||
-    theme?.primary_bg ||
-    (isDark ? "#0b1020" : "#f8fafc");
+    background_color || theme?.primary_bg || (isDark ? "#0b1020" : "#f8fafc");
   const resolvedTextColor =
     text_color || theme?.text_color || (isDark ? "#e5e7eb" : "#0f172a");
   const hasFestiveTint = Boolean(theme?.festival_theme);
 
-  const outerRadius = clamp(border_radius ?? 28, 0, 40);
-  const innerRadius = clamp(card_radius ?? 22, 0, 32);
-  const resolvedMaxWidth = clamp(max_width ?? 1240, 240, 1400);
+  const outerRadius = clamp(border_radius ?? 24, 0, 40);
+  const innerRadius = clamp(card_radius ?? 18, 0, 32);
+  const resolvedMaxWidth = clamp(
+    max_width ?? (isCheckoutSummary ? 420 : 1240),
+    240,
+    1400
+  );
   const resolvedMinHeight = clamp(min_height ?? 0, 0, 1600);
 
   const palette = useMemo(() => {
@@ -197,92 +203,71 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
         successText: "#166534",
         inputBg: card_color || "#ffffff",
         quantityBg: panel_color || "#f8fafc",
-        shadow: "0 20px 50px rgba(15,23,42,0.08)",
-        cardShadow: "0 8px 24px rgba(15,23,42,0.04)",
+        shadow: "0 8px 20px rgba(15,23,42,0.06)",
+        cardShadow: "0 4px 14px rgba(15,23,42,0.04)",
         disabledBg: "#cbd5e1",
       };
     }
 
     const pageBg = resolvedPrimaryBg;
-
     const shellBg =
       panel_color ||
-      (hasFestiveTint ? mixHex(pageBg, "#ffffff", 0.08) : "#0f172a");
-
+      (hasFestiveTint ? mixHex(pageBg, "#ffffff", 0.08) : "#111827");
     const panelBg =
       panel_color ||
       (hasFestiveTint ? mixHex(pageBg, "#ffffff", 0.12) : "#111827");
-
     const cardBg =
       card_color ||
       (hasFestiveTint
         ? mixHex(mixHex(pageBg, "#ffffff", 0.14), resolvedAccentColor, 0.06)
         : "#162033");
-
     const mutedBg = hasFestiveTint
       ? mixHex(pageBg, "#000000", 0.12)
       : "#0f172a";
-
     const inputBg = card_color
       ? card_color
       : hasFestiveTint
       ? mixHex(pageBg, "#000000", 0.18)
       : "#0b1220";
-
     const quantityBg = hasFestiveTint
       ? mixHex(pageBg, "#000000", 0.14)
       : "#0b1220";
-
     const shellBorder =
       border_color ||
       (hasFestiveTint
         ? alpha(resolvedAccentColor, 0.16)
         : "rgba(148,163,184,0.18)");
-
     const cardBorder =
       border_color ||
       (hasFestiveTint
         ? alpha(mixHex(resolvedAccentColor, "#ffffff", 0.35), 0.18)
         : "rgba(148,163,184,0.12)");
 
-    const softBg = hasFestiveTint ? alpha("#ffffff", 0.05) : "rgba(255,255,255,0.04)";
-    const text = resolvedTextColor;
-    const textMuted =
-      muted_text_color ||
-      (hasFestiveTint ? mixHex(resolvedTextColor, pageBg, 0.45) : "#94a3b8");
-    const textSoft =
-      muted_text_color ||
-      (hasFestiveTint ? mixHex(resolvedTextColor, pageBg, 0.28) : "#cbd5e1");
-    const headerBg = panel_color || (hasFestiveTint ? shellBg : "#0f172a");
-    const disabledBg = hasFestiveTint
-      ? mixHex(pageBg, "#94a3b8", 0.35)
-      : "#334155";
-
     return {
       pageBg,
       shellBg,
       shellBorder,
-      headerBg,
+      headerBg: shellBg,
       panelBg,
       cardBg,
       cardBorder,
       mutedBg,
-      softBg,
-      text,
-      textMuted,
-      textSoft,
+      softBg: hasFestiveTint ? alpha("#ffffff", 0.05) : "rgba(255,255,255,0.04)",
+      text: resolvedTextColor,
+      textMuted:
+        muted_text_color ||
+        (hasFestiveTint ? mixHex(resolvedTextColor, pageBg, 0.45) : "#94a3b8"),
+      textSoft:
+        muted_text_color ||
+        (hasFestiveTint ? mixHex(resolvedTextColor, pageBg, 0.28) : "#cbd5e1"),
       danger: "#fda4af",
       successBg: alpha("#22c55e", 0.16),
       successText: "#86efac",
       inputBg,
       quantityBg,
-      shadow: hasFestiveTint
-        ? "0 20px 48px rgba(0,0,0,0.28)"
-        : "0 8px 24px rgba(0,0,0,0.16)",
-      cardShadow: hasFestiveTint
-        ? "0 10px 24px rgba(0,0,0,0.20)"
-        : "0 2px 10px rgba(0,0,0,0.10)",
-      disabledBg,
+      shadow: "0 10px 24px rgba(0,0,0,0.18)",
+      cardShadow: "0 2px 10px rgba(0,0,0,0.10)",
+      disabledBg: "#334155",
     };
   }, [
     isDark,
@@ -314,6 +299,403 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   const handleApplyPromo = () => {
     setAppliedCode(promoCode.trim());
   };
+
+  if (isCheckoutSummary) {
+    return (
+      <section style={{ width: "100%" }}>
+        <div
+          style={{
+            border: `1px solid ${palette.shellBorder}`,
+            background: palette.shellBg,
+            borderRadius: `${outerRadius}px`,
+            overflow: "hidden",
+            boxShadow: palette.shadow,
+          }}
+        >
+          <div
+            style={{
+              padding: "20px",
+              borderBottom: `1px solid ${palette.shellBorder}`,
+              background: palette.headerBg,
+            }}
+          >
+            <p
+              style={{
+                margin: "0 0 8px",
+                fontSize: "12px",
+                fontWeight: 700,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                color: palette.textMuted,
+              }}
+            >
+              Order overview
+            </p>
+
+            <h3
+              style={{
+                margin: 0,
+                fontSize: "22px",
+                lineHeight: 1.1,
+                letterSpacing: "-0.03em",
+                color: palette.text,
+              }}
+            >
+              {heading}
+            </h3>
+
+            <p
+              style={{
+                margin: "8px 0 0",
+                color: palette.textMuted,
+                fontSize: "14px",
+                lineHeight: 1.6,
+              }}
+            >
+              {totalItems} item{totalItems !== 1 ? "s" : ""} in your order
+            </p>
+          </div>
+
+          <div
+            style={{
+              padding: "18px",
+              display: "grid",
+              gap: "14px",
+              background: palette.panelBg,
+            }}
+          >
+            {cartItems.length === 0 ? (
+              <div
+                style={{
+                  padding: "24px 16px",
+                  borderRadius: `${innerRadius}px`,
+                  border: `1px solid ${palette.cardBorder}`,
+                  background: palette.cardBg,
+                  textAlign: "center",
+                }}
+              >
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "16px",
+                    fontWeight: 700,
+                    color: palette.text,
+                  }}
+                >
+                  {emptyHeading}
+                </p>
+                <p
+                  style={{
+                    margin: "8px 0 0",
+                    fontSize: "14px",
+                    color: palette.textMuted,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  {emptyText}
+                </p>
+              </div>
+            ) : (
+              <>
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "12px",
+                  }}
+                >
+                  {cartItems.map((item) => (
+                    <div
+                      key={item.id}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "56px minmax(0, 1fr) auto",
+                        gap: "12px",
+                        alignItems: "center",
+                        padding: "12px",
+                        borderRadius: `${innerRadius}px`,
+                        background: palette.cardBg,
+                        border: `1px solid ${palette.cardBorder}`,
+                        boxShadow: palette.cardShadow,
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: "56px",
+                          height: "56px",
+                          borderRadius: "12px",
+                          overflow: "hidden",
+                          background: palette.mutedBg,
+                        }}
+                      >
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            display: "block",
+                          }}
+                        />
+                      </div>
+
+                      <div style={{ minWidth: 0 }}>
+                        <p
+                          style={{
+                            margin: "0 0 4px",
+                            fontSize: "14px",
+                            fontWeight: 700,
+                            color: palette.text,
+                            lineHeight: 1.3,
+                          }}
+                        >
+                          {item.name}
+                        </p>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "13px",
+                            color: palette.textMuted,
+                          }}
+                        >
+                          Qty {item.quantity}
+                        </p>
+                      </div>
+
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "14px",
+                          fontWeight: 700,
+                          color: palette.text,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        ₹{item.price * item.quantity}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                {show_promo && (
+                  <div
+                    style={{
+                      borderRadius: `${innerRadius}px`,
+                      background: palette.cardBg,
+                      border: `1px solid ${palette.cardBorder}`,
+                      boxShadow: palette.cardShadow,
+                      padding: "16px",
+                    }}
+                  >
+                    <h4
+                      style={{
+                        margin: "0 0 12px",
+                        fontSize: "15px",
+                        fontWeight: 700,
+                        color: palette.text,
+                      }}
+                    >
+                      {promoTitle}
+                    </h4>
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr auto",
+                        gap: "10px",
+                      }}
+                    >
+                      <input
+                        type="text"
+                        value={promoCode}
+                        onChange={(e) => setPromoCode(e.target.value)}
+                        placeholder={promoPlaceholder}
+                        style={{
+                          minHeight: "44px",
+                          borderRadius: "12px",
+                          border: `1px solid ${palette.cardBorder}`,
+                          background: palette.inputBg,
+                          color: palette.text,
+                          padding: "0 14px",
+                          outline: "none",
+                        }}
+                      />
+
+                      <button
+                        type="button"
+                        onClick={handleApplyPromo}
+                        style={{
+                          minHeight: "44px",
+                          border: "none",
+                          borderRadius: "12px",
+                          background: resolvedAccentColor,
+                          color: "#ffffff",
+                          padding: "0 16px",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {promoButtonLabel}
+                      </button>
+                    </div>
+
+                    {appliedCode ? (
+                      <p
+                        style={{
+                          margin: "10px 0 0",
+                          fontSize: "13px",
+                          color: palette.successText,
+                          background: palette.successBg,
+                          borderRadius: "10px",
+                          padding: "10px 12px",
+                        }}
+                      >
+                        Promo code <strong>{appliedCode}</strong> applied.
+                      </p>
+                    ) : null}
+                  </div>
+                )}
+
+                {show_summary && (
+                  <div
+                    style={{
+                      borderRadius: `${innerRadius}px`,
+                      background: palette.cardBg,
+                      border: `1px solid ${palette.cardBorder}`,
+                      boxShadow: palette.cardShadow,
+                      padding: "18px",
+                    }}
+                  >
+                    <h4
+                      style={{
+                        margin: "0 0 14px",
+                        fontSize: "18px",
+                        fontWeight: 700,
+                        color: palette.text,
+                        letterSpacing: "-0.02em",
+                      }}
+                    >
+                      {summaryTitle}
+                    </h4>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "12px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: "12px",
+                          color: palette.textMuted,
+                          fontSize: "14px",
+                        }}
+                      >
+                        <span>{subtotalLabel}</span>
+                        <span style={{ color: palette.text }}>₹{subtotal}</span>
+                      </div>
+
+                      {promoDiscount > 0 && (
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            gap: "12px",
+                            color: palette.successText,
+                            fontSize: "14px",
+                          }}
+                        >
+                          <span>Discount</span>
+                          <span>-₹{promoDiscount}</span>
+                        </div>
+                      )}
+
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: "12px",
+                          color: palette.textMuted,
+                          fontSize: "14px",
+                        }}
+                      >
+                        <span>{shippingLabel}</span>
+                        <span style={{ color: palette.text }}>₹{shipping}</span>
+                      </div>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: "12px",
+                          color: palette.textMuted,
+                          fontSize: "14px",
+                        }}
+                      >
+                        <span>{taxLabel}</span>
+                        <span style={{ color: palette.text }}>₹{tax}</span>
+                      </div>
+
+                      <div
+                        style={{
+                          height: "1px",
+                          background: palette.cardBorder,
+                          margin: "2px 0",
+                        }}
+                      />
+
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: "12px",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: "15px",
+                            fontWeight: 600,
+                            color: palette.text,
+                          }}
+                        >
+                          {totalLabel}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: "22px",
+                            fontWeight: 800,
+                            color: palette.text,
+                            letterSpacing: "-0.03em",
+                          }}
+                        >
+                          ₹{total}
+                        </span>
+                      </div>
+                    </div>
+
+                    <p
+                      style={{
+                        margin: "14px 0 0",
+                        fontSize: "13px",
+                        color: palette.textMuted,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {footerNote}
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section

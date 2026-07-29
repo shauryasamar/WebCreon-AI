@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useCart, Product } from "./CartContext";
 import { componentRegistry } from "./componentRegistry";
 
@@ -40,6 +40,19 @@ type RenderPageProps = {
   theme?: Theme;
 };
 
+const CHECKOUT_SUMMARY_TYPES = new Set([
+  "cart_sidebar",
+  "cartsidebar",
+  "cart_items",
+  "cartitems",
+  "order_summary",
+  "ordersummary",
+]);
+
+const PLACE_ORDER_TYPES = new Set(["place_order_cta", "placeordercta"]);
+const PAYMENT_TYPES = new Set(["payment_methods", "paymentmethods"]);
+const DELIVERY_TYPES = new Set(["delivery_form", "deliveryform"]);
+
 const RenderPage: React.FC<RenderPageProps> = ({
   page,
   siteId,
@@ -48,6 +61,17 @@ const RenderPage: React.FC<RenderPageProps> = ({
 }) => {
   const { products, cartItems } = useCart();
   const [selectedFilter, setSelectedFilter] = useState("All");
+  const [isCompactCheckout, setIsCompactCheckout] = useState(false);
+
+  useEffect(() => {
+    const syncViewport = () => {
+      setIsCompactCheckout(window.innerWidth < 1024);
+    };
+
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+    return () => window.removeEventListener("resize", syncViewport);
+  }, []);
 
   if (!page) {
     return <div style={{ padding: "24px" }}>Page not found.</div>;
@@ -76,7 +100,11 @@ const RenderPage: React.FC<RenderPageProps> = ({
     return products.filter((product) => product.category === selectedFilter);
   }, [products, selectedFilter]);
 
-  const renderBlock = (block: Block, index: number) => {
+  const renderBlock = (
+    block: Block,
+    index: number,
+    overrides?: Record<string, any>
+  ) => {
     const Component = componentRegistry[block.type];
 
     if (!Component) {
@@ -86,11 +114,14 @@ const RenderPage: React.FC<RenderPageProps> = ({
 
     const blockId = block.id ?? `${page.id ?? "page"}-${block.type}-${index}`;
     const resolvedDataSource = block.data_source ?? block.datasource ?? undefined;
-
     const blockProps = (block.props ?? {}) as Record<string, any>;
+    const resolvedTheme: Theme | undefined = theme;
+
     const componentProps = {
       siteId,
       ...blockProps,
+      theme: resolvedTheme,
+      ...(overrides ?? {}),
     };
 
     if (block.type === "filter_sidebar" || block.type === "filtersidebar") {
@@ -98,7 +129,6 @@ const RenderPage: React.FC<RenderPageProps> = ({
         <Component
           key={blockId}
           {...componentProps}
-          theme={(blockProps.theme as Theme | undefined) ?? theme}
           filters={productCategories}
           selectedFilter={selectedFilter}
           onFilterChange={setSelectedFilter}
@@ -132,7 +162,6 @@ const RenderPage: React.FC<RenderPageProps> = ({
         <Component
           key={blockId}
           {...componentProps}
-          theme={theme}
           cartItems={cartItems}
         />
       );
@@ -142,92 +171,180 @@ const RenderPage: React.FC<RenderPageProps> = ({
   };
 
   if (!isCheckoutPage) {
-    return <>{resolvedBlocks.map(renderBlock)}</>;
+    return <>{resolvedBlocks.map((block, index) => renderBlock(block, index))}</>;
   }
 
-  const addressBlock = resolvedBlocks[0];
-  const paymentBlock = resolvedBlocks[1];
-  const placeOrderBlock = resolvedBlocks[2];
-  const remainingBlocks = resolvedBlocks.slice(3);
+  const deliveryBlock = resolvedBlocks.find((block) =>
+    DELIVERY_TYPES.has(block.type.toLowerCase())
+  );
+
+  const paymentBlock = resolvedBlocks.find((block) =>
+    PAYMENT_TYPES.has(block.type.toLowerCase())
+  );
+
+  const placeOrderBlock = resolvedBlocks.find((block) =>
+    PLACE_ORDER_TYPES.has(block.type.toLowerCase())
+  );
+
+  const summaryBlock = resolvedBlocks.find((block) =>
+    CHECKOUT_SUMMARY_TYPES.has(block.type.toLowerCase())
+  );
+
+  const usedBlockIds = new Set(
+    [deliveryBlock, paymentBlock, placeOrderBlock, summaryBlock]
+      .filter(Boolean)
+      .map((block) => block!.id || block!.type)
+  );
+
+  const extraBlocks = resolvedBlocks.filter((block) => {
+    const key = block.id || block.type;
+    return !usedBlockIds.has(key);
+  });
+
+  const pageBg =
+    theme?.mode === "light" ? "#f8fafc" : theme?.primary_bg || "#0f172a";
+
+  const textColor =
+    theme?.mode === "light" ? "#111827" : theme?.text_color || "#f9fafb";
+
+  const subtleText =
+    theme?.mode === "light" ? "rgba(17,24,39,0.68)" : "rgba(255,255,255,0.68)";
 
   return (
     <div
       style={{
         minHeight: "100vh",
-        padding: "24px 16px 56px",
+        padding: isCompactCheckout ? "16px 12px 28px" : "20px 16px 36px",
+        background: pageBg,
       }}
     >
       <div
         style={{
-          maxWidth: "1180px",
+          maxWidth: "1240px",
           margin: "0 auto",
           width: "100%",
         }}
       >
         <div
           style={{
-            marginBottom: "20px",
+            marginBottom: isCompactCheckout ? "14px" : "18px",
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+            gap: "16px",
+            flexWrap: "wrap",
           }}
         >
-          <h1
-            style={{
-              margin: 0,
-              fontSize: "clamp(28px, 4vw, 40px)",
-              lineHeight: 1.05,
-              letterSpacing: "-0.03em",
-              fontWeight: 800,
-            }}
-          >
-            {page.title || page.name || "Checkout"}
-          </h1>
+          <div style={{ minWidth: 0 }}>
+            <p
+              style={{
+                margin: "0 0 6px",
+                fontSize: "11px",
+                fontWeight: 700,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                color: subtleText,
+              }}
+            >
+              Secure checkout
+            </p>
+
+            <h1
+              style={{
+                margin: 0,
+                fontSize: isCompactCheckout
+                  ? "clamp(24px, 4vw, 30px)"
+                  : "clamp(28px, 4vw, 34px)",
+                lineHeight: 1.05,
+                letterSpacing: "-0.03em",
+                fontWeight: 800,
+                color: textColor,
+              }}
+            >
+              {page.title || page.name || "Checkout"}
+            </h1>
+          </div>
 
           <p
             style={{
-              margin: "8px 0 0",
-              fontSize: "15px",
+              margin: 0,
+              fontSize: "13px",
               lineHeight: 1.6,
-              opacity: 0.75,
+              color: subtleText,
+              maxWidth: "420px",
             }}
           >
-            Complete your order with secure checkout.
+            Fast one-page checkout with delivery, payment, summary, and final action.
           </p>
         </div>
 
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "minmax(0, 1.35fr) minmax(320px, 0.9fr)",
-            gap: "24px",
+            gridTemplateColumns: isCompactCheckout
+              ? "minmax(0, 1fr)"
+              : "minmax(0, 1.05fr) minmax(360px, 0.95fr)",
+            gap: isCompactCheckout ? "14px" : "18px",
             alignItems: "start",
           }}
         >
-          <div style={{ minWidth: 0 }}>
-            {addressBlock ? renderBlock(addressBlock, 0) : null}
-          </div>
-
           <div
             style={{
               minWidth: 0,
               display: "grid",
-              gap: "16px",
+              gap: "14px",
               alignContent: "start",
             }}
           >
-            {paymentBlock ? renderBlock(paymentBlock, 1) : null}
-            {placeOrderBlock ? renderBlock(placeOrderBlock, 2) : null}
+            {deliveryBlock
+              ? renderBlock(deliveryBlock, resolvedBlocks.indexOf(deliveryBlock), {
+                  compact: true,
+                })
+              : null}
           </div>
 
-          {remainingBlocks.length > 0 ? (
+          <aside
+            style={{
+              minWidth: 0,
+              display: "grid",
+              gap: "12px",
+              alignContent: "start",
+              position: isCompactCheckout ? "static" : "sticky",
+              top: isCompactCheckout ? undefined : "84px",
+            }}
+          >
+            {paymentBlock
+              ? renderBlock(paymentBlock, resolvedBlocks.indexOf(paymentBlock), {
+                  compact: true,
+                })
+              : null}
+
+            {summaryBlock
+              ? renderBlock(summaryBlock, resolvedBlocks.indexOf(summaryBlock), {
+                  mode: "checkout_summary",
+                  compact: true,
+                })
+              : null}
+
+            {placeOrderBlock
+              ? renderBlock(placeOrderBlock, resolvedBlocks.indexOf(placeOrderBlock), {
+                  compact: true,
+                })
+              : null}
+          </aside>
+
+          {extraBlocks.length > 0 ? (
             <div
               style={{
                 gridColumn: "1 / -1",
                 display: "grid",
-                gap: "20px",
+                gap: "16px",
                 minWidth: 0,
+                marginTop: "2px",
               }}
             >
-              {remainingBlocks.map((block, index) =>
-                renderBlock(block, index + 3)
+              {extraBlocks.map((block, index) =>
+                renderBlock(block, index + resolvedBlocks.length)
               )}
             </div>
           ) : null}
