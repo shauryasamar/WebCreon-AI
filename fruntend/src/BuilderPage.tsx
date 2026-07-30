@@ -54,25 +54,13 @@ type SiteDefinition = EditorSiteDefinition & {
 };
 
 type SavedSite = {
-  id: number;
-  name: string;
-  site_type: string;
-  domain: string | null;
-  region: string | null;
+  id: string;
+  slug: string;
+  site_definition: SiteDefinition;
+  draft_definition: SiteDefinition | null;
+  version: number;
   created_at: string;
-};
-
-type SiteVersion = {
-  id: number;
-  site_id: number;
-  prompt: string;
-  site_definition_json: string;
-  created_at: string;
-};
-
-type SiteDetailResponse = {
-  site: SavedSite;
-  latest_version: SiteVersion | null;
+  updated_at: string;
 };
 
 const NAVBAR_BLOCK_ID = "global-navbar";
@@ -80,6 +68,7 @@ const BUILDER_TOPBAR_HEIGHT = 64;
 const EDITOR_SIDEBAR_WIDTH = 320;
 const FIXED_NAVBAR_CONTENT_OFFSET = 96;
 const FIXED_NAVBAR_Z_INDEX = 240;
+const API_BASE_URL = "http://localhost:8000";
 
 function normalizeRoute(route?: string | null) {
   if (!route || route === "/") return "";
@@ -115,6 +104,61 @@ function getNavbarEditorProps(siteDefinition: SiteDefinition) {
     showSearch: siteDefinition.navbar?.showSearch ?? true,
     showAccount: siteDefinition.navbar?.showAccount ?? true,
     showCart: siteDefinition.navbar?.showCart ?? true,
+  };
+}
+
+function slugify(value: string) {
+  return String(value || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+}
+
+function normalizeStorefrontProduct(raw: any): Product {
+  const attributes = raw?.attributes ?? {};
+  const sizes = Array.isArray(attributes?.sizes)
+    ? attributes.sizes
+    : Array.isArray(raw?.sizes)
+    ? raw.sizes
+    : [];
+
+  const image =
+    raw?.image ||
+    (Array.isArray(raw?.images) && raw.images[0]) ||
+    "";
+
+  const price = Number(raw?.price ?? 0);
+  const originalPrice =
+    raw?.originalPrice != null
+      ? Number(raw.originalPrice)
+      : raw?.original_price != null
+      ? Number(raw.original_price)
+      : price;
+
+  const discountPercent =
+    raw?.discountPercent != null
+      ? Number(raw.discountPercent)
+      : raw?.discount_percent != null
+      ? Number(raw.discount_percent)
+      : originalPrice > price && originalPrice > 0
+      ? Math.round(((originalPrice - price) / originalPrice) * 100)
+      : 0;
+
+  return {
+    id: Number(raw?.id),
+    name: raw?.name ?? "",
+    brand: raw?.brand ?? "",
+    price,
+    originalPrice,
+    discountPercent,
+    image,
+    description: raw?.description ?? "",
+    sizes,
+    category: raw?.category ?? "",
+    inStock: Number(raw?.stock ?? 0) > 0,
+    slug: raw?.slug || slugify(raw?.name) || String(raw?.id ?? ""),
   };
 }
 
@@ -264,6 +308,8 @@ function BuilderPageContent() {
     useState<SiteDefinition | null>(null);
   const [siteName, setSiteName] = useState("");
   const [loading, setLoading] = useState(true);
+  const [adminAuthChecked, setAdminAuthChecked] = useState(false);
+  const [adminAuthenticated, setAdminAuthenticated] = useState(false);
 
   const [editMode, setEditMode] = useState(false);
   const [editorTab, setEditorTab] = useState<EditorTab>("theme");
@@ -283,6 +329,44 @@ function BuilderPageContent() {
       | "sticky"
       | "fixed"
       | undefined) || "fixed";
+
+  useEffect(() => {
+    const checkAdminAuth = async () => {
+      if (!isAdminRoute) {
+        setAdminAuthenticated(false);
+        setAdminAuthChecked(true);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/auth/admin/me`, {
+          credentials: "include",
+        });
+
+        if (!response.ok) {
+          setAdminAuthenticated(false);
+          navigate("/admin/login", {
+            replace: true,
+            state: { from: location.pathname },
+          });
+          return;
+        }
+
+        setAdminAuthenticated(true);
+      } catch (error) {
+        console.error("Failed to verify admin session:", error);
+        setAdminAuthenticated(false);
+        navigate("/admin/login", {
+          replace: true,
+          state: { from: location.pathname },
+        });
+      } finally {
+        setAdminAuthChecked(true);
+      }
+    };
+
+    checkAdminAuth();
+  }, [isAdminRoute, navigate, location.pathname]);
 
   useLayoutEffect(() => {
     const element = previewPaneRef.current;
@@ -328,30 +412,28 @@ function BuilderPageContent() {
       try {
         setLoading(true);
 
-        const response = await fetch(`http://127.0.0.1:8000/sites/${siteId}`);
+        const response = await fetch(`${API_BASE_URL}/sites/${siteId}`, {
+          credentials: "include",
+        });
 
         if (!response.ok) {
           throw new Error(`Failed to load site: ${response.status}`);
         }
 
-        const data: SiteDetailResponse = await response.json();
+        const data: SavedSite = await response.json();
+        const parsedSiteDefinition: SiteDefinition =
+          data.draft_definition || data.site_definition;
 
-        if (!data.latest_version?.site_definition_json) {
+        if (!parsedSiteDefinition) {
           setSiteDefinition(null);
           setDraftSiteDefinition(null);
-          setSiteName(data.site?.name || "");
+          setSiteName(data.slug || "");
           return;
         }
 
-        const parsedSiteDefinition: SiteDefinition = JSON.parse(
-          data.latest_version.site_definition_json
-        );
-
         setSiteDefinition(parsedSiteDefinition);
         setDraftSiteDefinition(parsedSiteDefinition);
-        setSiteName(
-          parsedSiteDefinition.site?.brand_name || data.site?.name || "Website"
-        );
+        setSiteName(parsedSiteDefinition.site?.brand_name || data.slug || "Website");
 
         if (parsedSiteDefinition.pages?.length > 0) {
           const currentPath = window.location.pathname;
@@ -387,7 +469,9 @@ function BuilderPageContent() {
       }
     };
 
-    loadSite();
+    if (siteId) {
+      loadSite();
+    }
   }, [siteId, navigate, builderBase]);
 
   const storefrontHomePath = useMemo(() => {
@@ -440,7 +524,20 @@ function BuilderPageContent() {
     setEditorTab("block");
   };
 
-  if (loading) {
+  const handleLogout = async () => {
+    try {
+      await fetch(`${API_BASE_URL}/auth/admin/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch (error) {
+      console.error("Error logging out:", error);
+    } finally {
+      navigate("/admin/login", { replace: true });
+    }
+  };
+
+  if (loading || (isAdminRoute && !adminAuthChecked)) {
     return (
       <div
         style={{
@@ -455,6 +552,10 @@ function BuilderPageContent() {
     );
   }
 
+  if (isAdminRoute && !adminAuthenticated) {
+    return null;
+  }
+
   if (!activeSiteDefinition) {
     return (
       <div
@@ -466,7 +567,7 @@ function BuilderPageContent() {
         }}
       >
         <p>Website not found.</p>
-        <Link to="/" style={{ color: "#2563eb" }}>
+        <Link to="/admin/sites" style={{ color: "#2563eb" }}>
           Back to dashboard
         </Link>
       </div>
@@ -484,6 +585,35 @@ function BuilderPageContent() {
       : activeSiteDefinition.theme?.text_color || "#f9fafb";
 
   const accentColor = activeSiteDefinition.theme?.accent_color || "#2563eb";
+
+  const secondaryButtonStyle = {
+    padding: "9px 14px",
+    borderRadius: "10px",
+    background:
+      activeSiteDefinition.theme?.mode === "light"
+        ? "rgba(17,24,39,0.06)"
+        : "rgba(255,255,255,0.08)",
+    color: textColor,
+    textDecoration: "none" as const,
+    fontSize: "14px",
+    fontWeight: 600,
+    border: "none",
+    cursor: "pointer",
+  };
+
+  const outlineButtonStyle = {
+    padding: "9px 14px",
+    borderRadius: "10px",
+    border:
+      activeSiteDefinition.theme?.mode === "light"
+        ? "1px solid rgba(17,24,39,0.12)"
+        : "1px solid rgba(255,255,255,0.16)",
+    background: "transparent",
+    color: textColor,
+    cursor: "pointer",
+    fontSize: "14px",
+    fontWeight: 600,
+  };
 
   return (
     <div
@@ -555,59 +685,23 @@ function BuilderPageContent() {
           </div>
 
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-            <Link
-              to="/"
-              style={{
-                padding: "9px 14px",
-                borderRadius: "10px",
-                background:
-                  activeSiteDefinition.theme?.mode === "light"
-                    ? "rgba(17,24,39,0.06)"
-                    : "rgba(255,255,255,0.08)",
-                color: textColor,
-                textDecoration: "none",
-                fontSize: "14px",
-                fontWeight: 600,
-              }}
-            >
+            <Link to="/admin/sites" style={secondaryButtonStyle}>
               Back to dashboard
             </Link>
 
             {isAdminRoute ? (
-              <Link
-                to={storefrontHomePath}
-                style={{
-                  padding: "9px 14px",
-                  borderRadius: "10px",
-                  background:
-                    activeSiteDefinition.theme?.mode === "light"
-                      ? "rgba(17,24,39,0.06)"
-                      : "rgba(255,255,255,0.08)",
-                  color: textColor,
-                  textDecoration: "none",
-                  fontSize: "14px",
-                  fontWeight: 600,
-                }}
-              >
-                Back to website
-              </Link>
+              <>
+                <Link to={storefrontHomePath} style={secondaryButtonStyle}>
+                  Back to website
+                </Link>
+
+                <button onClick={handleLogout} style={outlineButtonStyle}>
+                  Logout
+                </button>
+              </>
             ) : (
               <>
-                <Link
-                  to={`${builderBase}/admin/products`}
-                  style={{
-                    padding: "9px 14px",
-                    borderRadius: "10px",
-                    background:
-                      activeSiteDefinition.theme?.mode === "light"
-                        ? "rgba(17,24,39,0.06)"
-                        : "rgba(255,255,255,0.08)",
-                    color: textColor,
-                    textDecoration: "none",
-                    fontSize: "14px",
-                    fontWeight: 600,
-                  }}
-                >
+                <Link to={`${builderBase}/admin/products`} style={secondaryButtonStyle}>
                   Open admin
                 </Link>
 
@@ -628,25 +722,14 @@ function BuilderPageContent() {
                     Customize
                   </button>
                 ) : (
-                  <button
-                    onClick={handleCloseEditMode}
-                    style={{
-                      padding: "9px 14px",
-                      borderRadius: "10px",
-                      border:
-                        activeSiteDefinition.theme?.mode === "light"
-                          ? "1px solid rgba(17,24,39,0.12)"
-                          : "1px solid rgba(255,255,255,0.16)",
-                      background: "transparent",
-                      color: textColor,
-                      cursor: "pointer",
-                      fontSize: "14px",
-                      fontWeight: 600,
-                    }}
-                  >
+                  <button onClick={handleCloseEditMode} style={outlineButtonStyle}>
                     Exit editor
                   </button>
                 )}
+
+                <button onClick={handleLogout} style={outlineButtonStyle}>
+                  Logout
+                </button>
               </>
             )}
           </div>
@@ -785,11 +868,16 @@ export default function BuilderPage() {
       if (!siteId) return;
 
       try {
-        const res = await fetch(`http://127.0.0.1:8000/sites/${siteId}/products`);
+        const res = await fetch(`${API_BASE_URL}/sites/${siteId}/products`, {
+          credentials: "include",
+        });
 
         if (res.ok) {
-          const data: Product[] = await res.json();
-          setSiteProducts(data);
+          const data = await res.json();
+          const normalizedProducts = Array.isArray(data)
+            ? data.map(normalizeStorefrontProduct)
+            : [];
+          setSiteProducts(normalizedProducts);
         } else {
           console.error("Failed to load products for site", res.status);
           setSiteProducts([]);

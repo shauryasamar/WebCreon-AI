@@ -26,6 +26,8 @@ type ProductFormValues = {
   skinTypes: string; // skincare
 };
 
+const API_BASE_URL = "http://localhost:8000";
+
 const AdminProducts = () => {
   const { siteId } = useParams();
   const [products, setProducts] = useState<Product[]>([]);
@@ -52,18 +54,31 @@ const AdminProducts = () => {
     skinTypes: "",
   });
 
+  // Normalize backend product shape to frontend Product
+  const normalizeProduct = (p: any): Product => ({
+    id: p.id,
+    name: p.name ?? "",
+    brand: p.brand ?? "",
+    category: p.category ?? "",
+    price: Number(p.price ?? 0),
+    image: (p.image as string) || (Array.isArray(p.images) && p.images[0]) || "",
+    description: p.description ?? "",
+    inStock: Number(p.stock ?? 0) > 0,
+    attributes: p.attributes ?? {},
+  });
+
   // Load products for this site from backend
   useEffect(() => {
     const loadProducts = async () => {
       if (!siteId) return;
       setIsLoading(true);
       try {
-        const res = await fetch(
-          `http://127.0.0.1:8000/sites/${siteId}/products`
-        );
+        const res = await fetch(`${API_BASE_URL}/sites/${siteId}/products`, {
+          credentials: "include",
+        });
         if (res.ok) {
-          const data: Product[] = await res.json();
-          setProducts(data);
+          const data = await res.json();
+          setProducts(Array.isArray(data) ? data.map(normalizeProduct) : []);
         } else {
           console.error("Failed to load products", res.status);
         }
@@ -165,6 +180,7 @@ const AdminProducts = () => {
     const price = parseFloat(formValues.price || "0") || 0;
     const attributes = buildAttributesFromForm();
 
+    // IMPORTANT: send numeric "stock" to match backend/db column
     const payload = {
       name: formValues.name,
       brand: formValues.brand,
@@ -172,38 +188,43 @@ const AdminProducts = () => {
       price,
       image: formValues.image,
       description: formValues.description,
-      inStock: formValues.inStock,
+      stock: formValues.inStock ? 1 : 0,
       attributes,
     };
 
     try {
       if (editingProduct) {
         const res = await fetch(
-          `http://127.0.0.1:8000/sites/${siteId}/products/${editingProduct.id}`,
+          `${API_BASE_URL}/sites/${siteId}/products/${editingProduct.id}`,
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
+            credentials: "include",
             body: JSON.stringify(payload),
           }
         );
         if (res.ok) {
-          const updated: Product = await res.json();
+          const updatedRaw = await res.json();
+          const updated = normalizeProduct(updatedRaw);
           setProducts((prev) =>
             prev.map((p) => (p.id === updated.id ? updated : p))
           );
+        } else {
+          console.error("Failed to update product", res.status);
         }
       } else {
-        const res = await fetch(
-          `http://127.0.0.1:8000/sites/${siteId}/products`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          }
-        );
+        const res = await fetch(`${API_BASE_URL}/sites/${siteId}/products`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(payload),
+        });
         if (res.ok) {
-          const created: Product = await res.json();
+          const createdRaw = await res.json();
+          const created = normalizeProduct(createdRaw);
           setProducts((prev) => [...prev, created]);
+        } else {
+          console.error("Failed to create product", res.status);
         }
       }
     } catch (err) {
@@ -218,11 +239,13 @@ const AdminProducts = () => {
     if (!siteId) return;
     try {
       const res = await fetch(
-        `http://127.0.0.1:8000/sites/${siteId}/products/${productId}`,
-        { method: "DELETE" }
+        `${API_BASE_URL}/sites/${siteId}/products/${productId}`,
+        { method: "DELETE", credentials: "include" }
       );
       if (res.ok) {
         setProducts((prev) => prev.filter((p) => p.id !== productId));
+      } else {
+        console.error("Failed to delete product", res.status);
       }
     } catch (err) {
       console.error("Error deleting product", err);

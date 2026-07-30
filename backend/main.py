@@ -1,24 +1,28 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-import json
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+from uuid import UUID
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from langgraph.graph import END, StateGraph
+from pydantic import BaseModel, Field
 from sqlmodel import Session, select
-from langgraph.graph import StateGraph, END
 
-from db.database import create_db_and_tables, get_session
-from models import Site, SiteVersion, Product
-from agents.understanding import extract_requirements
-from agents.planning import plan_site
-from agents.site_schema import build_site_definition
 from agents.backend_exec import build_backend_config
 from agents.backend_runtime import register_backend_routes
-from routers import products
-
+from agents.planning import plan_site
+from agents.site_schema import build_site_definition
+from agents.understanding import extract_requirements
+from auth_middleware import (
+    authenticate_admin,
+    authenticate_customer,
+    enforce_site_ownership,
+)
+from db.database import create_db_and_tables, get_session
+from models import AdminSite, Site
+from routers import auth, products
 
 app = FastAPI(title="AI Website Builder Backend")
 
@@ -30,6 +34,7 @@ def on_startup():
 
 origins = [
     "http://localhost:5173",
+    "http://127.0.0.1:5173",
 ]
 
 app.add_middleware(
@@ -40,7 +45,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Products API (per-site product CRUD)
+app.include_router(auth.router)
 app.include_router(products.router)
 
 
@@ -49,12 +54,9 @@ class GenerateSiteRequest(BaseModel):
 
 
 class SaveSiteRequest(BaseModel):
-    name: str
-    site_type: str
-    domain: Optional[str] = None
-    region: Optional[str] = None
-    prompt: str
-    site_definition: dict
+    slug: str
+    site_definition: dict[str, Any]
+    draft_definition: Optional[dict[str, Any]] = None
 
 
 class RequirementsResponse(BaseModel):
@@ -78,11 +80,11 @@ class SiteGenerationResponse(BaseModel):
 
 class SiteGenerationState(BaseModel):
     user_prompt: str
-    requirements: Dict[str, Any] = {}
-    site_plan: Dict[str, Any] = {}
-    backend_config: Dict[str, Any] = {}
-    frontend_config: Dict[str, Any] = {}
-    site_definition: Dict[str, Any] = {}
+    requirements: Dict[str, Any] = Field(default_factory=dict)
+    site_plan: Dict[str, Any] = Field(default_factory=dict)
+    backend_config: Dict[str, Any] = Field(default_factory=dict)
+    frontend_config: Dict[str, Any] = Field(default_factory=dict)
+    site_definition: Dict[str, Any] = Field(default_factory=dict)
     runtime_registered: bool = False
 
 
@@ -250,52 +252,101 @@ async def generate_site_definition_endpoint(req: GenerateSiteRequest):
     }
 
 
+@app.get("/auth/admin/me")
+def admin_me(admin=Depends(authenticate_admin)):
+    return admin
+
+
+@app.get("/auth/customer/me")
+def customer_me(user=Depends(authenticate_customer)):
+    return user
+
+
 @app.get("/sites")
 def get_sites(session: Session = Depends(get_session)):
-    sites = session.exec(select(Site).order_by(Site.id.desc())).all()
+    sites = session.exec(select(Site).order_by(Site.created_at.desc())).all()
     return sites
 
 
 @app.get("/sites/{site_id}")
-def get_site(site_id: int, session: Session = Depends(get_session)):
+def get_site(
+    site_id: UUID,
+    ownership=Depends(enforce_site_ownership),
+    session: Session = Depends(get_session),
+):
     site = session.get(Site, site_id)
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
 
-    latest_version = session.exec(
-        select(SiteVersion)
-        .where(SiteVersion.site_id == site_id)
-        .order_by(SiteVersion.id.desc())
-    ).first()
+    return site
 
-    return {
-        "site": site,
-        "latest_version": latest_version,
-    }
+
+@app.get("/sites/slug/{slug}")
+def get_site_by_slug(slug: str, session: Session = Depends(get_session)):
+    site = session.exec(select(Site).where(Site.slug == slug)).first()
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    return site
 
 
 @app.post("/sites")
-def create_site(payload: SaveSiteRequest, session: Session = Depends(get_session)):
+def create_site(
+    payload: SaveSiteRequest,
+    admin=Depends(authenticate_admin),
+    session: Session = Depends(get_session),
+):
+    existing_site = session.exec(
+        select(Site).where(Site.slug == payload.slug)
+    ).first()
+    if existing_site:
+        raise HTTPException(status_code=400, detail="Site slug already exists")
+
     site = Site(
-        name=payload.name,
-        site_type=payload.site_type,
-        domain=payload.domain,
-        region=payload.region,
+        slug=payload.slug,
+        site_definition=payload.site_definition,
+        draft_definition=payload.draft_definition,
     )
     session.add(site)
     session.commit()
     session.refresh(site)
 
-    version = SiteVersion(
+    admin_site = AdminSite(
+        admin_id=UUID(admin["adminId"]),
         site_id=site.id,
-        prompt=payload.prompt,
-        site_definition_json=json.dumps(payload.site_definition),
+        role_on_site="owner",
     )
-    session.add(version)
+    session.add(admin_site)
     session.commit()
-    session.refresh(version)
 
-    return {
-        "site": site,
-        "version": version,
-    }
+    session.refresh(site)
+    return site
+
+
+@app.put("/sites/{site_id}")
+def update_site(
+    site_id: UUID,
+    payload: SaveSiteRequest,
+    ownership=Depends(enforce_site_ownership),
+    session: Session = Depends(get_session),
+):
+    site = session.get(Site, site_id)
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    slug_conflict = session.exec(
+        select(Site).where(Site.slug == payload.slug, Site.id != site_id)
+    ).first()
+    if slug_conflict:
+        raise HTTPException(status_code=400, detail="Site slug already exists")
+
+    site.slug = payload.slug
+    site.site_definition = payload.site_definition
+    site.draft_definition = payload.draft_definition
+    site.version = site.version + 1
+
+    session.add(site)
+    session.commit()
+    session.refresh(site)
+
+    return site

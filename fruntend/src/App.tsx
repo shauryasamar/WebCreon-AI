@@ -1,11 +1,16 @@
 import { useEffect, useState } from "react";
 import {
   BrowserRouter,
+  Navigate,
   Routes,
   Route,
+  Outlet,
   useNavigate,
+  useLocation,
 } from "react-router-dom";
 import BuilderPage from "./BuilderPage";
+import AdminLoginPage from "./pages/AdminLoginPage";
+import AdminSignupPage from "./pages/AdminSignupPage";
 
 type Block = {
   id: string;
@@ -52,15 +57,81 @@ type SiteDefinitionResponse = {
 };
 
 type SavedSite = {
-  id: number;
-  name: string;
-  site_type: string;
-  domain: string | null;
-  region: string | null;
+  id: string;
+  slug: string;
+  site_definition: SiteDefinition;
+  draft_definition: SiteDefinition | null;
+  version: number;
   created_at: string;
+  updated_at: string;
 };
 
-function DashboardPage() {
+const API_BASE_URL = "http://localhost:8000";
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+}
+
+function RequireAdminAuth() {
+  const location = useLocation();
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    const checkAdminSession = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/auth/admin/me`, {
+          credentials: "include",
+        });
+
+        setIsAuthenticated(response.ok);
+      } catch (error) {
+        console.error("Error checking admin session:", error);
+        setIsAuthenticated(false);
+      } finally {
+        setCheckingSession(false);
+      }
+    };
+
+    checkAdminSession();
+  }, []);
+
+  if (checkingSession) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          background: "#0f172a",
+          color: "#f8fafc",
+          padding: "24px",
+        }}
+      >
+        <p>Checking admin session...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <Navigate
+        to="/admin/login"
+        replace
+        state={{ from: location.pathname }}
+      />
+    );
+  }
+
+  return <Outlet />;
+}
+
+function AdminSitesPage() {
   const navigate = useNavigate();
 
   const [prompt, setPrompt] = useState(
@@ -68,21 +139,25 @@ function DashboardPage() {
   );
   const [loading, setLoading] = useState(false);
   const [savedSites, setSavedSites] = useState<SavedSite[]>([]);
-  const [sitesLoading, setSitesLoading] = useState(false);
+  const [sitesLoading, setSitesLoading] = useState(true);
 
   const loadSavedSites = async () => {
     try {
       setSitesLoading(true);
-      const response = await fetch("http://127.0.0.1:8000/sites");
+
+      const response = await fetch(`${API_BASE_URL}/auth/admin/sites`, {
+        credentials: "include",
+      });
 
       if (!response.ok) {
-        throw new Error(`Failed to load sites: ${response.status}`);
+        throw new Error(`Failed to load admin sites: ${response.status}`);
       }
 
       const data = await response.json();
       setSavedSites(data);
     } catch (error) {
-      console.error("Error loading saved sites:", error);
+      console.error("Error loading admin sites:", error);
+      setSavedSites([]);
     } finally {
       setSitesLoading(false);
     }
@@ -92,55 +167,70 @@ function DashboardPage() {
     loadSavedSites();
   }, []);
 
-  const openSite = (siteId: number) => {
+  const openSite = (siteId: string) => {
     navigate(`/builder/${siteId}`);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch(`${API_BASE_URL}/auth/admin/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch (error) {
+      console.error("Error logging out:", error);
+    } finally {
+      navigate("/admin/login", { replace: true });
+    }
   };
 
   const generateSite = async () => {
     try {
       setLoading(true);
 
-      const response = await fetch("http://127.0.0.1:8000/site-definition", {
+      const response = await fetch(`${API_BASE_URL}/site-definition`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify({ prompt }),
       });
 
+      if (!response.ok) {
+        throw new Error(`Failed to generate site definition: ${response.status}`);
+      }
+
       const data: SiteDefinitionResponse = await response.json();
 
-      const siteName =
+      const brandName =
         data.site_definition.site.brand_name ||
         `${data.site_definition.site.site_type} website`;
 
-      await fetch("http://127.0.0.1:8000/sites", {
+      const baseSlug = slugify(brandName) || "website";
+      const uniqueSlug = `${baseSlug}-${Date.now()}`;
+
+      const createResponse = await fetch(`${API_BASE_URL}/sites`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify({
-          name: siteName,
-          site_type: data.site_definition.site.site_type,
-          domain: data.site_definition.site.domain,
-          region: data.site_definition.site.region,
-          prompt,
+          slug: uniqueSlug,
           site_definition: data.site_definition,
+          draft_definition: data.site_definition,
         }),
       });
 
-      const refreshedResponse = await fetch("http://127.0.0.1:8000/sites");
-      const refreshedSites: SavedSite[] = await refreshedResponse.json();
-
-      setSavedSites(refreshedSites);
-
-      if (refreshedSites.length > 0) {
-        const latestSite = refreshedSites.reduce((maxSite, currentSite) =>
-          currentSite.id > maxSite.id ? currentSite : maxSite
-        );
-
-        navigate(`/builder/${latestSite.id}`);
+      if (!createResponse.ok) {
+        throw new Error(`Failed to save site: ${createResponse.status}`);
       }
+
+      const createdSite: SavedSite = await createResponse.json();
+
+      await loadSavedSites();
+      navigate(`/builder/${createdSite.id}`);
     } catch (error) {
       console.error("Error generating site:", error);
     } finally {
@@ -193,11 +283,35 @@ function DashboardPage() {
 
           <div
             style={{
-              fontSize: "14px",
-              opacity: 0.7,
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
             }}
           >
-            {savedSites.length} saved websites
+            <div
+              style={{
+                fontSize: "14px",
+                opacity: 0.7,
+              }}
+            >
+              {savedSites.length} saved websites
+            </div>
+
+            <button
+              onClick={handleLogout}
+              style={{
+                padding: "10px 14px",
+                borderRadius: "10px",
+                border: "1px solid rgba(255,255,255,0.12)",
+                background: "rgba(255,255,255,0.04)",
+                color: "#f8fafc",
+                fontSize: "14px",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Logout
+            </button>
           </div>
         </div>
 
@@ -311,124 +425,144 @@ function DashboardPage() {
             ) : (
               <div
                 style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "14px",
-                    overflowY: "auto",
-                    minHeight: 0,
-                    paddingRight: "2px",
-                    scrollbarWidth: "none",
-                    msOverflowStyle: "none",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "14px",
+                  overflowY: "auto",
+                  minHeight: 0,
+                  paddingRight: "2px",
+                  scrollbarWidth: "none",
+                  msOverflowStyle: "none",
                 }}
               >
-                {savedSites.map((site) => (
-                  <button
-                    key={site.id}
-                    onClick={() => openSite(site.id)}
-                    style={{
-                      textAlign: "left",
-                      padding: "0",
-                      borderRadius: "18px",
-                      border: "1px solid rgba(255,255,255,0.06)",
-                      background: "linear-gradient(180deg, #1c2434 0%, #141c2b 100%)",
-                      color: "#f8fafc",
-                      cursor: "pointer",
-                      overflow: "hidden",
-                      flexShrink: 0,
-                      boxShadow:
-                        "0 10px 30px rgba(2,6,23,0.28), inset 0 1px 0 rgba(255,255,255,0.06)",
-                    }}
-                  >
-                    <div
+                {savedSites.map((site) => {
+                  const brandName =
+                    site.draft_definition?.site?.brand_name ||
+                    site.site_definition?.site?.brand_name ||
+                    site.slug;
+
+                  const siteType =
+                    site.draft_definition?.site?.site_type ||
+                    site.site_definition?.site?.site_type ||
+                    "website";
+
+                  const region =
+                    site.draft_definition?.site?.region ||
+                    site.site_definition?.site?.region;
+
+                  const domain =
+                    site.draft_definition?.site?.domain ||
+                    site.site_definition?.site?.domain;
+
+                  return (
+                    <button
+                      key={site.id}
+                      onClick={() => openSite(site.id)}
                       style={{
-                        padding: "14px 14px 13px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: "12px",
+                        textAlign: "left",
+                        padding: "0",
+                        borderRadius: "18px",
+                        border: "1px solid rgba(255,255,255,0.06)",
+                        background: "linear-gradient(180deg, #1c2434 0%, #141c2b 100%)",
+                        color: "#f8fafc",
+                        cursor: "pointer",
+                        overflow: "hidden",
+                        flexShrink: 0,
+                        boxShadow:
+                          "0 10px 30px rgba(2,6,23,0.28), inset 0 1px 0 rgba(255,255,255,0.06)",
                       }}
                     >
                       <div
                         style={{
+                          padding: "14px 14px 13px",
                           display: "flex",
                           alignItems: "center",
+                          justifyContent: "space-between",
                           gap: "12px",
-                          minWidth: 0,
-                          flex: 1,
                         }}
                       >
                         <div
                           style={{
-                            width: "42px",
-                            height: "42px",
-                            borderRadius: "14px",
-                            background:
-                              "linear-gradient(180deg, rgba(59,130,246,0.22) 0%, rgba(37,99,235,0.12) 100%)",
-                            border: "1px solid rgba(96,165,250,0.16)",
-                            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "12px",
+                            minWidth: 0,
+                            flex: 1,
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "42px",
+                              height: "42px",
+                              borderRadius: "14px",
+                              background:
+                                "linear-gradient(180deg, rgba(59,130,246,0.22) 0%, rgba(37,99,235,0.12) 100%)",
+                              border: "1px solid rgba(96,165,250,0.16)",
+                              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "#bfdbfe",
+                              fontSize: "14px",
+                              fontWeight: 700,
+                              flexShrink: 0,
+                            }}
+                          >
+                            {brandName?.charAt(0)?.toUpperCase() || "W"}
+                          </div>
+
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div
+                              style={{
+                                fontWeight: 700,
+                                fontSize: "14px",
+                                marginBottom: "4px",
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                            >
+                              {brandName}
+                            </div>
+
+                            <div
+                              style={{
+                                fontSize: "12px",
+                                color: "rgba(248,250,252,0.6)",
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                            >
+                              {siteType}
+                              {region ? ` • ${region}` : ""}
+                              {domain ? ` • ${domain}` : ""}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            width: "34px",
+                            height: "34px",
+                            borderRadius: "12px",
+                            background: "rgba(255,255,255,0.04)",
+                            border: "1px solid rgba(255,255,255,0.06)",
+                            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            color: "#bfdbfe",
+                            color: "rgba(248,250,252,0.72)",
                             fontSize: "14px",
-                            fontWeight: 700,
                             flexShrink: 0,
                           }}
                         >
-                          {site.name?.charAt(0)?.toUpperCase() || "W"}
-                        </div>
-
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div
-                            style={{
-                              fontWeight: 700,
-                              fontSize: "14px",
-                              marginBottom: "4px",
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                          >
-                            {site.name}
-                          </div>
-
-                          <div
-                            style={{
-                              fontSize: "12px",
-                              color: "rgba(248,250,252,0.6)",
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                          >
-                            {site.site_type}
-                            {site.region ? ` • ${site.region}` : ""}
-                            {site.domain ? ` • ${site.domain}` : ""}
-                          </div>
+                          →
                         </div>
                       </div>
-
-                      <div
-                        style={{
-                          width: "34px",
-                          height: "34px",
-                          borderRadius: "12px",
-                          background: "rgba(255,255,255,0.04)",
-                          border: "1px solid rgba(255,255,255,0.06)",
-                          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: "rgba(248,250,252,0.72)",
-                          fontSize: "14px",
-                          flexShrink: 0,
-                        }}
-                      >
-                        →
-                      </div>
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -442,8 +576,13 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<DashboardPage />} />
-        <Route path="/builder/:siteId/*" element={<BuilderPage />} />
+        <Route path="/" element={<Navigate to="/admin/login" replace />} />
+        <Route path="/admin/login" element={<AdminLoginPage />} />
+        <Route path="/admin/signup" element={<AdminSignupPage />} />
+        <Route element={<RequireAdminAuth />}>
+          <Route path="/admin/sites" element={<AdminSitesPage />} />
+          <Route path="/builder/:siteId/*" element={<BuilderPage />} />
+        </Route>
       </Routes>
     </BrowserRouter>
   );

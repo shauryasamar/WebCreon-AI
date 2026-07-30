@@ -1,11 +1,18 @@
+import os
+
 from sqlmodel import SQLModel, Session, create_engine
 
-DATABASE_URL = "sqlite:///./site_builder.db"
+
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql+psycopg2://webnirmaan:devpassword@localhost:5432/webnirmaan",
+)
+
 
 engine = create_engine(
     DATABASE_URL,
     echo=False,
-    connect_args={"check_same_thread": False}
+    pool_pre_ping=True,
 )
 
 
