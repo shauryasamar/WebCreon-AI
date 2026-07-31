@@ -67,11 +67,22 @@ class User(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     site_id: UUID = Field(foreign_key="sites.id", index=True)
+    name: str = Field(default="", nullable=False)
     email: str = Field(index=True)
+    phone: Optional[str] = Field(default=None)
     password_hash: str
+    is_active: bool = Field(default=True, nullable=False)
     created_at: datetime = Field(
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            onupdate=utc_now,
+        ),
     )
 
 

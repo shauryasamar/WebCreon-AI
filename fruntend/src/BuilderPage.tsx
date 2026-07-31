@@ -75,9 +75,9 @@ function normalizeRoute(route?: string | null) {
   return route.replace(/^\/+/, "");
 }
 
-function toFullBuilderPath(builderBase: string, route?: string | null) {
+function toFullAppPath(appBase: string, route?: string | null) {
   const normalized = normalizeRoute(route);
-  return normalized ? `${builderBase}/${normalized}` : builderBase;
+  return normalized ? `${appBase}/${normalized}` : appBase;
 }
 
 function isProductDetailBlockType(type: string) {
@@ -167,21 +167,27 @@ function StorefrontPage({
   siteDefinition,
   selectedProduct,
   siteId,
+  siteSlug,
   editMode,
+  adminTopbarVisible,
   selectedBlockId,
   onSelectBlock,
   storefrontNavbarMode,
   navbarFixedBounds,
+  appBase,
 }: {
   page: Page;
   siteDefinition: SiteDefinition;
   selectedProduct?: Product | null;
   siteId: string;
+  siteSlug: string;
   editMode: boolean;
+  adminTopbarVisible: boolean;
   selectedBlockId: string | null;
   onSelectBlock: (blockId: string) => void;
   storefrontNavbarMode: "static" | "sticky" | "fixed";
   navbarFixedBounds?: NavbarFixedBounds;
+  appBase: string;
 }) {
   const navbarProps = getNavbarEditorProps(siteDefinition);
   const navbarIsSelected = selectedBlockId === NAVBAR_BLOCK_ID;
@@ -258,8 +264,10 @@ function StorefrontPage({
           showSearch={navbarProps.showSearch}
           showAccount={navbarProps.showAccount}
           showCart={navbarProps.showCart}
-          topOffset={BUILDER_TOPBAR_HEIGHT}
+          topOffset={adminTopbarVisible ? BUILDER_TOPBAR_HEIGHT : 0}
           fixedBounds={storefrontNavbarMode === "fixed" ? navbarFixedBounds : undefined}
+          siteSlug={siteSlug}
+          appBase={appBase}
         />
       </div>
 
@@ -301,12 +309,12 @@ function BuilderPageContent() {
   const location = useLocation();
   const { products } = useCart();
 
-  const [siteDefinition, setSiteDefinition] = useState<SiteDefinition | null>(
-    null
-  );
+  const [resolvedSiteId, setResolvedSiteId] = useState("");
+  const [siteDefinition, setSiteDefinition] = useState<SiteDefinition | null>(null);
   const [draftSiteDefinition, setDraftSiteDefinition] =
     useState<SiteDefinition | null>(null);
   const [siteName, setSiteName] = useState("");
+  const [siteSlug, setSiteSlug] = useState("");
   const [loading, setLoading] = useState(true);
   const [adminAuthChecked, setAdminAuthChecked] = useState(false);
   const [adminAuthenticated, setAdminAuthenticated] = useState(false);
@@ -318,8 +326,14 @@ function BuilderPageContent() {
 
   const previewPaneRef = useRef<HTMLDivElement | null>(null);
 
-  const builderBase = `/builder/${siteId}`;
-  const isAdminRoute = location.pathname.startsWith(`${builderBase}/admin`);
+  const isStoreRoute = location.pathname.startsWith("/store/");
+  const appBase = isStoreRoute
+    ? `/store/${slug ?? ""}`
+    : `/builder/${resolvedSiteId || siteId || ""}`;
+
+  const builderBase = `/builder/${resolvedSiteId || siteId || ""}`;
+  const isAdminRoute =
+    !isStoreRoute && location.pathname.startsWith(`${builderBase}/admin`);
 
   const activeSiteDefinition = draftSiteDefinition || siteDefinition;
 
@@ -330,9 +344,11 @@ function BuilderPageContent() {
       | "fixed"
       | undefined) || "fixed";
 
+  const storefrontLoginPath = siteSlug ? `/store/${siteSlug}/login` : "#";
+
   useEffect(() => {
     const checkAdminAuth = async () => {
-      if (!isAdminRoute) {
+      if (isStoreRoute) {
         setAdminAuthenticated(false);
         setAdminAuthChecked(true);
         return;
@@ -345,10 +361,14 @@ function BuilderPageContent() {
 
         if (!response.ok) {
           setAdminAuthenticated(false);
-          navigate("/admin/login", {
-            replace: true,
-            state: { from: location.pathname },
-          });
+
+          if (isAdminRoute) {
+            navigate("/admin/login", {
+              replace: true,
+              state: { from: location.pathname },
+            });
+          }
+
           return;
         }
 
@@ -356,17 +376,20 @@ function BuilderPageContent() {
       } catch (error) {
         console.error("Failed to verify admin session:", error);
         setAdminAuthenticated(false);
-        navigate("/admin/login", {
-          replace: true,
-          state: { from: location.pathname },
-        });
+
+        if (isAdminRoute) {
+          navigate("/admin/login", {
+            replace: true,
+            state: { from: location.pathname },
+          });
+        }
       } finally {
         setAdminAuthChecked(true);
       }
     };
 
     checkAdminAuth();
-  }, [isAdminRoute, navigate, location.pathname]);
+  }, [isAdminRoute, isStoreRoute, navigate, location.pathname]);
 
   useLayoutEffect(() => {
     const element = previewPaneRef.current;
@@ -398,23 +421,49 @@ function BuilderPageContent() {
   }, [editMode, isAdminRoute, location.pathname]);
 
   const selectedProduct: Product | null = useMemo(() => {
-    if (!slug) return null;
+    const productSlug = slug && !isStoreRoute ? slug : undefined;
+    if (!productSlug) return null;
 
-    const bySlug = products.find((p) => p.slug === slug);
+    const bySlug = products.find((p) => p.slug === productSlug);
     if (bySlug) return bySlug;
 
-    const byId = products.find((p) => String(p.id) === String(slug));
+    const byId = products.find((p) => String(p.id) === String(productSlug));
     return byId ?? null;
-  }, [slug, products]);
+  }, [slug, products, isStoreRoute]);
 
   useEffect(() => {
     const loadSite = async () => {
       try {
         setLoading(true);
 
-        const response = await fetch(`${API_BASE_URL}/sites/${siteId}`, {
-          credentials: "include",
-        });
+        let response: Response;
+
+        if (siteId) {
+          response = await fetch(`${API_BASE_URL}/sites/${siteId}`, {
+            credentials: "include",
+          });
+        } else if (slug) {
+          response = await fetch(`${API_BASE_URL}/auth/admin/sites`, {
+            credentials: "include",
+          });
+
+          if (!response.ok) {
+            throw new Error(`Failed to load sites list: ${response.status}`);
+          }
+
+          const sites: SavedSite[] = await response.json();
+          const matchedSite = sites.find((site) => site.slug === slug);
+
+          if (!matchedSite) {
+            throw new Error("Site not found for slug");
+          }
+
+          response = await fetch(`${API_BASE_URL}/sites/${matchedSite.id}`, {
+            credentials: "include",
+          });
+        } else {
+          throw new Error("Missing site identifier");
+        }
 
         if (!response.ok) {
           throw new Error(`Failed to load site: ${response.status}`);
@@ -423,6 +472,9 @@ function BuilderPageContent() {
         const data: SavedSite = await response.json();
         const parsedSiteDefinition: SiteDefinition =
           data.draft_definition || data.site_definition;
+
+        setResolvedSiteId(data.id || "");
+        setSiteSlug(data.slug || "");
 
         if (!parsedSiteDefinition) {
           setSiteDefinition(null);
@@ -439,14 +491,12 @@ function BuilderPageContent() {
           const currentPath = window.location.pathname;
 
           const staticPageRoutes = parsedSiteDefinition.pages.map((page) =>
-            toFullBuilderPath(builderBase, page.route)
+            toFullAppPath(appBase, page.route)
           );
 
           const isKnownStaticRoute = staticPageRoutes.includes(currentPath);
-          const isDynamicProductRoute = currentPath.startsWith(
-            `${builderBase}/products/`
-          );
-          const isAdminPath = currentPath.startsWith(`${builderBase}/admin`);
+          const isDynamicProductRoute = currentPath.startsWith(`${appBase}/products/`);
+          const isAdminPath = !isStoreRoute && currentPath.startsWith(`${builderBase}/admin`);
 
           if (!isKnownStaticRoute && !isDynamicProductRoute && !isAdminPath) {
             const homePage =
@@ -457,26 +507,28 @@ function BuilderPageContent() {
                   page.role === "home"
               ) || parsedSiteDefinition.pages[0];
 
-            navigate(toFullBuilderPath(builderBase, homePage.route), {
+            navigate(toFullAppPath(appBase, homePage.route), {
               replace: true,
             });
           }
         }
       } catch (error) {
         console.error("Error loading site:", error);
+        setSiteDefinition(null);
+        setDraftSiteDefinition(null);
       } finally {
         setLoading(false);
       }
     };
 
-    if (siteId) {
+    if (siteId || slug) {
       loadSite();
     }
-  }, [siteId, navigate, builderBase]);
+  }, [siteId, slug, navigate, appBase, builderBase, isStoreRoute]);
 
   const storefrontHomePath = useMemo(() => {
     if (!activeSiteDefinition || activeSiteDefinition.pages.length === 0) {
-      return builderBase;
+      return appBase;
     }
 
     const homePage =
@@ -485,8 +537,8 @@ function BuilderPageContent() {
           page.route === "/" || page.route === "" || page.role === "home"
       ) || activeSiteDefinition.pages[0];
 
-    return toFullBuilderPath(builderBase, homePage.route);
-  }, [activeSiteDefinition, builderBase]);
+    return toFullAppPath(appBase, homePage.route);
+  }, [activeSiteDefinition, appBase]);
 
   const productDetailPage = useMemo(() => {
     if (!activeSiteDefinition) return null;
@@ -507,7 +559,7 @@ function BuilderPageContent() {
   }, [activeSiteDefinition]);
 
   const handleEnterEditMode = () => {
-    if (isAdminRoute) return;
+    if (!adminAuthenticated || isAdminRoute || isStoreRoute) return;
     setEditMode(true);
     setEditorTab("theme");
   };
@@ -519,7 +571,7 @@ function BuilderPageContent() {
   };
 
   const handleSelectBlock = (blockId: string) => {
-    if (!editMode) return;
+    if (!editMode || !adminAuthenticated) return;
     setSelectedBlockId(blockId);
     setEditorTab("block");
   };
@@ -533,11 +585,15 @@ function BuilderPageContent() {
     } catch (error) {
       console.error("Error logging out:", error);
     } finally {
+      setEditMode(false);
       navigate("/admin/login", { replace: true });
     }
   };
 
-  if (loading || (isAdminRoute && !adminAuthChecked)) {
+  const canEditStorefront = !isAdminRoute && !isStoreRoute && adminAuthenticated;
+  const showAdminTopbar = !isStoreRoute && adminAuthenticated;
+
+  if (loading || !adminAuthChecked) {
     return (
       <div
         style={{
@@ -567,9 +623,11 @@ function BuilderPageContent() {
         }}
       >
         <p>Website not found.</p>
-        <Link to="/admin/sites" style={{ color: "#2563eb" }}>
-          Back to dashboard
-        </Link>
+        {!isStoreRoute && (
+          <Link to="/admin/sites" style={{ color: "#2563eb" }}>
+            Back to dashboard
+          </Link>
+        )}
       </div>
     );
   }
@@ -624,117 +682,136 @@ function BuilderPageContent() {
         overflow: "visible",
       }}
     >
-      <div
-        style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 300,
-          minHeight: `${BUILDER_TOPBAR_HEIGHT}px`,
-          background:
-            activeSiteDefinition.theme?.mode === "light"
-              ? "rgba(255,255,255,0.92)"
-              : "rgba(2, 6, 23, 0.88)",
-          borderBottom:
-            activeSiteDefinition.theme?.mode === "light"
-              ? "1px solid rgba(17,24,39,0.08)"
-              : "1px solid rgba(255,255,255,0.08)",
-        }}
-      >
+      {showAdminTopbar && (
         <div
           style={{
-            maxWidth: "1280px",
-            margin: "0 auto",
+            position: "sticky",
+            top: 0,
+            zIndex: 300,
             minHeight: `${BUILDER_TOPBAR_HEIGHT}px`,
-            padding: "10px 20px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "16px",
-            flexWrap: "wrap",
+            background:
+              activeSiteDefinition.theme?.mode === "light"
+                ? "rgba(255,255,255,0.92)"
+                : "rgba(2, 6, 23, 0.88)",
+            borderBottom:
+              activeSiteDefinition.theme?.mode === "light"
+                ? "1px solid rgba(17,24,39,0.08)"
+                : "1px solid rgba(255,255,255,0.08)",
           }}
         >
           <div
             style={{
+              maxWidth: "1280px",
+              margin: "0 auto",
+              minHeight: `${BUILDER_TOPBAR_HEIGHT}px`,
+              padding: "10px 20px",
               display: "flex",
               alignItems: "center",
-              gap: "10px",
-              fontSize: "13px",
-              color:
-                activeSiteDefinition.theme?.mode === "light"
-                  ? "rgba(17,24,39,0.72)"
-                  : "rgba(255,255,255,0.72)",
+              justifyContent: "space-between",
+              gap: "16px",
+              flexWrap: "wrap",
             }}
           >
-            <span
+            <div
               style={{
-                padding: "6px 10px",
-                borderRadius: "999px",
-                background:
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                fontSize: "13px",
+                color:
                   activeSiteDefinition.theme?.mode === "light"
-                    ? "rgba(37,99,235,0.10)"
-                    : "rgba(37,99,235,0.14)",
-                border: "1px solid rgba(37,99,235,0.2)",
-                color: accentColor,
-                fontWeight: 600,
+                    ? "rgba(17,24,39,0.72)"
+                    : "rgba(255,255,255,0.72)",
               }}
             >
-              {isAdminRoute ? "Admin" : editMode ? "Editing" : "Preview"}
-            </span>
+              <span
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: "999px",
+                  background:
+                    activeSiteDefinition.theme?.mode === "light"
+                      ? "rgba(37,99,235,0.10)"
+                      : "rgba(37,99,235,0.14)",
+                  border: "1px solid rgba(37,99,235,0.2)",
+                  color: accentColor,
+                  fontWeight: 600,
+                }}
+              >
+                {isAdminRoute ? "Admin" : editMode ? "Editing" : "Preview"}
+              </span>
 
-            <span>{siteName}</span>
-          </div>
+              <span>{siteName}</span>
+            </div>
 
-          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-            <Link to="/admin/sites" style={secondaryButtonStyle}>
-              Back to dashboard
-            </Link>
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+              <Link to="/admin/sites" style={secondaryButtonStyle}>
+                Back to dashboard
+              </Link>
 
-            {isAdminRoute ? (
-              <>
-                <Link to={storefrontHomePath} style={secondaryButtonStyle}>
-                  Back to website
-                </Link>
+              {siteSlug && (
+                <a
+                  href={storefrontLoginPath}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={secondaryButtonStyle}
+                >
+                  Customer login
+                </a>
+              )}
 
-                <button onClick={handleLogout} style={outlineButtonStyle}>
-                  Logout
-                </button>
-              </>
-            ) : (
-              <>
-                <Link to={`${builderBase}/admin/products`} style={secondaryButtonStyle}>
-                  Open admin
-                </Link>
+              {isAdminRoute ? (
+                <>
+                  <Link to={storefrontHomePath} style={secondaryButtonStyle}>
+                    Back to website
+                  </Link>
 
-                {!editMode ? (
-                  <button
-                    onClick={handleEnterEditMode}
-                    style={{
-                      padding: "9px 14px",
-                      borderRadius: "10px",
-                      border: "none",
-                      background: accentColor,
-                      color: "white",
-                      cursor: "pointer",
-                      fontSize: "14px",
-                      fontWeight: 600,
-                    }}
+                  <button onClick={handleLogout} style={outlineButtonStyle}>
+                    Logout
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    to={`${builderBase}/admin/products`}
+                    style={secondaryButtonStyle}
                   >
-                    Customize
-                  </button>
-                ) : (
-                  <button onClick={handleCloseEditMode} style={outlineButtonStyle}>
-                    Exit editor
-                  </button>
-                )}
+                    Open admin
+                  </Link>
 
-                <button onClick={handleLogout} style={outlineButtonStyle}>
-                  Logout
-                </button>
-              </>
-            )}
+                  {!editMode ? (
+                    <button
+                      onClick={handleEnterEditMode}
+                      style={{
+                        padding: "9px 14px",
+                        borderRadius: "10px",
+                        border: "none",
+                        background: accentColor,
+                        color: "white",
+                        cursor: "pointer",
+                        fontSize: "14px",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Customize
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleCloseEditMode}
+                      style={outlineButtonStyle}
+                    >
+                      Exit editor
+                    </button>
+                  )}
+
+                  <button onClick={handleLogout} style={outlineButtonStyle}>
+                    Logout
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div
         style={{
@@ -753,7 +830,7 @@ function BuilderPageContent() {
             flex: 1,
             minWidth: 0,
             maxWidth:
-              editMode && !isAdminRoute
+              editMode && !isAdminRoute && !isStoreRoute
                 ? `calc(100% - ${EDITOR_SIDEBAR_WIDTH}px)`
                 : "100%",
             position: "relative",
@@ -762,11 +839,13 @@ function BuilderPageContent() {
           }}
         >
           <Routes>
-            <Route path="admin" element={<AdminLayout />}>
-              <Route index element={<Navigate to="products" replace />} />
-              <Route path="products" element={<AdminProducts />} />
-              <Route path="orders" element={<AdminOrders />} />
-            </Route>
+            {!isStoreRoute && (
+              <Route path="admin" element={<AdminLayout />}>
+                <Route index element={<Navigate to="products" replace />} />
+                <Route path="products" element={<AdminProducts />} />
+                <Route path="orders" element={<AdminOrders />} />
+              </Route>
+            )}
 
             {activeSiteDefinition.pages
               .filter((page) => page.flow !== "admin")
@@ -781,13 +860,16 @@ function BuilderPageContent() {
                       <StorefrontPage
                         page={page}
                         siteDefinition={activeSiteDefinition}
-                        siteId={siteId || ""}
+                        siteId={resolvedSiteId || siteId || ""}
+                        siteSlug={siteSlug}
                         selectedProduct={undefined}
                         editMode={editMode}
+                        adminTopbarVisible={showAdminTopbar}
                         selectedBlockId={selectedBlockId}
                         onSelectBlock={handleSelectBlock}
                         storefrontNavbarMode={storefrontNavbarMode}
                         navbarFixedBounds={navbarFixedBounds}
+                        appBase={appBase}
                       />
                     }
                   />
@@ -802,12 +884,15 @@ function BuilderPageContent() {
                     page={productDetailPage}
                     siteDefinition={activeSiteDefinition}
                     selectedProduct={selectedProduct}
-                    siteId={siteId || ""}
+                    siteId={resolvedSiteId || siteId || ""}
+                    siteSlug={siteSlug}
                     editMode={editMode}
+                    adminTopbarVisible={showAdminTopbar}
                     selectedBlockId={selectedBlockId}
                     onSelectBlock={handleSelectBlock}
                     storefrontNavbarMode={storefrontNavbarMode}
                     navbarFixedBounds={navbarFixedBounds}
+                    appBase={appBase}
                   />
                 }
               />
@@ -815,7 +900,7 @@ function BuilderPageContent() {
           </Routes>
         </div>
 
-        {editMode && !isAdminRoute && activeSiteDefinition && (
+        {editMode && canEditStorefront && activeSiteDefinition && (
           <div
             style={{
               width: `${EDITOR_SIDEBAR_WIDTH}px`,
@@ -860,15 +945,42 @@ function BuilderPageContent() {
 }
 
 export default function BuilderPage() {
-  const { siteId } = useParams();
+  const { siteId, slug } = useParams();
+  const [resolvedSiteId, setResolvedSiteId] = useState(siteId || "");
   const [siteProducts, setSiteProducts] = useState<Product[]>([]);
 
   useEffect(() => {
-    const loadProducts = async () => {
-      if (!siteId) return;
-
+    const resolveAndLoadProducts = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/sites/${siteId}/products`, {
+        let targetSiteId = siteId || "";
+
+        if (!targetSiteId && slug) {
+          const sitesRes = await fetch(`${API_BASE_URL}/auth/admin/sites`, {
+            credentials: "include",
+          });
+
+          if (!sitesRes.ok) {
+            throw new Error(`Failed to load sites list: ${sitesRes.status}`);
+          }
+
+          const sites: SavedSite[] = await sitesRes.json();
+          const matchedSite = sites.find((site) => site.slug === slug);
+
+          if (!matchedSite) {
+            throw new Error("Site not found for slug");
+          }
+
+          targetSiteId = matchedSite.id;
+        }
+
+        if (!targetSiteId) {
+          setSiteProducts([]);
+          return;
+        }
+
+        setResolvedSiteId(targetSiteId);
+
+        const res = await fetch(`${API_BASE_URL}/sites/${targetSiteId}/products`, {
           credentials: "include",
         });
 
@@ -888,11 +1000,11 @@ export default function BuilderPage() {
       }
     };
 
-    loadProducts();
-  }, [siteId]);
+    resolveAndLoadProducts();
+  }, [siteId, slug]);
 
   return (
-    <CartProvider key={siteId} products={siteProducts}>
+    <CartProvider key={resolvedSiteId || siteId || slug} products={siteProducts}>
       <BuilderPageContent />
     </CartProvider>
   );

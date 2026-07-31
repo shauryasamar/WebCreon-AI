@@ -263,8 +263,19 @@ def customer_me(user=Depends(authenticate_customer)):
 
 
 @app.get("/sites")
-def get_sites(session: Session = Depends(get_session)):
-    sites = session.exec(select(Site).order_by(Site.created_at.desc())).all()
+def get_sites(
+    admin=Depends(authenticate_admin),
+    session: Session = Depends(get_session),
+):
+    admin_id = UUID(admin["adminId"])
+
+    sites = session.exec(
+        select(Site)
+        .join(AdminSite, AdminSite.site_id == Site.id)
+        .where(AdminSite.admin_id == admin_id)
+        .order_by(Site.created_at.desc())
+    ).all()
+
     return sites
 
 
@@ -282,8 +293,22 @@ def get_site(
 
 
 @app.get("/sites/slug/{slug}")
-def get_site_by_slug(slug: str, session: Session = Depends(get_session)):
-    site = session.exec(select(Site).where(Site.slug == slug)).first()
+def get_site_by_slug(
+    slug: str,
+    admin=Depends(authenticate_admin),
+    session: Session = Depends(get_session),
+):
+    admin_id = UUID(admin["adminId"])
+
+    site = session.exec(
+        select(Site)
+        .join(AdminSite, AdminSite.site_id == Site.id)
+        .where(
+            Site.slug == slug,
+            AdminSite.admin_id == admin_id,
+        )
+    ).first()
+
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
 

@@ -1,6 +1,7 @@
-import React from "react";
-import { NavLink, useNavigate, useParams } from "react-router-dom";
+import React, { useEffect, useRef, useState } from "react";
+import { NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useCart } from "../CartContext";
+import { useCustomerAuth } from "../context/CustomerAuthContext";
 
 export type NavbarTheme = {
   name?: string;
@@ -49,6 +50,8 @@ export type NavbarProps = {
   cartRoute?: string;
   topOffset?: number;
   fixedBounds?: NavbarFixedBounds;
+  siteSlug?: string;
+  appBase?: string;
 };
 
 type NavbarPosition = "static" | "sticky" | "fixed";
@@ -75,7 +78,7 @@ const getInitials = (brandName?: string) => {
     .join("");
 };
 
-const toBuilderPath = (base: string, route?: string) => {
+const toAppPath = (base: string, route?: string) => {
   if (!route || route === "/") return base;
   const normalizedRoute = route.startsWith("/") ? route : `/${route}`;
   return `${base}${normalizedRoute}`;
@@ -133,19 +136,32 @@ const Navbar: React.FC<NavbarProps> = ({
   cartRoute = "/cart",
   topOffset = 0,
   fixedBounds,
+  siteSlug,
+  appBase,
 }) => {
   const { cartCount = 0 } = useCart();
   const navigate = useNavigate();
-  const { siteId } = useParams<{ siteId: string }>();
+  const location = useLocation();
+  const { siteId, slug } = useParams<{ siteId?: string; slug?: string }>();
+  const { isAuthenticated, refreshMe, clearUser, logout } = useCustomerAuth();
 
-  const base = `/builder/${siteId ?? ""}`;
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement | null>(null);
+  const accountButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  const base =
+    appBase ||
+    (location.pathname.startsWith("/store/")
+      ? `/store/${siteSlug || slug || ""}`
+      : `/builder/${siteId ?? ""}`);
+
   const light = isLightTheme(theme);
 
   const variant = theme?.navbar_variant || "soft";
   const position: NavbarPosition = theme?.navbar_position || "sticky";
 
-  const resolvedHomePath = toBuilderPath(base, homeRoute);
-  const resolvedCartPath = toBuilderPath(base, cartRoute);
+  const resolvedHomePath = toAppPath(base, homeRoute);
+  const resolvedCartPath = toAppPath(base, cartRoute);
 
   const accentColor = theme?.accent_color || "#2563eb";
   const primaryBg = theme?.primary_bg || (light ? "#f8fafc" : "#020617");
@@ -274,6 +290,180 @@ const Navbar: React.FC<NavbarProps> = ({
           navbarPaddingX ?? 14
         )}px`
       : shellPadding;
+
+  const isBuilderAdminRoute =
+    location.pathname.startsWith("/builder/") && location.pathname.includes("/admin");
+
+  const isStoreRoute = location.pathname.startsWith("/store/");
+
+  useEffect(() => {
+    if (!siteSlug) return;
+
+    if (isBuilderAdminRoute) {
+      clearUser();
+      return;
+    }
+
+    if (!isStoreRoute && !location.pathname.startsWith("/builder/")) return;
+
+    refreshMe(siteSlug);
+  }, [
+    siteSlug,
+    location.pathname,
+    refreshMe,
+    isBuilderAdminRoute,
+    isStoreRoute,
+    clearUser,
+  ]);
+
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        accountMenuRef.current?.contains(target) ||
+        accountButtonRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setAccountMenuOpen(false);
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setAccountMenuOpen(false);
+        accountButtonRef.current?.focus();
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [accountMenuOpen]);
+
+  const closeAccountMenu = () => {
+    setAccountMenuOpen(false);
+  };
+
+  const handleAccountClick = () => {
+    if (isBuilderAdminRoute) {
+      closeAccountMenu();
+      return;
+    }
+
+    if (!siteSlug) return;
+
+    if (isAuthenticated) {
+      setAccountMenuOpen((prev) => !prev);
+      return;
+    }
+
+    const storePrefix = `/store/${siteSlug}`;
+    const safeFrom = location.pathname.startsWith(storePrefix)
+      ? location.pathname
+      : storePrefix;
+
+    navigate(`/store/${siteSlug}/login`, {
+      state: { from: safeFrom },
+    });
+  };
+
+  const handleGoToProfile = () => {
+    if (!siteSlug) return;
+    closeAccountMenu();
+    navigate(`/store/${siteSlug}/profile`);
+  };
+
+  const handleGoToOrders = () => {
+    if (!siteSlug) return;
+    closeAccountMenu();
+    navigate(`/store/${siteSlug}/orders`);
+  };
+
+  const handleCustomerLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error("Customer logout failed:", error);
+    } finally {
+      closeAccountMenu();
+      navigate(`/store/${siteSlug}/login`, { replace: true });
+    }
+  };
+
+  const menuItemStyle: React.CSSProperties = {
+    width: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "12px",
+    padding: "12px 12px",
+    borderRadius: "12px",
+    border: "1px solid transparent",
+    background: "transparent",
+    color: textColor,
+    cursor: "pointer",
+    textAlign: "left",
+    fontSize: "13px",
+    fontWeight: 600,
+    letterSpacing: "-0.01em",
+    transition: "background 160ms ease, border-color 160ms ease, transform 160ms ease",
+  };
+
+  const dropdownPanelStyle: React.CSSProperties = {
+    position: "absolute",
+    top: "calc(100% + 12px)",
+    right: 0,
+    width: "248px",
+    padding: "10px",
+    borderRadius: "18px",
+    background: light
+      ? "rgba(255,255,255,0.96)"
+      : "rgba(15,23,42,0.96)",
+    border: light
+      ? "1px solid rgba(15,23,42,0.08)"
+      : "1px solid rgba(255,255,255,0.08)",
+    boxShadow: light
+      ? "0 20px 45px rgba(15,23,42,0.14)"
+      : "0 20px 45px rgba(0,0,0,0.38)",
+    backdropFilter: "blur(16px)",
+    WebkitBackdropFilter: "blur(16px)",
+    zIndex: 400,
+  };
+
+  const menuRowIconStyle: React.CSSProperties = {
+    width: "32px",
+    height: "32px",
+    borderRadius: "10px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
+    border: light
+      ? "1px solid rgba(15,23,42,0.06)"
+      : "1px solid rgba(255,255,255,0.06)",
+    color: textColor,
+    flexShrink: 0,
+  };
+
+  const menuMetaTextStyle: React.CSSProperties = {
+    fontSize: "11px",
+    color: mutedText,
+    marginTop: "2px",
+    letterSpacing: "0.01em",
+  };
+
+  const menuArrowStyle: React.CSSProperties = {
+    color: light ? "rgba(15,23,42,0.32)" : "rgba(255,255,255,0.32)",
+    fontSize: "14px",
+    lineHeight: 1,
+    flexShrink: 0,
+  };
 
   return (
     <header
@@ -405,7 +595,7 @@ const Navbar: React.FC<NavbarProps> = ({
                 {storefrontLinks.map((item) => (
                   <NavLink
                     key={`${item.label}-${item.route}`}
-                    to={toBuilderPath(base, item.route)}
+                    to={toAppPath(base, item.route)}
                     end={item.route === "/"}
                     style={({ isActive }) => ({
                       textDecoration: "none",
@@ -466,27 +656,267 @@ const Navbar: React.FC<NavbarProps> = ({
             )}
 
             {showAccount && (
-              <button
-                type="button"
-                aria-label="Account"
+              <div
+                ref={accountMenuRef}
                 style={{
-                  width: "42px",
-                  height: "42px",
-                  borderRadius: "14px",
-                  border: softBorder,
-                  background: iconButtonBg,
-                  color: textColor,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: "pointer",
+                  position: "relative",
                 }}
               >
-                <svg viewBox="0 0 24 24" style={iconStyle}>
-                  <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
-                  <circle cx="12" cy="8" r="4" />
-                </svg>
-              </button>
+                <button
+                  ref={accountButtonRef}
+                  type="button"
+                  aria-label={isAuthenticated ? "Account menu" : "Account"}
+                  aria-haspopup={isAuthenticated ? "menu" : undefined}
+                  aria-expanded={isAuthenticated ? accountMenuOpen : undefined}
+                  onClick={handleAccountClick}
+                  style={{
+                    width: "42px",
+                    height: "42px",
+                    borderRadius: "14px",
+                    border: accountMenuOpen
+                      ? light
+                        ? "1px solid rgba(15,23,42,0.10)"
+                        : "1px solid rgba(255,255,255,0.14)"
+                      : softBorder,
+                    background: accountMenuOpen
+                      ? light
+                        ? "rgba(15,23,42,0.08)"
+                        : "rgba(255,255,255,0.10)"
+                      : iconButtonBg,
+                    color: textColor,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    transition: "all 160ms ease",
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" style={iconStyle}>
+                    <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
+                    <circle cx="12" cy="8" r="4" />
+                  </svg>
+                </button>
+
+                {isAuthenticated && accountMenuOpen && (
+                  <div
+                    role="menu"
+                    aria-label="Account options"
+                    style={dropdownPanelStyle}
+                  >
+                    <div
+                      style={{
+                        padding: "8px 10px 12px",
+                        marginBottom: "8px",
+                        borderBottom: light
+                          ? "1px solid rgba(15,23,42,0.08)"
+                          : "1px solid rgba(255,255,255,0.08)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          letterSpacing: "0.08em",
+                          textTransform: "uppercase",
+                          color: mutedText,
+                          marginBottom: "6px",
+                        }}
+                      >
+                        Account
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: "14px",
+                          fontWeight: 700,
+                          color: textColor,
+                          letterSpacing: "-0.02em",
+                        }}
+                      >
+                        {brandName}
+                      </div>
+
+                      <div style={menuMetaTextStyle}>
+                        Manage profile, orders, and session
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={handleGoToProfile}
+                      style={menuItemStyle}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = light
+                          ? "rgba(15,23,42,0.04)"
+                          : "rgba(255,255,255,0.05)";
+                        e.currentTarget.style.borderColor = light
+                          ? "rgba(15,23,42,0.06)"
+                          : "rgba(255,255,255,0.06)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "transparent";
+                        e.currentTarget.style.borderColor = "transparent";
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "12px",
+                          minWidth: 0,
+                        }}
+                      >
+                        <span style={menuRowIconStyle}>
+                          <svg viewBox="0 0 24 24" style={iconStyle}>
+                            <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
+                            <circle cx="12" cy="8" r="4" />
+                          </svg>
+                        </span>
+                        <span style={{ minWidth: 0 }}>
+                          <div
+                            style={{
+                              fontSize: "13px",
+                              fontWeight: 650,
+                              color: textColor,
+                            }}
+                          >
+                            Profile
+                          </div>
+                          <div style={menuMetaTextStyle}>
+                            Personal details and preferences
+                          </div>
+                        </span>
+                      </div>
+                      <span style={menuArrowStyle}>→</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={handleGoToOrders}
+                      style={menuItemStyle}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = light
+                          ? "rgba(15,23,42,0.04)"
+                          : "rgba(255,255,255,0.05)";
+                        e.currentTarget.style.borderColor = light
+                          ? "rgba(15,23,42,0.06)"
+                          : "rgba(255,255,255,0.06)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "transparent";
+                        e.currentTarget.style.borderColor = "transparent";
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "12px",
+                          minWidth: 0,
+                        }}
+                      >
+                        <span style={menuRowIconStyle}>
+                          <svg viewBox="0 0 24 24" style={iconStyle}>
+                            <path d="M3 7.5H21" />
+                            <path d="M6 7.5V17C6 18.1046 6.89543 19 8 19H16C17.1046 19 18 18.1046 18 17V7.5" />
+                            <path d="M9 11H15" />
+                            <path d="M10 4.5H14" />
+                          </svg>
+                        </span>
+                        <span style={{ minWidth: 0 }}>
+                          <div
+                            style={{
+                              fontSize: "13px",
+                              fontWeight: 650,
+                              color: textColor,
+                            }}
+                          >
+                            Order history
+                          </div>
+                          <div style={menuMetaTextStyle}>
+                            Track purchases and order activity
+                          </div>
+                        </span>
+                      </div>
+                      <span style={menuArrowStyle}>→</span>
+                    </button>
+
+                    <div
+                      style={{
+                        margin: "8px 2px 2px",
+                        borderTop: light
+                          ? "1px solid rgba(15,23,42,0.08)"
+                          : "1px solid rgba(255,255,255,0.08)",
+                        paddingTop: "8px",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={handleCustomerLogout}
+                        style={{
+                          ...menuItemStyle,
+                          color: light ? "#991b1b" : "#fca5a5",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = light
+                            ? "rgba(239,68,68,0.06)"
+                            : "rgba(239,68,68,0.10)";
+                          e.currentTarget.style.borderColor = light
+                            ? "rgba(239,68,68,0.10)"
+                            : "rgba(239,68,68,0.16)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "transparent";
+                          e.currentTarget.style.borderColor = "transparent";
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "12px",
+                          }}
+                        >
+                          <span
+                            style={{
+                              ...menuRowIconStyle,
+                              color: light ? "#991b1b" : "#fca5a5",
+                              background: light
+                                ? "rgba(239,68,68,0.05)"
+                                : "rgba(239,68,68,0.10)",
+                              border: light
+                                ? "1px solid rgba(239,68,68,0.10)"
+                                : "1px solid rgba(239,68,68,0.14)",
+                            }}
+                          >
+                            <svg viewBox="0 0 24 24" style={iconStyle}>
+                              <path d="M9 21H5C4.44772 21 4 20.5523 4 20V4C4 3.44772 4.44772 3 5 3H9" />
+                              <path d="M16 17L21 12L16 7" />
+                              <path d="M21 12H9" />
+                            </svg>
+                          </span>
+                          <span>
+                            <div
+                              style={{
+                                fontSize: "13px",
+                                fontWeight: 650,
+                              }}
+                            >
+                              Logout
+                            </div>
+                            <div style={menuMetaTextStyle}>
+                              Sign out from this session
+                            </div>
+                          </span>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             {showCart && (

@@ -11,6 +11,9 @@ import {
 import BuilderPage from "./BuilderPage";
 import AdminLoginPage from "./pages/AdminLoginPage";
 import AdminSignupPage from "./pages/AdminSignupPage";
+import CustomerLoginPage from "./pages/CustomerLoginPage";
+import CustomerSignupPage from "./pages/CustomerSignupPage";
+import { CustomerAuthProvider } from "./context/CustomerAuthContext";
 
 type Block = {
   id: string;
@@ -572,19 +575,33 @@ function AdminSitesPage() {
   );
 }
 
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/" element={<Navigate to="/admin/login" replace />} />
+      <Route path="/admin/login" element={<AdminLoginPage />} />
+      <Route path="/admin/signup" element={<AdminSignupPage />} />
+
+      <Route path="/store/:slug/login" element={<CustomerLoginPage />} />
+      <Route path="/store/:slug/signup" element={<CustomerSignupPage />} />
+      <Route path="/store/:slug/*" element={<BuilderPage />} />
+
+      <Route element={<RequireAdminAuth />}>
+        <Route path="/admin/sites" element={<AdminSitesPage />} />
+      </Route>
+
+      <Route path="/builder/:siteId/*" element={<BuilderPage />} />
+    </Routes>
+  );
+}
+
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Navigate to="/admin/login" replace />} />
-        <Route path="/admin/login" element={<AdminLoginPage />} />
-        <Route path="/admin/signup" element={<AdminSignupPage />} />
-        <Route element={<RequireAdminAuth />}>
-          <Route path="/admin/sites" element={<AdminSitesPage />} />
-          <Route path="/builder/:siteId/*" element={<BuilderPage />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <CustomerAuthProvider>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </CustomerAuthProvider>
   );
 }
 

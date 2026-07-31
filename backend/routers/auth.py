@@ -3,7 +3,11 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 from sqlmodel import Session, select
 
-from auth_middleware import authenticate_admin, resolve_site_by_slug_or_404
+from auth_middleware import (
+    authenticate_admin,
+    authenticate_customer,
+    resolve_site_by_slug_or_404,
+)
 from auth_utils import (
     create_admin_token,
     create_customer_token,
@@ -13,10 +17,12 @@ from auth_utils import (
 from db.database import get_session
 from models import Admin, AdminSite, Site, User
 
+
 router = APIRouter(
     prefix="/auth",
     tags=["auth"],
 )
+
 
 COOKIE_SECURE = False
 COOKIE_SAMESITE = "lax"
@@ -35,6 +41,7 @@ class AdminLoginRequest(BaseModel):
 
 
 class CustomerSignupRequest(BaseModel):
+    name: str
     email: EmailStr
     password: str
 
@@ -72,6 +79,25 @@ def clear_auth_cookie(response: Response, key: str):
 def validate_password_or_400(password: str):
     if not password or not password.strip():
         raise HTTPException(status_code=400, detail="Password is required")
+
+
+def validate_name_or_400(name: str):
+    if not name or not name.strip():
+        raise HTTPException(status_code=400, detail="Name is required")
+
+
+def serialize_customer(user: User, site: Site) -> dict:
+    return {
+        "id": str(user.id),
+        "name": user.name,
+        "email": user.email,
+        "phone": user.phone,
+        "isActive": user.is_active,
+        "siteId": str(site.id),
+        "siteSlug": site.slug,
+        "createdAt": user.created_at.isoformat() if user.created_at else None,
+        "updatedAt": user.updated_at.isoformat() if user.updated_at else None,
+    }
 
 
 @router.post("/admin/signup")
@@ -182,6 +208,7 @@ def customer_signup(
     payload: CustomerSignupRequest,
     session: Session = Depends(get_session),
 ):
+    validate_name_or_400(payload.name)
     validate_password_or_400(payload.password)
 
     site = resolve_site_by_slug_or_404(website_name, session)
@@ -197,8 +224,10 @@ def customer_signup(
 
     user = User(
         site_id=site.id,
+        name=payload.name.strip(),
         email=payload.email,
         password_hash=hash_password(payload.password),
+        is_active=True,
     )
     session.add(user)
     session.commit()
@@ -208,12 +237,7 @@ def customer_signup(
 
     response = JSONResponse(
         content={
-            "user": {
-                "id": str(user.id),
-                "email": user.email,
-                "siteId": str(site.id),
-                "siteSlug": site.slug,
-            }
+            "user": serialize_customer(user, site)
         }
     )
     set_auth_cookie(response, CUSTOMER_COOKIE_NAME, token)
@@ -242,20 +266,53 @@ def customer_login(
             detail="Invalid credentials",
         )
 
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Customer account is inactive",
+        )
+
     token = create_customer_token(str(user.id), str(site.id))
 
     response = JSONResponse(
         content={
-            "user": {
-                "id": str(user.id),
-                "email": user.email,
-                "siteId": str(site.id),
-                "siteSlug": site.slug,
-            }
+            "user": serialize_customer(user, site)
         }
     )
     set_auth_cookie(response, CUSTOMER_COOKIE_NAME, token)
     return response
+
+
+@router.get("/customer/me/{website_name}")
+def customer_me(
+    website_name: str,
+    auth_user=Depends(authenticate_customer),
+    session: Session = Depends(get_session),
+):
+    site = resolve_site_by_slug_or_404(website_name, session)
+
+    if str(site.id) != auth_user["siteId"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Customer token does not match requested site",
+        )
+
+    user = session.get(User, auth_user["userId"])
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Customer not found",
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Customer account is inactive",
+        )
+
+    return {
+        "user": serialize_customer(user, site)
+    }
 
 
 @router.post("/customer/logout")

@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from sqlmodel import Session, select
 
+from auth_middleware import enforce_site_ownership
 from db.database import get_session
 from models import Product, Site
-
 
 router = APIRouter(
     prefix="/sites/{site_id}/products",
@@ -23,7 +23,9 @@ def get_site_or_404(session: Session, site_id: UUID) -> Site:
     return site
 
 
-def get_site_product_or_404(session: Session, site_id: UUID, product_id: UUID) -> Product:
+def get_site_product_or_404(
+    session: Session, site_id: UUID, product_id: UUID
+) -> Product:
     product = session.get(Product, product_id)
     if not product or product.site_id != site_id:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -59,7 +61,11 @@ class ProductResponse(BaseModel):
 
 
 @router.get("", response_model=List[ProductResponse])
-def list_products(site_id: UUID, session: Session = Depends(get_session)):
+def list_products(
+    site_id: UUID,
+    ownership=Depends(enforce_site_ownership),
+    session: Session = Depends(get_session),
+):
     get_site_or_404(session, site_id)
     products = session.exec(
         select(Product).where(Product.site_id == site_id)
@@ -71,6 +77,7 @@ def list_products(site_id: UUID, session: Session = Depends(get_session)):
 def create_product(
     site_id: UUID,
     product_in: ProductCreate,
+    ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
     get_site_or_404(session, site_id)
@@ -96,6 +103,7 @@ def update_product(
     site_id: UUID,
     product_id: UUID,
     product_in: ProductUpdate,
+    ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
     get_site_or_404(session, site_id)
@@ -118,6 +126,7 @@ def update_product(
 def delete_product(
     site_id: UUID,
     product_id: UUID,
+    ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
     get_site_or_404(session, site_id)
