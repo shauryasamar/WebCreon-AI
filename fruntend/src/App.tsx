@@ -14,6 +14,8 @@ import AdminSignupPage from "./pages/AdminSignupPage";
 import CustomerLoginPage from "./pages/CustomerLoginPage";
 import CustomerSignupPage from "./pages/CustomerSignupPage";
 import { CustomerAuthProvider } from "./context/CustomerAuthContext";
+import { CartProvider } from "./CartContext";
+
 
 type Block = {
   id: string;
@@ -22,6 +24,7 @@ type Block = {
   data_source?: string | null;
   actions?: Record<string, any>;
 };
+
 
 type Page = {
   id: string;
@@ -32,6 +35,7 @@ type Page = {
   flow?: string;
   show_in_nav?: boolean;
 };
+
 
 type SiteDefinition = {
   site: {
@@ -54,10 +58,12 @@ type SiteDefinition = {
   }[];
 };
 
+
 type SiteDefinitionResponse = {
   requirements: Record<string, any>;
   site_definition: SiteDefinition;
 };
+
 
 type SavedSite = {
   id: string;
@@ -69,7 +75,9 @@ type SavedSite = {
   updated_at: string;
 };
 
+
 const API_BASE_URL = "http://localhost:8000";
+
 
 function slugify(value: string) {
   return value
@@ -80,10 +88,12 @@ function slugify(value: string) {
     .replace(/-{2,}/g, "-");
 }
 
+
 function RequireAdminAuth() {
   const location = useLocation();
   const [checkingSession, setCheckingSession] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+
 
   useEffect(() => {
     const checkAdminSession = async () => {
@@ -91,6 +101,7 @@ function RequireAdminAuth() {
         const response = await fetch(`${API_BASE_URL}/auth/admin/me`, {
           credentials: "include",
         });
+
 
         setIsAuthenticated(response.ok);
       } catch (error) {
@@ -101,8 +112,10 @@ function RequireAdminAuth() {
       }
     };
 
+
     checkAdminSession();
   }, []);
+
 
   if (checkingSession) {
     return (
@@ -121,6 +134,7 @@ function RequireAdminAuth() {
     );
   }
 
+
   if (!isAuthenticated) {
     return (
       <Navigate
@@ -131,11 +145,14 @@ function RequireAdminAuth() {
     );
   }
 
+
   return <Outlet />;
 }
 
+
 function AdminSitesPage() {
   const navigate = useNavigate();
+
 
   const [prompt, setPrompt] = useState(
     "Create an ecommerce website for my clothing brand selling T-shirts in India with Razorpay and COD, dark theme, and an admin panel"
@@ -144,17 +161,21 @@ function AdminSitesPage() {
   const [savedSites, setSavedSites] = useState<SavedSite[]>([]);
   const [sitesLoading, setSitesLoading] = useState(true);
 
+
   const loadSavedSites = async () => {
     try {
       setSitesLoading(true);
+
 
       const response = await fetch(`${API_BASE_URL}/auth/admin/sites`, {
         credentials: "include",
       });
 
+
       if (!response.ok) {
         throw new Error(`Failed to load admin sites: ${response.status}`);
       }
+
 
       const data = await response.json();
       setSavedSites(data);
@@ -166,13 +187,16 @@ function AdminSitesPage() {
     }
   };
 
+
   useEffect(() => {
     loadSavedSites();
   }, []);
 
+
   const openSite = (siteId: string) => {
     navigate(`/builder/${siteId}`);
   };
+
 
   const handleLogout = async () => {
     try {
@@ -187,9 +211,11 @@ function AdminSitesPage() {
     }
   };
 
+
   const generateSite = async () => {
     try {
       setLoading(true);
+
 
       const response = await fetch(`${API_BASE_URL}/site-definition`, {
         method: "POST",
@@ -200,18 +226,23 @@ function AdminSitesPage() {
         body: JSON.stringify({ prompt }),
       });
 
+
       if (!response.ok) {
         throw new Error(`Failed to generate site definition: ${response.status}`);
       }
 
+
       const data: SiteDefinitionResponse = await response.json();
+
 
       const brandName =
         data.site_definition.site.brand_name ||
         `${data.site_definition.site.site_type} website`;
 
+
       const baseSlug = slugify(brandName) || "website";
       const uniqueSlug = `${baseSlug}-${Date.now()}`;
+
 
       const createResponse = await fetch(`${API_BASE_URL}/sites`, {
         method: "POST",
@@ -226,11 +257,14 @@ function AdminSitesPage() {
         }),
       });
 
+
       if (!createResponse.ok) {
         throw new Error(`Failed to save site: ${createResponse.status}`);
       }
 
+
       const createdSite: SavedSite = await createResponse.json();
+
 
       await loadSavedSites();
       navigate(`/builder/${createdSite.id}`);
@@ -240,6 +274,7 @@ function AdminSitesPage() {
       setLoading(false);
     }
   };
+
 
   return (
     <div
@@ -284,6 +319,7 @@ function AdminSitesPage() {
             WebNirmaan
           </h1>
 
+
           <div
             style={{
               display: "flex",
@@ -299,6 +335,7 @@ function AdminSitesPage() {
             >
               {savedSites.length} saved websites
             </div>
+
 
             <button
               onClick={handleLogout}
@@ -317,6 +354,7 @@ function AdminSitesPage() {
             </button>
           </div>
         </div>
+
 
         <div
           style={{
@@ -353,6 +391,7 @@ function AdminSitesPage() {
               Describe your website
             </p>
 
+
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
@@ -376,6 +415,7 @@ function AdminSitesPage() {
               }}
             />
 
+
             <button
               onClick={generateSite}
               disabled={loading}
@@ -396,6 +436,7 @@ function AdminSitesPage() {
               {loading ? "Generating..." : "Generate and open"}
             </button>
           </div>
+
 
           <div
             style={{
@@ -421,6 +462,7 @@ function AdminSitesPage() {
               Saved Websites
             </h3>
 
+
             {sitesLoading ? (
               <p style={{ margin: 0, opacity: 0.75 }}>Loading websites...</p>
             ) : savedSites.length === 0 ? (
@@ -444,18 +486,22 @@ function AdminSitesPage() {
                     site.site_definition?.site?.brand_name ||
                     site.slug;
 
+
                   const siteType =
                     site.draft_definition?.site?.site_type ||
                     site.site_definition?.site?.site_type ||
                     "website";
 
+
                   const region =
                     site.draft_definition?.site?.region ||
                     site.site_definition?.site?.region;
 
+
                   const domain =
                     site.draft_definition?.site?.domain ||
                     site.site_definition?.site?.domain;
+
 
                   return (
                     <button
@@ -514,6 +560,7 @@ function AdminSitesPage() {
                             {brandName?.charAt(0)?.toUpperCase() || "W"}
                           </div>
 
+
                           <div style={{ minWidth: 0, flex: 1 }}>
                             <div
                               style={{
@@ -527,6 +574,7 @@ function AdminSitesPage() {
                             >
                               {brandName}
                             </div>
+
 
                             <div
                               style={{
@@ -543,6 +591,7 @@ function AdminSitesPage() {
                             </div>
                           </div>
                         </div>
+
 
                         <div
                           style={{
@@ -575,6 +624,7 @@ function AdminSitesPage() {
   );
 }
 
+
 function AppRoutes() {
   return (
     <Routes>
@@ -595,14 +645,18 @@ function AppRoutes() {
   );
 }
 
+
 function App() {
   return (
     <CustomerAuthProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
+      <CartProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </CartProvider>
     </CustomerAuthProvider>
   );
 }
+
 
 export default App;

@@ -7,7 +7,9 @@ const AdminLayout = () => {
   const { siteId } = useParams();
   const location = useLocation();
 
-  const pageTitle = location.pathname.includes("/orders")
+  const pageTitle = location.pathname.includes("/checkout-charges")
+    ? "Checkout Charges"
+    : location.pathname.includes("/orders")
     ? "Orders"
     : "Products";
 

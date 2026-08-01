@@ -53,6 +53,38 @@ const PLACE_ORDER_TYPES = new Set(["place_order_cta", "placeordercta"]);
 const PAYMENT_TYPES = new Set(["payment_methods", "paymentmethods"]);
 const DELIVERY_TYPES = new Set(["delivery_form", "deliveryform"]);
 
+const PRODUCT_DETAIL_TYPES = new Set([
+  "product_detail",
+  "productdetail",
+  "product_gallery",
+  "productgallery",
+  "product_info",
+  "productinfo",
+  "purchase_panel",
+  "purchasepanel",
+]);
+
+const PRODUCT_LISTING_TYPES = new Set([
+  "product_grid",
+  "productgrid",
+  "products_grid",
+  "productsgrid",
+  "product_list",
+  "productlist",
+  "products_section",
+  "productssection",
+  "shop_products",
+  "shopproducts",
+]);
+
+const FILTER_TYPES = new Set([
+  "filter_sidebar",
+  "filtersidebar",
+  "filters",
+  "shop_filters",
+  "shopfilters",
+]);
+
 const RenderPage: React.FC<RenderPageProps> = ({
   page,
   siteId,
@@ -85,6 +117,16 @@ const RenderPage: React.FC<RenderPageProps> = ({
     page.page_type === "checkout" ||
     page.flow === "checkout";
 
+  const isProductDetailPageContext =
+    Boolean(selectedProduct) ||
+    page.role === "product_detail" ||
+    page.page_type === "product_detail" ||
+    page.route === "/products/:productSlug" ||
+    page.route === "/products/:slug" ||
+    resolvedBlocks.some((block) =>
+      PRODUCT_DETAIL_TYPES.has(String(block.type || "").toLowerCase())
+    );
+
   const productCategories = useMemo(() => {
     return Array.from(
       new Set(
@@ -99,6 +141,44 @@ const RenderPage: React.FC<RenderPageProps> = ({
     if (selectedFilter === "All") return products;
     return products.filter((product) => product.category === selectedFilter);
   }, [products, selectedFilter]);
+
+  const detailRelevantBlocks = useMemo(() => {
+    if (!isProductDetailPageContext) return resolvedBlocks;
+
+    const filtered = resolvedBlocks.filter((block) => {
+      const type = String(block.type || "").toLowerCase();
+      const resolvedDataSource = block.data_source ?? block.datasource ?? undefined;
+
+      if (FILTER_TYPES.has(type)) return false;
+      if (resolvedDataSource === "products") return false;
+      if (PRODUCT_LISTING_TYPES.has(type)) return false;
+
+      return true;
+    });
+
+    const hasRenderableDetailBlock = filtered.some((block) => {
+      const type = String(block.type || "").toLowerCase();
+      const resolvedDataSource = block.data_source ?? block.datasource ?? undefined;
+
+      return (
+        (PRODUCT_DETAIL_TYPES.has(type) || resolvedDataSource === "product") &&
+        Boolean(componentRegistry[block.type])
+      );
+    });
+
+    if (hasRenderableDetailBlock) return filtered;
+
+    return [
+      {
+        id: "auto-product-detail-fallback",
+        type: "product_detail",
+        data_source: "product",
+        props: {},
+      },
+    ];
+  }, [isProductDetailPageContext, resolvedBlocks]);
+
+  const blocksToRender = detailRelevantBlocks;
 
   const renderBlock = (
     block: Block,
@@ -124,7 +204,10 @@ const RenderPage: React.FC<RenderPageProps> = ({
       ...(overrides ?? {}),
     };
 
-    if (block.type === "filter_sidebar" || block.type === "filtersidebar") {
+    if (
+      !isProductDetailPageContext &&
+      (block.type === "filter_sidebar" || block.type === "filtersidebar")
+    ) {
       return (
         <Component
           key={blockId}
@@ -147,7 +230,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
       );
     }
 
-    if (resolvedDataSource === "products") {
+    if (!isProductDetailPageContext && resolvedDataSource === "products") {
       return (
         <Component
           key={blockId}
@@ -171,22 +254,22 @@ const RenderPage: React.FC<RenderPageProps> = ({
   };
 
   if (!isCheckoutPage) {
-    return <>{resolvedBlocks.map((block, index) => renderBlock(block, index))}</>;
+    return <>{blocksToRender.map((block, index) => renderBlock(block, index))}</>;
   }
 
-  const deliveryBlock = resolvedBlocks.find((block) =>
+  const deliveryBlock = blocksToRender.find((block) =>
     DELIVERY_TYPES.has(block.type.toLowerCase())
   );
 
-  const paymentBlock = resolvedBlocks.find((block) =>
+  const paymentBlock = blocksToRender.find((block) =>
     PAYMENT_TYPES.has(block.type.toLowerCase())
   );
 
-  const placeOrderBlock = resolvedBlocks.find((block) =>
+  const placeOrderBlock = blocksToRender.find((block) =>
     PLACE_ORDER_TYPES.has(block.type.toLowerCase())
   );
 
-  const summaryBlock = resolvedBlocks.find((block) =>
+  const summaryBlock = blocksToRender.find((block) =>
     CHECKOUT_SUMMARY_TYPES.has(block.type.toLowerCase())
   );
 
@@ -196,7 +279,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
       .map((block) => block!.id || block!.type)
   );
 
-  const extraBlocks = resolvedBlocks.filter((block) => {
+  const extraBlocks = blocksToRender.filter((block) => {
     const key = block.id || block.type;
     return !usedBlockIds.has(key);
   });
@@ -297,7 +380,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
             }}
           >
             {deliveryBlock
-              ? renderBlock(deliveryBlock, resolvedBlocks.indexOf(deliveryBlock), {
+              ? renderBlock(deliveryBlock, blocksToRender.indexOf(deliveryBlock), {
                   compact: true,
                 })
               : null}
@@ -314,20 +397,20 @@ const RenderPage: React.FC<RenderPageProps> = ({
             }}
           >
             {paymentBlock
-              ? renderBlock(paymentBlock, resolvedBlocks.indexOf(paymentBlock), {
+              ? renderBlock(paymentBlock, blocksToRender.indexOf(paymentBlock), {
                   compact: true,
                 })
               : null}
 
             {summaryBlock
-              ? renderBlock(summaryBlock, resolvedBlocks.indexOf(summaryBlock), {
+              ? renderBlock(summaryBlock, blocksToRender.indexOf(summaryBlock), {
                   mode: "checkout_summary",
                   compact: true,
                 })
               : null}
 
             {placeOrderBlock
-              ? renderBlock(placeOrderBlock, resolvedBlocks.indexOf(placeOrderBlock), {
+              ? renderBlock(placeOrderBlock, blocksToRender.indexOf(placeOrderBlock), {
                   compact: true,
                 })
               : null}
@@ -344,7 +427,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
               }}
             >
               {extraBlocks.map((block, index) =>
-                renderBlock(block, index + resolvedBlocks.length)
+                renderBlock(block, index + blocksToRender.length)
               )}
             </div>
           ) : null}

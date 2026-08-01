@@ -1,11 +1,13 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+from pathlib import Path
 from typing import Any, Dict, Optional
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from langgraph.graph import END, StateGraph
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
@@ -22,9 +24,12 @@ from auth_middleware import (
 )
 from db.database import create_db_and_tables, get_session
 from models import AdminSite, Site
-from routers import auth, products
+from routers import auth, cart, checkout_settings, products
 
 app = FastAPI(title="AI Website Builder Backend")
+
+UPLOADS_DIR = Path("uploads")
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @app.on_event("startup")
@@ -45,8 +50,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
+
 app.include_router(auth.router)
 app.include_router(products.router)
+app.include_router(cart.router)
+app.include_router(checkout_settings.router)
 
 
 class GenerateSiteRequest(BaseModel):
@@ -307,6 +316,21 @@ def get_site_by_slug(
             Site.slug == slug,
             AdminSite.admin_id == admin_id,
         )
+    ).first()
+
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    return site
+
+
+@app.get("/public/sites/slug/{slug}")
+def get_public_site_by_slug(
+    slug: str,
+    session: Session = Depends(get_session),
+):
+    site = session.exec(
+        select(Site).where(Site.slug == slug)
     ).first()
 
     if not site:

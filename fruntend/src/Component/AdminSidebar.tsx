@@ -22,6 +22,10 @@ const AdminSidebar = () => {
       label: "Orders",
       to: `/builder/${siteId}/admin/orders`,
     },
+    {
+      label: "Checkout Charges",
+      to: `/builder/${siteId}/admin/checkout-charges`,
+    },
   ];
 
   return (

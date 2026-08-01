@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useCart } from "../CartContext";
 
@@ -43,6 +43,45 @@ type CartSidebarProps = {
   accent_color?: string;
   theme?: CartTheme;
   accentColor?: string;
+};
+
+type ChargeCode =
+  | "shipping_fee"
+  | "tax"
+  | "handling_fee"
+  | "packaging_fee"
+  | "service_fee"
+  | "platform_fee"
+  | "small_order_fee"
+  | "cod_fee"
+  | "gift_wrap";
+
+type ChargeRule = {
+  id: string;
+  code: ChargeCode | "custom";
+  label: string;
+  enabled: boolean;
+  optional: boolean;
+  customerSelectable: boolean;
+  amountType: "fixed" | "percent";
+  amountValue: string;
+  applyConditionType: "none" | "subtotal_lt" | "subtotal_gte" | "payment_method";
+  applyConditionValue: string;
+  waiveConditionType: "none" | "subtotal_gte";
+  waiveConditionValue: string;
+  description: string;
+};
+
+type TaxSettings = {
+  enabled: boolean;
+  label: string;
+  rate: string;
+  applyOnShipping: boolean;
+};
+
+type CheckoutSettingsResponse = {
+  charges: ChargeRule[];
+  taxSettings: TaxSettings;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -108,6 +147,48 @@ function alpha(hex: string, opacity: number) {
   return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${clamp(opacity, 0, 1)})`;
 }
 
+function toNumber(value?: string) {
+  const parsed = Number(value || 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function matchesApplyCondition(
+  charge: ChargeRule,
+  subtotalAfterDiscount: number,
+  paymentMethod: string
+) {
+  switch (charge.applyConditionType) {
+    case "none":
+      return true;
+    case "subtotal_lt":
+      return subtotalAfterDiscount < toNumber(charge.applyConditionValue);
+    case "subtotal_gte":
+      return subtotalAfterDiscount >= toNumber(charge.applyConditionValue);
+    case "payment_method":
+      return charge.applyConditionValue === paymentMethod;
+    default:
+      return true;
+  }
+}
+
+function isWaived(charge: ChargeRule, subtotalAfterDiscount: number) {
+  switch (charge.waiveConditionType) {
+    case "subtotal_gte":
+      return subtotalAfterDiscount >= toNumber(charge.waiveConditionValue);
+    case "none":
+    default:
+      return false;
+  }
+}
+
+function calculateChargeAmount(charge: ChargeRule, baseAmount: number) {
+  const raw = toNumber(charge.amountValue);
+  if (charge.amountType === "percent") {
+    return Math.round((baseAmount * raw) / 100);
+  }
+  return Math.round(raw);
+}
+
 const CartSidebar: React.FC<CartSidebarProps> = ({
   mode = "cart",
   title,
@@ -142,11 +223,88 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   accentColor,
 }) => {
   const { cartItems, updateQuantity, removeFromCart, clearCart } = useCart();
-  const { siteId } = useParams();
+  const { siteId, slug } = useParams();
+
   const [promoCode, setPromoCode] = useState("");
   const [appliedCode, setAppliedCode] = useState("");
+  const [windowWidth, setWindowWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 1280
+  );
+
+  const [checkoutSettings, setCheckoutSettings] =
+    useState<CheckoutSettingsResponse | null>(null);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [selectedOptionalChargeIds, setSelectedOptionalChargeIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadCheckoutSettings = async () => {
+      try {
+        let url = "";
+
+        if (siteId) {
+          url = `http://localhost:8000/sites/${siteId}/checkout-settings`;
+        } else if (slug) {
+          url = `http://localhost:8000/store/${slug}/checkout-settings`;
+        } else {
+          return;
+        }
+
+        setSettingsLoading(true);
+
+        const response = await fetch(url, {
+          signal: controller.signal,
+          credentials: "include",
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to load checkout settings: ${response.status}`);
+        }
+
+        const data: CheckoutSettingsResponse = await response.json();
+        setCheckoutSettings(data);
+
+        const defaultSelectedOptionalIds = (data.charges || [])
+          .filter(
+            (charge) =>
+              charge.enabled &&
+              charge.customerSelectable &&
+              charge.optional
+          )
+          .map((charge) => charge.id);
+
+        setSelectedOptionalChargeIds(defaultSelectedOptionalIds);
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") {
+          console.error("Checkout settings load failed", error);
+        }
+      } finally {
+        setSettingsLoading(false);
+      }
+    };
+
+    loadCheckoutSettings();
+
+    return () => controller.abort();
+  }, [siteId, slug]);
+
+  const isMobile = windowWidth < 768;
+  const isTablet = windowWidth >= 768 && windowWidth < 1024;
 
   const isCheckoutSummary = mode === "checkout_summary";
+  const checkoutPath = slug
+    ? `/store/${slug}/checkout`
+    : siteId
+    ? `/builder/${siteId}/checkout`
+    : "/admin/sites";
 
   const heading = title || (isCheckoutSummary ? "Order summary" : "Your cart");
   const emptyHeading = empty_title || "Your cart is empty";
@@ -162,8 +320,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   const taxLabel = tax_label || "Estimated tax";
   const subtotalLabel = subtotal_label || "Subtotal";
   const totalLabel = total_label || "Total";
-  const footerNote =
-    note || "Shipping and taxes are calculated at checkout.";
+  const footerNote = note || "Shipping and taxes are calculated at checkout.";
 
   const isDark = theme?.mode !== "light";
   const resolvedAccentColor =
@@ -292,13 +449,171 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
       ? Math.round(subtotal * 0.1)
       : 0;
 
-  const shipping = cartItems.length > 0 ? 99 : 0;
-  const tax = Math.round((subtotal - promoDiscount) * 0.05);
-  const total = Math.max(subtotal - promoDiscount + shipping + tax, 0);
+  const subtotalAfterDiscount = Math.max(subtotal - promoDiscount, 0);
+  const paymentMethod = "online";
+
+  const enabledCharges = (checkoutSettings?.charges || []).filter(
+    (charge) => charge.enabled
+  );
+
+  const optionalSelectableCharges = enabledCharges.filter(
+    (charge) => charge.customerSelectable && charge.optional
+  );
+
+  const autoAppliedCharges = enabledCharges.filter(
+    (charge) => !(charge.customerSelectable && charge.optional)
+  );
+
+  const selectedOptionalCharges = optionalSelectableCharges.filter((charge) =>
+    selectedOptionalChargeIds.includes(charge.id)
+  );
+
+  const applicableCharges = [...autoAppliedCharges, ...selectedOptionalCharges]
+    .filter((charge) =>
+      matchesApplyCondition(charge, subtotalAfterDiscount, paymentMethod)
+    )
+    .filter((charge) => !isWaived(charge, subtotalAfterDiscount))
+    .map((charge) => ({
+      ...charge,
+      calculatedAmount: calculateChargeAmount(charge, subtotalAfterDiscount),
+    }))
+    .filter((charge) => charge.calculatedAmount > 0);
+
+  const shippingCharge =
+    applicableCharges.find((charge) => charge.code === "shipping_fee")
+      ?.calculatedAmount || 0;
+
+  const nonShippingCharges = applicableCharges.filter(
+    (charge) => charge.code !== "shipping_fee"
+  );
+
+  const chargesBeforeTax =
+    shippingCharge +
+    nonShippingCharges.reduce((sum, charge) => sum + charge.calculatedAmount, 0);
+
+  const taxBase = checkoutSettings?.taxSettings?.applyOnShipping
+    ? subtotalAfterDiscount + chargesBeforeTax
+    : subtotalAfterDiscount;
+
+  const tax = checkoutSettings?.taxSettings?.enabled
+    ? Math.round(
+        (taxBase * toNumber(checkoutSettings.taxSettings.rate)) / 100
+      )
+    : 0;
+
+  const total = Math.max(subtotalAfterDiscount + chargesBeforeTax + tax, 0);
 
   const handleApplyPromo = () => {
     setAppliedCode(promoCode.trim());
   };
+
+  const toggleOptionalCharge = (chargeId: string) => {
+    setSelectedOptionalChargeIds((prev) =>
+      prev.includes(chargeId)
+        ? prev.filter((id) => id !== chargeId)
+        : [...prev, chargeId]
+    );
+  };
+
+  const summaryItemGrid = isMobile
+    ? "56px minmax(0, 1fr)"
+    : "56px minmax(0, 1fr) auto";
+
+  const cartLayoutColumns =
+    isMobile || isTablet
+      ? "1fr"
+      : "minmax(0, 1.5fr) minmax(320px, 0.9fr)";
+
+  const optionalChargePicker = optionalSelectableCharges.length > 0 && (
+    <div
+      style={{
+        borderRadius: `${innerRadius}px`,
+        background: palette.cardBg,
+        border: `1px solid ${palette.cardBorder}`,
+        boxShadow: palette.cardShadow,
+        padding: isMobile ? "16px" : "18px",
+      }}
+    >
+      <h4
+        style={{
+          margin: "0 0 12px",
+          fontSize: "16px",
+          fontWeight: 700,
+          color: palette.text,
+        }}
+      >
+        Optional add-ons
+      </h4>
+
+      <div style={{ display: "grid", gap: "10px" }}>
+        {optionalSelectableCharges.map((charge) => {
+          const checked = selectedOptionalChargeIds.includes(charge.id);
+          const previewAmount = calculateChargeAmount(charge, subtotalAfterDiscount);
+
+          return (
+            <label
+              key={charge.id}
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                gap: "12px",
+                padding: "12px 14px",
+                borderRadius: "12px",
+                border: `1px solid ${palette.cardBorder}`,
+                background: checked ? palette.softBg : palette.inputBg,
+                cursor: "pointer",
+              }}
+            >
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggleOptionalCharge(charge.id)}
+                  style={{ marginTop: "3px" }}
+                />
+                <div>
+                  <div
+                    style={{
+                      color: palette.text,
+                      fontSize: "14px",
+                      fontWeight: 700,
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    {charge.label}
+                  </div>
+                  {charge.description ? (
+                    <div
+                      style={{
+                        marginTop: "4px",
+                        color: palette.textMuted,
+                        fontSize: "12px",
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      {charge.description}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  color: palette.text,
+                  fontSize: "14px",
+                  fontWeight: 700,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                ₹{previewAmount}
+              </div>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
 
   if (isCheckoutSummary) {
     return (
@@ -397,18 +712,13 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
               </div>
             ) : (
               <>
-                <div
-                  style={{
-                    display: "grid",
-                    gap: "12px",
-                  }}
-                >
-                  {cartItems.map((item) => (
+                <div style={{ display: "grid", gap: "12px" }}>
+                  {cartItems.map((item, index) => (
                     <div
-                      key={item.id}
+                      key={`${item.id}-${item.selectedVariantValue || "default"}-${index}`}
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "56px minmax(0, 1fr) auto",
+                        gridTemplateColumns: summaryItemGrid,
                         gap: "12px",
                         alignItems: "center",
                         padding: "12px",
@@ -451,6 +761,22 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                         >
                           {item.name}
                         </p>
+
+                        {item.selectedVariantValue && (
+                          <p
+                            style={{
+                              margin: "0 0 4px",
+                              fontSize: "12px",
+                              color: palette.textMuted,
+                              lineHeight: 1.4,
+                              wordBreak: "break-word",
+                            }}
+                          >
+                            {item.selectedVariantLabel || "Option"}:{" "}
+                            {item.selectedVariantValue}
+                          </p>
+                        )}
+
                         <p
                           style={{
                             margin: 0,
@@ -464,11 +790,12 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
 
                       <p
                         style={{
-                          margin: 0,
+                          margin: isMobile ? "2px 0 0 68px" : 0,
                           fontSize: "14px",
                           fontWeight: 700,
                           color: palette.text,
                           whiteSpace: "nowrap",
+                          textAlign: isMobile ? "left" : "right",
                         }}
                       >
                         ₹{item.price * item.quantity}
@@ -476,6 +803,8 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                     </div>
                   ))}
                 </div>
+
+                {optionalChargePicker}
 
                 {show_promo && (
                   <div
@@ -501,7 +830,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "1fr auto",
+                        gridTemplateColumns: isMobile ? "1fr" : "1fr auto",
                         gap: "10px",
                       }}
                     >
@@ -533,6 +862,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                           padding: "0 16px",
                           fontWeight: 700,
                           cursor: "pointer",
+                          width: isMobile ? "100%" : "auto",
                         }}
                       >
                         {promoButtonLabel}
@@ -623,8 +953,26 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                         }}
                       >
                         <span>{shippingLabel}</span>
-                        <span style={{ color: palette.text }}>₹{shipping}</span>
+                        <span style={{ color: palette.text }}>₹{shippingCharge}</span>
                       </div>
+
+                      {nonShippingCharges.map((charge) => (
+                        <div
+                          key={charge.id}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            gap: "12px",
+                            color: palette.textMuted,
+                            fontSize: "14px",
+                          }}
+                        >
+                          <span>{charge.label}</span>
+                          <span style={{ color: palette.text }}>
+                            ₹{charge.calculatedAmount}
+                          </span>
+                        </div>
+                      ))}
 
                       <div
                         style={{
@@ -635,7 +983,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                           fontSize: "14px",
                         }}
                       >
-                        <span>{taxLabel}</span>
+                        <span>{checkoutSettings?.taxSettings?.label || taxLabel}</span>
                         <span style={{ color: palette.text }}>₹{tax}</span>
                       </div>
 
@@ -685,7 +1033,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                         lineHeight: 1.5,
                       }}
                     >
-                      {footerNote}
+                      {settingsLoading ? "Updating charges..." : footerNote}
                     </p>
                   </div>
                 )}
@@ -700,7 +1048,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   return (
     <section
       style={{
-        padding: "20px 12px 36px",
+        padding: isMobile ? "16px 12px 32px" : "20px 12px 36px",
         maxWidth: `${resolvedMaxWidth}px`,
         minHeight: resolvedMinHeight > 0 ? `${resolvedMinHeight}px` : undefined,
         margin: "0 auto",
@@ -718,7 +1066,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
       >
         <div
           style={{
-            padding: "22px 22px 18px",
+            padding: isMobile ? "18px 16px 16px" : "22px 22px 18px",
             borderBottom: `1px solid ${palette.shellBorder}`,
             display: "flex",
             justifyContent: "space-between",
@@ -745,7 +1093,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
             <h3
               style={{
                 margin: 0,
-                fontSize: "clamp(22px, 2vw, 30px)",
+                fontSize: isMobile ? "24px" : "clamp(22px, 2vw, 30px)",
                 lineHeight: 1.05,
                 letterSpacing: "-0.03em",
                 color: palette.text,
@@ -777,6 +1125,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                 padding: "10px 14px",
                 fontSize: "13px",
                 fontWeight: 600,
+                width: isMobile ? "100%" : "auto",
               }}
             >
               {clearText}
@@ -786,7 +1135,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
 
         <div
           style={{
-            padding: "18px",
+            padding: isMobile ? "14px" : "18px",
             background: palette.panelBg,
           }}
         >
@@ -828,7 +1177,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "minmax(0, 1.5fr) minmax(320px, 0.9fr)",
+                gridTemplateColumns: cartLayoutColumns,
                 gap: "18px",
                 alignItems: "start",
               }}
@@ -840,15 +1189,17 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                   gap: "14px",
                 }}
               >
-                {cartItems.map((item) => (
+                {cartItems.map((item, index) => (
                   <div
-                    key={item.id}
+                    key={`${item.id}-${item.selectedVariantValue || "default"}-${index}`}
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "92px minmax(0, 1fr)",
-                      gap: "14px",
+                      gridTemplateColumns: isMobile
+                        ? "72px minmax(0, 1fr)"
+                        : "92px minmax(0, 1fr)",
+                      gap: isMobile ? "12px" : "14px",
                       alignItems: "start",
-                      padding: "14px",
+                      padding: isMobile ? "12px" : "14px",
                       borderRadius: `${innerRadius}px`,
                       background: palette.cardBg,
                       border: `1px solid ${palette.cardBorder}`,
@@ -857,9 +1208,9 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                   >
                     <div
                       style={{
-                        width: "92px",
-                        height: "92px",
-                        borderRadius: "16px",
+                        width: isMobile ? "72px" : "92px",
+                        height: isMobile ? "72px" : "92px",
+                        borderRadius: isMobile ? "14px" : "16px",
                         overflow: "hidden",
                         background: palette.mutedBg,
                         flexShrink: 0,
@@ -885,9 +1236,10 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                           alignItems: "flex-start",
                           gap: "12px",
                           marginBottom: "8px",
+                          flexWrap: isMobile ? "wrap" : "nowrap",
                         }}
                       >
-                        <div style={{ minWidth: 0 }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
                           <p
                             style={{
                               margin: "0 0 4px",
@@ -904,7 +1256,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                           <h4
                             style={{
                               margin: 0,
-                              fontSize: "16px",
+                              fontSize: isMobile ? "15px" : "16px",
                               lineHeight: 1.3,
                               color: palette.text,
                               fontWeight: 700,
@@ -913,10 +1265,27 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                           >
                             {item.name}
                           </h4>
+
+                          {item.selectedVariantValue && (
+                            <p
+                              style={{
+                                margin: "6px 0 0",
+                                fontSize: "12px",
+                                color: palette.textMuted,
+                                lineHeight: 1.45,
+                                wordBreak: "break-word",
+                              }}
+                            >
+                              {item.selectedVariantLabel || "Option"}:{" "}
+                              {item.selectedVariantValue}
+                            </p>
+                          )}
                         </div>
 
                         <button
-                          onClick={() => removeFromCart(item.id)}
+                          onClick={() =>
+                            removeFromCart(item.id, item.selectedVariantValue)
+                          }
                           style={{
                             border: "none",
                             background: "transparent",
@@ -935,105 +1304,125 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                       <div
                         style={{
                           display: "flex",
-                          alignItems: "center",
+                          flexDirection: isMobile ? "column" : "row",
+                          alignItems: isMobile ? "stretch" : "center",
                           justifyContent: "space-between",
                           gap: "12px",
-                          flexWrap: "wrap",
                         }}
                       >
                         <div
                           style={{
                             display: "flex",
-                            flexDirection: "column",
-                            gap: "4px",
+                            justifyContent: "space-between",
+                            alignItems: isMobile ? "center" : "flex-start",
+                            gap: "12px",
+                            flexWrap: "wrap",
                           }}
                         >
-                          <p
+                          <div
                             style={{
-                              margin: 0,
-                              fontSize: "13px",
-                              color: palette.textMuted,
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "4px",
+                              minWidth: isMobile ? "auto" : "88px",
                             }}
                           >
-                            Unit price
-                          </p>
-                          <p
+                            <p
+                              style={{
+                                margin: 0,
+                                fontSize: "13px",
+                                color: palette.textMuted,
+                              }}
+                            >
+                              Unit price
+                            </p>
+                            <p
+                              style={{
+                                margin: 0,
+                                fontSize: "16px",
+                                fontWeight: 700,
+                                color: palette.text,
+                                letterSpacing: "-0.02em",
+                              }}
+                            >
+                              ₹{item.price}
+                            </p>
+                          </div>
+
+                          <div
                             style={{
-                              margin: 0,
-                              fontSize: "16px",
-                              fontWeight: 700,
-                              color: palette.text,
-                              letterSpacing: "-0.02em",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              border: `1px solid ${palette.cardBorder}`,
+                              borderRadius: "999px",
+                              overflow: "hidden",
+                              background: palette.quantityBg,
+                              minHeight: "40px",
+                              alignSelf: "flex-start",
                             }}
                           >
-                            ₹{item.price}
-                          </p>
+                            <button
+                              onClick={() =>
+                                updateQuantity(
+                                  item.id,
+                                  item.quantity - 1,
+                                  item.selectedVariantValue
+                                )
+                              }
+                              style={{
+                                border: "none",
+                                background: "transparent",
+                                color: palette.text,
+                                width: "40px",
+                                height: "40px",
+                                cursor: "pointer",
+                                fontSize: "18px",
+                                fontWeight: 500,
+                              }}
+                            >
+                              −
+                            </button>
+
+                            <span
+                              style={{
+                                minWidth: "40px",
+                                textAlign: "center",
+                                fontSize: "14px",
+                                fontWeight: 700,
+                                color: palette.text,
+                              }}
+                            >
+                              {item.quantity}
+                            </span>
+
+                            <button
+                              onClick={() =>
+                                updateQuantity(
+                                  item.id,
+                                  item.quantity + 1,
+                                  item.selectedVariantValue
+                                )
+                              }
+                              style={{
+                                border: "none",
+                                background: "transparent",
+                                color: palette.text,
+                                width: "40px",
+                                height: "40px",
+                                cursor: "pointer",
+                                fontSize: "18px",
+                                fontWeight: 500,
+                              }}
+                            >
+                              +
+                            </button>
+                          </div>
                         </div>
 
                         <div
                           style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            border: `1px solid ${palette.cardBorder}`,
-                            borderRadius: "999px",
-                            overflow: "hidden",
-                            background: palette.quantityBg,
-                            minHeight: "40px",
-                          }}
-                        >
-                          <button
-                            onClick={() =>
-                              updateQuantity(item.id, item.quantity - 1)
-                            }
-                            style={{
-                              border: "none",
-                              background: "transparent",
-                              color: palette.text,
-                              width: "40px",
-                              height: "40px",
-                              cursor: "pointer",
-                              fontSize: "18px",
-                              fontWeight: 500,
-                            }}
-                          >
-                            −
-                          </button>
-
-                          <span
-                            style={{
-                              minWidth: "40px",
-                              textAlign: "center",
-                              fontSize: "14px",
-                              fontWeight: 700,
-                              color: palette.text,
-                            }}
-                          >
-                            {item.quantity}
-                          </span>
-
-                          <button
-                            onClick={() =>
-                              updateQuantity(item.id, item.quantity + 1)
-                            }
-                            style={{
-                              border: "none",
-                              background: "transparent",
-                              color: palette.text,
-                              width: "40px",
-                              height: "40px",
-                              cursor: "pointer",
-                              fontSize: "18px",
-                              fontWeight: 500,
-                            }}
-                          >
-                            +
-                          </button>
-                        </div>
-
-                        <div
-                          style={{
-                            marginLeft: "auto",
-                            textAlign: "right",
+                            marginLeft: isMobile ? 0 : "auto",
+                            textAlign: isMobile ? "left" : "right",
                           }}
                         >
                           <p
@@ -1068,8 +1457,12 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                   display: "flex",
                   flexDirection: "column",
                   gap: "14px",
+                  position: isMobile || isTablet ? "static" : "sticky",
+                  top: isMobile || isTablet ? undefined : "18px",
                 }}
               >
+                {optionalChargePicker}
+
                 {show_promo && (
                   <div
                     style={{
@@ -1077,7 +1470,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                       background: palette.cardBg,
                       border: `1px solid ${palette.cardBorder}`,
                       boxShadow: palette.cardShadow,
-                      padding: "18px",
+                      padding: isMobile ? "16px" : "18px",
                     }}
                   >
                     <h4
@@ -1094,7 +1487,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "1fr auto",
+                        gridTemplateColumns: isMobile ? "1fr" : "1fr auto",
                         gap: "10px",
                       }}
                     >
@@ -1126,6 +1519,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                           padding: "0 16px",
                           fontWeight: 700,
                           cursor: "pointer",
+                          width: isMobile ? "100%" : "auto",
                         }}
                       >
                         {promoButtonLabel}
@@ -1156,7 +1550,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                       background: palette.cardBg,
                       border: `1px solid ${palette.cardBorder}`,
                       boxShadow: palette.cardShadow,
-                      padding: "18px",
+                      padding: isMobile ? "16px" : "18px",
                     }}
                   >
                     <h4
@@ -1216,8 +1610,26 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                         }}
                       >
                         <span>{shippingLabel}</span>
-                        <span style={{ color: palette.text }}>₹{shipping}</span>
+                        <span style={{ color: palette.text }}>₹{shippingCharge}</span>
                       </div>
+
+                      {nonShippingCharges.map((charge) => (
+                        <div
+                          key={charge.id}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            gap: "12px",
+                            color: palette.textMuted,
+                            fontSize: "14px",
+                          }}
+                        >
+                          <span>{charge.label}</span>
+                          <span style={{ color: palette.text }}>
+                            ₹{charge.calculatedAmount}
+                          </span>
+                        </div>
+                      ))}
 
                       <div
                         style={{
@@ -1228,7 +1640,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                           fontSize: "14px",
                         }}
                       >
-                        <span>{taxLabel}</span>
+                        <span>{checkoutSettings?.taxSettings?.label || taxLabel}</span>
                         <span style={{ color: palette.text }}>₹{tax}</span>
                       </div>
 
@@ -1259,7 +1671,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                         </span>
                         <span
                           style={{
-                            fontSize: "22px",
+                            fontSize: isMobile ? "20px" : "22px",
                             fontWeight: 800,
                             color: palette.text,
                             letterSpacing: "-0.03em",
@@ -1278,12 +1690,12 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                         lineHeight: 1.5,
                       }}
                     >
-                      {footerNote}
+                      {settingsLoading ? "Updating charges..." : footerNote}
                     </p>
 
                     {cartItems.length > 0 ? (
                       <Link
-                        to={`/builder/${siteId}/checkout`}
+                        to={checkoutPath}
                         style={{
                           display: "flex",
                           alignItems: "center",

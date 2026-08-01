@@ -67,6 +67,7 @@ def authenticate_customer(
     request.state.user = {
         "userId": user_id,
         "siteId": site_id,
+        "isGuest": False,
     }
     return request.state.user
 

@@ -13,6 +13,7 @@ import { CartProvider, Product, useCart } from "./CartContext";
 import AdminLayout from "./Component/AdminLayout";
 import AdminProducts from "./Component/AdminProducts";
 import AdminOrders from "./Component/AdminOrders";
+import CheckoutChargesPage from "./Component/CheckoutChargesPage";
 import Navbar, { NavbarFixedBounds } from "./Component/Navbar";
 import Footer from "./Component/Footer";
 import EditorRenderPage from "./customizations/EditorRenderPage";
@@ -93,6 +94,15 @@ function isProductDetailBlockType(type: string) {
   ].includes((type || "").toLowerCase());
 }
 
+function isProductDetailRoute(route?: string | null) {
+  const normalized = normalizeRoute(route);
+  return (
+    normalized === "products/:productSlug" ||
+    normalized === "products/:slug" ||
+    normalized === "products/*"
+  );
+}
+
 function getNavbarEditorProps(siteDefinition: SiteDefinition) {
   return {
     brandName: siteDefinition.site?.brand_name || "Website",
@@ -118,48 +128,128 @@ function slugify(value: string) {
 
 function normalizeStorefrontProduct(raw: any): Product {
   const attributes = raw?.attributes ?? {};
-  const sizes = Array.isArray(attributes?.sizes)
-    ? attributes.sizes
-    : Array.isArray(raw?.sizes)
-    ? raw.sizes
-    : [];
-
-  const image =
-    raw?.image ||
-    (Array.isArray(raw?.images) && raw.images[0]) ||
-    "";
-
   const price = Number(raw?.price ?? 0);
-  const originalPrice =
-    raw?.originalPrice != null
-      ? Number(raw.originalPrice)
+
+  const comparePrice =
+    raw?.compare_price != null
+      ? Number(raw.compare_price)
+      : raw?.comparePrice != null
+      ? Number(raw.comparePrice)
       : raw?.original_price != null
       ? Number(raw.original_price)
-      : price;
+      : raw?.originalPrice != null
+      ? Number(raw.originalPrice)
+      : null;
+
+  const images = Array.isArray(raw?.images)
+    ? raw.images.filter((img: unknown) => typeof img === "string" && img.trim() !== "")
+    : raw?.image
+    ? [raw.image]
+    : [];
+
+  const variantOption =
+    raw?.variant_option ??
+    raw?.variantOption ??
+    (Array.isArray(attributes?.sizes) || Array.isArray(raw?.sizes)
+      ? {
+          optionType: "size",
+          optionName: "Size",
+          optionValues: (Array.isArray(attributes?.sizes)
+            ? attributes.sizes
+            : raw?.sizes || []
+          ).map((size: string) => ({
+            value: String(size),
+            inStock: true,
+            stockQty: null,
+          })),
+        }
+      : null);
+
+  const stock =
+    raw?.stock != null && !Number.isNaN(Number(raw.stock))
+      ? Number(raw.stock)
+      : 0;
+
+  const inStock =
+    typeof raw?.in_stock === "boolean"
+      ? raw.in_stock
+      : typeof raw?.inStock === "boolean"
+      ? raw.inStock
+      : stock > 0;
+
+  const originalPrice =
+    comparePrice != null && comparePrice > 0 ? comparePrice : price;
 
   const discountPercent =
     raw?.discountPercent != null
       ? Number(raw.discountPercent)
       : raw?.discount_percent != null
       ? Number(raw.discount_percent)
-      : originalPrice > price && originalPrice > 0
-      ? Math.round(((originalPrice - price) / originalPrice) * 100)
+      : comparePrice != null && comparePrice > price
+      ? Math.round(((comparePrice - price) / comparePrice) * 100)
       : 0;
 
   return {
-    id: Number(raw?.id),
+    id: raw?.id != null ? String(raw.id) : slugify(raw?.name || ""),
     name: raw?.name ?? "",
     brand: raw?.brand ?? "",
+    category: raw?.category ?? "",
+    description: raw?.description ?? "",
+    slug: raw?.slug || slugify(raw?.name) || String(raw?.id ?? ""),
     price,
+    compare_price: comparePrice,
+    images,
+    stock,
+    in_stock: inStock,
+    variant_option: variantOption,
     originalPrice,
     discountPercent,
-    image,
-    description: raw?.description ?? "",
-    sizes,
-    category: raw?.category ?? "",
-    inStock: Number(raw?.stock ?? 0) > 0,
-    slug: raw?.slug || slugify(raw?.name) || String(raw?.id ?? ""),
+    image: images[0] || "",
+    sizes: Array.isArray(attributes?.sizes)
+      ? attributes.sizes
+      : Array.isArray(raw?.sizes)
+      ? raw.sizes
+      : [],
+    inStock,
   };
+}
+
+async function resolveSiteBySlug(siteSlugParam: string): Promise<SavedSite | null> {
+  const publicCandidates = [
+    `${API_BASE_URL}/public/sites/slug/${siteSlugParam}`,
+    `${API_BASE_URL}/sites/slug/${siteSlugParam}`,
+  ];
+
+  for (const url of publicCandidates) {
+    try {
+      const response = await fetch(url, {
+        credentials: "include",
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data?.id || data?.slug || data?.site_definition || data?.draft_definition) {
+          return data as SavedSite;
+        }
+      }
+    } catch (error) {
+      console.warn("Site slug lookup failed:", url, error);
+    }
+  }
+
+  try {
+    const adminResponse = await fetch(`${API_BASE_URL}/auth/admin/sites`, {
+      credentials: "include",
+    });
+
+    if (!adminResponse.ok) return null;
+
+    const sites: SavedSite[] = await adminResponse.json();
+    return sites.find((site) => site.slug === siteSlugParam) ?? null;
+  } catch (error) {
+    console.warn("Admin site slug fallback failed:", error);
+    return null;
+  }
 }
 
 function StorefrontPage({
@@ -304,7 +394,11 @@ function StorefrontPage({
 }
 
 function BuilderPageContent() {
-  const { siteId, slug } = useParams();
+  const params = useParams();
+  const siteId = params.siteId;
+  const siteSlugParam = params.slug;
+  const productSlug = params.productSlug;
+
   const navigate = useNavigate();
   const location = useLocation();
   const { products } = useCart();
@@ -328,7 +422,7 @@ function BuilderPageContent() {
 
   const isStoreRoute = location.pathname.startsWith("/store/");
   const appBase = isStoreRoute
-    ? `/store/${slug ?? ""}`
+    ? `/store/${siteSlugParam ?? ""}`
     : `/builder/${resolvedSiteId || siteId || ""}`;
 
   const builderBase = `/builder/${resolvedSiteId || siteId || ""}`;
@@ -421,55 +515,54 @@ function BuilderPageContent() {
   }, [editMode, isAdminRoute, location.pathname]);
 
   const selectedProduct: Product | null = useMemo(() => {
-    const productSlug = slug && !isStoreRoute ? slug : undefined;
     if (!productSlug) return null;
+    if (!products.length) return null;
 
-    const bySlug = products.find((p) => p.slug === productSlug);
+    const normalizedTarget = String(productSlug).trim().toLowerCase();
+
+    const bySlug = products.find(
+      (p) => String(p.slug || "").trim().toLowerCase() === normalizedTarget
+    );
     if (bySlug) return bySlug;
 
-    const byId = products.find((p) => String(p.id) === String(productSlug));
-    return byId ?? null;
-  }, [slug, products, isStoreRoute]);
+    const byId = products.find(
+      (p) => String(p.id || "").trim().toLowerCase() === normalizedTarget
+    );
+    if (byId) return byId;
+
+    const byNameSlug = products.find(
+      (p) => slugify(String(p.name || "")) === normalizedTarget
+    );
+    return byNameSlug ?? null;
+  }, [productSlug, products]);
 
   useEffect(() => {
     const loadSite = async () => {
       try {
         setLoading(true);
 
-        let response: Response;
+        let data: SavedSite | null = null;
 
         if (siteId) {
-          response = await fetch(`${API_BASE_URL}/sites/${siteId}`, {
-            credentials: "include",
-          });
-        } else if (slug) {
-          response = await fetch(`${API_BASE_URL}/auth/admin/sites`, {
+          const response = await fetch(`${API_BASE_URL}/sites/${siteId}`, {
             credentials: "include",
           });
 
           if (!response.ok) {
-            throw new Error(`Failed to load sites list: ${response.status}`);
+            throw new Error(`Failed to load site: ${response.status}`);
           }
 
-          const sites: SavedSite[] = await response.json();
-          const matchedSite = sites.find((site) => site.slug === slug);
+          data = (await response.json()) as SavedSite;
+        } else if (siteSlugParam) {
+          data = await resolveSiteBySlug(siteSlugParam);
 
-          if (!matchedSite) {
+          if (!data?.id) {
             throw new Error("Site not found for slug");
           }
-
-          response = await fetch(`${API_BASE_URL}/sites/${matchedSite.id}`, {
-            credentials: "include",
-          });
         } else {
           throw new Error("Missing site identifier");
         }
 
-        if (!response.ok) {
-          throw new Error(`Failed to load site: ${response.status}`);
-        }
-
-        const data: SavedSite = await response.json();
         const parsedSiteDefinition: SiteDefinition =
           data.draft_definition || data.site_definition;
 
@@ -521,10 +614,10 @@ function BuilderPageContent() {
       }
     };
 
-    if (siteId || slug) {
+    if (siteId || siteSlugParam) {
       loadSite();
     }
-  }, [siteId, slug, navigate, appBase, builderBase, isStoreRoute]);
+  }, [siteId, siteSlugParam, navigate, appBase, builderBase, isStoreRoute]);
 
   const storefrontHomePath = useMemo(() => {
     if (!activeSiteDefinition || activeSiteDefinition.pages.length === 0) {
@@ -543,18 +636,25 @@ function BuilderPageContent() {
   const productDetailPage = useMemo(() => {
     if (!activeSiteDefinition) return null;
 
-    const existing = activeSiteDefinition.pages.find((page) =>
-      page.blocks.some((block) => isProductDetailBlockType(block.type))
-    );
+    const exactProductPage = activeSiteDefinition.pages.find((page) => {
+      if (isProductDetailRoute(page.route)) return true;
+      return page.blocks.some((block) => isProductDetailBlockType(block.type));
+    });
 
-    if (existing) return existing;
+    if (exactProductPage) return exactProductPage;
 
     return {
       id: "fallback-product-detail",
       name: "Product Detail",
-      route: "/products/:slug",
+      route: "/products/:productSlug",
       show_in_nav: false,
-      blocks: [{ id: "product-detail-fallback", type: "product_detail" }],
+      blocks: [
+        {
+          id: "product-detail-fallback",
+          type: "product_detail",
+          data_source: "product",
+        },
+      ],
     } as Page;
   }, [activeSiteDefinition]);
 
@@ -844,11 +944,22 @@ function BuilderPageContent() {
                 <Route index element={<Navigate to="products" replace />} />
                 <Route path="products" element={<AdminProducts />} />
                 <Route path="orders" element={<AdminOrders />} />
+                <Route path="checkout-charges" element={<CheckoutChargesPage />} />
               </Route>
             )}
 
             {activeSiteDefinition.pages
-              .filter((page) => page.flow !== "admin")
+              .filter((page) => {
+                if (page.flow === "admin") return false;
+
+                const sameAsResolvedProductPage =
+                  productDetailPage &&
+                  (page.id === productDetailPage.id ||
+                    isProductDetailRoute(page.route) ||
+                    page.blocks.some((block) => isProductDetailBlockType(block.type)));
+
+                return !sameAsResolvedProductPage;
+              })
               .map((page) => {
                 const normalizedRoute = normalizeRoute(page.route);
 
@@ -878,9 +989,10 @@ function BuilderPageContent() {
 
             {productDetailPage && (
               <Route
-                path="products/:slug"
+                path="products/:productSlug"
                 element={
                   <StorefrontPage
+                    key={`product-detail-${productSlug || "unknown"}`}
                     page={productDetailPage}
                     siteDefinition={activeSiteDefinition}
                     selectedProduct={selectedProduct}
@@ -945,7 +1057,9 @@ function BuilderPageContent() {
 }
 
 export default function BuilderPage() {
-  const { siteId, slug } = useParams();
+  const params = useParams();
+  const siteId = params.siteId;
+  const siteSlugParam = params.slug;
   const [resolvedSiteId, setResolvedSiteId] = useState(siteId || "");
   const [siteProducts, setSiteProducts] = useState<Product[]>([]);
 
@@ -954,19 +1068,10 @@ export default function BuilderPage() {
       try {
         let targetSiteId = siteId || "";
 
-        if (!targetSiteId && slug) {
-          const sitesRes = await fetch(`${API_BASE_URL}/auth/admin/sites`, {
-            credentials: "include",
-          });
+        if (!targetSiteId && siteSlugParam) {
+          const matchedSite = await resolveSiteBySlug(siteSlugParam);
 
-          if (!sitesRes.ok) {
-            throw new Error(`Failed to load sites list: ${sitesRes.status}`);
-          }
-
-          const sites: SavedSite[] = await sitesRes.json();
-          const matchedSite = sites.find((site) => site.slug === slug);
-
-          if (!matchedSite) {
+          if (!matchedSite?.id) {
             throw new Error("Site not found for slug");
           }
 
@@ -980,9 +1085,7 @@ export default function BuilderPage() {
 
         setResolvedSiteId(targetSiteId);
 
-        const res = await fetch(`${API_BASE_URL}/sites/${targetSiteId}/products`, {
-          credentials: "include",
-        });
+        const res = await fetch(`${API_BASE_URL}/sites/${targetSiteId}/products/public`);
 
         if (res.ok) {
           const data = await res.json();
@@ -1001,10 +1104,14 @@ export default function BuilderPage() {
     };
 
     resolveAndLoadProducts();
-  }, [siteId, slug]);
+  }, [siteId, siteSlugParam]);
 
   return (
-    <CartProvider key={resolvedSiteId || siteId || slug} products={siteProducts}>
+    <CartProvider
+      key={resolvedSiteId || siteId || siteSlugParam}
+      products={siteProducts}
+      siteId={resolvedSiteId || siteId || ""}
+    >
       <BuilderPageContent />
     </CartProvider>
   );
