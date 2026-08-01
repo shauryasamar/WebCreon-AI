@@ -6,6 +6,8 @@ type ThemeInput =
   | {
       mode?: string;
       accent_color?: string;
+      festival_theme?: string;
+      text_color?: string;
     };
 
 type PlaceOrderCtaProps = {
@@ -19,6 +21,7 @@ type PlaceOrderCtaProps = {
   border_radius?: number;
   padding?: number;
   max_width?: number;
+  reviewMode?: boolean;
 };
 
 export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
@@ -32,6 +35,7 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
   border_radius,
   padding,
   max_width,
+  reviewMode = false,
 }) => {
   const resolvedMode =
     typeof theme === "string" ? theme : theme?.mode === "light" ? "light" : "dark";
@@ -41,9 +45,11 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
     (typeof theme === "object" && theme?.accent_color) ||
     (resolvedMode === "dark" ? "#60a5fa" : "#2563eb");
 
-  const resolvedRadius = border_radius ?? 999;
+  const resolvedRadius = border_radius ?? 14;
   const resolvedPaddingY = padding ?? (compact ? 14 : 16);
   const resolvedPaddingX = compact ? 18 : 22;
+  const helperTextColor =
+    resolvedMode === "light" ? "rgba(17,24,39,0.68)" : "rgba(255,255,255,0.68)";
 
   return (
     <section
@@ -55,10 +61,23 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
       <div
         style={{
           width: "100%",
-          display: "flex",
-          justifyContent: "center",
+          display: "grid",
+          gap: reviewMode ? "10px" : "0",
         }}
       >
+        {reviewMode ? (
+          <p
+            style={{
+              margin: 0,
+              fontSize: "13px",
+              lineHeight: 1.6,
+              color: helperTextColor,
+            }}
+          >
+            Review the delivery and payment details, then complete the order. [web:47][web:56]
+          </p>
+        ) : null}
+
         <button
           type="button"
           onClick={onClick}

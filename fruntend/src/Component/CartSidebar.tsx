@@ -30,6 +30,9 @@ type CartSidebarProps = {
   note?: string;
   show_promo?: boolean;
   show_summary?: boolean;
+  show_items?: boolean;
+  show_gift_card?: boolean;
+  review_mode?: boolean;
   max_width?: number;
   min_height?: number;
   border_radius?: number;
@@ -43,22 +46,23 @@ type CartSidebarProps = {
   accent_color?: string;
   theme?: CartTheme;
   accentColor?: string;
+  paymentMethod?: string;
 };
 
 type ChargeCode =
   | "shipping_fee"
-  | "tax"
   | "handling_fee"
   | "packaging_fee"
   | "service_fee"
   | "platform_fee"
   | "small_order_fee"
   | "cod_fee"
-  | "gift_wrap";
+  | "gift_wrap"
+  | "custom";
 
 type ChargeRule = {
   id: string;
-  code: ChargeCode | "custom";
+  code: ChargeCode | string;
   label: string;
   enabled: boolean;
   optional: boolean;
@@ -69,7 +73,7 @@ type ChargeRule = {
   applyConditionValue: string;
   waiveConditionType: "none" | "subtotal_gte";
   waiveConditionValue: string;
-  description: string;
+  description?: string;
 };
 
 type TaxSettings = {
@@ -82,6 +86,10 @@ type TaxSettings = {
 type CheckoutSettingsResponse = {
   charges: ChargeRule[];
   taxSettings: TaxSettings;
+};
+
+type AppliedCharge = ChargeRule & {
+  calculatedAmount: number;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -107,12 +115,10 @@ function normalizeHex(hex?: string) {
 function hexToRgb(hex?: string) {
   const normalized = normalizeHex(hex);
   if (!normalized) return null;
-
   const value = normalized.slice(1);
   const r = parseInt(value.slice(0, 2), 16);
   const g = parseInt(value.slice(2, 4), 16);
   const b = parseInt(value.slice(4, 6), 16);
-
   return { r, g, b };
 }
 
@@ -121,6 +127,7 @@ function rgbToHex(r: number, g: number, b: number) {
     clamp(Math.round(value), 0, 255)
       .toString(16)
       .padStart(2, "0");
+
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
@@ -147,9 +154,16 @@ function alpha(hex: string, opacity: number) {
   return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${clamp(opacity, 0, 1)})`;
 }
 
-function toNumber(value?: string) {
-  const parsed = Number(value || 0);
+function toNumber(value?: string | number | null) {
+  const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizePaymentMethod(value?: string | null) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
 }
 
 function matchesApplyCondition(
@@ -165,13 +179,16 @@ function matchesApplyCondition(
     case "subtotal_gte":
       return subtotalAfterDiscount >= toNumber(charge.applyConditionValue);
     case "payment_method":
-      return charge.applyConditionValue === paymentMethod;
+      return (
+        normalizePaymentMethod(charge.applyConditionValue) ===
+        normalizePaymentMethod(paymentMethod)
+      );
     default:
       return true;
   }
 }
 
-function isWaived(charge: ChargeRule, subtotalAfterDiscount: number) {
+function isChargeWaived(charge: ChargeRule, subtotalAfterDiscount: number) {
   switch (charge.waiveConditionType) {
     case "subtotal_gte":
       return subtotalAfterDiscount >= toNumber(charge.waiveConditionValue);
@@ -184,9 +201,9 @@ function isWaived(charge: ChargeRule, subtotalAfterDiscount: number) {
 function calculateChargeAmount(charge: ChargeRule, baseAmount: number) {
   const raw = toNumber(charge.amountValue);
   if (charge.amountType === "percent") {
-    return Math.round((baseAmount * raw) / 100);
+    return Math.max(0, Math.round((baseAmount * raw) / 100));
   }
-  return Math.round(raw);
+  return Math.max(0, Math.round(raw));
 }
 
 const CartSidebar: React.FC<CartSidebarProps> = ({
@@ -208,6 +225,9 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   note,
   show_promo = true,
   show_summary = true,
+  show_items = true,
+  show_gift_card = true,
+  review_mode = false,
   max_width,
   min_height,
   border_radius,
@@ -221,6 +241,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   accent_color,
   theme,
   accentColor,
+  paymentMethod,
 }) => {
   const { cartItems, updateQuantity, removeFromCart, clearCart } = useCart();
   const { siteId, slug } = useParams();
@@ -230,15 +251,17 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   const [windowWidth, setWindowWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1280
   );
-
   const [checkoutSettings, setCheckoutSettings] =
     useState<CheckoutSettingsResponse | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(false);
-  const [selectedOptionalChargeIds, setSelectedOptionalChargeIds] = useState<string[]>([]);
+  const [selectedOptionalChargeIds, setSelectedOptionalChargeIds] = useState<
+    string[]
+  >([]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const onResize = () => setWindowWidth(window.innerWidth);
+    onResize();
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
@@ -272,16 +295,16 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
         const data: CheckoutSettingsResponse = await response.json();
         setCheckoutSettings(data);
 
-        const defaultSelectedOptionalIds = (data.charges || [])
-          .filter(
-            (charge) =>
-              charge.enabled &&
-              charge.customerSelectable &&
-              charge.optional
-          )
-          .map((charge) => charge.id);
+        setSelectedOptionalChargeIds((prev) => {
+          if (prev.length > 0) return prev;
 
-        setSelectedOptionalChargeIds(defaultSelectedOptionalIds);
+          return (data.charges || [])
+            .filter(
+              (charge) =>
+                charge.enabled && charge.customerSelectable && charge.optional
+            )
+            .map((charge) => charge.id);
+        });
       } catch (error) {
         if ((error as Error).name !== "AbortError") {
           console.error("Checkout settings load failed", error);
@@ -298,8 +321,12 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
 
   const isMobile = windowWidth < 768;
   const isTablet = windowWidth >= 768 && windowWidth < 1024;
-
   const isCheckoutSummary = mode === "checkout_summary";
+
+  const shouldShowItems = show_items && !review_mode;
+  const shouldShowPromo = show_promo && !review_mode;
+  const shouldShowGiftCard = show_gift_card && !review_mode;
+
   const checkoutPath = slug
     ? `/store/${slug}/checkout`
     : siteId
@@ -317,10 +344,10 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   const summaryTitle = summary_title || "Order summary";
   const checkoutLabel = checkout_label || "Proceed to checkout";
   const shippingLabel = shipping_label || "Shipping";
-  const taxLabel = tax_label || "Estimated tax";
+  const fallbackTaxLabel = tax_label || "Tax";
   const subtotalLabel = subtotal_label || "Subtotal";
   const totalLabel = total_label || "Total";
-  const footerNote = note || "Shipping and taxes are calculated at checkout.";
+  const footerNote = note || "Final charges will be validated at checkout.";
 
   const isDark = theme?.mode !== "light";
   const resolvedAccentColor =
@@ -334,7 +361,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   const outerRadius = clamp(border_radius ?? 24, 0, 40);
   const innerRadius = clamp(card_radius ?? 18, 0, 32);
   const resolvedMaxWidth = clamp(
-    max_width ?? (isCheckoutSummary ? 420 : 1240),
+    max_width ?? (isCheckoutSummary ? 1200 : 1240),
     240,
     1400
   );
@@ -378,9 +405,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
       (hasFestiveTint
         ? mixHex(mixHex(pageBg, "#ffffff", 0.14), resolvedAccentColor, 0.06)
         : "#162033");
-    const mutedBg = hasFestiveTint
-      ? mixHex(pageBg, "#000000", 0.12)
-      : "#0f172a";
+    const mutedBg = hasFestiveTint ? mixHex(pageBg, "#000000", 0.12) : "#0f172a";
     const inputBg = card_color
       ? card_color
       : hasFestiveTint
@@ -450,7 +475,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
       : 0;
 
   const subtotalAfterDiscount = Math.max(subtotal - promoDiscount, 0);
-  const paymentMethod = "online";
+  const normalizedPaymentMethod = normalizePaymentMethod(paymentMethod);
 
   const enabledCharges = (checkoutSettings?.charges || []).filter(
     (charge) => charge.enabled
@@ -468,16 +493,22 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     selectedOptionalChargeIds.includes(charge.id)
   );
 
-  const applicableCharges = [...autoAppliedCharges, ...selectedOptionalCharges]
+  const applicableCharges: AppliedCharge[] = [
+    ...autoAppliedCharges,
+    ...selectedOptionalCharges,
+  ]
     .filter((charge) =>
-      matchesApplyCondition(charge, subtotalAfterDiscount, paymentMethod)
+      matchesApplyCondition(charge, subtotalAfterDiscount, normalizedPaymentMethod)
     )
-    .filter((charge) => !isWaived(charge, subtotalAfterDiscount))
+    .filter((charge) => !isChargeWaived(charge, subtotalAfterDiscount))
     .map((charge) => ({
       ...charge,
       calculatedAmount: calculateChargeAmount(charge, subtotalAfterDiscount),
     }))
     .filter((charge) => charge.calculatedAmount > 0);
+
+  const shippingRule =
+    enabledCharges.find((charge) => charge.code === "shipping_fee") || null;
 
   const shippingCharge =
     applicableCharges.find((charge) => charge.code === "shipping_fee")
@@ -491,17 +522,31 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     shippingCharge +
     nonShippingCharges.reduce((sum, charge) => sum + charge.calculatedAmount, 0);
 
-  const taxBase = checkoutSettings?.taxSettings?.applyOnShipping
+  const taxSettings = checkoutSettings?.taxSettings;
+  const taxBase = taxSettings?.applyOnShipping
     ? subtotalAfterDiscount + chargesBeforeTax
     : subtotalAfterDiscount;
 
-  const tax = checkoutSettings?.taxSettings?.enabled
-    ? Math.round(
-        (taxBase * toNumber(checkoutSettings.taxSettings.rate)) / 100
-      )
-    : 0;
+  const tax =
+    taxSettings?.enabled
+      ? Math.max(0, Math.round((taxBase * toNumber(taxSettings.rate)) / 100))
+      : 0;
 
   const total = Math.max(subtotalAfterDiscount + chargesBeforeTax + tax, 0);
+
+  const shippingWaived = Boolean(
+    shippingRule && isChargeWaived(shippingRule, subtotalAfterDiscount)
+  );
+
+  const freeShippingThreshold =
+    shippingRule?.waiveConditionType === "subtotal_gte"
+      ? toNumber(shippingRule.waiveConditionValue)
+      : 0;
+
+  const remainingForFreeShipping =
+    freeShippingThreshold > 0
+      ? Math.max(freeShippingThreshold - subtotalAfterDiscount, 0)
+      : 0;
 
   const handleApplyPromo = () => {
     setAppliedCode(promoCode.trim());
@@ -522,9 +567,110 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   const cartLayoutColumns =
     isMobile || isTablet
       ? "1fr"
-      : "minmax(0, 1.5fr) minmax(320px, 0.9fr)";
+      : "minmax(0, 1.5fr) minmax(340px, 0.85fr)";
 
-  const optionalChargePicker = optionalSelectableCharges.length > 0 && (
+  const optionalChargePicker =
+    optionalSelectableCharges.length > 0 ? (
+      <div
+        style={{
+          borderRadius: `${innerRadius}px`,
+          background: palette.cardBg,
+          border: `1px solid ${palette.cardBorder}`,
+          boxShadow: palette.cardShadow,
+          padding: isMobile ? "16px" : "18px",
+        }}
+      >
+        <h4
+          style={{
+            margin: "0 0 12px",
+            fontSize: "16px",
+            fontWeight: 700,
+            color: palette.text,
+          }}
+        >
+          Optional add-ons
+        </h4>
+
+        <div style={{ display: "grid", gap: "10px" }}>
+          {optionalSelectableCharges.map((charge) => {
+            const checked = selectedOptionalChargeIds.includes(charge.id);
+            const previewAmount = calculateChargeAmount(
+              charge,
+              subtotalAfterDiscount
+            );
+
+            return (
+              <label
+                key={charge.id}
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                  padding: "12px 14px",
+                  borderRadius: "12px",
+                  border: `1px solid ${palette.cardBorder}`,
+                  background: checked ? palette.softBg : palette.inputBg,
+                  cursor: "pointer",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "10px",
+                    alignItems: "flex-start",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleOptionalCharge(charge.id)}
+                    style={{ marginTop: "3px" }}
+                  />
+                  <div>
+                    <div
+                      style={{
+                        color: palette.text,
+                        fontSize: "14px",
+                        fontWeight: 700,
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      {charge.label}
+                    </div>
+                    {charge.description ? (
+                      <div
+                        style={{
+                          marginTop: "4px",
+                          color: palette.textMuted,
+                          fontSize: "12px",
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        {charge.description}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    color: palette.text,
+                    fontSize: "14px",
+                    fontWeight: 700,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  ₹{previewAmount}
+                </div>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+    ) : null;
+
+  const summaryCard = (
     <div
       style={{
         borderRadius: `${innerRadius}px`,
@@ -536,82 +682,208 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     >
       <h4
         style={{
-          margin: "0 0 12px",
-          fontSize: "16px",
+          margin: "0 0 14px",
+          fontSize: "18px",
           fontWeight: 700,
           color: palette.text,
+          letterSpacing: "-0.02em",
         }}
       >
-        Optional add-ons
+        {summaryTitle}
       </h4>
 
-      <div style={{ display: "grid", gap: "10px" }}>
-        {optionalSelectableCharges.map((charge) => {
-          const checked = selectedOptionalChargeIds.includes(charge.id);
-          const previewAmount = calculateChargeAmount(charge, subtotalAfterDiscount);
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: "12px",
+            color: palette.textMuted,
+            fontSize: "14px",
+          }}
+        >
+          <span>{subtotalLabel}</span>
+          <span style={{ color: palette.text }}>₹{subtotal}</span>
+        </div>
 
-          return (
-            <label
-              key={charge.id}
-              style={{
-                display: "flex",
-                alignItems: "flex-start",
-                justifyContent: "space-between",
-                gap: "12px",
-                padding: "12px 14px",
-                borderRadius: "12px",
-                border: `1px solid ${palette.cardBorder}`,
-                background: checked ? palette.softBg : palette.inputBg,
-                cursor: "pointer",
-              }}
-            >
-              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => toggleOptionalCharge(charge.id)}
-                  style={{ marginTop: "3px" }}
-                />
-                <div>
-                  <div
-                    style={{
-                      color: palette.text,
-                      fontSize: "14px",
-                      fontWeight: 700,
-                      lineHeight: 1.3,
-                    }}
-                  >
-                    {charge.label}
-                  </div>
-                  {charge.description ? (
-                    <div
-                      style={{
-                        marginTop: "4px",
-                        color: palette.textMuted,
-                        fontSize: "12px",
-                        lineHeight: 1.45,
-                      }}
-                    >
-                      {charge.description}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
+        {promoDiscount > 0 ? (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: "12px",
+              color: palette.successText,
+              fontSize: "14px",
+            }}
+          >
+            <span>Discount</span>
+            <span>-₹{promoDiscount}</span>
+          </div>
+        ) : null}
 
-              <div
-                style={{
-                  color: palette.text,
-                  fontSize: "14px",
-                  fontWeight: 700,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                ₹{previewAmount}
-              </div>
-            </label>
-          );
-        })}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: "12px",
+            color: palette.textMuted,
+            fontSize: "14px",
+          }}
+        >
+          <span>{shippingRule?.label || shippingLabel}</span>
+          <span style={{ color: palette.text }}>
+            {shippingWaived ? "Free" : shippingCharge > 0 ? `₹${shippingCharge}` : "₹0"}
+          </span>
+        </div>
+
+        {shippingRule && shippingWaived ? (
+          <div
+            style={{
+              padding: "10px 12px",
+              borderRadius: "10px",
+              background: palette.successBg,
+              color: palette.successText,
+              fontSize: "13px",
+              lineHeight: 1.5,
+            }}
+          >
+            {shippingRule.label} waived for this order.
+          </div>
+        ) : shippingRule && freeShippingThreshold > 0 && remainingForFreeShipping > 0 ? (
+          <div
+            style={{
+              padding: "10px 12px",
+              borderRadius: "10px",
+              background: palette.softBg,
+              color: palette.textMuted,
+              fontSize: "13px",
+              lineHeight: 1.5,
+            }}
+          >
+            Add ₹{remainingForFreeShipping} more to waive {shippingRule.label.toLowerCase()}.
+          </div>
+        ) : null}
+
+        {nonShippingCharges.map((charge) => (
+          <div
+            key={charge.id}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: "12px",
+              color: palette.textMuted,
+              fontSize: "14px",
+            }}
+          >
+            <span>{charge.label}</span>
+            <span style={{ color: palette.text }}>₹{charge.calculatedAmount}</span>
+          </div>
+        ))}
+
+        {taxSettings?.enabled ? (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: "12px",
+              color: palette.textMuted,
+              fontSize: "14px",
+            }}
+          >
+            <span>{taxSettings.label || fallbackTaxLabel}</span>
+            <span style={{ color: palette.text }}>₹{tax}</span>
+          </div>
+        ) : null}
+
+        <div
+          style={{
+            height: "1px",
+            background: palette.cardBorder,
+            margin: "2px 0",
+          }}
+        />
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: "12px",
+            alignItems: "center",
+          }}
+        >
+          <span
+            style={{
+              fontSize: "15px",
+              fontWeight: 600,
+              color: palette.text,
+            }}
+          >
+            {totalLabel}
+          </span>
+          <span
+            style={{
+              fontSize: isMobile ? "20px" : "22px",
+              fontWeight: 800,
+              color: palette.text,
+              letterSpacing: "-0.03em",
+            }}
+          >
+            ₹{total}
+          </span>
+        </div>
       </div>
+
+      <p
+        style={{
+          margin: "14px 0 16px",
+          fontSize: "13px",
+          color: palette.textMuted,
+          lineHeight: 1.5,
+        }}
+      >
+        {settingsLoading ? "Updating charges..." : footerNote}
+      </p>
+
+      {cartItems.length > 0 ? (
+        <Link
+          to={checkoutPath}
+          style={{
+            display: isCheckoutSummary ? "none" : "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "100%",
+            minHeight: "48px",
+            borderRadius: "14px",
+            background: resolvedAccentColor,
+            color: "#ffffff",
+            fontSize: "14px",
+            fontWeight: 700,
+            textDecoration: "none",
+            boxShadow: "0 14px 28px rgba(0,0,0,0.22)",
+          }}
+        >
+          {checkoutLabel}
+        </Link>
+      ) : (
+        <button
+          type="button"
+          disabled
+          style={{
+            display: isCheckoutSummary ? "none" : "block",
+            width: "100%",
+            minHeight: "48px",
+            border: "none",
+            borderRadius: "14px",
+            background: palette.disabledBg,
+            color: "#ffffff",
+            fontSize: "14px",
+            fontWeight: 700,
+            cursor: "not-allowed",
+          }}
+        >
+          {checkoutLabel}
+        </button>
+      )}
     </div>
   );
 
@@ -712,101 +984,103 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
               </div>
             ) : (
               <>
-                <div style={{ display: "grid", gap: "12px" }}>
-                  {cartItems.map((item, index) => (
-                    <div
-                      key={`${item.id}-${item.selectedVariantValue || "default"}-${index}`}
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: summaryItemGrid,
-                        gap: "12px",
-                        alignItems: "center",
-                        padding: "12px",
-                        borderRadius: `${innerRadius}px`,
-                        background: palette.cardBg,
-                        border: `1px solid ${palette.cardBorder}`,
-                        boxShadow: palette.cardShadow,
-                      }}
-                    >
+                {shouldShowItems ? (
+                  <div style={{ display: "grid", gap: "12px" }}>
+                    {cartItems.map((item, index) => (
                       <div
+                        key={`${item.id}-${item.selectedVariantValue || "default"}-${index}`}
                         style={{
-                          width: "56px",
-                          height: "56px",
-                          borderRadius: "12px",
-                          overflow: "hidden",
-                          background: palette.mutedBg,
+                          display: "grid",
+                          gridTemplateColumns: summaryItemGrid,
+                          gap: "12px",
+                          alignItems: "center",
+                          padding: "12px",
+                          borderRadius: `${innerRadius}px`,
+                          background: palette.cardBg,
+                          border: `1px solid ${palette.cardBorder}`,
+                          boxShadow: palette.cardShadow,
                         }}
                       >
-                        <img
-                          src={item.image}
-                          alt={item.name}
+                        <div
                           style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                            display: "block",
-                          }}
-                        />
-                      </div>
-
-                      <div style={{ minWidth: 0 }}>
-                        <p
-                          style={{
-                            margin: "0 0 4px",
-                            fontSize: "14px",
-                            fontWeight: 700,
-                            color: palette.text,
-                            lineHeight: 1.3,
+                            width: "56px",
+                            height: "56px",
+                            borderRadius: "12px",
+                            overflow: "hidden",
+                            background: palette.mutedBg,
                           }}
                         >
-                          {item.name}
-                        </p>
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                              display: "block",
+                            }}
+                          />
+                        </div>
 
-                        {item.selectedVariantValue && (
+                        <div style={{ minWidth: 0 }}>
                           <p
                             style={{
                               margin: "0 0 4px",
-                              fontSize: "12px",
-                              color: palette.textMuted,
-                              lineHeight: 1.4,
-                              wordBreak: "break-word",
+                              fontSize: "14px",
+                              fontWeight: 700,
+                              color: palette.text,
+                              lineHeight: 1.3,
                             }}
                           >
-                            {item.selectedVariantLabel || "Option"}:{" "}
-                            {item.selectedVariantValue}
+                            {item.name}
                           </p>
-                        )}
+
+                          {item.selectedVariantValue ? (
+                            <p
+                              style={{
+                                margin: "0 0 4px",
+                                fontSize: "12px",
+                                color: palette.textMuted,
+                                lineHeight: 1.4,
+                                wordBreak: "break-word",
+                              }}
+                            >
+                              {item.selectedVariantLabel || "Option"}:{" "}
+                              {item.selectedVariantValue}
+                            </p>
+                          ) : null}
+
+                          <p
+                            style={{
+                              margin: 0,
+                              fontSize: "13px",
+                              color: palette.textMuted,
+                            }}
+                          >
+                            Qty {item.quantity}
+                          </p>
+                        </div>
 
                         <p
                           style={{
-                            margin: 0,
-                            fontSize: "13px",
-                            color: palette.textMuted,
+                            margin: isMobile ? "2px 0 0 68px" : 0,
+                            fontSize: "14px",
+                            fontWeight: 700,
+                            color: palette.text,
+                            whiteSpace: "nowrap",
+                            textAlign: isMobile ? "left" : "right",
                           }}
                         >
-                          Qty {item.quantity}
+                          ₹{item.price * item.quantity}
                         </p>
                       </div>
+                    ))}
+                  </div>
+                ) : null}
 
-                      <p
-                        style={{
-                          margin: isMobile ? "2px 0 0 68px" : 0,
-                          fontSize: "14px",
-                          fontWeight: 700,
-                          color: palette.text,
-                          whiteSpace: "nowrap",
-                          textAlign: isMobile ? "left" : "right",
-                        }}
-                      >
-                        ₹{item.price * item.quantity}
-                      </p>
-                    </div>
-                  ))}
-                </div>
+                {shouldShowGiftCard ? optionalChargePicker : null}
 
-                {optionalChargePicker}
-
-                {show_promo && (
+                {shouldShowPromo ? (
                   <div
                     style={{
                       borderRadius: `${innerRadius}px`,
@@ -884,159 +1158,9 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                       </p>
                     ) : null}
                   </div>
-                )}
+                ) : null}
 
-                {show_summary && (
-                  <div
-                    style={{
-                      borderRadius: `${innerRadius}px`,
-                      background: palette.cardBg,
-                      border: `1px solid ${palette.cardBorder}`,
-                      boxShadow: palette.cardShadow,
-                      padding: "18px",
-                    }}
-                  >
-                    <h4
-                      style={{
-                        margin: "0 0 14px",
-                        fontSize: "18px",
-                        fontWeight: 700,
-                        color: palette.text,
-                        letterSpacing: "-0.02em",
-                      }}
-                    >
-                      {summaryTitle}
-                    </h4>
-
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "12px",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: "12px",
-                          color: palette.textMuted,
-                          fontSize: "14px",
-                        }}
-                      >
-                        <span>{subtotalLabel}</span>
-                        <span style={{ color: palette.text }}>₹{subtotal}</span>
-                      </div>
-
-                      {promoDiscount > 0 && (
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            gap: "12px",
-                            color: palette.successText,
-                            fontSize: "14px",
-                          }}
-                        >
-                          <span>Discount</span>
-                          <span>-₹{promoDiscount}</span>
-                        </div>
-                      )}
-
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: "12px",
-                          color: palette.textMuted,
-                          fontSize: "14px",
-                        }}
-                      >
-                        <span>{shippingLabel}</span>
-                        <span style={{ color: palette.text }}>₹{shippingCharge}</span>
-                      </div>
-
-                      {nonShippingCharges.map((charge) => (
-                        <div
-                          key={charge.id}
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            gap: "12px",
-                            color: palette.textMuted,
-                            fontSize: "14px",
-                          }}
-                        >
-                          <span>{charge.label}</span>
-                          <span style={{ color: palette.text }}>
-                            ₹{charge.calculatedAmount}
-                          </span>
-                        </div>
-                      ))}
-
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: "12px",
-                          color: palette.textMuted,
-                          fontSize: "14px",
-                        }}
-                      >
-                        <span>{checkoutSettings?.taxSettings?.label || taxLabel}</span>
-                        <span style={{ color: palette.text }}>₹{tax}</span>
-                      </div>
-
-                      <div
-                        style={{
-                          height: "1px",
-                          background: palette.cardBorder,
-                          margin: "2px 0",
-                        }}
-                      />
-
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: "12px",
-                          alignItems: "center",
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: "15px",
-                            fontWeight: 600,
-                            color: palette.text,
-                          }}
-                        >
-                          {totalLabel}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: "22px",
-                            fontWeight: 800,
-                            color: palette.text,
-                            letterSpacing: "-0.03em",
-                          }}
-                        >
-                          ₹{total}
-                        </span>
-                      </div>
-                    </div>
-
-                    <p
-                      style={{
-                        margin: "14px 0 0",
-                        fontSize: "13px",
-                        color: palette.textMuted,
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      {settingsLoading ? "Updating charges..." : footerNote}
-                    </p>
-                  </div>
-                )}
+                {show_summary ? summaryCard : null}
               </>
             )}
           </div>
@@ -1113,7 +1237,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
             </p>
           </div>
 
-          {cartItems.length > 0 && (
+          {cartItems.length > 0 ? (
             <button
               onClick={clearCart}
               style={{
@@ -1130,7 +1254,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
             >
               {clearText}
             </button>
-          )}
+          ) : null}
         </div>
 
         <div
@@ -1242,49 +1366,137 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <p
                             style={{
-                              margin: "0 0 4px",
-                              fontSize: "11px",
-                              color: palette.textMuted,
-                              textTransform: "uppercase",
-                              letterSpacing: "0.12em",
-                              fontWeight: 700,
-                            }}
-                          >
-                            {item.brand || "Collection"}
-                          </p>
-
-                          <h4
-                            style={{
-                              margin: 0,
+                              margin: "0 0 6px",
                               fontSize: isMobile ? "15px" : "16px",
-                              lineHeight: 1.3,
-                              color: palette.text,
                               fontWeight: 700,
-                              letterSpacing: "-0.02em",
+                              color: palette.text,
+                              lineHeight: 1.35,
                             }}
                           >
                             {item.name}
-                          </h4>
+                          </p>
 
-                          {item.selectedVariantValue && (
+                          {item.selectedVariantValue ? (
                             <p
                               style={{
-                                margin: "6px 0 0",
-                                fontSize: "12px",
+                                margin: "0 0 6px",
+                                fontSize: "13px",
                                 color: palette.textMuted,
-                                lineHeight: 1.45,
-                                wordBreak: "break-word",
+                                lineHeight: 1.5,
                               }}
                             >
                               {item.selectedVariantLabel || "Option"}:{" "}
                               {item.selectedVariantValue}
                             </p>
-                          )}
+                          ) : null}
+
+                          <p
+                            style={{
+                              margin: 0,
+                              fontSize: "13px",
+                              color: palette.textMuted,
+                            }}
+                          >
+                            ₹{item.price} each
+                          </p>
+                        </div>
+
+                        <div
+                          style={{
+                            fontSize: isMobile ? "16px" : "18px",
+                            fontWeight: 800,
+                            color: palette.text,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          ₹{item.price * item.quantity}
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: isMobile ? "stretch" : "center",
+                          gap: "12px",
+                          flexWrap: isMobile ? "wrap" : "nowrap",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            borderRadius: "999px",
+                            border: `1px solid ${palette.cardBorder}`,
+                            background: palette.quantityBg,
+                            overflow: "hidden",
+                            minHeight: "42px",
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateQuantity(
+                                item.id,
+                                item.quantity - 1,
+                                item.selectedVariantValue ?? null
+                              )
+                            }
+                            style={{
+                              width: "40px",
+                              height: "42px",
+                              border: "none",
+                              background: "transparent",
+                              color: palette.text,
+                              fontSize: "18px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            -
+                          </button>
+
+                          <div
+                            style={{
+                              minWidth: "42px",
+                              textAlign: "center",
+                              fontSize: "14px",
+                              fontWeight: 700,
+                              color: palette.text,
+                            }}
+                          >
+                            {item.quantity}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateQuantity(
+                                item.id,
+                                item.quantity + 1,
+                                item.selectedVariantValue ?? null
+                              )
+                            }
+                            style={{
+                              width: "40px",
+                              height: "42px",
+                              border: "none",
+                              background: "transparent",
+                              color: palette.text,
+                              fontSize: "18px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            +
+                          </button>
                         </div>
 
                         <button
+                          type="button"
                           onClick={() =>
-                            removeFromCart(item.id, item.selectedVariantValue)
+                            removeFromCart(
+                              item.id,
+                              item.selectedVariantValue ?? null
+                            )
                           }
                           style={{
                             border: "none",
@@ -1292,191 +1504,43 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                             color: palette.danger,
                             cursor: "pointer",
                             fontSize: "13px",
-                            fontWeight: 600,
-                            whiteSpace: "nowrap",
-                            padding: "2px 0",
+                            fontWeight: 700,
+                            padding: 0,
                           }}
                         >
                           {removeText}
                         </button>
-                      </div>
-
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: isMobile ? "column" : "row",
-                          alignItems: isMobile ? "stretch" : "center",
-                          justifyContent: "space-between",
-                          gap: "12px",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: isMobile ? "center" : "flex-start",
-                            gap: "12px",
-                            flexWrap: "wrap",
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: "4px",
-                              minWidth: isMobile ? "auto" : "88px",
-                            }}
-                          >
-                            <p
-                              style={{
-                                margin: 0,
-                                fontSize: "13px",
-                                color: palette.textMuted,
-                              }}
-                            >
-                              Unit price
-                            </p>
-                            <p
-                              style={{
-                                margin: 0,
-                                fontSize: "16px",
-                                fontWeight: 700,
-                                color: palette.text,
-                                letterSpacing: "-0.02em",
-                              }}
-                            >
-                              ₹{item.price}
-                            </p>
-                          </div>
-
-                          <div
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              border: `1px solid ${palette.cardBorder}`,
-                              borderRadius: "999px",
-                              overflow: "hidden",
-                              background: palette.quantityBg,
-                              minHeight: "40px",
-                              alignSelf: "flex-start",
-                            }}
-                          >
-                            <button
-                              onClick={() =>
-                                updateQuantity(
-                                  item.id,
-                                  item.quantity - 1,
-                                  item.selectedVariantValue
-                                )
-                              }
-                              style={{
-                                border: "none",
-                                background: "transparent",
-                                color: palette.text,
-                                width: "40px",
-                                height: "40px",
-                                cursor: "pointer",
-                                fontSize: "18px",
-                                fontWeight: 500,
-                              }}
-                            >
-                              −
-                            </button>
-
-                            <span
-                              style={{
-                                minWidth: "40px",
-                                textAlign: "center",
-                                fontSize: "14px",
-                                fontWeight: 700,
-                                color: palette.text,
-                              }}
-                            >
-                              {item.quantity}
-                            </span>
-
-                            <button
-                              onClick={() =>
-                                updateQuantity(
-                                  item.id,
-                                  item.quantity + 1,
-                                  item.selectedVariantValue
-                                )
-                              }
-                              style={{
-                                border: "none",
-                                background: "transparent",
-                                color: palette.text,
-                                width: "40px",
-                                height: "40px",
-                                cursor: "pointer",
-                                fontSize: "18px",
-                                fontWeight: 500,
-                              }}
-                            >
-                              +
-                            </button>
-                          </div>
-                        </div>
-
-                        <div
-                          style={{
-                            marginLeft: isMobile ? 0 : "auto",
-                            textAlign: isMobile ? "left" : "right",
-                          }}
-                        >
-                          <p
-                            style={{
-                              margin: "0 0 4px",
-                              fontSize: "12px",
-                              color: palette.textMuted,
-                            }}
-                          >
-                            Line total
-                          </p>
-                          <p
-                            style={{
-                              margin: 0,
-                              fontSize: "18px",
-                              fontWeight: 800,
-                              color: palette.text,
-                              letterSpacing: "-0.03em",
-                            }}
-                          >
-                            ₹{item.price * item.quantity}
-                          </p>
-                        </div>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
 
-              <aside
+              <div
                 style={{
-                  display: "flex",
-                  flexDirection: "column",
+                  minWidth: 0,
+                  display: "grid",
                   gap: "14px",
                   position: isMobile || isTablet ? "static" : "sticky",
-                  top: isMobile || isTablet ? undefined : "18px",
+                  top: isMobile || isTablet ? undefined : "24px",
                 }}
               >
                 {optionalChargePicker}
 
-                {show_promo && (
+                {show_promo ? (
                   <div
                     style={{
                       borderRadius: `${innerRadius}px`,
                       background: palette.cardBg,
                       border: `1px solid ${palette.cardBorder}`,
                       boxShadow: palette.cardShadow,
-                      padding: isMobile ? "16px" : "18px",
+                      padding: "16px",
                     }}
                   >
                     <h4
                       style={{
                         margin: "0 0 12px",
-                        fontSize: "16px",
+                        fontSize: "15px",
                         fontWeight: 700,
                         color: palette.text,
                       }}
@@ -1541,200 +1605,10 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                       </p>
                     ) : null}
                   </div>
-                )}
+                ) : null}
 
-                {show_summary && (
-                  <div
-                    style={{
-                      borderRadius: `${innerRadius}px`,
-                      background: palette.cardBg,
-                      border: `1px solid ${palette.cardBorder}`,
-                      boxShadow: palette.cardShadow,
-                      padding: isMobile ? "16px" : "18px",
-                    }}
-                  >
-                    <h4
-                      style={{
-                        margin: "0 0 14px",
-                        fontSize: "18px",
-                        fontWeight: 700,
-                        color: palette.text,
-                        letterSpacing: "-0.02em",
-                      }}
-                    >
-                      {summaryTitle}
-                    </h4>
-
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "12px",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: "12px",
-                          color: palette.textMuted,
-                          fontSize: "14px",
-                        }}
-                      >
-                        <span>{subtotalLabel}</span>
-                        <span style={{ color: palette.text }}>₹{subtotal}</span>
-                      </div>
-
-                      {promoDiscount > 0 && (
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            gap: "12px",
-                            color: palette.successText,
-                            fontSize: "14px",
-                          }}
-                        >
-                          <span>Discount</span>
-                          <span>-₹{promoDiscount}</span>
-                        </div>
-                      )}
-
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: "12px",
-                          color: palette.textMuted,
-                          fontSize: "14px",
-                        }}
-                      >
-                        <span>{shippingLabel}</span>
-                        <span style={{ color: palette.text }}>₹{shippingCharge}</span>
-                      </div>
-
-                      {nonShippingCharges.map((charge) => (
-                        <div
-                          key={charge.id}
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            gap: "12px",
-                            color: palette.textMuted,
-                            fontSize: "14px",
-                          }}
-                        >
-                          <span>{charge.label}</span>
-                          <span style={{ color: palette.text }}>
-                            ₹{charge.calculatedAmount}
-                          </span>
-                        </div>
-                      ))}
-
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: "12px",
-                          color: palette.textMuted,
-                          fontSize: "14px",
-                        }}
-                      >
-                        <span>{checkoutSettings?.taxSettings?.label || taxLabel}</span>
-                        <span style={{ color: palette.text }}>₹{tax}</span>
-                      </div>
-
-                      <div
-                        style={{
-                          height: "1px",
-                          background: palette.cardBorder,
-                          margin: "2px 0",
-                        }}
-                      />
-
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: "12px",
-                          alignItems: "center",
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: "15px",
-                            fontWeight: 600,
-                            color: palette.text,
-                          }}
-                        >
-                          {totalLabel}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: isMobile ? "20px" : "22px",
-                            fontWeight: 800,
-                            color: palette.text,
-                            letterSpacing: "-0.03em",
-                          }}
-                        >
-                          ₹{total}
-                        </span>
-                      </div>
-                    </div>
-
-                    <p
-                      style={{
-                        margin: "14px 0 16px",
-                        fontSize: "13px",
-                        color: palette.textMuted,
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      {settingsLoading ? "Updating charges..." : footerNote}
-                    </p>
-
-                    {cartItems.length > 0 ? (
-                      <Link
-                        to={checkoutPath}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          width: "100%",
-                          minHeight: "48px",
-                          borderRadius: "14px",
-                          background: resolvedAccentColor,
-                          color: "#ffffff",
-                          fontSize: "14px",
-                          fontWeight: 700,
-                          textDecoration: "none",
-                          boxShadow: "0 14px 28px rgba(0,0,0,0.22)",
-                        }}
-                      >
-                        {checkoutLabel}
-                      </Link>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled
-                        style={{
-                          width: "100%",
-                          minHeight: "48px",
-                          border: "none",
-                          borderRadius: "14px",
-                          background: palette.disabledBg,
-                          color: "#ffffff",
-                          fontSize: "14px",
-                          fontWeight: 700,
-                          cursor: "not-allowed",
-                        }}
-                      >
-                        {checkoutLabel}
-                      </button>
-                    )}
-                  </div>
-                )}
-              </aside>
+                {show_summary ? summaryCard : null}
+              </div>
             </div>
           )}
         </div>

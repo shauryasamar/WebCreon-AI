@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-
+// This is for admin checkout settings
 type ChargeCode =
   | "shipping_fee"
   | "tax"
