@@ -256,9 +256,36 @@ class Order(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     site_id: UUID = Field(foreign_key="sites.id", index=True)
     customer_id: UUID = Field(foreign_key="users.id", index=True)
+    shipping_address_id: Optional[UUID] = Field(default=None, foreign_key="user_addresses.id")
     items: list[dict[str, Any]] = Field(sa_column=Column(JSONB, nullable=False))
+    shipping_address: Optional[dict[str, Any]] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+    )
+    pricing_snapshot: Optional[dict[str, Any]] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+    )
+    payment_method: Optional[str] = Field(default=None, max_length=30)
     status: str = Field(default="placed", nullable=False)
+    cancel_reason: Optional[str] = Field(default=None)
     total: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
+    confirmed_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    shipped_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    delivered_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    cancelled_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
     created_at: datetime = Field(
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False),
@@ -273,13 +300,250 @@ class Order(SQLModel, table=True):
     )
 
 
+class OrderItem(SQLModel, table=True):
+    __tablename__ = "order_items"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    order_id: UUID = Field(foreign_key="orders.id", index=True)
+    site_id: UUID = Field(foreign_key="sites.id", index=True)
+    product_id: UUID = Field(foreign_key="products.id", index=True)
+
+    product_name: str
+    product_slug: Optional[str] = Field(default=None)
+    product_image: Optional[str] = Field(default=None)
+
+    selected_variant_label: Optional[str] = Field(default=None)
+    selected_variant_value: Optional[str] = Field(default=None)
+
+    unit_price: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
+    compare_price: Optional[Decimal] = Field(
+        default=None,
+        sa_column=Column(Numeric(12, 2), nullable=True),
+    )
+    quantity: int = Field(nullable=False)
+    line_total: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
+    status: str = Field(default="placed", max_length=40, nullable=False)
+    returnable_quantity: int = Field(default=0, nullable=False)
+    pricing_snapshot: Optional[dict[str, Any]] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+    )
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            onupdate=utc_now,
+        ),
+    )
+
+
+class Shipment(SQLModel, table=True):
+    __tablename__ = "shipments"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    order_id: UUID = Field(foreign_key="orders.id", index=True)
+    site_id: UUID = Field(foreign_key="sites.id", index=True)
+    status: str = Field(default="pending", max_length=40, nullable=False)
+    delivery_partner_name: Optional[str] = Field(default=None, max_length=255)
+    delivery_partner_phone: Optional[str] = Field(default=None, max_length=30)
+    estimated_delivery_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    shipped_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    out_for_delivery_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    delivered_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            onupdate=utc_now,
+        ),
+    )
+
+
+class InventoryMovement(SQLModel, table=True):
+    __tablename__ = "inventory_movements"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    site_id: UUID = Field(foreign_key="sites.id", index=True)
+    product_id: UUID = Field(foreign_key="products.id", index=True)
+    order_id: Optional[UUID] = Field(default=None, foreign_key="orders.id")
+    order_item_id: Optional[UUID] = Field(default=None, foreign_key="order_items.id")
+    movement_type: str = Field(max_length=40, nullable=False)
+    quantity_delta: int = Field(nullable=False)
+    note: Optional[str] = Field(default=None)
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+
+
 class OrderStatusHistory(SQLModel, table=True):
     __tablename__ = "order_status_history"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     order_id: UUID = Field(foreign_key="orders.id", index=True)
     status: str
-    changed_by: UUID = Field(foreign_key="admins.id", index=True)
+    changed_by: Optional[UUID] = Field(default=None, index=True)
+    changed_by_type: str = Field(default="admin", max_length=30, nullable=False)
+    changed_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+
+
+class ReturnRequest(SQLModel, table=True):
+    __tablename__ = "return_requests"
+    __table_args__ = (
+        Index("ix_return_requests_site_status", "site_id", "status"),
+        Index("ix_return_requests_customer_status", "customer_id", "status"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    site_id: UUID = Field(foreign_key="sites.id", index=True)
+    order_id: UUID = Field(foreign_key="orders.id", index=True)
+    customer_id: UUID = Field(foreign_key="users.id", index=True)
+
+    status: str = Field(default="requested", max_length=40, nullable=False)
+    refund_status: str = Field(default="pending", max_length=40, nullable=False)
+
+    request_note: Optional[str] = Field(default=None)
+    admin_note: Optional[str] = Field(default=None)
+    rejection_reason: Optional[str] = Field(default=None)
+    refund_override_reason: Optional[str] = Field(default=None)
+
+    suggested_refund_amount: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(12, 2), nullable=False),
+    )
+    final_refund_amount: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(12, 2), nullable=False),
+    )
+
+    refund_method: Optional[str] = Field(default=None, max_length=40)
+
+    approved_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    rejected_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    received_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    inspected_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    refunded_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    closed_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            onupdate=utc_now,
+        ),
+    )
+
+
+class ReturnItem(SQLModel, table=True):
+    __tablename__ = "return_items"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    return_request_id: UUID = Field(foreign_key="return_requests.id", index=True)
+    site_id: UUID = Field(foreign_key="sites.id", index=True)
+    order_id: UUID = Field(foreign_key="orders.id", index=True)
+    order_item_id: UUID = Field(foreign_key="order_items.id", index=True)
+    product_id: UUID = Field(foreign_key="products.id", index=True)
+
+    product_name: str
+    product_slug: Optional[str] = Field(default=None)
+    product_image: Optional[str] = Field(default=None)
+
+    selected_variant_label: Optional[str] = Field(default=None)
+    selected_variant_value: Optional[str] = Field(default=None)
+
+    quantity_requested: int = Field(nullable=False)
+    quantity_approved: int = Field(default=0, nullable=False)
+    quantity_received: int = Field(default=0, nullable=False)
+
+    reason_code: str = Field(max_length=60, nullable=False)
+    reason_note: Optional[str] = Field(default=None)
+
+    unit_price_paid: Decimal = Field(
+        sa_column=Column(Numeric(12, 2), nullable=False)
+    )
+    line_refund_suggested: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(12, 2), nullable=False),
+    )
+    line_refund_final: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(12, 2), nullable=False),
+    )
+
+    restock_decision: Optional[str] = Field(default=None, max_length=30)
+    restocked_quantity: int = Field(default=0, nullable=False)
+
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            onupdate=utc_now,
+        ),
+    )
+
+
+class ReturnStatusHistory(SQLModel, table=True):
+    __tablename__ = "return_status_history"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    return_request_id: UUID = Field(foreign_key="return_requests.id", index=True)
+    status: str = Field(max_length=40, nullable=False)
+    changed_by: Optional[UUID] = Field(default=None, index=True)
+    changed_by_type: str = Field(default="admin", max_length=30, nullable=False)
+    note: Optional[str] = Field(default=None)
     changed_at: datetime = Field(
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False),

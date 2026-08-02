@@ -19,6 +19,7 @@ import Footer from "./Component/Footer";
 import EditorRenderPage from "./customizations/EditorRenderPage";
 import EditorSidebar, { EditorTab } from "./customizations/EditorSidebar";
 import { EditorSiteDefinition } from "./customizations/editorUtils";
+import CustomerOrdersPage from "./pages/CustomerOrdersPage";
 
 type Block = {
   id: string;
@@ -252,10 +253,8 @@ async function resolveSiteBySlug(siteSlugParam: string): Promise<SavedSite | nul
   }
 }
 
-function StorefrontPage({
-  page,
+function StorefrontShell({
   siteDefinition,
-  selectedProduct,
   siteId,
   siteSlug,
   editMode,
@@ -265,10 +264,9 @@ function StorefrontPage({
   storefrontNavbarMode,
   navbarFixedBounds,
   appBase,
+  children,
 }: {
-  page: Page;
   siteDefinition: SiteDefinition;
-  selectedProduct?: Product | null;
   siteId: string;
   siteSlug: string;
   editMode: boolean;
@@ -278,6 +276,7 @@ function StorefrontPage({
   storefrontNavbarMode: "static" | "sticky" | "fixed";
   navbarFixedBounds?: NavbarFixedBounds;
   appBase: string;
+  children: React.ReactNode;
 }) {
   const navbarProps = getNavbarEditorProps(siteDefinition);
   const navbarIsSelected = selectedBlockId === NAVBAR_BLOCK_ID;
@@ -369,27 +368,72 @@ function StorefrontPage({
           paddingTop: `${contentTopOffset}px`,
         }}
       >
-        {editMode ? (
-          <EditorRenderPage
-            page={page}
-            siteId={siteId}
-            selectedProduct={selectedProduct ?? undefined}
-            selectedBlockId={selectedBlockId}
-            onSelectBlock={onSelectBlock}
-            theme={siteDefinition.theme}
-          />
-        ) : (
-          <RenderPage
-            page={page}
-            siteId={siteId}
-            selectedProduct={selectedProduct ?? undefined}
-            theme={siteDefinition.theme}
-          />
-        )}
+        {children}
       </div>
 
       <Footer />
     </div>
+  );
+}
+
+function StorefrontPage({
+  page,
+  siteDefinition,
+  selectedProduct,
+  siteId,
+  siteSlug,
+  editMode,
+  adminTopbarVisible,
+  selectedBlockId,
+  onSelectBlock,
+  storefrontNavbarMode,
+  navbarFixedBounds,
+  appBase,
+}: {
+  page: Page;
+  siteDefinition: SiteDefinition;
+  selectedProduct?: Product | null;
+  siteId: string;
+  siteSlug: string;
+  editMode: boolean;
+  adminTopbarVisible: boolean;
+  selectedBlockId: string | null;
+  onSelectBlock: (blockId: string) => void;
+  storefrontNavbarMode: "static" | "sticky" | "fixed";
+  navbarFixedBounds?: NavbarFixedBounds;
+  appBase: string;
+}) {
+  return (
+    <StorefrontShell
+      siteDefinition={siteDefinition}
+      siteId={siteId}
+      siteSlug={siteSlug}
+      editMode={editMode}
+      adminTopbarVisible={adminTopbarVisible}
+      selectedBlockId={selectedBlockId}
+      onSelectBlock={onSelectBlock}
+      storefrontNavbarMode={storefrontNavbarMode}
+      navbarFixedBounds={navbarFixedBounds}
+      appBase={appBase}
+    >
+      {editMode ? (
+        <EditorRenderPage
+          page={page}
+          siteId={siteId}
+          selectedProduct={selectedProduct ?? undefined}
+          selectedBlockId={selectedBlockId}
+          onSelectBlock={onSelectBlock}
+          theme={siteDefinition.theme}
+        />
+      ) : (
+        <RenderPage
+          page={page}
+          siteId={siteId}
+          selectedProduct={selectedProduct ?? undefined}
+          theme={siteDefinition.theme}
+        />
+      )}
+    </StorefrontShell>
   );
 }
 
@@ -589,9 +633,10 @@ function BuilderPageContent() {
 
           const isKnownStaticRoute = staticPageRoutes.includes(currentPath);
           const isDynamicProductRoute = currentPath.startsWith(`${appBase}/products/`);
+          const isOrdersRoute = currentPath === `${appBase}/orders`;
           const isAdminPath = !isStoreRoute && currentPath.startsWith(`${builderBase}/admin`);
 
-          if (!isKnownStaticRoute && !isDynamicProductRoute && !isAdminPath) {
+          if (!isKnownStaticRoute && !isDynamicProductRoute && !isOrdersRoute && !isAdminPath) {
             const homePage =
               parsedSiteDefinition.pages.find(
                 (page) =>
@@ -947,6 +992,30 @@ function BuilderPageContent() {
                 <Route path="checkout-charges" element={<CheckoutChargesPage />} />
               </Route>
             )}
+
+            <Route
+              path="orders"
+              element={
+                <StorefrontShell
+                  siteDefinition={activeSiteDefinition}
+                  siteId={resolvedSiteId || siteId || ""}
+                  siteSlug={siteSlug}
+                  editMode={editMode}
+                  adminTopbarVisible={showAdminTopbar}
+                  selectedBlockId={selectedBlockId}
+                  onSelectBlock={handleSelectBlock}
+                  storefrontNavbarMode={storefrontNavbarMode}
+                  navbarFixedBounds={navbarFixedBounds}
+                  appBase={appBase}
+                >
+                  <CustomerOrdersPage
+                    siteId={resolvedSiteId || siteId || ""}
+                    siteSlug={siteSlug}
+                    theme={activeSiteDefinition.theme}
+                  />
+                </StorefrontShell>
+              }
+            />
 
             {activeSiteDefinition.pages
               .filter((page) => {

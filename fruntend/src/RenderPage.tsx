@@ -62,6 +62,12 @@ type PaymentData = {
   upiId: string;
 };
 
+type OrderPlacedState = {
+  orderId: string;
+  status: string;
+  total?: number;
+} | null;
+
 const CHECKOUT_SUMMARY_TYPES = new Set([
   "cart_sidebar",
   "cartsidebar",
@@ -190,6 +196,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [paymentData, setPaymentData] = useState<PaymentData>(initialPaymentData);
   const [isAddressesLoading, setIsAddressesLoading] = useState(false);
+  const [placedOrder, setPlacedOrder] = useState<OrderPlacedState>(null);
 
   useEffect(() => {
     const syncViewport = () => {
@@ -347,7 +354,6 @@ const RenderPage: React.FC<RenderPageProps> = ({
         CART_PAGE_TYPES.has(type) || dataSource === "cart";
 
       if (!isCartLike) return true;
-
       if (hasRenderedPrimaryCartBlock) return false;
 
       hasRenderedPrimaryCartBlock = true;
@@ -645,6 +651,116 @@ const RenderPage: React.FC<RenderPageProps> = ({
       )}
     </div>
   );
+
+  if (placedOrder) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          padding: isCompactCheckout ? "16px 12px 28px" : "20px 16px 36px",
+          background: pageBg,
+        }}
+      >
+        <div
+          style={{
+            maxWidth: "720px",
+            margin: "0 auto",
+            width: "100%",
+          }}
+        >
+          <div
+            style={{
+              borderRadius: "20px",
+              border: shellBorder,
+              background: shellBg,
+              boxShadow: isLight
+                ? "0 1px 2px rgba(16,24,40,0.04)"
+                : "0 18px 44px rgba(0,0,0,0.22)",
+              padding: isCompactCheckout ? "24px 18px" : "36px 32px",
+              textAlign: "center",
+            }}
+          >
+            <div
+              style={{
+                width: "72px",
+                height: "72px",
+                borderRadius: "999px",
+                margin: "0 auto 16px",
+                display: "grid",
+                placeItems: "center",
+                background: accentColor,
+                color: "#fff",
+                fontSize: "34px",
+                fontWeight: 800,
+                boxShadow: "0 16px 32px rgba(47,109,246,0.24)",
+              }}
+            >
+              ✓
+            </div>
+
+            <h2
+              style={{
+                margin: "0 0 10px",
+                fontSize: isCompactCheckout ? "28px" : "34px",
+                lineHeight: 1.1,
+                fontWeight: 800,
+                color: textColor,
+              }}
+            >
+              Order placed successfully
+            </h2>
+
+            <p
+              style={{
+                margin: "0 0 10px",
+                fontSize: "14px",
+                color: subtleText,
+                lineHeight: 1.7,
+              }}
+            >
+              Your order has been confirmed and is now being processed.
+            </p>
+
+            <div
+              style={{
+                display: "grid",
+                gap: "10px",
+                marginTop: "20px",
+                textAlign: "left",
+                borderRadius: "14px",
+                border: cardBorder,
+                background: cardBg,
+                padding: "16px",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+                <span style={{ fontSize: "13px", color: subtleText }}>Order ID</span>
+                <span style={{ fontSize: "13px", color: textColor, fontWeight: 700 }}>
+                  {placedOrder.orderId}
+                </span>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+                <span style={{ fontSize: "13px", color: subtleText }}>Status</span>
+                <span style={{ fontSize: "13px", color: textColor, fontWeight: 700, textTransform: "capitalize" }}>
+                  {placedOrder.status.replace(/_/g, " ")}
+                </span>
+              </div>
+
+              {typeof placedOrder.total === "number" ? (
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+                  <span style={{ fontSize: "13px", color: subtleText }}>Total</span>
+                  <span style={{ fontSize: "13px", color: textColor, fontWeight: 700 }}>
+                    ₹{placedOrder.total}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -1112,8 +1228,18 @@ const RenderPage: React.FC<RenderPageProps> = ({
                       disabled: !(
                         canContinueDelivery &&
                         canContinuePayment &&
-                        cartItems.length > 0
+                        cartItems.length > 0 &&
+                        selectedAddressId
                       ),
+                      selectedAddressId,
+                      paymentData,
+                      onOrderPlaced: (order: {
+                        orderId: string;
+                        status: string;
+                        total?: number;
+                      }) => {
+                        setPlacedOrder(order);
+                      },
                     })
                   : null}
               </div>

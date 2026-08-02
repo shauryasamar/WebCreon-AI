@@ -24,7 +24,7 @@ from auth_middleware import (
 )
 from db.database import create_db_and_tables, get_session
 from models import AdminSite, Site
-from routers import auth, cart, checkout, checkout_settings, products
+from routers import auth, cart, checkout, checkout_settings, orders, products, returns
 
 app = FastAPI(title="AI Website Builder Backend")
 
@@ -57,6 +57,8 @@ app.include_router(products.router)
 app.include_router(cart.router)
 app.include_router(checkout.router)
 app.include_router(checkout_settings.router)
+app.include_router(orders.router)
+app.include_router(returns.router)
 
 
 class GenerateSiteRequest(BaseModel):

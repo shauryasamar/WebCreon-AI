@@ -222,44 +222,49 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
     return () => window.removeEventListener("resize", syncViewport);
   }, []);
 
-  useEffect(() => {
-    setAddresses(savedAddresses);
+useEffect(() => {
+  setAddresses(savedAddresses);
 
-    if (!isAuthenticated) {
+  if (!isAuthenticated) {
+    setFormMode("hidden");
+    setEditingAddressId(null);
+    setDraftAddress(emptyDeliveryData);
+    return;
+  }
+
+  if (savedAddresses.length === 0) {
+    setEditingAddressId(null);
+
+    if (formMode !== "add") {
       setFormMode("hidden");
-      setEditingAddressId(null);
       setDraftAddress(emptyDeliveryData);
-      return;
     }
 
-    if (savedAddresses.length === 0) {
-      setFormMode("hidden");
-      setEditingAddressId(null);
-      setDraftAddress(emptyDeliveryData);
-      return;
+    return;
+  }
+
+  const selectedStillExists = savedAddresses.some(
+    (address: DeliveryFormData) => address.id === selectedAddressId
+  );
+
+  if (!selectedStillExists) {
+    const defaultAddress =
+      savedAddresses.find((address: DeliveryFormData) => address.isDefault) ||
+      savedAddresses[0];
+
+    if (defaultAddress) {
+      onSelectAddress?.(defaultAddress);
+      onDeliveryDataChange?.(defaultAddress);
     }
-
-    const selectedStillExists = savedAddresses.some(
-      (address: DeliveryFormData) => address.id === selectedAddressId
-    );
-
-    if (!selectedStillExists) {
-      const defaultAddress =
-        savedAddresses.find((address: DeliveryFormData) => address.isDefault) ||
-        savedAddresses[0];
-
-      if (defaultAddress) {
-        onSelectAddress?.(defaultAddress);
-        onDeliveryDataChange?.(defaultAddress);
-      }
-    }
-  }, [
-    savedAddresses,
-    selectedAddressId,
-    onSelectAddress,
-    onDeliveryDataChange,
-    isAuthenticated,
-  ]);
+  }
+}, [
+  savedAddresses,
+  selectedAddressId,
+  onSelectAddress,
+  onDeliveryDataChange,
+  isAuthenticated,
+  formMode,
+]);
 
   useEffect(() => {
     if (formMode === "edit" || formMode === "add") return;
@@ -455,11 +460,15 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
   };
 
   const handleCloseForm = () => {
-    setErrorMessage("");
-    setEditingAddressId(null);
-    setDraftAddress(emptyDeliveryData);
-    setFormMode("hidden");
-  };
+  setErrorMessage("");
+  setEditingAddressId(null);
+  setDraftAddress(emptyDeliveryData);
+  setFormMode("hidden");
+
+  if (addresses.length === 0) {
+    onDeliveryDataChange?.(emptyDeliveryData);
+  }
+};
 
   const refreshAddressesFromServer = async (
     preferredAddressId?: string | null
@@ -577,7 +586,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
   const disableContinue = !selectedAddress || continueDisabled;
   const showAddressList = addresses.length > 0;
   const showForm = formMode !== "hidden";
-  const isSplitView = showForm && showAddressList && !compact && !isMobile;
+  const isSplitView = showForm && !compact && !isMobile;
   const isEditMode = formMode === "edit";
 
   const inputBaseStyle: React.CSSProperties = {
