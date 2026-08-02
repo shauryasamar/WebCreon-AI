@@ -1,4 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
+import {
+  createCheckoutAddress,
+  deleteCheckoutAddress,
+  getCheckoutAddresses,
+  SavedAddress,
+  setDefaultCheckoutAddress,
+  updateCheckoutAddress,
+} from "../addressService";
 
 type ThemeInput =
   | "dark"
@@ -24,6 +32,7 @@ export type DeliveryFormData = {
 };
 
 type DeliveryFormProps = {
+  siteId: string;
   sectionLabel?: string;
   title?: string;
   theme?: ThemeInput;
@@ -50,6 +59,8 @@ type DeliveryFormProps = {
   selectedAddressId?: string | null;
   onSelectAddress?: (address: DeliveryFormData) => void;
   onSavedAddressesChange?: (addresses: DeliveryFormData[]) => void;
+  isAuthenticated?: boolean;
+  isAddressesLoading?: boolean;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -111,10 +122,6 @@ function alpha(hex: string, opacity: number) {
   return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${clamp(opacity, 0, 1)})`;
 }
 
-function createAddressId() {
-  return `addr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
 function isAddressValid(data: DeliveryFormData) {
   return Boolean(
     data.fullName.trim() &&
@@ -126,31 +133,31 @@ function isAddressValid(data: DeliveryFormData) {
   );
 }
 
-function normalizeAddresses(addresses: DeliveryFormData[]) {
-  let foundDefault = false;
+function mapSavedAddressToDeliveryData(address: SavedAddress): DeliveryFormData {
+  return {
+    id: address.id,
+    label: address.addressType || "Home",
+    isDefault: address.isDefault,
+    fullName: address.fullName || "",
+    phone: address.mobileNumber || "",
+    email: address.email || "",
+    address: address.addressLine1 || "",
+    city: address.city || "",
+    pincode: address.postalCode || "",
+  };
+}
 
-  const normalized = addresses.map((address, index) => {
-    const isDefault = Boolean(address.isDefault) && !foundDefault;
-    if (isDefault) foundDefault = true;
-
-    return {
-      ...address,
-      isDefault,
-      label: address.label || "Home",
-      id: address.id || createAddressId(),
-    };
-  });
-
-  if (!normalized.length) return normalized;
-
-  if (!foundDefault) {
-    normalized[0] = {
-      ...normalized[0],
-      isDefault: true,
-    };
-  }
-
-  return [...normalized].sort((a, b) => Number(Boolean(b.isDefault)) - Number(Boolean(a.isDefault)));
+function toAddressPayload(data: DeliveryFormData) {
+  return {
+    full_name: data.fullName.trim(),
+    mobile_number: data.phone.trim(),
+    address_line1: data.address.trim(),
+    city: data.city.trim(),
+    postal_code: data.pincode.trim(),
+    email: data.email.trim() || null,
+    address_type: (data.label || "Home").trim(),
+    is_default: Boolean(data.isDefault),
+  };
 }
 
 const emptyDeliveryData: DeliveryFormData = {
@@ -166,6 +173,7 @@ const emptyDeliveryData: DeliveryFormData = {
 };
 
 export const DeliveryForm: React.FC<DeliveryFormProps> = ({
+  siteId,
   sectionLabel = "Delivery",
   title = "Delivery Address",
   theme = "light",
@@ -192,26 +200,17 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
   selectedAddressId = null,
   onSelectAddress,
   onSavedAddressesChange,
+  isAuthenticated = false,
+  isAddressesLoading = false,
 }) => {
-  const [addresses, setAddresses] = useState<DeliveryFormData[]>(
-    normalizeAddresses(savedAddresses)
-  );
-  const [formMode, setFormMode] = useState<"hidden" | "add" | "edit">(
-    savedAddresses.length === 0 ? "add" : "hidden"
-  );
+  const [addresses, setAddresses] = useState<DeliveryFormData[]>(savedAddresses);
+  const [formMode, setFormMode] = useState<"hidden" | "add" | "edit">("hidden");
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
-  const [draftAddress, setDraftAddress] = useState<DeliveryFormData>(
-    deliveryData?.fullName ||
-      deliveryData?.phone ||
-      deliveryData?.email ||
-      deliveryData?.address ||
-      deliveryData?.city ||
-      deliveryData?.pincode
-      ? { ...emptyDeliveryData, ...deliveryData }
-      : emptyDeliveryData
-  );
+  const [draftAddress, setDraftAddress] = useState<DeliveryFormData>(emptyDeliveryData);
   const [isMobile, setIsMobile] = useState(false);
-  const [isFormVisible, setIsFormVisible] = useState(savedAddresses.length === 0);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     const syncViewport = () => {
@@ -224,26 +223,47 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
   }, []);
 
   useEffect(() => {
-    const normalized = normalizeAddresses(savedAddresses);
-    setAddresses(normalized);
+    setAddresses(savedAddresses);
 
-    if (savedAddresses.length === 0) {
-      setFormMode("add");
-      setIsFormVisible(true);
+    if (!isAuthenticated) {
+      setFormMode("hidden");
+      setEditingAddressId(null);
+      setDraftAddress(emptyDeliveryData);
       return;
     }
 
-    const selectedStillExists = normalized.some((address) => address.id === selectedAddressId);
+    if (savedAddresses.length === 0) {
+      setFormMode("hidden");
+      setEditingAddressId(null);
+      setDraftAddress(emptyDeliveryData);
+      return;
+    }
+
+    const selectedStillExists = savedAddresses.some(
+      (address: DeliveryFormData) => address.id === selectedAddressId
+    );
+
     if (!selectedStillExists) {
-      const defaultAddress = normalized.find((address) => address.isDefault) || normalized[0];
+      const defaultAddress =
+        savedAddresses.find((address: DeliveryFormData) => address.isDefault) ||
+        savedAddresses[0];
+
       if (defaultAddress) {
         onSelectAddress?.(defaultAddress);
         onDeliveryDataChange?.(defaultAddress);
       }
     }
-  }, [savedAddresses, selectedAddressId, onSelectAddress, onDeliveryDataChange]);
+  }, [
+    savedAddresses,
+    selectedAddressId,
+    onSelectAddress,
+    onDeliveryDataChange,
+    isAuthenticated,
+  ]);
 
   useEffect(() => {
+    if (formMode === "edit" || formMode === "add") return;
+
     if (
       deliveryData?.fullName ||
       deliveryData?.phone ||
@@ -258,11 +278,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
         ...deliveryData,
       }));
     }
-  }, [deliveryData]);
-
-  useEffect(() => {
-    setIsFormVisible(formMode !== "hidden" || addresses.length === 0);
-  }, [formMode, addresses.length]);
+  }, [deliveryData, formMode]);
 
   const themeObject = typeof theme === "object" ? theme : undefined;
   const isDark = themeObject ? themeObject.mode !== "light" : theme === "dark";
@@ -318,9 +334,10 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
         radioBorder: "#cbd5e1",
         editText: "#94a3b8",
         deleteText: "#dc2626",
-        checkboxBorder: "#cbd5e1",
-        checkboxBg: "#ffffff",
         defaultBadgeBg: alpha(resolvedAccent, 0.1),
+        errorBg: "#fef2f2",
+        errorText: "#b91c1c",
+        errorBorder: "#fecaca",
       };
     }
 
@@ -354,9 +371,10 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
       radioBorder: "rgba(148,163,184,0.4)",
       editText: "#cbd5e1",
       deleteText: "#f87171",
-      checkboxBorder: "rgba(148,163,184,0.4)",
-      checkboxBg: mixHex(resolvedPrimaryBg, "#ffffff", 0.04),
       defaultBadgeBg: alpha(resolvedAccent, 0.16),
+      errorBg: "rgba(239,68,68,0.12)",
+      errorText: "#fca5a5",
+      errorBorder: "rgba(248,113,113,0.32)",
     };
   }, [
     background_color,
@@ -373,9 +391,8 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
   ]);
 
   const syncAddresses = (nextAddresses: DeliveryFormData[]) => {
-    const normalized = normalizeAddresses(nextAddresses);
-    setAddresses(normalized);
-    onSavedAddressesChange?.(normalized);
+    setAddresses(nextAddresses);
+    onSavedAddressesChange?.(nextAddresses);
   };
 
   const handleDraftChange =
@@ -403,12 +420,22 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
   };
 
   const handleAddNew = () => {
-    const hasDefault = addresses.some((address) => address.isDefault);
-    const nextDraft = {
+    if (!isAuthenticated) {
+      setErrorMessage("Please sign in or signup to continue shopping.");
+      return;
+    }
+
+    const hasDefault = addresses.some(
+      (address: DeliveryFormData) => address.isDefault
+    );
+
+    const nextDraft: DeliveryFormData = {
       ...emptyDeliveryData,
       label: "Home",
       isDefault: !hasDefault,
     };
+
+    setErrorMessage("");
     setDraftAddress(nextDraft);
     onDeliveryDataChange?.(nextDraft);
     setEditingAddressId(null);
@@ -416,6 +443,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
   };
 
   const handleEdit = (address: DeliveryFormData) => {
+    setErrorMessage("");
     setDraftAddress({
       ...emptyDeliveryData,
       ...address,
@@ -427,84 +455,129 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
   };
 
   const handleCloseForm = () => {
-    setFormMode(addresses.length === 0 ? "add" : "hidden");
+    setErrorMessage("");
+    setEditingAddressId(null);
+    setDraftAddress(emptyDeliveryData);
+    setFormMode("hidden");
   };
 
-  const handleDeleteAddress = () => {
-    if (!editingAddressId) return;
-
-    const remainingAddresses = addresses.filter(
-      (address) => address.id !== editingAddressId
+  const refreshAddressesFromServer = async (
+    preferredAddressId?: string | null
+  ): Promise<DeliveryFormData[]> => {
+    const response = await getCheckoutAddresses(siteId);
+    const nextAddresses: DeliveryFormData[] = response.map(
+      (address: SavedAddress) => mapSavedAddressToDeliveryData(address)
     );
 
-    const normalizedRemaining = normalizeAddresses(remainingAddresses);
-    syncAddresses(normalizedRemaining);
+    syncAddresses(nextAddresses);
 
-    if (normalizedRemaining.length > 0) {
-      const nextSelected =
-        normalizedRemaining.find((address) => address.isDefault) ||
-        normalizedRemaining[0];
+    const nextSelected =
+      nextAddresses.find(
+        (address: DeliveryFormData) => address.id === preferredAddressId
+      ) ||
+      nextAddresses.find((address: DeliveryFormData) => address.isDefault) ||
+      nextAddresses[0] ||
+      null;
+
+    if (nextSelected) {
       onSelectAddress?.(nextSelected);
       onDeliveryDataChange?.(nextSelected);
     } else {
       onDeliveryDataChange?.(emptyDeliveryData);
     }
 
-    setEditingAddressId(null);
-    setDraftAddress(emptyDeliveryData);
-    setFormMode(normalizedRemaining.length === 0 ? "add" : "hidden");
+    return nextAddresses;
   };
 
-  const handleSaveAddress = () => {
+  const handleDeleteAddress = async () => {
+    if (!editingAddressId) return;
+
+    try {
+      setIsDeleting(true);
+      setErrorMessage("");
+      await deleteCheckoutAddress(siteId, editingAddressId);
+      await refreshAddressesFromServer(null);
+
+      setEditingAddressId(null);
+      setDraftAddress(emptyDeliveryData);
+      setFormMode("hidden");
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Failed to delete address"
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleSaveAddress = async () => {
+    if (!isAuthenticated) {
+      setErrorMessage("Please sign in or signup to continue shopping.");
+      return;
+    }
+
     if (!isAddressValid(draftAddress)) return;
 
-    let nextAddress: DeliveryFormData = {
-      ...draftAddress,
-      id: draftAddress.id || editingAddressId || createAddressId(),
-      label: draftAddress.label || "Home",
-      isDefault: Boolean(draftAddress.isDefault),
-    };
+    try {
+      setIsSaving(true);
+      setErrorMessage("");
 
-    let nextAddresses: DeliveryFormData[];
+      let saved: SavedAddress;
 
-    if (formMode === "edit" && editingAddressId) {
-      nextAddresses = addresses.map((address) =>
-        address.id === editingAddressId ? nextAddress : address
-      );
-    } else {
-      nextAddresses = [...addresses, nextAddress];
+      if (formMode === "edit" && editingAddressId) {
+        saved = await updateCheckoutAddress(
+          siteId,
+          editingAddressId,
+          toAddressPayload(draftAddress)
+        );
+      } else {
+        saved = await createCheckoutAddress(siteId, toAddressPayload(draftAddress));
+      }
+
+      if (draftAddress.isDefault && saved.id) {
+        await setDefaultCheckoutAddress(siteId, saved.id);
+      }
+
+      const refreshed = await refreshAddressesFromServer(saved.id);
+      const selected =
+        refreshed.find((address: DeliveryFormData) => address.id === saved.id) ||
+        refreshed[0] ||
+        null;
+
+      if (selected) {
+        setEditingAddressId(selected.id || null);
+      } else {
+        setEditingAddressId(null);
+      }
+
+      setFormMode("hidden");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to save address";
+
+      if (
+        message.toLowerCase().includes("authentication required") ||
+        message.toLowerCase().includes("unauthorized") ||
+        message.toLowerCase().includes("customer authentication required")
+      ) {
+        setErrorMessage("Please sign in or signup to continue shopping.");
+      } else {
+        setErrorMessage(message);
+      }
+    } finally {
+      setIsSaving(false);
     }
-
-    if (nextAddress.isDefault) {
-      nextAddresses = nextAddresses.map((address) => ({
-        ...address,
-        isDefault: address.id === nextAddress.id,
-      }));
-    }
-
-    nextAddresses = normalizeAddresses(nextAddresses);
-    const selected =
-      nextAddresses.find((address) => address.id === nextAddress.id) || nextAddresses[0];
-
-    syncAddresses(nextAddresses);
-    if (selected) {
-      onSelectAddress?.(selected);
-      onDeliveryDataChange?.(selected);
-    }
-
-    setEditingAddressId(selected?.id || null);
-    setFormMode("hidden");
   };
 
   const selectedAddress =
-    addresses.find((address) => address.id === selectedAddressId) ||
-    addresses.find((address) => address.isDefault) ||
+    addresses.find((address: DeliveryFormData) => address.id === selectedAddressId) ||
+    addresses.find((address: DeliveryFormData) => address.isDefault) ||
     null;
 
   const disableContinue = !selectedAddress || continueDisabled;
   const showAddressList = addresses.length > 0;
-  const showForm = formMode !== "hidden" || addresses.length === 0;
-  const isSplitView = showForm && !compact && !isMobile;
+  const showForm = formMode !== "hidden";
+  const isSplitView = showForm && showAddressList && !compact && !isMobile;
   const isEditMode = formMode === "edit";
 
   const inputBaseStyle: React.CSSProperties = {
@@ -592,7 +665,9 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                 color: palette.textMuted,
               }}
             >
-              Select one of your saved delivery addresses or add a new one.
+              {isAuthenticated
+                ? "Select one of your saved delivery addresses or add a new one."
+                : "Please sign in or signup to continue shopping."}
             </p>
           </div>
 
@@ -616,6 +691,23 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
           </button>
         </div>
 
+        {errorMessage ? (
+          <div
+            style={{
+              marginBottom: "14px",
+              padding: "10px 12px",
+              borderRadius: "10px",
+              border: `1px solid ${palette.errorBorder}`,
+              background: palette.errorBg,
+              color: palette.errorText,
+              fontSize: "13px",
+              lineHeight: 1.5,
+            }}
+          >
+            {errorMessage}
+          </div>
+        ) : null}
+
         <div
           style={{
             display: "grid",
@@ -631,11 +723,23 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
               minWidth: 0,
               display: "grid",
               gap: "12px",
-              transition: "all 220ms ease",
             }}
           >
-            {showAddressList ? (
-              addresses.map((address) => {
+            {isAddressesLoading ? (
+              <div
+                style={{
+                  borderRadius: "12px",
+                  border: `1px dashed ${palette.emptyStateBorder}`,
+                  background: palette.emptyStateBg,
+                  padding: isMobile ? "16px" : "20px",
+                  fontSize: "13px",
+                  color: palette.textMuted,
+                }}
+              >
+                Loading saved addresses...
+              </div>
+            ) : showAddressList ? (
+              addresses.map((address: DeliveryFormData) => {
                 const isSelected = address.id === selectedAddressId;
 
                 return (
@@ -754,7 +858,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                             <div>
                               {address.city}, {address.pincode}
                             </div>
-                            <div>India</div>
+                            <div>{address.email}</div>
                           </div>
                         </div>
                       </div>
@@ -811,25 +915,21 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                     color: palette.textMuted,
                   }}
                 >
-                  Add your first delivery address to continue.
+                  {isAuthenticated
+                    ? "Add your first delivery address to continue."
+                    : "Please sign in or signup to continue shopping."}
                 </p>
               </div>
             )}
           </div>
 
-          <div
-            style={{
-              minWidth: 0,
-              overflow: "hidden",
-              opacity: isFormVisible ? 1 : 0,
-              maxHeight: isFormVisible ? (isMobile ? "1400px" : "1600px") : "0px",
-              transform: isFormVisible ? "translateX(0)" : "translateX(16px)",
-              transition:
-                "max-height 260ms ease, opacity 220ms ease, transform 220ms ease, margin 220ms ease",
-              pointerEvents: isFormVisible ? "auto" : "none",
-            }}
-          >
-            {showForm ? (
+          {showForm ? (
+            <div
+              style={{
+                minWidth: 0,
+                overflow: "hidden",
+              }}
+            >
               <div
                 style={{
                   minWidth: 0,
@@ -873,24 +973,22 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                     </p>
                   </div>
 
-                  {addresses.length > 0 ? (
-                    <button
-                      type="button"
-                      onClick={handleCloseForm}
-                      style={{
-                        border: "none",
-                        background: "transparent",
-                        color: palette.textMuted,
-                        fontSize: "12px",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        padding: 0,
-                        alignSelf: isMobile ? "flex-end" : "auto",
-                      }}
-                    >
-                      Close
-                    </button>
-                  ) : null}
+                  <button
+                    type="button"
+                    onClick={handleCloseForm}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      color: palette.textMuted,
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      padding: 0,
+                      alignSelf: isMobile ? "flex-end" : "auto",
+                    }}
+                  >
+                    Close
+                  </button>
                 </div>
 
                 <form
@@ -1068,6 +1166,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                         <button
                           type="button"
                           onClick={handleDeleteAddress}
+                          disabled={isDeleting}
                           style={{
                             minHeight: "42px",
                             borderRadius: "8px",
@@ -1077,12 +1176,13 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                             padding: "0 4px",
                             fontSize: "13px",
                             fontWeight: 700,
-                            cursor: "pointer",
+                            cursor: isDeleting ? "not-allowed" : "pointer",
                             width: isMobile ? "100%" : "auto",
                             textAlign: isMobile ? "left" : "left",
+                            opacity: isDeleting ? 0.6 : 1,
                           }}
                         >
-                          Delete
+                          {isDeleting ? "Deleting..." : "Delete"}
                         </button>
                       ) : (
                         <div />
@@ -1118,31 +1218,39 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
 
                       <button
                         type="submit"
-                        disabled={!isAddressValid(draftAddress)}
+                        disabled={!isAddressValid(draftAddress) || isSaving}
                         style={{
                           minHeight: "42px",
                           minWidth: isMobile ? "100%" : "140px",
                           width: isMobile ? "100%" : "auto",
                           borderRadius: "8px",
                           border: "none",
-                          background: isAddressValid(draftAddress)
-                            ? palette.primaryButtonBg
-                            : palette.primaryButtonDisabledBg,
+                          background:
+                            isAddressValid(draftAddress) && !isSaving
+                              ? palette.primaryButtonBg
+                              : palette.primaryButtonDisabledBg,
                           color: palette.primaryButtonText,
                           padding: "0 18px",
                           fontSize: "13px",
                           fontWeight: 700,
-                          cursor: isAddressValid(draftAddress) ? "pointer" : "not-allowed",
+                          cursor:
+                            isAddressValid(draftAddress) && !isSaving
+                              ? "pointer"
+                              : "not-allowed",
                         }}
                       >
-                        Save Changes
+                        {isSaving
+                          ? "Saving..."
+                          : formMode === "edit"
+                          ? "Save Changes"
+                          : "Save Address"}
                       </button>
                     </div>
                   </div>
                 </form>
               </div>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </div>
 
         <div

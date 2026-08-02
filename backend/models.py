@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime, Numeric, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, Index, Numeric, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
@@ -83,6 +83,49 @@ class User(SQLModel, table=True):
 
     is_guest: bool = Field(default=False, nullable=False)
     is_active: bool = Field(default=True, nullable=False)
+
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            onupdate=utc_now,
+        ),
+    )
+
+
+class UserAddress(SQLModel, table=True):
+    __tablename__ = "user_addresses"
+    __table_args__ = (
+        Index("ix_user_addresses_user_id", "user_id"),
+        Index("ix_user_addresses_site_id", "site_id"),
+        Index("ix_user_addresses_user_active", "user_id", "is_active"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    site_id: UUID = Field(foreign_key="sites.id", nullable=False)
+    user_id: UUID = Field(foreign_key="users.id", nullable=False)
+
+    full_name: str = Field(max_length=255, nullable=False)
+    mobile_number: str = Field(max_length=30, nullable=False)
+    address_line1: str = Field(max_length=255, nullable=False)
+    city: str = Field(max_length=120, nullable=False)
+    postal_code: str = Field(max_length=20, nullable=False)
+    email: Optional[str] = Field(default=None, max_length=255, nullable=True)
+    address_type: str = Field(max_length=30, nullable=False)
+
+    is_default: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, default=False),
+    )
+    is_active: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, default=True),
+    )
 
     created_at: datetime = Field(
         default_factory=utc_now,

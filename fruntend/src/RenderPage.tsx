@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useCart, Product } from "./CartContext";
 import { componentRegistry } from "./componentRegistry";
+import { getCheckoutAddresses, SavedAddress } from "./addressService";
+import { useCustomerAuth } from "./context/CustomerAuthContext";
 
 type Block = {
   id?: string;
@@ -46,6 +48,7 @@ type CheckoutStep = "delivery" | "payment" | "review";
 type DeliveryData = {
   id?: string;
   label?: string;
+  isDefault?: boolean;
   fullName: string;
   phone: string;
   email: string;
@@ -122,6 +125,7 @@ const checkoutSteps: { key: CheckoutStep; label: string }[] = [
 const initialDeliveryData: DeliveryData = {
   id: "",
   label: "Home",
+  isDefault: false,
   fullName: "",
   phone: "",
   email: "",
@@ -154,6 +158,20 @@ function isPaymentValid(data: PaymentData) {
   return true;
 }
 
+function mapSavedAddressToDeliveryData(address: SavedAddress): DeliveryData {
+  return {
+    id: address.id,
+    label: address.addressType || "Home",
+    isDefault: address.isDefault,
+    fullName: address.fullName || "",
+    phone: address.mobileNumber || "",
+    email: address.email || "",
+    address: address.addressLine1 || "",
+    city: address.city || "",
+    pincode: address.postalCode || "",
+  };
+}
+
 const RenderPage: React.FC<RenderPageProps> = ({
   page,
   siteId,
@@ -161,6 +179,8 @@ const RenderPage: React.FC<RenderPageProps> = ({
   theme,
 }) => {
   const { products, cartItems } = useCart();
+  const { isAuthenticated, loading: authLoading } = useCustomerAuth();
+
   const [selectedFilter, setSelectedFilter] = useState("All");
   const [isCompactCheckout, setIsCompactCheckout] = useState(false);
 
@@ -169,6 +189,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
   const [savedAddresses, setSavedAddresses] = useState<DeliveryData[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [paymentData, setPaymentData] = useState<PaymentData>(initialPaymentData);
+  const [isAddressesLoading, setIsAddressesLoading] = useState(false);
 
   useEffect(() => {
     const syncViewport = () => {
@@ -179,6 +200,60 @@ const RenderPage: React.FC<RenderPageProps> = ({
     window.addEventListener("resize", syncViewport);
     return () => window.removeEventListener("resize", syncViewport);
   }, []);
+
+  useEffect(() => {
+    if (!siteId) return;
+    if (authLoading) return;
+
+    if (!isAuthenticated) {
+      setSavedAddresses([]);
+      setSelectedAddressId(null);
+      setDeliveryData(initialDeliveryData);
+      setIsAddressesLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadSavedAddresses = async () => {
+      try {
+        setIsAddressesLoading(true);
+        const addresses = await getCheckoutAddresses(siteId);
+        if (cancelled) return;
+
+        const mapped = addresses.map(mapSavedAddressToDeliveryData);
+        setSavedAddresses(mapped);
+
+        const selected =
+          mapped.find((address) => address.isDefault) || mapped[0] || null;
+
+        if (selected) {
+          setSelectedAddressId(selected.id || null);
+          setDeliveryData(selected);
+        } else {
+          setSelectedAddressId(null);
+          setDeliveryData(initialDeliveryData);
+        }
+      } catch (error) {
+        console.error("Failed to load checkout addresses", error);
+        if (!cancelled) {
+          setSavedAddresses([]);
+          setSelectedAddressId(null);
+          setDeliveryData(initialDeliveryData);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsAddressesLoading(false);
+        }
+      }
+    };
+
+    loadSavedAddresses();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [siteId, isAuthenticated, authLoading]);
 
   if (!page) {
     return <div style={{ padding: "24px" }}>Page not found.</div>;
@@ -736,6 +811,8 @@ const RenderPage: React.FC<RenderPageProps> = ({
                   deliveryData,
                   savedAddresses,
                   selectedAddressId,
+                  isAuthenticated,
+                  isAddressesLoading,
                   onSavedAddressesChange: (addresses: DeliveryData[]) => {
                     setSavedAddresses(addresses);
 
@@ -744,9 +821,14 @@ const RenderPage: React.FC<RenderPageProps> = ({
                     );
 
                     if (!stillSelected) {
-                      if (addresses.length > 0) {
-                        setSelectedAddressId(addresses[0].id || null);
-                        setDeliveryData(addresses[0]);
+                      const nextSelected =
+                        addresses.find((address) => address.isDefault) ||
+                        addresses[0] ||
+                        null;
+
+                      if (nextSelected) {
+                        setSelectedAddressId(nextSelected.id || null);
+                        setDeliveryData(nextSelected);
                       } else {
                         setSelectedAddressId(null);
                         setDeliveryData(initialDeliveryData);
