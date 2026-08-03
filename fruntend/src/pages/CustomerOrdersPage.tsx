@@ -17,8 +17,8 @@ type OrderListItem = {
     returnable_quantity?: number;
     is_returnable?: boolean;
     max_returnable_quantity?: number;
+    pricing_snapshot?: any;
   }>;
-  pricing_snapshot?: any;
   has_returnable_items?: boolean;
   can_request_return?: boolean;
 };
@@ -300,7 +300,7 @@ function getStepRank(stepKey: string) {
   }
 }
 
-function getReturnTimelineSteps(detail: CustomerReturnDetail) {
+function getReturnTimelineSteps(detail: CustomerReturnDetail): TimelineStep[] {
   return [
     { key: "requested", label: "Return requested", time: detail.created_at },
     { key: "approved", label: "Item ready to pick", time: detail.approved_at },
@@ -341,10 +341,13 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
   const [showReturnFormOrderId, setShowReturnFormOrderId] = useState<string | null>(null);
   const [expandedReturnId, setExpandedReturnId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [viewportWidth, setViewportWidth] = useState<number>(
+    typeof window !== "undefined" ? window.innerWidth : 1280
+  );
 
   const isLight = theme?.mode === "light";
   const accentColor = theme?.accent_color || "#3b82f6";
-  const pageBg = isLight ? "#f8fafc" : theme?.primary_bg || "#0b1220";
+  const pageBg = isLight ? (theme?.primary_bg || "#f8fafc") : "transparent";
   const cardBg = isLight ? "#ffffff" : "rgba(15,23,42,0.72)";
   const cardBorder = isLight
     ? "1px solid rgba(15,23,42,0.08)"
@@ -358,6 +361,16 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
     : "1px solid rgba(148,163,184,0.14)";
   const timelineRail = isLight ? "#d1d5db" : "rgba(255,255,255,0.16)";
   const pendingDot = isLight ? "#d1d5db" : "rgba(255,255,255,0.22)";
+
+  const isMobile = viewportWidth <= 640;
+  const isTablet = viewportWidth > 640 && viewportWidth <= 1024;
+  const isCompact = isMobile || isTablet;
+
+  useEffect(() => {
+    const handleResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const loadOrders = async () => {
     if (!siteId) return;
@@ -696,7 +709,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
         style={{
           border: cardBorder,
           borderRadius: "18px",
-          padding: "18px",
+          padding: isCompact ? "14px" : "18px",
           background: panelBg,
         }}
       >
@@ -744,7 +757,9 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
             const stepRank = getStepRank(step.key);
             const isCompleted =
               !isCancelled &&
-              (step.time ? stepRank < currentRank || orderStatus === "delivered" || stepRank === currentRank : false);
+              (step.time
+                ? stepRank < currentRank || orderStatus === "delivered" || stepRank === currentRank
+                : false);
             const isCurrent =
               !isCancelled &&
               ((stepRank === currentRank && orderStatus !== "delivered") ||
@@ -776,7 +791,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                   gridTemplateColumns: "30px minmax(0, 1fr)",
                   gap: "12px",
                   alignItems: "flex-start",
-                  minHeight: "72px",
+                  minHeight: isCompact ? "62px" : "72px",
                 }}
               >
                 <div
@@ -785,7 +800,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                     display: "flex",
                     justifyContent: "center",
                     paddingTop: "2px",
-                    minHeight: "72px",
+                    minHeight: isCompact ? "62px" : "72px",
                   }}
                 >
                   {index < timelineSteps.length - 1 ? (
@@ -856,7 +871,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                 <div style={{ paddingTop: "1px" }}>
                   <div
                     style={{
-                      fontSize: "18px",
+                      fontSize: isMobile ? "16px" : "18px",
                       fontWeight: isCurrent ? 800 : 700,
                       color: textPrimary,
                       marginBottom: "4px",
@@ -867,7 +882,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                   </div>
                   <div
                     style={{
-                      fontSize: "14px",
+                      fontSize: isMobile ? "13px" : "14px",
                       color: textMuted,
                     }}
                   >
@@ -938,16 +953,16 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
             background: "transparent",
             border: "none",
             color: "inherit",
-            padding: "16px",
+            padding: isCompact ? "14px" : "16px",
             cursor: "pointer",
           }}
         >
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "minmax(0, 1fr) auto",
+              gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) auto",
               gap: "12px",
-              alignItems: "center",
+              alignItems: isMobile ? "flex-start" : "center",
             }}
           >
             <div>
@@ -1029,7 +1044,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
           <div
             style={{
               borderTop: divider,
-              padding: "0 16px 16px",
+              padding: `0 ${isCompact ? "14px" : "16px"} ${isCompact ? "14px" : "16px"}`,
             }}
           >
             {!latestDetail ? (
@@ -1043,7 +1058,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                     borderRadius: "16px",
                     background: innerBg,
                     border: cardBorder,
-                    padding: "14px",
+                    padding: isCompact ? "12px" : "14px",
                   }}
                 >
                   <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
@@ -1065,7 +1080,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                             gridTemplateColumns: "30px minmax(0, 1fr)",
                             gap: "12px",
                             alignItems: "flex-start",
-                            minHeight: "68px",
+                            minHeight: isCompact ? "62px" : "68px",
                           }}
                         >
                           <div
@@ -1074,7 +1089,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                               display: "flex",
                               justifyContent: "center",
                               paddingTop: "2px",
-                              minHeight: "68px",
+                              minHeight: isCompact ? "62px" : "68px",
                             }}
                           >
                             {index < timelineSteps.length - 1 ? (
@@ -1142,7 +1157,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                           <div style={{ paddingTop: "1px" }}>
                             <div
                               style={{
-                                fontSize: "16px",
+                                fontSize: isMobile ? "15px" : "16px",
                                 fontWeight: isCurrent ? 800 : 700,
                                 color: textPrimary,
                                 marginBottom: "4px",
@@ -1185,13 +1200,17 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                     borderRadius: "16px",
                     background: innerBg,
                     border: cardBorder,
-                    padding: "14px",
+                    padding: isCompact ? "12px" : "14px",
                   }}
                 >
                   <div
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                      gridTemplateColumns: isMobile
+                        ? "1fr"
+                        : isTablet
+                        ? "repeat(2, minmax(0, 1fr))"
+                        : "repeat(3, minmax(0, 1fr))",
                       gap: "12px",
                     }}
                   >
@@ -1221,7 +1240,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                     borderRadius: "16px",
                     background: innerBg,
                     border: cardBorder,
-                    padding: "14px",
+                    padding: isCompact ? "12px" : "14px",
                   }}
                 >
                   <div
@@ -1247,9 +1266,13 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                           background: isLight ? "#ffffff" : "rgba(255,255,255,0.02)",
                           padding: "12px",
                           display: "grid",
-                          gridTemplateColumns: item.product_image ? "64px minmax(0, 1fr) auto" : "minmax(0, 1fr) auto",
+                          gridTemplateColumns: isMobile
+                            ? "1fr"
+                            : item.product_image
+                            ? "64px minmax(0, 1fr) auto"
+                            : "minmax(0, 1fr) auto",
                           gap: "12px",
-                          alignItems: "center",
+                          alignItems: isMobile ? "flex-start" : "center",
                         }}
                       >
                         {item.product_image ? (
@@ -1281,7 +1304,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                           </div>
                         </div>
 
-                        <div style={{ textAlign: "right" }}>
+                        <div style={{ textAlign: isMobile ? "left" : "right" }}>
                           <div style={{ fontSize: "12px", color: textMuted, marginBottom: "4px" }}>
                             Refund
                           </div>
@@ -1318,7 +1341,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                       borderRadius: "16px",
                       background: innerBg,
                       border: cardBorder,
-                      padding: "14px",
+                      padding: isCompact ? "12px" : "14px",
                     }}
                   >
                     <div
@@ -1397,7 +1420,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
         minHeight: "calc(100vh - 140px)",
         background: isLight ? pageBg : "transparent",
         color: textPrimary,
-        padding: "24px 16px 48px",
+        padding: isMobile ? "16px 12px 36px" : "24px 16px 48px",
       }}
     >
       <div
@@ -1410,7 +1433,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
           style={{
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "center",
+            alignItems: isMobile ? "flex-start" : "center",
             gap: "16px",
             flexWrap: "wrap",
             marginBottom: "22px",
@@ -1420,7 +1443,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
             <h1
               style={{
                 margin: 0,
-                fontSize: "32px",
+                fontSize: isMobile ? "26px" : "32px",
                 lineHeight: 1.1,
                 fontWeight: 800,
                 letterSpacing: "-0.03em",
@@ -1432,7 +1455,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
               style={{
                 margin: "8px 0 0",
                 color: textMuted,
-                fontSize: "14px",
+                fontSize: isMobile ? "13px" : "14px",
               }}
             >
               Track orders, view shipment updates, and manage eligible actions.
@@ -1451,6 +1474,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
               fontSize: "14px",
               fontWeight: 700,
               cursor: "pointer",
+              width: isMobile ? "100%" : "auto",
             }}
           >
             Continue shopping
@@ -1540,16 +1564,20 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                       background: "transparent",
                       border: "none",
                       color: "inherit",
-                      padding: "18px 18px 16px",
+                      padding: isCompact ? "16px 14px 14px" : "18px 18px 16px",
                       cursor: "pointer",
                     }}
                   >
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "minmax(0, 1.5fr) minmax(0, 1fr) auto auto",
+                        gridTemplateColumns: isMobile
+                          ? "1fr"
+                          : isTablet
+                          ? "minmax(0, 1fr) minmax(0, 1fr)"
+                          : "minmax(0, 1.5fr) minmax(0, 1fr) auto auto",
                         gap: "14px",
-                        alignItems: "center",
+                        alignItems: isMobile ? "flex-start" : "center",
                       }}
                     >
                       <div style={{ minWidth: 0 }}>
@@ -1567,7 +1595,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                           style={{
                             fontSize: "13px",
                             color: textMuted,
-                            whiteSpace: "nowrap",
+                            whiteSpace: isMobile ? "normal" : "nowrap",
                             overflow: "hidden",
                             textOverflow: "ellipsis",
                           }}
@@ -1630,7 +1658,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                     <div
                       style={{
                         borderTop: divider,
-                        padding: "18px",
+                        padding: isCompact ? "14px" : "18px",
                         background: isLight ? "#f8fafc" : "rgba(255,255,255,0.02)",
                       }}
                     >
@@ -1642,7 +1670,9 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                         <div
                           style={{
                             display: "grid",
-                            gridTemplateColumns: "minmax(0, 1.4fr) minmax(320px, 1fr)",
+                            gridTemplateColumns: isTablet || isMobile
+                              ? "1fr"
+                              : "minmax(0, 1.4fr) minmax(320px, 1fr)",
                             gap: "18px",
                             alignItems: "start",
                           }}
@@ -1658,7 +1688,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                               style={{
                                 border: cardBorder,
                                 borderRadius: "18px",
-                                padding: "16px",
+                                padding: isCompact ? "14px" : "16px",
                                 background: panelBg,
                               }}
                             >
@@ -1685,8 +1715,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                 {detail.items.map((item) => {
                                   const draftItem = draft?.items?.[item.id];
                                   const itemCanReturn = isItemReturnable(item);
-                                  const isEligible =
-                                    itemCanReturn && isReturnFormOpen;
+                                  const isEligible = itemCanReturn && isReturnFormOpen;
 
                                   return (
                                     <div
@@ -1704,11 +1733,13 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                       <div
                                         style={{
                                           display: "grid",
-                                          gridTemplateColumns: item.product_image
+                                          gridTemplateColumns: isMobile
+                                            ? "1fr"
+                                            : item.product_image
                                             ? "72px minmax(0, 1fr) auto"
                                             : "minmax(0, 1fr) auto",
                                           gap: "12px",
-                                          alignItems: "center",
+                                          alignItems: isMobile ? "flex-start" : "center",
                                         }}
                                       >
                                         {item.product_image ? (
@@ -1759,6 +1790,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                             fontSize: "14px",
                                             fontWeight: 800,
                                             whiteSpace: "nowrap",
+                                            textAlign: isMobile ? "left" : "right",
                                           }}
                                         >
                                           {formatPrice(item.line_total)}
@@ -1769,8 +1801,11 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                         <div
                                           style={{
                                             display: "grid",
-                                            gridTemplateColumns:
-                                              "auto minmax(110px, 120px) minmax(160px, 1fr) minmax(180px, 1fr)",
+                                            gridTemplateColumns: isMobile
+                                              ? "1fr"
+                                              : isTablet
+                                              ? "repeat(2, minmax(0, 1fr))"
+                                              : "auto minmax(110px, 120px) minmax(160px, 1fr) minmax(180px, 1fr)",
                                             gap: "10px",
                                             alignItems: "end",
                                             paddingTop: "4px",
@@ -1931,7 +1966,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                 style={{
                                   border: cardBorder,
                                   borderRadius: "18px",
-                                  padding: "16px",
+                                  padding: isCompact ? "14px" : "16px",
                                   background: panelBg,
                                 }}
                               >
@@ -1947,7 +1982,6 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                 >
                                   Shipping address
                                 </div>
-
                                 <div style={{ fontSize: "14px", fontWeight: 700 }}>
                                   {detail.shipping_address?.fullName || "—"}
                                 </div>
@@ -1976,7 +2010,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                 style={{
                                   border: cardBorder,
                                   borderRadius: "18px",
-                                  padding: "16px",
+                                  padding: isCompact ? "14px" : "16px",
                                   background: panelBg,
                                 }}
                               >
@@ -2075,7 +2109,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                               style={{
                                 border: cardBorder,
                                 borderRadius: "18px",
-                                padding: "16px",
+                                padding: isCompact ? "14px" : "16px",
                                 background: panelBg,
                               }}
                             >
@@ -2262,26 +2296,6 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                 >
                                   All items in this order have already been fully returned.
                                 </div>
-                              ) : null}
-
-                              {isDelivered ? (
-                                <button
-                                  type="button"
-                                  disabled
-                                  style={{
-                                    border: "1px solid rgba(168,85,247,0.20)",
-                                    background: "rgba(168,85,247,0.10)",
-                                    color: "#7c3aed",
-                                    borderRadius: "14px",
-                                    padding: "12px 16px",
-                                    fontSize: "14px",
-                                    fontWeight: 700,
-                                    cursor: "not-allowed",
-                                    opacity: 0.7,
-                                  }}
-                                >
-                                  Exchange request — coming soon
-                                </button>
                               ) : null}
                             </div>
                           </div>

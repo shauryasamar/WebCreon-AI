@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useCart } from "../CartContext";
 import { useCustomerAuth } from "../context/CustomerAuthContext";
@@ -55,6 +55,7 @@ export type NavbarProps = {
 };
 
 type NavbarPosition = "static" | "sticky" | "fixed";
+type ViewportMode = "mobile" | "tablet" | "desktop";
 
 const iconStyle: React.CSSProperties = {
   width: "18px",
@@ -124,6 +125,28 @@ const getNavbarPositionStyle = (
   };
 };
 
+const useViewportMode = (): ViewportMode => {
+  const getMode = (): ViewportMode => {
+    if (typeof window === "undefined") return "desktop";
+    if (window.innerWidth <= 640) return "mobile";
+    if (window.innerWidth <= 960) return "tablet";
+    return "desktop";
+  };
+
+  const [mode, setMode] = useState<ViewportMode>(getMode);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setMode(getMode());
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  return mode;
+};
+
 const Navbar: React.FC<NavbarProps> = ({
   brandName = "Storefront",
   tagline,
@@ -145,9 +168,18 @@ const Navbar: React.FC<NavbarProps> = ({
   const { siteId, slug } = useParams<{ siteId?: string; slug?: string }>();
   const { isAuthenticated, refreshMe, clearUser, logout } = useCustomerAuth();
 
+  const viewportMode = useViewportMode();
+  const isMobile = viewportMode === "mobile";
+  const isTablet = viewportMode === "tablet";
+  const isCompact = isMobile;
+
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const accountButtonRef = useRef<HTMLButtonElement | null>(null);
+  const mobileMenuRef = useRef<HTMLDivElement | null>(null);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const base =
     appBase ||
@@ -296,6 +328,28 @@ const Navbar: React.FC<NavbarProps> = ({
 
   const isStoreRoute = location.pathname.startsWith("/store/");
 
+  const mobileMenuButtonStyle: React.CSSProperties = useMemo(
+    () => ({
+      width: "42px",
+      height: "42px",
+      borderRadius: "14px",
+      border: softBorder,
+      background: mobileMenuOpen
+        ? light
+          ? "rgba(15,23,42,0.08)"
+          : "rgba(255,255,255,0.10)"
+        : iconButtonBg,
+      color: textColor,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      cursor: "pointer",
+      transition: "all 160ms ease",
+      flexShrink: 0,
+    }),
+    [softBorder, mobileMenuOpen, light, iconButtonBg, textColor]
+  );
+
   useEffect(() => {
     if (!siteSlug) return;
 
@@ -317,22 +371,42 @@ const Navbar: React.FC<NavbarProps> = ({
   ]);
 
   useEffect(() => {
-    if (!accountMenuOpen) return;
+    setMobileMenuOpen(false);
+    setAccountMenuOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!isCompact) {
+      setMobileMenuOpen(false);
+    }
+  }, [isCompact]);
+
+  useEffect(() => {
+    if (!accountMenuOpen && !mobileMenuOpen) return;
 
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (
+
+      const clickedAccount =
         accountMenuRef.current?.contains(target) ||
-        accountButtonRef.current?.contains(target)
-      ) {
+        accountButtonRef.current?.contains(target);
+
+      const clickedMobileMenu =
+        mobileMenuRef.current?.contains(target) ||
+        mobileMenuButtonRef.current?.contains(target);
+
+      if (clickedAccount || clickedMobileMenu) {
         return;
       }
+
       setAccountMenuOpen(false);
+      setMobileMenuOpen(false);
     };
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setAccountMenuOpen(false);
+        setMobileMenuOpen(false);
         accountButtonRef.current?.focus();
       }
     };
@@ -344,7 +418,7 @@ const Navbar: React.FC<NavbarProps> = ({
       document.removeEventListener("mousedown", handlePointerDown);
       document.removeEventListener("keydown", handleEscape);
     };
-  }, [accountMenuOpen]);
+  }, [accountMenuOpen, mobileMenuOpen]);
 
   const closeAccountMenu = () => {
     setAccountMenuOpen(false);
@@ -374,15 +448,13 @@ const Navbar: React.FC<NavbarProps> = ({
   };
 
   const handleGoToProfile = () => {
-    if (!siteSlug) return;
     closeAccountMenu();
-    navigate(`/store/${siteSlug}/profile`);
+    navigate(isBuilderAdminRoute ? `${base}/admin/profile` : `${base}/profile`);
   };
 
   const handleGoToOrders = () => {
-    if (!siteSlug) return;
     closeAccountMenu();
-    navigate(`/store/${siteSlug}/orders`);
+    navigate(isBuilderAdminRoute ? `${base}/admin/orders` : `${base}/orders`);
   };
 
   const handleCustomerLogout = async () => {
@@ -419,7 +491,8 @@ const Navbar: React.FC<NavbarProps> = ({
     position: "absolute",
     top: "calc(100% + 12px)",
     right: 0,
-    width: "248px",
+    width: isMobile ? "min(280px, calc(100vw - 32px))" : "248px",
+    maxWidth: "calc(100vw - 32px)",
     padding: "10px",
     borderRadius: "18px",
     background: light
@@ -434,6 +507,20 @@ const Navbar: React.FC<NavbarProps> = ({
     backdropFilter: "blur(16px)",
     WebkitBackdropFilter: "blur(16px)",
     zIndex: 400,
+  };
+
+  const mobileNavPanelStyle: React.CSSProperties = {
+    width: "100%",
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+    paddingTop: "8px",
+    borderTop:
+      variant === "transparent"
+        ? "none"
+        : light
+        ? "1px solid rgba(15,23,42,0.08)"
+        : "1px solid rgba(255,255,255,0.08)",
   };
 
   const menuRowIconStyle: React.CSSProperties = {
@@ -499,7 +586,7 @@ const Navbar: React.FC<NavbarProps> = ({
                 ? "none"
                 : shellBorder,
             boxShadow: shellBoxShadow,
-            flexWrap: "wrap",
+            flexWrap: isMobile ? "wrap" : "nowrap",
             minHeight: `${navbarHeight}px`,
           }}
         >
@@ -510,7 +597,7 @@ const Navbar: React.FC<NavbarProps> = ({
               gap: "16px",
               minWidth: 0,
               flex: "1 1 auto",
-              flexWrap: "wrap",
+              flexWrap: isMobile ? "wrap" : "nowrap",
             }}
           >
             <button
@@ -525,6 +612,7 @@ const Navbar: React.FC<NavbarProps> = ({
                 border: "none",
                 cursor: "pointer",
                 minWidth: 0,
+                flex: isMobile ? "1 1 auto" : "0 1 auto",
               }}
             >
               <div
@@ -549,7 +637,7 @@ const Navbar: React.FC<NavbarProps> = ({
                 {getInitials(brandName)}
               </div>
 
-              <div style={{ textAlign: "left", minWidth: 0 }}>
+              <div style={{ textAlign: "left", minWidth: 0, overflow: "hidden" }}>
                 <div
                   style={{
                     fontSize: "16px",
@@ -558,6 +646,8 @@ const Navbar: React.FC<NavbarProps> = ({
                     color: textColor,
                     letterSpacing: "-0.02em",
                     whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
                   }}
                 >
                   {brandName}
@@ -570,6 +660,9 @@ const Navbar: React.FC<NavbarProps> = ({
                       color: mutedText,
                       marginTop: "3px",
                       whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      maxWidth: isMobile ? "180px" : "none",
                     }}
                   >
                     {tagline}
@@ -578,18 +671,21 @@ const Navbar: React.FC<NavbarProps> = ({
               </div>
             </button>
 
-            {storefrontLinks.length > 0 && (
+            {!isCompact && storefrontLinks.length > 0 && (
               <nav
                 aria-label="Storefront"
                 style={{
                   display: "flex",
                   alignItems: "center",
                   gap: "8px",
-                  flexWrap: "wrap",
+                  flexWrap: "nowrap",
                   padding: "6px",
                   borderRadius: "16px",
                   background: softSurface,
                   border: variant === "transparent" ? "none" : softBorder,
+                  minWidth: 0,
+                  overflowX: "auto",
+                  scrollbarWidth: "none",
                 }}
               >
                 {storefrontLinks.map((item) => (
@@ -599,7 +695,7 @@ const Navbar: React.FC<NavbarProps> = ({
                     end={item.route === "/"}
                     style={({ isActive }) => ({
                       textDecoration: "none",
-                      padding: "10px 14px",
+                      padding: isTablet ? "9px 12px" : "10px 14px",
                       borderRadius: "12px",
                       fontSize: "14px",
                       fontWeight: 650,
@@ -614,6 +710,8 @@ const Navbar: React.FC<NavbarProps> = ({
                         : "none",
                       transition: "all 180ms ease",
                       lineHeight: 1,
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
                     })}
                   >
                     {item.label}
@@ -621,17 +719,44 @@ const Navbar: React.FC<NavbarProps> = ({
                 ))}
               </nav>
             )}
+
+            {isCompact && storefrontLinks.length > 0 && (
+              <button
+                ref={mobileMenuButtonRef}
+                type="button"
+                aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+                aria-expanded={mobileMenuOpen}
+                onClick={() => setMobileMenuOpen((prev) => !prev)}
+                style={mobileMenuButtonStyle}
+              >
+                <svg viewBox="0 0 24 24" style={iconStyle}>
+                  {mobileMenuOpen ? (
+                    <>
+                      <path d="M6 6L18 18" />
+                      <path d="M18 6L6 18" />
+                    </>
+                  ) : (
+                    <>
+                      <path d="M4 7H20" />
+                      <path d="M4 12H20" />
+                      <path d="M4 17H20" />
+                    </>
+                  )}
+                </svg>
+              </button>
+            )}
           </div>
 
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: "10px",
+              gap: isMobile ? "8px" : "10px",
               marginLeft: "auto",
+              flexShrink: 0,
             }}
           >
-            {showSearch && (
+            {showSearch && !isMobile && (
               <button
                 type="button"
                 aria-label="Search"
@@ -928,7 +1053,7 @@ const Navbar: React.FC<NavbarProps> = ({
                   position: "relative",
                   height: "42px",
                   minWidth: "48px",
-                  padding: "0 14px",
+                  padding: isMobile ? "0 12px" : "0 14px",
                   borderRadius: "14px",
                   border: softBorder,
                   background: cartButtonBg,
@@ -940,6 +1065,7 @@ const Navbar: React.FC<NavbarProps> = ({
                   boxShadow: light
                     ? "0 10px 24px rgba(15,23,42,0.16)"
                     : "0 10px 24px rgba(255,255,255,0.08)",
+                  flexShrink: 0,
                 }}
               >
                 <svg viewBox="0 0 24 24" style={iconStyle}>
@@ -974,6 +1100,89 @@ const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
           </div>
+
+          {isCompact && storefrontLinks.length > 0 && mobileMenuOpen && (
+            <div ref={mobileMenuRef} style={mobileNavPanelStyle}>
+              <nav
+                aria-label="Storefront"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                  width: "100%",
+                }}
+              >
+                {showSearch && isMobile && (
+                  <button
+                    type="button"
+                    aria-label="Search"
+                    style={{
+                      width: "100%",
+                      minHeight: "44px",
+                      borderRadius: "14px",
+                      border: softBorder,
+                      background: iconButtonBg,
+                      color: textColor,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "10px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" style={iconStyle}>
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="M20 20L16.65 16.65" />
+                    </svg>
+                    <span
+                      style={{
+                        fontSize: "14px",
+                        fontWeight: 600,
+                        letterSpacing: "-0.01em",
+                      }}
+                    >
+                      Search
+                    </span>
+                  </button>
+                )}
+
+                {storefrontLinks.map((item) => (
+                  <NavLink
+                    key={`${item.label}-${item.route}`}
+                    to={toAppPath(base, item.route)}
+                    end={item.route === "/"}
+                    onClick={() => setMobileMenuOpen(false)}
+                    style={({ isActive }) => ({
+                      textDecoration: "none",
+                      width: "100%",
+                      padding: "12px 14px",
+                      borderRadius: "14px",
+                      fontSize: "14px",
+                      fontWeight: 650,
+                      letterSpacing: "-0.01em",
+                      color: isActive ? "#ffffff" : textColor,
+                      background: isActive ? accentColor : softSurface,
+                      border:
+                        variant === "transparent"
+                          ? "1px solid transparent"
+                          : softBorder,
+                      boxShadow: isActive
+                        ? light
+                          ? "0 8px 18px rgba(37,99,235,0.24)"
+                          : "0 8px 18px rgba(37,99,235,0.22)"
+                        : "none",
+                      transition: "all 180ms ease",
+                      lineHeight: 1.2,
+                      display: "flex",
+                      alignItems: "center",
+                    })}
+                  >
+                    {item.label}
+                  </NavLink>
+                ))}
+              </nav>
+            </div>
+          )}
         </div>
       </div>
     </header>
