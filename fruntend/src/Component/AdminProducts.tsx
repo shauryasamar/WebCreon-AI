@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
+import { API_BASE_URL} from "../config/api";
 
 type VariantValue = {
   value: string;
@@ -54,7 +55,6 @@ type FormErrors = Partial<
   Record<keyof ProductFormValues | "imagesText" | "optionValuesText" | "variantRows", string>
 >;
 
-const API_BASE_URL = "http://localhost:8000";
 
 const presetMap: Record<
   ProductVariantOption["optionType"],

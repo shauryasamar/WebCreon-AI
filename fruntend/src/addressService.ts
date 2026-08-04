@@ -1,3 +1,5 @@
+import { API_BASE_URL } from "./config/api";
+
 export type SavedAddress = {
   id: string;
   siteId: string;
@@ -24,8 +26,6 @@ export type SaveAddressPayload = {
   address_type: string;
   is_default?: boolean;
 };
-
-const API_BASE_URL = "http://localhost:8000";
 
 async function parseJsonResponse<T>(response: Response): Promise<T> {
   const data = await response.json().catch(() => null);

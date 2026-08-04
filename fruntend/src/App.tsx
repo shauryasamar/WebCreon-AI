@@ -15,6 +15,7 @@ import CustomerLoginPage from "./pages/CustomerLoginPage";
 import CustomerSignupPage from "./pages/CustomerSignupPage";
 import { CustomerAuthProvider } from "./context/CustomerAuthContext";
 import { CartProvider } from "./CartContext";
+import { API_BASE_URL } from "./config/api";
 
 type Block = {
   id: string;
@@ -70,7 +71,6 @@ type SavedSite = {
   updated_at: string;
 };
 
-const API_BASE_URL = "http://localhost:8000";
 
 function slugify(value: string) {
   return value

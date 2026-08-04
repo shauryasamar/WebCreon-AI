@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
+import { API_BASE_URL } from "../config/api";
+
 // This is for admin checkout settings
 type ChargeCode =
   | "shipping_fee"
@@ -40,7 +42,6 @@ type CheckoutSettingsResponse = {
   charges: ChargeRule[];
 };
 
-const API_BASE_URL = "http://localhost:8000";
 
 const createDefaultCharges = (): ChargeRule[] => [
   {

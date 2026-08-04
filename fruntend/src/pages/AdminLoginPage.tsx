@@ -1,7 +1,6 @@
 import { FormEvent, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-
-const API_BASE_URL = "http://localhost:8000";
+import { API_BASE_URL } from "../config/api";
 
 type AdminLoginResponse = {
   admin: {

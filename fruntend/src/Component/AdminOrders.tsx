@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-
+import { API_BASE_URL as API_BASE} from "../config/api";
 type AdminMode = "orders" | "returns";
 
 type OrderStatus =
@@ -271,10 +271,6 @@ type RefundDraft = {
   adminNote: string;
 };
 
-const API_BASE =
-  (import.meta as any)?.env?.VITE_API_BASE_URL ||
-  (window as any)?.ENV?.VITE_API_BASE_URL ||
-  "http://localhost:8000";
 
 const sectionCardStyle: React.CSSProperties = {
   borderRadius: "18px",

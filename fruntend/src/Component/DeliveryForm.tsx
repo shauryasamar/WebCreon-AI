@@ -203,6 +203,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
   isAuthenticated = false,
   isAddressesLoading = false,
 }) => {
+  console.log("DeliveryForm isAuthenticated:", isAuthenticated);
   const [addresses, setAddresses] = useState<DeliveryFormData[]>(savedAddresses);
   const [formMode, setFormMode] = useState<"hidden" | "add" | "edit">("hidden");
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
@@ -224,7 +225,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
 
 useEffect(() => {
   setAddresses(savedAddresses);
-
+  
   if (!isAuthenticated) {
     setFormMode("hidden");
     setEditingAddressId(null);

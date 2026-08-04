@@ -20,6 +20,7 @@ import EditorRenderPage from "./customizations/EditorRenderPage";
 import EditorSidebar, { EditorTab } from "./customizations/EditorSidebar";
 import { EditorSiteDefinition } from "./customizations/editorUtils";
 import CustomerOrdersPage from "./pages/CustomerOrdersPage";
+import { API_BASE_URL } from "./config/api";
 
 type Block = {
   id: string;
@@ -70,7 +71,6 @@ const BUILDER_TOPBAR_HEIGHT = 64;
 const EDITOR_SIDEBAR_WIDTH = 320;
 const FIXED_NAVBAR_CONTENT_OFFSET = 96;
 const FIXED_NAVBAR_Z_INDEX = 240;
-const API_BASE_URL = "http://localhost:8000";
 
 function normalizeRoute(route?: string | null) {
   if (!route || route === "/") return "";

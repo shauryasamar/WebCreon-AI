@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { API_BASE_URL } from "../config/api";
 
 type ThemeInput =
   | "dark"
@@ -59,17 +60,6 @@ function isErrorResponse(data: unknown): data is ErrorResponse {
   return typeof data === "object" && data !== null && "detail" in data;
 }
 
-function getApiBaseUrl(): string {
-  const envBaseUrl =
-    (import.meta as any)?.env?.VITE_API_BASE_URL ||
-    (window as any)?.__API_BASE_URL__;
-
-  if (typeof envBaseUrl === "string" && envBaseUrl.trim()) {
-    return envBaseUrl.replace(/\/+$/, "");
-  }
-
-  return "http://localhost:8000";
-}
 
 export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
   siteId,
@@ -151,7 +141,7 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
       setIsSubmitting(true);
       setErrorMessage("");
 
-      const response = await fetch(`${getApiBaseUrl()}/orders/${siteId}/place`, {
+      const response = await fetch(`${API_BASE_URL}/orders/${siteId}/place`, {
         method: "POST",
         credentials: "include",
         headers: {

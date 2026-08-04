@@ -15,6 +15,8 @@ export type ProductVariantValue = {
   comparePrice?: number | null;
 };
 
+import { API_BASE_URL } from "./config/api";
+
 export type ProductVariantOption = {
   optionType?:
     | "size"
@@ -112,10 +114,6 @@ const getSelectedVariantValue = (product: Product) =>
   product.variant_option?.optionValues?.[0]?.value ??
   null;
 
-const getBaseUrl = () =>
-  (import.meta as any)?.env?.VITE_API_BASE_URL?.replace(/\/$/, "") ||
-  "http://localhost:8000";
-
 const mapBackendCartItemToCartItem = (item: BackendCartItem): CartItem => ({
   id: item.product_id,
   name: item.product_name,
@@ -200,7 +198,7 @@ export function CartProvider({
 
     setIsCartLoading(true);
     try {
-      const res = await fetch(`${getBaseUrl()}/cart/${resolvedSiteId}`, {
+      const res = await fetch(`${API_BASE_URL}/cart/${resolvedSiteId}`, {
         method: "GET",
         credentials: "include",
       });
@@ -236,7 +234,7 @@ export function CartProvider({
       const safeQuantity = Math.max(1, quantity);
 
       try {
-        const res = await fetch(`${getBaseUrl()}/cart/${resolvedSiteId}/items`, {
+        const res = await fetch(`${API_BASE_URL}/cart/${resolvedSiteId}/items`, {
           method: "POST",
           credentials: "include",
           headers: {
@@ -340,7 +338,7 @@ export function CartProvider({
 
       try {
         const res = await fetch(
-          `${getBaseUrl()}/cart/${resolvedSiteId}/items/${itemId}`,
+          `${API_BASE_URL}/cart/${resolvedSiteId}/items/${itemId}`,
           {
             method: "DELETE",
             credentials: "include",
@@ -405,7 +403,7 @@ export function CartProvider({
 
       try {
         const res = await fetch(
-          `${getBaseUrl()}/cart/${resolvedSiteId}/items/${itemId}`,
+          `${API_BASE_URL}/cart/${resolvedSiteId}/items/${itemId}`,
           {
             method: "PUT",
             credentials: "include",
@@ -446,7 +444,7 @@ export function CartProvider({
     if (!resolvedSiteId) return;
 
     try {
-      const res = await fetch(`${getBaseUrl()}/cart/${resolvedSiteId}/clear`, {
+      const res = await fetch(`${API_BASE_URL}/cart/${resolvedSiteId}/clear`, {
         method: "DELETE",
         credentials: "include",
       });

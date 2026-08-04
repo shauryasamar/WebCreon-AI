@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useCart } from "../CartContext";
+import { API_BASE_URL } from "../config/api";
 
 type CartTheme = {
   name?: string;
@@ -274,9 +275,9 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
         let url = "";
 
         if (siteId) {
-          url = `http://localhost:8000/sites/${siteId}/checkout-settings`;
+          url = `${API_BASE_URL}/sites/${siteId}/checkout-settings`;
         } else if (slug) {
-          url = `http://localhost:8000/store/${slug}/checkout-settings`;
+          url = `${API_BASE_URL}/store/${slug}/checkout-settings`;
         } else {
           return;
         }
