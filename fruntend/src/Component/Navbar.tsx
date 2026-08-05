@@ -95,6 +95,17 @@ const toAppPath = (base: string, route?: string) => {
 };
 
 
+/**
+ * IMPORTANT: When `fixedBounds` is provided, it means the navbar is being
+ * rendered inside the admin builder preview, and its nearest scrolling
+ * ancestor (the preview pane in BuilderShell.tsx) has been given a real
+ * CSS containing block via `transform: translateZ(0)`. That means
+ * `position: fixed` here resolves against that preview pane's box, NOT
+ * the browser viewport, and is genuinely clipped by that pane's
+ * `overflow: hidden`. Because of that, we no longer need (or want) to
+ * compute pixel-perfect left/width via getBoundingClientRect — the
+ * navbar can simply fill 100% of its containing block.
+ */
 const getNavbarPositionStyle = (
   position: NavbarPosition,
   topOffset: number,
@@ -104,26 +115,30 @@ const getNavbarPositionStyle = (
     return { position: "relative", zIndex: 20 };
   }
 
+
   if (position === "fixed") {
-    if (fixedBounds && fixedBounds.width > 0) {
+    if (fixedBounds) {
       return {
         position: "fixed",
-        top: `${topOffset}px`,
-        left: `${fixedBounds.left}px`,
-        width: `${fixedBounds.width}px`,
-        right: "auto",
+        top: 0,
+        left: 0,
+        right: 0,
+        width: "100%",
         zIndex: 240,
       };
     }
+
 
     return {
       position: "fixed",
       top: `${topOffset}px`,
       left: 0,
-      right: 0,
+      width: "100vw",
+      right: "auto",
       zIndex: 240,
     };
   }
+
 
   return { position: "sticky", top: `${topOffset}px`, zIndex: 40 };
 };
@@ -137,13 +152,16 @@ const useViewportMode = (): ViewportMode => {
     return "desktop";
   };
 
+
   const [mode, setMode] = useState<ViewportMode>(getMode);
+
 
   useEffect(() => {
     const handleResize = () => setMode(getMode());
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
 
   return mode;
 };
@@ -170,10 +188,11 @@ const Navbar: React.FC<NavbarProps> = ({
   const { siteId, slug } = useParams<{ siteId?: string; slug?: string }>();
   const { isAuthenticated, refreshMe, clearUser, logout } = useCustomerAuth();
 
+
   const viewportMode = useViewportMode();
   const isMobile = viewportMode === "mobile";
-  const isTablet = viewportMode === "tablet";
   const isCompact = isMobile;
+
 
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -181,12 +200,13 @@ const Navbar: React.FC<NavbarProps> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [searchActive, setSearchActive] = useState(false);
 
+
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const accountButtonRef = useRef<HTMLButtonElement | null>(null);
   const mobileMenuRef = useRef<HTMLDivElement | null>(null);
   const mobileMenuButtonRef = useRef<HTMLButtonElement | null>(null);
   const mobileSearchInputRef = useRef<HTMLInputElement | null>(null);
-  const navbarRef = useRef<HTMLElement | null>(null);
+
 
   const base =
     appBase ||
@@ -194,36 +214,36 @@ const Navbar: React.FC<NavbarProps> = ({
       ? `/store/${siteSlug || slug || ""}`
       : `/builder/${siteId ?? ""}`);
 
+
   const light = isLightTheme(theme);
   const variant = theme?.navbar_variant || "soft";
-  const position: NavbarPosition = theme?.navbar_position || "sticky";
+  const position: NavbarPosition = theme?.navbar_position || "fixed";
+  const isBuilderAdminRoute =
+    location.pathname.startsWith("/builder/") && location.pathname.includes("/admin");
+  const isStoreRoute = location.pathname.startsWith("/store/");
+
 
   const resolvedHomePath = toAppPath(base, homeRoute);
   const resolvedCartPath = toAppPath(base, cartRoute);
 
+
   const accentColor = theme?.accent_color || "#2563eb";
   const primaryBg = theme?.primary_bg || (light ? "#f8fafc" : "#020617");
 
-  const storefrontLinks =
-    navigation?.storefront && navigation.storefront.length > 0
-      ? navigation.storefront
-      : [];
 
   const defaultTextColor = theme?.text_color || (light ? "#0f172a" : "#f8fafc");
   const textColor = theme?.navbar_text_color || defaultTextColor;
-
-  const defaultMutedText = light
-    ? "rgba(15,23,42,0.64)"
-    : "rgba(255,255,255,0.68)";
+  const defaultMutedText = light ? "rgba(15,23,42,0.64)" : "rgba(255,255,255,0.68)";
   const mutedText = theme?.navbar_muted_text_color || defaultMutedText;
+
 
   const defaultOuterBorder = light
     ? "1px solid rgba(15,23,42,0.06)"
     : "1px solid rgba(255,255,255,0.05)";
-
   const defaultShellBorder = light
     ? "1px solid rgba(15,23,42,0.08)"
     : "1px solid rgba(255,255,255,0.08)";
+
 
   const navbarHeight = theme?.navbar_height ?? 72;
   const navbarMaxWidth = theme?.navbar_max_width ?? 1280;
@@ -231,16 +251,20 @@ const Navbar: React.FC<NavbarProps> = ({
   const navbarPaddingX = theme?.navbar_padding_x;
   const navbarPaddingY = theme?.navbar_padding_y;
 
+
   const hasCustomNavbarBg = Boolean(theme?.navbar_bg);
   const hasCustomNavbarBorder = Boolean(theme?.navbar_border_color);
+
 
   const darkOuterSurface = "#081226";
   const darkShellSurface = hasCustomNavbarBg ? theme!.navbar_bg! : "#0f172a";
   const darkSoftSurface = "rgba(255,255,255,0.06)";
 
+
   const lightOuterSurface = primaryBg;
   const lightShellSurface = hasCustomNavbarBg ? theme!.navbar_bg! : "#ffffff";
   const lightSoftSurface = "rgba(15,23,42,0.04)";
+
 
   let outerBackground = light ? lightOuterSurface : darkOuterSurface;
   let shellBg = light ? lightShellSurface : darkShellSurface;
@@ -251,6 +275,7 @@ const Navbar: React.FC<NavbarProps> = ({
   let wrapperPadding = "14px 16px";
   let shellPadding = "12px 14px";
 
+
   if (variant === "solid") {
     outerBackground = light ? lightShellSurface : darkShellSurface;
     shellBg = "transparent";
@@ -259,6 +284,7 @@ const Navbar: React.FC<NavbarProps> = ({
     wrapperPadding = "0";
     shellPadding = "14px 16px";
   }
+
 
   if (variant === "floating") {
     outerBackground =
@@ -276,6 +302,7 @@ const Navbar: React.FC<NavbarProps> = ({
     shellPadding = "12px 14px";
   }
 
+
   if (variant === "transparent") {
     outerBackground = "transparent";
     shellBg = "transparent";
@@ -285,18 +312,20 @@ const Navbar: React.FC<NavbarProps> = ({
     shellPadding = "10px 0";
   }
 
+
   if (variant === "soft") {
     outerBackground = light ? lightOuterSurface : darkOuterSurface;
     shellBg = light ? lightShellSurface : darkShellSurface;
   }
 
+
   const outerBorder = hasCustomNavbarBorder
     ? `1px solid ${theme!.navbar_border_color!}`
     : defaultOuterBorder;
-
   const shellBorder = hasCustomNavbarBorder
     ? `1px solid ${theme!.navbar_border_color!}`
     : defaultShellBorder;
+
 
   const softSurface =
     variant === "transparent"
@@ -304,32 +333,25 @@ const Navbar: React.FC<NavbarProps> = ({
       : light
       ? lightSoftSurface
       : darkSoftSurface;
-
   const softBorder = hasCustomNavbarBorder
     ? `1px solid ${theme!.navbar_border_color!}`
     : light
     ? "1px solid rgba(15,23,42,0.07)"
     : "1px solid rgba(255,255,255,0.08)";
-
   const iconButtonBg = softSurface;
+
 
   const resolvedWrapperPadding =
     navbarPaddingY !== undefined || navbarPaddingX !== undefined
       ? `${navbarPaddingY ?? 14}px ${navbarPaddingX ?? 16}px`
       : wrapperPadding;
 
+
   const resolvedShellPadding =
     navbarPaddingY !== undefined || navbarPaddingX !== undefined
-      ? `${Math.max(8, navbarPaddingY ?? 12)}px ${Math.max(
-          10,
-          navbarPaddingX ?? 14
-        )}px`
+      ? `${Math.max(8, navbarPaddingY ?? 12)}px ${Math.max(10, navbarPaddingX ?? 14)}px`
       : shellPadding;
 
-  const isBuilderAdminRoute =
-    location.pathname.startsWith("/builder/") && location.pathname.includes("/admin");
-
-  const isStoreRoute = location.pathname.startsWith("/store/");
 
   const mobileMenuButtonStyle: React.CSSProperties = useMemo(
     () => ({
@@ -353,6 +375,7 @@ const Navbar: React.FC<NavbarProps> = ({
     [softBorder, mobileMenuOpen, light, iconButtonBg, textColor]
   );
 
+
   useEffect(() => {
     if (!siteSlug) return;
     if (isBuilderAdminRoute) {
@@ -361,19 +384,14 @@ const Navbar: React.FC<NavbarProps> = ({
     }
     if (!isStoreRoute && !location.pathname.startsWith("/builder/")) return;
     refreshMe(siteSlug);
-  }, [
-    siteSlug,
-    location.pathname,
-    refreshMe,
-    isBuilderAdminRoute,
-    isStoreRoute,
-    clearUser,
-  ]);
+  }, [siteSlug, location.pathname, refreshMe, isBuilderAdminRoute, isStoreRoute, clearUser]);
+
 
   useEffect(() => {
     setAccountMenuOpen(false);
     setMobileMenuOpen(false);
   }, [location.pathname]);
+
 
   useEffect(() => {
     if (!isCompact) {
@@ -382,28 +400,31 @@ const Navbar: React.FC<NavbarProps> = ({
     }
   }, [isCompact]);
 
+
   useEffect(() => {
     if (mobileSearchOpen && mobileSearchInputRef.current) {
       mobileSearchInputRef.current.focus();
     }
   }, [mobileSearchOpen]);
 
+
   useEffect(() => {
     if (!accountMenuOpen && !mobileMenuOpen) return;
+
 
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
       const clickedAccount =
-        accountMenuRef.current?.contains(target) ||
-        accountButtonRef.current?.contains(target);
+        accountMenuRef.current?.contains(target) || accountButtonRef.current?.contains(target);
       const clickedMobileMenu =
-        mobileMenuRef.current?.contains(target) ||
-        mobileMenuButtonRef.current?.contains(target);
+        mobileMenuRef.current?.contains(target) || mobileMenuButtonRef.current?.contains(target);
+
 
       if (clickedAccount || clickedMobileMenu) return;
       setAccountMenuOpen(false);
       setMobileMenuOpen(false);
     };
+
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -414,6 +435,7 @@ const Navbar: React.FC<NavbarProps> = ({
       }
     };
 
+
     document.addEventListener("mousedown", handlePointerDown);
     document.addEventListener("keydown", handleEscape);
     return () => {
@@ -421,6 +443,7 @@ const Navbar: React.FC<NavbarProps> = ({
       document.removeEventListener("keydown", handleEscape);
     };
   }, [accountMenuOpen, mobileMenuOpen]);
+
 
   useEffect(() => {
     if (!mobileSearchOpen) return;
@@ -431,40 +454,39 @@ const Navbar: React.FC<NavbarProps> = ({
     return () => window.removeEventListener("scroll", onScroll);
   }, [mobileSearchOpen]);
 
+
   const closeAccountMenu = () => setAccountMenuOpen(false);
+
 
   const handleAccountClick = () => {
     if (isBuilderAdminRoute) {
       closeAccountMenu();
       return;
     }
-
     if (!siteSlug) return;
-
     if (isAuthenticated) {
       setAccountMenuOpen((prev) => !prev);
       return;
     }
-
     const storePrefix = `/store/${siteSlug}`;
-    const safeFrom = location.pathname.startsWith(storePrefix)
-      ? location.pathname
-      : storePrefix;
-
+    const safeFrom = location.pathname.startsWith(storePrefix) ? location.pathname : storePrefix;
     navigate(`/store/${siteSlug}/login`, {
       state: { from: safeFrom },
     });
   };
+
 
   const handleGoToProfile = () => {
     closeAccountMenu();
     navigate(isBuilderAdminRoute ? `${base}/admin/profile` : `${base}/profile`);
   };
 
+
   const handleGoToOrders = () => {
     closeAccountMenu();
     navigate(isBuilderAdminRoute ? `${base}/admin/orders` : `${base}/orders`);
   };
+
 
   const handleCustomerLogout = async () => {
     try {
@@ -477,9 +499,11 @@ const Navbar: React.FC<NavbarProps> = ({
     }
   };
 
+
   const handleDummyNotification = () => {
     window.console.log("Notification clicked");
   };
+
 
   const openMobileSearch = () => {
     setMobileMenuOpen(false);
@@ -487,10 +511,12 @@ const Navbar: React.FC<NavbarProps> = ({
     setSearchActive(true);
   };
 
+
   const closeSearch = () => {
     setSearchActive(false);
     setMobileSearchOpen(false);
   };
+
 
   const menuItemStyle: React.CSSProperties = {
     width: "100%",
@@ -511,6 +537,7 @@ const Navbar: React.FC<NavbarProps> = ({
     transition: "background 160ms ease, border-color 160ms ease, transform 160ms ease",
   };
 
+
   const dropdownPanelStyle: React.CSSProperties = {
     position: "absolute",
     top: "calc(100% + 12px)",
@@ -529,6 +556,7 @@ const Navbar: React.FC<NavbarProps> = ({
     zIndex: 400,
   };
 
+
   const menuRowIconStyle: React.CSSProperties = {
     width: "32px",
     height: "32px",
@@ -542,6 +570,7 @@ const Navbar: React.FC<NavbarProps> = ({
     flexShrink: 0,
   };
 
+
   const menuMetaTextStyle: React.CSSProperties = {
     fontSize: "11px",
     color: mutedText,
@@ -549,12 +578,14 @@ const Navbar: React.FC<NavbarProps> = ({
     letterSpacing: "0.01em",
   };
 
+
   const menuArrowStyle: React.CSSProperties = {
     color: light ? "rgba(15,23,42,0.32)" : "rgba(255,255,255,0.32)",
     fontSize: "14px",
     lineHeight: 1,
     flexShrink: 0,
   };
+
 
   const leftIconBtnBase: React.CSSProperties = {
     width: "42px",
@@ -571,6 +602,7 @@ const Navbar: React.FC<NavbarProps> = ({
     position: "relative",
   };
 
+
   const searchWrapStyle: React.CSSProperties = {
     width: "100%",
     minWidth: 0,
@@ -579,13 +611,12 @@ const Navbar: React.FC<NavbarProps> = ({
     borderRadius: "999px",
     border: softBorder,
     background: light ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.05)",
-    boxShadow: light
-      ? "0 10px 24px rgba(15,23,42,0.08)"
-      : "0 10px 24px rgba(0,0,0,0.18)",
+    boxShadow: light ? "0 10px 24px rgba(15,23,42,0.08)" : "0 10px 24px rgba(0,0,0,0.18)",
     overflow: "hidden",
     flex: "1 1 260px",
     maxWidth: isMobile ? "100%" : "min(100%, 440px)",
   };
+
 
   const mobileMenuPanelStyle: React.CSSProperties = {
     display: "flex",
@@ -593,8 +624,14 @@ const Navbar: React.FC<NavbarProps> = ({
     gap: "10px",
     width: "100%",
     paddingTop: "8px",
-    borderTop: variant === "transparent" ? "none" : light ? "1px solid rgba(15,23,42,0.08)" : "1px solid rgba(255,255,255,0.08)",
+    borderTop:
+      variant === "transparent"
+        ? "none"
+        : light
+        ? "1px solid rgba(15,23,42,0.08)"
+        : "1px solid rgba(255,255,255,0.08)",
   };
+
 
   const mobileHeaderStyle: React.CSSProperties = {
     display: "flex",
@@ -602,6 +639,7 @@ const Navbar: React.FC<NavbarProps> = ({
     gap: "10px",
     width: "100%",
   };
+
 
   const mobileTopRowStyle: React.CSSProperties = {
     display: "flex",
@@ -611,6 +649,7 @@ const Navbar: React.FC<NavbarProps> = ({
     width: "100%",
   };
 
+
   const mobileBrandRowStyle: React.CSSProperties = {
     display: "flex",
     alignItems: "center",
@@ -618,6 +657,7 @@ const Navbar: React.FC<NavbarProps> = ({
     minWidth: 0,
     flex: "1 1 auto",
   };
+
 
   const desktopMainRowStyle: React.CSSProperties = {
     display: "flex",
@@ -627,6 +667,7 @@ const Navbar: React.FC<NavbarProps> = ({
     width: "100%",
     flexWrap: "nowrap",
   };
+
 
   const mobilePanelMenu = (
     <div ref={mobileMenuRef} style={mobileMenuPanelStyle}>
@@ -656,6 +697,7 @@ const Navbar: React.FC<NavbarProps> = ({
         </span>
       </button>
 
+
       <button
         type="button"
         onClick={handleDummyNotification}
@@ -681,6 +723,7 @@ const Navbar: React.FC<NavbarProps> = ({
           Notifications
         </span>
       </button>
+
 
       {showAccount ? (
         isAuthenticated ? (
@@ -711,6 +754,7 @@ const Navbar: React.FC<NavbarProps> = ({
               </span>
             </button>
 
+
             <button
               type="button"
               onClick={handleGoToOrders}
@@ -738,6 +782,7 @@ const Navbar: React.FC<NavbarProps> = ({
                 Order history
               </span>
             </button>
+
 
             <button
               type="button"
@@ -797,6 +842,7 @@ const Navbar: React.FC<NavbarProps> = ({
     </div>
   );
 
+
   useEffect(() => {
     if (!searchActive) return;
     const onScroll = () => {
@@ -806,9 +852,9 @@ const Navbar: React.FC<NavbarProps> = ({
     return () => window.removeEventListener("scroll", onScroll);
   }, [searchActive]);
 
+
   return (
     <header
-      ref={navbarRef}
       id="storefront-navbar"
       className={`storefront-navbar storefront-navbar--${position}`}
       data-navbar-position={position}
@@ -822,9 +868,10 @@ const Navbar: React.FC<NavbarProps> = ({
     >
       <div
         style={{
-          maxWidth: `${navbarMaxWidth}px`,
-          margin: "0 auto",
           width: "100%",
+          minWidth: 0,
+          maxWidth: `${navbarMaxWidth}px`,
+          margin: position === "fixed" && fixedBounds ? "0" : "0 auto",
         }}
       >
         <div
@@ -837,6 +884,7 @@ const Navbar: React.FC<NavbarProps> = ({
             minHeight: `${navbarHeight}px`,
             width: "100%",
             boxSizing: "border-box",
+            minWidth: 0,
           }}
         >
           {isMobile ? (
@@ -912,6 +960,7 @@ const Navbar: React.FC<NavbarProps> = ({
                     </div>
                   </button>
 
+
                   {searchActive ? (
                     <div style={{ display: "flex", alignItems: "center", flex: 1, gap: "8px" }}>
                       <input
@@ -971,6 +1020,7 @@ const Navbar: React.FC<NavbarProps> = ({
                   ) : null}
                 </div>
 
+
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   {showCart && (
                     <button
@@ -984,7 +1034,6 @@ const Navbar: React.FC<NavbarProps> = ({
                         <circle cx="17" cy="20" r="1.5" />
                         <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
                       </svg>
-
                       {cartCount > 0 && (
                         <span
                           style={{
@@ -1010,6 +1059,7 @@ const Navbar: React.FC<NavbarProps> = ({
                       )}
                     </button>
                   )}
+
 
                   <button
                     ref={mobileMenuButtonRef}
@@ -1039,7 +1089,6 @@ const Navbar: React.FC<NavbarProps> = ({
                   </button>
                 </div>
               </div>
-
               {!searchActive && mobileMenuOpen ? mobilePanelMenu : null}
             </div>
           ) : (
@@ -1089,7 +1138,6 @@ const Navbar: React.FC<NavbarProps> = ({
                   >
                     {getInitials(brandName)}
                   </div>
-
                   <div style={{ textAlign: "left", minWidth: 0, overflow: "hidden" }}>
                     <div
                       style={{
@@ -1105,7 +1153,6 @@ const Navbar: React.FC<NavbarProps> = ({
                     >
                       {brandName}
                     </div>
-
                     {tagline ? (
                       <div
                         style={{
@@ -1122,6 +1169,7 @@ const Navbar: React.FC<NavbarProps> = ({
                     ) : null}
                   </div>
                 </button>
+
 
                 {showSearch && (
                   <div style={{ ...searchWrapStyle, flex: "1 1 260px" }}>
@@ -1152,7 +1200,6 @@ const Navbar: React.FC<NavbarProps> = ({
                         }}
                       />
                     </div>
-
                     <button
                       type="button"
                       aria-label="Search"
@@ -1184,6 +1231,7 @@ const Navbar: React.FC<NavbarProps> = ({
                 )}
               </div>
 
+
               <div
                 style={{
                   display: "flex",
@@ -1205,7 +1253,6 @@ const Navbar: React.FC<NavbarProps> = ({
                       <circle cx="17" cy="20" r="1.5" />
                       <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
                     </svg>
-
                     {cartCount > 0 && (
                       <span
                         style={{
@@ -1232,6 +1279,7 @@ const Navbar: React.FC<NavbarProps> = ({
                   </button>
                 )}
 
+
                 <button
                   type="button"
                   aria-label="Notifications"
@@ -1243,6 +1291,7 @@ const Navbar: React.FC<NavbarProps> = ({
                     <path d="M10 17a2 2 0 0 0 4 0" />
                   </svg>
                 </button>
+
 
                 {showAccount && (
                   <div ref={accountMenuRef} style={{ position: "relative" }}>
@@ -1260,6 +1309,7 @@ const Navbar: React.FC<NavbarProps> = ({
                         <circle cx="12" cy="8" r="4" />
                       </svg>
                     </button>
+
 
                     {isAuthenticated && accountMenuOpen && (
                       <div role="menu" aria-label="Account options" style={dropdownPanelStyle}>
@@ -1284,7 +1334,6 @@ const Navbar: React.FC<NavbarProps> = ({
                           >
                             Account
                           </div>
-
                           <div
                             style={{
                               fontSize: "14px",
@@ -1295,11 +1344,9 @@ const Navbar: React.FC<NavbarProps> = ({
                           >
                             {brandName}
                           </div>
-
-                          <div style={menuMetaTextStyle}>
-                            Manage profile, orders, and session
-                          </div>
+                          <div style={menuMetaTextStyle}>Manage profile, orders, and session</div>
                         </div>
+
 
                         <button
                           type="button"
@@ -1321,6 +1368,7 @@ const Navbar: React.FC<NavbarProps> = ({
                           </div>
                           <span style={menuArrowStyle}>→</span>
                         </button>
+
 
                         <button
                           type="button"
@@ -1344,6 +1392,7 @@ const Navbar: React.FC<NavbarProps> = ({
                           </div>
                           <span style={menuArrowStyle}>→</span>
                         </button>
+
 
                         <div
                           style={{

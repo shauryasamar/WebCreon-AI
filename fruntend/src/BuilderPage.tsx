@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Link,
   Navigate,
@@ -21,6 +21,12 @@ import EditorSidebar, { EditorTab } from "./customizations/EditorSidebar";
 import { EditorSiteDefinition } from "./customizations/editorUtils";
 import CustomerOrdersPage from "./pages/CustomerOrdersPage";
 import { API_BASE_URL } from "./config/api";
+import BuilderShell from "./Component/BuilderShell";
+import BuilderTopControlBar from "./Component/BuilderTopControlBar";
+import BuilderControlPanel from "./Component/BuilderControlPanel";
+import QrLinkPopup from "./Component/QrLinkPopup";
+import BuilderDrawerPanel, { AdminNavKey } from "./Component/BuilderDrawerPanel";
+
 
 type Block = {
   id: string;
@@ -66,21 +72,24 @@ type SavedSite = {
   updated_at: string;
 };
 
+
 const NAVBAR_BLOCK_ID = "global-navbar";
 const BUILDER_TOPBAR_HEIGHT = 64;
-const EDITOR_SIDEBAR_WIDTH = 320;
-const FIXED_NAVBAR_CONTENT_OFFSET = 96;
 const FIXED_NAVBAR_Z_INDEX = 240;
+const FIXED_NAVBAR_CONTENT_OFFSET = 96;
+
 
 function normalizeRoute(route?: string | null) {
   if (!route || route === "/") return "";
   return route.replace(/^\/+/, "");
 }
 
+
 function toFullAppPath(appBase: string, route?: string | null) {
   const normalized = normalizeRoute(route);
   return normalized ? `${appBase}/${normalized}` : appBase;
 }
+
 
 function isProductDetailBlockType(type: string) {
   return [
@@ -95,6 +104,7 @@ function isProductDetailBlockType(type: string) {
   ].includes((type || "").toLowerCase());
 }
 
+
 function isProductDetailRoute(route?: string | null) {
   const normalized = normalizeRoute(route);
   return (
@@ -103,6 +113,7 @@ function isProductDetailRoute(route?: string | null) {
     normalized === "products/*"
   );
 }
+
 
 function getNavbarEditorProps(siteDefinition: SiteDefinition) {
   return {
@@ -118,6 +129,7 @@ function getNavbarEditorProps(siteDefinition: SiteDefinition) {
   };
 }
 
+
 function slugify(value: string) {
   return String(value || "")
     .toLowerCase()
@@ -127,10 +139,10 @@ function slugify(value: string) {
     .replace(/-{2,}/g, "-");
 }
 
+
 function normalizeStorefrontProduct(raw: any): Product {
   const attributes = raw?.attributes ?? {};
   const price = Number(raw?.price ?? 0);
-
   const comparePrice =
     raw?.compare_price != null
       ? Number(raw.compare_price)
@@ -141,13 +153,13 @@ function normalizeStorefrontProduct(raw: any): Product {
       : raw?.originalPrice != null
       ? Number(raw.originalPrice)
       : null;
-
   const images = Array.isArray(raw?.images)
-    ? raw.images.filter((img: unknown) => typeof img === "string" && img.trim() !== "")
+    ? raw.images.filter(
+        (img: unknown) => typeof img === "string" && img.trim() !== ""
+      )
     : raw?.image
     ? [raw.image]
     : [];
-
   const variantOption =
     raw?.variant_option ??
     raw?.variantOption ??
@@ -155,9 +167,8 @@ function normalizeStorefrontProduct(raw: any): Product {
       ? {
           optionType: "size",
           optionName: "Size",
-          optionValues: (Array.isArray(attributes?.sizes)
-            ? attributes.sizes
-            : raw?.sizes || []
+          optionValues: (
+            Array.isArray(attributes?.sizes) ? attributes.sizes : raw?.sizes || []
           ).map((size: string) => ({
             value: String(size),
             inStock: true,
@@ -165,22 +176,18 @@ function normalizeStorefrontProduct(raw: any): Product {
           })),
         }
       : null);
-
   const stock =
     raw?.stock != null && !Number.isNaN(Number(raw.stock))
       ? Number(raw.stock)
       : 0;
-
   const inStock =
     typeof raw?.in_stock === "boolean"
       ? raw.in_stock
       : typeof raw?.inStock === "boolean"
       ? raw.inStock
       : stock > 0;
-
   const originalPrice =
     comparePrice != null && comparePrice > 0 ? comparePrice : price;
-
   const discountPercent =
     raw?.discountPercent != null
       ? Number(raw.discountPercent)
@@ -189,6 +196,7 @@ function normalizeStorefrontProduct(raw: any): Product {
       : comparePrice != null && comparePrice > price
       ? Math.round(((comparePrice - price) / comparePrice) * 100)
       : 0;
+
 
   return {
     id: raw?.id != null ? String(raw.id) : slugify(raw?.name || ""),
@@ -225,11 +233,15 @@ function normalizeStorefrontProduct(raw: any): Product {
   };
 }
 
-async function resolveSiteBySlug(siteSlugParam: string): Promise<SavedSite | null> {
+
+async function resolveSiteBySlug(
+  siteSlugParam: string
+): Promise<SavedSite | null> {
   const publicCandidates = [
     `${API_BASE_URL}/public/sites/slug/${siteSlugParam}`,
     `${API_BASE_URL}/sites/slug/${siteSlugParam}`,
   ];
+
 
   for (const url of publicCandidates) {
     try {
@@ -237,9 +249,15 @@ async function resolveSiteBySlug(siteSlugParam: string): Promise<SavedSite | nul
         credentials: "include",
       });
 
+
       if (response.ok) {
         const data = await response.json();
-        if (data?.id || data?.slug || data?.site_definition || data?.draft_definition) {
+        if (
+          data?.id ||
+          data?.slug ||
+          data?.site_definition ||
+          data?.draft_definition
+        ) {
           return data as SavedSite;
         }
       }
@@ -248,12 +266,15 @@ async function resolveSiteBySlug(siteSlugParam: string): Promise<SavedSite | nul
     }
   }
 
+
   try {
     const adminResponse = await fetch(`${API_BASE_URL}/auth/admin/sites`, {
       credentials: "include",
     });
 
+
     if (!adminResponse.ok) return null;
+
 
     const sites: SavedSite[] = await adminResponse.json();
     return sites.find((site) => site.slug === siteSlugParam) ?? null;
@@ -262,6 +283,7 @@ async function resolveSiteBySlug(siteSlugParam: string): Promise<SavedSite | nul
     return null;
   }
 }
+
 
 function StorefrontShell({
   siteDefinition,
@@ -291,8 +313,15 @@ function StorefrontShell({
   const navbarProps = getNavbarEditorProps(siteDefinition);
   const navbarIsSelected = selectedBlockId === NAVBAR_BLOCK_ID;
 
+
   const contentTopOffset =
     storefrontNavbarMode === "fixed" ? FIXED_NAVBAR_CONTENT_OFFSET : 0;
+
+
+  const fixedNavbarTopOffset = adminTopbarVisible
+    ? BUILDER_TOPBAR_HEIGHT
+    : 0;
+
 
   return (
     <div
@@ -352,6 +381,7 @@ function StorefrontShell({
           navbar
         </div>
 
+
         <Navbar
           brandName={navbarProps.brandName}
           tagline={navbarProps.tagline}
@@ -363,12 +393,15 @@ function StorefrontShell({
           showSearch={navbarProps.showSearch}
           showAccount={navbarProps.showAccount}
           showCart={navbarProps.showCart}
-          topOffset={adminTopbarVisible ? BUILDER_TOPBAR_HEIGHT : 0}
-          fixedBounds={storefrontNavbarMode === "fixed" ? navbarFixedBounds : undefined}
+          topOffset={fixedNavbarTopOffset}
+          fixedBounds={
+            storefrontNavbarMode === "fixed" ? navbarFixedBounds : undefined
+          }
           siteSlug={siteSlug}
           appBase={appBase}
         />
       </div>
+
 
       <div
         style={{
@@ -381,10 +414,12 @@ function StorefrontShell({
         {children}
       </div>
 
+
       <Footer />
     </div>
   );
 }
+
 
 function StorefrontPage({
   page,
@@ -447,18 +482,23 @@ function StorefrontPage({
   );
 }
 
+
 function BuilderPageContent() {
   const params = useParams();
   const siteId = params.siteId;
   const siteSlugParam = params.slug;
   const productSlug = params.productSlug;
 
+
   const navigate = useNavigate();
   const location = useLocation();
   const { products } = useCart();
 
+
   const [resolvedSiteId, setResolvedSiteId] = useState("");
-  const [siteDefinition, setSiteDefinition] = useState<SiteDefinition | null>(null);
+  const [siteDefinition, setSiteDefinition] = useState<SiteDefinition | null>(
+    null
+  );
   const [draftSiteDefinition, setDraftSiteDefinition] =
     useState<SiteDefinition | null>(null);
   const [siteName, setSiteName] = useState("");
@@ -467,24 +507,59 @@ function BuilderPageContent() {
   const [adminAuthChecked, setAdminAuthChecked] = useState(false);
   const [adminAuthenticated, setAdminAuthenticated] = useState(false);
 
+
   const [editMode, setEditMode] = useState(false);
   const [editorTab, setEditorTab] = useState<EditorTab>("theme");
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
-  const [navbarFixedBounds, setNavbarFixedBounds] = useState<NavbarFixedBounds>();
+  const [navbarFixedBounds, setNavbarFixedBounds] =
+    useState<NavbarFixedBounds>();
+  const [controlPanelSelection, setControlPanelSelection] = useState<
+    | "saved-sites"
+    | "chat"
+    | "customize"
+    | "admin-panel"
+    | "assets"
+    | "settings"
+    | "qr-link"
+    | null
+  >(null);
+  const [qrOpen, setQrOpen] = useState(false);
+  const [activeDrawer, setActiveDrawer] = useState<
+    | "saved-sites"
+    | "chat"
+    | "customize"
+    | "admin-panel"
+    | "assets"
+    | "settings"
+    | "qr-link"
+    | null
+  >(null);
+  const [savedSites, setSavedSites] = useState<SavedSite[]>([]);
+  const [savedSitesLoading, setSavedSitesLoading] = useState(false);
+
 
   const previewPaneRef = useRef<HTMLDivElement | null>(null);
+
 
   const isStoreRoute = location.pathname.startsWith("/store/");
   const appBase = isStoreRoute
     ? `/store/${siteSlugParam ?? ""}`
     : `/builder/${resolvedSiteId || siteId || ""}`;
-
   const builderBase = `/builder/${resolvedSiteId || siteId || ""}`;
   const isAdminRoute =
     !isStoreRoute && location.pathname.startsWith(`${builderBase}/admin`);
 
-  const activeSiteDefinition = draftSiteDefinition || siteDefinition;
 
+  const activeAdminNavKey: AdminNavKey | null = isAdminRoute
+    ? location.pathname.includes("/checkout-charges")
+      ? "checkout-charges"
+      : location.pathname.includes("/orders")
+      ? "orders"
+      : "products"
+    : null;
+
+
+  const activeSiteDefinition = draftSiteDefinition || siteDefinition;
   const storefrontNavbarMode =
     (activeSiteDefinition?.theme?.navbar_position as
       | "static"
@@ -492,7 +567,9 @@ function BuilderPageContent() {
       | "fixed"
       | undefined) || "fixed";
 
-  const storefrontLoginPath = siteSlug ? `/store/${siteSlug}/login` : "#";
+
+  const showAdminTopbar = !isStoreRoute && adminAuthenticated;
+
 
   useEffect(() => {
     const checkAdminAuth = async () => {
@@ -502,13 +579,16 @@ function BuilderPageContent() {
         return;
       }
 
+
       try {
         const response = await fetch(`${API_BASE_URL}/auth/admin/me`, {
           credentials: "include",
         });
 
+
         if (!response.ok) {
           setAdminAuthenticated(false);
+
 
           if (isAdminRoute) {
             navigate("/admin/login", {
@@ -517,13 +597,16 @@ function BuilderPageContent() {
             });
           }
 
+
           return;
         }
+
 
         setAdminAuthenticated(true);
       } catch (error) {
         console.error("Failed to verify admin session:", error);
         setAdminAuthenticated(false);
+
 
         if (isAdminRoute) {
           navigate("/admin/login", {
@@ -536,53 +619,87 @@ function BuilderPageContent() {
       }
     };
 
+
     checkAdminAuth();
   }, [isAdminRoute, isStoreRoute, navigate, location.pathname]);
 
-  useLayoutEffect(() => {
-    const element = previewPaneRef.current;
-    if (!element) return;
 
-    const updateBounds = () => {
-      const rect = element.getBoundingClientRect();
-      setNavbarFixedBounds({
-        left: rect.left,
-        width: rect.width,
+  useEffect(() => {
+    setNavbarFixedBounds(showAdminTopbar ? { left: 0, width: 0 } : undefined);
+  }, [showAdminTopbar]);
+
+
+  const loadSavedSites = async () => {
+    if (isStoreRoute) return;
+    try {
+      setSavedSitesLoading(true);
+      const response = await fetch(`${API_BASE_URL}/auth/admin/sites`, {
+        credentials: "include",
       });
-    };
+      if (!response.ok) {
+        throw new Error(`Failed to load admin sites: ${response.status}`);
+      }
+      const data = await response.json();
+      setSavedSites(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error loading saved sites:", error);
+      setSavedSites([]);
+    } finally {
+      setSavedSitesLoading(false);
+    }
+  };
 
-    updateBounds();
 
-    const resizeObserver = new ResizeObserver(() => {
-      updateBounds();
-    });
+  useEffect(() => {
+    if (!showAdminTopbar) return;
+    loadSavedSites();
+  }, [showAdminTopbar]);
 
-    resizeObserver.observe(element);
-    window.addEventListener("resize", updateBounds);
-    window.addEventListener("scroll", updateBounds, true);
 
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener("resize", updateBounds);
-      window.removeEventListener("scroll", updateBounds, true);
-    };
-  }, [editMode, isAdminRoute, location.pathname]);
+  const handleDeleteSite = async (targetSiteId: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/sites/${targetSiteId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete site: ${response.status}`);
+      }
+
+
+      setSavedSites((prev) => prev.filter((site) => site.id !== targetSiteId));
+
+
+      if (targetSiteId === (resolvedSiteId || siteId)) {
+        navigate("/admin/sites", { replace: true });
+      }
+    } catch (error) {
+      console.error("Error deleting site:", error);
+    }
+  };
+
 
   const selectedProduct: Product | null = useMemo(() => {
     if (!productSlug) return null;
     if (!products.length) return null;
 
+
     const normalizedTarget = String(productSlug).trim().toLowerCase();
+
 
     const bySlug = products.find(
       (p) => String(p.slug || "").trim().toLowerCase() === normalizedTarget
     );
     if (bySlug) return bySlug;
 
+
     const byId = products.find(
       (p) => String(p.id || "").trim().toLowerCase() === normalizedTarget
     );
     if (byId) return byId;
+
 
     const byNameSlug = products.find(
       (p) => slugify(String(p.name || "")) === normalizedTarget
@@ -590,25 +707,31 @@ function BuilderPageContent() {
     return byNameSlug ?? null;
   }, [productSlug, products]);
 
+
   useEffect(() => {
     const loadSite = async () => {
       try {
         setLoading(true);
 
+
         let data: SavedSite | null = null;
+
 
         if (siteId) {
           const response = await fetch(`${API_BASE_URL}/sites/${siteId}`, {
             credentials: "include",
           });
 
+
           if (!response.ok) {
             throw new Error(`Failed to load site: ${response.status}`);
           }
 
+
           data = (await response.json()) as SavedSite;
         } else if (siteSlugParam) {
           data = await resolveSiteBySlug(siteSlugParam);
+
 
           if (!data?.id) {
             throw new Error("Site not found for slug");
@@ -617,11 +740,14 @@ function BuilderPageContent() {
           throw new Error("Missing site identifier");
         }
 
+
         const parsedSiteDefinition: SiteDefinition =
           data.draft_definition || data.site_definition;
 
+
         setResolvedSiteId(data.id || "");
         setSiteSlug(data.slug || "");
+
 
         if (!parsedSiteDefinition) {
           setSiteDefinition(null);
@@ -630,23 +756,41 @@ function BuilderPageContent() {
           return;
         }
 
+
         setSiteDefinition(parsedSiteDefinition);
         setDraftSiteDefinition(parsedSiteDefinition);
-        setSiteName(parsedSiteDefinition.site?.brand_name || data.slug || "Website");
+        setSiteName(
+          parsedSiteDefinition.site?.brand_name || data.slug || "Website"
+        );
+
+
+        const freshAppBase = isStoreRoute
+          ? `/store/${siteSlugParam ?? ""}`
+          : `/builder/${data.id || siteId || ""}`;
+        const freshBuilderBase = `/builder/${data.id || siteId || ""}`;
+
 
         if (parsedSiteDefinition.pages?.length > 0) {
           const currentPath = window.location.pathname;
 
+
           const staticPageRoutes = parsedSiteDefinition.pages.map((page) =>
-            toFullAppPath(appBase, page.route)
+            toFullAppPath(freshAppBase, page.route)
           );
-
           const isKnownStaticRoute = staticPageRoutes.includes(currentPath);
-          const isDynamicProductRoute = currentPath.startsWith(`${appBase}/products/`);
-          const isOrdersRoute = currentPath === `${appBase}/orders`;
-          const isAdminPath = !isStoreRoute && currentPath.startsWith(`${builderBase}/admin`);
+          const isDynamicProductRoute =
+            currentPath.startsWith(`${freshAppBase}/products/`);
+          const isOrdersRoute = currentPath === `${freshAppBase}/orders`;
+          const isAdminPath =
+            !isStoreRoute && currentPath.startsWith(`${freshBuilderBase}/admin`);
 
-          if (!isKnownStaticRoute && !isDynamicProductRoute && !isOrdersRoute && !isAdminPath) {
+
+          if (
+            !isKnownStaticRoute &&
+            !isDynamicProductRoute &&
+            !isOrdersRoute &&
+            !isAdminPath
+          ) {
             const homePage =
               parsedSiteDefinition.pages.find(
                 (page) =>
@@ -655,7 +799,8 @@ function BuilderPageContent() {
                   page.role === "home"
               ) || parsedSiteDefinition.pages[0];
 
-            navigate(toFullAppPath(appBase, homePage.route), {
+
+            navigate(toFullAppPath(freshAppBase, homePage.route), {
               replace: true,
             });
           }
@@ -669,15 +814,18 @@ function BuilderPageContent() {
       }
     };
 
+
     if (siteId || siteSlugParam) {
       loadSite();
     }
-  }, [siteId, siteSlugParam, navigate, appBase, builderBase, isStoreRoute]);
+  }, [siteId, siteSlugParam, navigate, isStoreRoute]);
+
 
   const storefrontHomePath = useMemo(() => {
     if (!activeSiteDefinition || activeSiteDefinition.pages.length === 0) {
       return appBase;
     }
+
 
     const homePage =
       activeSiteDefinition.pages.find(
@@ -685,18 +833,23 @@ function BuilderPageContent() {
           page.route === "/" || page.route === "" || page.role === "home"
       ) || activeSiteDefinition.pages[0];
 
+
     return toFullAppPath(appBase, homePage.route);
   }, [activeSiteDefinition, appBase]);
 
+
   const productDetailPage = useMemo(() => {
     if (!activeSiteDefinition) return null;
+
 
     const exactProductPage = activeSiteDefinition.pages.find((page) => {
       if (isProductDetailRoute(page.route)) return true;
       return page.blocks.some((block) => isProductDetailBlockType(block.type));
     });
 
+
     if (exactProductPage) return exactProductPage;
+
 
     return {
       id: "fallback-product-detail",
@@ -713,11 +866,24 @@ function BuilderPageContent() {
     } as Page;
   }, [activeSiteDefinition]);
 
+
+  /**
+   * Note: this no longer bails out when `isAdminRoute` is true. Callers
+   * that need to leave an admin page (Products/Orders/Checkout Charges)
+   * call `navigate(storefrontHomePath)` immediately before this, and since
+   * `navigate()` doesn't update `location`/`isAdminRoute` synchronously,
+   * this function must still be allowed to set `editMode` in that same
+   * tick — otherwise Customize would never re-enable itself after
+   * visiting Store Control.
+   */
   const handleEnterEditMode = () => {
-    if (!adminAuthenticated || isAdminRoute || isStoreRoute) return;
+    if (!adminAuthenticated || isStoreRoute) return;
     setEditMode(true);
     setEditorTab("theme");
+    setControlPanelSelection("customize");
+    setActiveDrawer(null);
   };
+
 
   const handleCloseEditMode = () => {
     setEditMode(false);
@@ -725,11 +891,13 @@ function BuilderPageContent() {
     setEditorTab("theme");
   };
 
+
   const handleSelectBlock = (blockId: string) => {
     if (!editMode || !adminAuthenticated) return;
     setSelectedBlockId(blockId);
     setEditorTab("block");
   };
+
 
   const handleLogout = async () => {
     try {
@@ -745,8 +913,10 @@ function BuilderPageContent() {
     }
   };
 
-  const canEditStorefront = !isAdminRoute && !isStoreRoute && adminAuthenticated;
-  const showAdminTopbar = !isStoreRoute && adminAuthenticated;
+
+  const canEditStorefront =
+    !isAdminRoute && !isStoreRoute && adminAuthenticated;
+
 
   if (loading || !adminAuthChecked) {
     return (
@@ -763,9 +933,11 @@ function BuilderPageContent() {
     );
   }
 
+
   if (isAdminRoute && !adminAuthenticated) {
     return null;
   }
+
 
   if (!activeSiteDefinition) {
     return (
@@ -787,227 +959,268 @@ function BuilderPageContent() {
     );
   }
 
-  const pageBg =
-    activeSiteDefinition.theme?.mode === "light"
-      ? "#f8fafc"
-      : activeSiteDefinition.theme?.primary_bg || "#0f172a";
 
-  const textColor =
-    activeSiteDefinition.theme?.mode === "light"
-      ? "#111827"
-      : activeSiteDefinition.theme?.text_color || "#f9fafb";
+  const pageBg = isAdminRoute
+    ? "#ffffff"
+    : activeSiteDefinition.theme?.mode === "light"
+    ? "#f8fafc"
+    : activeSiteDefinition.theme?.primary_bg || "#0f172a";
+  const textColor = isAdminRoute
+    ? "#0f172a"
+    : activeSiteDefinition.theme?.mode === "light"
+    ? "#111827"
+    : activeSiteDefinition.theme?.text_color || "#f9fafb";
 
-  const accentColor = activeSiteDefinition.theme?.accent_color || "#2563eb";
 
-  const secondaryButtonStyle = {
-    padding: "9px 14px",
-    borderRadius: "10px",
-    background:
-      activeSiteDefinition.theme?.mode === "light"
-        ? "rgba(17,24,39,0.06)"
-        : "rgba(255,255,255,0.08)",
-    color: textColor,
-    textDecoration: "none" as const,
-    fontSize: "14px",
-    fontWeight: 600,
-    border: "none",
-    cursor: "pointer",
-  };
+  const topBar = showAdminTopbar ? (
+    <BuilderTopControlBar
+      siteName={siteName}
+      onGoDashboard={() => navigate("/admin/sites")}
+      onLogout={handleLogout}
+      userName={undefined}
+      userEmail={undefined}
+      avatarUrl={undefined}
+    />
+  ) : null;
 
-  const outlineButtonStyle = {
-    padding: "9px 14px",
-    borderRadius: "10px",
-    border:
-      activeSiteDefinition.theme?.mode === "light"
-        ? "1px solid rgba(17,24,39,0.12)"
-        : "1px solid rgba(255,255,255,0.16)",
-    background: "transparent",
-    color: textColor,
-    cursor: "pointer",
-    fontSize: "14px",
-    fontWeight: 600,
-  };
 
-  return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: pageBg,
-        color: textColor,
-        overflow: "visible",
+  const leftPanel = showAdminTopbar ? (
+    <BuilderControlPanel
+      activeKey={controlPanelSelection as any}
+      onSelect={(key) => {
+        if (!showAdminTopbar) return;
+
+
+        if (key === "customize") {
+          if (editMode) {
+            handleCloseEditMode();
+            return;
+          }
+          if (isAdminRoute) {
+            navigate(storefrontHomePath);
+          }
+          setControlPanelSelection("customize");
+          handleEnterEditMode();
+          return;
+        }
+
+
+        if (key === "saved-sites") {
+          if (editMode) handleCloseEditMode();
+          setControlPanelSelection(key);
+          setActiveDrawer((prev) => (prev === "saved-sites" ? null : "saved-sites"));
+          return;
+        }
+
+
+        if (key === "admin-panel") {
+          if (editMode) handleCloseEditMode();
+          setControlPanelSelection(key);
+          setActiveDrawer((prev) => (prev === "admin-panel" ? null : "admin-panel"));
+          return;
+        }
+
+
+        if (key === "assets") {
+          if (editMode) handleCloseEditMode();
+          if (isAdminRoute) {
+            navigate(storefrontHomePath);
+          }
+          setControlPanelSelection(key);
+          setActiveDrawer((prev) => (prev === "assets" ? null : "assets"));
+          return;
+        }
+
+
+        if (key === "chat") {
+          if (editMode) handleCloseEditMode();
+          if (isAdminRoute) {
+            navigate(storefrontHomePath);
+          }
+          setControlPanelSelection(key);
+          setActiveDrawer((prev) => (prev === "chat" ? null : "chat"));
+          return;
+        }
+
+
+        if (key === "settings") {
+          if (editMode) handleCloseEditMode();
+          setControlPanelSelection(key);
+          setActiveDrawer((prev) => (prev === "settings" ? null : "settings"));
+          return;
+        }
+
+
+        if (key === "qr-link") {
+          setQrOpen(true);
+          return;
+        }
       }}
-    >
-      {showAdminTopbar && (
-        <div
-          style={{
-            position: "sticky",
-            top: 0,
-            zIndex: 300,
-            minHeight: `${BUILDER_TOPBAR_HEIGHT}px`,
-            background:
-              activeSiteDefinition.theme?.mode === "light"
-                ? "rgba(255,255,255,0.92)"
-                : "rgba(2, 6, 23, 0.88)",
-            borderBottom:
-              activeSiteDefinition.theme?.mode === "light"
-                ? "1px solid rgba(17,24,39,0.08)"
-                : "1px solid rgba(255,255,255,0.08)",
-          }}
-        >
-          <div
-            style={{
-              maxWidth: "1280px",
-              margin: "0 auto",
-              minHeight: `${BUILDER_TOPBAR_HEIGHT}px`,
-              padding: "10px 20px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "16px",
-              flexWrap: "wrap",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-                fontSize: "13px",
-                color:
-                  activeSiteDefinition.theme?.mode === "light"
-                    ? "rgba(17,24,39,0.72)"
-                    : "rgba(255,255,255,0.72)",
-              }}
-            >
-              <span
-                style={{
-                  padding: "6px 10px",
-                  borderRadius: "999px",
-                  background:
-                    activeSiteDefinition.theme?.mode === "light"
-                      ? "rgba(37,99,235,0.10)"
-                      : "rgba(37,99,235,0.14)",
-                  border: "1px solid rgba(37,99,235,0.2)",
-                  color: accentColor,
-                  fontWeight: 600,
-                }}
-              >
-                {isAdminRoute ? "Admin" : editMode ? "Editing" : "Preview"}
-              </span>
+    />
+  ) : null;
 
-              <span>{siteName}</span>
-            </div>
 
-            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-              <Link to="/admin/sites" style={secondaryButtonStyle}>
-                Back to dashboard
-              </Link>
-
-              {siteSlug && (
-                <a
-                  href={storefrontLoginPath}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={secondaryButtonStyle}
-                >
-                  Customer login
-                </a>
-              )}
-
-              {isAdminRoute ? (
-                <>
-                  <Link to={storefrontHomePath} style={secondaryButtonStyle}>
-                    Back to website
-                  </Link>
-
-                  <button onClick={handleLogout} style={outlineButtonStyle}>
-                    Logout
-                  </button>
-                </>
-              ) : (
-                <>
-                  <Link
-                    to={`${builderBase}/admin/products`}
-                    style={secondaryButtonStyle}
-                  >
-                    Open admin
-                  </Link>
-
-                  {!editMode ? (
-                    <button
-                      onClick={handleEnterEditMode}
-                      style={{
-                        padding: "9px 14px",
-                        borderRadius: "10px",
-                        border: "none",
-                        background: accentColor,
-                        color: "white",
-                        cursor: "pointer",
-                        fontSize: "14px",
-                        fontWeight: 600,
-                      }}
-                    >
-                      Customize
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleCloseEditMode}
-                      style={outlineButtonStyle}
-                    >
-                      Exit editor
-                    </button>
-                  )}
-
-                  <button onClick={handleLogout} style={outlineButtonStyle}>
-                    Logout
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
+  const rightPanel =
+    editMode && canEditStorefront && activeSiteDefinition ? (
       <div
         style={{
-          display: "flex",
-          alignItems: "flex-start",
-          minWidth: 0,
-          position: "relative",
-          zIndex: 1,
-          isolation: "isolate",
-          overflow: "visible",
+          height: "100%",
+          overflowY: "auto",
+          background:
+            activeSiteDefinition.theme?.mode === "light"
+              ? "rgba(255,255,255,0.96)"
+              : "rgba(15,23,42,0.96)",
         }}
       >
-        <div
-          ref={previewPaneRef}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            maxWidth:
-              editMode && !isAdminRoute && !isStoreRoute
-                ? `calc(100% - ${EDITOR_SIDEBAR_WIDTH}px)`
-                : "100%",
-            position: "relative",
-            zIndex: 1,
-            overflow: "visible",
-          }}
-        >
-          <Routes>
-            {!isStoreRoute && (
-              <Route path="admin" element={<AdminLayout />}>
-                <Route index element={<Navigate to="products" replace />} />
-                <Route path="products" element={<AdminProducts />} />
-                <Route path="orders" element={<AdminOrders />} />
-                <Route path="checkout-charges" element={<CheckoutChargesPage />} />
-              </Route>
-            )}
+        <EditorSidebar
+          siteDefinition={activeSiteDefinition}
+          selectedBlockId={selectedBlockId}
+          selectedTab={editorTab}
+          onTabChange={setEditorTab}
+          onSiteDefinitionChange={(next) =>
+            setDraftSiteDefinition(next as SiteDefinition)
+          }
+        />
+      </div>
+    ) : undefined;
 
+
+  const drawerNode =
+    showAdminTopbar && activeDrawer ? (
+      <BuilderDrawerPanel
+        activeDrawer={activeDrawer}
+        onClose={() => setActiveDrawer(null)}
+        savedSites={savedSites}
+        selectedSiteId={resolvedSiteId || siteId || ""}
+        onSelectSite={(targetSiteId) => {
+          if (targetSiteId === (resolvedSiteId || siteId)) {
+            setActiveDrawer(null);
+            return;
+          }
+          setActiveDrawer(null);
+          navigate(`/builder/${targetSiteId}`);
+        }}
+        onDeleteSite={handleDeleteSite}
+        activeAdminNavKey={activeAdminNavKey}
+        onSelectAdminNav={(key) => {
+          navigate(`${builderBase}/admin/${key}`);
+        }}
+      />
+    ) : null;
+
+
+  return (
+    <BuilderShell
+      topBar={topBar}
+      leftPanel={leftPanel}
+      drawer={drawerNode}
+      rightPanel={rightPanel}
+      previewPaneRef={previewPaneRef}
+      plainCenter={isAdminRoute}
+    >
+      <div
+        style={{
+          minHeight: "100%",
+          background: pageBg,
+          color: textColor,
+          overflow: "visible",
+          position: "relative",
+          zIndex: 1,
+        }}
+      >
+        <Routes>
+          {!isStoreRoute && (
+            <Route path="admin" element={<AdminLayout />}>
+              <Route index element={<Navigate to="products" replace />} />
+              <Route path="products" element={<AdminProducts />} />
+              <Route path="orders" element={<AdminOrders />} />
+              <Route
+                path="checkout-charges"
+                element={<CheckoutChargesPage />}
+              />
+            </Route>
+          )}
+
+
+          <Route
+            path="orders"
+            element={
+              <StorefrontShell
+                siteDefinition={activeSiteDefinition}
+                siteId={resolvedSiteId || siteId || ""}
+                siteSlug={siteSlug}
+                editMode={editMode}
+                adminTopbarVisible={showAdminTopbar}
+                selectedBlockId={selectedBlockId}
+                onSelectBlock={handleSelectBlock}
+                storefrontNavbarMode={storefrontNavbarMode}
+                navbarFixedBounds={navbarFixedBounds}
+                appBase={appBase}
+              >
+                <CustomerOrdersPage
+                  siteId={resolvedSiteId || siteId || ""}
+                  siteSlug={siteSlug}
+                  theme={activeSiteDefinition.theme}
+                />
+              </StorefrontShell>
+            }
+          />
+
+
+          {activeSiteDefinition.pages
+            .filter((page) => {
+              if (page.flow === "admin") return false;
+
+
+              const sameAsResolvedProductPage =
+                productDetailPage &&
+                (page.id === productDetailPage.id ||
+                  isProductDetailRoute(page.route) ||
+                  page.blocks.some((block) =>
+                    isProductDetailBlockType(block.type)
+                  ));
+
+
+              return !sameAsResolvedProductPage;
+            })
+            .map((page) => {
+              const normalizedRoute = normalizeRoute(page.route);
+
+
+              return (
+                <Route
+                  key={page.id}
+                  path={normalizedRoute}
+                  element={
+                    <StorefrontPage
+                      page={page}
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      selectedProduct={undefined}
+                      editMode={editMode}
+                      adminTopbarVisible={showAdminTopbar}
+                      selectedBlockId={selectedBlockId}
+                      onSelectBlock={handleSelectBlock}
+                      storefrontNavbarMode={storefrontNavbarMode}
+                      navbarFixedBounds={navbarFixedBounds}
+                      appBase={appBase}
+                    />
+                  }
+                />
+              );
+            })}
+
+
+          {productDetailPage && (
             <Route
-              path="orders"
+              path="products/:productSlug"
               element={
-                <StorefrontShell
+                <StorefrontPage
+                  key={`product-detail-${productSlug || "unknown"}`}
+                  page={productDetailPage}
                   siteDefinition={activeSiteDefinition}
+                  selectedProduct={selectedProduct}
                   siteId={resolvedSiteId || siteId || ""}
                   siteSlug={siteSlug}
                   editMode={editMode}
@@ -1017,123 +1230,25 @@ function BuilderPageContent() {
                   storefrontNavbarMode={storefrontNavbarMode}
                   navbarFixedBounds={navbarFixedBounds}
                   appBase={appBase}
-                >
-                  <CustomerOrdersPage
-                    siteId={resolvedSiteId || siteId || ""}
-                    siteSlug={siteSlug}
-                    theme={activeSiteDefinition.theme}
-                  />
-                </StorefrontShell>
+                />
               }
             />
-
-            {activeSiteDefinition.pages
-              .filter((page) => {
-                if (page.flow === "admin") return false;
-
-                const sameAsResolvedProductPage =
-                  productDetailPage &&
-                  (page.id === productDetailPage.id ||
-                    isProductDetailRoute(page.route) ||
-                    page.blocks.some((block) => isProductDetailBlockType(block.type)));
-
-                return !sameAsResolvedProductPage;
-              })
-              .map((page) => {
-                const normalizedRoute = normalizeRoute(page.route);
-
-                return (
-                  <Route
-                    key={page.id}
-                    path={normalizedRoute}
-                    element={
-                      <StorefrontPage
-                        page={page}
-                        siteDefinition={activeSiteDefinition}
-                        siteId={resolvedSiteId || siteId || ""}
-                        siteSlug={siteSlug}
-                        selectedProduct={undefined}
-                        editMode={editMode}
-                        adminTopbarVisible={showAdminTopbar}
-                        selectedBlockId={selectedBlockId}
-                        onSelectBlock={handleSelectBlock}
-                        storefrontNavbarMode={storefrontNavbarMode}
-                        navbarFixedBounds={navbarFixedBounds}
-                        appBase={appBase}
-                      />
-                    }
-                  />
-                );
-              })}
-
-            {productDetailPage && (
-              <Route
-                path="products/:productSlug"
-                element={
-                  <StorefrontPage
-                    key={`product-detail-${productSlug || "unknown"}`}
-                    page={productDetailPage}
-                    siteDefinition={activeSiteDefinition}
-                    selectedProduct={selectedProduct}
-                    siteId={resolvedSiteId || siteId || ""}
-                    siteSlug={siteSlug}
-                    editMode={editMode}
-                    adminTopbarVisible={showAdminTopbar}
-                    selectedBlockId={selectedBlockId}
-                    onSelectBlock={handleSelectBlock}
-                    storefrontNavbarMode={storefrontNavbarMode}
-                    navbarFixedBounds={navbarFixedBounds}
-                    appBase={appBase}
-                  />
-                }
-              />
-            )}
-          </Routes>
-        </div>
-
-        {editMode && canEditStorefront && activeSiteDefinition && (
-          <div
-            style={{
-              width: `${EDITOR_SIDEBAR_WIDTH}px`,
-              flexShrink: 0,
-              alignSelf: "flex-start",
-              position: "sticky",
-              top: `${BUILDER_TOPBAR_HEIGHT}px`,
-              zIndex: 120,
-              height: `calc(100vh - ${BUILDER_TOPBAR_HEIGHT}px)`,
-              overflow: "hidden",
-              background:
-                activeSiteDefinition.theme?.mode === "light"
-                  ? "rgba(255,255,255,0.96)"
-                  : "rgba(15,23,42,0.96)",
-              borderLeft:
-                activeSiteDefinition.theme?.mode === "light"
-                  ? "1px solid rgba(17,24,39,0.08)"
-                  : "1px solid rgba(255,255,255,0.08)",
-            }}
-          >
-            <div
-              style={{
-                height: "100%",
-                overflowY: "auto",
-              }}
-            >
-              <EditorSidebar
-                siteDefinition={activeSiteDefinition}
-                selectedBlockId={selectedBlockId}
-                selectedTab={editorTab}
-                onTabChange={setEditorTab}
-                onSiteDefinitionChange={(next) =>
-                  setDraftSiteDefinition(next as SiteDefinition)
-                }
-              />
-            </div>
-          </div>
-        )}
+          )}
+        </Routes>
       </div>
-    </div>
+
+
+      <QrLinkPopup
+        open={qrOpen}
+        onClose={() => setQrOpen(false)}
+        customerUrl={
+          siteSlug ? `${window.location.origin}/store/${siteSlug}` : ""
+        }
+      />
+    </BuilderShell>
   );
 }
+
 
 export default function BuilderPage() {
   const params = useParams();
@@ -1142,29 +1257,39 @@ export default function BuilderPage() {
   const [resolvedSiteId, setResolvedSiteId] = useState(siteId || "");
   const [siteProducts, setSiteProducts] = useState<Product[]>([]);
 
+
   useEffect(() => {
     const resolveAndLoadProducts = async () => {
       try {
         let targetSiteId = siteId || "";
 
+
         if (!targetSiteId && siteSlugParam) {
           const matchedSite = await resolveSiteBySlug(siteSlugParam);
+
 
           if (!matchedSite?.id) {
             throw new Error("Site not found for slug");
           }
 
+
           targetSiteId = matchedSite.id;
         }
+
 
         if (!targetSiteId) {
           setSiteProducts([]);
           return;
         }
 
+
         setResolvedSiteId(targetSiteId);
 
-        const res = await fetch(`${API_BASE_URL}/sites/${targetSiteId}/products/public`);
+
+        const res = await fetch(
+          `${API_BASE_URL}/sites/${targetSiteId}/products/public`
+        );
+
 
         if (res.ok) {
           const data = await res.json();
@@ -1182,8 +1307,10 @@ export default function BuilderPage() {
       }
     };
 
+
     resolveAndLoadProducts();
   }, [siteId, siteSlugParam]);
+
 
   return (
     <CartProvider

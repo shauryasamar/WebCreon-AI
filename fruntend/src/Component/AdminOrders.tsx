@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { API_BASE_URL as API_BASE} from "../config/api";
+import { useParams } from "react-router-dom";
+import { API_BASE_URL as API_BASE } from "../config/api";
+
 type AdminMode = "orders" | "returns";
 
 type OrderStatus =
@@ -240,12 +242,6 @@ type AdminReturnDetail = {
   status_history: ReturnHistoryEntry[];
 };
 
-type SiteRecord = {
-  id: string;
-  name?: string;
-  slug?: string;
-};
-
 type ReviewDraft = {
   action: "approve" | "reject";
   adminNote: string;
@@ -272,31 +268,32 @@ type RefundDraft = {
 };
 
 
-const sectionCardStyle: React.CSSProperties = {
-  borderRadius: "18px",
-  border: "1px solid rgba(255,255,255,0.08)",
-  background: "rgba(15,23,42,0.72)",
-  backdropFilter: "blur(14px)",
-  boxShadow: "0 10px 30px rgba(2,6,23,0.28)",
+const plainCardStyle: React.CSSProperties = {
+  borderRadius: "8px",
+  border: "1px solid #e2e8f0",
+  background: "#ffffff",
 };
+
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
-  borderRadius: "12px",
-  border: "1px solid rgba(255,255,255,0.08)",
-  background: "rgba(255,255,255,0.04)",
-  color: "#f8fafc",
-  padding: "11px 12px",
+  borderRadius: "6px",
+  border: "1px solid #cbd5e1",
+  background: "#ffffff",
+  color: "#0f172a",
+  padding: "9px 10px",
   outline: "none",
   fontSize: "14px",
 };
 
+
 const labelStyle: React.CSSProperties = {
   fontSize: "12px",
   fontWeight: 700,
-  color: "rgba(255,255,255,0.62)",
+  color: "#475569",
   marginBottom: "6px",
 };
+
 
 const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "new", label: "New" },
@@ -305,6 +302,7 @@ const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "delivered", label: "Delivered" },
   { key: "cancelled", label: "Cancelled" },
 ];
+
 
 const returnTabs: Array<{ key: ReturnTabKey; label: string }> = [
   { key: "requested", label: "Requested" },
@@ -316,6 +314,7 @@ const returnTabs: Array<{ key: ReturnTabKey; label: string }> = [
   { key: "rejected", label: "Rejected" },
 ];
 
+
 const fetchJson = async (url: string, init?: RequestInit) => {
   const res = await fetch(url, {
     ...init,
@@ -325,6 +324,7 @@ const fetchJson = async (url: string, init?: RequestInit) => {
       ...(init?.headers || {}),
     },
   });
+
 
   if (!res.ok) {
     let message = "Request failed";
@@ -337,8 +337,10 @@ const fetchJson = async (url: string, init?: RequestInit) => {
     throw new Error(message);
   }
 
+
   return res.json();
 };
+
 
 const formatDate = (value?: string | null) => {
   if (!value) return "—";
@@ -346,6 +348,7 @@ const formatDate = (value?: string | null) => {
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleString();
 };
+
 
 const formatPrice = (value?: number | null) => {
   const amount = Number(value || 0);
@@ -355,6 +358,7 @@ const formatPrice = (value?: number | null) => {
     maximumFractionDigits: 2,
   }).format(amount);
 };
+
 
 const toInputDateTime = (value?: string | null) => {
   if (!value) return "";
@@ -366,6 +370,7 @@ const toInputDateTime = (value?: string | null) => {
   )}:${pad(d.getMinutes())}`;
 };
 
+
 const toIsoOrNull = (value?: string | null) => {
   if (!value) return null;
   const d = new Date(value);
@@ -373,97 +378,44 @@ const toIsoOrNull = (value?: string | null) => {
   return d.toISOString();
 };
 
+
 const getStatusLabel = (status: string) => status.replaceAll("_", " ");
+
 
 const getStatusTone = (status: string) => {
   switch (status) {
     case "placed":
-      return {
-        bg: "rgba(59,130,246,0.14)",
-        text: "#93c5fd",
-        border: "1px solid rgba(59,130,246,0.22)",
-      };
+      return { bg: "#eff6ff", text: "#1d4ed8", border: "1px solid #bfdbfe" };
     case "confirmed":
-      return {
-        bg: "rgba(14,165,233,0.14)",
-        text: "#67e8f9",
-        border: "1px solid rgba(14,165,233,0.22)",
-      };
+      return { bg: "#ecfeff", text: "#0e7490", border: "1px solid #a5f3fc" };
     case "shipped":
-      return {
-        bg: "rgba(245,158,11,0.14)",
-        text: "#fcd34d",
-        border: "1px solid rgba(245,158,11,0.22)",
-      };
+      return { bg: "#fffbeb", text: "#b45309", border: "1px solid #fde68a" };
     case "out_for_delivery":
-      return {
-        bg: "rgba(168,85,247,0.14)",
-        text: "#d8b4fe",
-        border: "1px solid rgba(168,85,247,0.22)",
-      };
+      return { bg: "#faf5ff", text: "#7c3aed", border: "1px solid #e9d5ff" };
     case "delivered":
-      return {
-        bg: "rgba(34,197,94,0.14)",
-        text: "#86efac",
-        border: "1px solid rgba(34,197,94,0.22)",
-      };
+      return { bg: "#f0fdf4", text: "#15803d", border: "1px solid #bbf7d0" };
     case "cancelled":
     case "partially_cancelled":
-      return {
-        bg: "rgba(239,68,68,0.14)",
-        text: "#fca5a5",
-        border: "1px solid rgba(239,68,68,0.22)",
-      };
+      return { bg: "#fef2f2", text: "#b91c1c", border: "1px solid #fecaca" };
     case "requested":
-      return {
-        bg: "rgba(59,130,246,0.14)",
-        text: "#93c5fd",
-        border: "1px solid rgba(59,130,246,0.22)",
-      };
+      return { bg: "#eff6ff", text: "#1d4ed8", border: "1px solid #bfdbfe" };
     case "approved":
-      return {
-        bg: "rgba(14,165,233,0.14)",
-        text: "#67e8f9",
-        border: "1px solid rgba(14,165,233,0.22)",
-      };
+      return { bg: "#ecfeff", text: "#0e7490", border: "1px solid #a5f3fc" };
     case "received":
-      return {
-        bg: "rgba(245,158,11,0.14)",
-        text: "#fcd34d",
-        border: "1px solid rgba(245,158,11,0.22)",
-      };
+      return { bg: "#fffbeb", text: "#b45309", border: "1px solid #fde68a" };
     case "inspected":
-      return {
-        bg: "rgba(168,85,247,0.14)",
-        text: "#d8b4fe",
-        border: "1px solid rgba(168,85,247,0.22)",
-      };
+      return { bg: "#faf5ff", text: "#7c3aed", border: "1px solid #e9d5ff" };
     case "refunded":
-      return {
-        bg: "rgba(34,197,94,0.14)",
-        text: "#86efac",
-        border: "1px solid rgba(34,197,94,0.22)",
-      };
+      return { bg: "#f0fdf4", text: "#15803d", border: "1px solid #bbf7d0" };
     case "closed":
-      return {
-        bg: "rgba(148,163,184,0.16)",
-        text: "#cbd5e1",
-        border: "1px solid rgba(148,163,184,0.22)",
-      };
+      return { bg: "#f1f5f9", text: "#334155", border: "1px solid #e2e8f0" };
     case "rejected":
-      return {
-        bg: "rgba(239,68,68,0.14)",
-        text: "#fca5a5",
-        border: "1px solid rgba(239,68,68,0.22)",
-      };
+      return { bg: "#fef2f2", text: "#b91c1c", border: "1px solid #fecaca" };
     default:
-      return {
-        bg: "rgba(255,255,255,0.06)",
-        text: "#e2e8f0",
-        border: "1px solid rgba(255,255,255,0.12)",
-      };
+      return { bg: "#f8fafc", text: "#334155", border: "1px solid #e2e8f0" };
   }
 };
+
 
 const matchesTab = (order: AdminOrderListItem, tab: TabKey) => {
   switch (tab) {
@@ -482,12 +434,14 @@ const matchesTab = (order: AdminOrderListItem, tab: TabKey) => {
   }
 };
 
+
 const matchesReturnTab = (item: AdminReturnListItem, tab: ReturnTabKey) => item.status === tab;
 
+
 const AdminOrders: React.FC = () => {
+  const { siteId } = useParams<{ siteId: string }>();
   const [mode, setMode] = useState<AdminMode>("orders");
-  const [sites, setSites] = useState<SiteRecord[]>([]);
-  const [selectedSiteId, setSelectedSiteId] = useState<string>("");
+
 
   const [orders, setOrders] = useState<AdminOrderListItem[]>([]);
   const [detailsMap, setDetailsMap] = useState<Record<string, AdminOrderDetail>>({});
@@ -495,19 +449,23 @@ const AdminOrders: React.FC = () => {
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("new");
 
+
   const [adminReturns, setAdminReturns] = useState<AdminReturnListItem[]>([]);
   const [returnDetailsMap, setReturnDetailsMap] = useState<Record<string, AdminReturnDetail>>({});
   const [expandedReturnId, setExpandedReturnId] = useState<string | null>(null);
   const [activeReturnTab, setActiveReturnTab] = useState<ReturnTabKey>("requested");
+
 
   const [reviewDrafts, setReviewDrafts] = useState<Record<string, ReviewDraft>>({});
   const [receiveDrafts, setReceiveDrafts] = useState<Record<string, ReceiveDraft>>({});
   const [inspectDrafts, setInspectDrafts] = useState<Record<string, InspectDraft>>({});
   const [refundDrafts, setRefundDrafts] = useState<Record<string, RefundDraft>>({});
 
+
   const [loading, setLoading] = useState<boolean>(true);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string>("");
+
 
   const hydrateShipmentDraft = (orderId: string, detail: AdminOrderDetail) => {
     setShipmentDrafts((prev) => ({
@@ -520,12 +478,12 @@ const AdminOrders: React.FC = () => {
     }));
   };
 
+
   const hydrateReturnDrafts = (returnId: string, detail: AdminReturnDetail) => {
     setReviewDrafts((prev) => ({
       ...prev,
       [returnId]:
-        prev[returnId] ||
-        {
+        prev[returnId] || {
           action: "approve",
           adminNote: detail.admin_note || "",
           rejectionReason: detail.rejection_reason || "",
@@ -535,11 +493,11 @@ const AdminOrders: React.FC = () => {
         },
     }));
 
+
     setReceiveDrafts((prev) => ({
       ...prev,
       [returnId]:
-        prev[returnId] ||
-        {
+        prev[returnId] || {
           adminNote: detail.admin_note || "",
           receivedQuantities: Object.fromEntries(
             detail.items.map((item) => [item.id, item.quantity_approved || 0])
@@ -547,11 +505,11 @@ const AdminOrders: React.FC = () => {
         },
     }));
 
+
     setInspectDrafts((prev) => ({
       ...prev,
       [returnId]:
-        prev[returnId] ||
-        {
+        prev[returnId] || {
           adminNote: detail.admin_note || "",
           restockDecisionByItem: Object.fromEntries(
             detail.items.map((item) => [
@@ -565,11 +523,11 @@ const AdminOrders: React.FC = () => {
         },
     }));
 
+
     setRefundDrafts((prev) => ({
       ...prev,
       [returnId]:
-        prev[returnId] ||
-        {
+        prev[returnId] || {
           refundMethod: detail.refund_method || "cod_refund",
           finalRefundAmount: String(detail.final_refund_amount ?? ""),
           refundOverrideReason: detail.refund_override_reason || "",
@@ -578,75 +536,37 @@ const AdminOrders: React.FC = () => {
     }));
   };
 
-  const loadSites = async () => {
-    const siteList = await fetchJson(`${API_BASE}/sites`);
-    const normalizedSites: SiteRecord[] = Array.isArray(siteList) ? siteList : [];
-    setSites(normalizedSites);
-    return normalizedSites;
-  };
 
-  const loadOrdersForSite = async (siteId: string) => {
+  const loadOrdersForSite = async () => {
+    if (!siteId) return;
     const orderList = await fetchJson(`${API_BASE}/orders/admin/${siteId}`);
     setOrders(Array.isArray(orderList) ? orderList : []);
     setDetailsMap({});
     setExpandedOrderId(null);
   };
 
-  const loadReturnsForSite = async (siteId: string) => {
+
+  const loadReturnsForSite = async () => {
+    if (!siteId) return;
     const returnList = await fetchJson(`${API_BASE}/returns/admin/${siteId}`);
     setAdminReturns(Array.isArray(returnList) ? returnList : []);
     setReturnDetailsMap({});
     setExpandedReturnId(null);
   };
 
-  const loadSitesAndRecords = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const siteList = await loadSites();
-      const fallbackSiteId = siteList[0]?.id || "";
-      const siteIdToUse = selectedSiteId || fallbackSiteId;
-
-      if (!siteIdToUse) {
-        setOrders([]);
-        setAdminReturns([]);
-        setLoading(false);
-        return;
-      }
-
-      if (!selectedSiteId) {
-        setSelectedSiteId(siteIdToUse);
-      }
-
-      if (mode === "orders") {
-        await loadOrdersForSite(siteIdToUse);
-      } else {
-        await loadReturnsForSite(siteIdToUse);
-      }
-    } catch (err: any) {
-      setError(err.message || "Failed to load admin data");
-      setOrders([]);
-      setAdminReturns([]);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   useEffect(() => {
-    loadSitesAndRecords();
-  }, []);
+    if (!siteId) return;
 
-  useEffect(() => {
-    if (!selectedSiteId) return;
 
     const loadByMode = async () => {
       setLoading(true);
       setError("");
       try {
         if (mode === "orders") {
-          await loadOrdersForSite(selectedSiteId);
+          await loadOrdersForSite();
         } else {
-          await loadReturnsForSite(selectedSiteId);
+          await loadReturnsForSite();
         }
       } catch (err: any) {
         setError(err.message || `Failed to load ${mode}`);
@@ -660,16 +580,20 @@ const AdminOrders: React.FC = () => {
       }
     };
 
+
     loadByMode();
-  }, [selectedSiteId, mode]);
+  }, [siteId, mode]);
+
 
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => matchesTab(order, activeTab));
   }, [orders, activeTab]);
 
+
   const filteredReturns = useMemo(() => {
     return adminReturns.filter((item) => matchesReturnTab(item, activeReturnTab));
   }, [adminReturns, activeReturnTab]);
+
 
   const counts = useMemo(() => {
     return {
@@ -680,6 +604,7 @@ const AdminOrders: React.FC = () => {
       cancelled: orders.filter((o) => matchesTab(o, "cancelled")).length,
     };
   }, [orders]);
+
 
   const returnCounts = useMemo(() => {
     return {
@@ -693,49 +618,60 @@ const AdminOrders: React.FC = () => {
     };
   }, [adminReturns]);
 
+
   const ensureOrderDetail = async (orderId: string) => {
-    if (!selectedSiteId) return;
+    if (!siteId) return;
     if (detailsMap[orderId]) return;
 
-    const detail = await fetchJson(`${API_BASE}/orders/admin/${selectedSiteId}/${orderId}`);
+
+    const detail = await fetchJson(`${API_BASE}/orders/admin/${siteId}/${orderId}`);
     setDetailsMap((prev) => ({ ...prev, [orderId]: detail }));
     hydrateShipmentDraft(orderId, detail);
   };
 
+
   const ensureReturnDetail = async (returnId: string) => {
-    if (!selectedSiteId) return;
+    if (!siteId) return;
     if (returnDetailsMap[returnId]) return;
 
-    const detail = await fetchJson(`${API_BASE}/returns/admin/${selectedSiteId}/${returnId}`);
+
+    const detail = await fetchJson(`${API_BASE}/returns/admin/${siteId}/${returnId}`);
     setReturnDetailsMap((prev) => ({ ...prev, [returnId]: detail }));
     hydrateReturnDrafts(returnId, detail);
   };
 
+
   const syncOrderAfterAction = async (orderId: string) => {
-    if (!selectedSiteId) return;
+    if (!siteId) return;
+
 
     const [orderList, detail] = await Promise.all([
-      fetchJson(`${API_BASE}/orders/admin/${selectedSiteId}`),
-      fetchJson(`${API_BASE}/orders/admin/${selectedSiteId}/${orderId}`),
+      fetchJson(`${API_BASE}/orders/admin/${siteId}`),
+      fetchJson(`${API_BASE}/orders/admin/${siteId}/${orderId}`),
     ]);
+
 
     setOrders(Array.isArray(orderList) ? orderList : []);
     setDetailsMap((prev) => ({ ...prev, [orderId]: detail }));
     hydrateShipmentDraft(orderId, detail);
   };
 
+
   const syncReturnAfterAction = async (returnId: string) => {
-    if (!selectedSiteId) return;
+    if (!siteId) return;
+
 
     const [returnList, detail] = await Promise.all([
-      fetchJson(`${API_BASE}/returns/admin/${selectedSiteId}`),
-      fetchJson(`${API_BASE}/returns/admin/${selectedSiteId}/${returnId}`),
+      fetchJson(`${API_BASE}/returns/admin/${siteId}`),
+      fetchJson(`${API_BASE}/returns/admin/${siteId}/${returnId}`),
     ]);
+
 
     setAdminReturns(Array.isArray(returnList) ? returnList : []);
     setReturnDetailsMap((prev) => ({ ...prev, [returnId]: detail }));
     hydrateReturnDrafts(returnId, detail);
   };
+
 
   const updateStatus = async (
     orderId: string,
@@ -747,10 +683,10 @@ const AdminOrders: React.FC = () => {
       cancel_reason?: string | null;
     } = {}
   ) => {
-    if (!selectedSiteId) return;
+    if (!siteId) return;
     setActionLoadingId(orderId);
     try {
-      await fetchJson(`${API_BASE}/orders/admin/${selectedSiteId}/${orderId}/status`, {
+      await fetchJson(`${API_BASE}/orders/admin/${siteId}/${orderId}/status`, {
         method: "PATCH",
         body: JSON.stringify({
           status,
@@ -768,6 +704,7 @@ const AdminOrders: React.FC = () => {
     }
   };
 
+
   const handleExpandToggle = async (orderId: string) => {
     const next = expandedOrderId === orderId ? null : orderId;
     setExpandedOrderId(next);
@@ -779,6 +716,7 @@ const AdminOrders: React.FC = () => {
       }
     }
   };
+
 
   const handleReturnExpandToggle = async (returnId: string) => {
     const next = expandedReturnId === returnId ? null : returnId;
@@ -792,13 +730,16 @@ const AdminOrders: React.FC = () => {
     }
   };
 
+
   const getExpandedOrder = (listOrder: AdminOrderListItem): AdminOrderDetail | null => {
     return detailsMap[listOrder.id] || null;
   };
 
+
   const getExpandedReturn = (listItem: AdminReturnListItem): AdminReturnDetail | null => {
     return returnDetailsMap[listItem.id] || null;
   };
+
 
   const getShipmentDraft = (order: AdminOrderListItem) => {
     return (
@@ -809,6 +750,7 @@ const AdminOrders: React.FC = () => {
       }
     );
   };
+
 
   const setShipmentDraftValue = (
     orderId: string,
@@ -828,6 +770,7 @@ const AdminOrders: React.FC = () => {
     }));
   };
 
+
   const setReviewDraftValue = (
     returnId: string,
     updater: (draft: ReviewDraft) => ReviewDraft
@@ -845,6 +788,7 @@ const AdminOrders: React.FC = () => {
     }));
   };
 
+
   const setReceiveDraftValue = (
     returnId: string,
     updater: (draft: ReceiveDraft) => ReceiveDraft
@@ -859,6 +803,7 @@ const AdminOrders: React.FC = () => {
       ),
     }));
   };
+
 
   const setInspectDraftValue = (
     returnId: string,
@@ -875,6 +820,7 @@ const AdminOrders: React.FC = () => {
       ),
     }));
   };
+
 
   const setRefundDraftValue = (
     returnId: string,
@@ -893,14 +839,17 @@ const AdminOrders: React.FC = () => {
     }));
   };
 
+
   const handleConfirmOrder = async (orderId: string) => {
     await updateStatus(orderId, "confirmed");
   };
+
 
   const handleMarkShipped = async (orderId: string) => {
     const order = orders.find((item) => item.id === orderId);
     if (!order) return;
     const draft = getShipmentDraft(order);
+
 
     await updateStatus(orderId, "shipped", {
       delivery_partner_name: draft.deliveryPartnerName || null,
@@ -909,10 +858,12 @@ const AdminOrders: React.FC = () => {
     });
   };
 
+
   const handleOutForDelivery = async (orderId: string) => {
     const order = orders.find((item) => item.id === orderId);
     if (!order) return;
     const draft = getShipmentDraft(order);
+
 
     await updateStatus(orderId, "out_for_delivery", {
       delivery_partner_name: draft.deliveryPartnerName || null,
@@ -921,9 +872,11 @@ const AdminOrders: React.FC = () => {
     });
   };
 
+
   const handleDelivered = async (orderId: string) => {
     await updateStatus(orderId, "delivered");
   };
+
 
   const handleCancel = async (orderId: string) => {
     const cancelReason = window.prompt("Enter cancel reason") || "";
@@ -932,31 +885,37 @@ const AdminOrders: React.FC = () => {
     });
   };
 
+
   const handleSaveShipment = async (orderId: string) => {
     const order = orders.find((item) => item.id === orderId);
     if (!order) return;
+
 
     if (order.status === "confirmed") {
       await handleMarkShipped(orderId);
       return;
     }
 
+
     if (order.status === "shipped") {
       await handleOutForDelivery(orderId);
       return;
     }
 
+
     window.alert("Shipment details are saved when moving the order to shipped/out for delivery.");
   };
 
+
   const handleReviewReturn = async (returnId: string) => {
-    if (!selectedSiteId) return;
+    if (!siteId) return;
     const draft = reviewDrafts[returnId];
     if (!draft) return;
 
+
     setActionLoadingId(returnId);
     try {
-      await fetchJson(`${API_BASE}/returns/admin/${selectedSiteId}/${returnId}/review`, {
+      await fetchJson(`${API_BASE}/returns/admin/${siteId}/${returnId}/review`, {
         method: "PATCH",
         body: JSON.stringify({
           action: draft.action,
@@ -979,14 +938,16 @@ const AdminOrders: React.FC = () => {
     }
   };
 
+
   const handleReceiveReturn = async (returnId: string) => {
-    if (!selectedSiteId) return;
+    if (!siteId) return;
     const draft = receiveDrafts[returnId];
     if (!draft) return;
 
+
     setActionLoadingId(returnId);
     try {
-      await fetchJson(`${API_BASE}/returns/admin/${selectedSiteId}/${returnId}/receive`, {
+      await fetchJson(`${API_BASE}/returns/admin/${siteId}/${returnId}/receive`, {
         method: "PATCH",
         body: JSON.stringify({
           admin_note: draft.adminNote || null,
@@ -1006,14 +967,16 @@ const AdminOrders: React.FC = () => {
     }
   };
 
+
   const handleInspectReturn = async (returnId: string) => {
-    if (!selectedSiteId) return;
+    if (!siteId) return;
     const draft = inspectDrafts[returnId];
     if (!draft) return;
 
+
     setActionLoadingId(returnId);
     try {
-      await fetchJson(`${API_BASE}/returns/admin/${selectedSiteId}/${returnId}/inspect`, {
+      await fetchJson(`${API_BASE}/returns/admin/${siteId}/${returnId}/inspect`, {
         method: "PATCH",
         body: JSON.stringify({
           admin_note: draft.adminNote || null,
@@ -1032,14 +995,16 @@ const AdminOrders: React.FC = () => {
     }
   };
 
+
   const handleRefundReturn = async (returnId: string) => {
-    if (!selectedSiteId) return;
+    if (!siteId) return;
     const draft = refundDrafts[returnId];
     if (!draft) return;
 
+
     setActionLoadingId(returnId);
     try {
-      await fetchJson(`${API_BASE}/returns/admin/${selectedSiteId}/${returnId}/refund`, {
+      await fetchJson(`${API_BASE}/returns/admin/${siteId}/${returnId}/refund`, {
         method: "PATCH",
         body: JSON.stringify({
           refund_method: draft.refundMethod,
@@ -1057,12 +1022,14 @@ const AdminOrders: React.FC = () => {
     }
   };
 
+
   const handleCloseReturn = async (returnId: string) => {
-    if (!selectedSiteId) return;
+    if (!siteId) return;
+
 
     setActionLoadingId(returnId);
     try {
-      await fetchJson(`${API_BASE}/returns/admin/${selectedSiteId}/${returnId}/close`, {
+      await fetchJson(`${API_BASE}/returns/admin/${siteId}/${returnId}/close`, {
         method: "PATCH",
       });
       await syncReturnAfterAction(returnId);
@@ -1073,21 +1040,26 @@ const AdminOrders: React.FC = () => {
     }
   };
 
+
   const generateBillPdf = (order: AdminOrderDetail | AdminOrderListItem) => {
     window.alert(`Generate invoice for ${order.id}`);
   };
 
+
   const renderRowActions = (order: AdminOrderListItem) => {
     const actionButtonStyle: React.CSSProperties = {
-      border: "none",
-      borderRadius: "10px",
-      padding: "9px 12px",
+      border: "1px solid #cbd5e1",
+      borderRadius: "6px",
+      padding: "8px 10px",
       fontSize: "12px",
       fontWeight: 700,
       cursor: actionLoadingId === order.id ? "wait" : "pointer",
       whiteSpace: "nowrap",
       opacity: actionLoadingId === order.id ? 0.7 : 1,
+      background: "#ffffff",
+      color: "#0f172a",
     };
+
 
     if (activeTab === "new") {
       return (
@@ -1100,9 +1072,9 @@ const AdminOrders: React.FC = () => {
             }}
             style={{
               ...actionButtonStyle,
-              background: "rgba(59,130,246,0.16)",
-              color: "#93c5fd",
-              border: "1px solid rgba(59,130,246,0.22)",
+              background: "#eff6ff",
+              color: "#1d4ed8",
+              border: "1px solid #bfdbfe",
             }}
           >
             Accept
@@ -1115,9 +1087,9 @@ const AdminOrders: React.FC = () => {
             }}
             style={{
               ...actionButtonStyle,
-              background: "rgba(239,68,68,0.14)",
-              color: "#fca5a5",
-              border: "1px solid rgba(239,68,68,0.2)",
+              background: "#fef2f2",
+              color: "#b91c1c",
+              border: "1px solid #fecaca",
             }}
           >
             Reject
@@ -1125,6 +1097,7 @@ const AdminOrders: React.FC = () => {
         </>
       );
     }
+
 
     if (activeTab === "yet_to_ship") {
       return (
@@ -1137,13 +1110,14 @@ const AdminOrders: React.FC = () => {
             }}
             style={{
               ...actionButtonStyle,
-              background: "rgba(14,165,233,0.16)",
-              color: "#67e8f9",
-              border: "1px solid rgba(14,165,233,0.22)",
+              background: "#ecfeff",
+              color: "#0e7490",
+              border: "1px solid #a5f3fc",
             }}
           >
             Mark Shipped
           </button>
+
 
           <button
             onClick={(e) => {
@@ -1151,15 +1125,11 @@ const AdminOrders: React.FC = () => {
               const detail = detailsMap[order.id] || order;
               generateBillPdf(detail);
             }}
-            style={{
-              ...actionButtonStyle,
-              background: "rgba(255,255,255,0.08)",
-              color: "#f8fafc",
-              border: "1px solid rgba(255,255,255,0.12)",
-            }}
+            style={actionButtonStyle}
           >
             Generate Bill PDF
           </button>
+
 
           <button
             disabled={actionLoadingId === order.id}
@@ -1169,9 +1139,9 @@ const AdminOrders: React.FC = () => {
             }}
             style={{
               ...actionButtonStyle,
-              background: "rgba(239,68,68,0.14)",
-              color: "#fca5a5",
-              border: "1px solid rgba(239,68,68,0.2)",
+              background: "#fef2f2",
+              color: "#b91c1c",
+              border: "1px solid #fecaca",
             }}
           >
             Cancel
@@ -1179,6 +1149,7 @@ const AdminOrders: React.FC = () => {
         </>
       );
     }
+
 
     if (activeTab === "yet_to_deliver") {
       return (
@@ -1189,15 +1160,11 @@ const AdminOrders: React.FC = () => {
               const detail = detailsMap[order.id] || order;
               generateBillPdf(detail);
             }}
-            style={{
-              ...actionButtonStyle,
-              background: "rgba(255,255,255,0.08)",
-              color: "#f8fafc",
-              border: "1px solid rgba(255,255,255,0.12)",
-            }}
+            style={actionButtonStyle}
           >
             Generate Bill PDF
           </button>
+
 
           {order.status === "shipped" ? (
             <button
@@ -1208,14 +1175,15 @@ const AdminOrders: React.FC = () => {
               }}
               style={{
                 ...actionButtonStyle,
-                background: "rgba(245,158,11,0.16)",
-                color: "#fcd34d",
-                border: "1px solid rgba(245,158,11,0.22)",
+                background: "#fffbeb",
+                color: "#b45309",
+                border: "1px solid #fde68a",
               }}
             >
               Out for Delivery
             </button>
           ) : null}
+
 
           {order.status === "out_for_delivery" ? (
             <button
@@ -1226,9 +1194,9 @@ const AdminOrders: React.FC = () => {
               }}
               style={{
                 ...actionButtonStyle,
-                background: "rgba(34,197,94,0.16)",
-                color: "#86efac",
-                border: "1px solid rgba(34,197,94,0.22)",
+                background: "#f0fdf4",
+                color: "#15803d",
+                border: "1px solid #bbf7d0",
               }}
             >
               Mark Delivered
@@ -1238,6 +1206,7 @@ const AdminOrders: React.FC = () => {
       );
     }
 
+
     if (activeTab === "delivered") {
       return (
         <button
@@ -1246,32 +1215,32 @@ const AdminOrders: React.FC = () => {
             const detail = detailsMap[order.id] || order;
             generateBillPdf(detail);
           }}
-          style={{
-            ...actionButtonStyle,
-            background: "rgba(255,255,255,0.08)",
-            color: "#f8fafc",
-            border: "1px solid rgba(255,255,255,0.12)",
-          }}
+          style={actionButtonStyle}
         >
           Generate Bill PDF
         </button>
       );
     }
 
+
     return null;
   };
 
+
   const renderReturnRowActions = (returnItem: AdminReturnListItem) => {
     const actionButtonStyle: React.CSSProperties = {
-      border: "none",
-      borderRadius: "10px",
-      padding: "9px 12px",
+      border: "1px solid #cbd5e1",
+      borderRadius: "6px",
+      padding: "8px 10px",
       fontSize: "12px",
       fontWeight: 700,
       cursor: actionLoadingId === returnItem.id ? "wait" : "pointer",
       whiteSpace: "nowrap",
       opacity: actionLoadingId === returnItem.id ? 0.7 : 1,
+      background: "#ffffff",
+      color: "#0f172a",
     };
+
 
     if (returnItem.status === "requested") {
       return (
@@ -1283,15 +1252,16 @@ const AdminOrders: React.FC = () => {
           }}
           style={{
             ...actionButtonStyle,
-            background: "rgba(59,130,246,0.16)",
-            color: "#93c5fd",
-            border: "1px solid rgba(59,130,246,0.22)",
+            background: "#eff6ff",
+            color: "#1d4ed8",
+            border: "1px solid #bfdbfe",
           }}
         >
           Review
         </button>
       );
     }
+
 
     if (returnItem.status === "approved") {
       return (
@@ -1303,15 +1273,16 @@ const AdminOrders: React.FC = () => {
           }}
           style={{
             ...actionButtonStyle,
-            background: "rgba(245,158,11,0.16)",
-            color: "#fcd34d",
-            border: "1px solid rgba(245,158,11,0.22)",
+            background: "#fffbeb",
+            color: "#b45309",
+            border: "1px solid #fde68a",
           }}
         >
           Receive
         </button>
       );
     }
+
 
     if (returnItem.status === "received") {
       return (
@@ -1323,15 +1294,16 @@ const AdminOrders: React.FC = () => {
           }}
           style={{
             ...actionButtonStyle,
-            background: "rgba(168,85,247,0.16)",
-            color: "#d8b4fe",
-            border: "1px solid rgba(168,85,247,0.22)",
+            background: "#faf5ff",
+            color: "#7c3aed",
+            border: "1px solid #e9d5ff",
           }}
         >
           Inspect
         </button>
       );
     }
+
 
     if (returnItem.status === "inspected") {
       return (
@@ -1343,15 +1315,16 @@ const AdminOrders: React.FC = () => {
           }}
           style={{
             ...actionButtonStyle,
-            background: "rgba(34,197,94,0.16)",
-            color: "#86efac",
-            border: "1px solid rgba(34,197,94,0.22)",
+            background: "#f0fdf4",
+            color: "#15803d",
+            border: "1px solid #bbf7d0",
           }}
         >
           Refund
         </button>
       );
     }
+
 
     if (returnItem.status === "refunded" || returnItem.status === "rejected") {
       return (
@@ -1363,9 +1336,9 @@ const AdminOrders: React.FC = () => {
           }}
           style={{
             ...actionButtonStyle,
-            background: "rgba(148,163,184,0.16)",
-            color: "#cbd5e1",
-            border: "1px solid rgba(148,163,184,0.22)",
+            background: "#f1f5f9",
+            color: "#334155",
+            border: "1px solid #e2e8f0",
           }}
         >
           Close
@@ -1373,61 +1346,17 @@ const AdminOrders: React.FC = () => {
       );
     }
 
+
     return null;
   };
 
+
   return (
-    <div style={{ color: "#f8fafc" }}>
+    <div style={{ color: "#0f172a" }}>
       <div
         style={{
           display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          gap: "16px",
-          marginBottom: "20px",
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <h1 style={{ margin: 0, marginBottom: "8px", fontSize: "30px" }}>Orders</h1>
-          <div style={{ fontSize: "14px", color: "rgba(255,255,255,0.64)" }}>
-            Manage fulfilment, shipment, cancellations, returns, and exchanges.
-          </div>
-        </div>
-
-        <div style={{ minWidth: "260px" }}>
-          <div style={labelStyle}>Site</div>
-          <select
-            value={selectedSiteId}
-            onChange={(e) => setSelectedSiteId(e.target.value)}
-            style={inputStyle}
-          >
-            {sites.map((site) => (
-              <option key={site.id} value={site.id} style={{ color: "#0f172a" }}>
-                {site.name || site.slug || site.id}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {error ? (
-        <div
-          style={{
-            ...sectionCardStyle,
-            padding: "14px 16px",
-            marginBottom: "18px",
-            color: "#fca5a5",
-          }}
-        >
-          {error}
-        </div>
-      ) : null}
-
-      <div
-        style={{
-          display: "flex",
-          gap: "10px",
+          gap: "8px",
           flexWrap: "wrap",
           marginBottom: "14px",
         }}
@@ -1443,13 +1372,11 @@ const AdminOrders: React.FC = () => {
                 setExpandedReturnId(null);
               }}
               style={{
-                borderRadius: "999px",
-                padding: "10px 14px",
-                border: isActive
-                  ? "1px solid rgba(59,130,246,0.3)"
-                  : "1px solid rgba(255,255,255,0.08)",
-                background: isActive ? "rgba(59,130,246,0.16)" : "rgba(255,255,255,0.04)",
-                color: isActive ? "#93c5fd" : "#e2e8f0",
+                borderRadius: "6px",
+                padding: "8px 12px",
+                border: isActive ? "1px solid #bfdbfe" : "1px solid #e2e8f0",
+                background: isActive ? "#eff6ff" : "#ffffff",
+                color: isActive ? "#1d4ed8" : "#334155",
                 fontSize: "13px",
                 fontWeight: 700,
                 cursor: "pointer",
@@ -1462,14 +1389,31 @@ const AdminOrders: React.FC = () => {
         })}
       </div>
 
+
+      {error ? (
+        <div
+          style={{
+            ...plainCardStyle,
+            padding: "12px 14px",
+            marginBottom: "16px",
+            color: "#b91c1c",
+            background: "#fef2f2",
+            border: "1px solid #fecaca",
+          }}
+        >
+          {error}
+        </div>
+      ) : null}
+
+
       {mode === "orders" ? (
         <>
           <div
             style={{
               display: "flex",
-              gap: "10px",
+              gap: "8px",
               flexWrap: "wrap",
-              marginBottom: "18px",
+              marginBottom: "16px",
             }}
           >
             {tabs.map((tab) => {
@@ -1482,13 +1426,11 @@ const AdminOrders: React.FC = () => {
                     setExpandedOrderId(null);
                   }}
                   style={{
-                    borderRadius: "999px",
-                    padding: "10px 14px",
-                    border: isActive
-                      ? "1px solid rgba(59,130,246,0.3)"
-                      : "1px solid rgba(255,255,255,0.08)",
-                    background: isActive ? "rgba(59,130,246,0.16)" : "rgba(255,255,255,0.04)",
-                    color: isActive ? "#93c5fd" : "#e2e8f0",
+                    borderRadius: "6px",
+                    padding: "8px 12px",
+                    border: isActive ? "1px solid #bfdbfe" : "1px solid #e2e8f0",
+                    background: isActive ? "#eff6ff" : "#ffffff",
+                    color: isActive ? "#1d4ed8" : "#334155",
                     fontSize: "13px",
                     fontWeight: 700,
                     cursor: "pointer",
@@ -1500,36 +1442,14 @@ const AdminOrders: React.FC = () => {
             })}
           </div>
 
-          <div style={{ ...sectionCardStyle, overflow: "hidden" }}>
-            <div
-              style={{
-                padding: "14px 16px",
-                borderBottom: "1px solid rgba(255,255,255,0.08)",
-                fontSize: "14px",
-                fontWeight: 700,
-              }}
-            >
-              {tabs.find((tab) => tab.key === activeTab)?.label}
-            </div>
 
+          <div style={{ ...plainCardStyle, overflow: "hidden" }}>
             {loading ? (
-              <div
-                style={{
-                  padding: "22px 16px",
-                  fontSize: "14px",
-                  color: "rgba(255,255,255,0.58)",
-                }}
-              >
+              <div style={{ padding: "20px 16px", fontSize: "14px", color: "#64748b" }}>
                 Loading orders...
               </div>
             ) : !filteredOrders.length ? (
-              <div
-                style={{
-                  padding: "22px 16px",
-                  fontSize: "14px",
-                  color: "rgba(255,255,255,0.58)",
-                }}
-              >
+              <div style={{ padding: "20px 16px", fontSize: "14px", color: "#64748b" }}>
                 No records in this tab.
               </div>
             ) : (
@@ -1542,13 +1462,9 @@ const AdminOrders: React.FC = () => {
                   const items = detail?.items || order.items || [];
                   const shippingAddress = detail?.shipping_address || order.shipping_address;
 
+
                   return (
-                    <div
-                      key={order.id}
-                      style={{
-                        borderBottom: "1px solid rgba(255,255,255,0.06)",
-                      }}
-                    >
+                    <div key={order.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
                       <div
                         onClick={() => handleExpandToggle(order.id)}
                         style={{
@@ -1557,47 +1473,43 @@ const AdminOrders: React.FC = () => {
                             "minmax(0, 1.2fr) minmax(0, 1fr) auto auto auto",
                           gap: "14px",
                           alignItems: "center",
-                          padding: "16px",
+                          padding: "14px 16px",
                           cursor: "pointer",
-                          background: isExpanded ? "rgba(59,130,246,0.06)" : "transparent",
+                          background: isExpanded ? "#f8fafc" : "transparent",
                         }}
                       >
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: "14px", fontWeight: 800, marginBottom: "4px" }}>
+                          <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "4px" }}>
                             {order.id}
                           </div>
-                          <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.68)" }}>
+                          <div style={{ fontSize: "13px", color: "#64748b" }}>
                             {order.customer_name || "—"}
                           </div>
                         </div>
 
+
                         <div style={{ minWidth: 0 }}>
-                          <div
-                            style={{
-                              fontSize: "13px",
-                              color: "rgba(255,255,255,0.62)",
-                              marginBottom: "4px",
-                            }}
-                          >
+                          <div style={{ fontSize: "13px", color: "#64748b", marginBottom: "4px" }}>
                             {formatDate(order.created_at)}
                           </div>
-                          <div style={{ fontSize: "13px", color: "#f8fafc", fontWeight: 700 }}>
+                          <div style={{ fontSize: "13px", color: "#0f172a", fontWeight: 700 }}>
                             {formatPrice(order.total)}
                           </div>
                         </div>
+
 
                         <div>
                           <span
                             style={{
                               display: "inline-flex",
                               alignItems: "center",
-                              padding: "8px 10px",
-                              borderRadius: "999px",
+                              padding: "6px 9px",
+                              borderRadius: "4px",
                               background: tone.bg,
                               color: tone.text,
                               border: tone.border,
                               fontSize: "12px",
-                              fontWeight: 800,
+                              fontWeight: 700,
                               textTransform: "capitalize",
                               whiteSpace: "nowrap",
                             }}
@@ -1605,6 +1517,7 @@ const AdminOrders: React.FC = () => {
                             {getStatusLabel(order.status)}
                           </span>
                         </div>
+
 
                         <div
                           onClick={(e) => e.stopPropagation()}
@@ -1618,39 +1531,31 @@ const AdminOrders: React.FC = () => {
                           {renderRowActions(order)}
                         </div>
 
-                        <div
-                          style={{
-                            fontSize: "18px",
-                            color: "rgba(255,255,255,0.56)",
-                            justifySelf: "end",
-                          }}
-                        >
+
+                        <div style={{ fontSize: "18px", color: "#94a3b8", justifySelf: "end" }}>
                           {isExpanded ? "−" : "+"}
                         </div>
                       </div>
 
+
                       {isExpanded ? (
-                        <div
-                          style={{
-                            padding: "0 16px 16px",
-                            background: "rgba(255,255,255,0.02)",
-                          }}
-                        >
+                        <div style={{ padding: "0 16px 16px", background: "#ffffff" }}>
                           <div
                             style={{
                               display: "grid",
                               gridTemplateColumns: "minmax(0, 1.2fr) minmax(320px, 0.8fr)",
-                              gap: "16px",
+                              gap: "14px",
                               alignItems: "start",
                             }}
                           >
-                            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                              <div style={{ ...sectionCardStyle, padding: "16px" }}>
-                                <div style={{ fontSize: "14px", fontWeight: 800, marginBottom: "14px" }}>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                              <div style={{ ...plainCardStyle, padding: "14px" }}>
+                                <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>
                                   Order Items
                                 </div>
 
-                                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+
+                                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                                   {items.map((item) => (
                                     <div
                                       key={item.id}
@@ -1658,40 +1563,27 @@ const AdminOrders: React.FC = () => {
                                         display: "flex",
                                         justifyContent: "space-between",
                                         gap: "12px",
-                                        padding: "12px",
-                                        borderRadius: "14px",
-                                        background: "rgba(255,255,255,0.03)",
-                                        border: "1px solid rgba(255,255,255,0.06)",
+                                        padding: "10px",
+                                        borderRadius: "6px",
+                                        background: "#f8fafc",
+                                        border: "1px solid #e2e8f0",
                                       }}
                                     >
                                       <div>
                                         <div style={{ fontSize: "14px", fontWeight: 700 }}>
                                           {item.product_name}
                                         </div>
-                                        <div
-                                          style={{
-                                            fontSize: "13px",
-                                            color: "rgba(255,255,255,0.62)",
-                                            marginTop: "4px",
-                                          }}
-                                        >
+                                        <div style={{ fontSize: "13px", color: "#64748b", marginTop: "4px" }}>
                                           Qty {item.quantity}
-                                          {item.selected_variant_value
-                                            ? ` · ${item.selected_variant_value}`
-                                            : ""}
+                                          {item.selected_variant_value ? ` · ${item.selected_variant_value}` : ""}
                                         </div>
-                                        <div
-                                          style={{
-                                            fontSize: "12px",
-                                            color: "rgba(255,255,255,0.48)",
-                                            marginTop: "4px",
-                                          }}
-                                        >
+                                        <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "4px" }}>
                                           Item status: {item.status.replaceAll("_", " ")}
                                         </div>
                                       </div>
 
-                                      <div style={{ fontSize: "14px", fontWeight: 800 }}>
+
+                                      <div style={{ fontSize: "14px", fontWeight: 700 }}>
                                         {formatPrice(item.line_total)}
                                       </div>
                                     </div>
@@ -1699,58 +1591,47 @@ const AdminOrders: React.FC = () => {
                                 </div>
                               </div>
 
-                              <div style={{ ...sectionCardStyle, padding: "16px" }}>
-                                <div style={{ fontSize: "14px", fontWeight: 800, marginBottom: "14px" }}>
+
+                              <div style={{ ...plainCardStyle, padding: "14px" }}>
+                                <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>
                                   Shipping Address
                                 </div>
+
 
                                 <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "6px" }}>
                                   {shippingAddress?.fullName || "—"}
                                 </div>
-                                <div
-                                  style={{
-                                    fontSize: "14px",
-                                    color: "rgba(255,255,255,0.7)",
-                                    lineHeight: 1.7,
-                                  }}
-                                >
+                                <div style={{ fontSize: "14px", color: "#475569", lineHeight: 1.7 }}>
                                   {shippingAddress?.addressLine1 || "—"}
                                   <br />
-                                  {(shippingAddress?.city || "—")} -{" "}
-                                  {(shippingAddress?.postalCode || "—")}
+                                  {(shippingAddress?.city || "—")} - {(shippingAddress?.postalCode || "—")}
                                   <br />
                                   {shippingAddress?.mobileNumber || "—"}
                                   {shippingAddress?.email ? ` · ${shippingAddress.email}` : ""}
                                 </div>
                               </div>
 
+
                               {detail?.cancel_reason ? (
-                                <div style={{ ...sectionCardStyle, padding: "16px" }}>
-                                  <div style={{ fontSize: "14px", fontWeight: 800, marginBottom: "10px" }}>
+                                <div style={{ ...plainCardStyle, padding: "14px" }}>
+                                  <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "8px" }}>
                                     Cancel Reason
                                   </div>
-                                  <div style={{ fontSize: "14px", color: "rgba(255,255,255,0.72)" }}>
-                                    {detail.cancel_reason}
-                                  </div>
+                                  <div style={{ fontSize: "14px", color: "#475569" }}>{detail.cancel_reason}</div>
                                 </div>
                               ) : null}
                             </div>
 
-                            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                              <div style={{ ...sectionCardStyle, padding: "16px" }}>
-                                <div style={{ fontSize: "14px", fontWeight: 800, marginBottom: "14px" }}>
+
+                            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                              <div style={{ ...plainCardStyle, padding: "14px" }}>
+                                <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>
                                   Customer
                                 </div>
                                 <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "6px" }}>
                                   {detail?.customer_name || order.customer_name || "—"}
                                 </div>
-                                <div
-                                  style={{
-                                    fontSize: "13px",
-                                    color: "rgba(255,255,255,0.68)",
-                                    lineHeight: 1.8,
-                                  }}
-                                >
+                                <div style={{ fontSize: "13px", color: "#475569", lineHeight: 1.8 }}>
                                   {detail?.customer_phone || order.customer_phone || "—"}
                                   <br />
                                   {detail?.customer_email || order.customer_email || "—"}
@@ -1759,12 +1640,14 @@ const AdminOrders: React.FC = () => {
                                 </div>
                               </div>
 
-                              <div style={{ ...sectionCardStyle, padding: "16px" }}>
-                                <div style={{ fontSize: "14px", fontWeight: 800, marginBottom: "14px" }}>
+
+                              <div style={{ ...plainCardStyle, padding: "14px" }}>
+                                <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>
                                   Shipment Control
                                 </div>
 
-                                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+
+                                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                                   <div>
                                     <div style={labelStyle}>Delivery Partner Name</div>
                                     <input
@@ -1776,6 +1659,7 @@ const AdminOrders: React.FC = () => {
                                       style={inputStyle}
                                     />
                                   </div>
+
 
                                   <div>
                                     <div style={labelStyle}>Delivery Partner Phone</div>
@@ -1789,6 +1673,7 @@ const AdminOrders: React.FC = () => {
                                     />
                                   </div>
 
+
                                   <div>
                                     <div style={labelStyle}>Estimated Delivery Time</div>
                                     <input
@@ -1801,14 +1686,15 @@ const AdminOrders: React.FC = () => {
                                     />
                                   </div>
 
+
                                   <button
                                     onClick={() => handleSaveShipment(order.id)}
                                     style={{
-                                      border: "1px solid rgba(255,255,255,0.08)",
-                                      background: "rgba(255,255,255,0.06)",
-                                      color: "#f8fafc",
-                                      borderRadius: "12px",
-                                      padding: "11px 14px",
+                                      border: "1px solid #cbd5e1",
+                                      background: "#ffffff",
+                                      color: "#0f172a",
+                                      borderRadius: "6px",
+                                      padding: "10px 12px",
                                       fontSize: "14px",
                                       fontWeight: 700,
                                       cursor: "pointer",
@@ -1819,30 +1705,17 @@ const AdminOrders: React.FC = () => {
                                 </div>
                               </div>
 
-                              <div style={{ ...sectionCardStyle, padding: "16px" }}>
-                                <div style={{ fontSize: "14px", fontWeight: 800, marginBottom: "14px" }}>
+
+                              <div style={{ ...plainCardStyle, padding: "14px" }}>
+                                <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>
                                   Timeline
                                 </div>
-
-                                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                  <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.68)" }}>
-                                    Placed: {formatDate(order.created_at)}
-                                  </div>
-                                  <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.68)" }}>
-                                    Confirmed: {formatDate(detail?.confirmed_at || order.confirmed_at)}
-                                  </div>
-                                  <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.68)" }}>
-                                    Shipped: {formatDate(detail?.shipped_at || order.shipped_at)}
-                                  </div>
-                                  <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.68)" }}>
-                                    Out for delivery: {formatDate(detail?.shipment?.out_for_delivery_at)}
-                                  </div>
-                                  <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.68)" }}>
-                                    Delivered: {formatDate(detail?.delivered_at || order.delivered_at)}
-                                  </div>
-                                  <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.68)" }}>
-                                    Cancelled: {formatDate(detail?.cancelled_at || order.cancelled_at)}
-                                  </div>
+                                <div style={{ display: "grid", gap: "6px", fontSize: "14px", color: "#475569" }}>
+                                  <div>Created: {formatDate(order.created_at)}</div>
+                                  <div>Confirmed: {formatDate(order.confirmed_at)}</div>
+                                  <div>Shipped: {formatDate(order.shipped_at)}</div>
+                                  <div>Delivered: {formatDate(order.delivered_at)}</div>
+                                  <div>Cancelled: {formatDate(order.cancelled_at)}</div>
                                 </div>
                               </div>
                             </div>
@@ -1861,9 +1734,9 @@ const AdminOrders: React.FC = () => {
           <div
             style={{
               display: "flex",
-              gap: "10px",
+              gap: "8px",
               flexWrap: "wrap",
-              marginBottom: "18px",
+              marginBottom: "16px",
             }}
           >
             {returnTabs.map((tab) => {
@@ -1876,13 +1749,11 @@ const AdminOrders: React.FC = () => {
                     setExpandedReturnId(null);
                   }}
                   style={{
-                    borderRadius: "999px",
-                    padding: "10px 14px",
-                    border: isActive
-                      ? "1px solid rgba(59,130,246,0.3)"
-                      : "1px solid rgba(255,255,255,0.08)",
-                    background: isActive ? "rgba(59,130,246,0.16)" : "rgba(255,255,255,0.04)",
-                    color: isActive ? "#93c5fd" : "#e2e8f0",
+                    borderRadius: "6px",
+                    padding: "8px 12px",
+                    border: isActive ? "1px solid #bfdbfe" : "1px solid #e2e8f0",
+                    background: isActive ? "#eff6ff" : "#ffffff",
+                    color: isActive ? "#1d4ed8" : "#334155",
                     fontSize: "13px",
                     fontWeight: 700,
                     cursor: "pointer",
@@ -1894,37 +1765,15 @@ const AdminOrders: React.FC = () => {
             })}
           </div>
 
-          <div style={{ ...sectionCardStyle, overflow: "hidden" }}>
-            <div
-              style={{
-                padding: "14px 16px",
-                borderBottom: "1px solid rgba(255,255,255,0.08)",
-                fontSize: "14px",
-                fontWeight: 700,
-              }}
-            >
-              {returnTabs.find((tab) => tab.key === activeReturnTab)?.label}
-            </div>
 
+          <div style={{ ...plainCardStyle, overflow: "hidden" }}>
             {loading ? (
-              <div
-                style={{
-                  padding: "22px 16px",
-                  fontSize: "14px",
-                  color: "rgba(255,255,255,0.58)",
-                }}
-              >
+              <div style={{ padding: "20px 16px", fontSize: "14px", color: "#64748b" }}>
                 Loading returns...
               </div>
             ) : !filteredReturns.length ? (
-              <div
-                style={{
-                  padding: "22px 16px",
-                  fontSize: "14px",
-                  color: "rgba(255,255,255,0.58)",
-                }}
-              >
-                No return requests in this tab.
+              <div style={{ padding: "20px 16px", fontSize: "14px", color: "#64748b" }}>
+                No records in this tab.
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column" }}>
@@ -1933,18 +1782,21 @@ const AdminOrders: React.FC = () => {
                   const tone = getStatusTone(returnItem.status);
                   const detail = getExpandedReturn(returnItem);
 
-                  const reviewDraft = reviewDrafts[returnItem.id];
-                  const receiveDraft = receiveDrafts[returnItem.id];
-                  const inspectDraft = inspectDrafts[returnItem.id];
-                  const refundDraft = refundDrafts[returnItem.id];
+
+                  const reviewDraft =
+                    reviewDrafts[returnItem.id] ||
+                    {
+                      action: "approve" as const,
+                      adminNote: returnItem.admin_note || "",
+                      rejectionReason: returnItem.rejection_reason || "",
+                      approvedQuantities: Object.fromEntries(
+                        detail?.items.map((item) => [item.id, item.quantity_requested]) || []
+                      ),
+                    };
+
 
                   return (
-                    <div
-                      key={returnItem.id}
-                      style={{
-                        borderBottom: "1px solid rgba(255,255,255,0.06)",
-                      }}
-                    >
+                    <div key={returnItem.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
                       <div
                         onClick={() => handleReturnExpandToggle(returnItem.id)}
                         style={{
@@ -1953,47 +1805,43 @@ const AdminOrders: React.FC = () => {
                             "minmax(0, 1.2fr) minmax(0, 1fr) auto auto auto",
                           gap: "14px",
                           alignItems: "center",
-                          padding: "16px",
+                          padding: "14px 16px",
                           cursor: "pointer",
-                          background: isExpanded ? "rgba(59,130,246,0.06)" : "transparent",
+                          background: isExpanded ? "#f8fafc" : "transparent",
                         }}
                       >
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: "14px", fontWeight: 800, marginBottom: "4px" }}>
+                          <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "4px" }}>
                             {returnItem.id}
                           </div>
-                          <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.68)" }}>
+                          <div style={{ fontSize: "13px", color: "#64748b" }}>
                             Order: {returnItem.order_id}
                           </div>
                         </div>
 
+
                         <div style={{ minWidth: 0 }}>
-                          <div
-                            style={{
-                              fontSize: "13px",
-                              color: "rgba(255,255,255,0.62)",
-                              marginBottom: "4px",
-                            }}
-                          >
+                          <div style={{ fontSize: "13px", color: "#64748b", marginBottom: "4px" }}>
                             {formatDate(returnItem.created_at)}
                           </div>
-                          <div style={{ fontSize: "13px", color: "#f8fafc", fontWeight: 700 }}>
-                            Refund: {formatPrice(returnItem.final_refund_amount)}
+                          <div style={{ fontSize: "13px", color: "#0f172a", fontWeight: 700 }}>
+                            {formatPrice(returnItem.final_refund_amount)}
                           </div>
                         </div>
+
 
                         <div>
                           <span
                             style={{
                               display: "inline-flex",
                               alignItems: "center",
-                              padding: "8px 10px",
-                              borderRadius: "999px",
+                              padding: "6px 9px",
+                              borderRadius: "4px",
                               background: tone.bg,
                               color: tone.text,
                               border: tone.border,
                               fontSize: "12px",
-                              fontWeight: 800,
+                              fontWeight: 700,
                               textTransform: "capitalize",
                               whiteSpace: "nowrap",
                             }}
@@ -2001,6 +1849,7 @@ const AdminOrders: React.FC = () => {
                             {getStatusLabel(returnItem.status)}
                           </span>
                         </div>
+
 
                         <div
                           onClick={(e) => e.stopPropagation()}
@@ -2014,658 +1863,233 @@ const AdminOrders: React.FC = () => {
                           {renderReturnRowActions(returnItem)}
                         </div>
 
-                        <div
-                          style={{
-                            fontSize: "18px",
-                            color: "rgba(255,255,255,0.56)",
-                            justifySelf: "end",
-                          }}
-                        >
+
+                        <div style={{ fontSize: "18px", color: "#94a3b8", justifySelf: "end" }}>
                           {isExpanded ? "−" : "+"}
                         </div>
                       </div>
 
+
                       {isExpanded ? (
-                        <div
-                          style={{
-                            padding: "0 16px 16px",
-                            background: "rgba(255,255,255,0.02)",
-                          }}
-                        >
-                          {!detail ? (
-                            <div style={{ paddingTop: "12px", fontSize: "13px", color: "rgba(255,255,255,0.62)" }}>
-                              Loading return details...
-                            </div>
-                          ) : (
-                            <div
-                              style={{
-                                display: "grid",
-                                gridTemplateColumns: "minmax(0, 1.2fr) minmax(320px, 0.8fr)",
-                                gap: "16px",
-                                alignItems: "start",
-                                paddingTop: "16px",
-                              }}
-                            >
-                              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                                <div style={{ ...sectionCardStyle, padding: "16px" }}>
-                                  <div style={{ fontSize: "14px", fontWeight: 800, marginBottom: "14px" }}>
-                                    Return Items
-                                  </div>
-
-                                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                    {detail.items.map((item) => (
-                                      <div
-                                        key={item.id}
-                                        style={{
-                                          padding: "12px",
-                                          borderRadius: "14px",
-                                          background: "rgba(255,255,255,0.03)",
-                                          border: "1px solid rgba(255,255,255,0.06)",
-                                        }}
-                                      >
-                                        <div
-                                          style={{
-                                            display: "flex",
-                                            justifyContent: "space-between",
-                                            gap: "12px",
-                                          }}
-                                        >
-                                          <div>
-                                            <div style={{ fontSize: "14px", fontWeight: 700 }}>
-                                              {item.product_name}
-                                            </div>
-                                            <div
-                                              style={{
-                                                fontSize: "13px",
-                                                color: "rgba(255,255,255,0.62)",
-                                                marginTop: "4px",
-                                              }}
-                                            >
-                                              Requested: {item.quantity_requested} · Approved:{" "}
-                                              {item.quantity_approved} · Received: {item.quantity_received}
-                                            </div>
-                                            <div
-                                              style={{
-                                                fontSize: "12px",
-                                                color: "rgba(255,255,255,0.48)",
-                                                marginTop: "4px",
-                                              }}
-                                            >
-                                              Reason: {getStatusLabel(item.reason_code)}
-                                              {item.reason_note ? ` · ${item.reason_note}` : ""}
-                                            </div>
-                                            <div
-                                              style={{
-                                                fontSize: "12px",
-                                                color: "rgba(255,255,255,0.48)",
-                                                marginTop: "4px",
-                                              }}
-                                            >
-                                              Restock: {item.restock_decision || "—"} · Qty:{" "}
-                                              {item.restocked_quantity}
-                                            </div>
-                                          </div>
-
-                                          <div style={{ fontSize: "14px", fontWeight: 800 }}>
-                                            {formatPrice(item.line_refund_final)}
-                                          </div>
-                                        </div>
-
-                                        {detail.status === "requested" && reviewDraft ? (
-                                          <div
-                                            style={{
-                                              marginTop: "12px",
-                                              display: "grid",
-                                              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                                              gap: "10px",
-                                            }}
-                                          >
-                                            <div>
-                                              <div style={labelStyle}>Approved Quantity</div>
-                                              <input
-                                                type="number"
-                                                min={0}
-                                                max={item.quantity_requested}
-                                                value={reviewDraft.approvedQuantities[item.id] ?? 0}
-                                                onChange={(e) =>
-                                                  setReviewDraftValue(returnItem.id, (draft) => ({
-                                                    ...draft,
-                                                    approvedQuantities: {
-                                                      ...draft.approvedQuantities,
-                                                      [item.id]: Number(e.target.value || 0),
-                                                    },
-                                                  }))
-                                                }
-                                                style={inputStyle}
-                                              />
-                                            </div>
-                                          </div>
-                                        ) : null}
-
-                                        {detail.status === "approved" && receiveDraft ? (
-                                          <div
-                                            style={{
-                                              marginTop: "12px",
-                                              display: "grid",
-                                              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                                              gap: "10px",
-                                            }}
-                                          >
-                                            <div>
-                                              <div style={labelStyle}>Received Quantity</div>
-                                              <input
-                                                type="number"
-                                                min={0}
-                                                max={item.quantity_approved}
-                                                value={receiveDraft.receivedQuantities[item.id] ?? 0}
-                                                onChange={(e) =>
-                                                  setReceiveDraftValue(returnItem.id, (draft) => ({
-                                                    ...draft,
-                                                    receivedQuantities: {
-                                                      ...draft.receivedQuantities,
-                                                      [item.id]: Number(e.target.value || 0),
-                                                    },
-                                                  }))
-                                                }
-                                                style={inputStyle}
-                                              />
-                                            </div>
-                                          </div>
-                                        ) : null}
-
-                                        {detail.status === "received" && inspectDraft ? (
-                                          <div
-                                            style={{
-                                              marginTop: "12px",
-                                              display: "grid",
-                                              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                                              gap: "10px",
-                                            }}
-                                          >
-                                            <div>
-                                              <div style={labelStyle}>Restock Decision</div>
-                                              <select
-                                                value={inspectDraft.restockDecisionByItem[item.id] || "discard"}
-                                                onChange={(e) =>
-                                                  setInspectDraftValue(returnItem.id, (draft) => ({
-                                                    ...draft,
-                                                    restockDecisionByItem: {
-                                                      ...draft.restockDecisionByItem,
-                                                      [item.id]: e.target.value as
-                                                        | "restock"
-                                                        | "quarantine"
-                                                        | "discard",
-                                                    },
-                                                  }))
-                                                }
-                                                style={inputStyle}
-                                              >
-                                                <option value="restock" style={{ color: "#0f172a" }}>
-                                                  Restock
-                                                </option>
-                                                <option value="quarantine" style={{ color: "#0f172a" }}>
-                                                  Quarantine
-                                                </option>
-                                                <option value="discard" style={{ color: "#0f172a" }}>
-                                                  Discard
-                                                </option>
-                                              </select>
-                                            </div>
-
-                                            <div>
-                                              <div style={labelStyle}>Restock Quantity</div>
-                                              <input
-                                                type="number"
-                                                min={0}
-                                                max={item.quantity_received}
-                                                value={inspectDraft.restockQuantityByItem[item.id] ?? 0}
-                                                onChange={(e) =>
-                                                  setInspectDraftValue(returnItem.id, (draft) => ({
-                                                    ...draft,
-                                                    restockQuantityByItem: {
-                                                      ...draft.restockQuantityByItem,
-                                                      [item.id]: Number(e.target.value || 0),
-                                                    },
-                                                  }))
-                                                }
-                                                style={inputStyle}
-                                              />
-                                            </div>
-                                          </div>
-                                        ) : null}
-                                      </div>
-                                    ))}
-                                  </div>
+                        <div style={{ padding: "0 16px 16px", background: "#ffffff" }}>
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "minmax(0, 1.2fr) minmax(320px, 0.8fr)",
+                              gap: "14px",
+                              alignItems: "start",
+                            }}
+                          >
+                            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                              <div style={{ ...plainCardStyle, padding: "14px" }}>
+                                <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>
+                                  Return Items
                                 </div>
 
-                                <div style={{ ...sectionCardStyle, padding: "16px" }}>
-                                  <div style={{ fontSize: "14px", fontWeight: 800, marginBottom: "14px" }}>
-                                    Customer Order
-                                  </div>
-                                  <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.68)", lineHeight: 1.8 }}>
-                                    Order ID: {detail.order.id}
-                                    <br />
-                                    Order Status: {getStatusLabel(detail.order.status)}
-                                    <br />
-                                    Payment: {detail.order.payment_method.toUpperCase()}
-                                    <br />
-                                    Order Total: {formatPrice(detail.order.total)}
-                                    <br />
-                                    Delivered At: {formatDate(detail.order.delivered_at)}
-                                  </div>
-                                </div>
 
-                                <div style={{ ...sectionCardStyle, padding: "16px" }}>
-                                  <div style={{ fontSize: "14px", fontWeight: 800, marginBottom: "14px" }}>
-                                    Shipping Address
-                                  </div>
-                                  <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "6px" }}>
-                                    {detail.order.shipping_address?.fullName || "—"}
-                                  </div>
-                                  <div
-                                    style={{
-                                      fontSize: "14px",
-                                      color: "rgba(255,255,255,0.7)",
-                                      lineHeight: 1.7,
-                                    }}
-                                  >
-                                    {detail.order.shipping_address?.addressLine1 || "—"}
-                                    <br />
-                                    {(detail.order.shipping_address?.city || "—")} -{" "}
-                                    {(detail.order.shipping_address?.postalCode || "—")}
-                                    <br />
-                                    {detail.order.shipping_address?.mobileNumber || "—"}
-                                    {detail.order.shipping_address?.email
-                                      ? ` · ${detail.order.shipping_address.email}`
-                                      : ""}
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                                <div style={{ ...sectionCardStyle, padding: "16px" }}>
-                                  <div style={{ fontSize: "14px", fontWeight: 800, marginBottom: "14px" }}>
-                                    Return Summary
-                                  </div>
-
-                                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                    <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.68)" }}>
-                                      Status: {getStatusLabel(detail.status)}
-                                    </div>
-                                    <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.68)" }}>
-                                      Refund status: {getStatusLabel(detail.refund_status)}
-                                    </div>
-                                    <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.68)" }}>
-                                      Suggested refund: {formatPrice(detail.suggested_refund_amount)}
-                                    </div>
-                                    <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.68)" }}>
-                                      Final refund: {formatPrice(detail.final_refund_amount)}
-                                    </div>
-                                    <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.68)" }}>
-                                      Refund method: {detail.refund_method || "—"}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {detail.status === "requested" && reviewDraft ? (
-                                  <div style={{ ...sectionCardStyle, padding: "16px" }}>
-                                    <div style={{ fontSize: "14px", fontWeight: 800, marginBottom: "14px" }}>
-                                      Review Action
-                                    </div>
-
-                                    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                                      <div>
-                                        <div style={labelStyle}>Action</div>
-                                        <select
-                                          value={reviewDraft.action}
-                                          onChange={(e) =>
-                                            setReviewDraftValue(returnItem.id, (draft) => ({
-                                              ...draft,
-                                              action: e.target.value as "approve" | "reject",
-                                            }))
-                                          }
-                                          style={inputStyle}
-                                        >
-                                          <option value="approve" style={{ color: "#0f172a" }}>
-                                            Approve
-                                          </option>
-                                          <option value="reject" style={{ color: "#0f172a" }}>
-                                            Reject
-                                          </option>
-                                        </select>
-                                      </div>
-
-                                      <div>
-                                        <div style={labelStyle}>Admin Note</div>
-                                        <textarea
-                                          value={reviewDraft.adminNote}
-                                          onChange={(e) =>
-                                            setReviewDraftValue(returnItem.id, (draft) => ({
-                                              ...draft,
-                                              adminNote: e.target.value,
-                                            }))
-                                          }
-                                          rows={3}
-                                          style={inputStyle}
-                                        />
-                                      </div>
-
-                                      {reviewDraft.action === "reject" ? (
-                                        <div>
-                                          <div style={labelStyle}>Rejection Reason</div>
-                                          <textarea
-                                            value={reviewDraft.rejectionReason}
-                                            onChange={(e) =>
-                                              setReviewDraftValue(returnItem.id, (draft) => ({
-                                                ...draft,
-                                                rejectionReason: e.target.value,
-                                              }))
-                                            }
-                                            rows={3}
-                                            style={inputStyle}
-                                          />
-                                        </div>
-                                      ) : null}
-
-                                      <button
-                                        disabled={actionLoadingId === returnItem.id}
-                                        onClick={() => handleReviewReturn(returnItem.id)}
-                                        style={{
-                                          border: "1px solid rgba(59,130,246,0.24)",
-                                          background: "rgba(59,130,246,0.16)",
-                                          color: "#93c5fd",
-                                          borderRadius: "12px",
-                                          padding: "11px 14px",
-                                          fontSize: "14px",
-                                          fontWeight: 700,
-                                          cursor: actionLoadingId === returnItem.id ? "wait" : "pointer",
-                                        }}
-                                      >
-                                        Submit Review
-                                      </button>
-                                    </div>
-                                  </div>
-                                ) : null}
-
-                                {detail.status === "approved" && receiveDraft ? (
-                                  <div style={{ ...sectionCardStyle, padding: "16px" }}>
-                                    <div style={{ fontSize: "14px", fontWeight: 800, marginBottom: "14px" }}>
-                                      Receive Action
-                                    </div>
-
-                                    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                                      <div>
-                                        <div style={labelStyle}>Admin Note</div>
-                                        <textarea
-                                          value={receiveDraft.adminNote}
-                                          onChange={(e) =>
-                                            setReceiveDraftValue(returnItem.id, (draft) => ({
-                                              ...draft,
-                                              adminNote: e.target.value,
-                                            }))
-                                          }
-                                          rows={3}
-                                          style={inputStyle}
-                                        />
-                                      </div>
-
-                                      <button
-                                        disabled={actionLoadingId === returnItem.id}
-                                        onClick={() => handleReceiveReturn(returnItem.id)}
-                                        style={{
-                                          border: "1px solid rgba(245,158,11,0.24)",
-                                          background: "rgba(245,158,11,0.16)",
-                                          color: "#fcd34d",
-                                          borderRadius: "12px",
-                                          padding: "11px 14px",
-                                          fontSize: "14px",
-                                          fontWeight: 700,
-                                          cursor: actionLoadingId === returnItem.id ? "wait" : "pointer",
-                                        }}
-                                      >
-                                        Mark Received
-                                      </button>
-                                    </div>
-                                  </div>
-                                ) : null}
-
-                                {detail.status === "received" && inspectDraft ? (
-                                  <div style={{ ...sectionCardStyle, padding: "16px" }}>
-                                    <div style={{ fontSize: "14px", fontWeight: 800, marginBottom: "14px" }}>
-                                      Inspection Action
-                                    </div>
-
-                                    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                                      <div>
-                                        <div style={labelStyle}>Admin Note</div>
-                                        <textarea
-                                          value={inspectDraft.adminNote}
-                                          onChange={(e) =>
-                                            setInspectDraftValue(returnItem.id, (draft) => ({
-                                              ...draft,
-                                              adminNote: e.target.value,
-                                            }))
-                                          }
-                                          rows={3}
-                                          style={inputStyle}
-                                        />
-                                      </div>
-
-                                      <button
-                                        disabled={actionLoadingId === returnItem.id}
-                                        onClick={() => handleInspectReturn(returnItem.id)}
-                                        style={{
-                                          border: "1px solid rgba(168,85,247,0.24)",
-                                          background: "rgba(168,85,247,0.16)",
-                                          color: "#d8b4fe",
-                                          borderRadius: "12px",
-                                          padding: "11px 14px",
-                                          fontSize: "14px",
-                                          fontWeight: 700,
-                                          cursor: actionLoadingId === returnItem.id ? "wait" : "pointer",
-                                        }}
-                                      >
-                                        Complete Inspection
-                                      </button>
-                                    </div>
-                                  </div>
-                                ) : null}
-
-                                {detail.status === "inspected" && refundDraft ? (
-                                  <div style={{ ...sectionCardStyle, padding: "16px" }}>
-                                    <div style={{ fontSize: "14px", fontWeight: 800, marginBottom: "14px" }}>
-                                      Refund Action
-                                    </div>
-
-                                    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                                      <div>
-                                        <div style={labelStyle}>Refund Method</div>
-                                        <input
-                                          value={refundDraft.refundMethod}
-                                          onChange={(e) =>
-                                            setRefundDraftValue(returnItem.id, (draft) => ({
-                                              ...draft,
-                                              refundMethod: e.target.value,
-                                            }))
-                                          }
-                                          placeholder="e.g. cod_refund"
-                                          style={inputStyle}
-                                        />
-                                      </div>
-
-                                      <div>
-                                        <div style={labelStyle}>Final Refund Amount</div>
-                                        <input
-                                          type="number"
-                                          step="0.01"
-                                          value={refundDraft.finalRefundAmount}
-                                          onChange={(e) =>
-                                            setRefundDraftValue(returnItem.id, (draft) => ({
-                                              ...draft,
-                                              finalRefundAmount: e.target.value,
-                                            }))
-                                          }
-                                          placeholder={String(detail.suggested_refund_amount)}
-                                          style={inputStyle}
-                                        />
-                                      </div>
-
-                                      <div>
-                                        <div style={labelStyle}>Refund Override Reason</div>
-                                        <textarea
-                                          value={refundDraft.refundOverrideReason}
-                                          onChange={(e) =>
-                                            setRefundDraftValue(returnItem.id, (draft) => ({
-                                              ...draft,
-                                              refundOverrideReason: e.target.value,
-                                            }))
-                                          }
-                                          rows={3}
-                                          style={inputStyle}
-                                        />
-                                      </div>
-
-                                      <div>
-                                        <div style={labelStyle}>Admin Note</div>
-                                        <textarea
-                                          value={refundDraft.adminNote}
-                                          onChange={(e) =>
-                                            setRefundDraftValue(returnItem.id, (draft) => ({
-                                              ...draft,
-                                              adminNote: e.target.value,
-                                            }))
-                                          }
-                                          rows={3}
-                                          style={inputStyle}
-                                        />
-                                      </div>
-
-                                      <button
-                                        disabled={actionLoadingId === returnItem.id}
-                                        onClick={() => handleRefundReturn(returnItem.id)}
-                                        style={{
-                                          border: "1px solid rgba(34,197,94,0.24)",
-                                          background: "rgba(34,197,94,0.16)",
-                                          color: "#86efac",
-                                          borderRadius: "12px",
-                                          padding: "11px 14px",
-                                          fontSize: "14px",
-                                          fontWeight: 700,
-                                          cursor: actionLoadingId === returnItem.id ? "wait" : "pointer",
-                                        }}
-                                      >
-                                        Process Refund
-                                      </button>
-                                    </div>
-                                  </div>
-                                ) : null}
-
-                                {(detail.status === "rejected" || detail.status === "refunded") && (
-                                  <div style={{ ...sectionCardStyle, padding: "16px" }}>
-                                    <div style={{ fontSize: "14px", fontWeight: 800, marginBottom: "14px" }}>
-                                      Final Action
-                                    </div>
-                                    <button
-                                      disabled={actionLoadingId === returnItem.id}
-                                      onClick={() => handleCloseReturn(returnItem.id)}
+                                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                                  {(detail?.items || []).map((item) => (
+                                    <div
+                                      key={item.id}
                                       style={{
-                                        border: "1px solid rgba(148,163,184,0.24)",
-                                        background: "rgba(148,163,184,0.16)",
-                                        color: "#cbd5e1",
-                                        borderRadius: "12px",
-                                        padding: "11px 14px",
-                                        fontSize: "14px",
-                                        fontWeight: 700,
-                                        cursor: actionLoadingId === returnItem.id ? "wait" : "pointer",
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        gap: "12px",
+                                        padding: "10px",
+                                        borderRadius: "6px",
+                                        background: "#f8fafc",
+                                        border: "1px solid #e2e8f0",
                                       }}
                                     >
-                                      Close Return
-                                    </button>
-                                  </div>
-                                )}
-
-                                <div style={{ ...sectionCardStyle, padding: "16px" }}>
-                                  <div style={{ fontSize: "14px", fontWeight: 800, marginBottom: "14px" }}>
-                                    Timeline
-                                  </div>
-
-                                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                    <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.68)" }}>
-                                      Requested: {formatDate(detail.created_at)}
-                                    </div>
-                                    <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.68)" }}>
-                                      Approved: {formatDate(detail.approved_at)}
-                                    </div>
-                                    <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.68)" }}>
-                                      Rejected: {formatDate(detail.rejected_at)}
-                                    </div>
-                                    <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.68)" }}>
-                                      Received: {formatDate(detail.received_at)}
-                                    </div>
-                                    <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.68)" }}>
-                                      Inspected: {formatDate(detail.inspected_at)}
-                                    </div>
-                                    <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.68)" }}>
-                                      Refunded: {formatDate(detail.refunded_at)}
-                                    </div>
-                                    <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.68)" }}>
-                                      Closed: {formatDate(detail.closed_at)}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div style={{ ...sectionCardStyle, padding: "16px" }}>
-                                  <div style={{ fontSize: "14px", fontWeight: 800, marginBottom: "14px" }}>
-                                    Status History
-                                  </div>
-
-                                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                    {detail.status_history?.length ? (
-                                      detail.status_history.map((entry) => (
-                                        <div
-                                          key={entry.id}
-                                          style={{
-                                            padding: "10px 12px",
-                                            borderRadius: "12px",
-                                            background: "rgba(255,255,255,0.03)",
-                                            border: "1px solid rgba(255,255,255,0.06)",
-                                          }}
-                                        >
-                                          <div style={{ fontSize: "13px", fontWeight: 700 }}>
-                                            {getStatusLabel(entry.status)}
-                                          </div>
-                                          <div
-                                            style={{
-                                              fontSize: "12px",
-                                              color: "rgba(255,255,255,0.58)",
-                                              marginTop: "4px",
-                                            }}
-                                          >
-                                            {formatDate(entry.changed_at)} · {entry.changed_by_type || "system"}
-                                          </div>
-                                          {entry.note ? (
-                                            <div
-                                              style={{
-                                                fontSize: "12px",
-                                                color: "rgba(255,255,255,0.72)",
-                                                marginTop: "6px",
-                                              }}
-                                            >
-                                              {entry.note}
-                                            </div>
-                                          ) : null}
+                                      <div>
+                                        <div style={{ fontSize: "14px", fontWeight: 700 }}>
+                                          {item.product_name}
                                         </div>
-                                      ))
-                                    ) : (
-                                      <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.58)" }}>
-                                        No status history found.
+                                        <div style={{ fontSize: "13px", color: "#64748b", marginTop: "4px" }}>
+                                          Requested {item.quantity_requested} · Approved {item.quantity_approved} · Received {item.quantity_received}
+                                        </div>
+                                        <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "4px" }}>
+                                          Reason: {item.reason_code}
+                                          {item.reason_note ? ` · ${item.reason_note}` : ""}
+                                        </div>
                                       </div>
-                                    )}
-                                  </div>
+
+
+                                      <div style={{ fontSize: "14px", fontWeight: 700 }}>
+                                        {formatPrice(item.line_refund_final)}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+
+                              <div style={{ ...plainCardStyle, padding: "14px" }}>
+                                <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>
+                                  Return Timeline
+                                </div>
+                                <div style={{ display: "grid", gap: "6px", fontSize: "14px", color: "#475569" }}>
+                                  <div>Requested: {formatDate(returnItem.created_at)}</div>
+                                  <div>Approved: {formatDate(detail?.approved_at || returnItem.approved_at)}</div>
+                                  <div>Received: {formatDate(detail?.received_at || returnItem.received_at)}</div>
+                                  <div>Inspected: {formatDate(detail?.inspected_at || returnItem.inspected_at)}</div>
+                                  <div>Refunded: {formatDate(detail?.refunded_at || returnItem.refunded_at)}</div>
+                                  <div>Closed: {formatDate(detail?.closed_at || returnItem.closed_at)}</div>
                                 </div>
                               </div>
                             </div>
-                          )}
+
+
+                            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                              <div style={{ ...plainCardStyle, padding: "14px" }}>
+                                <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>
+                                  Return Summary
+                                </div>
+                                <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "6px" }}>
+                                  Order {returnItem.order_id}
+                                </div>
+                                <div style={{ fontSize: "13px", color: "#475569", lineHeight: 1.8 }}>
+                                  Items: {returnItem.item_count}
+                                  <br />
+                                  Requested Qty: {returnItem.total_quantity_requested}
+                                  <br />
+                                  Suggested Refund: {formatPrice(returnItem.suggested_refund_amount)}
+                                  <br />
+                                  Final Refund: {formatPrice(returnItem.final_refund_amount)}
+                                </div>
+                              </div>
+
+
+                              {returnItem.status === "requested" ? (
+                                <div style={{ ...plainCardStyle, padding: "14px" }}>
+                                  <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>
+                                    Review Return
+                                  </div>
+
+
+                                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                                    <div>
+                                      <div style={labelStyle}>Admin Note</div>
+                                      <textarea
+                                        value={reviewDraft.adminNote}
+                                        onChange={(e) =>
+                                          setReviewDraftValue(returnItem.id, (draft) => ({
+                                            ...draft,
+                                            adminNote: e.target.value,
+                                          }))
+                                        }
+                                        style={{ ...inputStyle, minHeight: "80px", resize: "vertical" }}
+                                      />
+                                    </div>
+
+
+                                    <div>
+                                      <div style={labelStyle}>Rejection Reason</div>
+                                      <input
+                                        value={reviewDraft.rejectionReason}
+                                        onChange={(e) =>
+                                          setReviewDraftValue(returnItem.id, (draft) => ({
+                                            ...draft,
+                                            rejectionReason: e.target.value,
+                                          }))
+                                        }
+                                        style={inputStyle}
+                                      />
+                                    </div>
+
+
+                                    <button
+                                      onClick={() => handleReviewReturn(returnItem.id)}
+                                      style={{
+                                        border: "1px solid #cbd5e1",
+                                        background: "#ffffff",
+                                        color: "#0f172a",
+                                        borderRadius: "6px",
+                                        padding: "10px 12px",
+                                        fontSize: "14px",
+                                        fontWeight: 700,
+                                        cursor: "pointer",
+                                      }}
+                                    >
+                                      Submit Review
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : null}
+
+
+                              {returnItem.status === "approved" ? (
+                                <div style={{ ...plainCardStyle, padding: "14px" }}>
+                                  <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>
+                                    Receive Return
+                                  </div>
+                                  <button
+                                    onClick={() => handleReceiveReturn(returnItem.id)}
+                                    style={{
+                                      border: "1px solid #cbd5e1",
+                                      background: "#ffffff",
+                                      color: "#0f172a",
+                                      borderRadius: "6px",
+                                      padding: "10px 12px",
+                                      fontSize: "14px",
+                                      fontWeight: 700,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    Mark as Received
+                                  </button>
+                                </div>
+                              ) : null}
+
+
+                              {returnItem.status === "received" ? (
+                                <div style={{ ...plainCardStyle, padding: "14px" }}>
+                                  <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>
+                                    Inspect Return
+                                  </div>
+                                  <button
+                                    onClick={() => handleInspectReturn(returnItem.id)}
+                                    style={{
+                                      border: "1px solid #cbd5e1",
+                                      background: "#ffffff",
+                                      color: "#0f172a",
+                                      borderRadius: "6px",
+                                      padding: "10px 12px",
+                                      fontSize: "14px",
+                                      fontWeight: 700,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    Submit Inspection
+                                  </button>
+                                </div>
+                              ) : null}
+
+
+                              {returnItem.status === "inspected" ? (
+                                <div style={{ ...plainCardStyle, padding: "14px" }}>
+                                  <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>
+                                    Refund Return
+                                  </div>
+                                  <button
+                                    onClick={() => handleRefundReturn(returnItem.id)}
+                                    style={{
+                                      border: "1px solid #cbd5e1",
+                                      background: "#ffffff",
+                                      color: "#0f172a",
+                                      borderRadius: "6px",
+                                      padding: "10px 12px",
+                                      fontSize: "14px",
+                                      fontWeight: 700,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    Process Refund
+                                  </button>
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
                         </div>
                       ) : null}
                     </div>
@@ -2679,5 +2103,6 @@ const AdminOrders: React.FC = () => {
     </div>
   );
 };
+
 
 export default AdminOrders;

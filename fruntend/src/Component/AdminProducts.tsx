@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { API_BASE_URL} from "../config/api";
 
+
 type VariantValue = {
   value: string;
   inStock: boolean;
@@ -10,11 +11,13 @@ type VariantValue = {
   comparePrice?: number | null;
 };
 
+
 type ProductVariantOption = {
   optionType: "size" | "weight" | "shoe_size" | "volume" | "pack_size" | "custom";
   optionName: string;
   optionValues: VariantValue[];
 };
+
 
 type Product = {
   id: string;
@@ -31,6 +34,7 @@ type Product = {
   variant_option?: ProductVariantOption | null;
 };
 
+
 type VariantRow = {
   value: string;
   price: string;
@@ -38,6 +42,7 @@ type VariantRow = {
   stockQty: string;
   inStock: boolean;
 };
+
 
 type ProductFormValues = {
   name: string;
@@ -51,9 +56,11 @@ type ProductFormValues = {
   optionValuesText: string;
 };
 
+
 type FormErrors = Partial<
   Record<keyof ProductFormValues | "imagesText" | "optionValuesText" | "variantRows", string>
 >;
+
 
 
 const presetMap: Record<
@@ -67,6 +74,7 @@ const presetMap: Record<
   pack_size: { optionName: "Pack Size", values: ["1 pack", "2 pack", "5 pack"] },
   custom: { optionName: "", values: [] },
 };
+
 
 const normalizeProduct = (p: any): Product => ({
   id: String(p.id),
@@ -83,6 +91,7 @@ const normalizeProduct = (p: any): Product => ({
   variant_option: p.variant_option ?? null,
 });
 
+
 const buildVariantRowsFromText = (
   text: string,
   existing: VariantRow[] = []
@@ -91,6 +100,7 @@ const buildVariantRowsFromText = (
     .split(",")
     .map((v) => v.trim())
     .filter(Boolean);
+
 
   return values.map((value) => {
     const found = existing.find((item) => item.value.toLowerCase() === value.toLowerCase());
@@ -106,9 +116,11 @@ const buildVariantRowsFromText = (
   });
 };
 
+
 const getVariantDiscountPercent = (price: string, comparePrice: string) => {
   const finalPrice = Number(price);
   const original = Number(comparePrice);
+
 
   if (
     !price.trim() ||
@@ -121,8 +133,10 @@ const getVariantDiscountPercent = (price: string, comparePrice: string) => {
     return null;
   }
 
+
   return Math.round(((original - finalPrice) / original) * 100);
 };
+
 
 const AdminProducts = () => {
   const { siteId } = useParams();
@@ -133,6 +147,7 @@ const AdminProducts = () => {
   const [errors, setErrors] = useState<FormErrors>({});
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [variantRows, setVariantRows] = useState<VariantRow[]>([]);
+
 
   const [formValues, setFormValues] = useState<ProductFormValues>({
     name: "",
@@ -146,14 +161,17 @@ const AdminProducts = () => {
     optionValuesText: "",
   });
 
+
   const parseImages = (text: string) =>
     text
       .split("\n")
       .map((item) => item.trim())
       .filter(Boolean);
 
+
   const buildVariantOption = (): ProductVariantOption | null => {
     if (!formValues.optionName.trim() && variantRows.length === 0) return null;
+
 
     const optionValues = variantRows
       .map((row) => ({
@@ -165,7 +183,9 @@ const AdminProducts = () => {
       }))
       .filter((row) => row.value);
 
+
     if (optionValues.length === 0) return null;
+
 
     return {
       optionType: formValues.optionType,
@@ -174,12 +194,14 @@ const AdminProducts = () => {
     };
   };
 
+
   const getFallbackProductPrice = () => {
     const firstWithPrice = variantRows.find(
       (row) => row.price.trim() !== "" && Number(row.price) > 0
     );
     return firstWithPrice ? Number(firstWithPrice.price) : 0;
   };
+
 
   const getFallbackComparePrice = () => {
     const firstWithComparePrice = variantRows.find(
@@ -191,11 +213,13 @@ const AdminProducts = () => {
     return firstWithComparePrice ? Number(firstWithComparePrice.comparePrice) : null;
   };
 
+
   const getFallbackStock = () =>
     variantRows.reduce((sum, row) => {
       const qty = row.stockQty.trim() === "" ? 0 : Number(row.stockQty);
       return sum + (Number.isFinite(qty) && qty > 0 ? qty : 0);
     }, 0);
+
 
   const validateForm = () => {
     const nextErrors: FormErrors = {};
@@ -204,6 +228,7 @@ const AdminProducts = () => {
       .split(",")
       .map((v) => v.trim())
       .filter(Boolean);
+
 
     if (!formValues.name.trim()) nextErrors.name = "Name is required.";
     if (!formValues.category.trim()) nextErrors.category = "Category is required.";
@@ -215,19 +240,23 @@ const AdminProducts = () => {
       nextErrors.optionValuesText = "Duplicate option values are not allowed.";
     }
 
+
     const hasAnyVariantPrice = variantRows.some(
       (row) => row.price.trim() !== "" && Number(row.price) > 0
     );
 
+
     if (!hasAnyVariantPrice) {
       nextErrors.variantRows = "Add at least one variant price.";
     }
+
 
     const invalidVariantRow = variantRows.some((row) => {
       const price = row.price.trim() === "" ? null : Number(row.price);
       const comparePrice =
         row.comparePrice.trim() === "" ? null : Number(row.comparePrice);
       const stockQty = row.stockQty.trim() === "" ? null : Number(row.stockQty);
+
 
       return (
         !row.value.trim() ||
@@ -241,14 +270,17 @@ const AdminProducts = () => {
       );
     });
 
+
     if (invalidVariantRow) {
       nextErrors.variantRows =
         "Each variant must have value, valid price, optional MRP, and valid stock.";
     }
 
+
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
+
 
   const resetForm = () => {
     setEditingProduct(null);
@@ -267,10 +299,12 @@ const AdminProducts = () => {
     });
   };
 
+
   const openCreateForm = () => {
     resetForm();
     setShowForm(true);
   };
+
 
   const openEditForm = (product: Product) => {
     const optionValues = product.variant_option?.optionValues ?? [];
@@ -300,6 +334,7 @@ const AdminProducts = () => {
     setShowForm(true);
   };
 
+
   useEffect(() => {
     const loadProducts = async () => {
       if (!siteId) return;
@@ -321,10 +356,13 @@ const AdminProducts = () => {
       }
     };
 
+
     loadProducts();
   }, [siteId]);
 
+
   const imagePreviewList = useMemo(() => parseImages(formValues.imagesText), [formValues.imagesText]);
+
 
   const handleFormChange = (
     field: keyof ProductFormValues,
@@ -334,6 +372,7 @@ const AdminProducts = () => {
       ...prev,
       [field]: value,
     }));
+
 
     if (field === "optionType") {
       const preset = presetMap[value as ProductVariantOption["optionType"]];
@@ -349,10 +388,12 @@ const AdminProducts = () => {
       return;
     }
 
+
     if (field === "optionValuesText") {
       setVariantRows((prev) => buildVariantRowsFromText(value, prev));
     }
   };
+
 
   const handleVariantRowChange = (
     index: number,
@@ -366,8 +407,10 @@ const AdminProducts = () => {
     );
   };
 
+
   const handleImageUpload = async (file: File) => {
     if (!siteId) return;
+
 
     const allowedTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
     if (!allowedTypes.includes(file.type)) {
@@ -375,8 +418,10 @@ const AdminProducts = () => {
       return;
     }
 
+
     const formData = new FormData();
     formData.append("file", file);
+
 
     setIsUploadingImage(true);
     try {
@@ -386,14 +431,17 @@ const AdminProducts = () => {
         body: formData,
       });
 
+
       if (!res.ok) {
         const errorData = await res.json().catch(() => null);
         alert(errorData?.detail || "Failed to upload image.");
         return;
       }
 
+
       const data = await res.json();
       const fullUrl = `${API_BASE_URL}${data.url}`;
+
 
       setFormValues((prev) => ({
         ...prev,
@@ -409,14 +457,17 @@ const AdminProducts = () => {
     }
   };
 
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!siteId) return;
     if (!validateForm()) return;
 
+
     const fallbackPrice = getFallbackProductPrice();
     const fallbackComparePrice = getFallbackComparePrice();
     const fallbackStock = getFallbackStock();
+
 
     const payload = {
       name: formValues.name.trim(),
@@ -431,6 +482,7 @@ const AdminProducts = () => {
       images: parseImages(formValues.imagesText),
       variant_option: buildVariantOption(),
     };
+
 
     try {
       if (editingProduct) {
@@ -475,6 +527,7 @@ const AdminProducts = () => {
     }
   };
 
+
   const handleDelete = async (productId: string) => {
     if (!siteId) return;
     try {
@@ -492,67 +545,43 @@ const AdminProducts = () => {
     }
   };
 
+
   return (
-    <div style={{ maxWidth: "1100px" }}>
+    <div style={{ maxWidth: "1100px", color: "#0f172a" }}>
       <div
         style={{
           display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: "16px",
-          marginBottom: "24px",
-          flexWrap: "wrap",
+          justifyContent: "flex-end",
+          marginBottom: "18px",
         }}
       >
-        <div>
-          <p
-            style={{
-              margin: "0 0 6px",
-              fontSize: "12px",
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              color: "rgba(255,255,255,0.5)",
-            }}
-          >
-            Admin / Products
-          </p>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: "40px",
-              lineHeight: 1.05,
-              letterSpacing: "-0.03em",
-              color: "white",
-            }}
-          >
-            Products
-          </h1>
-        </div>
-
         <button onClick={openCreateForm} style={primaryButtonStyle}>
           + Add product
         </button>
       </div>
 
+
       {showForm && (
         <div
           style={{
-            marginBottom: "24px",
+            marginBottom: "20px",
             padding: "16px 18px",
-            borderRadius: "18px",
-            background: "rgba(15,23,42,0.9)",
-            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: "8px",
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
           }}
         >
           <h2
             style={{
               margin: "0 0 12px",
-              fontSize: "18px",
-              color: "white",
+              fontSize: "16px",
+              color: "#0f172a",
+              fontWeight: 700,
             }}
           >
             {editingProduct ? "Edit product" : "Add product"}
           </h2>
+
 
           <form
             onSubmit={handleSubmit}
@@ -580,6 +609,7 @@ const AdminProducts = () => {
               error={errors.category}
             />
 
+
             <div style={{ gridColumn: "1 / -1" }}>
               <FormField
                 label="Description"
@@ -588,6 +618,7 @@ const AdminProducts = () => {
                 error={errors.description}
               />
             </div>
+
 
             <div style={{ gridColumn: "1 / -1" }}>
               <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -605,12 +636,13 @@ const AdminProducts = () => {
                   style={inputStyle}
                 />
                 {isUploadingImage ? (
-                  <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.65)" }}>
+                  <span style={{ fontSize: "12px", color: "#64748b" }}>
                     Uploading image...
                   </span>
                 ) : null}
               </label>
             </div>
+
 
             <div style={{ gridColumn: "1 / -1" }}>
               <FormField
@@ -621,6 +653,7 @@ const AdminProducts = () => {
                 error={errors.imagesText}
               />
             </div>
+
 
             {imagePreviewList.length > 0 && (
               <div
@@ -647,9 +680,9 @@ const AdminProducts = () => {
                         width: "88px",
                         height: "88px",
                         objectFit: "cover",
-                        borderRadius: "10px",
-                        border: "1px solid rgba(255,255,255,0.1)",
-                        background: "rgba(255,255,255,0.04)",
+                        borderRadius: "6px",
+                        border: "1px solid #e2e8f0",
+                        background: "#f8fafc",
                       }}
                     />
                     <button
@@ -667,13 +700,14 @@ const AdminProducts = () => {
               </div>
             )}
 
+
             <div
               style={{
                 gridColumn: "1 / -1",
                 padding: "12px",
-                borderRadius: "12px",
-                border: "1px solid rgba(255,255,255,0.08)",
-                background: "rgba(255,255,255,0.03)",
+                borderRadius: "8px",
+                border: "1px solid #e2e8f0",
+                background: "#f8fafc",
               }}
             >
               <div style={{ display: "grid", gap: "12px" }}>
@@ -695,6 +729,7 @@ const AdminProducts = () => {
                   </select>
                 </label>
 
+
                 <FormField
                   label="Option name"
                   value={formValues.optionName}
@@ -708,21 +743,24 @@ const AdminProducts = () => {
                   error={errors.optionValuesText}
                 />
 
+
                 {variantRows.length > 0 && (
                   <div style={{ display: "grid", gap: "10px" }}>
                     <div
                       style={{
                         fontSize: "12px",
                         fontWeight: 700,
-                        color: "rgba(255,255,255,0.72)",
+                        color: "#475569",
                       }}
                     >
                       Per-variant price, MRP, discount, and stock
                     </div>
 
+
                     <div style={{ display: "grid", gap: "10px" }}>
                       {variantRows.map((row, index) => {
                         const discountPercent = getVariantDiscountPercent(row.price, row.comparePrice);
+
 
                         return (
                           <div
@@ -733,9 +771,9 @@ const AdminProducts = () => {
                               gap: "10px",
                               alignItems: "end",
                               padding: "12px",
-                              borderRadius: "12px",
-                              border: "1px solid rgba(255,255,255,0.06)",
-                              background: "rgba(255,255,255,0.02)",
+                              borderRadius: "8px",
+                              border: "1px solid #e2e8f0",
+                              background: "#ffffff",
                             }}
                           >
                             <FormField
@@ -767,7 +805,7 @@ const AdminProducts = () => {
                                 alignItems: "center",
                                 gap: "8px",
                                 minHeight: "42px",
-                                color: "rgba(255,255,255,0.78)",
+                                color: "#334155",
                                 fontSize: "13px",
                                 paddingBottom: "8px",
                               }}
@@ -780,6 +818,7 @@ const AdminProducts = () => {
                               In stock
                             </label>
 
+
                             <div
                               style={{
                                 minHeight: "42px",
@@ -787,7 +826,7 @@ const AdminProducts = () => {
                                 alignItems: "center",
                                 fontSize: "12px",
                                 fontWeight: 700,
-                                color: discountPercent ? "#86efac" : "rgba(255,255,255,0.45)",
+                                color: discountPercent ? "#15803d" : "#94a3b8",
                               }}
                             >
                               {discountPercent ? `${discountPercent}% off` : "No discount"}
@@ -797,11 +836,13 @@ const AdminProducts = () => {
                       })}
                     </div>
 
+
                     {errors.variantRows ? <span style={errorStyle}>{errors.variantRows}</span> : null}
                   </div>
                 )}
               </div>
             </div>
+
 
             <div
               style={{
@@ -831,12 +872,13 @@ const AdminProducts = () => {
         </div>
       )}
 
+
       <div
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-          gap: "14px",
-          marginBottom: "22px",
+          gap: "12px",
+          marginBottom: "20px",
         }}
       >
         <StatCard label="Total products" value={String(products.length)} />
@@ -850,36 +892,18 @@ const AdminProducts = () => {
         />
       </div>
 
+
       <div
         style={{
-          border: "1px solid rgba(255,255,255,0.08)",
-          borderRadius: "20px",
+          border: "1px solid #e2e8f0",
+          borderRadius: "8px",
           overflow: "hidden",
-          background: "rgba(255,255,255,0.03)",
-          boxShadow: "0 18px 40px rgba(0,0,0,0.18)",
+          background: "#ffffff",
         }}
       >
-        <div
-          style={{
-            padding: "16px 18px",
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
-            background: "rgba(255,255,255,0.03)",
-          }}
-        >
-          <h2
-            style={{
-              margin: 0,
-              fontSize: "16px",
-              color: "white",
-            }}
-          >
-            Product inventory
-          </h2>
-        </div>
-
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead style={{ background: "rgba(255,255,255,0.04)" }}>
+            <thead style={{ background: "#f8fafc" }}>
               <tr>
                 <th style={thStyle}>Product</th>
                 <th style={thStyle}>Price</th>
@@ -888,6 +912,7 @@ const AdminProducts = () => {
                 <th style={thStyle}>Actions</th>
               </tr>
             </thead>
+
 
             <tbody>
               {isLoading && (
@@ -898,6 +923,7 @@ const AdminProducts = () => {
                 </tr>
               )}
 
+
               {!isLoading && products.length === 0 && (
                 <tr>
                   <td colSpan={5} style={tdStyle}>
@@ -905,6 +931,7 @@ const AdminProducts = () => {
                   </td>
                 </tr>
               )}
+
 
               {products.map((product) => {
                 const firstVariant = product.variant_option?.optionValues?.[0];
@@ -917,6 +944,7 @@ const AdminProducts = () => {
                   (firstVariant as any).comparePrice > displayPrice
                     ? (firstVariant as any).comparePrice
                     : product.compare_price;
+
 
                 return (
                   <tr key={product.id}>
@@ -933,20 +961,20 @@ const AdminProducts = () => {
                           src={product.images[0] || ""}
                           alt={product.name}
                           style={{
-                            width: "60px",
-                            height: "72px",
-                            borderRadius: "14px",
+                            width: "56px",
+                            height: "68px",
+                            borderRadius: "6px",
                             objectFit: "cover",
-                            background: "rgba(255,255,255,0.04)",
-                            border: "1px solid rgba(255,255,255,0.06)",
+                            background: "#f8fafc",
+                            border: "1px solid #e2e8f0",
                           }}
                         />
                         <div>
                           <div
                             style={{
-                              fontSize: "15px",
+                              fontSize: "14px",
                               fontWeight: 700,
-                              color: "white",
+                              color: "#0f172a",
                               marginBottom: "4px",
                             }}
                           >
@@ -955,7 +983,7 @@ const AdminProducts = () => {
                           <div
                             style={{
                               fontSize: "13px",
-                              color: "rgba(255,255,255,0.55)",
+                              color: "#64748b",
                             }}
                           >
                             {product.brand}
@@ -964,6 +992,7 @@ const AdminProducts = () => {
                       </div>
                     </td>
 
+
                     <td style={tdStyle}>
                       <div style={{ display: "grid", gap: "4px" }}>
                         <span>₹{displayPrice}</span>
@@ -971,7 +1000,7 @@ const AdminProducts = () => {
                           <span
                             style={{
                               fontSize: "12px",
-                              color: "rgba(255,255,255,0.5)",
+                              color: "#94a3b8",
                               textDecoration: "line-through",
                             }}
                           >
@@ -982,20 +1011,19 @@ const AdminProducts = () => {
                     </td>
                     <td style={tdStyle}>{product.category}</td>
 
+
                     <td style={tdStyle}>
                       <div style={{ display: "grid", gap: "6px" }}>
                         <span
                           style={{
                             display: "inline-flex",
                             alignItems: "center",
-                            padding: "7px 10px",
-                            borderRadius: "999px",
-                            background: product.in_stock
-                              ? "rgba(34,197,94,0.14)"
-                              : "rgba(248,113,113,0.14)",
-                            color: product.in_stock ? "#4ade80" : "#f87171",
+                            padding: "5px 8px",
+                            borderRadius: "4px",
+                            background: product.in_stock ? "#f0fdf4" : "#fef2f2",
+                            color: product.in_stock ? "#15803d" : "#b91c1c",
                             fontWeight: 700,
-                            fontSize: "13px",
+                            fontSize: "12px",
                             width: "fit-content",
                           }}
                         >
@@ -1004,13 +1032,14 @@ const AdminProducts = () => {
                         <span
                           style={{
                             fontSize: "12px",
-                            color: "rgba(255,255,255,0.55)",
+                            color: "#64748b",
                           }}
                         >
                           Qty: {product.stock}
                         </span>
                       </div>
                     </td>
+
 
                     <td style={tdStyle}>
                       <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
@@ -1038,6 +1067,7 @@ const AdminProducts = () => {
     </div>
   );
 };
+
 
 const FormField = ({
   label,
@@ -1075,20 +1105,21 @@ const FormField = ({
   </label>
 );
 
+
 const StatCard = ({ label, value }: { label: string; value: string }) => (
   <div
     style={{
-      padding: "16px 18px",
-      borderRadius: "18px",
-      background: "rgba(255,255,255,0.04)",
-      border: "1px solid rgba(255,255,255,0.06)",
+      padding: "14px 16px",
+      borderRadius: "8px",
+      background: "#ffffff",
+      border: "1px solid #e2e8f0",
     }}
   >
     <p
       style={{
-        margin: "0 0 8px",
+        margin: "0 0 6px",
         fontSize: "13px",
-        color: "rgba(255,255,255,0.55)",
+        color: "#64748b",
       }}
     >
       {label}
@@ -1096,8 +1127,8 @@ const StatCard = ({ label, value }: { label: string; value: string }) => (
     <h3
       style={{
         margin: 0,
-        fontSize: "24px",
-        color: "white",
+        fontSize: "22px",
+        color: "#0f172a",
       }}
     >
       {value}
@@ -1105,71 +1136,81 @@ const StatCard = ({ label, value }: { label: string; value: string }) => (
   </div>
 );
 
+
 const labelStyle: React.CSSProperties = {
   fontSize: "13px",
-  color: "rgba(255,255,255,0.7)",
+  color: "#475569",
 };
+
 
 const inputStyle: React.CSSProperties = {
   padding: "8px 10px",
-  borderRadius: "8px",
-  border: "1px solid rgba(148,163,184,0.6)",
-  background: "rgba(15,23,42,0.9)",
-  color: "white",
+  borderRadius: "6px",
+  border: "1px solid #cbd5e1",
+  background: "#ffffff",
+  color: "#0f172a",
   fontSize: "14px",
   width: "100%",
 };
 
+
 const thStyle: React.CSSProperties = {
   textAlign: "left",
-  padding: "15px 18px",
+  padding: "13px 16px",
   fontSize: "12px",
   letterSpacing: "0.05em",
   textTransform: "uppercase",
-  color: "rgba(255,255,255,0.52)",
+  color: "#64748b",
+  borderBottom: "1px solid #e2e8f0",
 };
 
+
 const tdStyle: React.CSSProperties = {
-  padding: "16px 18px",
-  borderTop: "1px solid rgba(255,255,255,0.06)",
+  padding: "14px 16px",
+  borderTop: "1px solid #e2e8f0",
   fontSize: "14px",
-  color: "rgba(255,255,255,0.88)",
+  color: "#0f172a",
   verticalAlign: "middle",
 };
 
+
 const ghostButtonStyle: React.CSSProperties = {
-  padding: "9px 12px",
-  borderRadius: "10px",
-  border: "1px solid rgba(255,255,255,0.1)",
-  background: "rgba(255,255,255,0.04)",
-  color: "white",
+  padding: "8px 12px",
+  borderRadius: "6px",
+  border: "1px solid #cbd5e1",
+  background: "#ffffff",
+  color: "#0f172a",
   fontWeight: 600,
   cursor: "pointer",
 };
 
+
 const primaryButtonStyle: React.CSSProperties = {
   padding: "9px 14px",
-  borderRadius: "10px",
-  border: "1px solid rgba(59,130,246,0.3)",
+  borderRadius: "6px",
+  border: "none",
   background: "#2563eb",
   color: "white",
   fontWeight: 600,
   cursor: "pointer",
 };
 
+
 const dangerButtonStyle: React.CSSProperties = {
-  padding: "9px 12px",
-  borderRadius: "10px",
-  border: "1px solid rgba(239,68,68,0.2)",
-  background: "rgba(239,68,68,0.12)",
-  color: "#fca5a5",
+  padding: "8px 12px",
+  borderRadius: "6px",
+  border: "1px solid #fecaca",
+  background: "#fef2f2",
+  color: "#b91c1c",
   fontWeight: 600,
   cursor: "pointer",
 };
 
+
 const errorStyle: React.CSSProperties = {
-  color: "#fca5a5",
+  color: "#b91c1c",
   fontSize: "12px",
 };
+
 
 export default AdminProducts;

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 
+
 // This is for admin checkout settings
 type ChargeCode =
   | "shipping_fee"
@@ -13,6 +14,7 @@ type ChargeCode =
   | "small_order_fee"
   | "cod_fee"
   | "gift_wrap";
+
 
 type ChargeRule = {
   id: string;
@@ -30,12 +32,14 @@ type ChargeRule = {
   description: string;
 };
 
+
 type TaxSettings = {
   enabled: boolean;
   label: string;
   rate: string;
   applyOnShipping: boolean;
 };
+
 
 type CheckoutSettingsResponse = {
   taxSettings: TaxSettings;
@@ -166,6 +170,7 @@ const createDefaultCharges = (): ChargeRule[] => [
   },
 ];
 
+
 const defaultTaxSettings: TaxSettings = {
   enabled: true,
   label: "GST",
@@ -173,10 +178,12 @@ const defaultTaxSettings: TaxSettings = {
   applyOnShipping: false,
 };
 
+
 const createDefaultCheckoutSettings = (): CheckoutSettingsResponse => ({
   taxSettings: defaultTaxSettings,
   charges: createDefaultCharges(),
 });
+
 
 const normalizeCharge = (charge: Partial<ChargeRule>, index: number): ChargeRule => ({
   id: String(charge.id ?? `custom_${index}`),
@@ -199,8 +206,10 @@ const normalizeCharge = (charge: Partial<ChargeRule>, index: number): ChargeRule
   description: String(charge.description ?? ""),
 });
 
+
 const normalizeResponse = (data: Partial<CheckoutSettingsResponse> | null | undefined): CheckoutSettingsResponse => {
   const fallback = createDefaultCheckoutSettings();
+
 
   return {
     taxSettings: {
@@ -217,8 +226,10 @@ const normalizeResponse = (data: Partial<CheckoutSettingsResponse> | null | unde
   };
 };
 
+
 const CheckoutChargesPage = () => {
   const { siteId } = useParams<{ siteId: string }>();
+
 
   const [charges, setCharges] = useState<ChargeRule[]>(createDefaultCharges);
   const [taxSettings, setTaxSettings] = useState<TaxSettings>(defaultTaxSettings);
@@ -228,31 +239,38 @@ const CheckoutChargesPage = () => {
   const [activeStandardTab, setActiveStandardTab] = useState<string>("shipping_fee");
   const [activeCustomTab, setActiveCustomTab] = useState<string | null>(null);
 
+
   const activeCharges = useMemo(
     () => charges.filter((charge) => charge.enabled),
     [charges]
   );
+
 
   const optionalChargesCount = useMemo(
     () => charges.filter((charge) => charge.enabled && charge.customerSelectable).length,
     [charges]
   );
 
+
   const standardCharges = useMemo(
     () => charges.filter((charge) => charge.code !== "custom"),
     [charges]
   );
+
 
   const customCharges = useMemo(
     () => charges.filter((charge) => charge.code === "custom"),
     [charges]
   );
 
+
   const activeStandardCharge =
     standardCharges.find((charge) => charge.id === activeStandardTab) ?? standardCharges[0];
 
+
   const activeCustomCharge =
     customCharges.find((charge) => charge.id === activeCustomTab) ?? customCharges[0] ?? null;
+
 
   useEffect(() => {
     const loadCheckoutSettings = async () => {
@@ -262,9 +280,11 @@ const CheckoutChargesPage = () => {
         return;
       }
 
+
       try {
         setLoading(true);
         setSaveMessage("");
+
 
         const response = await fetch(
           `${API_BASE_URL}/sites/${siteId}/checkout-settings`,
@@ -273,18 +293,23 @@ const CheckoutChargesPage = () => {
           }
         );
 
+
         if (!response.ok) {
           throw new Error(`Failed to load checkout settings: ${response.status}`);
         }
 
+
         const data: CheckoutSettingsResponse = await response.json();
         const normalized = normalizeResponse(data);
+
 
         setTaxSettings(normalized.taxSettings);
         setCharges(normalized.charges);
 
+
         const firstStandard = normalized.charges.find((charge) => charge.code !== "custom");
         const firstCustom = normalized.charges.find((charge) => charge.code === "custom");
+
 
         setActiveStandardTab(firstStandard?.id ?? "shipping_fee");
         setActiveCustomTab(firstCustom?.id ?? null);
@@ -296,8 +321,10 @@ const CheckoutChargesPage = () => {
       }
     };
 
+
     loadCheckoutSettings();
   }, [siteId]);
+
 
   const updateCharge = (
     id: string,
@@ -312,9 +339,11 @@ const CheckoutChargesPage = () => {
     setSaveMessage("");
   };
 
+
   const addCustomCharge = () => {
     const nextId = `custom_${Date.now()}`;
     const customCount = charges.filter((charge) => charge.code === "custom").length + 1;
+
 
     setCharges((prev) => [
       ...prev,
@@ -338,6 +367,7 @@ const CheckoutChargesPage = () => {
     setSaveMessage("");
   };
 
+
   const removeCustomCharge = (id: string) => {
     const nextCustomCharges = customCharges.filter((charge) => charge.id !== id);
     setCharges((prev) => prev.filter((charge) => charge.id !== id));
@@ -345,20 +375,24 @@ const CheckoutChargesPage = () => {
     setSaveMessage("");
   };
 
+
   const handleSave = async () => {
     if (!siteId) {
       setSaveMessage("Missing site id in route.");
       return;
     }
 
+
     try {
       setSaving(true);
       setSaveMessage("");
+
 
       const payload: CheckoutSettingsResponse = {
         taxSettings,
         charges,
       };
+
 
       const response = await fetch(
         `${API_BASE_URL}/sites/${siteId}/checkout-settings`,
@@ -371,6 +405,7 @@ const CheckoutChargesPage = () => {
           body: JSON.stringify(payload),
         }
       );
+
 
       if (!response.ok) {
         let errorMessage = `Failed to save settings: ${response.status}`;
@@ -388,8 +423,10 @@ const CheckoutChargesPage = () => {
         throw new Error(errorMessage);
       }
 
+
       const data: CheckoutSettingsResponse = await response.json();
       const normalized = normalizeResponse(data);
+
 
       setTaxSettings(normalized.taxSettings);
       setCharges(normalized.charges);
@@ -404,6 +441,7 @@ const CheckoutChargesPage = () => {
     }
   };
 
+
   if (loading) {
     return (
       <div
@@ -411,68 +449,38 @@ const CheckoutChargesPage = () => {
           minHeight: "320px",
           display: "grid",
           placeItems: "center",
-          color: "white",
+          color: "#0f172a",
         }}
       >
-        <p style={{ margin: 0, fontSize: "14px", color: "rgba(255,255,255,0.7)" }}>
+        <p style={{ margin: 0, fontSize: "14px", color: "#64748b" }}>
           Loading checkout settings...
         </p>
       </div>
     );
   }
 
+
   return (
-    <div style={{ maxWidth: "1120px" }}>
+    <div style={{ maxWidth: "1120px", color: "#0f172a" }}>
       <div
         style={{
           display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: "16px",
-          marginBottom: "24px",
-          flexWrap: "wrap",
+          justifyContent: "flex-end",
+          marginBottom: "18px",
         }}
       >
-        <div>
-          <p
-            style={{
-              margin: "0 0 6px",
-              fontSize: "12px",
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              color: "rgba(255,255,255,0.5)",
-            }}
-          >
-            Admin / Checkout Charges
-          </p>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: "40px",
-              lineHeight: 1.05,
-              letterSpacing: "-0.03em",
-              color: "white",
-            }}
-          >
-            Checkout Charges
-          </h1>
-        </div>
-
-        <button
-          onClick={handleSave}
-          style={primaryButtonStyle}
-          disabled={saving}
-        >
+        <button onClick={handleSave} style={primaryButtonStyle} disabled={saving}>
           {saving ? "Saving..." : "Save settings"}
         </button>
       </div>
+
 
       <div
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-          gap: "14px",
-          marginBottom: "22px",
+          gap: "12px",
+          marginBottom: "20px",
         }}
       >
         <StatCard label="Active charges" value={String(activeCharges.length)} />
@@ -483,10 +491,11 @@ const CheckoutChargesPage = () => {
         />
       </div>
 
+
       <SectionCard
         title="Tax settings"
         subtitle="Tax stays separate from other charges because it is not waivable."
-        style={{ marginBottom: "24px" }}
+        style={{ marginBottom: "20px" }}
       >
         <div
           style={{
@@ -531,10 +540,11 @@ const CheckoutChargesPage = () => {
         </div>
       </SectionCard>
 
+
       <SectionCard
         title="Standard charges"
         subtitle="Click a charge button to open and edit that section only."
-        style={{ marginBottom: "24px" }}
+        style={{ marginBottom: "20px" }}
       >
         <TabBar
           items={standardCharges.map((charge) => ({
@@ -546,15 +556,14 @@ const CheckoutChargesPage = () => {
           onChange={setActiveStandardTab}
         />
 
+
         {activeStandardCharge ? (
-          <div style={{ marginTop: "16px" }}>
-            <ChargeCard
-              charge={activeStandardCharge}
-              onChange={updateCharge}
-            />
+          <div style={{ marginTop: "14px" }}>
+            <ChargeCard charge={activeStandardCharge} onChange={updateCharge} />
           </div>
         ) : null}
       </SectionCard>
+
 
       <SectionCard
         title="Custom charges"
@@ -568,11 +577,12 @@ const CheckoutChargesPage = () => {
         {customCharges.length === 0 ? (
           <div
             style={{
-              padding: "16px 18px",
-              borderRadius: "16px",
-              border: "1px dashed rgba(255,255,255,0.12)",
-              color: "rgba(255,255,255,0.62)",
+              padding: "14px 16px",
+              borderRadius: "6px",
+              border: "1px dashed #cbd5e1",
+              color: "#64748b",
               fontSize: "14px",
+              background: "#ffffff",
             }}
           >
             No custom charges added yet.
@@ -589,8 +599,9 @@ const CheckoutChargesPage = () => {
               onChange={setActiveCustomTab}
             />
 
+
             {activeCustomCharge ? (
-              <div style={{ marginTop: "16px" }}>
+              <div style={{ marginTop: "14px" }}>
                 <ChargeCard
                   charge={activeCustomCharge}
                   onChange={updateCharge}
@@ -602,21 +613,18 @@ const CheckoutChargesPage = () => {
         )}
       </SectionCard>
 
+
       {saveMessage ? (
         <div
           style={{
-            marginTop: "18px",
-            padding: "12px 14px",
-            borderRadius: "12px",
-            background: saveMessage.toLowerCase().includes("saved")
-              ? "rgba(34,197,94,0.12)"
-              : "rgba(239,68,68,0.12)",
+            marginTop: "16px",
+            padding: "10px 12px",
+            borderRadius: "6px",
+            background: saveMessage.toLowerCase().includes("saved") ? "#f0fdf4" : "#fef2f2",
             border: saveMessage.toLowerCase().includes("saved")
-              ? "1px solid rgba(34,197,94,0.2)"
-              : "1px solid rgba(239,68,68,0.2)",
-            color: saveMessage.toLowerCase().includes("saved")
-              ? "#86efac"
-              : "#fca5a5",
+              ? "1px solid #bbf7d0"
+              : "1px solid #fecaca",
+            color: saveMessage.toLowerCase().includes("saved") ? "#15803d" : "#b91c1c",
             fontSize: "14px",
             fontWeight: 600,
           }}
@@ -627,6 +635,7 @@ const CheckoutChargesPage = () => {
     </div>
   );
 };
+
 
 const SectionCard = ({
   title,
@@ -643,11 +652,10 @@ const SectionCard = ({
 }) => (
   <div
     style={{
-      padding: "18px",
-      borderRadius: "20px",
-      background: "rgba(255,255,255,0.03)",
-      border: "1px solid rgba(255,255,255,0.08)",
-      boxShadow: "0 18px 40px rgba(0,0,0,0.18)",
+      padding: "16px",
+      borderRadius: "8px",
+      background: "#ffffff",
+      border: "1px solid #e2e8f0",
       ...style,
     }}
   >
@@ -658,23 +666,23 @@ const SectionCard = ({
         alignItems: "center",
         gap: "12px",
         flexWrap: "wrap",
-        marginBottom: "16px",
+        marginBottom: "14px",
       }}
     >
       <div>
-        <h2 style={{ margin: "0 0 6px", fontSize: "18px", color: "white" }}>
+        <h2 style={{ margin: "0 0 4px", fontSize: "15px", color: "#0f172a", fontWeight: 700 }}>
           {title}
         </h2>
-        <p style={{ margin: 0, fontSize: "13px", color: "rgba(255,255,255,0.58)" }}>
-          {subtitle}
-        </p>
+        <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>{subtitle}</p>
       </div>
       {action}
     </div>
 
+
     {children}
   </div>
 );
+
 
 const getShortTabLabel = (label: string) => {
   const map: Record<string, string> = {
@@ -688,8 +696,10 @@ const getShortTabLabel = (label: string) => {
     "Gift wrap": "Gift Wrap",
   };
 
+
   return map[label] ?? label;
 };
+
 
 const TabBar = ({
   items,
@@ -712,6 +722,7 @@ const TabBar = ({
       const isActive = item.id === activeId;
       const shortLabel = getShortTabLabel(item.label);
 
+
       return (
         <button
           key={item.id}
@@ -719,13 +730,11 @@ const TabBar = ({
           onClick={() => onChange(item.id)}
           style={{
             minWidth: 0,
-            padding: "9px 8px",
-            borderRadius: "10px",
-            border: isActive
-              ? "1px solid rgba(59,130,246,0.42)"
-              : "1px solid rgba(255,255,255,0.08)",
-            background: isActive ? "rgba(37,99,235,0.18)" : "rgba(255,255,255,0.04)",
-            color: "white",
+            padding: "8px 8px",
+            borderRadius: "6px",
+            border: isActive ? "1px solid #bfdbfe" : "1px solid #e2e8f0",
+            background: isActive ? "#eff6ff" : "#ffffff",
+            color: isActive ? "#1d4ed8" : "#334155",
             fontWeight: isActive ? 700 : 600,
             fontSize: "12px",
             lineHeight: 1.2,
@@ -734,30 +743,24 @@ const TabBar = ({
             alignItems: "center",
             justifyContent: "center",
             gap: "6px",
-            boxShadow: isActive ? "0 8px 18px rgba(37,99,235,0.16)" : "none",
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
           }}
           title={item.label}
         >
-          <span
-            style={{
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {shortLabel}
           </span>
 
+
           <span
             style={{
-              width: "7px",
-              height: "7px",
-              minWidth: "7px",
+              width: "6px",
+              height: "6px",
+              minWidth: "6px",
               borderRadius: "999px",
-              background: item.enabled ? "#4ade80" : "rgba(255,255,255,0.28)",
+              background: item.enabled ? "#22c55e" : "#cbd5e1",
               display: "inline-block",
             }}
           />
@@ -766,6 +769,7 @@ const TabBar = ({
     })}
   </div>
 );
+
 
 const ChargeCard = ({
   charge,
@@ -779,10 +783,10 @@ const ChargeCard = ({
   return (
     <div
       style={{
-        padding: "16px 18px",
-        borderRadius: "18px",
-        background: "rgba(15,23,42,0.88)",
-        border: "1px solid rgba(255,255,255,0.08)",
+        padding: "14px 16px",
+        borderRadius: "6px",
+        background: "#ffffff",
+        border: "1px solid #e2e8f0",
       }}
     >
       <div
@@ -791,18 +795,17 @@ const ChargeCard = ({
           justifyContent: "space-between",
           alignItems: "flex-start",
           gap: "14px",
-          marginBottom: "14px",
+          marginBottom: "12px",
           flexWrap: "wrap",
         }}
       >
         <div>
-          <h3 style={{ margin: "0 0 6px", fontSize: "16px", color: "white" }}>
+          <h3 style={{ margin: "0 0 4px", fontSize: "14px", color: "#0f172a", fontWeight: 700 }}>
             {charge.label}
           </h3>
-          <p style={{ margin: 0, fontSize: "13px", color: "rgba(255,255,255,0.58)" }}>
-            {charge.description}
-          </p>
+          <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>{charge.description}</p>
         </div>
+
 
         {onRemove ? (
           <button onClick={onRemove} style={dangerButtonStyle}>
@@ -810,6 +813,7 @@ const ChargeCard = ({
           </button>
         ) : null}
       </div>
+
 
       <div
         style={{
@@ -824,17 +828,20 @@ const ChargeCard = ({
           onChange={(checked) => onChange(charge.id, "enabled", checked)}
         />
 
+
         <ToggleField
           label="Optional charge"
           checked={charge.optional}
           onChange={(checked) => onChange(charge.id, "optional", checked)}
         />
 
+
         <ToggleField
           label="Customer selectable"
           checked={charge.customerSelectable}
           onChange={(checked) => onChange(charge.id, "customerSelectable", checked)}
         />
+
 
         <SelectField
           label="Amount type"
@@ -846,6 +853,7 @@ const ChargeCard = ({
           ]}
         />
 
+
         <FormField
           label={charge.amountType === "fixed" ? "Amount (₹)" : "Amount (%)"}
           type="number"
@@ -853,11 +861,13 @@ const ChargeCard = ({
           onChange={(value) => onChange(charge.id, "amountValue", value)}
         />
 
+
         <FormField
           label="Customer label"
           value={charge.label}
           onChange={(value) => onChange(charge.id, "label", value)}
         />
+
 
         <SelectField
           label="Apply condition"
@@ -871,11 +881,13 @@ const ChargeCard = ({
           ]}
         />
 
+
         <FormField
           label="Apply condition value"
           value={charge.applyConditionValue}
           onChange={(value) => onChange(charge.id, "applyConditionValue", value)}
         />
+
 
         <SelectField
           label="Waive condition"
@@ -887,6 +899,7 @@ const ChargeCard = ({
           ]}
         />
 
+
         <FormField
           label="Waive condition value"
           value={charge.waiveConditionValue}
@@ -896,6 +909,7 @@ const ChargeCard = ({
     </div>
   );
 };
+
 
 const FormField = ({
   label,
@@ -910,14 +924,10 @@ const FormField = ({
 }) => (
   <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
     <span style={labelStyle}>{label}</span>
-    <input
-      type={type}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      style={inputStyle}
-    />
+    <input type={type} value={value} onChange={(e) => onChange(e.target.value)} style={inputStyle} />
   </label>
 );
+
 
 const SelectField = ({
   label,
@@ -942,6 +952,7 @@ const SelectField = ({
   </label>
 );
 
+
 const ToggleField = ({
   label,
   checked,
@@ -957,84 +968,70 @@ const ToggleField = ({
       alignItems: "center",
       gap: "10px",
       minHeight: "42px",
-      color: "rgba(255,255,255,0.82)",
+      color: "#334155",
       fontSize: "14px",
       fontWeight: 600,
       paddingTop: "24px",
     }}
   >
-    <input
-      type="checkbox"
-      checked={checked}
-      onChange={(e) => onChange(e.target.checked)}
-    />
+    <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
     {label}
   </label>
 );
 
+
 const StatCard = ({ label, value }: { label: string; value: string }) => (
   <div
     style={{
-      padding: "16px 18px",
-      borderRadius: "18px",
-      background: "rgba(255,255,255,0.04)",
-      border: "1px solid rgba(255,255,255,0.06)",
+      padding: "14px 16px",
+      borderRadius: "8px",
+      background: "#ffffff",
+      border: "1px solid #e2e8f0",
     }}
   >
-    <p
-      style={{
-        margin: "0 0 8px",
-        fontSize: "13px",
-        color: "rgba(255,255,255,0.55)",
-      }}
-    >
-      {label}
-    </p>
-    <h3
-      style={{
-        margin: 0,
-        fontSize: "24px",
-        color: "white",
-      }}
-    >
-      {value}
-    </h3>
+    <p style={{ margin: "0 0 6px", fontSize: "13px", color: "#64748b" }}>{label}</p>
+    <h3 style={{ margin: 0, fontSize: "22px", color: "#0f172a" }}>{value}</h3>
   </div>
 );
 
+
 const labelStyle: React.CSSProperties = {
   fontSize: "13px",
-  color: "rgba(255,255,255,0.7)",
+  color: "#475569",
 };
 
+
 const inputStyle: React.CSSProperties = {
-  padding: "10px 12px",
-  borderRadius: "10px",
-  border: "1px solid rgba(148,163,184,0.35)",
-  background: "rgba(15,23,42,0.9)",
-  color: "white",
+  padding: "9px 10px",
+  borderRadius: "6px",
+  border: "1px solid #cbd5e1",
+  background: "#ffffff",
+  color: "#0f172a",
   fontSize: "14px",
   width: "100%",
 };
 
+
 const primaryButtonStyle: React.CSSProperties = {
   padding: "9px 14px",
-  borderRadius: "10px",
-  border: "1px solid rgba(59,130,246,0.3)",
+  borderRadius: "6px",
+  border: "none",
   background: "#2563eb",
   color: "white",
   fontWeight: 600,
   cursor: "pointer",
 };
 
+
 const dangerButtonStyle: React.CSSProperties = {
-  padding: "9px 12px",
-  borderRadius: "10px",
-  border: "1px solid rgba(239,68,68,0.2)",
-  background: "rgba(239,68,68,0.12)",
-  color: "#fca5a5",
+  padding: "8px 12px",
+  borderRadius: "6px",
+  border: "1px solid #fecaca",
+  background: "#fef2f2",
+  color: "#b91c1c",
   fontWeight: 600,
   cursor: "pointer",
 };
+
 
 export default CheckoutChargesPage;
