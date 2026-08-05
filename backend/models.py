@@ -185,6 +185,45 @@ class Product(SQLModel, table=True):
     )
 
 
+class ProductReview(SQLModel, table=True):
+    __tablename__ = "product_reviews"
+    __table_args__ = (
+        Index("ix_product_reviews_site_id", "site_id"),
+        Index("ix_product_reviews_product_id", "product_id"),
+        Index("ix_product_reviews_customer_id", "customer_id"),
+        Index("ix_product_reviews_order_id", "order_id"),
+        Index("ix_product_reviews_created_at", "created_at"),
+        UniqueConstraint("order_item_id", name="uq_product_reviews_order_item"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    site_id: UUID = Field(foreign_key="sites.id", index=True)
+    product_id: UUID = Field(foreign_key="products.id", index=True)
+    customer_id: UUID = Field(foreign_key="users.id", index=True)
+    order_id: UUID = Field(foreign_key="orders.id", index=True)
+    order_item_id: UUID = Field(foreign_key="order_items.id", index=True)
+
+    rating: int = Field(nullable=False)
+    review_text: str = Field(default="", nullable=False)
+    review_images: list[str] = Field(
+        default_factory=list,
+        sa_column=Column(JSONB, nullable=False),
+    )
+
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            onupdate=utc_now,
+        ),
+    )
+
+
 class Cart(SQLModel, table=True):
     __tablename__ = "carts"
     __table_args__ = (UniqueConstraint("site_id", "user_id", name="uq_carts_site_user"),)

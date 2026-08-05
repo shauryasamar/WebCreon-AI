@@ -6,6 +6,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
+import { API_BASE_URL } from "./config/api";
 
 export type ProductVariantValue = {
   value: string;
@@ -14,8 +15,6 @@ export type ProductVariantValue = {
   price?: number | null;
   comparePrice?: number | null;
 };
-
-import { API_BASE_URL } from "./config/api";
 
 export type ProductVariantOption = {
   optionType?:
@@ -30,8 +29,24 @@ export type ProductVariantOption = {
   optionValues: ProductVariantValue[];
 };
 
+export type ProductReview = {
+  id: string;
+  site_id: string;
+  product_id: string;
+  customer_id: string;
+  order_id: string;
+  order_item_id: string;
+  rating: number;
+  review_text: string;
+  review_images: string[];
+  customer_name?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
 export type Product = {
   id: string | number;
+  site_id?: string;
   name: string;
   brand?: string;
   category?: string;
@@ -50,6 +65,9 @@ export type Product = {
   inStock?: boolean;
   selectedVariantValue?: string | null;
   selectedVariantLabel?: string | null;
+  average_rating?: number;
+  review_count?: number;
+  reviews?: ProductReview[];
 };
 
 export type CartItem = Product & {

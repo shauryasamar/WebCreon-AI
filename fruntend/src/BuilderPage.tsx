@@ -192,6 +192,7 @@ function normalizeStorefrontProduct(raw: any): Product {
 
   return {
     id: raw?.id != null ? String(raw.id) : slugify(raw?.name || ""),
+    site_id: raw?.site_id != null ? String(raw.site_id) : undefined,
     name: raw?.name ?? "",
     brand: raw?.brand ?? "",
     category: raw?.category ?? "",
@@ -212,6 +213,15 @@ function normalizeStorefrontProduct(raw: any): Product {
       ? raw.sizes
       : [],
     inStock,
+    average_rating:
+      typeof raw?.average_rating === "number"
+        ? raw.average_rating
+        : Number(raw?.average_rating ?? 0),
+    review_count:
+      typeof raw?.review_count === "number"
+        ? raw.review_count
+        : Number(raw?.review_count ?? 0),
+    reviews: Array.isArray(raw?.reviews) ? raw.reviews : undefined,
   };
 }
 

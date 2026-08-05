@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { useCart, Product } from "../CartContext";
+import { useCart, Product, ProductReview } from "../CartContext";
+import { API_BASE_URL } from "../config/api";
+import { useCustomerAuth } from "../context/CustomerAuthContext";
 
 type ProductDetailProps = {
   product?: Product | null;
@@ -27,6 +29,24 @@ type VariantOption = {
   optionValues?: VariantValue[];
 };
 
+type DeliveredOrderItem = {
+  id: string;
+  product_id: string | number;
+  product_name?: string;
+  product_slug?: string | null;
+  product_image?: string | null;
+  selected_variant_label?: string | null;
+  selected_variant_value?: string | null;
+  status?: string;
+  is_returnable?: boolean;
+};
+
+type DeliveredOrder = {
+  id: string | number;
+  status?: string;
+  items?: DeliveredOrderItem[];
+};
+
 const MAX_GALLERY_IMAGES = 5;
 
 const ProductDetail: React.FC<ProductDetailProps> = ({
@@ -35,6 +55,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   theme,
 }) => {
   const { addToCart, products, cartItems } = useCart();
+  const { isAuthenticated } = useCustomerAuth();
   const { productSlug } = useParams();
 
   const product =
@@ -46,9 +67,75 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
         null
       : null);
 
+  const anyProduct = (product ?? {}) as any;
+
   const [windowWidth, setWindowWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1280
   );
+  const [reviews, setReviews] = useState<ProductReview[]>(
+    Array.isArray(anyProduct?.reviews) ? (anyProduct.reviews as ProductReview[]) : []
+  );
+  const [averageRating, setAverageRating] = useState<number>(
+    Number(anyProduct?.average_rating ?? 0)
+  );
+  const [reviewCount, setReviewCount] = useState<number>(
+    Number(anyProduct?.review_count ?? 0)
+  );
+  const [reviewRating, setReviewRating] = useState<number>(0);
+  const [reviewText, setReviewText] = useState<string>("");
+  const [reviewImages, setReviewImages] = useState<string[]>([]);
+  const [reviewUploadError, setReviewUploadError] = useState<string>("");
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewMessage, setReviewMessage] = useState<string>("");
+  const [eligibleOrderItem, setEligibleOrderItem] = useState<DeliveredOrderItem | null>(null);
+  const [checkingEligibility, setCheckingEligibility] = useState(false);
+  const [selectedImage, setSelectedImage] = useState("");
+  const [selectedOption, setSelectedOption] = useState("");
+  const [quantity, setQuantity] = useState(1);
+  const [added, setAdded] = useState(false);
+
+  const normalizedImages: string[] = useMemo(() => {
+    const imageList = Array.isArray(anyProduct?.images)
+      ? anyProduct.images.filter(
+          (image: unknown): image is string =>
+            typeof image === "string" && image.trim() !== ""
+        )
+      : [];
+
+    if (imageList.length) return imageList.slice(0, MAX_GALLERY_IMAGES);
+    if (typeof anyProduct?.image === "string" && anyProduct.image.trim()) return [anyProduct.image];
+    return [];
+  }, [anyProduct]);
+
+  const variantOption: VariantOption | null = anyProduct?.variant_option
+    ? {
+        optionType: anyProduct.variant_option.optionType,
+        optionName: anyProduct.variant_option.optionName || "Options",
+        optionValues: Array.isArray(anyProduct.variant_option.optionValues)
+          ? anyProduct.variant_option.optionValues
+          : [],
+      }
+    : null;
+
+  const optionValues: VariantValue[] = Array.isArray(variantOption?.optionValues)
+    ? variantOption.optionValues
+    : Array.isArray(anyProduct?.sizes)
+    ? anyProduct.sizes.map((size: string) => ({ value: size, inStock: true }))
+    : [];
+
+  const optionLabel = variantOption?.optionName || "Options";
+  const hasVariants = optionValues.length > 0;
+  const firstAvailableVariant =
+    optionValues.find((option) => option.inStock !== false)?.value ??
+    optionValues[0]?.value ??
+    "";
+
+  const siteId =
+    anyProduct?.site_id != null
+      ? String(anyProduct.site_id)
+      : (selectedProduct as any)?.site_id != null
+      ? String((selectedProduct as any).site_id)
+      : "";
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -56,6 +143,115 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+
+  useEffect(() => {
+    setReviews(Array.isArray(anyProduct?.reviews) ? anyProduct.reviews : []);
+    setAverageRating(Number(anyProduct?.average_rating ?? 0));
+    setReviewCount(Number(anyProduct?.review_count ?? 0));
+  }, [anyProduct]);
+
+  useEffect(() => {
+    setSelectedImage(normalizedImages[0] || "");
+  }, [normalizedImages]);
+
+  useEffect(() => {
+    setSelectedOption(firstAvailableVariant);
+  }, [firstAvailableVariant, product?.id]);
+
+  useEffect(() => {
+    setQuantity(1);
+    setAdded(false);
+  }, [product?.id]);
+
+  useEffect(() => {
+    const loadProductReviews = async () => {
+      if (!siteId || !product?.id) return;
+
+      try {
+        const res = await fetch(
+          `${API_BASE_URL}/sites/${siteId}/products/${product.id}`,
+          { credentials: "include" }
+        );
+
+        if (!res.ok) return;
+
+        const data = await res.json();
+
+        if (Array.isArray(data?.reviews)) {
+          setReviews(data.reviews);
+        }
+
+        if (typeof data?.average_rating === "number") {
+          setAverageRating(data.average_rating);
+        }
+
+        if (typeof data?.review_count === "number") {
+          setReviewCount(data.review_count);
+        }
+      } catch (error) {
+        console.error("Failed to load product reviews", error);
+      }
+    };
+
+    loadProductReviews();
+  }, [product?.id, siteId]);
+
+  useEffect(() => {
+    const loadEligibleOrderItem = async () => {
+      if (!isAuthenticated || !product || !siteId) {
+        setEligibleOrderItem(null);
+        return;
+      }
+
+      setCheckingEligibility(true);
+      try {
+        const response = await fetch(`${API_BASE_URL}/orders/${siteId}/my-orders`, {
+          credentials: "include",
+        });
+
+        if (!response.ok) {
+          setEligibleOrderItem(null);
+          return;
+        }
+
+        const data = await response.json();
+        const orders: DeliveredOrder[] = Array.isArray(data) ? data : [];
+
+        const matchedItem =
+          orders
+            .filter((order) => String(order?.status || "").toLowerCase() === "delivered")
+            .flatMap((order) => (Array.isArray(order.items) ? order.items : []))
+            .find((item) => String(item.product_id) === String(product.id)) ?? null;
+
+        setEligibleOrderItem(matchedItem);
+      } catch (error) {
+        console.error("Failed to load delivered orders for review eligibility", error);
+        setEligibleOrderItem(null);
+      } finally {
+        setCheckingEligibility(false);
+      }
+    };
+
+    loadEligibleOrderItem();
+  }, [isAuthenticated, product, siteId]);
+
+  if (!product) {
+    return (
+      <section style={{ maxWidth: "1160px", margin: "0 auto", padding: "20px 16px 40px" }}>
+        <div
+          style={{
+            border: "1px solid rgba(15,23,42,0.08)",
+            borderRadius: "20px",
+            padding: "24px",
+            background: "#fff",
+            color: "#475569",
+          }}
+        >
+          Product not found.
+        </div>
+      </section>
+    );
+  }
 
   const isMobile = windowWidth < 768;
   const isTablet = windowWidth >= 768 && windowWidth < 1024;
@@ -114,81 +310,12 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     color: subtleText,
   };
 
-  if (!product) {
-    return (
-      <section style={{ maxWidth: "1160px", margin: "0 auto", padding: "20px 16px 40px" }}>
-        <div
-          style={{
-            ...shellCard,
-            borderRadius: "20px",
-            padding: "24px",
-            boxShadow: softShadow,
-            color: mutedText,
-          }}
-        >
-          Product not found.
-        </div>
-      </section>
-    );
-  }
-
-  const resolvedProduct = product;
-  const anyProduct = resolvedProduct as any;
-
-  const normalizedImages: string[] = useMemo(() => {
-    const imageList = Array.isArray(anyProduct?.images)
-      ? anyProduct.images.filter(
-          (image: unknown): image is string =>
-            typeof image === "string" && image.trim() !== ""
-        )
-      : [];
-
-    if (imageList.length) return imageList.slice(0, MAX_GALLERY_IMAGES);
-    if (typeof anyProduct?.image === "string" && anyProduct.image.trim()) return [anyProduct.image];
-    return [];
-  }, [anyProduct]);
-
-  const variantOption: VariantOption | null = anyProduct?.variant_option
-    ? {
-        optionType: anyProduct.variant_option.optionType,
-        optionName: anyProduct.variant_option.optionName || "Options",
-        optionValues: Array.isArray(anyProduct.variant_option.optionValues)
-          ? anyProduct.variant_option.optionValues
-          : [],
-      }
-    : null;
-
-  const optionValues: VariantValue[] = Array.isArray(variantOption?.optionValues)
-    ? variantOption.optionValues
-    : Array.isArray(anyProduct?.sizes)
-    ? anyProduct.sizes.map((size: string) => ({ value: size, inStock: true }))
-    : [];
-
-  const optionLabel = variantOption?.optionName || "Options";
-  const hasVariants = optionValues.length > 0;
-  const firstAvailableVariant =
-    optionValues.find((option) => option.inStock !== false)?.value ??
-    optionValues[0]?.value ??
-    "";
-
-  const [selectedImage, setSelectedImage] = useState(normalizedImages[0] || "");
-  const [selectedOption, setSelectedOption] = useState(firstAvailableVariant);
-  const [quantity, setQuantity] = useState(1);
-  const [added, setAdded] = useState(false);
-
-  useEffect(() => setSelectedImage(normalizedImages[0] || ""), [normalizedImages]);
-  useEffect(() => setSelectedOption(firstAvailableVariant), [firstAvailableVariant, resolvedProduct.id]);
-  useEffect(() => {
-    setQuantity(1);
-    setAdded(false);
-  }, [resolvedProduct.id]);
-
   const selectedVariantMeta = optionValues.find((option) => option.value === selectedOption);
 
   const effectivePrice =
     typeof selectedVariantMeta?.price === "number" && selectedVariantMeta.price > 0
       ? selectedVariantMeta.price
-      : resolvedProduct.price;
+      : product.price;
 
   const effectiveOriginalPrice =
     typeof selectedVariantMeta?.comparePrice === "number" &&
@@ -235,13 +362,14 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
 
   const availableQty = hasVariants
     ? variantStockQty
-    : typeof resolvedProduct.stock === "number"
-    ? resolvedProduct.stock
+    : typeof product.stock === "number"
+    ? product.stock
     : null;
 
   const quantityAlreadyInCart = cartItems.reduce((sum, item) => {
-    const sameProduct = String(item.id) === String(resolvedProduct.id);
-    const sameVariant = (item.selectedVariantValue ?? null) === (hasVariants ? selectedOption : null);
+    const sameProduct = String(item.id) === String(product.id);
+    const sameVariant =
+      (item.selectedVariantValue ?? null) === (hasVariants ? selectedOption : null);
     return sameProduct && sameVariant ? sum + item.quantity : sum;
   }, 0);
 
@@ -249,8 +377,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     typeof availableQty === "number" ? Math.max(availableQty - quantityAlreadyInCart, 0) : null;
 
   const isEntireProductOutOfStock = !normalizedInStock;
-  const isCartLimitReached =
-    typeof remainingQty === "number" ? remainingQty <= 0 : false;
+  const isCartLimitReached = typeof remainingQty === "number" ? remainingQty <= 0 : false;
 
   const stockMessage = isEntireProductOutOfStock
     ? "Out of stock"
@@ -269,23 +396,34 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   const maxAllowedQty =
     typeof remainingQty === "number" && remainingQty > 0 ? remainingQty : null;
 
-  const isAtMaxQty =
-    typeof maxAllowedQty === "number" ? quantity >= maxAllowedQty : false;
+  const isAtMaxQty = typeof maxAllowedQty === "number" ? quantity >= maxAllowedQty : false;
 
   const canAddToCart = normalizedInStock && (!hasVariants || Boolean(selectedOption));
   const finalCanAddToCart =
     canAddToCart && !selectedVariantOutOfStock && !isCartLimitReached;
+
+  const ratingDisplay = averageRating > 0 ? averageRating.toFixed(1) : "New";
+  const reviewCountDisplay =
+    reviewCount > 0 ? `based on ${reviewCount} ratings` : "No ratings yet";
+
+  const canSubmitReview =
+    isAuthenticated &&
+    !!siteId &&
+    !!eligibleOrderItem &&
+    reviewRating >= 1 &&
+    reviewRating <= 5 &&
+    !reviewSubmitting;
 
   const handleAddToCart = async () => {
     if (!finalCanAddToCart) return;
     if (typeof maxAllowedQty === "number" && quantity > maxAllowedQty) return;
 
     const productToAdd: Product = {
-      ...resolvedProduct,
+      ...product,
       price: effectivePrice,
       compare_price: showOriginal ? effectiveOriginalPrice ?? null : null,
       in_stock: true,
-      stock: variantStockQty ?? resolvedProduct.stock,
+      stock: variantStockQty ?? product.stock,
       selectedVariantValue: hasVariants ? selectedOption : null,
       selectedVariantLabel: hasVariants ? optionLabel : null,
       ...(hasVariants && selectedOption
@@ -308,6 +446,114 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     }
   };
 
+  const handleReviewImageUpload = async (file: File) => {
+    if (!file) return;
+    if (!siteId) {
+      setReviewUploadError("Missing site id for this product.");
+      return;
+    }
+
+    setReviewUploadError("");
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/sites/${siteId}/products/upload-review-image`,
+        {
+          method: "POST",
+          credentials: "include",
+          body: formData,
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data?.detail || "Failed to upload review image");
+      }
+
+      if (data?.url) {
+        setReviewImages((current) => [...current, data.url]);
+      }
+    } catch (error) {
+      console.error("Review image upload failed", error);
+      setReviewUploadError(
+        error instanceof Error ? error.message : "Failed to upload image"
+      );
+    }
+  };
+
+  const submitReview = async () => {
+    if (!isAuthenticated) {
+      setReviewMessage("Please log in to submit a review.");
+      return;
+    }
+
+    if (!siteId) {
+      setReviewMessage("Missing site id for this product.");
+      return;
+    }
+
+    if (!eligibleOrderItem?.id) {
+      setReviewMessage("No delivered purchase found for this product.");
+      return;
+    }
+
+    if (!reviewRating || reviewRating < 1 || reviewRating > 5) {
+      setReviewMessage("Please select a rating.");
+      return;
+    }
+
+    setReviewSubmitting(true);
+    setReviewMessage("");
+
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/sites/${siteId}/products/reviews`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            product_id: product.id,
+            order_item_id: eligibleOrderItem.id,
+            rating: reviewRating,
+            review_text: reviewText,
+            review_images: reviewImages,
+          }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data?.detail || "Failed to submit review");
+      }
+
+      if (data?.review) {
+        setReviews((current) => [data.review, ...current]);
+      }
+      setAverageRating(Number(data?.average_rating ?? averageRating));
+      setReviewCount(Number(data?.review_count ?? reviewCount));
+      setReviewRating(0);
+      setReviewText("");
+      setReviewImages([]);
+      setReviewMessage("Review submitted successfully.");
+      setEligibleOrderItem(null);
+    } catch (error) {
+      console.error("Failed to submit review", error);
+      setReviewMessage(
+        error instanceof Error ? error.message : "Failed to submit review"
+      );
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
+
   const gallerySlots = Array.from(
     { length: MAX_GALLERY_IMAGES },
     (_, index) => normalizedImages[index] || null
@@ -322,33 +568,6 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   const buyGridColumns = isMobile ? "1fr" : "116px minmax(0, 1fr)";
   const reviewGridColumns = isMobile ? "1fr" : "minmax(280px, 360px) minmax(0, 1fr)";
   const supportGridColumns = isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))";
-
-  const reviews = [
-    {
-      name: "Aarav",
-      rating: "★★★★★",
-      title: "Great fit and clean finish",
-      body: "Fabric feels premium and the fit is exactly as expected. Good for regular wear and the stitching also looks neat.",
-    },
-    {
-      name: "Neha",
-      rating: "★★★★☆",
-      title: "Looks good in person",
-      body: "The color and overall finish are nice. Delivery was smooth and sizing was mostly accurate. Would buy again.",
-    },
-    {
-      name: "Rohit",
-      rating: "★★★★★",
-      title: "Value for money",
-      body: "Good quality for the price. The material feels comfortable and the product looks better than expected.",
-    },
-  ];
-
-  const supportItems = [
-    { label: "Delivery", value: "Fast ship" },
-    { label: "Returns", value: "Easy return" },
-    { label: "Quality", value: "Curated pick" },
-  ];
 
   return (
     <section style={{ maxWidth: "1160px", margin: "0 auto", padding: pagePadding }}>
@@ -424,7 +643,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
               {selectedImage ? (
                 <img
                   src={selectedImage}
-                  alt={resolvedProduct.name}
+                  alt={product.name}
                   loading="eager"
                   style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                 />
@@ -446,7 +665,13 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: isMobile ? "6px" : "8px" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+              gap: isMobile ? "6px" : "8px",
+            }}
+          >
             {gallerySlots.map((image, index) => {
               const isActive = image && selectedImage === image;
 
@@ -471,7 +696,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                   {image ? (
                     <img
                       src={image}
-                      alt={`${resolvedProduct.name} view ${index + 1}`}
+                      alt={`${product.name} view ${index + 1}`}
                       loading="lazy"
                       style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                     />
@@ -507,7 +732,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
           >
             <div style={{ display: "grid", gap: "10px", paddingBottom: "14px", borderBottom: subtleBorder }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                {resolvedProduct.brand && (
+                {product.brand && (
                   <span
                     style={{
                       fontSize: "11px",
@@ -517,11 +742,11 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                       color: subtleText,
                     }}
                   >
-                    {resolvedProduct.brand}
+                    {product.brand}
                   </span>
                 )}
 
-                {resolvedProduct.category && (
+                {product.category && (
                   <span
                     style={{
                       fontSize: "11px",
@@ -532,7 +757,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                       borderRadius: "999px",
                     }}
                   >
-                    {resolvedProduct.category}
+                    {product.category}
                   </span>
                 )}
 
@@ -547,8 +772,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                   }}
                 >
                   <span style={{ color: "#f59e0b", letterSpacing: "0.04em" }}>★★★★☆</span>
-                  <span>4.8</span>
-                  <span style={{ color: subtleText }}>(24 reviews)</span>
+                  <span>{ratingDisplay}</span>
+                  <span style={{ color: subtleText }}>({reviewCountDisplay})</span>
                 </span>
               </div>
 
@@ -561,10 +786,10 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                   color: pageText,
                 }}
               >
-                {resolvedProduct.name}
+                {product.name}
               </h1>
 
-              {resolvedProduct.description && (
+              {product.description && (
                 <p
                   style={{
                     margin: 0,
@@ -578,7 +803,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                     overflow: "hidden",
                   }}
                 >
-                  {resolvedProduct.description}
+                  {product.description}
                 </p>
               )}
             </div>
@@ -949,7 +1174,11 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 borderTop: subtleBorder,
               }}
             >
-              {supportItems.map((item) => (
+              {[
+                { label: "Delivery", value: "Fast ship" },
+                { label: "Returns", value: "Easy return" },
+                { label: "Quality", value: "Curated pick" },
+              ].map((item) => (
                 <div
                   key={item.label}
                   style={{
@@ -1019,8 +1248,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
             }}
           >
             <span style={{ color: "#f59e0b", fontSize: "15px" }}>★★★★☆</span>
-            <span>4.8</span>
-            <span style={{ color: subtleText, fontWeight: 600 }}>based on 24 ratings</span>
+            <span>{ratingDisplay}</span>
+            <span style={{ color: subtleText, fontWeight: 600 }}>{reviewCountDisplay}</span>
           </div>
         </div>
 
@@ -1047,7 +1276,11 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 Write a review
               </h3>
               <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.6, color: mutedText }}>
-                Dummy review form for now. Submission logic can be wired after review API is added.
+                {checkingEligibility
+                  ? "Checking your delivered purchases..."
+                  : eligibleOrderItem
+                  ? "Share your delivered purchase experience."
+                  : "No delivered purchase found for this product."}
               </p>
             </div>
 
@@ -1056,45 +1289,43 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 Your rating
               </p>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <button
-                    key={star}
-                    type="button"
-                    style={{
-                      width: "38px",
-                      height: "38px",
-                      borderRadius: "12px",
-                      border: subtleBorder,
-                      background: isLight ? "rgba(255,255,255,0.88)" : "rgba(255,255,255,0.04)",
-                      color: "#f59e0b",
-                      fontSize: "16px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    ★
-                  </button>
-                ))}
+                {[1, 2, 3, 4, 5].map((star) => {
+                  const isFilled = star <= reviewRating;
+
+                  return (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setReviewRating(star)}
+                      aria-label={`Rate ${star} star${star > 1 ? "s" : ""}`}
+                      aria-pressed={reviewRating === star}
+                      style={{
+                        width: "38px",
+                        height: "38px",
+                        borderRadius: "12px",
+                        border: reviewRating === star ? `1px solid ${accentColor}` : subtleBorder,
+                        background: isLight ? "rgba(255,255,255,0.88)" : "rgba(255,255,255,0.04)",
+                        color: isFilled ? "#f59e0b" : subtleText,
+                        fontSize: "16px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      ★
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
             <div>
               <p style={{ margin: "0 0 8px", fontSize: "12px", fontWeight: 700, color: pageText }}>
-                Review title
-              </p>
-              <input
-                type="text"
-                placeholder="Summarize your experience"
-                style={{ ...reviewInputBase, height: "42px", padding: "0 12px" }}
-              />
-            </div>
-
-            <div>
-              <p style={{ margin: "0 0 8px", fontSize: "12px", fontWeight: 700, color: pageText }}>
-                Review
+                Review text
               </p>
               <textarea
                 placeholder="Share fit, quality, comfort, delivery experience, and overall satisfaction."
                 rows={5}
+                value={reviewText}
+                onChange={(e) => setReviewText(e.target.value)}
                 style={{
                   ...reviewInputBase,
                   padding: "12px",
@@ -1104,8 +1335,56 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
               />
             </div>
 
+            <div>
+              <p style={{ margin: "0 0 8px", fontSize: "12px", fontWeight: 700, color: pageText }}>
+                Review images
+              </p>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/jpg,image/webp"
+                multiple
+                onChange={async (e) => {
+                  const files = Array.from(e.target.files || []);
+                  for (const file of files) {
+                    await handleReviewImageUpload(file);
+                  }
+                  e.currentTarget.value = "";
+                }}
+                style={{
+                  ...reviewInputBase,
+                  padding: "10px 12px",
+                }}
+              />
+              {reviewUploadError ? (
+                <p style={{ margin: "8px 0 0", color: "#dc2626", fontSize: "12px" }}>
+                  {reviewUploadError}
+                </p>
+              ) : null}
+
+              {reviewImages.length ? (
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "10px" }}>
+                  {reviewImages.map((img) => (
+                    <img
+                      key={img}
+                      src={img}
+                      alt="review upload"
+                      style={{
+                        width: "56px",
+                        height: "56px",
+                        objectFit: "cover",
+                        borderRadius: "10px",
+                        border: subtleBorder,
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
             <button
               type="button"
+              onClick={submitReview}
+              disabled={!canSubmitReview}
               style={{
                 minHeight: "42px",
                 borderRadius: "12px",
@@ -1114,74 +1393,114 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 color: "#ffffff",
                 fontWeight: 700,
                 fontSize: "13px",
-                cursor: "pointer",
+                cursor: canSubmitReview ? "pointer" : "not-allowed",
                 boxShadow: isLight
                   ? "0 12px 24px rgba(37,99,235,0.20)"
                   : "0 12px 24px rgba(37,99,235,0.24)",
+                opacity: canSubmitReview ? 1 : 0.65,
               }}
             >
-              Submit review
+              {reviewSubmitting ? "Submitting..." : "Submit review"}
             </button>
+
+            {reviewMessage ? (
+              <p style={{ margin: 0, fontSize: "12px", color: mutedText }}>{reviewMessage}</p>
+            ) : null}
           </div>
 
           <div style={{ display: "grid", gap: "10px" }}>
-            {reviews.map((review, index) => (
+            {reviews.length === 0 ? (
               <div
-                key={`${review.name}-${index}`}
                 style={{
                   borderRadius: "16px",
                   border: subtleBorder,
                   background: reviewCardBg,
                   padding: "14px",
+                  color: mutedText,
+                  fontSize: "13px",
                 }}
               >
+                No reviews yet.
+              </div>
+            ) : (
+              reviews.map((review, index) => (
                 <div
+                  key={review.id || `${review.customer_name || "customer"}-${index}`}
                   style={{
-                    display: "flex",
-                    alignItems: "flex-start",
-                    justifyContent: "space-between",
-                    gap: "12px",
-                    flexWrap: "wrap",
-                    marginBottom: "8px",
+                    borderRadius: "16px",
+                    border: subtleBorder,
+                    background: reviewCardBg,
+                    padding: "14px",
                   }}
                 >
-                  <div>
-                    <div
-                      style={{
-                        fontSize: "13px",
-                        fontWeight: 700,
-                        color: pageText,
-                        marginBottom: "4px",
-                      }}
-                    >
-                      {review.name}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      justifyContent: "space-between",
+                      gap: "12px",
+                      flexWrap: "wrap",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          fontSize: "13px",
+                          fontWeight: 700,
+                          color: pageText,
+                          marginBottom: "4px",
+                        }}
+                      >
+                        {review.customer_name || "Customer"}
+                      </div>
+                      <div style={{ color: "#f59e0b", fontSize: "12px", letterSpacing: "0.04em" }}>
+                        {"★".repeat(review.rating)}
+                        {"☆".repeat(5 - review.rating)}
+                      </div>
                     </div>
-                    <div style={{ color: "#f59e0b", fontSize: "12px", letterSpacing: "0.04em" }}>
-                      {review.rating}
-                    </div>
+
+                    <span style={{ fontSize: "11px", color: subtleText, fontWeight: 600 }}>
+                      {review.created_at ? new Date(review.created_at).toLocaleDateString() : ""}
+                    </span>
                   </div>
 
-                  <span style={{ fontSize: "11px", color: subtleText, fontWeight: 600 }}>
-                    2 days ago
-                  </span>
-                </div>
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      color: pageText,
+                      marginBottom: "6px",
+                    }}
+                  >
+                    Review
+                  </div>
 
-                <div
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: 700,
-                    color: pageText,
-                    marginBottom: "6px",
-                  }}
-                >
-                  {review.title}
-                </div>
+                  <p style={{ margin: 0, color: mutedText, fontSize: "13px", lineHeight: 1.68 }}>
+                    {review.review_text}
+                  </p>
 
-                <p style={{ margin: 0, color: mutedText, fontSize: "13px", lineHeight: 1.68 }}>
-                  {review.body}
-                </p>
-              </div>
-            ))}
+                  {Array.isArray(review.review_images) && review.review_images.length > 0 ? (
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "10px" }}>
+                      {review.review_images.map((img) => (
+                        <img
+                          key={img}
+                          src={img}
+                          alt="review"
+                          style={{
+                            width: "64px",
+                            height: "64px",
+                            objectFit: "cover",
+                            borderRadius: "10px",
+                            border: subtleBorder,
+                          }}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

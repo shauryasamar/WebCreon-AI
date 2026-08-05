@@ -240,6 +240,9 @@ const ProductGrid: React.FC<ProductGridProps> = ({
             product.normalizedDiscountPercent > 0 && product.normalizedInStock;
 
           const isDisabled = !product.normalizedInStock;
+          const ratingValue = Number(product.average_rating ?? 0);
+          const ratingText = ratingValue > 0 ? ratingValue.toFixed(1) : "New";
+          const reviewCount = Number(product.review_count ?? 0);
 
           return (
             <article
@@ -462,7 +465,8 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                     }}
                   >
                     <span style={{ color: "#d97706" }}>★</span>
-                    <span>4.8</span>
+                    <span>{ratingText}</span>
+                    <span>({reviewCount})</span>
                   </div>
                 </div>
 
