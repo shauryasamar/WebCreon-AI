@@ -80,6 +80,47 @@ const PLACE_ORDER_TYPES = new Set(["place_order_cta", "placeordercta"]);
 const PAYMENT_TYPES = new Set(["payment_methods", "paymentmethods"]);
 const DELIVERY_TYPES = new Set(["delivery_form", "deliveryform"]);
 
+const PRODUCT_DETAIL_TYPES = new Set([
+  "product_detail",
+  "productdetail",
+  "product_gallery",
+  "productgallery",
+  "product_info",
+  "productinfo",
+  "purchase_panel",
+  "purchasepanel",
+]);
+
+const PRODUCT_LISTING_TYPES = new Set([
+  "product_grid",
+  "productgrid",
+  "products_grid",
+  "productsgrid",
+  "product_list",
+  "productlist",
+  "products_section",
+  "productssection",
+  "shop_products",
+  "shopproducts",
+]);
+
+const FILTER_TYPES = new Set([
+  "filter_sidebar",
+  "filtersidebar",
+  "filters",
+  "shop_filters",
+  "shopfilters",
+]);
+
+const CART_PAGE_TYPES = new Set([
+  "cart_sidebar",
+  "cartsidebar",
+  "cart_items",
+  "cartitems",
+  "order_summary",
+  "ordersummary",
+]);
+
 const checkoutSteps: { key: CheckoutStep; label: string }[] = [
   { key: "delivery", label: "Delivery Address" },
   { key: "payment", label: "Payment" },
@@ -87,12 +128,12 @@ const checkoutSteps: { key: CheckoutStep; label: string }[] = [
 ];
 
 const initialDeliveryData: DeliveryData = {
-  fullName: "",
-  phone: "",
-  email: "",
-  address: "",
-  city: "",
-  pincode: "",
+  fullName: "Jane Doe",
+  phone: "+91 9876543210",
+  email: "jane.doe@example.com",
+  address: "42 Park Avenue, Bandra West",
+  city: "Mumbai",
+  pincode: "400050",
 };
 
 const initialPaymentData: PaymentData = {
@@ -228,6 +269,22 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
     page.page_type === "checkout" ||
     page.flow === "checkout";
 
+  const isCartPage =
+    page.slug === "cart" ||
+    page.route === "/cart" ||
+    page.page_type === "cart" ||
+    page.role === "cart";
+
+  const isProductDetailPageContext =
+    Boolean(selectedProduct) ||
+    page.role === "product_detail" ||
+    page.page_type === "product_detail" ||
+    page.route === "/products/:productSlug" ||
+    page.route === "/products/:slug" ||
+    resolvedBlocks.some((block) =>
+      PRODUCT_DETAIL_TYPES.has(String(block.type || "").toLowerCase())
+    );
+
   const productCategories = useMemo(() => {
     return Array.from(
       new Set(
@@ -242,6 +299,77 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
     if (selectedFilter === "All") return products;
     return products.filter((product) => product.category === selectedFilter);
   }, [products, selectedFilter]);
+
+  const detailRelevantBlocks = useMemo(() => {
+    if (!isProductDetailPageContext) return resolvedBlocks;
+
+    const filtered = resolvedBlocks.filter((block) => {
+      const type = String(block.type || "").toLowerCase();
+      const resolvedDataSource = block.data_source ?? block.datasource ?? undefined;
+
+      if (FILTER_TYPES.has(type)) return false;
+      if (resolvedDataSource === "products") return false;
+      if (PRODUCT_LISTING_TYPES.has(type)) return false;
+
+      return true;
+    });
+
+    const hasRenderableDetailBlock = filtered.some((block) => {
+      const type = String(block.type || "").toLowerCase();
+      const resolvedDataSource = block.data_source ?? block.datasource ?? undefined;
+
+      return (
+        (PRODUCT_DETAIL_TYPES.has(type) || resolvedDataSource === "product") &&
+        Boolean(componentRegistry[block.type])
+      );
+    });
+
+    if (hasRenderableDetailBlock) return filtered;
+
+    return [
+      {
+        id: "auto-product-detail-fallback",
+        type: "product_detail",
+        data_source: "product",
+        props: {},
+      },
+    ];
+  }, [isProductDetailPageContext, resolvedBlocks]);
+
+  const blocksToRender = useMemo(() => {
+    if (isCheckoutPage) return detailRelevantBlocks;
+    if (!isCartPage) return detailRelevantBlocks;
+
+    let hasRenderedPrimaryCartBlock = false;
+
+    return detailRelevantBlocks.filter((block) => {
+      const type = String(block.type || "").toLowerCase();
+      const dataSource = block.data_source ?? block.datasource ?? undefined;
+      const isCartLike =
+        CART_PAGE_TYPES.has(type) || dataSource === "cart";
+
+      if (!isCartLike) return true;
+      if (hasRenderedPrimaryCartBlock) return false;
+
+      hasRenderedPrimaryCartBlock = true;
+      return true;
+    });
+  }, [detailRelevantBlocks, isCheckoutPage, isCartPage]);
+
+  // Auto switch checkout step if selected block belongs to a specific step
+  useEffect(() => {
+    if (!selectedBlockId || !isCheckoutPage) return;
+    const matched = blocksToRender.find((b) => (b.id || b.type) === selectedBlockId);
+    if (!matched) return;
+    const type = (matched.type || "").toLowerCase();
+    if (PAYMENT_TYPES.has(type)) {
+      setCheckoutStep("payment");
+    } else if (PLACE_ORDER_TYPES.has(type)) {
+      setCheckoutStep("review");
+    } else if (DELIVERY_TYPES.has(type)) {
+      setCheckoutStep("delivery");
+    }
+  }, [selectedBlockId, isCheckoutPage, blocksToRender]);
 
   const renderBlock = (
     block: Block,
@@ -271,7 +399,10 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
 
     let renderedNode: React.ReactNode;
 
-    if (block.type === "filter_sidebar" || block.type === "filtersidebar") {
+    if (
+      !isProductDetailPageContext &&
+      (block.type === "filter_sidebar" || block.type === "filtersidebar")
+    ) {
       renderedNode = (
         <Component
           {...componentProps}
@@ -288,7 +419,10 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
           selectedProduct={selectedProduct}
         />
       );
-    } else if (resolvedDataSource === "products") {
+    } else if (
+      !isProductDetailPageContext &&
+      resolvedDataSource === "products"
+    ) {
       renderedNode = (
         <Component
           {...componentProps}
@@ -320,22 +454,22 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
   };
 
   if (!isCheckoutPage) {
-    return <>{resolvedBlocks.map((block, index) => renderBlock(block, index))}</>;
+    return <>{blocksToRender.map((block, index) => renderBlock(block, index))}</>;
   }
 
-  const deliveryBlock = resolvedBlocks.find((block) =>
+  const deliveryBlock = blocksToRender.find((block) =>
     DELIVERY_TYPES.has(block.type.toLowerCase())
   );
 
-  const paymentBlock = resolvedBlocks.find((block) =>
+  const paymentBlock = blocksToRender.find((block) =>
     PAYMENT_TYPES.has(block.type.toLowerCase())
   );
 
-  const placeOrderBlock = resolvedBlocks.find((block) =>
+  const placeOrderBlock = blocksToRender.find((block) =>
     PLACE_ORDER_TYPES.has(block.type.toLowerCase())
   );
 
-  const summaryBlock = resolvedBlocks.find((block) =>
+  const summaryBlock = blocksToRender.find((block) =>
     CHECKOUT_SUMMARY_TYPES.has(block.type.toLowerCase())
   );
 
@@ -345,47 +479,205 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
       .map((block) => block!.id || block!.type)
   );
 
-  const extraBlocks = resolvedBlocks.filter((block) => {
+  const extraBlocks = blocksToRender.filter((block) => {
     const key = block.id || block.type;
     return !usedBlockIds.has(key);
   });
 
   const pageBg =
-    theme?.mode === "light" ? "#f8fafc" : theme?.primary_bg || "#0f172a";
+    theme?.mode === "light" ? "#f6f7fb" : theme?.primary_bg || "#0f172a";
   const textColor =
     theme?.mode === "light" ? "#111827" : theme?.text_color || "#f9fafb";
   const subtleText =
-    theme?.mode === "light" ? "rgba(17,24,39,0.68)" : "rgba(255,255,255,0.68)";
-  const accentColor = theme?.accent_color || "#2563eb";
+    theme?.mode === "light" ? "#6b7280" : "rgba(255,255,255,0.68)";
+  const accentColor = theme?.accent_color || "#2f6df6";
   const isLight = theme?.mode === "light";
 
   const shellBg = isLight ? "#ffffff" : "rgba(15,23,42,0.42)";
   const shellBorder = isLight
-    ? "1px solid rgba(15,23,42,0.08)"
+    ? "1px solid #e8ebf0"
     : "1px solid rgba(255,255,255,0.08)";
   const softPanel = isLight ? "#f8fafc" : "rgba(255,255,255,0.04)";
+  const cardBg = isLight ? "#ffffff" : "rgba(255,255,255,0.04)";
+  const cardBorder = isLight
+    ? "1px solid #e5e7eb"
+    : "1px solid rgba(255,255,255,0.08)";
+  const cardDivider = isLight
+    ? "1px solid #edf0f4"
+    : "1px solid rgba(255,255,255,0.08)";
+  const mutedPanel = isLight ? "#f8fafc" : "rgba(255,255,255,0.03)";
 
   const currentStepIndex = checkoutSteps.findIndex((step) => step.key === checkoutStep);
   const canContinueDelivery = isDeliveryValid(deliveryData);
   const canContinuePayment = isPaymentValid(paymentData);
 
   const goToStep = (nextStep: CheckoutStep) => {
-    if (nextStep === "delivery") {
-      setCheckoutStep("delivery");
-      return;
-    }
-
-    if (nextStep === "payment") {
-      if (!canContinueDelivery) return;
-      setCheckoutStep("payment");
-      return;
-    }
-
-    if (nextStep === "review") {
-      if (!canContinueDelivery || !canContinuePayment) return;
-      setCheckoutStep("review");
-    }
+    setCheckoutStep(nextStep);
   };
+
+  const paymentLayoutColumns = isCompactCheckout
+    ? "minmax(0, 1fr)"
+    : "minmax(0, 1.1fr) minmax(360px, 0.9fr)";
+
+  const reviewLayoutColumns = isCompactCheckout
+    ? "minmax(0, 1fr)"
+    : "minmax(0, 1.2fr) minmax(340px, 0.8fr)";
+
+  const infoCardStyle: React.CSSProperties = {
+    borderRadius: "14px",
+    border: cardBorder,
+    background: cardBg,
+    padding: isCompactCheckout ? "14px" : "16px",
+    boxShadow: isLight
+      ? "0 1px 2px rgba(16,24,40,0.04)"
+      : "0 10px 24px rgba(0,0,0,0.14)",
+  };
+
+  const displayCartItems =
+    cartItems.length > 0
+      ? cartItems
+      : products.length > 0
+      ? [
+          {
+            id: products[0].id,
+            name: products[0].name,
+            price: products[0].price,
+            quantity: 1,
+            image: products[0].image,
+            selectedVariantLabel: "Option",
+            selectedVariantValue: products[0].sizes?.[0] || undefined,
+          },
+        ]
+      : [];
+
+  const selectedItemsCard = (
+    <div style={infoCardStyle}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: "12px",
+          alignItems: "center",
+          marginBottom: "12px",
+        }}
+      >
+        <h4
+          style={{
+            margin: 0,
+            fontSize: "15px",
+            fontWeight: 700,
+            color: textColor,
+          }}
+        >
+          Selected items
+        </h4>
+      </div>
+
+      {displayCartItems.length === 0 ? (
+        <p
+          style={{
+            margin: 0,
+            fontSize: "14px",
+            color: subtleText,
+            lineHeight: 1.6,
+          }}
+        >
+          No items in cart.
+        </p>
+      ) : (
+        <div style={{ display: "grid", gap: "12px" }}>
+          {displayCartItems.map((item, index) => (
+            <div
+              key={`${item.id}-${item.selectedVariantValue || "default"}-${index}`}
+              style={{
+                display: "grid",
+                gridTemplateColumns: isCompactCheckout
+                  ? "56px minmax(0, 1fr)"
+                  : "64px minmax(0, 1fr) auto",
+                gap: "12px",
+                alignItems: "center",
+                padding: "10px 0",
+                borderBottom:
+                  index === displayCartItems.length - 1 ? "none" : cardDivider,
+              }}
+            >
+              <div
+                style={{
+                  width: isCompactCheckout ? "56px" : "64px",
+                  height: isCompactCheckout ? "56px" : "64px",
+                  borderRadius: "12px",
+                  overflow: "hidden",
+                  background: mutedPanel,
+                }}
+              >
+                <img
+                  src={item.image}
+                  alt={item.name}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    display: "block",
+                  }}
+                />
+              </div>
+
+              <div style={{ minWidth: 0 }}>
+                <p
+                  style={{
+                    margin: "0 0 4px",
+                    fontSize: "14px",
+                    fontWeight: 700,
+                    color: textColor,
+                    lineHeight: 1.35,
+                  }}
+                >
+                  {item.name}
+                </p>
+
+                {item.selectedVariantValue ? (
+                  <p
+                    style={{
+                      margin: "0 0 4px",
+                      fontSize: "12px",
+                      color: subtleText,
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    {item.selectedVariantLabel || "Option"}:{" "}
+                    {item.selectedVariantValue}
+                  </p>
+                ) : null}
+
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "12px",
+                    color: subtleText,
+                  }}
+                >
+                  Qty {item.quantity} × ₹{item.price}
+                </p>
+              </div>
+
+              {!isCompactCheckout ? (
+                <div
+                  style={{
+                    fontSize: "14px",
+                    fontWeight: 700,
+                    color: textColor,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  ₹{item.quantity * item.price}
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div
@@ -405,64 +697,31 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
         <div
           style={{
             marginBottom: isCompactCheckout ? "14px" : "18px",
-            display: "flex",
-            alignItems: "flex-end",
-            justifyContent: "space-between",
-            gap: "16px",
-            flexWrap: "wrap",
           }}
         >
-          <div style={{ minWidth: 0 }}>
-            <p
-              style={{
-                margin: "0 0 6px",
-                fontSize: "11px",
-                fontWeight: 700,
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                color: subtleText,
-              }}
-            >
-              Secure checkout
-            </p>
-
-            <h1
-              style={{
-                margin: 0,
-                fontSize: isCompactCheckout
-                  ? "clamp(24px, 4vw, 30px)"
-                  : "clamp(28px, 4vw, 34px)",
-                lineHeight: 1.05,
-                letterSpacing: "-0.03em",
-                fontWeight: 800,
-                color: textColor,
-              }}
-            >
-              {page.title || page.name || "Checkout"}
-            </h1>
-          </div>
-
-          <p
+          <h1
             style={{
               margin: 0,
-              fontSize: "13px",
-              lineHeight: 1.6,
-              color: subtleText,
-              maxWidth: "420px",
+              fontSize: isCompactCheckout
+                ? "clamp(28px, 4vw, 32px)"
+                : "clamp(34px, 4vw, 38px)",
+              lineHeight: 1.05,
+              fontWeight: 800,
+              color: textColor,
+              letterSpacing: "-0.03em",
             }}
           >
-            Delivery, payment, and review now stay aligned in both preview and
-            live checkout flows. [web:15][web:56]
-          </p>
+            {page.title || page.name || "Checkout"}
+          </h1>
         </div>
 
         <div
           style={{
-            borderRadius: "22px",
+            borderRadius: "18px",
             border: shellBorder,
             background: shellBg,
             boxShadow: isLight
-              ? "0 18px 44px rgba(15,23,42,0.08)"
+              ? "0 1px 2px rgba(16,24,40,0.04)"
               : "0 18px 44px rgba(0,0,0,0.22)",
             padding: isCompactCheckout ? "14px" : "18px",
             marginBottom: isCompactCheckout ? "14px" : "18px",
@@ -474,109 +733,97 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
               gridTemplateColumns: isCompactCheckout
                 ? "minmax(0,1fr)"
                 : "repeat(3, minmax(0, 1fr))",
-              gap: isCompactCheckout ? "10px" : "14px",
+              gap: isCompactCheckout ? "10px" : "16px",
               alignItems: "center",
             }}
           >
             {checkoutSteps.map((step, index) => {
               const isCompleted = index < currentStepIndex;
               const isCurrent = step.key === checkoutStep;
-              const isAccessible =
-                step.key === "delivery" ||
-                (step.key === "payment" && canContinueDelivery) ||
-                (step.key === "review" && canContinueDelivery && canContinuePayment);
+              const isAccessible = true;
 
               return (
-                <button
+                <div
                   key={step.key}
-                  type="button"
-                  onClick={() => isAccessible && goToStep(step.key)}
                   style={{
-                    border: "none",
-                    background: "transparent",
-                    padding: 0,
-                    cursor: isAccessible ? "pointer" : "default",
-                    textAlign: "left",
-                    opacity: isAccessible ? 1 : 0.65,
+                    display: "grid",
+                    gridTemplateColumns:
+                      !isCompactCheckout && index < checkoutSteps.length - 1
+                        ? "auto 1fr"
+                        : "auto",
+                    alignItems: "center",
+                    gap: "12px",
                   }}
                 >
-                  <div
+                  <button
+                    type="button"
+                    onClick={() => isAccessible && goToStep(step.key)}
                     style={{
+                      border: "none",
+                      background: "transparent",
+                      padding: 0,
+                      cursor: "pointer",
+                      textAlign: "left",
                       display: "flex",
                       alignItems: "center",
                       gap: "10px",
+                      opacity: 1,
                     }}
                   >
                     <div
                       style={{
-                        width: "24px",
-                        height: "24px",
+                        width: "22px",
+                        height: "22px",
                         borderRadius: "999px",
                         display: "grid",
                         placeItems: "center",
-                        fontSize: "12px",
-                        fontWeight: 800,
-                        border: isCurrent
-                          ? `1px solid ${accentColor}`
-                          : isCompleted
-                          ? `1px solid ${accentColor}`
-                          : isLight
-                          ? "1px solid rgba(15,23,42,0.14)"
-                          : "1px solid rgba(255,255,255,0.16)",
-                        background: isCurrent || isCompleted ? accentColor : "transparent",
-                        color: isCurrent || isCompleted ? "#ffffff" : subtleText,
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        border:
+                          isCurrent || isCompleted
+                            ? `1px solid ${accentColor}`
+                            : isLight
+                            ? "1px solid #d5dbe4"
+                            : "1px solid rgba(255,255,255,0.16)",
+                        background:
+                          isCurrent || isCompleted ? accentColor : "transparent",
+                        color:
+                          isCurrent || isCompleted ? "#ffffff" : subtleText,
                         flexShrink: 0,
                       }}
                     >
                       {index + 1}
                     </div>
 
-                    <div style={{ minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontSize: "13px",
-                          fontWeight: 700,
-                          color: isCurrent ? textColor : subtleText,
-                          lineHeight: 1.2,
-                        }}
-                      >
-                        {step.label}
-                      </div>
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: isCurrent ? 700 : 600,
+                        color: isCurrent ? textColor : subtleText,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {step.label}
                     </div>
-                  </div>
+                  </button>
 
                   {!isCompactCheckout && index < checkoutSteps.length - 1 ? (
                     <div
                       style={{
-                        marginTop: "12px",
-                        marginLeft: "12px",
-                        height: "2px",
-                        borderRadius: "999px",
+                        height: "1px",
                         background:
-                          index < currentStepIndex
-                            ? accentColor
-                            : isLight
-                            ? "rgba(15,23,42,0.08)"
-                            : "rgba(255,255,255,0.08)",
+                          index < currentStepIndex ? accentColor : "#e5e7eb",
+                        width: "100%",
                       }}
                     />
                   ) : null}
-                </button>
+                </div>
               );
             })}
           </div>
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: isCompactCheckout
-              ? "minmax(0, 1fr)"
-              : "minmax(0, 1.05fr) minmax(340px, 0.95fr)",
-            gap: isCompactCheckout ? "14px" : "18px",
-            alignItems: "start",
-          }}
-        >
+        {checkoutStep === "delivery" ? (
           <div
             style={{
               minWidth: 0,
@@ -585,255 +832,304 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
               alignContent: "start",
             }}
           >
-            {checkoutStep === "delivery" && deliveryBlock
-              ? renderBlock(deliveryBlock, resolvedBlocks.indexOf(deliveryBlock), {
-                  compact: true,
+            {deliveryBlock
+              ? renderBlock(deliveryBlock, blocksToRender.indexOf(deliveryBlock), {
+                  compact: false,
                   currentStep: "delivery",
                   deliveryData,
                   onDeliveryDataChange: setDeliveryData,
-                  onContinue: () => canContinueDelivery && goToStep("payment"),
-                  continueDisabled: !canContinueDelivery,
+                  onContinue: () => goToStep("payment"),
+                  continueDisabled: false,
                 })
               : null}
-
-            {checkoutStep === "payment" && paymentBlock
-              ? renderBlock(paymentBlock, resolvedBlocks.indexOf(paymentBlock), {
-                  compact: true,
-                  currentStep: "payment",
-                  paymentData,
-                  onPaymentDataChange: setPaymentData,
-                  onBack: () => goToStep("delivery"),
-                  onContinue: () => canContinuePayment && goToStep("review"),
-                  continueDisabled: !canContinuePayment,
-                })
-              : null}
-
-            {checkoutStep === "review" ? (
-              <div
-                style={{
-                  borderRadius: "20px",
-                  border: shellBorder,
-                  background: isLight ? "#ffffff" : softPanel,
-                  boxShadow: isLight
-                    ? "0 10px 24px rgba(15,23,42,0.06)"
-                    : "0 10px 24px rgba(0,0,0,0.16)",
-                  padding: isCompactCheckout ? "16px" : "20px",
-                }}
-              >
-                <div
-                  style={{
-                    marginBottom: "18px",
-                    paddingBottom: "12px",
-                    borderBottom: isLight
-                      ? "1px solid rgba(15,23,42,0.08)"
-                      : "1px solid rgba(255,255,255,0.08)",
-                  }}
-                >
-                  <p
-                    style={{
-                      margin: "0 0 6px",
-                      fontSize: "11px",
-                      fontWeight: 700,
-                      letterSpacing: "0.12em",
-                      textTransform: "uppercase",
-                      color: subtleText,
-                    }}
-                  >
-                    Final review
-                  </p>
-
-                  <h3
-                    style={{
-                      margin: 0,
-                      fontSize: isCompactCheckout ? "22px" : "24px",
-                      lineHeight: 1.1,
-                      letterSpacing: "-0.03em",
-                      color: textColor,
-                    }}
-                  >
-                    Review & Pay
-                  </h3>
-                </div>
-
-                <div style={{ display: "grid", gap: "14px" }}>
-                  <div
-                    style={{
-                      borderRadius: "16px",
-                      border: isLight
-                        ? "1px solid rgba(15,23,42,0.08)"
-                        : "1px solid rgba(255,255,255,0.08)",
-                      background: isLight ? "#f8fafc" : "rgba(255,255,255,0.04)",
-                      padding: "14px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "12px",
-                        alignItems: "center",
-                        marginBottom: "10px",
-                      }}
-                    >
-                      <h4
-                        style={{
-                          margin: 0,
-                          fontSize: "15px",
-                          fontWeight: 700,
-                          color: textColor,
-                        }}
-                      >
-                        Delivery address
-                      </h4>
-
-                      <button
-                        type="button"
-                        onClick={() => goToStep("delivery")}
-                        style={{
-                          border: "none",
-                          background: "transparent",
-                          color: accentColor,
-                          fontSize: "13px",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          padding: 0,
-                        }}
-                      >
-                        Change
-                      </button>
-                    </div>
-
-                    <div
-                      style={{
-                        color: subtleText,
-                        fontSize: "14px",
-                        lineHeight: 1.65,
-                      }}
-                    >
-                      <div style={{ color: textColor, fontWeight: 700 }}>
-                        {deliveryData.fullName || "—"}
-                      </div>
-                      <div>{deliveryData.phone || "—"}</div>
-                      <div>{deliveryData.email || "—"}</div>
-                      <div>{deliveryData.address || "—"}</div>
-                      <div>
-                        {deliveryData.city || "—"} {deliveryData.pincode ? `- ${deliveryData.pincode}` : ""}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      borderRadius: "16px",
-                      border: isLight
-                        ? "1px solid rgba(15,23,42,0.08)"
-                        : "1px solid rgba(255,255,255,0.08)",
-                      background: isLight ? "#f8fafc" : "rgba(255,255,255,0.04)",
-                      padding: "14px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "12px",
-                        alignItems: "center",
-                        marginBottom: "10px",
-                      }}
-                    >
-                      <h4
-                        style={{
-                          margin: 0,
-                          fontSize: "15px",
-                          fontWeight: 700,
-                          color: textColor,
-                        }}
-                      >
-                        Payment method
-                      </h4>
-
-                      <button
-                        type="button"
-                        onClick={() => goToStep("payment")}
-                        style={{
-                          border: "none",
-                          background: "transparent",
-                          color: accentColor,
-                          fontSize: "13px",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          padding: 0,
-                        }}
-                      >
-                        Change
-                      </button>
-                    </div>
-
-                    <div
-                      style={{
-                        color: subtleText,
-                        fontSize: "14px",
-                        lineHeight: 1.65,
-                      }}
-                    >
-                      <div style={{ color: textColor, fontWeight: 700 }}>
-                        {paymentData.method || "—"}
-                      </div>
-                      {paymentData.method.toUpperCase() === "UPI" ? (
-                        <div>{paymentData.upiId || "—"}</div>
-                      ) : (
-                        <div>Payment will be completed using the selected method.</div>
-                      )}
-                    </div>
-                  </div>
-
-                  {placeOrderBlock
-                    ? renderBlock(placeOrderBlock, resolvedBlocks.indexOf(placeOrderBlock), {
-                        compact: true,
-                        buttonLabel: "Pay now",
-                        reviewMode: true,
-                        disabled: !(canContinueDelivery && canContinuePayment && cartItems.length > 0),
-                      })
-                    : null}
-                </div>
-              </div>
-            ) : null}
           </div>
+        ) : null}
 
-          <aside
+        {checkoutStep === "payment" ? (
+          <div
             style={{
-              minWidth: 0,
               display: "grid",
-              gap: "12px",
-              alignContent: "start",
-              position: isCompactCheckout ? "static" : "sticky",
-              top: isCompactCheckout ? undefined : "84px",
+              gridTemplateColumns: paymentLayoutColumns,
+              gap: isCompactCheckout ? "14px" : "18px",
+              alignItems: "start",
             }}
           >
-            {summaryBlock
-              ? renderBlock(summaryBlock, resolvedBlocks.indexOf(summaryBlock), {
-                  mode: "checkout_summary",
-                  compact: true,
-                })
-              : null}
-          </aside>
-
-          {extraBlocks.length > 0 ? (
-            <div
+            <aside
               style={{
-                gridColumn: "1 / -1",
-                display: "grid",
-                gap: "16px",
                 minWidth: 0,
-                marginTop: "2px",
+                display: "grid",
+                gap: "12px",
+                alignContent: "start",
+                position: isCompactCheckout ? "static" : "sticky",
+                top: isCompactCheckout ? undefined : "84px",
               }}
             >
-              {extraBlocks.map((block, index) =>
-                renderBlock(block, index + resolvedBlocks.length)
-              )}
+              {summaryBlock
+                ? renderBlock(summaryBlock, blocksToRender.indexOf(summaryBlock), {
+                    mode: "checkout_summary",
+                    compact: false,
+                    paymentMethod: paymentData.method,
+                    show_promo: true,
+                    show_summary: true,
+                  })
+                : null}
+            </aside>
+
+            <div
+              style={{
+                minWidth: 0,
+                display: "grid",
+                gap: "14px",
+                alignContent: "start",
+              }}
+            >
+              {paymentBlock
+                ? renderBlock(paymentBlock, blocksToRender.indexOf(paymentBlock), {
+                    compact: false,
+                    currentStep: "payment",
+                    paymentData,
+                    onPaymentDataChange: setPaymentData,
+                    onBack: () => goToStep("delivery"),
+                    onContinue: () => goToStep("review"),
+                    continueDisabled: false,
+                  })
+                : null}
             </div>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
+
+        {checkoutStep === "review" ? (
+          <div
+            style={{
+              borderRadius: "16px",
+              border: shellBorder,
+              background: isLight ? "#ffffff" : softPanel,
+              boxShadow: isLight
+                ? "0 1px 2px rgba(16,24,40,0.04)"
+                : "0 10px 24px rgba(0,0,0,0.16)",
+              padding: isCompactCheckout ? "16px" : "18px",
+            }}
+          >
+            <div
+              style={{
+                marginBottom: "18px",
+                paddingBottom: "12px",
+                borderBottom: cardDivider,
+              }}
+            >
+              <p
+                style={{
+                  margin: "0 0 6px",
+                  fontSize: "10px",
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: subtleText,
+                }}
+              >
+                Review
+              </p>
+
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: "24px",
+                  lineHeight: 1.1,
+                  color: textColor,
+                  fontWeight: 700,
+                }}
+              >
+                Review & Pay
+              </h3>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: reviewLayoutColumns,
+                gap: "16px",
+                alignItems: "start",
+              }}
+            >
+              <div
+                style={{
+                  display: "grid",
+                  gap: "14px",
+                }}
+              >
+                {selectedItemsCard}
+
+                <div style={infoCardStyle}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: "12px",
+                      alignItems: "center",
+                      marginBottom: "10px",
+                    }}
+                  >
+                    <h4
+                      style={{
+                        margin: 0,
+                        fontSize: "15px",
+                        fontWeight: 700,
+                        color: textColor,
+                      }}
+                    >
+                      Delivery address
+                    </h4>
+
+                    <button
+                      type="button"
+                      onClick={() => goToStep("delivery")}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: accentColor,
+                        fontSize: "12px",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        padding: 0,
+                      }}
+                    >
+                      Change
+                    </button>
+                  </div>
+
+                  <div
+                    style={{
+                      color: subtleText,
+                      fontSize: "14px",
+                      lineHeight: 1.65,
+                    }}
+                  >
+                    <div style={{ color: textColor, fontWeight: 700 }}>
+                      {deliveryData.fullName || "—"}
+                    </div>
+                    <div>{deliveryData.phone || "—"}</div>
+                    <div>{deliveryData.email || "—"}</div>
+                    <div>{deliveryData.address || "—"}</div>
+                    <div>
+                      {deliveryData.city || "—"}{" "}
+                      {deliveryData.pincode ? `- ${deliveryData.pincode}` : ""}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={infoCardStyle}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: "12px",
+                      alignItems: "center",
+                      marginBottom: "10px",
+                    }}
+                  >
+                    <h4
+                      style={{
+                        margin: 0,
+                        fontSize: "15px",
+                        fontWeight: 700,
+                        color: textColor,
+                      }}
+                    >
+                      Payment method
+                    </h4>
+
+                    <button
+                      type="button"
+                      onClick={() => goToStep("payment")}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: accentColor,
+                        fontSize: "12px",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        padding: 0,
+                      }}
+                    >
+                      Change
+                    </button>
+                  </div>
+
+                  <div
+                    style={{
+                      color: subtleText,
+                      fontSize: "14px",
+                      lineHeight: 1.65,
+                    }}
+                  >
+                    <div style={{ color: textColor, fontWeight: 700 }}>
+                      {paymentData.method || "—"}
+                    </div>
+                    {paymentData.method.toUpperCase() === "UPI" ? (
+                      <div>{paymentData.upiId || "—"}</div>
+                    ) : (
+                      <div>
+                        Payment will be completed using the selected method.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  minWidth: 0,
+                  display: "grid",
+                  gap: "12px",
+                  alignContent: "start",
+                  position: isCompactCheckout ? "static" : "sticky",
+                  top: isCompactCheckout ? undefined : "84px",
+                }}
+              >
+                {summaryBlock
+                  ? renderBlock(summaryBlock, blocksToRender.indexOf(summaryBlock), {
+                      mode: "checkout_summary",
+                      compact: false,
+                      paymentMethod: paymentData.method,
+                      show_summary: true,
+                      show_items: false,
+                      show_promo: false,
+                      show_gift_card: false,
+                      review_mode: true,
+                    })
+                  : null}
+
+                {placeOrderBlock
+                  ? renderBlock(placeOrderBlock, blocksToRender.indexOf(placeOrderBlock), {
+                      compact: false,
+                      buttonLabel:
+                        paymentData.method.toUpperCase() === "COD"
+                          ? "Place Order"
+                          : "Pay Now",
+                      reviewMode: true,
+                      disabled: false,
+                    })
+                  : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {extraBlocks.length > 0 ? (
+          <div
+            style={{
+              gridColumn: "1 / -1",
+              display: "grid",
+              gap: "16px",
+              minWidth: 0,
+              marginTop: "16px",
+            }}
+          >
+            {extraBlocks.map((block, index) =>
+              renderBlock(block, index + blocksToRender.length)
+            )}
+          </div>
+        ) : null}
       </div>
     </div>
   );
