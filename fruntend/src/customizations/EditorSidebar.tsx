@@ -63,28 +63,25 @@ function colorInputStyle(isLightMode: boolean): React.CSSProperties {
   };
 }
 
-function sectionCardStyle(isLightMode: boolean): React.CSSProperties {
+function sectionCardStyle(_isLightMode: boolean): React.CSSProperties {
   return {
     display: "grid",
     gap: "12px",
-    padding: "14px",
-    borderRadius: "12px",
-    background: isLightMode
-      ? "rgba(17,24,39,0.04)"
-      : "rgba(255,255,255,0.04)",
+    padding: "12px",
+    borderRadius: "4px",
+    border: "1px solid rgba(15,23,42,0.08)",
+    background: "#ffffff",
   };
 }
 
-function blockFieldCardStyle(isLightMode: boolean): React.CSSProperties {
+function blockFieldCardStyle(_isLightMode: boolean): React.CSSProperties {
   return {
     display: "grid",
     gap: "8px",
-    padding: "12px",
-    borderRadius: "12px",
-    border: isLightMode
-      ? "1px solid rgba(17,24,39,0.08)"
-      : "1px solid rgba(255,255,255,0.08)",
-    background: isLightMode ? "#ffffff" : "rgba(255,255,255,0.03)",
+    padding: "10px",
+    borderRadius: "4px",
+    border: "1px solid rgba(15,23,42,0.08)",
+    background: "#ffffff",
   };
 }
 
@@ -384,14 +381,15 @@ export default function EditorSidebar({
   onTabChange,
   onSiteDefinitionChange,
 }: EditorSidebarProps) {
-  const isLightMode = siteDefinition.theme?.mode === "light";
+  const isLightMode = true;
 
-  const textColor = isLightMode
-    ? "#111827"
-    : siteDefinition.theme?.text_color || "#f9fafb";
+  // const textColor = isLightMode
+  //   ? "#111827"
+  //   : siteDefinition.theme?.text_color || "#f9fafb";
 
-  const accentColor = siteDefinition.theme?.accent_color || "#2563eb";
-
+  // const accentColor = siteDefinition.theme?.accent_color || "#2563eb";
+  const textColor = "#111827";
+  const accentColor = "#2563eb";
   const selectedBlock = findBlockById(siteDefinition, selectedBlockId);
   const editableConfig = selectedBlock
     ? getEditableConfigForBlock(selectedBlock.type)
@@ -431,19 +429,19 @@ export default function EditorSidebar({
     <aside
       style={{
         width: "100%",
+        minWidth: 0,
+        height: "100%",
         flexShrink: 0,
-        borderLeft: isLightMode
-          ? "1px solid rgba(17,24,39,0.08)"
-          : "1px solid rgba(255,255,255,0.08)",
-        background: isLightMode
-          ? "rgba(255,255,255,0.96)"
-          : "rgba(15,23,42,0.96)",
         position: "relative",
         top: "auto",
-        height: "100%",
-        overflowY: "visible",
-        padding: "20px",
+        overflowY: "auto",
+        overflowX: "hidden",
+        padding: "16px",
         boxSizing: "border-box",
+        color: "#111827",
+        background: "#ffffff",
+        border: "none",
+        borderRadius: 0,
       }}
     >
       <div style={{ display: "flex", gap: "8px", marginBottom: "18px" }}>

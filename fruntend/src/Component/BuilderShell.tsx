@@ -1,6 +1,5 @@
 import React from "react";
 
-
 type BuilderShellProps = {
   topBar: React.ReactNode;
   leftPanel: React.ReactNode;
@@ -19,7 +18,6 @@ type BuilderShellProps = {
   plainCenter?: boolean;
 };
 
-
 export default function BuilderShell({
   topBar,
   leftPanel,
@@ -30,12 +28,11 @@ export default function BuilderShell({
   plainCenter = false,
 }: BuilderShellProps) {
   const hasAdminChrome = Boolean(topBar || leftPanel || rightPanel || drawer);
-
+  const hasRightPanel = Boolean(rightPanel);
 
   if (!hasAdminChrome) {
     return <>{children}</>;
   }
-
 
   return (
     <div
@@ -44,10 +41,13 @@ export default function BuilderShell({
         width: "100vw",
         display: "grid",
         gridTemplateRows: "64px minmax(0, 1fr)",
-        gridTemplateColumns: "auto minmax(0, 1fr) auto",
+        gridTemplateColumns: hasRightPanel
+          ? "auto minmax(0, 1fr) 20vw"
+          : "auto minmax(0, 1fr) 0px",
         background: "#f8fafc",
         color: "#0f172a",
         overflow: "hidden",
+        transition: "grid-template-columns 0.22s ease",
       }}
     >
       <style>{`
@@ -55,13 +55,13 @@ export default function BuilderShell({
           scrollbar-width: none;
           -ms-overflow-style: none;
         }
+
         .builder-preview-scroll::-webkit-scrollbar {
           display: none;
           width: 0px;
           height: 0px;
         }
       `}</style>
-
 
       <header
         style={{
@@ -77,7 +77,6 @@ export default function BuilderShell({
       >
         {topBar}
       </header>
-
 
       <div
         style={{
@@ -108,7 +107,6 @@ export default function BuilderShell({
           {leftPanel}
         </div>
 
-
         <div
           style={{
             height: "100%",
@@ -131,6 +129,7 @@ export default function BuilderShell({
                   flexShrink: 0,
                 }}
               />
+
               <div
                 style={{
                   width: 299,
@@ -149,7 +148,6 @@ export default function BuilderShell({
           )}
         </div>
       </div>
-
 
       {plainCenter ? (
         <div
@@ -194,14 +192,9 @@ export default function BuilderShell({
         >
           {/*
             Inner pane: this is the real fixed-position containing block
-            (via transform). It has zero padding of its own, so the fixed
+            via transform. It has zero padding of its own, so the fixed
             navbar and the normal-flow storefront content both measure
-            against the exact same box and stay perfectly aligned. Do NOT
-            merge this with the outer frame div above — the outer div's
-            padding is what creates the 8px dashed-border inset, and a
-            position:fixed descendant ignores its containing block's own
-            padding, which is what caused the navbar to leak past the
-            frame when this was previously collapsed into a single div.
+            against the exact same box and stay perfectly aligned.
           */}
           <div
             ref={previewPaneRef}
@@ -229,14 +222,18 @@ export default function BuilderShell({
         </div>
       )}
 
-
       <aside
         style={{
           gridRow: "2 / 3",
           gridColumn: "3 / 4",
+          width: hasRightPanel ? "20vw" : "0px",
+          maxWidth: hasRightPanel ? "20vw" : "0px",
           height: "100%",
           overflow: "hidden",
           minWidth: 0,
+          opacity: hasRightPanel ? 1 : 0,
+          pointerEvents: hasRightPanel ? "auto" : "none",
+          transition: "width 0.22s ease, opacity 0.22s ease",
         }}
       >
         {rightPanel}

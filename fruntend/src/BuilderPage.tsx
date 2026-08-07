@@ -76,7 +76,7 @@ type SavedSite = {
 const NAVBAR_BLOCK_ID = "global-navbar";
 const BUILDER_TOPBAR_HEIGHT = 64;
 const FIXED_NAVBAR_Z_INDEX = 240;
-const FIXED_NAVBAR_CONTENT_OFFSET = 96;
+const FIXED_NAVBAR_CONTENT_OFFSET = 111;
 
 
 function normalizeRoute(route?: string | null) {
