@@ -7,6 +7,29 @@ import { useCustomerAuth } from "../context/CustomerAuthContext";
 type ProductDetailProps = {
   product?: Product | null;
   selectedProduct?: Product | null;
+
+  add_to_cart_label?: string;
+  button_bg_color?: string;
+  button_text_color?: string;
+
+  show_delivery_info?: boolean;
+  delivery_text?: string;
+  show_return_policy?: boolean;
+  return_policy_text?: string;
+  show_quality_guarantee?: boolean;
+  quality_text?: string;
+
+  show_discount_badge?: boolean;
+  show_stock_badge?: boolean;
+  show_ratings?: boolean;
+  show_original_price?: boolean;
+  show_brand_name?: boolean;
+  show_reviews_section?: boolean;
+
+  max_width?: string;
+  image_aspect_ratio?: string;
+  image_fit?: "cover" | "contain";
+
   theme?: {
     mode?: string;
     primary_bg?: string;
@@ -52,6 +75,24 @@ const MAX_GALLERY_IMAGES = 5;
 const ProductDetail: React.FC<ProductDetailProps> = ({
   product: propProduct,
   selectedProduct,
+  add_to_cart_label,
+  button_bg_color,
+  button_text_color,
+  show_delivery_info = true,
+  delivery_text,
+  show_return_policy = true,
+  return_policy_text,
+  show_quality_guarantee = true,
+  quality_text,
+  show_discount_badge = true,
+  show_stock_badge = true,
+  show_ratings = true,
+  show_original_price = true,
+  show_brand_name = true,
+  show_reviews_section = true,
+  max_width,
+  image_aspect_ratio,
+  image_fit,
   theme,
 }) => {
   const { addToCart, products, cartItems } = useCart();
@@ -569,8 +610,15 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   const reviewGridColumns = isMobile ? "1fr" : "minmax(280px, 360px) minmax(0, 1fr)";
   const supportGridColumns = isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))";
 
+  const resolvedAddToCartText = add_to_cart_label || "Add to cart";
+  const activeBtnBg = button_bg_color || accentColor;
+  const activeBtnTextColor = button_text_color || "#ffffff";
+  const resolvedMaxWidth = max_width === "full" ? "100%" : max_width ? `${max_width}px` : "1160px";
+  const resolvedImageAspect = image_aspect_ratio || "1 / 1";
+  const resolvedImageFit = image_fit || "cover";
+
   return (
-    <section style={{ maxWidth: "1160px", margin: "0 auto", padding: pagePadding }}>
+    <section style={{ maxWidth: resolvedMaxWidth, margin: "0 auto", padding: pagePadding }}>
       <div
         style={{
           display: "grid",
@@ -585,21 +633,21 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
               ...shellCard,
               borderRadius: isMobile ? "18px" : "22px",
               boxShadow: softShadow,
-              padding: isMobile ? "10px" : "12px",
+              padding: isMobile ? "8px" : "10px",
+              overflow: "hidden",
             }}
           >
             <div
               style={{
                 position: "relative",
+                width: "100%",
                 borderRadius: isMobile ? "14px" : "16px",
                 overflow: "hidden",
                 background: mediaBg,
-                aspectRatio: isMobile ? "4 / 4.6" : "4 / 4.35",
-                minHeight: isMobile ? "280px" : "340px",
-                maxHeight: isMobile ? "380px" : "460px",
+                aspectRatio: resolvedImageAspect,
               }}
             >
-              {showDiscount && (
+              {show_discount_badge && showDiscount && (
                 <div
                   style={{
                     position: "absolute",
@@ -620,7 +668,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 </div>
               )}
 
-              {!normalizedInStock && (
+              {show_stock_badge && !normalizedInStock && (
                 <div
                   style={{
                     position: "absolute",
@@ -645,7 +693,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                   src={selectedImage}
                   alt={product.name}
                   loading="eager"
-                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, objectPosition: "top center", display: "block" }}
                 />
               ) : (
                 <div
@@ -698,7 +746,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                       src={image}
                       alt={`${product.name} view ${index + 1}`}
                       loading="lazy"
-                      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                      style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top center", display: "block" }}
                     />
                   ) : (
                     <div
@@ -732,7 +780,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
           >
             <div style={{ display: "grid", gap: "10px", paddingBottom: "14px", borderBottom: subtleBorder }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                {product.brand && (
+                {show_brand_name && product.brand && (
                   <span
                     style={{
                       fontSize: "11px",
@@ -746,7 +794,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                   </span>
                 )}
 
-                {product.category && (
+                {show_brand_name && product.category && (
                   <span
                     style={{
                       fontSize: "11px",
@@ -761,20 +809,22 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                   </span>
                 )}
 
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "5px",
-                    fontSize: "12px",
-                    color: mutedText,
-                    fontWeight: 600,
-                  }}
-                >
-                  <span style={{ color: "#f59e0b", letterSpacing: "0.04em" }}>★★★★☆</span>
-                  <span>{ratingDisplay}</span>
-                  <span style={{ color: subtleText }}>({reviewCountDisplay})</span>
-                </span>
+                {show_ratings && (
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      fontSize: "12px",
+                      color: mutedText,
+                      fontWeight: 600,
+                    }}
+                  >
+                    <span style={{ color: "#f59e0b", letterSpacing: "0.04em" }}>★★★★☆</span>
+                    <span>{ratingDisplay}</span>
+                    <span style={{ color: subtleText }}>({reviewCountDisplay})</span>
+                  </span>
+                )}
               </div>
 
               <h1
@@ -845,13 +895,13 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                     ₹{effectivePrice}
                   </span>
 
-                  {showOriginal && (
+                  {show_original_price && showOriginal && (
                     <span style={{ fontSize: "14px", color: subtleText, textDecoration: "line-through" }}>
                       ₹{effectiveOriginalPrice}
                     </span>
                   )}
 
-                  {showDiscount && (
+                  {show_discount_badge && showDiscount && (
                     <span
                       style={{
                         fontSize: "11px",
@@ -1135,8 +1185,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                       ? "#94a3b8"
                       : added
                       ? "#16a34a"
-                      : accentColor,
-                    color: "#ffffff",
+                      : activeBtnBg,
+                    color: activeBtnTextColor,
                     cursor: finalCanAddToCart ? "pointer" : "not-allowed",
                     fontWeight: 700,
                     fontSize: "14px",
@@ -1160,57 +1210,87 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                       : `Select ${optionLabel}`
                     : added
                     ? "Added to cart"
-                    : "Add to cart"}
+                    : resolvedAddToCartText}
                 </button>
               </div>
             </div>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: supportGridColumns,
-                gap: "10px",
-                paddingTop: "14px",
-                borderTop: subtleBorder,
-              }}
-            >
-              {[
-                { label: "Delivery", value: "Fast ship" },
-                { label: "Returns", value: "Easy return" },
-                { label: "Quality", value: "Curated pick" },
-              ].map((item) => (
-                <div
-                  key={item.label}
-                  style={{
-                    padding: "12px 10px",
-                    borderRadius: "14px",
-                    background: softSectionBg,
-                    border: subtleBorder,
-                    textAlign: "left",
-                  }}
-                >
-                  <p style={{ margin: "0 0 5px", ...tagText }}>{item.label}</p>
-                  <p style={{ margin: 0, fontSize: "12px", fontWeight: 600, color: pageText }}>
-                    {item.value}
-                  </p>
-                </div>
-              ))}
-            </div>
+            {(show_delivery_info || show_return_policy || show_quality_guarantee) && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: supportGridColumns,
+                  gap: "10px",
+                  paddingTop: "14px",
+                  borderTop: subtleBorder,
+                }}
+              >
+                {show_delivery_info && (
+                  <div
+                    style={{
+                      padding: "12px 10px",
+                      borderRadius: "14px",
+                      background: softSectionBg,
+                      border: subtleBorder,
+                      textAlign: "left",
+                    }}
+                  >
+                    <p style={{ margin: "0 0 5px", ...tagText }}>Delivery</p>
+                    <p style={{ margin: 0, fontSize: "12px", fontWeight: 600, color: pageText }}>
+                      {delivery_text || "Fast ship"}
+                    </p>
+                  </div>
+                )}
+                {show_return_policy && (
+                  <div
+                    style={{
+                      padding: "12px 10px",
+                      borderRadius: "14px",
+                      background: softSectionBg,
+                      border: subtleBorder,
+                      textAlign: "left",
+                    }}
+                  >
+                    <p style={{ margin: "0 0 5px", ...tagText }}>Returns</p>
+                    <p style={{ margin: 0, fontSize: "12px", fontWeight: 600, color: pageText }}>
+                      {return_policy_text || "Easy return"}
+                    </p>
+                  </div>
+                )}
+                {show_quality_guarantee && (
+                  <div
+                    style={{
+                      padding: "12px 10px",
+                      borderRadius: "14px",
+                      background: softSectionBg,
+                      border: subtleBorder,
+                      textAlign: "left",
+                    }}
+                  >
+                    <p style={{ margin: "0 0 5px", ...tagText }}>Quality</p>
+                    <p style={{ margin: 0, fontSize: "12px", fontWeight: 600, color: pageText }}>
+                      {quality_text || "Curated pick"}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      <div
-        style={{
-          ...shellCard,
-          marginTop: isMobile ? "18px" : "22px",
-          borderRadius: isMobile ? "18px" : "22px",
-          boxShadow: softShadow,
-          padding: isMobile ? "16px" : "20px",
-          display: "grid",
-          gap: "18px",
-        }}
-      >
+      {show_reviews_section && (
+        <div
+          style={{
+            ...shellCard,
+            marginTop: isMobile ? "18px" : "22px",
+            borderRadius: isMobile ? "18px" : "22px",
+            boxShadow: softShadow,
+            padding: isMobile ? "16px" : "20px",
+            display: "grid",
+            gap: "18px",
+          }}
+        >
         <div
           style={{
             display: "flex",
@@ -1504,6 +1584,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
           </div>
         </div>
       </div>
+    )}
     </section>
   );
 };

@@ -8,7 +8,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
-from sqlmodel import Session, delete, select
+from sqlmodel import Session, delete, func, select
 
 from auth_middleware import authenticate_admin, authenticate_customer, enforce_site_ownership
 from db.database import get_session
@@ -715,6 +715,40 @@ class CancelOrderRequest(BaseModel):
 # =========================
 # ADMIN ROUTES FIRST
 # =========================
+
+
+@router.get("/admin/{site_id}/pending-counts")
+def get_admin_pending_counts(
+    site_id: UUID,
+    admin=Depends(authenticate_admin),
+    ownership=Depends(enforce_site_ownership),
+    session: Session = Depends(get_session),
+):
+    """
+    Returns the count of orders needing attention (placed) and
+    returns needing attention (requested). Used for sidebar badge.
+    """
+    from models import ReturnRequest
+
+    new_orders = session.exec(
+        select(func.count()).select_from(Order).where(
+            Order.site_id == site_id,
+            Order.status == "placed",
+        )
+    ).one()
+
+    new_returns = session.exec(
+        select(func.count()).select_from(ReturnRequest).where(
+            ReturnRequest.site_id == site_id,
+            ReturnRequest.status == "requested",
+        )
+    ).one()
+
+    return {
+        "new_orders": new_orders,
+        "new_returns": new_returns,
+        "total": new_orders + new_returns,
+    }
 
 
 @router.get("/admin/{site_id}")

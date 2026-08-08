@@ -74,6 +74,7 @@ type SavedSite = {
 
 
 const NAVBAR_BLOCK_ID = "global-navbar";
+const FOOTER_BLOCK_ID = "global-footer";
 const BUILDER_TOPBAR_HEIGHT = 64;
 const FIXED_NAVBAR_Z_INDEX = 240;
 const FIXED_NAVBAR_CONTENT_OFFSET = 111;
@@ -110,7 +111,11 @@ function isProductDetailRoute(route?: string | null) {
   return (
     normalized === "products/:productSlug" ||
     normalized === "products/:slug" ||
-    normalized === "products/*"
+    normalized === "products/*" ||
+    normalized === "product/:productSlug" ||
+    normalized === "product/:slug" ||
+    normalized === "product/:id" ||
+    normalized === "product/*"
   );
 }
 
@@ -416,7 +421,67 @@ function StorefrontShell({
       </div>
 
 
-      <Footer />
+      {/* Global Footer Block */}
+      <div
+        data-editor-block-id={FOOTER_BLOCK_ID}
+        data-editor-block-type="footer"
+        onClick={(e) => {
+          if (!editMode) return;
+          e.stopPropagation();
+          onSelectBlock(FOOTER_BLOCK_ID);
+        }}
+        style={{
+          position: "relative",
+          outline:
+            editMode && selectedBlockId === FOOTER_BLOCK_ID
+              ? "2px solid #2563eb"
+              : "1px dashed transparent",
+          outlineOffset: "4px",
+          borderRadius: "8px",
+          transition: "outline-color 0.15s ease",
+          cursor: editMode ? "pointer" : "default",
+          zIndex: 5,
+          isolation: "isolate",
+          overflow: "visible",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            top: "-24px",
+            left: "12px",
+            zIndex: 40,
+            padding: "2px 8px",
+            borderRadius: "999px",
+            background: "#2563eb",
+            color: "#ffffff",
+            fontSize: "11px",
+            fontWeight: 700,
+            letterSpacing: "0.02em",
+            pointerEvents: "none",
+            opacity: editMode && selectedBlockId === FOOTER_BLOCK_ID ? 1 : 0,
+            transform:
+              editMode && selectedBlockId === FOOTER_BLOCK_ID
+                ? "translateY(0)"
+                : "translateY(4px)",
+            transition: "all 0.15s ease",
+          }}
+        >
+          footer
+        </div>
+
+        <Footer
+          brandName={siteDefinition.site?.brand_name || (siteDefinition.footer as any)?.brandName}
+          tagline={siteDefinition.footer?.tagline}
+          copyrightText={siteDefinition.footer?.copyrightText}
+          links={siteDefinition.footer?.links}
+          show_newsletter={siteDefinition.footer?.show_newsletter}
+          newsletter_title={siteDefinition.footer?.newsletter_title}
+          show_social_links={siteDefinition.footer?.show_social_links}
+          social_links={siteDefinition.footer?.social_links}
+          theme={siteDefinition.theme}
+        />
+      </div>
     </div>
   );
 }
@@ -537,6 +602,7 @@ function BuilderPageContent() {
   >(null);
   const [savedSites, setSavedSites] = useState<SavedSite[]>([]);
   const [savedSitesLoading, setSavedSitesLoading] = useState(false);
+  const [pendingCounts, setPendingCounts] = useState<{ new_orders: number; new_returns: number; total: number } | null>(null);
 
 
   const previewPaneRef = useRef<HTMLDivElement | null>(null);
@@ -623,6 +689,32 @@ function BuilderPageContent() {
 
     checkAdminAuth();
   }, [isAdminRoute, isStoreRoute, navigate, location.pathname]);
+
+
+  // Fetch pending order/return counts for the notification badge
+  useEffect(() => {
+    const currentSiteId = resolvedSiteId || siteId;
+    if (!adminAuthenticated || !currentSiteId || isStoreRoute) return;
+
+    const fetchCounts = async () => {
+      try {
+        const res = await fetch(
+          `${API_BASE_URL}/orders/admin/${currentSiteId}/pending-counts`,
+          { credentials: "include" }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setPendingCounts(data);
+        }
+      } catch {
+        // silently ignore — this is a non-critical badge
+      }
+    };
+
+    fetchCounts();
+    const interval = setInterval(fetchCounts, 30_000);
+    return () => clearInterval(interval);
+  }, [adminAuthenticated, resolvedSiteId, siteId, isStoreRoute]);
 
 
   useEffect(() => {
@@ -844,6 +936,7 @@ function BuilderPageContent() {
 
 
     const exactProductPage = activeSiteDefinition.pages.find((page) => {
+      if (page.role === "product_detail" || page.page_type === "product_detail") return true;
       if (isProductDetailRoute(page.route)) return true;
       return page.blocks.some((block) => isProductDetailBlockType(block.type));
     });
@@ -985,9 +1078,13 @@ function BuilderPageContent() {
   ) : null;
 
 
+  const storeBadge = (pendingCounts?.total ?? 0) > 0 ? pendingCounts!.total : undefined;
+
+
   const leftPanel = showAdminTopbar ? (
     <BuilderControlPanel
       activeKey={controlPanelSelection as any}
+      badgeCounts={storeBadge != null ? { "admin-panel": storeBadge } : {}}
       onSelect={(key) => {
         if (!showAdminTopbar) return;
 

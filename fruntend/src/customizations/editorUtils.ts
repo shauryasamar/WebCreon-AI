@@ -49,10 +49,22 @@ export type EditorSiteDefinition = {
     navbar_muted_text_color?: string;
     navbar_border_color?: string;
     navbar_height?: number;
-    navbar_max_width?: number;
+    navbar_max_width?: number | string;
     navbar_radius?: number;
     navbar_padding_x?: number;
     navbar_padding_y?: number;
+    logo_height?: number | string;
+    logo_fit?: "contain" | "cover";
+    icon_color?: string;
+    cart_badge_bg?: string;
+    cart_badge_text_color?: string;
+    nav_links_color?: string;
+    footer_bg?: string;
+    footer_text_color?: string;
+    footer_muted_color?: string;
+    footer_border_color?: string;
+    footer_max_width?: string | number;
+    footer_layout?: "apple_minimal" | "glassmorphism_premium" | "modern_marketplace" | "luxury_fashion" | "neo_modern";
   };
   navigation?: {
     storefront?: Array<{
@@ -72,6 +84,17 @@ export type EditorSiteDefinition = {
     showSearch?: boolean;
     showAccount?: boolean;
     showCart?: boolean;
+  };
+  footer?: {
+    layout?: string;
+    footer_layout?: string;
+    copyrightText?: string;
+    tagline?: string;
+    links?: Array<{ label: string; href: string }>;
+    show_newsletter?: boolean;
+    newsletter_title?: string;
+    show_social_links?: boolean;
+    social_links?: Array<{ platform: string; url: string }>;
   };
   pages: EditorPage[];
   resources: Array<{
@@ -97,6 +120,7 @@ export type FestivalThemeKey =
 type ThemeValues = EditorSiteDefinition["theme"];
 
 const GLOBAL_NAVBAR_BLOCK_ID = "global-navbar";
+const GLOBAL_FOOTER_BLOCK_ID = "global-footer";
 
 const DEFAULT_LIGHT_THEME: Partial<ThemeValues> = {
   mode: "light",
@@ -176,6 +200,32 @@ function buildGlobalNavbarBlock(siteDefinition: EditorSiteDefinition): EditorBlo
   };
 }
 
+function buildGlobalFooterBlock(siteDefinition: EditorSiteDefinition): EditorBlock {
+  return {
+    id: GLOBAL_FOOTER_BLOCK_ID,
+    type: "footer",
+    props: {
+      brandName: siteDefinition.site?.brand_name || "Website",
+      copyrightText: siteDefinition.footer?.copyrightText || `© ${new Date().getFullYear()} ${siteDefinition.site?.brand_name || "Website"}. All rights reserved.`,
+      tagline: siteDefinition.footer?.tagline || siteDefinition.theme?.brand_tone || "Your premium shopping destination.",
+      links: siteDefinition.footer?.links || [
+        { label: "About Us", href: "/about" },
+        { label: "Contact", href: "/contact" },
+        { label: "Privacy Policy", href: "/privacy" },
+        { label: "Terms of Service", href: "/terms" },
+      ],
+      show_newsletter: siteDefinition.footer?.show_newsletter ?? true,
+      newsletter_title: siteDefinition.footer?.newsletter_title || "Subscribe to Our Newsletter",
+      show_social_links: siteDefinition.footer?.show_social_links ?? true,
+      social_links: siteDefinition.footer?.social_links || [
+        { platform: "Instagram", url: "https://instagram.com" },
+        { platform: "Twitter / X", url: "https://x.com" },
+        { platform: "Facebook", url: "https://facebook.com" },
+      ],
+    },
+  };
+}
+
 function getFestivalThemeOverrides(
   preset: FestivalThemeKey,
   mode: ThemeMode
@@ -249,6 +299,87 @@ function getFestivalThemeOverrides(
   }
 }
 
+const PRODUCT_DETAIL_BLOCK_TYPES = new Set([
+  "product_detail",
+  "productdetail",
+  "product_info",
+  "productinfo",
+  "product_gallery",
+  "productgallery",
+  "purchase_panel",
+  "purchasepanel",
+]);
+
+const CHECKOUT_BLOCK_TYPES = new Set([
+  "delivery_form",
+  "deliveryform",
+  "payment_methods",
+  "paymentmethods",
+  "place_order_cta",
+  "placeordercta",
+  "checkout_summary",
+  "checkoutsummary",
+  "order_summary",
+  "ordersummary",
+]);
+
+export function isProductDetailFallbackId(blockId: string | null | undefined): boolean {
+  if (!blockId) return false;
+  const lower = String(blockId).toLowerCase();
+  if (PRODUCT_DETAIL_BLOCK_TYPES.has(lower)) return true;
+  if (
+    lower.startsWith("auto-product-detail") ||
+    lower.startsWith("product-detail") ||
+    lower.includes("product-detail")
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function isCheckoutFallbackId(blockId: string | null | undefined): boolean {
+  if (!blockId) return false;
+  const lower = String(blockId).toLowerCase();
+  if (CHECKOUT_BLOCK_TYPES.has(lower)) return true;
+  if (
+    lower.startsWith("auto-checkout") ||
+    lower.startsWith("checkout") ||
+    lower.includes("checkout") ||
+    lower.includes("delivery") ||
+    lower.includes("payment") ||
+    lower.includes("place")
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function isProductDetailPageRoute(route?: string | null): boolean {
+  if (!route) return false;
+  const normalized = route.replace(/^\/+/, "").toLowerCase();
+  return (
+    normalized === "products/:productslug" ||
+    normalized === "products/:slug" ||
+    normalized === "products/*" ||
+    normalized === "product/:productslug" ||
+    normalized === "product/:slug" ||
+    normalized === "product/:id" ||
+    normalized === "product/*" ||
+    normalized.includes("/products/") ||
+    normalized.includes("/product/")
+  );
+}
+
+export function isCheckoutPageRoute(route?: string | null): boolean {
+  if (!route) return false;
+  const normalized = route.replace(/^\/+/, "").toLowerCase();
+  return (
+    normalized === "checkout" ||
+    normalized.includes("/checkout") ||
+    normalized.includes("checkout")
+  );
+}
+
 export function findBlockById(
   siteDefinition: EditorSiteDefinition | null,
   blockId: string | null
@@ -259,9 +390,67 @@ export function findBlockById(
     return buildGlobalNavbarBlock(siteDefinition);
   }
 
+  if (blockId === GLOBAL_FOOTER_BLOCK_ID) {
+    return buildGlobalFooterBlock(siteDefinition);
+  }
+
   for (const page of siteDefinition.pages) {
     const match = page.blocks.find((block) => block.id === blockId);
     if (match) return match;
+  }
+
+  if (isProductDetailFallbackId(blockId)) {
+    const pdPage = siteDefinition.pages.find(
+      (p) =>
+        p.role === "product_detail" ||
+        p.page_type === "product_detail" ||
+        isProductDetailPageRoute(p.route)
+    );
+
+    const existingBlock = pdPage?.blocks.find((b) =>
+      PRODUCT_DETAIL_BLOCK_TYPES.has(String(b.type || "").toLowerCase())
+    );
+
+    if (existingBlock) return existingBlock;
+
+    return {
+      id: blockId,
+      type: "product_detail",
+      data_source: "product",
+      props: pdPage?.blocks?.[0]?.props || {},
+    };
+  }
+
+  if (isCheckoutFallbackId(blockId)) {
+    const checkoutPage = siteDefinition.pages.find(
+      (p) =>
+        p.role === "checkout" ||
+        p.page_type === "checkout" ||
+        (p as any).slug === "checkout" ||
+        isCheckoutPageRoute(p.route)
+    );
+
+    const existingBlock = checkoutPage?.blocks.find(
+      (b) =>
+        String(b.id || b.type).toLowerCase() === blockId.toLowerCase() ||
+        CHECKOUT_BLOCK_TYPES.has(String(b.type || "").toLowerCase())
+    );
+
+    if (existingBlock) return existingBlock;
+
+    const targetType = blockId.includes("delivery")
+      ? "delivery_form"
+      : blockId.includes("payment")
+      ? "payment_methods"
+      : blockId.includes("place") || blockId.includes("cta")
+      ? "place_order_cta"
+      : "order_summary";
+
+    return {
+      id: blockId,
+      type: targetType,
+      props: {},
+    };
   }
 
   return null;
@@ -291,7 +480,32 @@ export function getEditableConfigForBlock(
   blockType: string | undefined | null
 ): EditableBlockConfig | null {
   if (!blockType) return null;
-  return editorRegistry[blockType] || null;
+  const raw = String(blockType).trim();
+  const lower = raw.toLowerCase();
+  const normalized = lower.replace(/[-_]/g, "");
+
+  const found =
+    editorRegistry[raw] ||
+    editorRegistry[lower] ||
+    editorRegistry[normalized];
+
+  if (found) return found;
+
+  if (PRODUCT_DETAIL_BLOCK_TYPES.has(lower) || PRODUCT_DETAIL_BLOCK_TYPES.has(normalized)) {
+    return editorRegistry.product_detail || null;
+  }
+
+  if (CHECKOUT_BLOCK_TYPES.has(lower) || CHECKOUT_BLOCK_TYPES.has(normalized)) {
+    return (
+      editorRegistry[raw] ||
+      editorRegistry[lower] ||
+      editorRegistry[normalized] ||
+      editorRegistry.delivery_form ||
+      null
+    );
+  }
+
+  return null;
 }
 
 export function updateBlockFieldValue(
@@ -366,6 +580,187 @@ export function updateBlockFieldValue(
     return siteDefinition;
   }
 
+  if (blockId === GLOBAL_FOOTER_BLOCK_ID) {
+    if (field.target === "theme") {
+      return {
+        ...siteDefinition,
+        theme: {
+          ...siteDefinition.theme,
+          [field.key]: value,
+        },
+      };
+    }
+
+    return {
+      ...siteDefinition,
+      footer: {
+        ...(siteDefinition.footer ?? {}),
+        [field.key]: value,
+      },
+    };
+  }
+
+  const hasExistingBlock = siteDefinition.pages.some((p) =>
+    p.blocks.some((b) => b.id === blockId)
+  );
+
+  if (!hasExistingBlock && isProductDetailFallbackId(blockId)) {
+    const pdPageIndex = siteDefinition.pages.findIndex(
+      (p) =>
+        p.role === "product_detail" ||
+        p.page_type === "product_detail" ||
+        isProductDetailPageRoute(p.route) ||
+        p.blocks.some((b) =>
+          PRODUCT_DETAIL_BLOCK_TYPES.has(String(b.type || "").toLowerCase())
+        )
+    );
+
+    if (pdPageIndex !== -1) {
+      const targetPage = siteDefinition.pages[pdPageIndex];
+      const existingBlockIndex = targetPage.blocks.findIndex((b) =>
+        PRODUCT_DETAIL_BLOCK_TYPES.has(String(b.type || "").toLowerCase())
+      );
+
+      const updatedPages = [...siteDefinition.pages];
+      if (existingBlockIndex !== -1) {
+        const existingBlock = targetPage.blocks[existingBlockIndex];
+        const updatedBlock = {
+          ...existingBlock,
+          props: {
+            ...(existingBlock.props || {}),
+            [field.key]: value,
+          },
+        };
+        const updatedBlocks = [...targetPage.blocks];
+        updatedBlocks[existingBlockIndex] = updatedBlock;
+        updatedPages[pdPageIndex] = { ...targetPage, blocks: updatedBlocks };
+      } else {
+        const newBlock: EditorBlock = {
+          id: blockId,
+          type: "product_detail",
+          data_source: "product",
+          props: {
+            [field.key]: value,
+          },
+        };
+        updatedPages[pdPageIndex] = {
+          ...targetPage,
+          blocks: [...targetPage.blocks, newBlock],
+        };
+      }
+      return {
+        ...siteDefinition,
+        pages: updatedPages,
+      };
+    } else {
+      const newProductDetailPage: EditorPage = {
+        id: "page-product-detail",
+        name: "Product Detail",
+        route: "/products/:productSlug",
+        role: "product_detail",
+        page_type: "product_detail",
+        show_in_nav: false,
+        blocks: [
+          {
+            id: blockId,
+            type: "product_detail",
+            data_source: "product",
+            props: {
+              [field.key]: value,
+            },
+          },
+        ],
+      };
+      return {
+        ...siteDefinition,
+        pages: [...siteDefinition.pages, newProductDetailPage],
+      };
+    }
+  }
+
+  if (!hasExistingBlock && isCheckoutFallbackId(blockId)) {
+    const checkoutPageIndex = siteDefinition.pages.findIndex(
+      (p) =>
+        p.role === "checkout" ||
+        p.page_type === "checkout" ||
+        (p as any).slug === "checkout" ||
+        isCheckoutPageRoute(p.route) ||
+        p.blocks.some((b) =>
+          CHECKOUT_BLOCK_TYPES.has(String(b.type || "").toLowerCase())
+        )
+    );
+
+    const targetType = blockId.includes("delivery")
+      ? "delivery_form"
+      : blockId.includes("payment")
+      ? "payment_methods"
+      : blockId.includes("place") || blockId.includes("cta")
+      ? "place_order_cta"
+      : "order_summary";
+
+    if (checkoutPageIndex !== -1) {
+      const targetPage = siteDefinition.pages[checkoutPageIndex];
+      const existingBlockIndex = targetPage.blocks.findIndex(
+        (b) =>
+          b.id === blockId ||
+          String(b.type || "").toLowerCase() === targetType.toLowerCase()
+      );
+
+      const updatedPages = [...siteDefinition.pages];
+      if (existingBlockIndex !== -1) {
+        const existingBlock = targetPage.blocks[existingBlockIndex];
+        const updatedBlock = {
+          ...existingBlock,
+          props: {
+            ...(existingBlock.props || {}),
+            [field.key]: value,
+          },
+        };
+        const updatedBlocks = [...targetPage.blocks];
+        updatedBlocks[existingBlockIndex] = updatedBlock;
+        updatedPages[checkoutPageIndex] = { ...targetPage, blocks: updatedBlocks };
+      } else {
+        const newBlock: EditorBlock = {
+          id: blockId,
+          type: targetType,
+          props: {
+            [field.key]: value,
+          },
+        };
+        updatedPages[checkoutPageIndex] = {
+          ...targetPage,
+          blocks: [...targetPage.blocks, newBlock],
+        };
+      }
+      return {
+        ...siteDefinition,
+        pages: updatedPages,
+      };
+    } else {
+      const newCheckoutPage: EditorPage = {
+        id: "page-checkout",
+        name: "Checkout",
+        route: "/checkout",
+        role: "checkout",
+        page_type: "checkout",
+        show_in_nav: false,
+        blocks: [
+          {
+            id: blockId,
+            type: targetType,
+            props: {
+              [field.key]: value,
+            },
+          },
+        ],
+      };
+      return {
+        ...siteDefinition,
+        pages: [...siteDefinition.pages, newCheckoutPage],
+      };
+    }
+  }
+
   return {
     ...siteDefinition,
     pages: siteDefinition.pages.map((page) => ({
@@ -418,7 +813,7 @@ export function updateBlockProps(
       nextSiteDefinition = {
         ...nextSiteDefinition,
         site: {
-          ...nextSiteDefinition.site,
+          ...siteDefinition.site,
           brand_name: propsPatch.brandName,
         },
       };
@@ -464,6 +859,84 @@ export function updateBlockProps(
     }
 
     return nextSiteDefinition;
+  }
+
+  const hasExistingBlockProps = siteDefinition.pages.some((p) =>
+    p.blocks.some((b) => b.id === blockId)
+  );
+
+  if (!hasExistingBlockProps && isProductDetailFallbackId(blockId)) {
+    const pdPageIndex = siteDefinition.pages.findIndex(
+      (p) =>
+        p.role === "product_detail" ||
+        p.page_type === "product_detail" ||
+        isProductDetailPageRoute(p.route) ||
+        p.blocks.some((b) =>
+          PRODUCT_DETAIL_BLOCK_TYPES.has(String(b.type || "").toLowerCase())
+        )
+    );
+
+    if (pdPageIndex !== -1) {
+      const targetPage = siteDefinition.pages[pdPageIndex];
+      const existingBlockIndex = targetPage.blocks.findIndex((b) =>
+        PRODUCT_DETAIL_BLOCK_TYPES.has(String(b.type || "").toLowerCase())
+      );
+
+      const updatedPages = [...siteDefinition.pages];
+      if (existingBlockIndex !== -1) {
+        const existingBlock = targetPage.blocks[existingBlockIndex];
+        const updatedBlock = {
+          ...existingBlock,
+          props: {
+            ...(existingBlock.props || {}),
+            ...propsPatch,
+          },
+        };
+        const updatedBlocks = [...targetPage.blocks];
+        updatedBlocks[existingBlockIndex] = updatedBlock;
+        updatedPages[pdPageIndex] = { ...targetPage, blocks: updatedBlocks };
+      } else {
+        const newBlock: EditorBlock = {
+          id: blockId,
+          type: "product_detail",
+          data_source: "product",
+          props: {
+            ...propsPatch,
+          },
+        };
+        updatedPages[pdPageIndex] = {
+          ...targetPage,
+          blocks: [...targetPage.blocks, newBlock],
+        };
+      }
+      return {
+        ...siteDefinition,
+        pages: updatedPages,
+      };
+    } else {
+      const newProductDetailPage: EditorPage = {
+        id: "page-product-detail",
+        name: "Product Detail",
+        route: "/products/:productSlug",
+        role: "product_detail",
+        page_type: "product_detail",
+        show_in_nav: false,
+        blocks: [
+          {
+            id: blockId,
+            type: "product_detail",
+            data_source: "product",
+            props: {
+              ...propsPatch,
+            },
+          },
+        ],
+      };
+      return {
+        ...siteDefinition,
+        pages: [...siteDefinition.pages, newProductDetailPage],
+      };
+    }
   }
 
   return {

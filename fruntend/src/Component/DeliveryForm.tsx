@@ -642,19 +642,6 @@ useEffect(() => {
           }}
         >
           <div>
-            <p
-              style={{
-                margin: "0 0 6px",
-                fontSize: "10px",
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                color: palette.textSoft,
-                fontWeight: 700,
-              }}
-            >
-              {sectionLabel}
-            </p>
-
             <h3
               style={{
                 margin: 0,

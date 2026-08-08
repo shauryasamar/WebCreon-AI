@@ -191,11 +191,13 @@ const navbarHeightField = {
 const navbarMaxWidthField = {
   key: "navbar_max_width",
   label: "Content width",
-  type: "number" as const,
+  type: "select" as const,
   target: "theme" as const,
-  min: 720,
-  max: 1600,
-  step: 10,
+  options: [
+    { label: "Standard (1280px)", value: "1280" },
+    { label: "Wide (1440px)", value: "1440" },
+    { label: "Full Width (100%)", value: "full" },
+  ],
   helpText: "Controls how wide the navbar content area can grow.",
 };
 
@@ -231,6 +233,32 @@ const navbarPaddingYField = {
   step: 1,
   helpText: "Controls top and bottom spacing inside the navbar.",
 };
+
+const navbarLogoHeightField = {
+  key: "logo_height",
+  label: "Logo Height",
+  type: "select" as const,
+  target: "theme" as const,
+  options: [
+    { label: "Compact (28px)", value: "28" },
+    { label: "Standard (36px)", value: "36" },
+    { label: "Large (44px)", value: "44" },
+    { label: "Extra Large (52px)", value: "52" },
+  ],
+};
+
+const navbarLogoFitField = {
+  key: "logo_fit",
+  label: "Logo Image Fit",
+  type: "select" as const,
+  target: "theme" as const,
+  options: [
+    { label: "Contain (Fit Inside)", value: "contain" },
+    { label: "Cover (Fill)", value: "cover" },
+  ],
+};
+
+
 
 const cartTitleField = {
   key: "title",
@@ -692,23 +720,434 @@ const checkoutStyleFields = [
   styleMaxWidthField,
 ];
 
+
+
+const productGridGapField = {
+  key: "grid_gap",
+  label: "Grid Gap (px)",
+  type: "select" as const,
+  target: "props" as const,
+  options: [
+    { label: "Compact (12px)", value: "12" },
+    { label: "Default (16px)", value: "16" },
+    { label: "Spacious (24px)", value: "24" },
+    { label: "Relaxed (32px)", value: "32" },
+  ],
+};
+
+const productGridMaxWidthField = {
+  key: "max_width",
+  label: "Section Max Width",
+  type: "select" as const,
+  target: "props" as const,
+  options: [
+    { label: "Standard (1200px)", value: "1200" },
+    { label: "Wide (1400px)", value: "1400" },
+    { label: "Full Width (100%)", value: "full" },
+  ],
+};
+
+const productGridOuterBgColorField = {
+  key: "outer_bg_color",
+  label: "Section Outer Background",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const productGridCardBgColorField = {
+  key: "card_bg_color",
+  label: "Card Background Color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const productGridCardRadiusField = {
+  key: "card_radius",
+  label: "Card Corner Radius (px)",
+  type: "select" as const,
+  target: "props" as const,
+  options: [
+    { label: "Sharp (0px)", value: "0" },
+    { label: "Slightly Rounded (8px)", value: "8" },
+    { label: "Smooth (16px)", value: "16" },
+    { label: "Curved (24px)", value: "24" },
+    { label: "Ultra Curved (32px)", value: "32" },
+  ],
+};
+
+const productGridCardBorderColorField = {
+  key: "card_border_color",
+  label: "Card Border Color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const productGridCardShadowField = {
+  key: "card_shadow",
+  label: "Card Elevation / Shadow",
+  type: "select" as const,
+  target: "props" as const,
+  options: [
+    { label: "Flat (No Shadow)", value: "none" },
+    { label: "Subtle Glow", value: "subtle" },
+    { label: "Soft Floating", value: "soft" },
+    { label: "Deep Elevated", value: "elevated" },
+  ],
+};
+
+const productGridImageAspectRatioField = {
+  key: "image_aspect_ratio",
+  label: "Image Aspect Ratio",
+  type: "select" as const,
+  target: "props" as const,
+  options: [
+    { label: "Square (1 : 1)", value: "1/1" },
+    { label: "Portrait (3 : 4)", value: "3/4" },
+    { label: "Tall (2 : 3)", value: "2/3" },
+    { label: "Wide (16 : 9)", value: "16/9" },
+  ],
+};
+
+const productGridImageFitField = {
+  key: "image_fit",
+  label: "Image Fitting",
+  type: "select" as const,
+  target: "props" as const,
+  options: [
+    { label: "Cover (Fill Space)", value: "cover" },
+    { label: "Contain (Fit Inside)", value: "contain" },
+  ],
+};
+
+const productGridImageBgField = {
+  key: "image_bg",
+  label: "Image Container Background",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const productGridTitleColorField = {
+  key: "title_color",
+  label: "Product Title Color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const productGridBrandColorField = {
+  key: "brand_color",
+  label: "Brand Label Color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const productGridPriceColorField = {
+  key: "price_color",
+  label: "Sale Price Color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const productGridOriginalPriceColorField = {
+  key: "original_price_color",
+  label: "Original Price Color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const productGridRatingStarColorField = {
+  key: "rating_star_color",
+  label: "Rating Star Color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const productGridShowDiscountBadgeField = {
+  key: "show_discount_badge",
+  label: "Show Discount Badge",
+  type: "checkbox" as const,
+  target: "props" as const,
+};
+
+const productGridShowStockBadgeField = {
+  key: "show_stock_badge",
+  label: "Show Stock Status Badge",
+  type: "checkbox" as const,
+  target: "props" as const,
+};
+
+const productGridShowRatingsField = {
+  key: "show_ratings",
+  label: "Show Ratings & Reviews",
+  type: "checkbox" as const,
+  target: "props" as const,
+};
+
+const productGridShowOriginalPriceField = {
+  key: "show_original_price",
+  label: "Show Strikethrough Original Price",
+  type: "checkbox" as const,
+  target: "props" as const,
+};
+
+const productGridShowBrandNameField = {
+  key: "show_brand_name",
+  label: "Show Brand Label",
+  type: "checkbox" as const,
+  target: "props" as const,
+};
+
+
+
+const productDetailAddToCartLabelField = {
+  key: "add_to_cart_label",
+  label: "Add to Cart button text",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Add to Bag",
+};
+
+const productDetailButtonBgColorField = {
+  key: "button_bg_color",
+  label: "Primary button background",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const productDetailButtonTextColorField = {
+  key: "button_text_color",
+  label: "Primary button text color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const productDetailShowDeliveryInfoField = {
+  key: "show_delivery_info",
+  label: "Show Delivery Info Badge",
+  type: "checkbox" as const,
+  target: "props" as const,
+};
+
+const productDetailDeliveryTextField = {
+  key: "delivery_text",
+  label: "Delivery badge text",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Free Express Delivery on orders over ₹499",
+};
+
+const productDetailShowReturnPolicyField = {
+  key: "show_return_policy",
+  label: "Show Return Policy Badge",
+  type: "checkbox" as const,
+  target: "props" as const,
+};
+
+const productDetailReturnPolicyTextField = {
+  key: "return_policy_text",
+  label: "Return policy badge text",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "7-Day Easy Returns & Exchange",
+};
+
+const productDetailShowQualityGuaranteeField = {
+  key: "show_quality_guarantee",
+  label: "Show Quality Guarantee Badge",
+  type: "checkbox" as const,
+  target: "props" as const,
+};
+
+const productDetailQualityTextField = {
+  key: "quality_text",
+  label: "Quality guarantee text",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "100% Authentic & Quality Assured",
+};
+
+const productDetailShowDiscountBadgeField = {
+  key: "show_discount_badge",
+  label: "Show Discount Badge (% OFF)",
+  type: "checkbox" as const,
+  target: "props" as const,
+};
+
+const productDetailShowStockBadgeField = {
+  key: "show_stock_badge",
+  label: "Show Stock Status Badge",
+  type: "checkbox" as const,
+  target: "props" as const,
+};
+
+const productDetailShowRatingsField = {
+  key: "show_ratings",
+  label: "Show Customer Ratings",
+  type: "checkbox" as const,
+  target: "props" as const,
+};
+
+const productDetailShowOriginalPriceField = {
+  key: "show_original_price",
+  label: "Show Original / Compare Price",
+  type: "checkbox" as const,
+  target: "props" as const,
+};
+
+const productDetailShowBrandNameField = {
+  key: "show_brand_name",
+  label: "Show Brand / Category Tag",
+  type: "checkbox" as const,
+  target: "props" as const,
+};
+
+const productDetailShowReviewsSectionField = {
+  key: "show_reviews_section",
+  label: "Show Reviews Section",
+  type: "checkbox" as const,
+  target: "props" as const,
+};
+
+const productDetailMaxWidthField = {
+  key: "max_width",
+  label: "Max Container Width (px)",
+  type: "select" as const,
+  target: "props" as const,
+  options: [
+    { label: "Default (1160px)", value: "1160" },
+    { label: "Compact (1000px)", value: "1000" },
+    { label: "Wide (1280px)", value: "1280" },
+    { label: "Full Width (100%)", value: "full" },
+  ],
+};
+
+const productDetailImageAspectRatioField = {
+  key: "image_aspect_ratio",
+  label: "Product Image Aspect Ratio",
+  type: "select" as const,
+  target: "props" as const,
+  options: [
+    { label: "Square (1 : 1)", value: "1 / 1" },
+    { label: "Portrait (4 : 5)", value: "4 / 5" },
+    { label: "Tall (2 : 3)", value: "2 / 3" },
+    { label: "Landscape (4 : 3)", value: "4 / 3" },
+  ],
+};
+
+const productDetailImageFitField = {
+  key: "image_fit",
+  label: "Product Image Fit Mode",
+  type: "select" as const,
+  target: "props" as const,
+  options: [
+    { label: "Cover (Fill Frame)", value: "cover" },
+    { label: "Contain (Fit Inside)", value: "contain" },
+  ],
+};
+
+const productDetailFields = [
+  productDetailAddToCartLabelField,
+  productDetailButtonBgColorField,
+  productDetailButtonTextColorField,
+  productDetailShowDeliveryInfoField,
+  productDetailDeliveryTextField,
+  productDetailShowReturnPolicyField,
+  productDetailReturnPolicyTextField,
+  productDetailShowQualityGuaranteeField,
+  productDetailQualityTextField,
+  productDetailShowDiscountBadgeField,
+  productDetailShowStockBadgeField,
+  productDetailShowRatingsField,
+  productDetailShowOriginalPriceField,
+  productDetailShowBrandNameField,
+  productDetailShowReviewsSectionField,
+  productDetailMaxWidthField,
+  productDetailImageAspectRatioField,
+  productDetailImageFitField,
+];
+
 export const editorRegistry: EditorRegistry = {
   product_grid: {
     displayName: "Product Grid",
-    fields: [sizeField, textColorField],
+    fields: [
+      productGridGapField,
+      productGridMaxWidthField,
+      productGridOuterBgColorField,
+      productGridCardBgColorField,
+      productGridCardRadiusField,
+      productGridCardBorderColorField,
+      productGridCardShadowField,
+      productGridImageAspectRatioField,
+      productGridImageFitField,
+      productGridImageBgField,
+      productGridTitleColorField,
+      productGridBrandColorField,
+      productGridPriceColorField,
+      productGridOriginalPriceColorField,
+      productGridRatingStarColorField,
+      productGridShowDiscountBadgeField,
+      productGridShowStockBadgeField,
+      productGridShowRatingsField,
+      productGridShowOriginalPriceField,
+      productGridShowBrandNameField,
+    ],
   },
   productgrid: {
     displayName: "Product Grid",
-    fields: [sizeField, textColorField],
+    fields: [
+      productGridGapField,
+      productGridMaxWidthField,
+      productGridOuterBgColorField,
+      productGridCardBgColorField,
+      productGridCardRadiusField,
+      productGridCardBorderColorField,
+      productGridCardShadowField,
+      productGridImageAspectRatioField,
+      productGridImageFitField,
+      productGridImageBgField,
+      productGridTitleColorField,
+      productGridBrandColorField,
+      productGridPriceColorField,
+      productGridOriginalPriceColorField,
+      productGridRatingStarColorField,
+      productGridShowDiscountBadgeField,
+      productGridShowStockBadgeField,
+      productGridShowRatingsField,
+      productGridShowOriginalPriceField,
+      productGridShowBrandNameField,
+    ],
   },
 
   product_detail: {
     displayName: "Product Detail",
-    fields: [sizeField, textColorField],
+    fields: productDetailFields,
   },
   productdetail: {
     displayName: "Product Detail",
-    fields: [sizeField, textColorField],
+    fields: productDetailFields,
+  },
+  product_info: {
+    displayName: "Product Detail",
+    fields: productDetailFields,
+  },
+  productinfo: {
+    displayName: "Product Detail",
+    fields: productDetailFields,
+  },
+  product_gallery: {
+    displayName: "Product Detail",
+    fields: productDetailFields,
+  },
+  productgallery: {
+    displayName: "Product Detail",
+    fields: productDetailFields,
+  },
+  purchase_panel: {
+    displayName: "Product Detail",
+    fields: productDetailFields,
+  },
+  purchasepanel: {
+    displayName: "Product Detail",
+    fields: productDetailFields,
   },
 
   hero_banner: {
@@ -770,6 +1209,8 @@ export const editorRegistry: EditorRegistry = {
     fields: [
       navbarBrandNameField,
       navbarLogoUrlField,
+      navbarLogoHeightField,
+      navbarLogoFitField,
       navbarVariantField,
       navbarPositionField,
       navbarHeightField,
@@ -807,7 +1248,6 @@ export const editorRegistry: EditorRegistry = {
   delivery_form: {
     displayName: "Delivery Form",
     fields: [
-      deliverySectionLabelField,
       deliveryTitleField,
       deliveryCompactField,
       deliveryAccentColorField,
@@ -817,7 +1257,6 @@ export const editorRegistry: EditorRegistry = {
   deliveryform: {
     displayName: "Delivery Form",
     fields: [
-      deliverySectionLabelField,
       deliveryTitleField,
       deliveryCompactField,
       deliveryAccentColorField,
@@ -828,7 +1267,6 @@ export const editorRegistry: EditorRegistry = {
   payment_methods: {
     displayName: "Payment Methods",
     fields: [
-      paymentSectionLabelField,
       paymentTitleField,
       paymentMethodsField,
       paymentCompactField,
@@ -839,7 +1277,6 @@ export const editorRegistry: EditorRegistry = {
   paymentmethods: {
     displayName: "Payment Methods",
     fields: [
-      paymentSectionLabelField,
       paymentTitleField,
       paymentMethodsField,
       paymentCompactField,
@@ -870,6 +1307,101 @@ export const editorRegistry: EditorRegistry = {
       styleBorderRadiusField,
       stylePaddingField,
       styleMaxWidthField,
+    ],
+  },
+
+  footer: {
+    displayName: "Footer Settings",
+    fields: [
+      {
+        key: "brandName",
+        label: "Brand name",
+        type: "text" as const,
+        target: "props" as const,
+        placeholder: "Storefront",
+      },
+      {
+        key: "tagline",
+        label: "Tagline text",
+        type: "text" as const,
+        target: "props" as const,
+        placeholder: "Your premium shopping destination.",
+      },
+      {
+        key: "copyrightText",
+        label: "Copyright text",
+        type: "text" as const,
+        target: "props" as const,
+        placeholder: "© 2026 Storefront. All rights reserved.",
+      },
+      {
+        key: "footer_max_width",
+        label: "Footer Max Width",
+        type: "select" as const,
+        target: "theme" as const,
+        options: [
+          { label: "Standard (1200px)", value: "1200" },
+          { label: "Wide (1400px)", value: "1400" },
+          { label: "Full Width (100%)", value: "full" },
+        ],
+      },
+      {
+        key: "footer_bg",
+        label: "Footer Background Color",
+        type: "color" as const,
+        target: "theme" as const,
+      },
+      {
+        key: "footer_text_color",
+        label: "Footer Text Color",
+        type: "color" as const,
+        target: "theme" as const,
+      },
+      {
+        key: "footer_muted_color",
+        label: "Footer Secondary Text Color",
+        type: "color" as const,
+        target: "theme" as const,
+      },
+      {
+        key: "footer_border_color",
+        label: "Footer Border Color",
+        type: "color" as const,
+        target: "theme" as const,
+      },
+      {
+        key: "show_newsletter",
+        label: "Show Newsletter Signup",
+        type: "checkbox" as const,
+        target: "props" as const,
+      },
+      {
+        key: "newsletter_title",
+        label: "Newsletter Heading Text",
+        type: "text" as const,
+        target: "props" as const,
+        placeholder: "Subscribe to Our Newsletter",
+      },
+      {
+        key: "show_social_links",
+        label: "Show Social Media Links",
+        type: "checkbox" as const,
+        target: "props" as const,
+      },
+      {
+        key: "social_links",
+        label: "Social Links JSON List",
+        type: "json" as const,
+        target: "props" as const,
+        helpText: 'JSON array of social handles. Example: [{"platform": "Instagram", "url": "https://instagram.com"}]',
+      },
+      {
+        key: "links",
+        label: "Footer links",
+        type: "json" as const,
+        target: "props" as const,
+        helpText: 'JSON list of links. Example: [{"label": "About", "href": "/about"}]',
+      },
     ],
   },
 };

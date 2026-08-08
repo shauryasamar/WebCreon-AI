@@ -15,6 +15,8 @@ type BuilderControlPanelProps = {
   activeKey?: ControlItemKey | null;
   onSelect: (key: ControlItemKey) => void;
   disabledKeys?: ControlItemKey[];
+  /** Optional badge counts per key — shown as a red dot with number */
+  badgeCounts?: Partial<Record<ControlItemKey, number>>;
 };
 
 
@@ -94,7 +96,7 @@ function IconImage() {
 function IconGear() {
   return (
     <IconShell>
-      <path d="M19.14 12.94a7.99 7.99 0 0 0 .06-.94 7.99 7.99 0 0 0-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.98 7.98 0 0 0-1.63-.94l-.36-2.54A.5.5 0 0 0 13.9 2h-3.8a.5.5 0 0 0-.49.42l-.36 2.54a7.98 7.98 0 0 0-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.48a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.62-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.39 1.05.71 1.63.94l.36 2.54a.5.5 0 0 0 .49.42h3.8a.5.5 0 0 0 .49-.42l.36-2.54c.58-.23 1.13-.55 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58Z"/>
+      <path d="M19.14 12.94a7.99 7.99 0 0 0 .06-.94 7.99 7.99 0 0 0-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.98 7.98 0 0 0-1.63-.94l-.36-2.54A.5.5 0 0 0 13.9 2h-3.8a.5.5 0 0 0-.49.42l-.36 2.54a7.98 7.98 0 0 0-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.48a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.62-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.39 1.05.71 1.63.94l.36 2.54a.5.5 0 0 0 .49.42h3.8a.5.5 0 0 0 .49-.42l.36-2.54c.58-.23 1.13-.55 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58Z" />
       <circle cx="12" cy="12" r="2.5" />
     </IconShell>
   );
@@ -118,11 +120,13 @@ function ControlButton({
   disabled,
   item,
   onSelect,
+  badge,
 }: {
   active: boolean;
   disabled?: boolean;
   item: (typeof ITEMS)[number];
   onSelect: (key: ControlItemKey) => void;
+  badge?: number;
 }) {
   return (
     <button
@@ -131,12 +135,14 @@ function ControlButton({
       disabled={disabled}
       onClick={() => !disabled && onSelect(item.key)}
       style={{
+        position: "relative",   /* anchor for the floating badge */
         width: "100%",
         border: "none",
         background: "transparent",
         padding: 0,
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.35 : 1,
+        overflow: "visible",    /* let badge bleed outside */
       }}
     >
       <div
@@ -149,21 +155,52 @@ function ControlButton({
           color: active ? "#2563eb" : "#6b7280",
         }}
       >
-        <div
-          style={{
-            width: 30,
-            height: 30,
-            borderRadius: 10,
-            display: "grid",
-            placeItems: "center",
-            background: active ? "rgba(37,99,235,0.09)" : "transparent",
-            border: active
-              ? "1px solid rgba(37,99,235,0.16)"
-              : "1px solid transparent",
-          }}
-        >
-          {item.icon}
+        {/* Icon + badge as a unit */}
+        <div style={{ position: "relative", display: "inline-block" }}>
+          <div
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 10,
+              display: "grid",
+              placeItems: "center",
+              background: active ? "rgba(37,99,235,0.09)" : "transparent",
+              border: active
+                ? "1px solid rgba(37,99,235,0.16)"
+                : "1px solid transparent",
+            }}
+          >
+            {item.icon}
+          </div>
+
+          {/* Badge crosses the top-right corner of the icon */}
+          {badge != null && badge > 0 ? (
+            <span
+              style={{
+                position: "absolute",
+                top: -4,
+                right: -5,
+                minWidth: 14,
+                height: 14,
+                borderRadius: 99,
+                background: "#ef4444",
+                color: "#fff",
+                fontSize: 8,
+                fontWeight: 800,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "0 2px",
+                lineHeight: 1,
+                pointerEvents: "none",
+                zIndex: 10,
+              }}
+            >
+              {badge > 99 ? "99+" : badge}
+            </span>
+          ) : null}
         </div>
+
         <div
           style={{
             fontSize: 8,
@@ -188,10 +225,10 @@ export default function BuilderControlPanel({
   activeKey,
   onSelect,
   disabledKeys = [],
+  badgeCounts = {},
 }: BuilderControlPanelProps) {
   const topItems = ITEMS.filter((item) => !item.bottom);
   const bottomItems = ITEMS.filter((item) => item.bottom);
-
 
   return (
     <div
@@ -219,6 +256,7 @@ export default function BuilderControlPanel({
             disabled={disabledKeys.includes(item.key)}
             item={item}
             onSelect={onSelect}
+            badge={badgeCounts[item.key]}
           />
         ))}
       </div>
@@ -247,6 +285,7 @@ export default function BuilderControlPanel({
             disabled={disabledKeys.includes(item.key)}
             item={item}
             onSelect={onSelect}
+            badge={badgeCounts[item.key]}
           />
         ))}
       </div>

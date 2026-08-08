@@ -25,10 +25,12 @@ export type NavbarTheme = {
   navbar_muted_text_color?: string;
   navbar_border_color?: string;
   navbar_height?: number;
-  navbar_max_width?: number;
+  navbar_max_width?: number | string;
   navbar_radius?: number;
   navbar_padding_x?: number;
   navbar_padding_y?: number;
+  logo_height?: number | string;
+  logo_fit?: "contain" | "cover";
 };
 
 
@@ -249,6 +251,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   const defaultMutedText = light ? "rgba(15,23,42,0.64)" : "rgba(255,255,255,0.68)";
   const mutedText = theme?.navbar_muted_text_color || defaultMutedText;
 
+  const logoHeightStyle = theme?.logo_height ? `${theme.logo_height}px` : "32px";
+  const logoFitStyle = (theme?.logo_fit as any) || "contain";
+
 
   const defaultOuterBorder = light
     ? "1px solid rgba(15,23,42,0.06)"
@@ -259,7 +264,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
 
   const navbarHeight = theme?.navbar_height ?? 72;
-  const navbarMaxWidth = theme?.navbar_max_width ?? 1280;
+  const navbarMaxWidth = String(theme?.navbar_max_width) === "full" ? "100%" : `${theme?.navbar_max_width ?? 1280}px`;
   const navbarRadius = theme?.navbar_radius;
   const navbarPaddingX = theme?.navbar_padding_x;
   const navbarPaddingY = theme?.navbar_padding_y;
@@ -904,7 +909,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
         style={{
           width: "100%",
           minWidth: 0,
-          maxWidth: `${navbarMaxWidth}px`,
+          maxWidth: navbarMaxWidth,
           margin: "0 auto",
           display: "flex",
           justifyContent: "center",
@@ -1035,7 +1040,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         <img
                           src={resolvedLogoUrl}
                           alt={brandName || "Logo"}
-                          style={{ maxHeight: "32px", maxWidth: "120px", objectFit: "contain", flexShrink: 0 }}
+                          style={{ maxHeight: logoHeightStyle, height: logoHeightStyle, maxWidth: "160px", objectFit: logoFitStyle, flexShrink: 0 }}
                         />
                       ) : (
                         <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: light ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.12)", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800, flexShrink: 0 }}>
@@ -1160,7 +1165,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         <img
                           src={resolvedLogoUrl}
                           alt={brandName || "Logo"}
-                          style={{ maxHeight: "32px", maxWidth: "120px", objectFit: "contain", flexShrink: 0 }}
+                          style={{ maxHeight: logoHeightStyle, height: logoHeightStyle, maxWidth: "160px", objectFit: logoFitStyle, flexShrink: 0 }}
                         />
                       ) : (
                         <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: light ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)", border: softBorder, color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800, flexShrink: 0 }}>
@@ -1210,25 +1215,6 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         <button
                           type="button"
                           onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
-                          style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative" }}
-                        >
-                          <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
-                            <circle cx="9" cy="20" r="1.5" />
-                            <circle cx="17" cy="20" r="1.5" />
-                            <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
-                          </svg>
-                          {cartCount > 0 && (
-                            <span style={{ position: "absolute", top: "-4px", right: "-4px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
-                              {cartCount}
-                            </span>
-                          )}
-                        </button>
-                      )}
-
-                      {!isMobile && (
-                        <button
-                          type="button"
-                          onClick={handleDummyNotification}
                           style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
                         >
                           <svg viewBox="0 0 24 24" style={iconStyle}>
@@ -1283,7 +1269,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         <img
                           src={resolvedLogoUrl}
                           alt={brandName || "Logo"}
-                          style={{ maxHeight: "34px", maxWidth: "130px", objectFit: "contain", flexShrink: 0 }}
+                          style={{ maxHeight: logoHeightStyle, height: logoHeightStyle, maxWidth: "160px", objectFit: logoFitStyle, flexShrink: 0 }}
                         />
                       ) : (
                         <span style={{ fontFamily: "'Playfair Display', 'Didot', 'Georgia', serif", fontSize: isMobile ? "16px" : "20px", fontWeight: 700, color: textColor, flexShrink: 0 }}>
@@ -1410,7 +1396,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         <img
                           src={resolvedLogoUrl}
                           alt={brandName || "Logo"}
-                          style={{ maxHeight: "32px", maxWidth: "120px", objectFit: "contain", flexShrink: 0 }}
+                          style={{ maxHeight: logoHeightStyle, height: logoHeightStyle, maxWidth: "160px", objectFit: logoFitStyle, flexShrink: 0 }}
                         />
                       ) : (
                         <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: light ? "#f0f4f9" : "#1e293b", boxShadow: light ? "3px 3px 6px rgba(166,180,200,0.4), -3px -3px 6px rgba(255,255,255,0.9)" : "3px 3px 6px rgba(0,0,0,0.4), -3px -3px 6px rgba(255,255,255,0.05)", color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800, flexShrink: 0 }}>
@@ -1534,7 +1520,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                       <img
                         src={resolvedLogoUrl}
                         alt={brandName || "Logo"}
-                        style={{ maxHeight: "32px", maxWidth: "120px", objectFit: "contain", flexShrink: 0 }}
+                        style={{ maxHeight: logoHeightStyle, height: logoHeightStyle, maxWidth: "160px", objectFit: logoFitStyle, flexShrink: 0 }}
                       />
                     ) : (
                       <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: light ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)", border: softBorder, color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800, flexShrink: 0 }}>

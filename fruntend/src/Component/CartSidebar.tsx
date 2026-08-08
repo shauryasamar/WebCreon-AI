@@ -369,80 +369,81 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   const resolvedMinHeight = clamp(min_height ?? 0, 0, 1600);
 
   const palette = useMemo(() => {
+    const pageBg = resolvedPrimaryBg;
+
+    const dynamicShellBorder = border_color
+      ? border_color
+      : alpha(resolvedTextColor, isDark ? 0.12 : 0.08);
+
+    const dynamicCardBorder = border_color
+      ? border_color
+      : alpha(resolvedTextColor, isDark ? 0.09 : 0.06);
+
     if (!isDark) {
+      const shellBg = panel_color || background_color || "#ffffff";
+      const panelBg = panel_color || background_color || mixHex(pageBg, "#ffffff", 0.7);
+      const cardBg = card_color || "#ffffff";
+
       return {
-        pageBg: resolvedPrimaryBg,
-        shellBg: panel_color || "#ffffff",
-        shellBorder: border_color || "rgba(15,23,42,0.08)",
-        headerBg: panel_color || "#ffffff",
-        panelBg: panel_color || "#f8fafc",
-        cardBg: card_color || "#ffffff",
-        cardBorder: border_color || "rgba(15,23,42,0.06)",
-        mutedBg: panel_color || "#f8fafc",
-        softBg: "rgba(15,23,42,0.04)",
+        pageBg,
+        shellBg,
+        shellBorder: dynamicShellBorder,
+        headerBg: shellBg,
+        panelBg,
+        cardBg,
+        cardBorder: dynamicCardBorder,
+        mutedBg: mixHex(pageBg, "#000000", 0.03),
+        softBg: alpha(resolvedTextColor, 0.04),
         text: resolvedTextColor,
-        textMuted: muted_text_color || "#64748b",
-        textSoft: muted_text_color || "#475569",
+        textMuted: muted_text_color || mixHex(resolvedTextColor, pageBg, 0.4),
+        textSoft: muted_text_color || mixHex(resolvedTextColor, pageBg, 0.25),
         danger: "#dc2626",
-        successBg: "rgba(34,197,94,0.10)",
+        successBg: alpha("#22c55e", 0.10),
         successText: "#166534",
-        inputBg: card_color || "#ffffff",
-        quantityBg: panel_color || "#f8fafc",
-        shadow: "0 8px 20px rgba(15,23,42,0.06)",
-        cardShadow: "0 4px 14px rgba(15,23,42,0.04)",
-        disabledBg: "#cbd5e1",
+        inputBg: cardBg,
+        quantityBg: mixHex(pageBg, "#000000", 0.02),
+        shadow: alpha(resolvedTextColor, 0.06) ? `0 8px 20px ${alpha("#0f172a", 0.06)}` : "none",
+        cardShadow: `0 4px 14px ${alpha("#0f172a", 0.04)}`,
+        disabledBg: mixHex(resolvedTextColor, pageBg, 0.5),
       };
     }
 
-    const pageBg = resolvedPrimaryBg;
     const shellBg =
       panel_color ||
-      (hasFestiveTint ? mixHex(pageBg, "#ffffff", 0.08) : "#111827");
+      background_color ||
+      (hasFestiveTint
+        ? mixHex(pageBg, "#ffffff", 0.08)
+        : mixHex(pageBg, "#ffffff", 0.04));
     const panelBg =
       panel_color ||
-      (hasFestiveTint ? mixHex(pageBg, "#ffffff", 0.12) : "#111827");
+      background_color ||
+      (hasFestiveTint
+        ? mixHex(pageBg, "#ffffff", 0.12)
+        : mixHex(pageBg, "#ffffff", 0.06));
     const cardBg =
       card_color ||
       (hasFestiveTint
         ? mixHex(mixHex(pageBg, "#ffffff", 0.14), resolvedAccentColor, 0.06)
-        : "#162033");
-    const mutedBg = hasFestiveTint ? mixHex(pageBg, "#000000", 0.12) : "#0f172a";
-    const inputBg = card_color
-      ? card_color
-      : hasFestiveTint
-      ? mixHex(pageBg, "#000000", 0.18)
-      : "#0b1220";
-    const quantityBg = hasFestiveTint
-      ? mixHex(pageBg, "#000000", 0.14)
-      : "#0b1220";
-    const shellBorder =
-      border_color ||
-      (hasFestiveTint
-        ? alpha(resolvedAccentColor, 0.16)
-        : "rgba(148,163,184,0.18)");
-    const cardBorder =
-      border_color ||
-      (hasFestiveTint
-        ? alpha(mixHex(resolvedAccentColor, "#ffffff", 0.35), 0.18)
-        : "rgba(148,163,184,0.12)");
+        : mixHex(pageBg, "#ffffff", 0.09));
+    const mutedBg = mixHex(pageBg, "#000000", 0.12);
+    const inputBg = card_color || mixHex(pageBg, "#000000", 0.15);
+    const quantityBg = mixHex(pageBg, "#000000", 0.12);
 
     return {
       pageBg,
       shellBg,
-      shellBorder,
+      shellBorder: dynamicShellBorder,
       headerBg: shellBg,
       panelBg,
       cardBg,
-      cardBorder,
+      cardBorder: dynamicCardBorder,
       mutedBg,
-      softBg: hasFestiveTint ? alpha("#ffffff", 0.05) : "rgba(255,255,255,0.04)",
+      softBg: alpha("#ffffff", 0.05),
       text: resolvedTextColor,
       textMuted:
-        muted_text_color ||
-        (hasFestiveTint ? mixHex(resolvedTextColor, pageBg, 0.45) : "#94a3b8"),
+        muted_text_color || mixHex(resolvedTextColor, pageBg, 0.45),
       textSoft:
-        muted_text_color ||
-        (hasFestiveTint ? mixHex(resolvedTextColor, pageBg, 0.28) : "#cbd5e1"),
+        muted_text_color || mixHex(resolvedTextColor, pageBg, 0.28),
       danger: "#fda4af",
       successBg: alpha("#22c55e", 0.16),
       successText: "#86efac",
@@ -450,7 +451,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
       quantityBg,
       shadow: "0 10px 24px rgba(0,0,0,0.18)",
       cardShadow: "0 2px 10px rgba(0,0,0,0.10)",
-      disabledBg: "#334155",
+      disabledBg: mixHex(resolvedTextColor, pageBg, 0.5),
     };
   }, [
     isDark,
@@ -458,6 +459,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     resolvedTextColor,
     resolvedAccentColor,
     hasFestiveTint,
+    background_color,
     panel_color,
     card_color,
     border_color,
@@ -907,19 +909,6 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
               background: palette.headerBg,
             }}
           >
-            <p
-              style={{
-                margin: "0 0 8px",
-                fontSize: "12px",
-                fontWeight: 700,
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                color: palette.textMuted,
-              }}
-            >
-              Order overview
-            </p>
-
             <h3
               style={{
                 margin: 0,
@@ -1177,7 +1166,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
         maxWidth: `${resolvedMaxWidth}px`,
         minHeight: resolvedMinHeight > 0 ? `${resolvedMinHeight}px` : undefined,
         margin: "0 auto",
-        background: palette.pageBg,
+        background: "transparent",
       }}
     >
       <div
@@ -1202,19 +1191,6 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
           }}
         >
           <div>
-            <p
-              style={{
-                margin: "0 0 6px",
-                fontSize: "11px",
-                fontWeight: 700,
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                color: palette.textMuted,
-              }}
-            >
-              Shopping bag
-            </p>
-
             <h3
               style={{
                 margin: 0,

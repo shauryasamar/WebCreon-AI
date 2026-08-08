@@ -30,6 +30,12 @@ export const componentRegistry: ComponentRegistry = {
 
   product_detail: ProductDetail,
   productdetail: ProductDetail,
+  product_info: ProductDetail,
+  productinfo: ProductDetail,
+  product_gallery: ProductDetail,
+  productgallery: ProductDetail,
+  purchase_panel: ProductDetail,
+  purchasepanel: ProductDetail,
 
   cart_sidebar: CartSidebar,
   cartsidebar: CartSidebar,

@@ -1783,15 +1783,44 @@ const AdminOrders: React.FC = () => {
                   const detail = getExpandedReturn(returnItem);
 
 
-                  const reviewDraft =
-                    reviewDrafts[returnItem.id] ||
-                    {
+                  const reviewDraft: ReviewDraft =
+                    reviewDrafts[returnItem.id] || {
                       action: "approve" as const,
                       adminNote: returnItem.admin_note || "",
                       rejectionReason: returnItem.rejection_reason || "",
                       approvedQuantities: Object.fromEntries(
                         detail?.items.map((item) => [item.id, item.quantity_requested]) || []
                       ),
+                    };
+
+                  const receiveDraft: ReceiveDraft =
+                    receiveDrafts[returnItem.id] || {
+                      adminNote: returnItem.admin_note || "",
+                      receivedQuantities: Object.fromEntries(
+                        detail?.items.map((item) => [item.id, item.quantity_approved ?? 0]) || []
+                      ),
+                    };
+
+                  const inspectDraft: InspectDraft =
+                    inspectDrafts[returnItem.id] || {
+                      adminNote: returnItem.admin_note || "",
+                      restockDecisionByItem: Object.fromEntries(
+                        detail?.items.map((item) => [
+                          item.id,
+                          (item.restock_decision || "restock") as "restock" | "quarantine" | "discard",
+                        ]) || []
+                      ),
+                      restockQuantityByItem: Object.fromEntries(
+                        detail?.items.map((item) => [item.id, item.restocked_quantity ?? item.quantity_received ?? 0]) || []
+                      ),
+                    };
+
+                  const refundDraft: RefundDraft =
+                    refundDrafts[returnItem.id] || {
+                      refundMethod: detail?.refund_method || "cod_refund",
+                      finalRefundAmount: String(returnItem.final_refund_amount ?? ""),
+                      refundOverrideReason: detail?.refund_override_reason || "",
+                      adminNote: returnItem.admin_note || "",
                     };
 
 
@@ -1905,11 +1934,31 @@ const AdminOrders: React.FC = () => {
                                         <div style={{ fontSize: "14px", fontWeight: 700 }}>
                                           {item.product_name}
                                         </div>
-                                        <div style={{ fontSize: "13px", color: "#64748b", marginTop: "4px" }}>
+                                        {(item.selected_variant_label || item.selected_variant_value) ? (
+                                          <div style={{ marginTop: "4px" }}>
+                                            <span style={{
+                                              display: "inline-flex",
+                                              alignItems: "center",
+                                              gap: "4px",
+                                              fontSize: "12px",
+                                              fontWeight: 600,
+                                              color: "#7c3aed",
+                                              background: "#f5f3ff",
+                                              border: "1px solid #e9d5ff",
+                                              borderRadius: "4px",
+                                              padding: "2px 8px",
+                                            }}>
+                                              {item.selected_variant_label
+                                                ? <><span style={{ opacity: 0.7 }}>{item.selected_variant_label}:</span> {item.selected_variant_value}</>
+                                                : item.selected_variant_value}
+                                            </span>
+                                          </div>
+                                        ) : null}
+                                        <div style={{ fontSize: "13px", color: "#64748b", marginTop: "6px" }}>
                                           Requested {item.quantity_requested} · Approved {item.quantity_approved} · Received {item.quantity_received}
                                         </div>
                                         <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "4px" }}>
-                                          Reason: {item.reason_code}
+                                          Reason: {item.reason_code.replaceAll("_", " ")}
                                           {item.reason_note ? ` · ${item.reason_note}` : ""}
                                         </div>
                                       </div>
@@ -1955,36 +2004,117 @@ const AdminOrders: React.FC = () => {
                                   <br />
                                   Suggested Refund: {formatPrice(returnItem.suggested_refund_amount)}
                                   <br />
-                                  Final Refund: {formatPrice(returnItem.final_refund_amount)}
                                 </div>
                               </div>
 
-
                               {returnItem.status === "requested" ? (
-                                <div style={{ ...plainCardStyle, padding: "14px" }}>
-                                  <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>
-                                    Review Return
+                                <div style={{ ...plainCardStyle, padding: "16px" }}>
+                                  <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "12px", color: "#0f172a" }}>
+                                    Review Return Request
                                   </div>
 
+                                  <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setReviewDraftValue(returnItem.id, (draft) => ({
+                                          ...draft,
+                                          action: "approve",
+                                        }))
+                                      }
+                                      style={{
+                                        flex: 1,
+                                        padding: "8px 12px",
+                                        borderRadius: "6px",
+                                        border: reviewDraft.action === "approve" ? "2px solid #16a34a" : "1px solid #cbd5e1",
+                                        background: reviewDraft.action === "approve" ? "#f0fdf4" : "#ffffff",
+                                        color: reviewDraft.action === "approve" ? "#15803d" : "#475569",
+                                        fontWeight: 700,
+                                        fontSize: "13px",
+                                        cursor: "pointer",
+                                      }}
+                                    >
+                                      ✓ Approve Return
+                                    </button>
 
-                                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                    <div>
-                                      <div style={labelStyle}>Admin Note</div>
-                                      <textarea
-                                        value={reviewDraft.adminNote}
-                                        onChange={(e) =>
-                                          setReviewDraftValue(returnItem.id, (draft) => ({
-                                            ...draft,
-                                            adminNote: e.target.value,
-                                          }))
-                                        }
-                                        style={{ ...inputStyle, minHeight: "80px", resize: "vertical" }}
-                                      />
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setReviewDraftValue(returnItem.id, (draft) => ({
+                                          ...draft,
+                                          action: "reject",
+                                        }))
+                                      }
+                                      style={{
+                                        flex: 1,
+                                        padding: "8px 12px",
+                                        borderRadius: "6px",
+                                        border: reviewDraft.action === "reject" ? "2px solid #dc2626" : "1px solid #cbd5e1",
+                                        background: reviewDraft.action === "reject" ? "#fef2f2" : "#ffffff",
+                                        color: reviewDraft.action === "reject" ? "#b91c1c" : "#475569",
+                                        fontWeight: 700,
+                                        fontSize: "13px",
+                                        cursor: "pointer",
+                                      }}
+                                    >
+                                      ✕ Reject Return
+                                    </button>
+                                  </div>
+
+                                  {reviewDraft.action === "approve" ? (
+                                    <div style={{ marginBottom: "14px" }}>
+                                      <div style={{ ...labelStyle, marginBottom: "8px" }}>Item Approval Quantities</div>
+                                      <div style={{ display: "grid", gap: "8px" }}>
+                                        {(detail?.items || []).map((item) => {
+                                          const approvedQty =
+                                            reviewDraft.approvedQuantities[item.id] ?? item.quantity_requested;
+                                          return (
+                                            <div
+                                              key={item.id}
+                                              style={{
+                                                display: "flex",
+                                                justifyContent: "space-between",
+                                                alignItems: "center",
+                                                padding: "8px 10px",
+                                                borderRadius: "6px",
+                                                background: "#f8fafc",
+                                                border: "1px solid #e2e8f0",
+                                              }}
+                                            >
+                                              <div style={{ fontSize: "13px", fontWeight: 600, minWidth: 0, paddingRight: "8px" }}>
+                                                {item.product_name}
+                                                <div style={{ fontSize: "11px", color: "#64748b" }}>
+                                                  Requested: {item.quantity_requested}
+                                                </div>
+                                              </div>
+                                              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                                <span style={{ fontSize: "12px", color: "#475569" }}>Approve:</span>
+                                                <input
+                                                  type="number"
+                                                  min={0}
+                                                  max={item.quantity_requested}
+                                                  value={approvedQty}
+                                                  onChange={(e) => {
+                                                    const val = Math.max(0, Math.min(item.quantity_requested, Number(e.target.value) || 0));
+                                                    setReviewDraftValue(returnItem.id, (draft) => ({
+                                                      ...draft,
+                                                      approvedQuantities: {
+                                                        ...draft.approvedQuantities,
+                                                        [item.id]: val,
+                                                      },
+                                                    }));
+                                                  }}
+                                                  style={{ ...inputStyle, width: "64px", textAlign: "center", padding: "4px 6px" }}
+                                                />
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
                                     </div>
-
-
-                                    <div>
-                                      <div style={labelStyle}>Rejection Reason</div>
+                                  ) : (
+                                    <div style={{ marginBottom: "14px" }}>
+                                      <div style={labelStyle}>Rejection Reason (Required)</div>
                                       <input
                                         value={reviewDraft.rejectionReason}
                                         onChange={(e) =>
@@ -1993,98 +2123,359 @@ const AdminOrders: React.FC = () => {
                                             rejectionReason: e.target.value,
                                           }))
                                         }
+                                        placeholder="e.g. Item not eligible, policy exceeded"
                                         style={inputStyle}
                                       />
                                     </div>
+                                  )}
 
-
-                                    <button
-                                      onClick={() => handleReviewReturn(returnItem.id)}
-                                      style={{
-                                        border: "1px solid #cbd5e1",
-                                        background: "#ffffff",
-                                        color: "#0f172a",
-                                        borderRadius: "6px",
-                                        padding: "10px 12px",
-                                        fontSize: "14px",
-                                        fontWeight: 700,
-                                        cursor: "pointer",
-                                      }}
-                                    >
-                                      Submit Review
-                                    </button>
+                                  <div style={{ marginBottom: "14px" }}>
+                                    <div style={labelStyle}>Admin Note (Optional)</div>
+                                    <textarea
+                                      value={reviewDraft.adminNote}
+                                      onChange={(e) =>
+                                        setReviewDraftValue(returnItem.id, (draft) => ({
+                                          ...draft,
+                                          adminNote: e.target.value,
+                                        }))
+                                      }
+                                      placeholder="Internal note for records..."
+                                      style={{ ...inputStyle, minHeight: "64px", resize: "vertical" }}
+                                    />
                                   </div>
+
+                                  <button
+                                    onClick={() => handleReviewReturn(returnItem.id)}
+                                    disabled={actionLoadingId === returnItem.id}
+                                    style={{
+                                      width: "100%",
+                                      border: "none",
+                                      background: reviewDraft.action === "approve" ? "#16a34a" : "#dc2626",
+                                      color: "#ffffff",
+                                      borderRadius: "6px",
+                                      padding: "10px 14px",
+                                      fontSize: "14px",
+                                      fontWeight: 700,
+                                      cursor: actionLoadingId === returnItem.id ? "wait" : "pointer",
+                                    }}
+                                  >
+                                    {reviewDraft.action === "approve" ? "Confirm & Approve Return" : "Submit Rejection"}
+                                  </button>
                                 </div>
                               ) : null}
 
 
                               {returnItem.status === "approved" ? (
-                                <div style={{ ...plainCardStyle, padding: "14px" }}>
-                                  <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>
-                                    Receive Return
+                                <div style={{ ...plainCardStyle, padding: "16px" }}>
+                                  <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "6px", color: "#0f172a" }}>
+                                    Receive Returned Items
                                   </div>
+                                  <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "14px" }}>
+                                    Verify physical arrival of products and enter actual received quantities.
+                                  </div>
+
+                                  <div style={{ display: "grid", gap: "8px", marginBottom: "14px" }}>
+                                    {(detail?.items || []).map((item) => {
+                                      const receivedQty =
+                                        receiveDraft.receivedQuantities[item.id] ?? item.quantity_approved;
+                                      return (
+                                        <div
+                                          key={item.id}
+                                          style={{
+                                            display: "flex",
+                                            justifyContent: "space-between",
+                                            alignItems: "center",
+                                            padding: "8px 10px",
+                                            borderRadius: "6px",
+                                            background: "#f8fafc",
+                                            border: "1px solid #e2e8f0",
+                                          }}
+                                        >
+                                          <div style={{ fontSize: "13px", fontWeight: 600, minWidth: 0, paddingRight: "8px" }}>
+                                            {item.product_name}
+                                            <div style={{ fontSize: "11px", color: "#64748b" }}>
+                                              Approved Qty: {item.quantity_approved}
+                                            </div>
+                                          </div>
+                                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                            <span style={{ fontSize: "12px", color: "#475569" }}>Received Qty:</span>
+                                            <input
+                                              type="number"
+                                              min={0}
+                                              max={item.quantity_approved}
+                                              value={receivedQty}
+                                              onChange={(e) => {
+                                                const val = Math.max(0, Math.min(item.quantity_approved, Number(e.target.value) || 0));
+                                                setReceiveDraftValue(returnItem.id, (draft) => ({
+                                                  ...draft,
+                                                  receivedQuantities: {
+                                                    ...draft.receivedQuantities,
+                                                    [item.id]: val,
+                                                  },
+                                                }));
+                                              }}
+                                              style={{ ...inputStyle, width: "64px", textAlign: "center", padding: "4px 6px" }}
+                                            />
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+
+                                  <div style={{ marginBottom: "14px" }}>
+                                    <div style={labelStyle}>Admin Note (Optional)</div>
+                                    <textarea
+                                      value={receiveDraft.adminNote}
+                                      onChange={(e) =>
+                                        setReceiveDraftValue(returnItem.id, (draft) => ({
+                                          ...draft,
+                                          adminNote: e.target.value,
+                                        }))
+                                      }
+                                      placeholder="Condition of package on delivery..."
+                                      style={{ ...inputStyle, minHeight: "64px", resize: "vertical" }}
+                                    />
+                                  </div>
+
                                   <button
                                     onClick={() => handleReceiveReturn(returnItem.id)}
+                                    disabled={actionLoadingId === returnItem.id}
                                     style={{
-                                      border: "1px solid #cbd5e1",
-                                      background: "#ffffff",
-                                      color: "#0f172a",
+                                      width: "100%",
+                                      border: "none",
+                                      background: "#2563eb",
+                                      color: "#ffffff",
                                       borderRadius: "6px",
-                                      padding: "10px 12px",
+                                      padding: "10px 14px",
                                       fontSize: "14px",
                                       fontWeight: 700,
-                                      cursor: "pointer",
+                                      cursor: actionLoadingId === returnItem.id ? "wait" : "pointer",
                                     }}
                                   >
-                                    Mark as Received
+                                    Confirm Received Package & Quantities
                                   </button>
                                 </div>
                               ) : null}
 
 
                               {returnItem.status === "received" ? (
-                                <div style={{ ...plainCardStyle, padding: "14px" }}>
-                                  <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>
-                                    Inspect Return
+                                <div style={{ ...plainCardStyle, padding: "16px" }}>
+                                  <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "6px", color: "#0f172a" }}>
+                                    Product Quality Inspection & Stock Restock
                                   </div>
+                                  <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "14px" }}>
+                                    Inspect received items. Choosing <b>Restock</b> will automatically restore product inventory!
+                                  </div>
+
+                                  <div style={{ display: "grid", gap: "10px", marginBottom: "14px" }}>
+                                    {(detail?.items || []).map((item) => {
+                                      const currentDecision =
+                                        inspectDraft.restockDecisionByItem[item.id] || "restock";
+                                      const restockQty =
+                                        inspectDraft.restockQuantityByItem[item.id] ?? item.quantity_received;
+
+                                      return (
+                                        <div
+                                          key={item.id}
+                                          style={{
+                                            padding: "10px 12px",
+                                            borderRadius: "6px",
+                                            background: "#f8fafc",
+                                            border: "1px solid #e2e8f0",
+                                            display: "grid",
+                                            gap: "8px",
+                                          }}
+                                        >
+                                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", fontWeight: 700 }}>
+                                            <span>{item.product_name}</span>
+                                            <span style={{ color: "#64748b" }}>Received: {item.quantity_received}</span>
+                                          </div>
+
+                                          <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "8px", alignItems: "center" }}>
+                                            <div>
+                                              <div style={{ fontSize: "11px", color: "#475569", fontWeight: 600 }}>Decision</div>
+                                              <select
+                                                value={currentDecision}
+                                                onChange={(e) => {
+                                                  const dec = e.target.value as "restock" | "quarantine" | "discard";
+                                                  setInspectDraftValue(returnItem.id, (draft) => ({
+                                                    ...draft,
+                                                    restockDecisionByItem: {
+                                                      ...draft.restockDecisionByItem,
+                                                      [item.id]: dec,
+                                                    },
+                                                    restockQuantityByItem: {
+                                                      ...draft.restockQuantityByItem,
+                                                      [item.id]: dec === "restock" ? item.quantity_received : 0,
+                                                    },
+                                                  }));
+                                                }}
+                                                style={{ ...inputStyle, padding: "6px 8px", fontSize: "12px" }}
+                                              >
+                                                <option value="restock">📦 Restock (Return to Stock)</option>
+                                                <option value="discard">🗑️ Discard (Damaged / Unsellable)</option>
+                                                <option value="quarantine">⚠️ Quarantine (Hold for Quality Check)</option>
+                                              </select>
+                                            </div>
+
+                                            <div>
+                                              <div style={{ fontSize: "11px", color: "#475569", fontWeight: 600 }}>
+                                                {currentDecision === "restock" ? "Restock Qty (+Stock)" : "Qty Processed"}
+                                              </div>
+                                              <input
+                                                type="number"
+                                                min={0}
+                                                max={item.quantity_received}
+                                                disabled={currentDecision !== "restock"}
+                                                value={restockQty}
+                                                onChange={(e) => {
+                                                  const val = Math.max(0, Math.min(item.quantity_received, Number(e.target.value) || 0));
+                                                  setInspectDraftValue(returnItem.id, (draft) => ({
+                                                    ...draft,
+                                                    restockQuantityByItem: {
+                                                      ...draft.restockQuantityByItem,
+                                                      [item.id]: val,
+                                                    },
+                                                  }));
+                                                }}
+                                                style={{ ...inputStyle, padding: "6px 8px", fontSize: "12px" }}
+                                              />
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+
+                                  <div style={{ marginBottom: "14px" }}>
+                                    <div style={labelStyle}>Inspection Note (Optional)</div>
+                                    <textarea
+                                      value={inspectDraft.adminNote}
+                                      onChange={(e) =>
+                                        setInspectDraftValue(returnItem.id, (draft) => ({
+                                          ...draft,
+                                          adminNote: e.target.value,
+                                        }))
+                                      }
+                                      placeholder="Notes on packaging or product condition..."
+                                      style={{ ...inputStyle, minHeight: "64px", resize: "vertical" }}
+                                    />
+                                  </div>
+
                                   <button
                                     onClick={() => handleInspectReturn(returnItem.id)}
+                                    disabled={actionLoadingId === returnItem.id}
                                     style={{
-                                      border: "1px solid #cbd5e1",
-                                      background: "#ffffff",
-                                      color: "#0f172a",
+                                      width: "100%",
+                                      border: "none",
+                                      background: "#7c3aed",
+                                      color: "#ffffff",
                                       borderRadius: "6px",
-                                      padding: "10px 12px",
+                                      padding: "10px 14px",
                                       fontSize: "14px",
                                       fontWeight: 700,
-                                      cursor: "pointer",
+                                      cursor: actionLoadingId === returnItem.id ? "wait" : "pointer",
                                     }}
                                   >
-                                    Submit Inspection
+                                    Submit Inspection & Update Stock
                                   </button>
                                 </div>
                               ) : null}
 
 
                               {returnItem.status === "inspected" ? (
-                                <div style={{ ...plainCardStyle, padding: "14px" }}>
-                                  <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>
-                                    Refund Return
+                                <div style={{ ...plainCardStyle, padding: "16px" }}>
+                                  <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "6px", color: "#0f172a" }}>
+                                    Process Customer Refund
                                   </div>
+                                  <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "14px" }}>
+                                    Calculated Allowed Refund: <b>{formatPrice(returnItem.suggested_refund_amount)}</b>
+                                  </div>
+
+                                  <div style={{ display: "grid", gap: "10px", marginBottom: "14px" }}>
+                                    <div>
+                                      <div style={labelStyle}>Refund Method</div>
+                                      <select
+                                        value={refundDraft.refundMethod}
+                                        onChange={(e) =>
+                                          setRefundDraftValue(returnItem.id, (draft) => ({
+                                            ...draft,
+                                            refundMethod: e.target.value,
+                                          }))
+                                        }
+                                        style={inputStyle}
+                                      >
+                                        <option value="cod_refund">Bank Transfer / Cash Refund</option>
+                                        <option value="store_credit">Store Credit Coupon</option>
+                                        <option value="original_payment">Original Payment Gateway Refund</option>
+                                      </select>
+                                    </div>
+
+                                    <div>
+                                      <div style={labelStyle}>Final Refund Amount (₹)</div>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        value={refundDraft.finalRefundAmount}
+                                        onChange={(e) =>
+                                          setRefundDraftValue(returnItem.id, (draft) => ({
+                                            ...draft,
+                                            finalRefundAmount: e.target.value,
+                                          }))
+                                        }
+                                        style={inputStyle}
+                                      />
+                                    </div>
+
+                                    {Number(refundDraft.finalRefundAmount || 0) !== returnItem.suggested_refund_amount ? (
+                                      <div>
+                                        <div style={labelStyle}>Refund Override Reason (Required for amount change)</div>
+                                        <input
+                                          value={refundDraft.refundOverrideReason}
+                                          onChange={(e) =>
+                                            setRefundDraftValue(returnItem.id, (draft) => ({
+                                              ...draft,
+                                              refundOverrideReason: e.target.value,
+                                            }))
+                                          }
+                                          placeholder="Reason for adjusting refund amount..."
+                                          style={inputStyle}
+                                        />
+                                      </div>
+                                    ) : null}
+
+                                    <div>
+                                      <div style={labelStyle}>Admin Note</div>
+                                      <textarea
+                                        value={refundDraft.adminNote}
+                                        onChange={(e) =>
+                                          setRefundDraftValue(returnItem.id, (draft) => ({
+                                            ...draft,
+                                            adminNote: e.target.value,
+                                          }))
+                                        }
+                                        placeholder="Refund reference ID or payment note..."
+                                        style={{ ...inputStyle, minHeight: "64px", resize: "vertical" }}
+                                      />
+                                    </div>
+                                  </div>
+
                                   <button
                                     onClick={() => handleRefundReturn(returnItem.id)}
+                                    disabled={actionLoadingId === returnItem.id}
                                     style={{
-                                      border: "1px solid #cbd5e1",
-                                      background: "#ffffff",
-                                      color: "#0f172a",
+                                      width: "100%",
+                                      border: "none",
+                                      background: "#16a34a",
+                                      color: "#ffffff",
                                       borderRadius: "6px",
-                                      padding: "10px 12px",
+                                      padding: "10px 14px",
                                       fontSize: "14px",
                                       fontWeight: 700,
-                                      cursor: "pointer",
+                                      cursor: actionLoadingId === returnItem.id ? "wait" : "pointer",
                                     }}
                                   >
-                                    Process Refund
+                                    Confirm & Issue Refund ({formatPrice(Number(refundDraft.finalRefundAmount || returnItem.final_refund_amount))})
                                   </button>
                                 </div>
                               ) : null}

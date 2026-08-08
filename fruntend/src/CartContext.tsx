@@ -60,7 +60,10 @@ export type Product = {
   variant_option?: ProductVariantOption | null;
   originalPrice?: number;
   discountPercent?: number;
+  discount_percent?: number;
   image?: string;
+  image_url?: string;
+  imageUrl?: string;
   sizes?: string[];
   inStock?: boolean;
   selectedVariantValue?: string | null;

@@ -324,37 +324,76 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
       );
     });
 
-    if (hasRenderableDetailBlock) return filtered;
+    if (hasRenderableDetailBlock) {
+      const mergedDetailProps: Record<string, any> = {};
+      filtered.forEach((b) => {
+        const t = String(b.type || "").toLowerCase();
+        const ds = b.data_source ?? b.datasource ?? undefined;
+        if (PRODUCT_DETAIL_TYPES.has(t) || ds === "product") {
+          Object.assign(mergedDetailProps, b.props || {});
+        }
+      });
+
+      let mergedOnce = false;
+      return filtered.map((b) => {
+        const t = String(b.type || "").toLowerCase();
+        const ds = b.data_source ?? b.datasource ?? undefined;
+        if ((PRODUCT_DETAIL_TYPES.has(t) || ds === "product") && !mergedOnce) {
+          mergedOnce = true;
+          return {
+            ...b,
+            props: {
+              ...mergedDetailProps,
+              ...(b.props || {}),
+            },
+          };
+        }
+        return b;
+      });
+    }
+
+    const pdBlockInPage = page?.blocks?.find((b) =>
+      PRODUCT_DETAIL_TYPES.has(String(b.type || "").toLowerCase())
+    );
 
     return [
       {
-        id: "auto-product-detail-fallback",
+        id: pdBlockInPage?.id || "auto-product-detail-fallback",
         type: "product_detail",
         data_source: "product",
-        props: {},
+        props: pdBlockInPage?.props || {},
       },
     ];
-  }, [isProductDetailPageContext, resolvedBlocks]);
+  }, [isProductDetailPageContext, resolvedBlocks, page]);
 
   const blocksToRender = useMemo(() => {
     if (isCheckoutPage) return detailRelevantBlocks;
-    if (!isCartPage) return detailRelevantBlocks;
 
     let hasRenderedPrimaryCartBlock = false;
+    let hasRenderedPrimaryProductDetailBlock = false;
 
     return detailRelevantBlocks.filter((block) => {
       const type = String(block.type || "").toLowerCase();
       const dataSource = block.data_source ?? block.datasource ?? undefined;
-      const isCartLike =
-        CART_PAGE_TYPES.has(type) || dataSource === "cart";
 
-      if (!isCartLike) return true;
-      if (hasRenderedPrimaryCartBlock) return false;
+      const isCartLike = CART_PAGE_TYPES.has(type) || dataSource === "cart";
+      if (isCartPage && isCartLike) {
+        if (hasRenderedPrimaryCartBlock) return false;
+        hasRenderedPrimaryCartBlock = true;
+        return true;
+      }
 
-      hasRenderedPrimaryCartBlock = true;
+      const isProductDetailLike =
+        PRODUCT_DETAIL_TYPES.has(type) || dataSource === "product";
+      if (isProductDetailPageContext && isProductDetailLike) {
+        if (hasRenderedPrimaryProductDetailBlock) return false;
+        hasRenderedPrimaryProductDetailBlock = true;
+        return true;
+      }
+
       return true;
     });
-  }, [detailRelevantBlocks, isCheckoutPage, isCartPage]);
+  }, [detailRelevantBlocks, isCheckoutPage, isCartPage, isProductDetailPageContext]);
 
   // Auto switch checkout step if selected block belongs to a specific step
   useEffect(() => {
@@ -917,19 +956,6 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
                 borderBottom: cardDivider,
               }}
             >
-              <p
-                style={{
-                  margin: "0 0 6px",
-                  fontSize: "10px",
-                  fontWeight: 700,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  color: subtleText,
-                }}
-              >
-                Review
-              </p>
-
               <h3
                 style={{
                   margin: 0,
@@ -1103,9 +1129,10 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
                   ? renderBlock(placeOrderBlock, blocksToRender.indexOf(placeOrderBlock), {
                       compact: false,
                       buttonLabel:
-                        paymentData.method.toUpperCase() === "COD"
+                        placeOrderBlock.props?.buttonLabel ||
+                        (paymentData.method.toUpperCase() === "COD"
                           ? "Place Order"
-                          : "Pay Now",
+                          : "Pay Now"),
                       reviewMode: true,
                       disabled: false,
                     })

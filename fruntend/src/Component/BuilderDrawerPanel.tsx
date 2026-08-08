@@ -327,6 +327,141 @@ function renderAssetPreview(assetId: string) {
           <div style={{ fontSize: "7px", color: "#64748b" }}>✓ Free Delivery • ✓ 30-Day Guarantee</div>
         </div>
       );
+
+    // Product Card Preview Mockups
+    case "product-fashion-apparel":
+      return (
+        <div style={{ display: "flex", gap: "6px", background: "#ffffff", borderRadius: "10px", padding: "6px", border: "1px solid rgba(15,23,42,0.06)", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+          <div style={{ width: "35px", height: "45px", borderRadius: "6px", background: "linear-gradient(180deg, #3b82f6 0%, #1e40af 100%)", flexShrink: 0, position: "relative", display: "grid", placeItems: "center" }}>
+            <span style={{ position: "absolute", top: "2px", left: "2px", fontSize: "5px", background: "#166534", color: "#fff", padding: "1px 3px", borderRadius: "4px", scale: "0.8" }}>96%</span>
+            <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: "#ffffff", strokeWidth: 2, fill: "none" }}>
+              <path d="M20.37 4.91L17.26 3.5a2.12 2.12 0 0 0-1.81 0l-3.1 1.41a.84.84 0 0 1-.7 0l-3.1-1.41a2.12 2.12 0 0 0-1.81 0L3.63 4.91a1 1 0 0 0-.58.91v2.5a2 2 0 0 0 .73 1.54L6 11.5v7a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-7l2.22-1.65A2 2 0 0 0 21 8.32V5.82a1 1 0 0 0-.63-.91z" />
+            </svg>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: "2px", flex: 1 }}>
+            <span style={{ fontSize: "8px", color: "#94a3b8", fontWeight: 700 }}>VOGUE</span>
+            <span style={{ fontSize: "10px", fontWeight: 800, color: "#1e293b", lineHeight: 1 }}>Shirts</span>
+            <span style={{ fontSize: "8px", color: "#d97706" }}>★ 3.0</span>
+            <span style={{ fontSize: "9px", fontWeight: 800, color: "#1e293b" }}>₹220</span>
+          </div>
+        </div>
+      );
+    case "product-electronics":
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: "4px", background: "#ffffff", borderRadius: "10px", padding: "6px", border: "1px solid rgba(15,23,42,0.06)", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+          <div style={{ width: "100%", height: "35px", borderRadius: "6px", background: "#f8fafc", position: "relative", display: "grid", placeItems: "center" }}>
+            <span style={{ position: "absolute", top: "2px", left: "2px", fontSize: "5px", background: "#166534", color: "#fff", padding: "1px 3px", borderRadius: "4px", scale: "0.8" }}>96%</span>
+            <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: "#2563eb", strokeWidth: 2, fill: "none" }}>
+              <path d="M3 14c0-4.97 4.03-9 9-9s9 4.03 9 9" />
+              <path d="M19 12h2v4h-2zM3 12h2v4H3z" />
+            </svg>
+          </div>
+          <span style={{ fontSize: "7px", color: "#94a3b8", fontWeight: 700 }}>SONIC</span>
+          <span style={{ fontSize: "9px", fontWeight: 800, color: "#1e293b", lineHeight: 1 }}>AirPods Pro</span>
+          <div style={{ background: "#f4f4f6", padding: "3px 6px", borderRadius: "6px", display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "2px" }}>
+            <span style={{ fontSize: "8px", fontWeight: 800, color: "#1e293b" }}>₹220</span>
+            <span style={{ fontSize: "6px", background: "rgba(22,163,74,0.1)", color: "#16a34a", padding: "1px 3px", borderRadius: "999px" }}>In Stock</span>
+          </div>
+        </div>
+      );
+    case "product-beauty-cosmetics":
+      return (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "3px", background: "#ffffff", borderRadius: "10px", padding: "6px", border: "1px solid rgba(15,23,42,0.06)", boxShadow: "0 2px 8px rgba(0,0,0,0.04)", textAlign: "center" }}>
+          <div style={{ width: "32px", height: "32px", borderRadius: "999px", background: "#fff1f2", display: "grid", placeItems: "center", position: "relative" }}>
+            <span style={{ position: "absolute", top: "-2px", left: "-2px", fontSize: "5px", background: "#166534", color: "#fff", padding: "1px 3px", borderRadius: "4px", scale: "0.7" }}>96%</span>
+            <svg viewBox="0 0 24 24" style={{ width: "14px", height: "14px", stroke: "#e11d48", strokeWidth: 2, fill: "none" }}>
+              <path d="M9 22h6V10H9v12zM12 2v8M10 5h4" />
+            </svg>
+          </div>
+          <span style={{ fontSize: "7px", color: "#94a3b8", fontWeight: 700 }}>GLOW</span>
+          <span style={{ fontSize: "9px", fontWeight: 800, color: "#1e293b", lineHeight: 1 }}>Face Wash</span>
+          <span style={{ fontSize: "8px", color: "#dc2626", fontWeight: 800 }}>₹220</span>
+          <span style={{ fontSize: "6px", background: "rgba(22,163,74,0.1)", color: "#16a34a", padding: "1px 4px", borderRadius: "999px" }}>In Stock</span>
+        </div>
+      );
+    case "product-grocery":
+      return (
+        <div style={{ display: "flex", gap: "6px", background: "#ffffff", borderRadius: "10px", padding: "6px", border: "1px solid rgba(15,23,42,0.06)", boxShadow: "0 2px 8px rgba(0,0,0,0.04)", alignItems: "center" }}>
+          <div style={{ width: "35px", height: "35px", borderRadius: "6px", background: "#f0fdf4", flexShrink: 0, position: "relative", display: "grid", placeItems: "center" }}>
+            <span style={{ position: "absolute", top: "2px", left: "2px", fontSize: "5px", background: "#166534", color: "#fff", padding: "1px 3px", borderRadius: "4px", scale: "0.7" }}>96%</span>
+            <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: "#16a34a", strokeWidth: 2, fill: "none" }}>
+              <path d="M12 22a8 8 0 1 0 0-16 8 8 0 0 0 0 16z" />
+              <path d="M12 2v4M12 6c-2 0-3-1-3-3" />
+            </svg>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1px", flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: "7px", color: "#94a3b8", fontWeight: 700 }}>FRESH</span>
+            <span style={{ fontSize: "9px", fontWeight: 800, color: "#1e293b", lineHeight: 1 }}>Red Apples</span>
+            <div style={{ borderTop: "1px solid #e2e8f0", margin: "2px 0" }} />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "8px", fontWeight: 800 }}>₹220</span>
+              <span style={{ fontSize: "5px", background: "rgba(22,163,74,0.1)", color: "#16a34a", padding: "1px 3px", borderRadius: "999px" }}>In Stock</span>
+            </div>
+          </div>
+        </div>
+      );
+    case "product-books-stationery":
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: "3px", background: "#ffffff", borderRadius: "10px", padding: "6px", border: "1px solid rgba(15,23,42,0.06)", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+          <div style={{ width: "100%", height: "45px", borderRadius: "4px", background: "linear-gradient(135deg, #312e81 0%, #4338ca 100%)", position: "relative", display: "grid", placeItems: "center" }}>
+            <span style={{ position: "absolute", top: "2px", left: "2px", fontSize: "5px", background: "#166534", color: "#fff", padding: "1px 3px", borderRadius: "4px", scale: "0.8" }}>96%</span>
+            <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: "#ffffff", strokeWidth: 2, fill: "none" }}>
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5v-15z" />
+            </svg>
+          </div>
+          <span style={{ fontSize: "7px", color: "#94a3b8", fontWeight: 700 }}>PENGUIN</span>
+          <span style={{ fontSize: "9px", fontWeight: 800, color: "#1e293b", lineHeight: 1 }}>Atomic Habits</span>
+          <div style={{ borderTop: "1px solid #e2e8f0", margin: "2px 0" }} />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "8px", fontWeight: 800 }}>₹220</span>
+            <span style={{ fontSize: "7px", color: "#d97706" }}>★ 3.0</span>
+          </div>
+        </div>
+      );
+
+    // Footer Preview Mockups
+    case "footer-apple-minimal":
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: "2px", padding: "4px 8px", background: "#ffffff", borderRadius: "6px", border: "1px solid rgba(15,23,42,0.06)", fontSize: "8px", color: "#64748b" }}>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span>© 2026 Brand.</span>
+            <span>Terms • Privacy</span>
+          </div>
+        </div>
+      );
+    case "footer-glassmorphism":
+      return (
+        <div style={{ padding: "6px 8px", background: "rgba(255, 255, 255, 0.7)", backdropFilter: "blur(8px)", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.8)", fontSize: "8px", color: "#0f172a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span>Frosted Glass Footer</span>
+          <div style={{ width: "40px", height: "10px", borderRadius: "4px", background: "rgba(255,255,255,0.6)", border: "1px solid rgba(0,0,0,0.08)" }} />
+        </div>
+      );
+    case "footer-modern-marketplace":
+      return (
+        <div style={{ padding: "6px 8px", background: "#f8fafc", borderRadius: "6px", border: "1px solid rgba(0,0,0,0.06)", fontSize: "8px", display: "flex", flexDirection: "column", gap: "4px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ fontWeight: 800 }}>Shopify Market</span>
+            <span>Payments accepted</span>
+          </div>
+          <div style={{ width: "100%", height: "1px", background: "#e2e8f0" }} />
+          <span>© 2026 Shopify Market. All rights reserved.</span>
+        </div>
+      );
+    case "footer-luxury-fashion":
+      return (
+        <div style={{ padding: "6px 8px", background: "#fafafa", borderRadius: "6px", border: "1px solid rgba(0,0,0,0.04)", textAlign: "center", fontSize: "8px", fontFamily: "serif" }}>
+          <div style={{ fontWeight: 800, fontSize: "10px", marginBottom: "2px" }}>YB</div>
+          <span>CURATED LUXURY EDIT</span>
+        </div>
+      );
+    case "footer-neo-modern":
+      return (
+        <div style={{ padding: "6px 8px", background: "#f0f4f9", borderRadius: "6px", boxShadow: "3px 3px 6px rgba(166,180,200,0.3)", fontSize: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontWeight: 800 }}>Neo Footer</span>
+          <div style={{ width: "30px", height: "8px", borderRadius: "999px", background: "#f0f4f9", boxShadow: "inset 1px 1px 2px rgba(0,0,0,0.1)" }} />
+        </div>
+      );
+
     default:
       return null;
   }
@@ -605,7 +740,6 @@ export default function BuilderDrawerPanel({
               }}
             >
               {[
-                { id: "all", label: "All Assets" },
                 { id: "navbar", label: "Navbar" },
                 { id: "banner", label: "Banner" },
                 { id: "products", label: "Products" },
