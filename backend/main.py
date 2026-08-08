@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -26,27 +27,28 @@ from db.database import create_db_and_tables, get_session
 from models import AdminSite, Site
 from routers import auth, cart, checkout, checkout_settings, orders, products, returns
 
-app = FastAPI(title="AI Website Builder Backend")
-
 UPLOADS_DIR = Path("uploads")
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 
-@app.on_event("startup")
-def on_startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     create_db_and_tables()
+    yield
+
+
+app = FastAPI(title="AI Website Builder Backend", lifespan=lifespan)
 
 
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "http://192.168.88.24:5173",
-    "http://172.31.192.1:5173",
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

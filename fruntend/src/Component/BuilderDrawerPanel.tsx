@@ -1,5 +1,9 @@
-import React from "react";
-
+import React, { useState } from "react";
+import {
+  COMPONENT_ASSETS,
+  ComponentAsset,
+  ComponentAssetCategory,
+} from "../customizations/assetsRegistry";
 
 type ControlItemKey =
   | "saved-sites"
@@ -9,7 +13,6 @@ type ControlItemKey =
   | "assets"
   | "settings"
   | "qr-link";
-
 
 type SavedSite = {
   id: string;
@@ -26,22 +29,18 @@ type SavedSite = {
   } | null;
 };
 
-
 export type AdminNavKey = "products" | "orders" | "checkout-charges";
-
 
 type AdminNavItem = {
   key: AdminNavKey;
   label: string;
 };
 
-
 const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { key: "products", label: "Products" },
   { key: "orders", label: "Orders" },
   { key: "checkout-charges", label: "Checkout Charges" },
 ];
-
 
 type BuilderDrawerPanelProps = {
   activeDrawer: ControlItemKey | null;
@@ -52,8 +51,9 @@ type BuilderDrawerPanelProps = {
   onDeleteSite?: (siteId: string) => void;
   activeAdminNavKey?: AdminNavKey | null;
   onSelectAdminNav?: (key: AdminNavKey) => void;
+  siteDefinition?: any;
+  onSiteDefinitionChange?: (next: any) => void;
 };
-
 
 function titleForDrawer(key: ControlItemKey | null) {
   switch (key) {
@@ -64,14 +64,13 @@ function titleForDrawer(key: ControlItemKey | null) {
     case "admin-panel":
       return "Store Control";
     case "assets":
-      return "Assets";
+      return "Component Assets";
     case "settings":
       return "Settings";
     default:
       return "";
   }
 }
-
 
 function getBrandName(site: SavedSite) {
   return (
@@ -81,7 +80,6 @@ function getBrandName(site: SavedSite) {
     "Website"
   );
 }
-
 
 function DeleteIcon() {
   return (
@@ -103,12 +101,6 @@ function DeleteIcon() {
   );
 }
 
-
-/**
- * Shared card used for both Saved Sites and Store Control nav items, so the
- * two drawers look and behave the same way (plain white card, subtle
- * border, slightly darker background when selected).
- */
 function PlainCard({
   label,
   isSelected,
@@ -160,7 +152,6 @@ function PlainCard({
   );
 }
 
-
 export default function BuilderDrawerPanel({
   activeDrawer,
   onClose,
@@ -170,7 +161,13 @@ export default function BuilderDrawerPanel({
   onDeleteSite,
   activeAdminNavKey,
   onSelectAdminNav,
+  siteDefinition,
+  onSiteDefinitionChange,
 }: BuilderDrawerPanelProps) {
+  const [selectedAssetCategory, setSelectedAssetCategory] =
+    useState<ComponentAssetCategory>("all");
+  const [appliedAssetId, setAppliedAssetId] = useState<string | null>(null);
+
   if (
     !activeDrawer ||
     activeDrawer === "customize" ||
@@ -179,10 +176,59 @@ export default function BuilderDrawerPanel({
     return null;
   }
 
-
   const title = titleForDrawer(activeDrawer);
   if (!title) return null;
 
+  const handleApplyAsset = (asset: ComponentAsset) => {
+    if (!siteDefinition || !onSiteDefinitionChange) return;
+
+    const nextDefinition = JSON.parse(JSON.stringify(siteDefinition));
+
+    // Apply layout theme patches (UI-only variant changes, preserving color scheme intact)
+    if (asset.patch.themePatch) {
+      nextDefinition.theme = {
+        ...(nextDefinition.theme ?? {}),
+        ...asset.patch.themePatch,
+      };
+    }
+
+    // Apply block patches to target blocks in pages
+    if (asset.patch.blockPatch) {
+      const targetType = asset.targetType;
+      if (Array.isArray(nextDefinition.pages)) {
+        nextDefinition.pages = nextDefinition.pages.map((page: any) => ({
+          ...page,
+          blocks: (page.blocks ?? []).map((block: any) => {
+            const blockType = String(block.type || "").toLowerCase();
+            if (
+              blockType === targetType ||
+              (targetType === "hero_banner" && blockType.includes("hero")) ||
+              (targetType === "product_grid" && blockType.includes("product")) ||
+              (targetType === "footer" && blockType.includes("footer"))
+            ) {
+              return {
+                ...block,
+                props: {
+                  ...(block.props ?? {}),
+                  ...asset.patch.blockPatch,
+                },
+              };
+            }
+            return block;
+          }),
+        }));
+      }
+    }
+
+    onSiteDefinitionChange(nextDefinition);
+    setAppliedAssetId(asset.id);
+    setTimeout(() => setAppliedAssetId(null), 2000);
+  };
+
+  const filteredAssets = COMPONENT_ASSETS.filter((asset) => {
+    if (selectedAssetCategory === "all") return true;
+    return asset.category === selectedAssetCategory;
+  });
 
   return (
     <div
@@ -223,7 +269,6 @@ export default function BuilderDrawerPanel({
         </button>
       </div>
 
-
       <div
         style={{
           padding:
@@ -256,7 +301,6 @@ export default function BuilderDrawerPanel({
               {savedSites.map((site) => {
                 const brandName = getBrandName(site);
                 const isSelected = selectedSiteId === site.id;
-
 
                 return (
                   <PlainCard
@@ -305,13 +349,164 @@ export default function BuilderDrawerPanel({
               />
             ))}
           </div>
+        ) : activeDrawer === "assets" ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            {/* Category Filter Pills */}
+            <div
+              style={{
+                display: "flex",
+                gap: "6px",
+                overflowX: "auto",
+                paddingBottom: "4px",
+                scrollbarWidth: "none",
+              }}
+            >
+              {[
+                { id: "all", label: "All" },
+                { id: "navbar", label: "Navbar" },
+              ].map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() =>
+                    setSelectedAssetCategory(cat.id as ComponentAssetCategory)
+                  }
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: "999px",
+                    border:
+                      selectedAssetCategory === cat.id
+                        ? "1px solid #2563eb"
+                        : "1px solid rgba(15,23,42,0.1)",
+                    background:
+                      selectedAssetCategory === cat.id
+                        ? "rgba(37,99,235,0.08)"
+                        : "#ffffff",
+                    color: selectedAssetCategory === cat.id ? "#2563eb" : "#64748b",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Component Assets List */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {filteredAssets.map((asset) => {
+                const isJustApplied = appliedAssetId === asset.id;
+                const isCurrentlyActive =
+                  siteDefinition?.theme?.navbar_layout ===
+                    asset.patch.themePatch?.navbar_layout ||
+                  (asset.id === "navbar-standard" &&
+                    !siteDefinition?.theme?.navbar_layout);
+
+                return (
+                  <div
+                    key={asset.id}
+                    style={{
+                      padding: "12px",
+                      borderRadius: "12px",
+                      border: isCurrentlyActive
+                        ? "1.5px solid #2563eb"
+                        : "1px solid rgba(15,23,42,0.08)",
+                      background: isCurrentlyActive
+                        ? "rgba(37,99,235,0.02)"
+                        : "#ffffff",
+                      boxShadow: "0 2px 6px rgba(15,23,42,0.03)",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "8px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color: "#0f172a",
+                        }}
+                      >
+                        {asset.title}
+                      </div>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          padding: "2px 6px",
+                          borderRadius: "4px",
+                          background: isCurrentlyActive
+                            ? "#2563eb"
+                            : "rgba(37,99,235,0.08)",
+                          color: isCurrentlyActive ? "#ffffff" : "#2563eb",
+                        }}
+                      >
+                        {isCurrentlyActive ? "Active" : asset.tag}
+                      </span>
+                    </div>
+
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: 11,
+                        lineHeight: 1.45,
+                        color: "#64748b",
+                      }}
+                    >
+                      {asset.description}
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() => handleApplyAsset(asset)}
+                      disabled={!siteDefinition || !onSiteDefinitionChange}
+                      style={{
+                        marginTop: "2px",
+                        padding: "7px 12px",
+                        borderRadius: "8px",
+                        border: "none",
+                        background: isJustApplied
+                          ? "#16a34a"
+                          : isCurrentlyActive
+                          ? "#059669"
+                          : "#2563eb",
+                        color: "#ffffff",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        cursor:
+                          !siteDefinition || !onSiteDefinitionChange
+                            ? "not-allowed"
+                            : "pointer",
+                        opacity:
+                          !siteDefinition || !onSiteDefinitionChange ? 0.5 : 1,
+                        transition: "background 0.2s ease",
+                      }}
+                    >
+                      {isJustApplied
+                        ? "✓ Layout Applied"
+                        : isCurrentlyActive
+                        ? "Active Layout"
+                        : "Apply Layout"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         ) : (
           <>
             <p style={{ margin: 0 }}>
               Drawer content for <strong>{title}</strong> will go here.
-            </p>
-            <p style={{ marginTop: 8 }}>
-              Later you can add lists, controls, or forms specific to this section.
             </p>
           </>
         )}

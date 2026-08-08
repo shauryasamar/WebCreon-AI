@@ -1105,6 +1105,10 @@ function BuilderPageContent() {
         onSelectAdminNav={(key) => {
           navigate(`${builderBase}/admin/${key}`);
         }}
+        siteDefinition={activeSiteDefinition}
+        onSiteDefinitionChange={(next) =>
+          setDraftSiteDefinition(next as SiteDefinition)
+        }
       />
     ) : null;
 

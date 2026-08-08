@@ -25,8 +25,12 @@ export default function BuilderTopControlBar({ siteName, onGoDashboard, onLogout
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <span style={{ fontSize: "13px", fontWeight: 800, color: "#0f172a", letterSpacing: "0.04em" }}>WEB NIRMAAN</span>
-          <span style={{ color: "rgba(15,23,42,0.35)", fontWeight: 700 }}>›</span>
-          <span style={{ fontSize: "13px", fontWeight: 600, color: "#334155" }}>{siteName || "Current Website"}</span>
+          {siteName ? (
+            <>
+              <span style={{ color: "rgba(15,23,42,0.35)", fontWeight: 700 }}>›</span>
+              <span style={{ fontSize: "13px", fontWeight: 600, color: "#334155" }}>{siteName}</span>
+            </>
+          ) : null}
         </div>
       </button>
 

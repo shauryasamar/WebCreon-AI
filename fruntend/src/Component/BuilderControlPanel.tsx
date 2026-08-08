@@ -14,6 +14,7 @@ type ControlItemKey =
 type BuilderControlPanelProps = {
   activeKey?: ControlItemKey | null;
   onSelect: (key: ControlItemKey) => void;
+  disabledKeys?: ControlItemKey[];
 };
 
 
@@ -114,24 +115,28 @@ function IconQr() {
 
 function ControlButton({
   active,
+  disabled,
   item,
   onSelect,
 }: {
   active: boolean;
+  disabled?: boolean;
   item: (typeof ITEMS)[number];
   onSelect: (key: ControlItemKey) => void;
 }) {
   return (
     <button
       type="button"
-      title={item.title}
-      onClick={() => onSelect(item.key)}
+      title={disabled ? `${item.title} (Disabled)` : item.title}
+      disabled={disabled}
+      onClick={() => !disabled && onSelect(item.key)}
       style={{
         width: "100%",
         border: "none",
         background: "transparent",
         padding: 0,
-        cursor: "pointer",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.35 : 1,
       }}
     >
       <div
@@ -182,6 +187,7 @@ function ControlButton({
 export default function BuilderControlPanel({
   activeKey,
   onSelect,
+  disabledKeys = [],
 }: BuilderControlPanelProps) {
   const topItems = ITEMS.filter((item) => !item.bottom);
   const bottomItems = ITEMS.filter((item) => item.bottom);
@@ -210,6 +216,7 @@ export default function BuilderControlPanel({
           <ControlButton
             key={item.key}
             active={activeKey === item.key}
+            disabled={disabledKeys.includes(item.key)}
             item={item}
             onSelect={onSelect}
           />
@@ -237,6 +244,7 @@ export default function BuilderControlPanel({
           <ControlButton
             key={item.key}
             active={activeKey === item.key}
+            disabled={disabledKeys.includes(item.key)}
             item={item}
             onSelect={onSelect}
           />

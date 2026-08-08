@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   BrowserRouter,
   Navigate,
@@ -16,6 +16,10 @@ import CustomerSignupPage from "./pages/CustomerSignupPage";
 import { CustomerAuthProvider } from "./context/CustomerAuthContext";
 import { CartProvider } from "./CartContext";
 import { API_BASE_URL } from "./config/api";
+import BuilderShell from "./Component/BuilderShell";
+import BuilderTopControlBar from "./Component/BuilderTopControlBar";
+import BuilderControlPanel from "./Component/BuilderControlPanel";
+import BuilderDrawerPanel from "./Component/BuilderDrawerPanel";
 
 type Block = {
   id: string;
@@ -71,6 +75,13 @@ type SavedSite = {
   updated_at: string;
 };
 
+type ChatMessage = {
+  id: string;
+  sender: "user" | "assistant";
+  text: string;
+  time: string;
+  status?: "loading" | "done" | "error";
+};
 
 function slugify(value: string) {
   return value
@@ -138,17 +149,35 @@ function RequireAdminAuth() {
 function AdminSitesPage() {
   const navigate = useNavigate();
 
-  const [prompt, setPrompt] = useState(
-    "Create an ecommerce website for my clothing brand selling T-shirts in India with Razorpay and COD, dark theme, and an admin panel"
-  );
+  const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [savedSites, setSavedSites] = useState<SavedSite[]>([]);
-  const [sitesLoading, setSitesLoading] = useState(true);
+  const [activeDrawer, setActiveDrawer] = useState<
+    | "saved-sites"
+    | "chat"
+    | "customize"
+    | "admin-panel"
+    | "assets"
+    | "settings"
+    | "qr-link"
+    | null
+  >(null);
+
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, loading]);
 
   const loadSavedSites = async () => {
     try {
-      setSitesLoading(true);
-
       const response = await fetch(`${API_BASE_URL}/auth/admin/sites`, {
         credentials: "include",
       });
@@ -158,12 +187,10 @@ function AdminSitesPage() {
       }
 
       const data = await response.json();
-      setSavedSites(data);
+      setSavedSites(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error loading admin sites:", error);
       setSavedSites([]);
-    } finally {
-      setSitesLoading(false);
     }
   };
 
@@ -173,6 +200,23 @@ function AdminSitesPage() {
 
   const openSite = (siteId: string) => {
     navigate(`/builder/${siteId}`);
+  };
+
+  const handleDeleteSite = async (targetSiteId: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/sites/${targetSiteId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete site: ${response.status}`);
+      }
+
+      setSavedSites((prev) => prev.filter((site) => site.id !== targetSiteId));
+    } catch (error) {
+      console.error("Error deleting site:", error);
+    }
   };
 
   const handleLogout = async () => {
@@ -188,17 +232,43 @@ function AdminSitesPage() {
     }
   };
 
-  const generateSite = async () => {
-    try {
-      setLoading(true);
+  const generateSiteWithPrompt = async (promptText: string) => {
+    const trimmed = promptText.trim();
+    if (!trimmed || loading) return;
 
+    const userMsgId = `user-${Date.now()}`;
+    const assistantMsgId = `assistant-${Date.now()}`;
+    const currentTime = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    setMessages((prev) => [
+      ...prev,
+      { id: userMsgId, sender: "user", text: trimmed, time: currentTime },
+      {
+        id: assistantMsgId,
+        sender: "assistant",
+        text: "Building your website...",
+        time: currentTime,
+        status: "loading",
+      },
+    ]);
+
+    setPrompt("");
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
+    setLoading(true);
+
+    try {
       const response = await fetch(`${API_BASE_URL}/site-definition`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         credentials: "include",
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ prompt: trimmed }),
       });
 
       if (!response.ok) {
@@ -233,346 +303,345 @@ function AdminSitesPage() {
 
       const createdSite: SavedSite = await createResponse.json();
 
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMsgId
+            ? {
+              ...msg,
+              text: `Created ${brandName}! Opening builder...`,
+              status: "done",
+            }
+            : msg
+        )
+      );
+
       await loadSavedSites();
-      navigate(`/builder/${createdSite.id}`);
+      setTimeout(() => {
+        navigate(`/builder/${createdSite.id}`);
+      }, 800);
     } catch (error) {
       console.error("Error generating site:", error);
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMsgId
+            ? {
+              ...msg,
+              text: "Unable to generate site right now. Please try again.",
+              status: "error",
+            }
+            : msg
+        )
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div
-      style={{
-        height: "100vh",
-        overflow: "hidden",
-        background: "#0f172a",
-        color: "#f8fafc",
-        padding: "16px 20px",
-        boxSizing: "border-box",
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setPrompt(e.target.value);
+    e.target.style.height = "auto";
+    e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      generateSiteWithPrompt(prompt);
+    }
+  };
+
+  const topBar = (
+    <BuilderTopControlBar
+      siteName=""
+      onGoDashboard={() => navigate("/admin/sites")}
+      onLogout={handleLogout}
+    />
+  );
+
+  const leftPanel = (
+    <BuilderControlPanel
+      activeKey={activeDrawer}
+      disabledKeys={["chat", "customize", "admin-panel", "assets", "qr-link"]}
+      onSelect={(key) => {
+        if (key === "saved-sites" || key === "settings") {
+          setActiveDrawer((prev) => (prev === key ? null : key));
+        }
       }}
+    />
+  );
+
+  const drawerNode = activeDrawer ? (
+    <BuilderDrawerPanel
+      activeDrawer={activeDrawer}
+      onClose={() => setActiveDrawer(null)}
+      savedSites={savedSites}
+      onSelectSite={(targetSiteId) => {
+        setActiveDrawer(null);
+        openSite(targetSiteId);
+      }}
+      onDeleteSite={handleDeleteSite}
+    />
+  ) : null;
+
+  return (
+    <BuilderShell
+      topBar={topBar}
+      leftPanel={leftPanel}
+      drawer={drawerNode}
+      plainCenter={true}
     >
       <div
         style={{
-          maxWidth: "1280px",
           height: "100%",
-          margin: "0 auto",
           display: "flex",
           flexDirection: "column",
-          minHeight: 0,
+          background: "#ffffff",
+          color: "#0f172a",
+          position: "relative",
+          overflow: "hidden",
         }}
       >
-        <div
-          style={{
-            flexShrink: 0,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: "16px",
-            marginBottom: "16px",
-          }}
-        >
-          <h1
-            style={{
-              margin: 0,
-              fontSize: "32px",
-              lineHeight: 1.1,
-              fontWeight: 700,
-              letterSpacing: "-0.02em",
-            }}
-          >
-            WebNirmaan
-          </h1>
-
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "14px",
-                opacity: 0.7,
-              }}
-            >
-              {savedSites.length} saved websites
-            </div>
-
-            <button
-              onClick={handleLogout}
-              style={{
-                padding: "10px 14px",
-                borderRadius: "10px",
-                border: "1px solid rgba(255,255,255,0.12)",
-                background: "rgba(255,255,255,0.04)",
-                color: "#f8fafc",
-                fontSize: "14px",
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              Logout
-            </button>
-          </div>
-        </div>
-
+        {/* Chat Content Area */}
         <div
           style={{
             flex: 1,
-            minHeight: 0,
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 2fr) minmax(340px, 1fr)",
-            gap: "20px",
-            alignItems: "stretch",
+            overflowY: "auto",
+            padding: "24px 20px 16px 20px",
+            display: "flex",
+            flexDirection: "column",
           }}
         >
-          <div
-            style={{
-              background: "#111827",
-              border: "1px solid rgba(255,255,255,0.08)",
-              borderRadius: "20px",
-              padding: "20px",
-              display: "flex",
-              flexDirection: "column",
-              minHeight: 0,
-              boxShadow: "0 18px 40px rgba(0,0,0,0.18)",
-            }}
-          >
-            <p
+          {messages.length === 0 ? (
+            <div
               style={{
-                marginTop: 0,
-                marginBottom: "12px",
-                opacity: 0.88,
-                fontSize: "15px",
-                fontWeight: 600,
-                flexShrink: 0,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                height: "100%",
+                color: "#64748b",
+                fontSize: "14px",
+                textAlign: "center",
+                padding: "32px 20px",
+                gap: "8px",
+                margin: "auto 0",
               }}
             >
-              Describe your website
-            </p>
-
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              rows={6}
+              <p style={{ margin: 0, fontWeight: 600, color: "#475569", fontSize: "15px" }}>
+                Describe the website or storefront you want to build.
+              </p>
+              <p style={{ margin: 0, fontSize: "13px", color: "#94a3b8", maxWidth: "520px", lineHeight: 1.5 }}>
+                Specify your brand name, products, payment preferences, or design style, and WebNirmaan AI will generate your website.
+              </p>
+            </div>
+          ) : (
+            <div
               style={{
                 width: "100%",
-                flex: 1,
-                minHeight: 0,
-                boxSizing: "border-box",
-                padding: "16px",
-                marginBottom: "14px",
-                borderRadius: "16px",
-                border: "1px solid rgba(255,255,255,0.12)",
-                background: "linear-gradient(180deg, #0b1220 0%, #0f172a 100%)",
-                color: "#f8fafc",
-                resize: "none",
-                fontSize: "15px",
-                lineHeight: 1.6,
-                outline: "none",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
-              }}
-            />
-
-            <button
-              onClick={generateSite}
-              disabled={loading}
-              style={{
-                padding: "12px 18px",
-                borderRadius: "12px",
-                border: "none",
-                background: "linear-gradient(180deg, #3b82f6 0%, #2563eb 100%)",
-                color: "white",
-                cursor: loading ? "not-allowed" : "pointer",
-                fontWeight: 600,
-                opacity: loading ? 0.7 : 1,
-                boxShadow: "0 10px 24px rgba(37,99,235,0.28)",
-                alignSelf: "flex-start",
-                flexShrink: 0,
+                display: "flex",
+                flexDirection: "column",
+                gap: "20px",
               }}
             >
-              {loading ? "Generating..." : "Generate and open"}
-            </button>
-          </div>
-
-          <div
-            style={{
-              background: "#111827",
-              border: "1px solid rgba(255,255,255,0.08)",
-              borderRadius: "20px",
-              padding: "20px",
-              display: "flex",
-              flexDirection: "column",
-              minHeight: 0,
-              boxShadow: "0 18px 40px rgba(0,0,0,0.18)",
-            }}
-          >
-            <h3
-              style={{
-                marginTop: 0,
-                marginBottom: "16px",
-                fontSize: "22px",
-                lineHeight: 1.2,
-                flexShrink: 0,
-              }}
-            >
-              Saved Websites
-            </h3>
-
-            {sitesLoading ? (
-              <p style={{ margin: 0, opacity: 0.75 }}>Loading websites...</p>
-            ) : savedSites.length === 0 ? (
-              <p style={{ margin: 0, opacity: 0.8 }}>No saved websites yet.</p>
-            ) : (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "14px",
-                  overflowY: "auto",
-                  minHeight: 0,
-                  paddingRight: "2px",
-                  scrollbarWidth: "none",
-                  msOverflowStyle: "none",
-                }}
-              >
-                {savedSites.map((site) => {
-                  const brandName =
-                    site.draft_definition?.site?.brand_name ||
-                    site.site_definition?.site?.brand_name ||
-                    site.slug;
-
-                  const siteType =
-                    site.draft_definition?.site?.site_type ||
-                    site.site_definition?.site?.site_type ||
-                    "website";
-
-                  const region =
-                    site.draft_definition?.site?.region ||
-                    site.site_definition?.site?.region;
-
-                  const domain =
-                    site.draft_definition?.site?.domain ||
-                    site.site_definition?.site?.domain;
-
-                  return (
-                    <button
-                      key={site.id}
-                      onClick={() => openSite(site.id)}
+              {messages.map((msg) => {
+                const isUser = msg.sender === "user";
+                return (
+                  <div
+                    key={msg.id}
+                    style={{
+                      display: "flex",
+                      justifyContent: isUser ? "flex-end" : "flex-start",
+                      width: "100%",
+                    }}
+                  >
+                    <div
                       style={{
-                        textAlign: "left",
-                        padding: "0",
-                        borderRadius: "18px",
-                        border: "1px solid rgba(255,255,255,0.06)",
-                        background: "linear-gradient(180deg, #1c2434 0%, #141c2b 100%)",
-                        color: "#f8fafc",
-                        cursor: "pointer",
-                        overflow: "hidden",
-                        flexShrink: 0,
-                        boxShadow:
-                          "0 10px 30px rgba(2,6,23,0.28), inset 0 1px 0 rgba(255,255,255,0.06)",
+                        display: "flex",
+                        gap: "12px",
+                        alignItems: "flex-start",
+                        flexDirection: isUser ? "row-reverse" : "row",
+                        maxWidth: "80%",
                       }}
                     >
                       <div
                         style={{
-                          padding: "14px 14px 13px",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: "12px",
+                          width: "32px",
+                          height: "32px",
+                          borderRadius: "10px",
+                          background: isUser
+                            ? "#e2e8f0"
+                            : "linear-gradient(135deg, #2563eb, #1d4ed8)",
+                          display: "grid",
+                          placeItems: "center",
+                          color: isUser ? "#334155" : "#ffffff",
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          flexShrink: 0,
                         }}
                       >
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "12px",
-                            minWidth: 0,
-                            flex: 1,
-                          }}
-                        >
+                        {isUser ? "You" : "AI"}
+                      </div>
+
+                      <div
+                        style={{
+                          borderRadius: isUser
+                            ? "18px 18px 4px 18px"
+                            : "18px 18px 18px 4px",
+                          padding: "14px 18px",
+                          background: isUser
+                            ? "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)"
+                            : "#f8fafc",
+                          border: isUser
+                            ? "none"
+                            : "1px solid rgba(15,23,42,0.08)",
+                          color: isUser ? "#ffffff" : "#0f172a",
+                          fontSize: "14px",
+                          lineHeight: 1.5,
+                          boxShadow: isUser
+                            ? "0 4px 14px rgba(37,99,235,0.22)"
+                            : "0 2px 10px rgba(15,23,42,0.04)",
+                          whiteSpace: "pre-wrap",
+                        }}
+                      >
+                        {msg.text}
+                        {msg.status === "loading" && (
                           <div
                             style={{
-                              width: "42px",
-                              height: "42px",
-                              borderRadius: "14px",
-                              background:
-                                "linear-gradient(180deg, rgba(59,130,246,0.22) 0%, rgba(37,99,235,0.12) 100%)",
-                              border: "1px solid rgba(96,165,250,0.16)",
-                              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
+                              marginTop: "8px",
                               display: "flex",
+                              gap: "5px",
                               alignItems: "center",
-                              justifyContent: "center",
-                              color: "#bfdbfe",
-                              fontSize: "14px",
-                              fontWeight: 700,
-                              flexShrink: 0,
                             }}
                           >
-                            {brandName?.charAt(0)?.toUpperCase() || "W"}
-                          </div>
-
-                          <div style={{ minWidth: 0, flex: 1 }}>
                             <div
                               style={{
-                                fontWeight: 700,
-                                fontSize: "14px",
-                                marginBottom: "4px",
-                                whiteSpace: "nowrap",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
+                                width: "6px",
+                                height: "6px",
+                                borderRadius: "50%",
+                                background: "#2563eb",
+                                animation: "pulse 1.2s infinite ease-in-out",
                               }}
-                            >
-                              {brandName}
-                            </div>
-
+                            />
                             <div
                               style={{
-                                fontSize: "12px",
-                                color: "rgba(248,250,252,0.6)",
-                                whiteSpace: "nowrap",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
+                                width: "6px",
+                                height: "6px",
+                                borderRadius: "50%",
+                                background: "#2563eb",
+                                animation: "pulse 1.2s infinite ease-in-out 0.2s",
                               }}
-                            >
-                              {siteType}
-                              {region ? ` • ${region}` : ""}
-                              {domain ? ` • ${domain}` : ""}
-                            </div>
+                            />
+                            <div
+                              style={{
+                                width: "6px",
+                                height: "6px",
+                                borderRadius: "50%",
+                                background: "#2563eb",
+                                animation: "pulse 1.2s infinite ease-in-out 0.4s",
+                              }}
+                            />
                           </div>
-                        </div>
-
-                        <div
-                          style={{
-                            width: "34px",
-                            height: "34px",
-                            borderRadius: "12px",
-                            background: "rgba(255,255,255,0.04)",
-                            border: "1px solid rgba(255,255,255,0.06)",
-                            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            color: "rgba(248,250,252,0.72)",
-                            fontSize: "14px",
-                            flexShrink: 0,
-                          }}
-                        >
-                          →
-                        </div>
+                        )}
                       </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+                    </div>
+                  </div>
+                );
+              })}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </div>
+
+        {/* Floating Chat Input Bar */}
+        <div
+          style={{
+            padding: "12px 20px 24px 20px",
+            background: "transparent",
+            flexShrink: 0,
+          }}
+        >
+          <div
+            style={{
+              maxWidth: "760px",
+              margin: "0 auto",
+              background: "#ffffff",
+              border: "1px solid rgba(15,23,42,0.12)",
+              borderRadius: "24px",
+              padding: "10px 16px",
+              boxShadow: "0 10px 30px rgba(15,23,42,0.08)",
+              display: "flex",
+              alignItems: "flex-end",
+              gap: "12px",
+            }}
+          >
+            <textarea
+              ref={textareaRef}
+              value={prompt}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              placeholder="Describe the website you want to build..."
+              rows={1}
+              disabled={loading}
+              style={{
+                flex: 1,
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                color: "#0f172a",
+                fontSize: "14px",
+                lineHeight: 1.4,
+                resize: "none",
+                fontFamily: "inherit",
+                minHeight: "26px",
+                maxHeight: "160px",
+                padding: "6px 4px",
+              }}
+            />
+
+            <button
+              type="button"
+              onClick={() => generateSiteWithPrompt(prompt)}
+              disabled={loading || !prompt.trim()}
+              title="Send prompt"
+              style={{
+                width: "38px",
+                height: "38px",
+                borderRadius: "12px",
+                border: "none",
+                background:
+                  loading || !prompt.trim()
+                    ? "#e2e8f0"
+                    : "linear-gradient(135deg, #2563eb, #1d4ed8)",
+                color: loading || !prompt.trim() ? "#94a3b8" : "#ffffff",
+                cursor: loading || !prompt.trim() ? "not-allowed" : "pointer",
+                display: "grid",
+                placeItems: "center",
+                flexShrink: 0,
+                boxShadow:
+                  loading || !prompt.trim()
+                    ? "none"
+                    : "0 3px 10px rgba(37,99,235,0.3)",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="22" y1="2" x2="11" y2="13" />
+                <polygon points="22 2 15 22 11 13 2 9 22 2" />
+              </svg>
+            </button>
           </div>
         </div>
       </div>
-    </div>
+    </BuilderShell>
   );
 }
 
