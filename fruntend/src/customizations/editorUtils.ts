@@ -43,6 +43,7 @@ export type EditorSiteDefinition = {
     festival_theme?: string;
     navbar_variant?: "solid" | "soft" | "floating" | "transparent";
     navbar_position?: "static" | "sticky" | "fixed";
+    navbar_outer_bg?: string;
     navbar_bg?: string;
     navbar_text_color?: string;
     navbar_muted_text_color?: string;
@@ -66,6 +67,8 @@ export type EditorSiteDefinition = {
     }>;
   };
   navbar?: {
+    logoUrl?: string;
+    logo_url?: string;
     showSearch?: boolean;
     showAccount?: boolean;
     showCart?: boolean;
@@ -160,6 +163,7 @@ function buildGlobalNavbarBlock(siteDefinition: EditorSiteDefinition): EditorBlo
     type: "navbar",
     props: {
       brandName: siteDefinition.site?.brand_name || "Website",
+      logoUrl: siteDefinition.navbar?.logoUrl || siteDefinition.navbar?.logo_url || "",
       tagline: siteDefinition.theme?.brand_tone || "",
       navigation: siteDefinition.navigation || {
         storefront: [],
@@ -307,6 +311,17 @@ export function updateBlockFieldValue(
       };
     }
 
+    if (field.key === "logoUrl" || field.key === "logo_url") {
+      return {
+        ...siteDefinition,
+        navbar: {
+          ...siteDefinition.navbar,
+          logoUrl: value,
+          logo_url: value,
+        },
+      };
+    }
+
     if (field.key === "brandName") {
       return {
         ...siteDefinition,
@@ -383,6 +398,21 @@ export function updateBlockProps(
 ): EditorSiteDefinition {
   if (blockId === GLOBAL_NAVBAR_BLOCK_ID) {
     let nextSiteDefinition = { ...siteDefinition };
+
+    if (
+      Object.prototype.hasOwnProperty.call(propsPatch, "logoUrl") ||
+      Object.prototype.hasOwnProperty.call(propsPatch, "logo_url")
+    ) {
+      const val = propsPatch.logoUrl ?? propsPatch.logo_url;
+      nextSiteDefinition = {
+        ...nextSiteDefinition,
+        navbar: {
+          ...nextSiteDefinition.navbar,
+          logoUrl: val,
+          logo_url: val,
+        },
+      };
+    }
 
     if (Object.prototype.hasOwnProperty.call(propsPatch, "brandName")) {
       nextSiteDefinition = {

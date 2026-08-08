@@ -19,6 +19,7 @@ export type NavbarTheme = {
     | "modern_marketplace"
     | "luxury_fashion"
     | "neo_modern";
+  navbar_outer_bg?: string;
   navbar_bg?: string;
   navbar_text_color?: string;
   navbar_muted_text_color?: string;
@@ -53,6 +54,8 @@ export type NavbarFixedBounds = {
 export type NavbarProps = {
   brandName?: string;
   tagline?: string;
+  logoUrl?: string;
+  logo_url?: string;
   theme?: NavbarTheme;
   navigation?: NavbarNavigationGroups;
   showSearch?: boolean;
@@ -88,12 +91,9 @@ const isLightTheme = (theme?: NavbarTheme) => theme?.mode === "light";
 
 const getInitials = (brandName?: string) => {
   if (!brandName) return "SB";
-  return brandName
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase() ?? "")
-    .join("");
+  const words = brandName.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 1) return words[0].substring(0, 2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
 };
 
 
@@ -176,22 +176,25 @@ const useViewportMode = (): ViewportMode => {
 };
 
 
-const Navbar: React.FC<NavbarProps> = ({
-  brandName = "Storefront",
-  theme,
-  navigation,
-  showSearch = true,
-  showAccount = true,
-  showCart = true,
-  homeRoute = "/",
-  cartRoute = "/cart",
-  topOffset = 0,
-  fixedBounds,
-  siteSlug,
-  appBase,
-  onOpenCart,
-  onSearch,
-}) => {
+const Navbar: React.FC<NavbarProps> = (props) => {
+  const {
+    brandName = "Storefront",
+    logoUrl,
+    logo_url,
+    theme,
+    navigation,
+    showSearch = true,
+    showAccount = true,
+    showCart = true,
+    homeRoute = "/",
+    cartRoute = "/cart",
+    topOffset = 0,
+    fixedBounds,
+    siteSlug,
+    appBase,
+    onOpenCart,
+    onSearch,
+  } = props;
   const { cartCount = 0 } = useCart();
   const navigate = useNavigate();
   const location = useLocation();
@@ -262,16 +265,19 @@ const Navbar: React.FC<NavbarProps> = ({
   const navbarPaddingY = theme?.navbar_padding_y;
 
 
+  const resolvedLogoUrl = props.logoUrl || props.logo_url || (props as any).logo;
+
   const hasCustomNavbarBg = Boolean(theme?.navbar_bg);
+  const hasCustomOuterBg = Boolean(theme?.navbar_outer_bg);
   const hasCustomNavbarBorder = Boolean(theme?.navbar_border_color);
 
 
-  const darkOuterSurface = "#081226";
+  const darkOuterSurface = hasCustomOuterBg ? theme!.navbar_outer_bg! : (primaryBg || "#081226");
   const darkShellSurface = hasCustomNavbarBg ? theme!.navbar_bg! : "#0f172a";
   const darkSoftSurface = "rgba(255,255,255,0.06)";
 
 
-  const lightOuterSurface = primaryBg;
+  const lightOuterSurface = hasCustomOuterBg ? theme!.navbar_outer_bg! : primaryBg;
   const lightShellSurface = hasCustomNavbarBg ? theme!.navbar_bg! : "#ffffff";
   const lightSoftSurface = "rgba(15,23,42,0.04)";
 
@@ -467,10 +473,48 @@ const Navbar: React.FC<NavbarProps> = ({
 
   const closeAccountMenu = () => setAccountMenuOpen(false);
 
+  const handleGoToProfile = () => {
+    closeAccountMenu();
+    navigate(isBuilderAdminRoute ? `${base}/admin/profile` : `${base}/profile`);
+  };
 
-  const [isCenterSearchExpanded, setIsCenterSearchExpanded] = useState(false);
+  const handleGoToOrders = () => {
+    closeAccountMenu();
+    navigate(isBuilderAdminRoute ? `${base}/admin/orders` : `${base}/orders`);
+  };
+
+  const handleCustomerLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error("Customer logout failed:", error);
+    } finally {
+      closeAccountMenu();
+      navigate(`/store/${siteSlug}/login`, { replace: true });
+    }
+  };
+
+  const handleDummyNotification = () => {
+    window.console.log("Notification clicked");
+  };
+
+  const openMobileSearch = () => {
+    setAccountMenuOpen(false);
+    setMobileMenuOpen(false);
+    setMobileSearchOpen(true);
+    setSearchActive(true);
+  };
+
+  const closeSearch = () => {
+    setSearchActive(false);
+    setMobileSearchOpen(false);
+    setAccountMenuOpen(false);
+    setMobileMenuOpen(false);
+  };
 
   const handleAccountClick = () => {
+    setMobileSearchOpen(false);
+    setSearchActive(false);
     if (isBuilderAdminRoute) {
       closeAccountMenu();
       return;
@@ -488,48 +532,6 @@ const Navbar: React.FC<NavbarProps> = ({
     } else {
       setAccountMenuOpen((prev) => !prev);
     }
-  };
-
-
-  const handleGoToProfile = () => {
-    closeAccountMenu();
-    navigate(isBuilderAdminRoute ? `${base}/admin/profile` : `${base}/profile`);
-  };
-
-
-  const handleGoToOrders = () => {
-    closeAccountMenu();
-    navigate(isBuilderAdminRoute ? `${base}/admin/orders` : `${base}/orders`);
-  };
-
-
-  const handleCustomerLogout = async () => {
-    try {
-      await logout();
-    } catch (error) {
-      console.error("Customer logout failed:", error);
-    } finally {
-      closeAccountMenu();
-      navigate(`/store/${siteSlug}/login`, { replace: true });
-    }
-  };
-
-
-  const handleDummyNotification = () => {
-    window.console.log("Notification clicked");
-  };
-
-
-  const openMobileSearch = () => {
-    setMobileMenuOpen(false);
-    setMobileSearchOpen(true);
-    setSearchActive(true);
-  };
-
-
-  const closeSearch = () => {
-    setSearchActive(false);
-    setMobileSearchOpen(false);
   };
 
 
@@ -893,6 +895,9 @@ const Navbar: React.FC<NavbarProps> = ({
         background: outerBackground,
         borderBottom: variant === "floating" ? "none" : outerBorder,
         boxSizing: "border-box",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
       }}
     >
       <div
@@ -900,7 +905,10 @@ const Navbar: React.FC<NavbarProps> = ({
           width: "100%",
           minWidth: 0,
           maxWidth: `${navbarMaxWidth}px`,
-          margin: position === "fixed" && fixedBounds ? "0" : "0 auto",
+          margin: "0 auto",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
         }}
       >
         <div
@@ -916,835 +924,725 @@ const Navbar: React.FC<NavbarProps> = ({
             minWidth: 0,
           }}
         >
-          {isMobile ? (
-            <div style={mobileHeaderStyle}>
-              <div style={mobileTopRowStyle}>
-                <div style={mobileBrandRowStyle}>
+          {(() => {
+            const layoutType = theme?.navbar_layout || "apple_minimal";
+
+            if (searchActive || mobileSearchOpen) {
+              return (
+                <form
+                  onSubmit={handleSearchSubmit}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "4px 8px 4px 14px",
+                    borderRadius: "999px",
+                    background: light ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.08)",
+                    border: softBorder,
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: textColor, strokeWidth: 2, fill: "none", flexShrink: 0 }}>
+                    <circle cx="11" cy="11" r="7" />
+                    <path d="M20 20L16.65 16.65" />
+                  </svg>
+                  <input
+                    ref={mobileSearchInputRef}
+                    type="text"
+                    placeholder="Search products..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{
+                      flex: 1,
+                      border: "none",
+                      outline: "none",
+                      background: "transparent",
+                      color: textColor,
+                      fontSize: "13px",
+                      fontWeight: 500,
+                      minWidth: 0,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={closeSearch}
+                    aria-label="Close search"
+                    style={{
+                      width: "32px",
+                      height: "32px",
+                      borderRadius: "999px",
+                      border: "none",
+                      background: light ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.12)",
+                      color: textColor,
+                      display: "grid",
+                      placeItems: "center",
+                      cursor: "pointer",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" style={{ width: "14px", height: "14px", stroke: "currentColor", strokeWidth: 2.2, fill: "none" }}>
+                      <path d="M18 6L6 18" />
+                      <path d="M6 6L18 18" />
+                    </svg>
+                  </button>
+                </form>
+              );
+            }
+
+            // Mobile toggle button renderer
+            const renderMobileToggleBtn = () =>
+              isMobile ? (
+                <button
+                  ref={mobileMenuButtonRef}
+                  type="button"
+                  aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+                  aria-expanded={mobileMenuOpen}
+                  onClick={() => setMobileMenuOpen((prev) => !prev)}
+                  style={{
+                    ...mobileMenuButtonStyle,
+                    display: searchActive ? "none" : "flex",
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" style={iconStyle}>
+                    {mobileMenuOpen ? (
+                      <>
+                        <path d="M6 6L18 18" />
+                        <path d="M18 6L6 18" />
+                      </>
+                    ) : (
+                      <>
+                        <path d="M4 7H20" />
+                        <path d="M4 12H20" />
+                        <path d="M4 17H20" />
+                      </>
+                    )}
+                  </svg>
+                </button>
+              ) : null;
+
+            if (layoutType === "glassmorphism_premium") {
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: isMobile ? "8px" : "16px", padding: "6px 14px", background: light ? "rgba(255, 255, 255, 0.65)" : "rgba(15, 23, 42, 0.65)", backdropFilter: "blur(20px)", borderRadius: "20px", border: light ? "1px solid rgba(255, 255, 255, 0.4)" : "1px solid rgba(255, 255, 255, 0.12)", boxShadow: light ? "0 8px 32px rgba(31, 38, 135, 0.08)" : "0 8px 32px rgba(0, 0, 0, 0.4)", boxSizing: "border-box" }}>
+                    {/* Brand */}
+                    <button
+                      type="button"
+                      onClick={() => navigate(resolvedHomePath)}
+                      style={{ display: "flex", alignItems: "center", gap: "10px", background: "transparent", border: "none", cursor: "pointer", minWidth: 0 }}
+                    >
+                      {resolvedLogoUrl ? (
+                        <img
+                          src={resolvedLogoUrl}
+                          alt={brandName || "Logo"}
+                          style={{ maxHeight: "32px", maxWidth: "120px", objectFit: "contain", flexShrink: 0 }}
+                        />
+                      ) : (
+                        <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: light ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.12)", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800, flexShrink: 0 }}>
+                          {getInitials(brandName)}
+                        </div>
+                      )}
+                      <span style={{ fontSize: isMobile ? "14px" : "15px", fontWeight: 700, color: textColor, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{brandName}</span>
+                    </button>
+
+                    {/* Glass Pill Search */}
+                    {showSearch && !isMobile && (
+                      <form
+                        onSubmit={handleSearchSubmit}
+                        style={{
+                          flex: "1 1 240px",
+                          maxWidth: "460px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          padding: "4px 4px 4px 16px",
+                          borderRadius: "999px",
+                          background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)",
+                          backdropFilter: "blur(10px)",
+                          border: light ? "1px solid rgba(255,255,255,0.7)" : "1px solid rgba(255,255,255,0.15)",
+                        }}
+                      >
+                        <input
+                          type="text"
+                          placeholder="Search products..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", fontWeight: 500 }}
+                        />
+                        <button
+                          type="submit"
+                          style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: light ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.2)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                        >
+                          <svg viewBox="0 0 24 24" style={{ width: "15px", height: "15px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
+                            <circle cx="11" cy="11" r="7" />
+                            <path d="M20 20L16.65 16.65" />
+                          </svg>
+                        </button>
+                      </form>
+                    )}
+
+                    {/* Glass Action Icons */}
+                    <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "10px" }}>
+                      {showCart && (
+                        <button
+                          type="button"
+                          onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
+                          style={{ width: "38px", height: "38px", borderRadius: "999px", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative" }}
+                        >
+                          <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
+                            <circle cx="9" cy="20" r="1.5" />
+                            <circle cx="17" cy="20" r="1.5" />
+                            <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
+                          </svg>
+                          {cartCount > 0 && (
+                            <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
+                              {cartCount}
+                            </span>
+                          )}
+                        </button>
+                      )}
+
+                      {!isMobile && (
+                        <button
+                          type="button"
+                          onClick={handleDummyNotification}
+                          style={{ width: "38px", height: "38px", borderRadius: "999px", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                        >
+                          <svg viewBox="0 0 24 24" style={iconStyle}>
+                            <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
+                            <path d="M10 17a2 2 0 0 0 4 0" />
+                          </svg>
+                        </button>
+                      )}
+
+                      {showAccount && !isMobile && (
+                        <div ref={accountMenuRef} style={{ position: "relative" }}>
+                          <button
+                            ref={accountButtonRef}
+                            type="button"
+                            onClick={handleAccountClick}
+                            style={{ width: "38px", height: "38px", borderRadius: "999px", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                          >
+                            <svg viewBox="0 0 24 24" style={iconStyle}>
+                              <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
+                              <circle cx="12" cy="8" r="4" />
+                            </svg>
+                          </button>
+                          {accountMenuOpen && (
+                            <div role="menu" style={dropdownPanelStyle}>
+                              <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
+                              <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
+                              {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {renderMobileToggleBtn()}
+                    </div>
+                  </div>
+                  {mobileMenuOpen ? mobilePanelMenu : null}
+                </div>
+              );
+            }
+
+            if (layoutType === "modern_marketplace") {
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: isMobile ? "8px" : "16px", padding: "6px 12px", boxSizing: "border-box" }}>
+                    {/* Brand */}
+                    <button
+                      type="button"
+                      onClick={() => navigate(resolvedHomePath)}
+                      style={{ display: "flex", alignItems: "center", gap: "10px", background: "transparent", border: "none", cursor: "pointer", minWidth: 0 }}
+                    >
+                      {resolvedLogoUrl ? (
+                        <img
+                          src={resolvedLogoUrl}
+                          alt={brandName || "Logo"}
+                          style={{ maxHeight: "32px", maxWidth: "120px", objectFit: "contain", flexShrink: 0 }}
+                        />
+                      ) : (
+                        <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: light ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)", border: softBorder, color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800, flexShrink: 0 }}>
+                          {getInitials(brandName)}
+                        </div>
+                      )}
+                      <span style={{ fontSize: isMobile ? "14px" : "15px", fontWeight: 700, color: textColor, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{brandName}</span>
+                    </button>
+
+                    {/* Marketplace Search */}
+                    {showSearch && !isMobile && (
+                      <form
+                        onSubmit={handleSearchSubmit}
+                        style={{
+                          flex: "1 1 240px",
+                          maxWidth: "480px",
+                          display: "flex",
+                          alignItems: "center",
+                          borderRadius: "8px",
+                          border: softBorder,
+                          background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <input
+                          type="text"
+                          placeholder="Search products..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", padding: "8px 14px" }}
+                        />
+                        <button
+                          type="submit"
+                          style={{ width: "42px", height: "36px", border: "none", background: accentColor, color: "#ffffff", display: "grid", placeItems: "center", cursor: "pointer" }}
+                        >
+                          <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: "currentColor", strokeWidth: 2.2, fill: "none" }}>
+                            <circle cx="11" cy="11" r="7" />
+                            <path d="M20 20L16.65 16.65" />
+                          </svg>
+                        </button>
+                      </form>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "10px" }}>
+                      {showCart && (
+                        <button
+                          type="button"
+                          onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
+                          style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative" }}
+                        >
+                          <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
+                            <circle cx="9" cy="20" r="1.5" />
+                            <circle cx="17" cy="20" r="1.5" />
+                            <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
+                          </svg>
+                          {cartCount > 0 && (
+                            <span style={{ position: "absolute", top: "-4px", right: "-4px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
+                              {cartCount}
+                            </span>
+                          )}
+                        </button>
+                      )}
+
+                      {!isMobile && (
+                        <button
+                          type="button"
+                          onClick={handleDummyNotification}
+                          style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                        >
+                          <svg viewBox="0 0 24 24" style={iconStyle}>
+                            <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
+                            <path d="M10 17a2 2 0 0 0 4 0" />
+                          </svg>
+                        </button>
+                      )}
+
+                      {showAccount && !isMobile && (
+                        <div ref={accountMenuRef} style={{ position: "relative" }}>
+                          <button
+                            ref={accountButtonRef}
+                            type="button"
+                            onClick={handleAccountClick}
+                            style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                          >
+                            <svg viewBox="0 0 24 24" style={iconStyle}>
+                              <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
+                              <circle cx="12" cy="8" r="4" />
+                            </svg>
+                          </button>
+                          {accountMenuOpen && (
+                            <div role="menu" style={dropdownPanelStyle}>
+                              <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
+                              <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
+                              {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {renderMobileToggleBtn()}
+                    </div>
+                  </div>
+                  {mobileMenuOpen ? mobilePanelMenu : null}
+                </div>
+              );
+            }
+
+            if (layoutType === "luxury_fashion") {
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: isMobile ? "8px" : "16px", padding: "8px 16px", boxSizing: "border-box" }}>
+                    {/* Serif Logo */}
+                    <button
+                      type="button"
+                      onClick={() => navigate(resolvedHomePath)}
+                      style={{ display: "flex", alignItems: "center", gap: isMobile ? "8px" : "16px", background: "transparent", border: "none", cursor: "pointer", minWidth: 0 }}
+                    >
+                      {resolvedLogoUrl ? (
+                        <img
+                          src={resolvedLogoUrl}
+                          alt={brandName || "Logo"}
+                          style={{ maxHeight: "34px", maxWidth: "130px", objectFit: "contain", flexShrink: 0 }}
+                        />
+                      ) : (
+                        <span style={{ fontFamily: "'Playfair Display', 'Didot', 'Georgia', serif", fontSize: isMobile ? "16px" : "20px", fontWeight: 700, color: textColor, flexShrink: 0 }}>
+                          {getInitials(brandName)}
+                        </span>
+                      )}
+                      <span style={{ width: "1px", height: "18px", background: light ? "rgba(15,23,42,0.15)" : "rgba(255,255,255,0.2)" }} />
+                      <span style={{ fontFamily: "'Playfair Display', 'Didot', 'Georgia', serif", fontSize: isMobile ? "12px" : "15px", fontWeight: 600, color: textColor, letterSpacing: "0.12em", textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {brandName}
+                      </span>
+                    </button>
+
+                    {/* Minimal Fashion Search Pill */}
+                    {showSearch && !isMobile && (
+                      <form
+                        onSubmit={handleSearchSubmit}
+                        style={{
+                          flex: "1 1 240px",
+                          maxWidth: "440px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          padding: "4px 4px 4px 16px",
+                          borderRadius: "999px",
+                          background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
+                          border: softBorder,
+                        }}
+                      >
+                        <input
+                          type="text"
+                          placeholder="Search products..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", fontFamily: "serif" }}
+                        />
+                        <button
+                          type="submit"
+                          style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: "transparent", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                        >
+                          <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
+                            <circle cx="11" cy="11" r="7" />
+                            <path d="M20 20L16.65 16.65" />
+                          </svg>
+                        </button>
+                      </form>
+                    )}
+
+                    {/* Luxury Minimal Icons */}
+                    <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "8px" : "14px" }}>
+                      {showCart && (
+                        <button
+                          type="button"
+                          onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
+                          style={{ background: "transparent", border: "none", color: textColor, cursor: "pointer", position: "relative", padding: "4px" }}
+                        >
+                          <svg viewBox="0 0 24 24" style={{ width: "19px", height: "19px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
+                            <circle cx="9" cy="20" r="1.5" />
+                            <circle cx="17" cy="20" r="1.5" />
+                            <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
+                          </svg>
+                          {cartCount > 0 && (
+                            <span style={{ position: "absolute", top: "-2px", right: "-4px", width: "16px", height: "16px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "9px", fontWeight: 800, display: "grid", placeItems: "center" }}>
+                              {cartCount}
+                            </span>
+                          )}
+                        </button>
+                      )}
+
+                      {!isMobile && (
+                        <button
+                          type="button"
+                          onClick={handleDummyNotification}
+                          style={{ background: "transparent", border: "none", color: textColor, cursor: "pointer", padding: "4px" }}
+                        >
+                          <svg viewBox="0 0 24 24" style={{ width: "19px", height: "19px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
+                            <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
+                            <path d="M10 17a2 2 0 0 0 4 0" />
+                          </svg>
+                        </button>
+                      )}
+
+                      {showAccount && !isMobile && (
+                        <div ref={accountMenuRef} style={{ position: "relative" }}>
+                          <button
+                            ref={accountButtonRef}
+                            type="button"
+                            onClick={handleAccountClick}
+                            style={{ background: "transparent", border: "none", color: textColor, cursor: "pointer", padding: "4px" }}
+                          >
+                            <svg viewBox="0 0 24 24" style={{ width: "19px", height: "19px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
+                              <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
+                              <circle cx="12" cy="8" r="4" />
+                            </svg>
+                          </button>
+                          {accountMenuOpen && (
+                            <div role="menu" style={dropdownPanelStyle}>
+                              <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
+                              <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
+                              {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {renderMobileToggleBtn()}
+                    </div>
+                  </div>
+                  {mobileMenuOpen ? mobilePanelMenu : null}
+                </div>
+              );
+            }
+
+            if (layoutType === "neo_modern") {
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: isMobile ? "8px" : "16px", padding: "8px 16px", background: light ? "#f0f4f9" : "#1e293b", borderRadius: "999px", boxShadow: light ? "6px 6px 14px rgba(166,180,200,0.4), -6px -6px 14px rgba(255,255,255,0.9)" : "6px 6px 14px rgba(0,0,0,0.5), -6px -6px 14px rgba(255,255,255,0.05)", boxSizing: "border-box" }}>
+                    {/* Brand */}
+                    <button
+                      type="button"
+                      onClick={() => navigate(resolvedHomePath)}
+                      style={{ display: "flex", alignItems: "center", gap: "10px", background: "transparent", border: "none", cursor: "pointer", minWidth: 0 }}
+                    >
+                      {resolvedLogoUrl ? (
+                        <img
+                          src={resolvedLogoUrl}
+                          alt={brandName || "Logo"}
+                          style={{ maxHeight: "32px", maxWidth: "120px", objectFit: "contain", flexShrink: 0 }}
+                        />
+                      ) : (
+                        <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: light ? "#f0f4f9" : "#1e293b", boxShadow: light ? "3px 3px 6px rgba(166,180,200,0.4), -3px -3px 6px rgba(255,255,255,0.9)" : "3px 3px 6px rgba(0,0,0,0.4), -3px -3px 6px rgba(255,255,255,0.05)", color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800, flexShrink: 0 }}>
+                          {getInitials(brandName)}
+                        </div>
+                      )}
+                      <span style={{ fontSize: isMobile ? "14px" : "15px", fontWeight: 700, color: textColor, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{brandName}</span>
+                    </button>
+
+                    {/* Inset Neumorphic Search Bar */}
+                    {showSearch && !isMobile && (
+                      <form
+                        onSubmit={handleSearchSubmit}
+                        style={{
+                          flex: "1 1 240px",
+                          maxWidth: "460px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          padding: "4px 4px 4px 16px",
+                          borderRadius: "999px",
+                          background: light ? "#f0f4f9" : "#1e293b",
+                          boxShadow: light ? "inset 2px 2px 5px rgba(166,180,200,0.4), inset -2px -2px 5px rgba(255,255,255,0.9)" : "inset 2px 2px 5px rgba(0,0,0,0.5), inset -2px -2px 5px rgba(255,255,255,0.05)",
+                        }}
+                      >
+                        <input
+                          type="text"
+                          placeholder="Search products..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", fontWeight: 500 }}
+                        />
+                        <button
+                          type="submit"
+                          style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: light ? "#f0f4f9" : "#1e293b", boxShadow: light ? "3px 3px 6px rgba(166,180,200,0.4), -3px -3px 6px rgba(255,255,255,0.9)" : "3px 3px 6px rgba(0,0,0,0.4), -3px -3px 6px rgba(255,255,255,0.05)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                        >
+                          <svg viewBox="0 0 24 24" style={{ width: "15px", height: "15px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
+                            <circle cx="11" cy="11" r="7" />
+                            <path d="M20 20L16.65 16.65" />
+                          </svg>
+                        </button>
+                      </form>
+                    )}
+
+                    {/* Circular Neumorphic Action Controls */}
+                    <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "12px" }}>
+                      {showCart && (
+                        <button
+                          type="button"
+                          onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
+                          style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: light ? "#f0f4f9" : "#1e293b", boxShadow: light ? "4px 4px 8px rgba(166,180,200,0.4), -4px -4px 8px rgba(255,255,255,0.9)" : "4px 4px 8px rgba(0,0,0,0.4), -4px -4px 8px rgba(255,255,255,0.05)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative" }}
+                        >
+                          <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
+                            <circle cx="9" cy="20" r="1.5" />
+                            <circle cx="17" cy="20" r="1.5" />
+                            <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
+                          </svg>
+                          {cartCount > 0 && (
+                            <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
+                              {cartCount}
+                            </span>
+                          )}
+                        </button>
+                      )}
+
+                      {!isMobile && (
+                        <button
+                          type="button"
+                          onClick={handleDummyNotification}
+                          style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: light ? "#f0f4f9" : "#1e293b", boxShadow: light ? "4px 4px 8px rgba(166,180,200,0.4), -4px -4px 8px rgba(255,255,255,0.9)" : "4px 4px 8px rgba(0,0,0,0.4), -4px -4px 8px rgba(255,255,255,0.05)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                        >
+                          <svg viewBox="0 0 24 24" style={iconStyle}>
+                            <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
+                            <path d="M10 17a2 2 0 0 0 4 0" />
+                          </svg>
+                        </button>
+                      )}
+
+                      {showAccount && !isMobile && (
+                        <div ref={accountMenuRef} style={{ position: "relative" }}>
+                          <button
+                            ref={accountButtonRef}
+                            type="button"
+                            onClick={handleAccountClick}
+                            style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: light ? "#f0f4f9" : "#1e293b", boxShadow: light ? "4px 4px 8px rgba(166,180,200,0.4), -4px -4px 8px rgba(255,255,255,0.9)" : "4px 4px 8px rgba(0,0,0,0.4), -4px -4px 8px rgba(255,255,255,0.05)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                          >
+                            <svg viewBox="0 0 24 24" style={iconStyle}>
+                              <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
+                              <circle cx="12" cy="8" r="4" />
+                            </svg>
+                          </button>
+                          {accountMenuOpen && (
+                            <div role="menu" style={dropdownPanelStyle}>
+                              <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
+                              <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
+                              {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {renderMobileToggleBtn()}
+                    </div>
+                  </div>
+                  {mobileMenuOpen ? mobilePanelMenu : null}
+                </div>
+              );
+            }
+
+            // Apple Minimal & Default Standard Layout
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: isMobile ? "8px" : "16px", padding: "6px 12px", boxSizing: "border-box" }}>
+                  {/* Brand */}
                   <button
                     type="button"
                     onClick={() => navigate(resolvedHomePath)}
-                    style={{
-                      display: searchActive ? "none" : "flex",
-                      alignItems: "center",
-                      gap: "12px",
-                      padding: 0,
-                      background: "transparent",
-                      border: "none",
-                      cursor: "pointer",
-                      minWidth: 0,
-                      flex: "1 1 auto",
-                    }}
+                    style={{ display: "flex", alignItems: "center", gap: "10px", background: "transparent", border: "none", cursor: "pointer", minWidth: 0 }}
                   >
-                    <div
-                      style={{
-                        width: "40px",
-                        height: "40px",
-                        borderRadius: "14px",
-                        background: `linear-gradient(135deg, ${accentColor}, ${accentColor}dd)`,
-                        color: "#ffffff",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: "13px",
-                        fontWeight: 800,
-                        letterSpacing: "0.04em",
-                        boxShadow: light
-                          ? "0 12px 24px rgba(37,99,235,0.18)"
-                          : "0 12px 24px rgba(0,0,0,0.26)",
-                        flexShrink: 0,
-                      }}
-                    >
-                      {getInitials(brandName)}
-                    </div>
-                    <div style={{ textAlign: "left", minWidth: 0, overflow: "hidden" }}>
-                      <div
-                        style={{
-                          fontSize: "15px",
-                          fontWeight: 750,
-                          lineHeight: 1.1,
-                          color: textColor,
-                          letterSpacing: "-0.02em",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                      >
-                        {brandName}
+                    {resolvedLogoUrl ? (
+                      <img
+                        src={resolvedLogoUrl}
+                        alt={brandName || "Logo"}
+                        style={{ maxHeight: "32px", maxWidth: "120px", objectFit: "contain", flexShrink: 0 }}
+                      />
+                    ) : (
+                      <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: light ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)", border: softBorder, color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800, flexShrink: 0 }}>
+                        {getInitials(brandName)}
                       </div>
-                    </div>
+                    )}
+                    <span style={{ fontSize: isMobile ? "14px" : "15px", fontWeight: 700, color: textColor, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{brandName}</span>
                   </button>
 
-
-                  {searchActive ? (
-                    <div style={{ display: "flex", alignItems: "center", flex: 1, gap: "8px" }}>
+                  {/* Pill Search with enclosed button icon */}
+                  {showSearch && !isMobile && (
+                    <form
+                      onSubmit={handleSearchSubmit}
+                      style={{
+                        flex: "1 1 240px",
+                        maxWidth: "460px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        padding: "4px 4px 4px 16px",
+                        borderRadius: "999px",
+                        background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
+                        border: softBorder,
+                      }}
+                    >
                       <input
-                        ref={mobileSearchInputRef}
                         type="text"
-                        aria-label="Search products"
                         placeholder="Search products..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        style={{
-                          flex: 1,
-                          minWidth: 0,
-                          height: "40px",
-                          borderRadius: "12px",
-                          border: softBorder,
-                          background: light ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.05)",
-                          outline: "none",
-                          padding: "0 12px",
-                          color: textColor,
-                        }}
-                        onBlur={() => {
-                          if (searchQuery.trim().length === 0) {
-                            closeSearch();
-                          }
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            closeSearch();
-                          }
-                          if (e.key === "Escape") {
-                            closeSearch();
-                          }
-                        }}
+                        style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", fontWeight: 500 }}
                       />
                       <button
-                        type="button"
-                        onClick={closeSearch}
-                        style={{
-                          width: "40px",
-                          height: "40px",
-                          borderRadius: "12px",
-                          border: "none",
-                          background: light ? "#0f172a" : "#ffffff",
-                          color: light ? "#ffffff" : "#0f172a",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          cursor: "pointer",
-                        }}
+                        type="submit"
+                        style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: light ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.15)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
                       >
-                        <svg viewBox="0 0 24 24" style={iconStyle}>
-                          <path d="M6 6L18 18" />
-                          <path d="M18 6L6 18" />
+                        <svg viewBox="0 0 24 24" style={{ width: "15px", height: "15px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
+                          <circle cx="11" cy="11" r="7" />
+                          <path d="M20 20L16.65 16.65" />
                         </svg>
                       </button>
-                    </div>
-                  ) : null}
-                </div>
-
-
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  {showCart && (
-                    <button
-                      type="button"
-                      aria-label="Cart"
-                      onClick={() => navigate(resolvedCartPath)}
-                      style={leftIconBtnBase}
-                    >
-                      <svg viewBox="0 0 24 24" style={iconStyle}>
-                        <circle cx="9" cy="20" r="1.5" />
-                        <circle cx="17" cy="20" r="1.5" />
-                        <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
-                      </svg>
-                      {cartCount > 0 && (
-                        <span
-                          style={{
-                            position: "absolute",
-                            top: "-5px",
-                            right: "-5px",
-                            minWidth: "20px",
-                            height: "20px",
-                            padding: "0 6px",
-                            borderRadius: "999px",
-                            background: "#ef4444",
-                            color: "#ffffff",
-                            fontSize: "11px",
-                            fontWeight: 800,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            boxShadow: "0 6px 14px rgba(239,68,68,0.35)",
-                          }}
-                        >
-                          {cartCount}
-                        </span>
-                      )}
-                    </button>
+                    </form>
                   )}
 
-
-                  <button
-                    ref={mobileMenuButtonRef}
-                    type="button"
-                    aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
-                    aria-expanded={mobileMenuOpen}
-                    onClick={() => setMobileMenuOpen((prev) => !prev)}
-                    style={{
-                      ...mobileMenuButtonStyle,
-                      display: searchActive ? "none" : "flex",
-                    }}
-                  >
-                    <svg viewBox="0 0 24 24" style={iconStyle}>
-                      {mobileMenuOpen ? (
-                        <>
-                          <path d="M6 6L18 18" />
-                          <path d="M18 6L6 18" />
-                        </>
-                      ) : (
-                        <>
-                          <path d="M4 7H20" />
-                          <path d="M4 12H20" />
-                          <path d="M4 17H20" />
-                        </>
-                      )}
-                    </svg>
-                  </button>
-                </div>
-              </div>
-              {!searchActive && mobileMenuOpen ? mobilePanelMenu : null}
-            </div>
-          ) : theme?.navbar_layout === "apple_minimal" ? (
-            /* 1. Apple / Vercel Minimal */
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: "16px", padding: "6px 12px" }}>
-              {/* Brand */}
-              <button
-                type="button"
-                onClick={() => navigate(resolvedHomePath)}
-                style={{ display: "flex", alignItems: "center", gap: "10px", background: "transparent", border: "none", cursor: "pointer" }}
-              >
-                <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: light ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)", border: softBorder, color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800 }}>
-                  {getInitials(brandName)}
-                </div>
-                <span style={{ fontSize: "15px", fontWeight: 700, color: textColor }}>{brandName}</span>
-              </button>
-
-              {/* Pill Search with enclosed button icon */}
-              {showSearch && (
-                <form
-                  onSubmit={handleSearchSubmit}
-                  style={{
-                    flex: "1 1 320px",
-                    maxWidth: "460px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "4px 4px 4px 16px",
-                    borderRadius: "999px",
-                    background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
-                    border: softBorder,
-                  }}
-                >
-                  <input
-                    type="text"
-                    placeholder="Search products..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", fontWeight: 500 }}
-                  />
-                  <button
-                    type="submit"
-                    style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: light ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.15)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
-                  >
-                    <svg viewBox="0 0 24 24" style={{ width: "15px", height: "15px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
-                      <circle cx="11" cy="11" r="7" />
-                      <path d="M20 20L16.65 16.65" />
-                    </svg>
-                  </button>
-                </form>
-              )}
-
-              {/* Actions */}
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                {showCart && (
-                  <button
-                    type="button"
-                    onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
-                    style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative" }}
-                  >
-                    <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
-                      <circle cx="9" cy="20" r="1.5" />
-                      <circle cx="17" cy="20" r="1.5" />
-                      <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
-                    </svg>
-                    {cartCount > 0 && (
-                      <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
-                        {cartCount}
-                      </span>
+                  {/* Actions */}
+                  <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "10px" }}>
+                    {showCart && (
+                      <button
+                        type="button"
+                        onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
+                        style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative" }}
+                      >
+                        <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
+                          <circle cx="9" cy="20" r="1.5" />
+                          <circle cx="17" cy="20" r="1.5" />
+                          <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
+                        </svg>
+                        {cartCount > 0 && (
+                          <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
+                            {cartCount}
+                          </span>
+                        )}
+                      </button>
                     )}
-                  </button>
-                )}
 
-                <button
-                  type="button"
-                  onClick={handleDummyNotification}
-                  style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
-                >
-                  <svg viewBox="0 0 24 24" style={iconStyle}>
-                    <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
-                    <path d="M10 17a2 2 0 0 0 4 0" />
-                  </svg>
-                </button>
+                    {!isMobile && (
+                      <button
+                        type="button"
+                        onClick={handleDummyNotification}
+                        style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                      >
+                        <svg viewBox="0 0 24 24" style={iconStyle}>
+                          <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
+                          <path d="M10 17a2 2 0 0 0 4 0" />
+                        </svg>
+                      </button>
+                    )}
 
-                {showAccount && (
-                  <div ref={accountMenuRef} style={{ position: "relative" }}>
-                    <button
-                      ref={accountButtonRef}
-                      type="button"
-                      onClick={handleAccountClick}
-                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
-                    >
-                      <svg viewBox="0 0 24 24" style={iconStyle}>
-                        <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
-                        <circle cx="12" cy="8" r="4" />
-                      </svg>
-                    </button>
-                    {accountMenuOpen && (
-                      <div role="menu" style={dropdownPanelStyle}>
-                        <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
-                        <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
-                        {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
+                    {showAccount && !isMobile && (
+                      <div ref={accountMenuRef} style={{ position: "relative" }}>
+                        <button
+                          ref={accountButtonRef}
+                          type="button"
+                          onClick={handleAccountClick}
+                          style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                        >
+                          <svg viewBox="0 0 24 24" style={iconStyle}>
+                            <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
+                            <circle cx="12" cy="8" r="4" />
+                          </svg>
+                        </button>
+                        {accountMenuOpen && (
+                          <div role="menu" style={dropdownPanelStyle}>
+                            <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
+                            <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
+                            {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
+                          </div>
+                        )}
                       </div>
                     )}
+
+                    {renderMobileToggleBtn()}
                   </div>
-                )}
-              </div>
-            </div>
-          ) : theme?.navbar_layout === "glassmorphism_premium" ? (
-            /* 2. Glassmorphism Premium */
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: "16px", padding: "6px 14px", background: light ? "rgba(255, 255, 255, 0.65)" : "rgba(15, 23, 42, 0.65)", backdropFilter: "blur(20px)", borderRadius: "20px", border: light ? "1px solid rgba(255, 255, 255, 0.4)" : "1px solid rgba(255, 255, 255, 0.12)", boxShadow: light ? "0 8px 32px rgba(31, 38, 135, 0.08)" : "0 8px 32px rgba(0, 0, 0, 0.4)" }}>
-              {/* Brand */}
-              <button
-                type="button"
-                onClick={() => navigate(resolvedHomePath)}
-                style={{ display: "flex", alignItems: "center", gap: "10px", background: "transparent", border: "none", cursor: "pointer" }}
-              >
-                <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: light ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.12)", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800 }}>
-                  {getInitials(brandName)}
                 </div>
-                <span style={{ fontSize: "15px", fontWeight: 700, color: textColor }}>{brandName}</span>
-              </button>
-
-              {/* Glass Pill Search */}
-              {showSearch && (
-                <form
-                  onSubmit={handleSearchSubmit}
-                  style={{
-                    flex: "1 1 320px",
-                    maxWidth: "460px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "4px 4px 4px 16px",
-                    borderRadius: "999px",
-                    background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)",
-                    backdropFilter: "blur(10px)",
-                    border: light ? "1px solid rgba(255,255,255,0.7)" : "1px solid rgba(255,255,255,0.15)",
-                  }}
-                >
-                  <input
-                    type="text"
-                    placeholder="Search products..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", fontWeight: 500 }}
-                  />
-                  <button
-                    type="submit"
-                    style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: light ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.2)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
-                  >
-                    <svg viewBox="0 0 24 24" style={{ width: "15px", height: "15px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
-                      <circle cx="11" cy="11" r="7" />
-                      <path d="M20 20L16.65 16.65" />
-                    </svg>
-                  </button>
-                </form>
-              )}
-
-              {/* Glass Action Icons */}
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                {showCart && (
-                  <button
-                    type="button"
-                    onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
-                    style={{ width: "38px", height: "38px", borderRadius: "999px", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative" }}
-                  >
-                    <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
-                      <circle cx="9" cy="20" r="1.5" />
-                      <circle cx="17" cy="20" r="1.5" />
-                      <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
-                    </svg>
-                    {cartCount > 0 && (
-                      <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
-                        {cartCount}
-                      </span>
-                    )}
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleDummyNotification}
-                  style={{ width: "38px", height: "38px", borderRadius: "999px", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
-                >
-                  <svg viewBox="0 0 24 24" style={iconStyle}>
-                    <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
-                    <path d="M10 17a2 2 0 0 0 4 0" />
-                  </svg>
-                </button>
-
-                {showAccount && (
-                  <div ref={accountMenuRef} style={{ position: "relative" }}>
-                    <button
-                      ref={accountButtonRef}
-                      type="button"
-                      onClick={handleAccountClick}
-                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
-                    >
-                      <svg viewBox="0 0 24 24" style={iconStyle}>
-                        <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
-                        <circle cx="12" cy="8" r="4" />
-                      </svg>
-                    </button>
-                    {accountMenuOpen && (
-                      <div role="menu" style={dropdownPanelStyle}>
-                        <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
-                        <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
-                        {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
-                      </div>
-                    )}
-                  </div>
-                )}
+                {mobileMenuOpen ? mobilePanelMenu : null}
               </div>
-            </div>
-          ) : theme?.navbar_layout === "modern_marketplace" ? (
-            /* 3. Modern Marketplace (Amazon / Shopify - No Hamburger Menu) */
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: "16px", padding: "6px 12px" }}>
-              {/* Brand Logo & Name */}
-              <button
-                type="button"
-                onClick={() => navigate(resolvedHomePath)}
-                style={{ display: "flex", alignItems: "center", gap: "10px", background: "transparent", border: "none", cursor: "pointer" }}
-              >
-                <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: light ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)", border: softBorder, color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800 }}>
-                  {getInitials(brandName)}
-                </div>
-                <span style={{ fontSize: "15px", fontWeight: 700, color: textColor }}>{brandName}</span>
-              </button>
-
-              {/* Marketplace Rectangular Search with Accent Button */}
-              {showSearch && (
-                <form
-                  onSubmit={handleSearchSubmit}
-                  style={{
-                    flex: "1 1 340px",
-                    maxWidth: "480px",
-                    display: "flex",
-                    alignItems: "center",
-                    borderRadius: "8px",
-                    border: softBorder,
-                    background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
-                    overflow: "hidden",
-                  }}
-                >
-                  <input
-                    type="text"
-                    placeholder="Search products..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", padding: "8px 14px" }}
-                  />
-                  <button
-                    type="submit"
-                    style={{ width: "42px", height: "36px", border: "none", background: accentColor, color: "#ffffff", display: "grid", placeItems: "center", cursor: "pointer" }}
-                  >
-                    <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: "currentColor", strokeWidth: 2.2, fill: "none" }}>
-                      <circle cx="11" cy="11" r="7" />
-                      <path d="M20 20L16.65 16.65" />
-                    </svg>
-                  </button>
-                </form>
-              )}
-
-              {/* Action Buttons */}
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                {showCart && (
-                  <button
-                    type="button"
-                    onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
-                    style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative" }}
-                  >
-                    <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
-                      <circle cx="9" cy="20" r="1.5" />
-                      <circle cx="17" cy="20" r="1.5" />
-                      <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
-                    </svg>
-                    {cartCount > 0 && (
-                      <span style={{ position: "absolute", top: "-4px", right: "-4px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
-                        {cartCount}
-                      </span>
-                    )}
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleDummyNotification}
-                  style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
-                >
-                  <svg viewBox="0 0 24 24" style={iconStyle}>
-                    <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
-                    <path d="M10 17a2 2 0 0 0 4 0" />
-                  </svg>
-                </button>
-
-                {showAccount && (
-                  <div ref={accountMenuRef} style={{ position: "relative" }}>
-                    <button
-                      ref={accountButtonRef}
-                      type="button"
-                      onClick={handleAccountClick}
-                      style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
-                    >
-                      <svg viewBox="0 0 24 24" style={iconStyle}>
-                        <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
-                        <circle cx="12" cy="8" r="4" />
-                      </svg>
-                    </button>
-                    {accountMenuOpen && (
-                      <div role="menu" style={dropdownPanelStyle}>
-                        <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
-                        <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
-                        {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : theme?.navbar_layout === "luxury_fashion" ? (
-            /* 4. Luxury Fashion Store */
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: "16px", padding: "8px 16px" }}>
-              {/* Serif Logo with Vertical Divider */}
-              <button
-                type="button"
-                onClick={() => navigate(resolvedHomePath)}
-                style={{ display: "flex", alignItems: "center", gap: "16px", background: "transparent", border: "none", cursor: "pointer" }}
-              >
-                <span style={{ fontFamily: "'Playfair Display', 'Didot', 'Georgia', serif", fontSize: "20px", fontWeight: 700, color: textColor }}>
-                  {getInitials(brandName)}
-                </span>
-                <span style={{ width: "1px", height: "20px", background: light ? "rgba(15,23,42,0.15)" : "rgba(255,255,255,0.2)" }} />
-                <span style={{ fontFamily: "'Playfair Display', 'Didot', 'Georgia', serif", fontSize: "15px", fontWeight: 600, color: textColor, letterSpacing: "0.15em", textTransform: "uppercase" }}>
-                  {brandName}
-                </span>
-              </button>
-
-              {/* Minimal Fashion Search Pill */}
-              {showSearch && (
-                <form
-                  onSubmit={handleSearchSubmit}
-                  style={{
-                    flex: "1 1 300px",
-                    maxWidth: "440px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "4px 4px 4px 16px",
-                    borderRadius: "999px",
-                    background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
-                    border: softBorder,
-                  }}
-                >
-                  <input
-                    type="text"
-                    placeholder="Search products..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", fontFamily: "serif" }}
-                  />
-                  <button
-                    type="submit"
-                    style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: "transparent", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
-                  >
-                    <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
-                      <circle cx="11" cy="11" r="7" />
-                      <path d="M20 20L16.65 16.65" />
-                    </svg>
-                  </button>
-                </form>
-              )}
-
-              {/* Luxury Minimal Icons */}
-              <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-                {showCart && (
-                  <button
-                    type="button"
-                    onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
-                    style={{ background: "transparent", border: "none", color: textColor, cursor: "pointer", position: "relative", padding: "4px" }}
-                  >
-                    <svg viewBox="0 0 24 24" style={{ width: "19px", height: "19px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
-                      <circle cx="9" cy="20" r="1.5" />
-                      <circle cx="17" cy="20" r="1.5" />
-                      <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
-                    </svg>
-                    {cartCount > 0 && (
-                      <span style={{ position: "absolute", top: "-2px", right: "-4px", width: "16px", height: "16px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "9px", fontWeight: 800, display: "grid", placeItems: "center" }}>
-                        {cartCount}
-                      </span>
-                    )}
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleDummyNotification}
-                  style={{ background: "transparent", border: "none", color: textColor, cursor: "pointer", padding: "4px" }}
-                >
-                  <svg viewBox="0 0 24 24" style={{ width: "19px", height: "19px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
-                    <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
-                    <path d="M10 17a2 2 0 0 0 4 0" />
-                  </svg>
-                </button>
-
-                {showAccount && (
-                  <div ref={accountMenuRef} style={{ position: "relative" }}>
-                    <button
-                      ref={accountButtonRef}
-                      type="button"
-                      onClick={handleAccountClick}
-                      style={{ background: "transparent", border: "none", color: textColor, cursor: "pointer", padding: "4px" }}
-                    >
-                      <svg viewBox="0 0 24 24" style={{ width: "19px", height: "19px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
-                        <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
-                        <circle cx="12" cy="8" r="4" />
-                      </svg>
-                    </button>
-                    {accountMenuOpen && (
-                      <div role="menu" style={dropdownPanelStyle}>
-                        <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
-                        <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
-                        {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : theme?.navbar_layout === "neo_modern" ? (
-            /* 5. Neo Modern 2026 SaaS */
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: "16px", padding: "8px 16px", background: light ? "#f0f4f9" : "#1e293b", borderRadius: "999px", boxShadow: light ? "6px 6px 14px rgba(166,180,200,0.4), -6px -6px 14px rgba(255,255,255,0.9)" : "6px 6px 14px rgba(0,0,0,0.5), -6px -6px 14px rgba(255,255,255,0.05)" }}>
-              {/* Brand */}
-              <button
-                type="button"
-                onClick={() => navigate(resolvedHomePath)}
-                style={{ display: "flex", alignItems: "center", gap: "10px", background: "transparent", border: "none", cursor: "pointer" }}
-              >
-                <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: light ? "#f0f4f9" : "#1e293b", boxShadow: light ? "3px 3px 6px rgba(166,180,200,0.4), -3px -3px 6px rgba(255,255,255,0.9)" : "3px 3px 6px rgba(0,0,0,0.4), -3px -3px 6px rgba(255,255,255,0.05)", color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800 }}>
-                  {getInitials(brandName)}
-                </div>
-                <span style={{ fontSize: "15px", fontWeight: 700, color: textColor }}>{brandName}</span>
-              </button>
-
-              {/* Inset Neumorphic Search Bar */}
-              {showSearch && (
-                <form
-                  onSubmit={handleSearchSubmit}
-                  style={{
-                    flex: "1 1 320px",
-                    maxWidth: "460px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "4px 4px 4px 16px",
-                    borderRadius: "999px",
-                    background: light ? "#f0f4f9" : "#1e293b",
-                    boxShadow: light ? "inset 2px 2px 5px rgba(166,180,200,0.4), inset -2px -2px 5px rgba(255,255,255,0.9)" : "inset 2px 2px 5px rgba(0,0,0,0.5), inset -2px -2px 5px rgba(255,255,255,0.05)",
-                  }}
-                >
-                  <input
-                    type="text"
-                    placeholder="Search products..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", fontWeight: 500 }}
-                  />
-                  <button
-                    type="submit"
-                    style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: light ? "#f0f4f9" : "#1e293b", boxShadow: light ? "3px 3px 6px rgba(166,180,200,0.4), -3px -3px 6px rgba(255,255,255,0.9)" : "3px 3px 6px rgba(0,0,0,0.4), -3px -3px 6px rgba(255,255,255,0.05)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
-                  >
-                    <svg viewBox="0 0 24 24" style={{ width: "15px", height: "15px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
-                      <circle cx="11" cy="11" r="7" />
-                      <path d="M20 20L16.65 16.65" />
-                    </svg>
-                  </button>
-                </form>
-              )}
-
-              {/* Circular Neumorphic Action Controls */}
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                {showCart && (
-                  <button
-                    type="button"
-                    onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
-                    style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: light ? "#f0f4f9" : "#1e293b", boxShadow: light ? "4px 4px 8px rgba(166,180,200,0.4), -4px -4px 8px rgba(255,255,255,0.9)" : "4px 4px 8px rgba(0,0,0,0.4), -4px -4px 8px rgba(255,255,255,0.05)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative" }}
-                  >
-                    <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
-                      <circle cx="9" cy="20" r="1.5" />
-                      <circle cx="17" cy="20" r="1.5" />
-                      <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
-                    </svg>
-                    {cartCount > 0 && (
-                      <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
-                        {cartCount}
-                      </span>
-                    )}
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleDummyNotification}
-                  style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: light ? "#f0f4f9" : "#1e293b", boxShadow: light ? "4px 4px 8px rgba(166,180,200,0.4), -4px -4px 8px rgba(255,255,255,0.9)" : "4px 4px 8px rgba(0,0,0,0.4), -4px -4px 8px rgba(255,255,255,0.05)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
-                >
-                  <svg viewBox="0 0 24 24" style={iconStyle}>
-                    <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
-                    <path d="M10 17a2 2 0 0 0 4 0" />
-                  </svg>
-                </button>
-
-                {showAccount && (
-                  <div ref={accountMenuRef} style={{ position: "relative" }}>
-                    <button
-                      ref={accountButtonRef}
-                      type="button"
-                      onClick={handleAccountClick}
-                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: light ? "#f0f4f9" : "#1e293b", boxShadow: light ? "4px 4px 8px rgba(166,180,200,0.4), -4px -4px 8px rgba(255,255,255,0.9)" : "4px 4px 8px rgba(0,0,0,0.4), -4px -4px 8px rgba(255,255,255,0.05)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
-                    >
-                      <svg viewBox="0 0 24 24" style={iconStyle}>
-                        <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
-                        <circle cx="12" cy="8" r="4" />
-                      </svg>
-                    </button>
-                    {accountMenuOpen && (
-                      <div role="menu" style={dropdownPanelStyle}>
-                        <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
-                        <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
-                        {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            /* 1. Apple / Vercel Minimal (Default Fallback) */
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: "16px", padding: "6px 12px" }}>
-              {/* Brand */}
-              <button
-                type="button"
-                onClick={() => navigate(resolvedHomePath)}
-                style={{ display: "flex", alignItems: "center", gap: "10px", background: "transparent", border: "none", cursor: "pointer" }}
-              >
-                <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: light ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)", border: softBorder, color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800 }}>
-                  {getInitials(brandName)}
-                </div>
-                <span style={{ fontSize: "15px", fontWeight: 700, color: textColor }}>{brandName}</span>
-              </button>
-
-              {/* Pill Search with enclosed button icon */}
-              {showSearch && (
-                <form
-                  onSubmit={handleSearchSubmit}
-                  style={{
-                    flex: "1 1 320px",
-                    maxWidth: "460px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "4px 4px 4px 16px",
-                    borderRadius: "999px",
-                    background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
-                    border: softBorder,
-                  }}
-                >
-                  <input
-                    type="text"
-                    placeholder="Search products..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", fontWeight: 500 }}
-                  />
-                  <button
-                    type="submit"
-                    style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: light ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.15)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
-                  >
-                    <svg viewBox="0 0 24 24" style={{ width: "15px", height: "15px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
-                      <circle cx="11" cy="11" r="7" />
-                      <path d="M20 20L16.65 16.65" />
-                    </svg>
-                  </button>
-                </form>
-              )}
-
-              {/* Actions */}
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                {showCart && (
-                  <button
-                    type="button"
-                    onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
-                    style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative" }}
-                  >
-                    <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
-                      <circle cx="9" cy="20" r="1.5" />
-                      <circle cx="17" cy="20" r="1.5" />
-                      <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
-                    </svg>
-                    {cartCount > 0 && (
-                      <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
-                        {cartCount}
-                      </span>
-                    )}
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleDummyNotification}
-                  style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
-                >
-                  <svg viewBox="0 0 24 24" style={iconStyle}>
-                    <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
-                    <path d="M10 17a2 2 0 0 0 4 0" />
-                  </svg>
-                </button>
-
-                {showAccount && (
-                  <div ref={accountMenuRef} style={{ position: "relative" }}>
-                    <button
-                      ref={accountButtonRef}
-                      type="button"
-                      onClick={handleAccountClick}
-                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
-                    >
-                      <svg viewBox="0 0 24 24" style={iconStyle}>
-                        <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
-                        <circle cx="12" cy="8" r="4" />
-                      </svg>
-                    </button>
-                    {accountMenuOpen && (
-                      <div role="menu" style={dropdownPanelStyle}>
-                        <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
-                        <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
-                        {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       </div>
     </header>

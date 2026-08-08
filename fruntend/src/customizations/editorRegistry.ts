@@ -85,6 +85,15 @@ const navbarBrandNameField = {
   placeholder: "Storefront",
 };
 
+const navbarLogoUrlField = {
+  key: "logoUrl",
+  label: "Brand logo image URL",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "https://example.com/logo.png",
+  helpText: "Transparent PNG or SVG images work best on all dark & light background colors.",
+};
+
 const navbarShowSearchField = {
   key: "showSearch",
   label: "Show search",
@@ -133,9 +142,16 @@ const navbarPositionField = {
     "Use static for normal page flow, sticky to keep it visible while scrolling, and fixed preview position for a stronger pinned effect inside the builder preview.",
 };
 
+const navbarOuterBackgroundColorField = {
+  key: "navbar_outer_bg",
+  label: "Outer header background",
+  type: "color" as const,
+  target: "theme" as const,
+};
+
 const navbarBackgroundColorField = {
   key: "navbar_bg",
-  label: "Navbar background",
+  label: "Navbar inner background",
   type: "color" as const,
   target: "theme" as const,
 };
@@ -753,6 +769,7 @@ export const editorRegistry: EditorRegistry = {
     displayName: "Navbar",
     fields: [
       navbarBrandNameField,
+      navbarLogoUrlField,
       navbarVariantField,
       navbarPositionField,
       navbarHeightField,
@@ -760,9 +777,9 @@ export const editorRegistry: EditorRegistry = {
       navbarRadiusField,
       navbarPaddingXField,
       navbarPaddingYField,
+      navbarOuterBackgroundColorField,
       navbarBackgroundColorField,
       navbarTextColorField,
-      navbarMutedTextColorField,
       navbarBorderColorField,
       navbarShowSearchField,
       navbarShowAccountField,

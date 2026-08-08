@@ -384,6 +384,7 @@ function StorefrontShell({
 
         <Navbar
           brandName={navbarProps.brandName}
+          logoUrl={siteDefinition.navbar?.logoUrl || siteDefinition.navbar?.logo_url || (navbarProps as any).logoUrl}
           tagline={navbarProps.tagline}
           theme={{
             ...siteDefinition.theme,

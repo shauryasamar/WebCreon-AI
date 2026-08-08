@@ -282,6 +282,51 @@ function renderAssetPreview(assetId: string) {
           </div>
         </div>
       );
+    case "hero-flash-sale":
+      return (
+        <div style={{ padding: "8px 10px", borderRadius: "8px", background: "linear-gradient(135deg, #1e293b, #0f172a)", color: "#ffffff", display: "flex", flexDirection: "column", gap: "4px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{ background: "#ef4444", fontSize: "7px", fontWeight: 800, padding: "1px 5px", borderRadius: "4px" }}>FLASH SALE</span>
+            <span style={{ fontSize: "7px", color: "#94a3b8" }}>CODE: SAVE50</span>
+          </div>
+          <div style={{ fontSize: "11px", fontWeight: 800, lineHeight: 1.2 }}>Festive Flash Sale - 50% OFF</div>
+          <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "7px", color: "#cbd5e1" }}>
+            <span>ENDS IN:</span>
+            <span style={{ background: "rgba(255,255,255,0.15)", padding: "1px 4px", borderRadius: "3px", fontWeight: 800 }}>04h:22m</span>
+          </div>
+        </div>
+      );
+    case "hero-product-launch":
+      return (
+        <div style={{ padding: "8px 10px", borderRadius: "8px", background: "linear-gradient(135deg, #eff6ff, #dbeafe)", color: "#0f172a", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+            <span style={{ background: "#2563eb", color: "#fff", fontSize: "6px", fontWeight: 800, padding: "1px 4px", borderRadius: "3px", width: "fit-content" }}>NEW LAUNCH</span>
+            <div style={{ fontSize: "10px", fontWeight: 800 }}>Future Of Sound</div>
+          </div>
+          <div style={{ background: "#ffffff", padding: "4px 6px", borderRadius: "6px", border: "1px solid rgba(37,99,235,0.2)", fontSize: "8px", fontWeight: 800, color: "#2563eb" }}>
+            $249 • 4.9 ⭐
+          </div>
+        </div>
+      );
+    case "hero-lead-magnet":
+      return (
+        <div style={{ padding: "8px 10px", borderRadius: "8px", background: "linear-gradient(135deg, #ecfdf5, #d1fae5)", color: "#0f172a", display: "flex", flexDirection: "column", gap: "4px" }}>
+          <span style={{ background: "#10b981", color: "#fff", fontSize: "6px", fontWeight: 800, padding: "1px 4px", borderRadius: "3px", width: "fit-content" }}>VIP DISCOUNT</span>
+          <div style={{ fontSize: "10px", fontWeight: 800 }}>Get 15% OFF Your First Order</div>
+          <div style={{ display: "flex", gap: "4px", marginTop: "2px" }}>
+            <div style={{ flex: 1, height: "12px", borderRadius: "999px", background: "#ffffff", border: "1px solid rgba(16,185,129,0.3)" }} />
+            <div style={{ width: "24px", height: "12px", borderRadius: "999px", background: "#10b981" }} />
+          </div>
+        </div>
+      );
+    case "hero-minimal-brand":
+      return (
+        <div style={{ padding: "8px 10px", borderRadius: "8px", background: "linear-gradient(135deg, #f8fafc, #f1f5f9)", border: "1px solid rgba(15,23,42,0.08)", color: "#0f172a", display: "flex", flexDirection: "column", gap: "4px" }}>
+          <span style={{ fontSize: "6px", fontWeight: 800, color: "#64748b" }}>NEW COLLECTION</span>
+          <div style={{ fontSize: "10px", fontWeight: 800 }}>Crafted For Everyday Elegance</div>
+          <div style={{ fontSize: "7px", color: "#64748b" }}>✓ Free Delivery • ✓ 30-Day Guarantee</div>
+        </div>
+      );
     default:
       return null;
   }
@@ -300,7 +345,7 @@ export default function BuilderDrawerPanel({
   onSiteDefinitionChange,
 }: BuilderDrawerPanelProps) {
   const [selectedAssetCategory, setSelectedAssetCategory] =
-    useState<ComponentAssetCategory>("all");
+    useState<ComponentAssetCategory>("navbar");
   const [appliedAssetId, setAppliedAssetId] = useState<string | null>(null);
 
   if (
@@ -327,31 +372,94 @@ export default function BuilderDrawerPanel({
       };
     }
 
-    // Apply block patches to target blocks in pages
+    // Apply block patches to target blocks in pages or flat blocks
     if (asset.patch.blockPatch) {
-      const targetType = asset.targetType;
-      if (Array.isArray(nextDefinition.pages)) {
-        nextDefinition.pages = nextDefinition.pages.map((page: any) => ({
-          ...page,
-          blocks: (page.blocks ?? []).map((block: any) => {
-            const blockType = String(block.type || "").toLowerCase();
-            if (
-              blockType === targetType ||
-              (targetType === "hero_banner" && blockType.includes("hero")) ||
-              (targetType === "product_grid" && blockType.includes("product")) ||
-              (targetType === "footer" && blockType.includes("footer"))
-            ) {
-              return {
-                ...block,
-                props: {
-                  ...(block.props ?? {}),
+      const updateBlockList = (blocksList: any[]) => {
+        let hasHeroBlock = false;
+        const targetType = asset.targetType;
+        const updated = (blocksList ?? []).map((block: any) => {
+          const blockType = String(block.type || "").toLowerCase();
+          const isHero = targetType === "hero_banner" && (blockType === "hero_banner" || blockType.includes("hero"));
+
+          if (isHero) {
+            hasHeroBlock = true;
+            const currentProps = block.props ?? {};
+            const newSlide = {
+              id: `slide-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+              ...asset.patch.blockPatch,
+            };
+
+            let existingSlides: any[] = Array.isArray(currentProps.slides) ? [...currentProps.slides] : [];
+
+            if (existingSlides.length === 0 && (currentProps.headline || currentProps.variant)) {
+              existingSlides.push({
+                id: `slide-1`,
+                variant: currentProps.variant || "standard",
+                headline: currentProps.headline || "Welcome to Our Store",
+                subheadline: currentProps.subheadline,
+                primary_cta: currentProps.primary_cta,
+                secondary_cta: currentProps.secondary_cta,
+                background_image: currentProps.background_image,
+                background_overlay: currentProps.background_overlay,
+              });
+            }
+
+            existingSlides.push(newSlide);
+
+            return {
+              ...block,
+              props: {
+                ...currentProps,
+                slides: existingSlides,
+                ...asset.patch.blockPatch,
+              },
+            };
+          }
+
+          if (
+            blockType === targetType ||
+            (targetType === "product_grid" && blockType.includes("product")) ||
+            (targetType === "footer" && blockType.includes("footer"))
+          ) {
+            return {
+              ...block,
+              props: {
+                ...(block.props ?? {}),
+                ...asset.patch.blockPatch,
+              },
+            };
+          }
+          return block;
+        });
+
+        if (targetType === "hero_banner" && !hasHeroBlock) {
+          updated.unshift({
+            id: `hero-${Date.now()}`,
+            type: "hero_banner",
+            props: {
+              auto_play_interval: 3,
+              auto_play: true,
+              slides: [
+                {
+                  id: `slide-${Date.now()}`,
                   ...asset.patch.blockPatch,
                 },
-              };
-            }
-            return block;
-          }),
+              ],
+            },
+          });
+        }
+        return updated;
+      };
+
+      if (Array.isArray(nextDefinition.pages) && nextDefinition.pages.length > 0) {
+        nextDefinition.pages = nextDefinition.pages.map((page: any) => ({
+          ...page,
+          blocks: updateBlockList(page.blocks ?? []),
         }));
+      }
+
+      if (Array.isArray(nextDefinition.blocks)) {
+        nextDefinition.blocks = updateBlockList(nextDefinition.blocks);
       }
     }
 
@@ -361,8 +469,8 @@ export default function BuilderDrawerPanel({
   };
 
   const filteredAssets = COMPONENT_ASSETS.filter((asset) => {
-    if (selectedAssetCategory === "all") return true;
-    return asset.category === selectedAssetCategory;
+    if ((selectedAssetCategory as string) === "all") return true;
+    return (asset.category as string) === (selectedAssetCategory as string);
   });
 
   return (
@@ -497,8 +605,11 @@ export default function BuilderDrawerPanel({
               }}
             >
               {[
-                { id: "all", label: "All" },
+                { id: "all", label: "All Assets" },
                 { id: "navbar", label: "Navbar" },
+                { id: "banner", label: "Banner" },
+                { id: "products", label: "Products" },
+                { id: "footer", label: "Footer" },
               ].map((cat) => (
                 <button
                   key={cat.id}
@@ -529,6 +640,42 @@ export default function BuilderDrawerPanel({
               ))}
             </div>
 
+            {/* Active Banner Carousel Count Info Badge */}
+            {selectedAssetCategory === "banner" && (
+              <div
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "8px",
+                  background: "rgba(37,99,235,0.06)",
+                  border: "1px solid rgba(37,99,235,0.15)",
+                  color: "#2563eb",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span>Carousel Status</span>
+                <span
+                  style={{
+                    background: "#2563eb",
+                    color: "#ffffff",
+                    padding: "2px 8px",
+                    borderRadius: "999px",
+                    fontSize: "11px",
+                    fontWeight: 800,
+                  }}
+                >
+                  {(() => {
+                    const heroBlock = (siteDefinition?.pages?.[0]?.blocks ?? []).find((b: any) => String(b.type || "").toLowerCase().includes("hero"));
+                    const count = Array.isArray(heroBlock?.props?.slides) ? heroBlock.props.slides.length : (heroBlock ? 1 : 0);
+                    return `${count} ${count === 1 ? 'Banner' : 'Banners'} Active`;
+                  })()}
+                </span>
+              </div>
+            )}
+
             {/* Component Assets List */}
             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
               {filteredAssets.map((asset) => {
@@ -538,6 +685,12 @@ export default function BuilderDrawerPanel({
                     asset.patch.themePatch?.navbar_layout ||
                   (asset.id === "navbar-apple-minimal" &&
                     !siteDefinition?.theme?.navbar_layout);
+
+                const heroBlock = (siteDefinition?.pages?.[0]?.blocks ?? []).find((b: any) => String(b.type || "").toLowerCase().includes("hero"));
+                const activeSlidesList = Array.isArray(heroBlock?.props?.slides) ? heroBlock.props.slides : [];
+                const appliedCount = asset.category === "banner"
+                  ? activeSlidesList.filter((s: any) => (s.variant || "standard") === (asset.patch.blockPatch?.variant || "standard")).length
+                  : 0;
 
                 return (
                   <div
@@ -575,20 +728,36 @@ export default function BuilderDrawerPanel({
                       >
                         {asset.title}
                       </div>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          padding: "2px 6px",
-                          borderRadius: "4px",
-                          background: isCurrentlyActive
-                            ? "#2563eb"
-                            : "rgba(37,99,235,0.08)",
-                          color: isCurrentlyActive ? "#ffffff" : "#2563eb",
-                        }}
-                      >
-                        {isCurrentlyActive ? "Active" : asset.tag}
-                      </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        {asset.category === "banner" && (
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 800,
+                              padding: "2px 6px",
+                              borderRadius: "999px",
+                              background: appliedCount > 0 ? "#2563eb" : "rgba(15,23,42,0.06)",
+                              color: appliedCount > 0 ? "#ffffff" : "#64748b",
+                            }}
+                          >
+                            {appliedCount} Applied
+                          </span>
+                        )}
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: "2px 6px",
+                            borderRadius: "4px",
+                            background: isCurrentlyActive
+                              ? "#2563eb"
+                              : "rgba(37,99,235,0.08)",
+                            color: isCurrentlyActive ? "#ffffff" : "#2563eb",
+                          }}
+                        >
+                          {isCurrentlyActive ? "Active" : asset.tag}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Visual Mini Navbar Preview */}
@@ -632,7 +801,9 @@ export default function BuilderDrawerPanel({
                       }}
                     >
                       {isJustApplied
-                        ? "✓ Layout Applied"
+                        ? asset.category === "banner" ? "✓ Banner Added" : "✓ Layout Applied"
+                        : asset.category === "banner"
+                        ? "+ Add Banner to Carousel"
                         : isCurrentlyActive
                         ? "Active Layout"
                         : "Apply Layout"}
