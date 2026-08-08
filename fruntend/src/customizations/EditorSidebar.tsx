@@ -102,7 +102,7 @@ function getJsonEditorValue(value: any) {
 }
 
 function getFieldGroupTitle(field: EditorField) {
-  if (["brandName", "tagline"].includes(field.key)) return "Brand";
+  if (field.key === "brandName") return "Brand";
 
   if (["showSearch", "showAccount", "showCart"].includes(field.key)) {
     return "Actions";

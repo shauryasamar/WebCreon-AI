@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useCart } from "../CartContext";
 import { useCustomerAuth } from "../context/CustomerAuthContext";
 
@@ -12,7 +12,13 @@ export type NavbarTheme = {
   accent_color?: string;
   navbar_variant?: "solid" | "soft" | "floating" | "transparent";
   navbar_position?: "static" | "sticky" | "fixed";
-  navbar_layout?: "standard" | "modern_floating" | "futuristic_tech";
+  navbar_layout?:
+    | "standard"
+    | "apple_minimal"
+    | "glassmorphism_premium"
+    | "modern_marketplace"
+    | "luxury_fashion"
+    | "neo_modern";
   navbar_bg?: string;
   navbar_text_color?: string;
   navbar_muted_text_color?: string;
@@ -58,6 +64,8 @@ export type NavbarProps = {
   fixedBounds?: NavbarFixedBounds;
   siteSlug?: string;
   appBase?: string;
+  onOpenCart?: () => void;
+  onSearch?: (query: string) => void;
 };
 
 
@@ -170,7 +178,6 @@ const useViewportMode = (): ViewportMode => {
 
 const Navbar: React.FC<NavbarProps> = ({
   brandName = "Storefront",
-  tagline,
   theme,
   navigation,
   showSearch = true,
@@ -182,6 +189,8 @@ const Navbar: React.FC<NavbarProps> = ({
   fixedBounds,
   siteSlug,
   appBase,
+  onOpenCart,
+  onSearch,
 }) => {
   const { cartCount = 0 } = useCart();
   const navigate = useNavigate();
@@ -521,6 +530,20 @@ const Navbar: React.FC<NavbarProps> = ({
   const closeSearch = () => {
     setSearchActive(false);
     setMobileSearchOpen(false);
+  };
+
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (onSearch) {
+      onSearch(searchQuery);
+      return;
+    }
+    if (!searchQuery.trim()) return;
+    const searchTarget = siteSlug
+      ? `/store/${siteSlug}?search=${encodeURIComponent(searchQuery.trim())}`
+      : `${resolvedHomePath}?search=${encodeURIComponent(searchQuery.trim())}`;
+    navigate(searchTarget);
   };
 
 
@@ -948,21 +971,6 @@ const Navbar: React.FC<NavbarProps> = ({
                       >
                         {brandName}
                       </div>
-                      {tagline ? (
-                        <div
-                          style={{
-                            fontSize: "11px",
-                            color: mutedText,
-                            marginTop: "3px",
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            maxWidth: "180px",
-                          }}
-                        >
-                          {tagline}
-                        </div>
-                      ) : null}
                     </div>
                   </button>
 
@@ -1097,327 +1105,71 @@ const Navbar: React.FC<NavbarProps> = ({
               </div>
               {!searchActive && mobileMenuOpen ? mobilePanelMenu : null}
             </div>
-          ) : theme?.navbar_layout === "modern_floating" ? (
-            /* Ultra-Modern Floating Glass Header */
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: "16px", padding: "4px 8px" }}>
-              {/* Left: Brand Badge */}
+          ) : theme?.navbar_layout === "apple_minimal" ? (
+            /* 1. Apple / Vercel Minimal */
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: "16px", padding: "6px 12px" }}>
+              {/* Brand */}
               <button
                 type="button"
                 onClick={() => navigate(resolvedHomePath)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  padding: "4px 12px 4px 6px",
-                  borderRadius: "999px",
-                  background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
-                  border: softBorder,
-                  cursor: "pointer",
-                }}
+                style={{ display: "flex", alignItems: "center", gap: "10px", background: "transparent", border: "none", cursor: "pointer" }}
               >
-                <div
-                  style={{
-                    width: "34px",
-                    height: "34px",
-                    borderRadius: "999px",
-                    background: accentColor,
-                    color: "#ffffff",
-                    display: "grid",
-                    placeItems: "center",
-                    fontSize: "12px",
-                    fontWeight: 800,
-                    boxShadow: `0 4px 14px ${accentColor}44`,
-                  }}
-                >
+                <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: light ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)", border: softBorder, color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800 }}>
                   {getInitials(brandName)}
                 </div>
-                <div style={{ textAlign: "left" }}>
-                  <div style={{ fontSize: "14px", fontWeight: 700, color: textColor, letterSpacing: "-0.02em" }}>
-                    {brandName}
-                  </div>
-                </div>
+                <span style={{ fontSize: "15px", fontWeight: 700, color: textColor }}>{brandName}</span>
               </button>
 
-              {/* Middle: Floating Pill Search */}
+              {/* Pill Search with enclosed button icon */}
               {showSearch && (
-                <div
+                <form
+                  onSubmit={handleSearchSubmit}
                   style={{
                     flex: "1 1 320px",
                     maxWidth: "460px",
                     display: "flex",
                     alignItems: "center",
-                    gap: "10px",
-                    padding: "6px 16px",
+                    gap: "8px",
+                    padding: "4px 4px 4px 16px",
                     borderRadius: "999px",
+                    background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
                     border: softBorder,
-                    background: light ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.06)",
-                    boxShadow: light ? "0 4px 20px rgba(15,23,42,0.06)" : "0 4px 20px rgba(0,0,0,0.25)",
-                    backdropFilter: "blur(12px)",
                   }}
                 >
-                  <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: mutedText, strokeWidth: 2, fill: "none" }}>
-                    <circle cx="11" cy="11" r="7" />
-                    <path d="M20 20L16.65 16.65" />
-                  </svg>
                   <input
                     type="text"
                     placeholder="Search products..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{
-                      flex: 1,
-                      border: "none",
-                      outline: "none",
-                      background: "transparent",
-                      color: textColor,
-                      fontSize: "13px",
-                      fontWeight: 500,
-                    }}
-                  />
-                </div>
-              )}
-
-              {/* Right: Modern Action Pills */}
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                {showCart && (
-                  <button
-                    type="button"
-                    onClick={() => navigate(resolvedCartPath)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      padding: "8px 16px",
-                      borderRadius: "999px",
-                      border: "none",
-                      background: accentColor,
-                      color: "#ffffff",
-                      fontSize: "13px",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      boxShadow: `0 4px 16px ${accentColor}44`,
-                    }}
-                  >
-                    <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
-                      <circle cx="9" cy="20" r="1.5" />
-                      <circle cx="17" cy="20" r="1.5" />
-                      <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
-                    </svg>
-                    <span>Cart</span>
-                    <span style={{ background: "rgba(255,255,255,0.25)", borderRadius: "999px", padding: "1px 7px", fontSize: "11px", fontWeight: 800 }}>
-                      {cartCount}
-                    </span>
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleDummyNotification}
-                  style={{
-                    width: "38px",
-                    height: "38px",
-                    borderRadius: "999px",
-                    border: softBorder,
-                    background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
-                    color: textColor,
-                    display: "grid",
-                    placeItems: "center",
-                    cursor: "pointer",
-                  }}
-                >
-                  <svg viewBox="0 0 24 24" style={iconStyle}>
-                    <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
-                    <path d="M10 17a2 2 0 0 0 4 0" />
-                  </svg>
-                </button>
-
-                {showAccount && (
-                  <div ref={accountMenuRef} style={{ position: "relative" }}>
-                    <button
-                      ref={accountButtonRef}
-                      type="button"
-                      onClick={handleAccountClick}
-                      style={{
-                        width: "38px",
-                        height: "38px",
-                        borderRadius: "999px",
-                        border: softBorder,
-                        background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
-                        color: textColor,
-                        display: "grid",
-                        placeItems: "center",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <svg viewBox="0 0 24 24" style={iconStyle}>
-                        <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
-                        <circle cx="12" cy="8" r="4" />
-                      </svg>
-                    </button>
-
-                    {accountMenuOpen && (
-                      <div role="menu" style={dropdownPanelStyle}>
-                        <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>
-                          Profile
-                        </button>
-                        <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>
-                          Orders
-                        </button>
-                        {isAuthenticated && (
-                          <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>
-                            Logout
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : theme?.navbar_layout === "futuristic_tech" ? (
-            /* Futuristic Tech Command Header */
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: "16px", padding: "4px 8px" }}>
-              {/* Left: Geometric Cyber Logo */}
-              <button
-                type="button"
-                onClick={() => navigate(resolvedHomePath)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  background: "transparent",
-                  border: "none",
-                  cursor: "pointer",
-                }}
-              >
-                <div
-                  style={{
-                    width: "38px",
-                    height: "38px",
-                    clipPath: "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)",
-                    background: accentColor,
-                    color: "#ffffff",
-                    display: "grid",
-                    placeItems: "center",
-                    fontSize: "13px",
-                    fontWeight: 900,
-                    letterSpacing: "0.08em",
-                    boxShadow: `0 0 16px ${accentColor}aa`,
-                  }}
-                >
-                  {getInitials(brandName)}
-                </div>
-                <div style={{ textAlign: "left" }}>
-                  <div style={{ fontSize: "15px", fontWeight: 800, color: textColor, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-                    {brandName}
-                  </div>
-                  {tagline ? (
-                    <div style={{ fontSize: "10px", color: accentColor, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" }}>
-                      SYS // {tagline}
-                    </div>
-                  ) : null}
-                </div>
-              </button>
-
-              {/* Middle: Cyber Command Search */}
-              {showSearch && (
-                <div
-                  style={{
-                    flex: "1 1 340px",
-                    maxWidth: "480px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "4px 6px 4px 12px",
-                    borderRadius: "10px",
-                    border: `1px solid ${accentColor}66`,
-                    background: light ? "rgba(15,23,42,0.03)" : "rgba(15,23,42,0.75)",
-                    boxShadow: `0 0 12px ${accentColor}22`,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: "10px",
-                      fontWeight: 800,
-                      color: accentColor,
-                      padding: "2px 6px",
-                      borderRadius: "4px",
-                      background: `${accentColor}18`,
-                      letterSpacing: "0.08em",
-                    }}
-                  >
-                    SEARCH
-                  </span>
-                  <input
-                    type="text"
-                    placeholder="Enter query..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{
-                      flex: 1,
-                      border: "none",
-                      outline: "none",
-                      background: "transparent",
-                      color: textColor,
-                      fontSize: "13px",
-                      fontFamily: "monospace",
-                    }}
+                    style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", fontWeight: 500 }}
                   />
                   <button
-                    type="button"
-                    style={{
-                      width: "32px",
-                      height: "32px",
-                      borderRadius: "6px",
-                      border: "none",
-                      background: accentColor,
-                      color: "#ffffff",
-                      display: "grid",
-                      placeItems: "center",
-                      cursor: "pointer",
-                    }}
+                    type="submit"
+                    style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: light ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.15)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
                   >
-                    <svg viewBox="0 0 24 24" style={{ width: "14px", height: "14px", stroke: "currentColor", strokeWidth: 2.2, fill: "none" }}>
+                    <svg viewBox="0 0 24 24" style={{ width: "15px", height: "15px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
                       <circle cx="11" cy="11" r="7" />
                       <path d="M20 20L16.65 16.65" />
                     </svg>
                   </button>
-                </div>
+                </form>
               )}
 
-              {/* Right: Tech Icon Actions */}
+              {/* Actions */}
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 {showCart && (
                   <button
                     type="button"
-                    onClick={() => navigate(resolvedCartPath)}
-                    style={{
-                      ...leftIconBtnBase,
-                      position: "relative",
-                      borderRadius: "10px",
-                      border: `1px solid ${accentColor}44`,
-                    }}
+                    onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
+                    style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative" }}
                   >
-                    <svg viewBox="0 0 24 24" style={iconStyle}>
+                    <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
                       <circle cx="9" cy="20" r="1.5" />
                       <circle cx="17" cy="20" r="1.5" />
                       <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
                     </svg>
                     {cartCount > 0 && (
-                      <span
-                        style={{
-                          position: "absolute",
-                          top: "-5px",
-                          right: "-5px",
-                          background: accentColor,
-                          color: "#ffffff",
-                          borderRadius: "4px",
-                          fontSize: "10px",
-                          fontWeight: 900,
-                          padding: "1px 5px",
-                          boxShadow: `0 0 8px ${accentColor}`,
-                        }}
-                      >
+                      <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
                         {cartCount}
                       </span>
                     )}
@@ -1427,11 +1179,7 @@ const Navbar: React.FC<NavbarProps> = ({
                 <button
                   type="button"
                   onClick={handleDummyNotification}
-                  style={{
-                    ...leftIconBtnBase,
-                    borderRadius: "10px",
-                    border: `1px solid ${accentColor}44`,
-                  }}
+                  style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
                 >
                   <svg viewBox="0 0 24 24" style={iconStyle}>
                     <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
@@ -1445,31 +1193,445 @@ const Navbar: React.FC<NavbarProps> = ({
                       ref={accountButtonRef}
                       type="button"
                       onClick={handleAccountClick}
-                      style={{
-                        ...leftIconBtnBase,
-                        borderRadius: "10px",
-                        border: `1px solid ${accentColor}44`,
-                      }}
+                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
                     >
                       <svg viewBox="0 0 24 24" style={iconStyle}>
                         <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
                         <circle cx="12" cy="8" r="4" />
                       </svg>
                     </button>
-
                     {accountMenuOpen && (
                       <div role="menu" style={dropdownPanelStyle}>
-                        <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>
-                          Profile
-                        </button>
-                        <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>
-                          Orders
-                        </button>
-                        {isAuthenticated && (
-                          <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>
-                            Logout
-                          </button>
-                        )}
+                        <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
+                        <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
+                        {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : theme?.navbar_layout === "glassmorphism_premium" ? (
+            /* 2. Glassmorphism Premium */
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: "16px", padding: "6px 14px", background: light ? "rgba(255, 255, 255, 0.65)" : "rgba(15, 23, 42, 0.65)", backdropFilter: "blur(20px)", borderRadius: "20px", border: light ? "1px solid rgba(255, 255, 255, 0.4)" : "1px solid rgba(255, 255, 255, 0.12)", boxShadow: light ? "0 8px 32px rgba(31, 38, 135, 0.08)" : "0 8px 32px rgba(0, 0, 0, 0.4)" }}>
+              {/* Brand */}
+              <button
+                type="button"
+                onClick={() => navigate(resolvedHomePath)}
+                style={{ display: "flex", alignItems: "center", gap: "10px", background: "transparent", border: "none", cursor: "pointer" }}
+              >
+                <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: light ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.12)", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800 }}>
+                  {getInitials(brandName)}
+                </div>
+                <span style={{ fontSize: "15px", fontWeight: 700, color: textColor }}>{brandName}</span>
+              </button>
+
+              {/* Glass Pill Search */}
+              {showSearch && (
+                <form
+                  onSubmit={handleSearchSubmit}
+                  style={{
+                    flex: "1 1 320px",
+                    maxWidth: "460px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "4px 4px 4px 16px",
+                    borderRadius: "999px",
+                    background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)",
+                    backdropFilter: "blur(10px)",
+                    border: light ? "1px solid rgba(255,255,255,0.7)" : "1px solid rgba(255,255,255,0.15)",
+                  }}
+                >
+                  <input
+                    type="text"
+                    placeholder="Search products..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", fontWeight: 500 }}
+                  />
+                  <button
+                    type="submit"
+                    style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: light ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.2)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                  >
+                    <svg viewBox="0 0 24 24" style={{ width: "15px", height: "15px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="M20 20L16.65 16.65" />
+                    </svg>
+                  </button>
+                </form>
+              )}
+
+              {/* Glass Action Icons */}
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                {showCart && (
+                  <button
+                    type="button"
+                    onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
+                    style={{ width: "38px", height: "38px", borderRadius: "999px", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative" }}
+                  >
+                    <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
+                      <circle cx="9" cy="20" r="1.5" />
+                      <circle cx="17" cy="20" r="1.5" />
+                      <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
+                    </svg>
+                    {cartCount > 0 && (
+                      <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
+                        {cartCount}
+                      </span>
+                    )}
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleDummyNotification}
+                  style={{ width: "38px", height: "38px", borderRadius: "999px", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                >
+                  <svg viewBox="0 0 24 24" style={iconStyle}>
+                    <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
+                    <path d="M10 17a2 2 0 0 0 4 0" />
+                  </svg>
+                </button>
+
+                {showAccount && (
+                  <div ref={accountMenuRef} style={{ position: "relative" }}>
+                    <button
+                      ref={accountButtonRef}
+                      type="button"
+                      onClick={handleAccountClick}
+                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                    >
+                      <svg viewBox="0 0 24 24" style={iconStyle}>
+                        <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
+                        <circle cx="12" cy="8" r="4" />
+                      </svg>
+                    </button>
+                    {accountMenuOpen && (
+                      <div role="menu" style={dropdownPanelStyle}>
+                        <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
+                        <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
+                        {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : theme?.navbar_layout === "modern_marketplace" ? (
+            /* 3. Modern Marketplace (Amazon / Shopify - No Hamburger Menu) */
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: "16px", padding: "6px 12px" }}>
+              {/* Brand Logo & Name */}
+              <button
+                type="button"
+                onClick={() => navigate(resolvedHomePath)}
+                style={{ display: "flex", alignItems: "center", gap: "10px", background: "transparent", border: "none", cursor: "pointer" }}
+              >
+                <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: light ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)", border: softBorder, color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800 }}>
+                  {getInitials(brandName)}
+                </div>
+                <span style={{ fontSize: "15px", fontWeight: 700, color: textColor }}>{brandName}</span>
+              </button>
+
+              {/* Marketplace Rectangular Search with Accent Button */}
+              {showSearch && (
+                <form
+                  onSubmit={handleSearchSubmit}
+                  style={{
+                    flex: "1 1 340px",
+                    maxWidth: "480px",
+                    display: "flex",
+                    alignItems: "center",
+                    borderRadius: "8px",
+                    border: softBorder,
+                    background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
+                    overflow: "hidden",
+                  }}
+                >
+                  <input
+                    type="text"
+                    placeholder="Search products..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", padding: "8px 14px" }}
+                  />
+                  <button
+                    type="submit"
+                    style={{ width: "42px", height: "36px", border: "none", background: accentColor, color: "#ffffff", display: "grid", placeItems: "center", cursor: "pointer" }}
+                  >
+                    <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: "currentColor", strokeWidth: 2.2, fill: "none" }}>
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="M20 20L16.65 16.65" />
+                    </svg>
+                  </button>
+                </form>
+              )}
+
+              {/* Action Buttons */}
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                {showCart && (
+                  <button
+                    type="button"
+                    onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
+                    style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative" }}
+                  >
+                    <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
+                      <circle cx="9" cy="20" r="1.5" />
+                      <circle cx="17" cy="20" r="1.5" />
+                      <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
+                    </svg>
+                    {cartCount > 0 && (
+                      <span style={{ position: "absolute", top: "-4px", right: "-4px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
+                        {cartCount}
+                      </span>
+                    )}
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleDummyNotification}
+                  style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                >
+                  <svg viewBox="0 0 24 24" style={iconStyle}>
+                    <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
+                    <path d="M10 17a2 2 0 0 0 4 0" />
+                  </svg>
+                </button>
+
+                {showAccount && (
+                  <div ref={accountMenuRef} style={{ position: "relative" }}>
+                    <button
+                      ref={accountButtonRef}
+                      type="button"
+                      onClick={handleAccountClick}
+                      style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                    >
+                      <svg viewBox="0 0 24 24" style={iconStyle}>
+                        <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
+                        <circle cx="12" cy="8" r="4" />
+                      </svg>
+                    </button>
+                    {accountMenuOpen && (
+                      <div role="menu" style={dropdownPanelStyle}>
+                        <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
+                        <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
+                        {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : theme?.navbar_layout === "luxury_fashion" ? (
+            /* 4. Luxury Fashion Store */
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: "16px", padding: "8px 16px" }}>
+              {/* Serif Logo with Vertical Divider */}
+              <button
+                type="button"
+                onClick={() => navigate(resolvedHomePath)}
+                style={{ display: "flex", alignItems: "center", gap: "16px", background: "transparent", border: "none", cursor: "pointer" }}
+              >
+                <span style={{ fontFamily: "'Playfair Display', 'Didot', 'Georgia', serif", fontSize: "20px", fontWeight: 700, color: textColor }}>
+                  {getInitials(brandName)}
+                </span>
+                <span style={{ width: "1px", height: "20px", background: light ? "rgba(15,23,42,0.15)" : "rgba(255,255,255,0.2)" }} />
+                <span style={{ fontFamily: "'Playfair Display', 'Didot', 'Georgia', serif", fontSize: "15px", fontWeight: 600, color: textColor, letterSpacing: "0.15em", textTransform: "uppercase" }}>
+                  {brandName}
+                </span>
+              </button>
+
+              {/* Minimal Fashion Search Pill */}
+              {showSearch && (
+                <form
+                  onSubmit={handleSearchSubmit}
+                  style={{
+                    flex: "1 1 300px",
+                    maxWidth: "440px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "4px 4px 4px 16px",
+                    borderRadius: "999px",
+                    background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
+                    border: softBorder,
+                  }}
+                >
+                  <input
+                    type="text"
+                    placeholder="Search products..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", fontFamily: "serif" }}
+                  />
+                  <button
+                    type="submit"
+                    style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: "transparent", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                  >
+                    <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="M20 20L16.65 16.65" />
+                    </svg>
+                  </button>
+                </form>
+              )}
+
+              {/* Luxury Minimal Icons */}
+              <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                {showCart && (
+                  <button
+                    type="button"
+                    onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
+                    style={{ background: "transparent", border: "none", color: textColor, cursor: "pointer", position: "relative", padding: "4px" }}
+                  >
+                    <svg viewBox="0 0 24 24" style={{ width: "19px", height: "19px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
+                      <circle cx="9" cy="20" r="1.5" />
+                      <circle cx="17" cy="20" r="1.5" />
+                      <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
+                    </svg>
+                    {cartCount > 0 && (
+                      <span style={{ position: "absolute", top: "-2px", right: "-4px", width: "16px", height: "16px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "9px", fontWeight: 800, display: "grid", placeItems: "center" }}>
+                        {cartCount}
+                      </span>
+                    )}
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleDummyNotification}
+                  style={{ background: "transparent", border: "none", color: textColor, cursor: "pointer", padding: "4px" }}
+                >
+                  <svg viewBox="0 0 24 24" style={{ width: "19px", height: "19px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
+                    <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
+                    <path d="M10 17a2 2 0 0 0 4 0" />
+                  </svg>
+                </button>
+
+                {showAccount && (
+                  <div ref={accountMenuRef} style={{ position: "relative" }}>
+                    <button
+                      ref={accountButtonRef}
+                      type="button"
+                      onClick={handleAccountClick}
+                      style={{ background: "transparent", border: "none", color: textColor, cursor: "pointer", padding: "4px" }}
+                    >
+                      <svg viewBox="0 0 24 24" style={{ width: "19px", height: "19px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
+                        <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
+                        <circle cx="12" cy="8" r="4" />
+                      </svg>
+                    </button>
+                    {accountMenuOpen && (
+                      <div role="menu" style={dropdownPanelStyle}>
+                        <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
+                        <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
+                        {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : theme?.navbar_layout === "neo_modern" ? (
+            /* 5. Neo Modern 2026 SaaS */
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: "16px", padding: "8px 16px", background: light ? "#f0f4f9" : "#1e293b", borderRadius: "999px", boxShadow: light ? "6px 6px 14px rgba(166,180,200,0.4), -6px -6px 14px rgba(255,255,255,0.9)" : "6px 6px 14px rgba(0,0,0,0.5), -6px -6px 14px rgba(255,255,255,0.05)" }}>
+              {/* Brand */}
+              <button
+                type="button"
+                onClick={() => navigate(resolvedHomePath)}
+                style={{ display: "flex", alignItems: "center", gap: "10px", background: "transparent", border: "none", cursor: "pointer" }}
+              >
+                <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: light ? "#f0f4f9" : "#1e293b", boxShadow: light ? "3px 3px 6px rgba(166,180,200,0.4), -3px -3px 6px rgba(255,255,255,0.9)" : "3px 3px 6px rgba(0,0,0,0.4), -3px -3px 6px rgba(255,255,255,0.05)", color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800 }}>
+                  {getInitials(brandName)}
+                </div>
+                <span style={{ fontSize: "15px", fontWeight: 700, color: textColor }}>{brandName}</span>
+              </button>
+
+              {/* Inset Neumorphic Search Bar */}
+              {showSearch && (
+                <form
+                  onSubmit={handleSearchSubmit}
+                  style={{
+                    flex: "1 1 320px",
+                    maxWidth: "460px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "4px 4px 4px 16px",
+                    borderRadius: "999px",
+                    background: light ? "#f0f4f9" : "#1e293b",
+                    boxShadow: light ? "inset 2px 2px 5px rgba(166,180,200,0.4), inset -2px -2px 5px rgba(255,255,255,0.9)" : "inset 2px 2px 5px rgba(0,0,0,0.5), inset -2px -2px 5px rgba(255,255,255,0.05)",
+                  }}
+                >
+                  <input
+                    type="text"
+                    placeholder="Search products..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", fontWeight: 500 }}
+                  />
+                  <button
+                    type="submit"
+                    style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: light ? "#f0f4f9" : "#1e293b", boxShadow: light ? "3px 3px 6px rgba(166,180,200,0.4), -3px -3px 6px rgba(255,255,255,0.9)" : "3px 3px 6px rgba(0,0,0,0.4), -3px -3px 6px rgba(255,255,255,0.05)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                  >
+                    <svg viewBox="0 0 24 24" style={{ width: "15px", height: "15px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="M20 20L16.65 16.65" />
+                    </svg>
+                  </button>
+                </form>
+              )}
+
+              {/* Circular Neumorphic Action Controls */}
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                {showCart && (
+                  <button
+                    type="button"
+                    onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
+                    style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: light ? "#f0f4f9" : "#1e293b", boxShadow: light ? "4px 4px 8px rgba(166,180,200,0.4), -4px -4px 8px rgba(255,255,255,0.9)" : "4px 4px 8px rgba(0,0,0,0.4), -4px -4px 8px rgba(255,255,255,0.05)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative" }}
+                  >
+                    <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
+                      <circle cx="9" cy="20" r="1.5" />
+                      <circle cx="17" cy="20" r="1.5" />
+                      <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
+                    </svg>
+                    {cartCount > 0 && (
+                      <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
+                        {cartCount}
+                      </span>
+                    )}
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleDummyNotification}
+                  style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: light ? "#f0f4f9" : "#1e293b", boxShadow: light ? "4px 4px 8px rgba(166,180,200,0.4), -4px -4px 8px rgba(255,255,255,0.9)" : "4px 4px 8px rgba(0,0,0,0.4), -4px -4px 8px rgba(255,255,255,0.05)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                >
+                  <svg viewBox="0 0 24 24" style={iconStyle}>
+                    <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
+                    <path d="M10 17a2 2 0 0 0 4 0" />
+                  </svg>
+                </button>
+
+                {showAccount && (
+                  <div ref={accountMenuRef} style={{ position: "relative" }}>
+                    <button
+                      ref={accountButtonRef}
+                      type="button"
+                      onClick={handleAccountClick}
+                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: light ? "#f0f4f9" : "#1e293b", boxShadow: light ? "4px 4px 8px rgba(166,180,200,0.4), -4px -4px 8px rgba(255,255,255,0.9)" : "4px 4px 8px rgba(0,0,0,0.4), -4px -4px 8px rgba(255,255,255,0.05)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                    >
+                      <svg viewBox="0 0 24 24" style={iconStyle}>
+                        <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
+                        <circle cx="12" cy="8" r="4" />
+                      </svg>
+                    </button>
+                    {accountMenuOpen && (
+                      <div role="menu" style={dropdownPanelStyle}>
+                        <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
+                        <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
+                        {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
                       </div>
                     )}
                   </div>
@@ -1477,199 +1639,80 @@ const Navbar: React.FC<NavbarProps> = ({
               </div>
             </div>
           ) : (
-            <div style={desktopMainRowStyle}>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                  minWidth: 0,
-                  flex: "1 1 auto",
-                }}
+            /* 1. Apple / Vercel Minimal (Default Fallback) */
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: "16px", padding: "6px 12px" }}>
+              {/* Brand */}
+              <button
+                type="button"
+                onClick={() => navigate(resolvedHomePath)}
+                style={{ display: "flex", alignItems: "center", gap: "10px", background: "transparent", border: "none", cursor: "pointer" }}
               >
-                <button
-                  type="button"
-                  onClick={() => navigate(resolvedHomePath)}
+                <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: light ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)", border: softBorder, color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800 }}>
+                  {getInitials(brandName)}
+                </div>
+                <span style={{ fontSize: "15px", fontWeight: 700, color: textColor }}>{brandName}</span>
+              </button>
+
+              {/* Pill Search with enclosed button icon */}
+              {showSearch && (
+                <form
+                  onSubmit={handleSearchSubmit}
                   style={{
+                    flex: "1 1 320px",
+                    maxWidth: "460px",
                     display: "flex",
                     alignItems: "center",
-                    gap: "12px",
-                    padding: 0,
-                    background: "transparent",
-                    border: "none",
-                    cursor: "pointer",
-                    minWidth: 0,
-                    flex: "0 1 auto",
+                    gap: "8px",
+                    padding: "4px 4px 4px 16px",
+                    borderRadius: "999px",
+                    background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
+                    border: softBorder,
                   }}
                 >
-                  <div
-                    style={{
-                      width: "42px",
-                      height: "42px",
-                      borderRadius: "14px",
-                      background: `linear-gradient(135deg, ${accentColor}, ${accentColor}dd)`,
-                      color: "#ffffff",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: "13px",
-                      fontWeight: 800,
-                      letterSpacing: "0.04em",
-                      boxShadow: light
-                        ? "0 12px 24px rgba(37,99,235,0.18)"
-                        : "0 12px 24px rgba(0,0,0,0.26)",
-                      flexShrink: 0,
-                    }}
+                  <input
+                    type="text"
+                    placeholder="Search products..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", fontWeight: 500 }}
+                  />
+                  <button
+                    type="submit"
+                    style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: light ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.15)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
                   >
-                    {getInitials(brandName)}
-                  </div>
-                  <div style={{ textAlign: "left", minWidth: 0, overflow: "hidden" }}>
-                    <div
-                      style={{
-                        fontSize: "16px",
-                        fontWeight: 750,
-                        lineHeight: 1.1,
-                        color: textColor,
-                        letterSpacing: "-0.02em",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {brandName}
-                    </div>
-                    {tagline ? (
-                      <div
-                        style={{
-                          fontSize: "12px",
-                          color: mutedText,
-                          marginTop: "3px",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                      >
-                        {tagline}
-                      </div>
-                    ) : null}
-                  </div>
-                </button>
+                    <svg viewBox="0 0 24 24" style={{ width: "15px", height: "15px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="M20 20L16.65 16.65" />
+                    </svg>
+                  </button>
+                </form>
+              )}
 
-
-                {showSearch && (
-                  <div style={{ ...searchWrapStyle, flex: "1 1 260px" }}>
-                    <div
-                      style={{
-                        flex: 1,
-                        minWidth: 0,
-                        padding: "0 16px",
-                        display: "flex",
-                        alignItems: "center",
-                      }}
-                    >
-                      <input
-                        type="text"
-                        aria-label="Search products"
-                        placeholder="Search products..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        style={{
-                          width: "100%",
-                          border: "none",
-                          outline: "none",
-                          background: "transparent",
-                          color: textColor,
-                          fontSize: "14px",
-                          fontWeight: 500,
-                          padding: "12px 0",
-                        }}
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      aria-label="Search"
-                      onClick={() => window.console.log("Search:", searchQuery)}
-                      style={{
-                        width: "46px",
-                        height: "46px",
-                        margin: "4px",
-                        borderRadius: "999px",
-                        border: "none",
-                        background: light ? "#0f172a" : "#ffffff",
-                        color: light ? "#ffffff" : "#0f172a",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        cursor: "pointer",
-                        flexShrink: 0,
-                        boxShadow: light
-                          ? "0 8px 18px rgba(15,23,42,0.12)"
-                          : "0 8px 18px rgba(255,255,255,0.10)",
-                      }}
-                    >
-                      <svg viewBox="0 0 24 24" style={iconStyle}>
-                        <circle cx="11" cy="11" r="7" />
-                        <path d="M20 20L16.65 16.65" />
-                      </svg>
-                    </button>
-                  </div>
-                )}
-              </div>
-
-
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  minWidth: 0,
-                  flex: "0 0 auto",
-                }}
-              >
+              {/* Actions */}
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 {showCart && (
                   <button
                     type="button"
-                    aria-label="Cart"
-                    onClick={() => navigate(resolvedCartPath)}
-                    style={leftIconBtnBase}
+                    onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
+                    style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative" }}
                   >
-                    <svg viewBox="0 0 24 24" style={iconStyle}>
+                    <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
                       <circle cx="9" cy="20" r="1.5" />
                       <circle cx="17" cy="20" r="1.5" />
                       <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
                     </svg>
                     {cartCount > 0 && (
-                      <span
-                        style={{
-                          position: "absolute",
-                          top: "-5px",
-                          right: "-5px",
-                          minWidth: "20px",
-                          height: "20px",
-                          padding: "0 6px",
-                          borderRadius: "999px",
-                          background: "#ef4444",
-                          color: "#ffffff",
-                          fontSize: "11px",
-                          fontWeight: 800,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          boxShadow: "0 6px 14px rgba(239,68,68,0.35)",
-                        }}
-                      >
+                      <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
                         {cartCount}
                       </span>
                     )}
                   </button>
                 )}
 
-
                 <button
                   type="button"
-                  aria-label="Notifications"
                   onClick={handleDummyNotification}
-                  style={leftIconBtnBase}
+                  style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
                 >
                   <svg viewBox="0 0 24 24" style={iconStyle}>
                     <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
@@ -1677,152 +1720,24 @@ const Navbar: React.FC<NavbarProps> = ({
                   </svg>
                 </button>
 
-
                 {showAccount && (
                   <div ref={accountMenuRef} style={{ position: "relative" }}>
                     <button
                       ref={accountButtonRef}
                       type="button"
-                      aria-label={isAuthenticated ? "Account menu" : "Account"}
-                      aria-haspopup={isAuthenticated ? "menu" : undefined}
-                      aria-expanded={isAuthenticated ? accountMenuOpen : undefined}
                       onClick={handleAccountClick}
-                      style={leftIconBtnBase}
+                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
                     >
                       <svg viewBox="0 0 24 24" style={iconStyle}>
                         <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
                         <circle cx="12" cy="8" r="4" />
                       </svg>
                     </button>
-
-
-                    {isAuthenticated && accountMenuOpen && (
-                      <div role="menu" aria-label="Account options" style={dropdownPanelStyle}>
-                        <div
-                          style={{
-                            padding: "8px 10px 12px",
-                            marginBottom: "8px",
-                            borderBottom: light
-                              ? "1px solid rgba(15,23,42,0.08)"
-                              : "1px solid rgba(255,255,255,0.08)",
-                          }}
-                        >
-                          <div
-                            style={{
-                              fontSize: "11px",
-                              fontWeight: 700,
-                              letterSpacing: "0.08em",
-                              textTransform: "uppercase",
-                              color: mutedText,
-                              marginBottom: "6px",
-                            }}
-                          >
-                            Account
-                          </div>
-                          <div
-                            style={{
-                              fontSize: "14px",
-                              fontWeight: 700,
-                              color: textColor,
-                              letterSpacing: "-0.02em",
-                            }}
-                          >
-                            {brandName}
-                          </div>
-                          <div style={menuMetaTextStyle}>Manage profile, orders, and session</div>
-                        </div>
-
-
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={handleGoToProfile}
-                          style={menuItemStyle}
-                        >
-                          <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
-                            <span style={menuRowIconStyle}>
-                              <svg viewBox="0 0 24 24" style={iconStyle}>
-                                <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
-                                <circle cx="12" cy="8" r="4" />
-                              </svg>
-                            </span>
-                            <span style={{ minWidth: 0 }}>
-                              <div style={{ fontSize: "13px", fontWeight: 650, color: textColor }}>Profile</div>
-                              <div style={menuMetaTextStyle}>Personal details and preferences</div>
-                            </span>
-                          </div>
-                          <span style={menuArrowStyle}>→</span>
-                        </button>
-
-
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={handleGoToOrders}
-                          style={menuItemStyle}
-                        >
-                          <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
-                            <span style={menuRowIconStyle}>
-                              <svg viewBox="0 0 24 24" style={iconStyle}>
-                                <path d="M3 7.5H21" />
-                                <path d="M6 7.5V17C6 18.1046 6.89543 19 8 19H16C17.1046 19 18 18.1046 18 17V7.5" />
-                                <path d="M9 11H15" />
-                                <path d="M10 4.5H14" />
-                              </svg>
-                            </span>
-                            <span style={{ minWidth: 0 }}>
-                              <div style={{ fontSize: "13px", fontWeight: 650, color: textColor }}>Order history</div>
-                              <div style={menuMetaTextStyle}>Track purchases and order activity</div>
-                            </span>
-                          </div>
-                          <span style={menuArrowStyle}>→</span>
-                        </button>
-
-
-                        <div
-                          style={{
-                            margin: "8px 2px 2px",
-                            borderTop: light
-                              ? "1px solid rgba(15,23,42,0.08)"
-                              : "1px solid rgba(255,255,255,0.08)",
-                            paddingTop: "8px",
-                          }}
-                        >
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={handleCustomerLogout}
-                            style={{
-                              ...menuItemStyle,
-                              color: light ? "#991b1b" : "#fca5a5",
-                            }}
-                          >
-                            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                              <span
-                                style={{
-                                  ...menuRowIconStyle,
-                                  color: light ? "#991b1b" : "#fca5a5",
-                                  background: light
-                                    ? "rgba(239,68,68,0.05)"
-                                    : "rgba(239,68,68,0.10)",
-                                  border: light
-                                    ? "1px solid rgba(239,68,68,0.10)"
-                                    : "1px solid rgba(239,68,68,0.14)",
-                                }}
-                              >
-                                <svg viewBox="0 0 24 24" style={iconStyle}>
-                                  <path d="M9 21H5C4.44772 21 4 20.5523 4 20V4C4 3.44772 4.44772 3 5 3H9" />
-                                  <path d="M16 17L21 12L16 7" />
-                                  <path d="M21 12H9" />
-                                </svg>
-                              </span>
-                              <span>
-                                <div style={{ fontSize: "13px", fontWeight: 650 }}>Logout</div>
-                                <div style={menuMetaTextStyle}>Sign out from this session</div>
-                              </span>
-                            </div>
-                          </button>
-                        </div>
+                    {accountMenuOpen && (
+                      <div role="menu" style={dropdownPanelStyle}>
+                        <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
+                        <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
+                        {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
                       </div>
                     )}
                   </div>

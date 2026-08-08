@@ -85,14 +85,6 @@ const navbarBrandNameField = {
   placeholder: "Storefront",
 };
 
-const navbarTaglineField = {
-  key: "tagline",
-  label: "Tagline",
-  type: "text" as const,
-  target: "props" as const,
-  placeholder: "Short brand tagline",
-};
-
 const navbarShowSearchField = {
   key: "showSearch",
   label: "Show search",
@@ -761,7 +753,6 @@ export const editorRegistry: EditorRegistry = {
     displayName: "Navbar",
     fields: [
       navbarBrandNameField,
-      navbarTaglineField,
       navbarVariantField,
       navbarPositionField,
       navbarHeightField,

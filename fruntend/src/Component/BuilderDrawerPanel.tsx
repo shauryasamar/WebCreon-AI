@@ -152,6 +152,141 @@ function PlainCard({
   );
 }
 
+function renderAssetPreview(assetId: string) {
+  switch (assetId) {
+    case "navbar-apple-minimal":
+      return (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", background: "#ffffff", borderRadius: "999px", padding: "6px 10px", boxShadow: "0 3px 10px rgba(0,0,0,0.05)", border: "1px solid rgba(15,23,42,0.08)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <div style={{ width: "20px", height: "20px", borderRadius: "6px", background: "#f1f5f9", fontSize: "9px", fontWeight: 800, display: "grid", placeItems: "center", color: "#0f172a" }}>YB</div>
+            <span style={{ fontSize: "11px", fontWeight: 700, color: "#0f172a" }}>Your Brand</span>
+          </div>
+          <div style={{ flex: 1, maxWidth: "110px", height: "18px", borderRadius: "999px", background: "#f8fafc", border: "1px solid rgba(15,23,42,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px 0 8px" }}>
+            <span style={{ fontSize: "8px", color: "#94a3b8" }}>Search...</span>
+            <div style={{ width: "12px", height: "12px", borderRadius: "999px", background: "#e2e8f0", display: "grid", placeItems: "center" }}>
+              <svg viewBox="0 0 24 24" style={{ width: "7px", height: "7px", stroke: "#475569", strokeWidth: 2.5, fill: "none" }}><circle cx="11" cy="11" r="7" /><path d="M20 20L16.65 16.65" /></svg>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "4px" }}>
+            <div style={{ width: "18px", height: "18px", borderRadius: "999px", background: "#f8fafc", border: "1px solid rgba(15,23,42,0.08)", display: "grid", placeItems: "center", position: "relative" }}>
+              <svg viewBox="0 0 24 24" style={{ width: "9px", height: "9px", stroke: "#334155", strokeWidth: 2, fill: "none" }}><circle cx="9" cy="20" r="1.5" /><circle cx="17" cy="20" r="1.5" /><path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" /></svg>
+              <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "8px", height: "8px", borderRadius: "999px", background: "#0066ff", color: "#fff", fontSize: "5px", fontWeight: 900, display: "grid", placeItems: "center" }}>1</span>
+            </div>
+            <div style={{ width: "18px", height: "18px", borderRadius: "999px", background: "#f8fafc", border: "1px solid rgba(15,23,42,0.08)", display: "grid", placeItems: "center" }}>
+              <svg viewBox="0 0 24 24" style={{ width: "9px", height: "9px", stroke: "#334155", strokeWidth: 2, fill: "none" }}><path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" /><path d="M10 17a2 2 0 0 0 4 0" /></svg>
+            </div>
+            <div style={{ width: "18px", height: "18px", borderRadius: "999px", background: "#f8fafc", border: "1px solid rgba(15,23,42,0.08)", display: "grid", placeItems: "center" }}>
+              <svg viewBox="0 0 24 24" style={{ width: "9px", height: "9px", stroke: "#334155", strokeWidth: 2, fill: "none" }}><path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" /><circle cx="12" cy="8" r="4" /></svg>
+            </div>
+          </div>
+        </div>
+      );
+    case "navbar-glassmorphism":
+      return (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", background: "linear-gradient(135deg, rgba(255,255,255,0.9), rgba(240,244,248,0.75))", borderRadius: "10px", padding: "6px 10px", border: "1px solid rgba(255,255,255,0.9)", boxShadow: "0 4px 12px rgba(31,38,135,0.07)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <div style={{ width: "18px", height: "18px", borderRadius: "5px", background: "rgba(255,255,255,0.8)", border: "1px solid rgba(255,255,255,0.6)", fontSize: "8px", fontWeight: 800, display: "grid", placeItems: "center", color: "#0f172a" }}>YB</div>
+            <span style={{ fontSize: "11px", fontWeight: 700, color: "#0f172a" }}>Your Brand</span>
+          </div>
+          <div style={{ flex: 1, maxWidth: "110px", height: "18px", borderRadius: "999px", background: "rgba(255,255,255,0.5)", border: "1px solid rgba(255,255,255,0.8)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px 0 8px" }}>
+            <span style={{ fontSize: "8px", color: "#94a3b8" }}>Search...</span>
+            <div style={{ width: "12px", height: "12px", borderRadius: "999px", background: "rgba(255,255,255,0.8)", display: "grid", placeItems: "center" }}>
+              <svg viewBox="0 0 24 24" style={{ width: "7px", height: "7px", stroke: "#475569", strokeWidth: 2.5, fill: "none" }}><circle cx="11" cy="11" r="7" /><path d="M20 20L16.65 16.65" /></svg>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "4px" }}>
+            <div style={{ width: "18px", height: "18px", borderRadius: "999px", background: "rgba(255,255,255,0.6)", border: "1px solid rgba(255,255,255,0.8)", display: "grid", placeItems: "center", position: "relative" }}>
+              <svg viewBox="0 0 24 24" style={{ width: "9px", height: "9px", stroke: "#334155", strokeWidth: 2, fill: "none" }}><circle cx="9" cy="20" r="1.5" /><circle cx="17" cy="20" r="1.5" /><path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" /></svg>
+              <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "8px", height: "8px", borderRadius: "999px", background: "#0066ff", color: "#fff", fontSize: "5px", fontWeight: 900, display: "grid", placeItems: "center" }}>1</span>
+            </div>
+            <div style={{ width: "18px", height: "18px", borderRadius: "999px", background: "rgba(255,255,255,0.6)", border: "1px solid rgba(255,255,255,0.8)", display: "grid", placeItems: "center" }}>
+              <svg viewBox="0 0 24 24" style={{ width: "9px", height: "9px", stroke: "#334155", strokeWidth: 2, fill: "none" }}><path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" /><path d="M10 17a2 2 0 0 0 4 0" /></svg>
+            </div>
+            <div style={{ width: "18px", height: "18px", borderRadius: "999px", background: "rgba(255,255,255,0.6)", border: "1px solid rgba(255,255,255,0.8)", display: "grid", placeItems: "center" }}>
+              <svg viewBox="0 0 24 24" style={{ width: "9px", height: "9px", stroke: "#334155", strokeWidth: 2, fill: "none" }}><path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" /><circle cx="12" cy="8" r="4" /></svg>
+            </div>
+          </div>
+        </div>
+      );
+    case "navbar-modern-marketplace":
+      return (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", background: "#ffffff", borderRadius: "6px", padding: "6px 8px", border: "1px solid rgba(15,23,42,0.12)", boxShadow: "0 2px 6px rgba(0,0,0,0.03)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+            <div style={{ width: "18px", height: "18px", borderRadius: "4px", background: "#f1f5f9", border: "1px solid rgba(15,23,42,0.1)", fontSize: "8px", fontWeight: 800, display: "grid", placeItems: "center", color: "#0f172a" }}>YB</div>
+            <span style={{ fontSize: "11px", fontWeight: 700, color: "#0f172a" }}>Your Brand</span>
+          </div>
+          <div style={{ flex: 1, maxWidth: "110px", height: "18px", borderRadius: "4px", border: "1px solid rgba(15,23,42,0.2)", display: "flex", alignItems: "center", justifyContent: "space-between", overflow: "hidden", background: "#ffffff" }}>
+            <span style={{ fontSize: "8px", color: "#94a3b8", paddingLeft: "4px" }}>Search...</span>
+            <div style={{ width: "18px", height: "100%", background: "#374151", display: "grid", placeItems: "center" }}>
+              <svg viewBox="0 0 24 24" style={{ width: "8px", height: "8px", stroke: "#ffffff", strokeWidth: 2.5, fill: "none" }}><circle cx="11" cy="11" r="7" /><path d="M20 20L16.65 16.65" /></svg>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "4px" }}>
+            <div style={{ width: "18px", height: "18px", borderRadius: "4px", border: "1px solid rgba(15,23,42,0.12)", display: "grid", placeItems: "center", position: "relative" }}>
+              <svg viewBox="0 0 24 24" style={{ width: "9px", height: "9px", stroke: "#334155", strokeWidth: 2, fill: "none" }}><circle cx="9" cy="20" r="1.5" /><circle cx="17" cy="20" r="1.5" /><path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" /></svg>
+              <span style={{ position: "absolute", top: "-3px", right: "-3px", width: "7px", height: "7px", borderRadius: "999px", background: "#0066ff", color: "#fff", fontSize: "5px", fontWeight: 900, display: "grid", placeItems: "center" }}>1</span>
+            </div>
+            <div style={{ width: "18px", height: "18px", borderRadius: "4px", border: "1px solid rgba(15,23,42,0.12)", display: "grid", placeItems: "center" }}>
+              <svg viewBox="0 0 24 24" style={{ width: "9px", height: "9px", stroke: "#334155", strokeWidth: 2, fill: "none" }}><path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" /><path d="M10 17a2 2 0 0 0 4 0" /></svg>
+            </div>
+            <div style={{ width: "18px", height: "18px", borderRadius: "4px", border: "1px solid rgba(15,23,42,0.12)", display: "grid", placeItems: "center" }}>
+              <svg viewBox="0 0 24 24" style={{ width: "9px", height: "9px", stroke: "#334155", strokeWidth: 2, fill: "none" }}><path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" /><circle cx="12" cy="8" r="4" /></svg>
+            </div>
+          </div>
+        </div>
+      );
+    case "navbar-luxury-fashion":
+      return (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", background: "#ffffff", borderRadius: "999px", padding: "6px 10px", border: "1px solid rgba(15,23,42,0.12)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+            <span style={{ fontFamily: "serif", fontSize: "11px", fontWeight: 800, color: "#0f172a" }}>YB</span>
+            <span style={{ width: "1px", height: "10px", background: "rgba(15,23,42,0.2)" }} />
+            <span style={{ fontFamily: "serif", fontSize: "9px", fontWeight: 600, color: "#0f172a", letterSpacing: "0.1em" }}>Your Brand</span>
+          </div>
+          <div style={{ flex: 1, maxWidth: "100px", height: "16px", borderRadius: "999px", border: "1px solid rgba(15,23,42,0.15)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 6px" }}>
+            <span style={{ fontSize: "7px", color: "#94a3b8", fontFamily: "serif" }}>Search...</span>
+            <svg viewBox="0 0 24 24" style={{ width: "7px", height: "7px", stroke: "#0f172a", strokeWidth: 2, fill: "none" }}><circle cx="11" cy="11" r="7" /><path d="M20 20L16.65 16.65" /></svg>
+          </div>
+          <div style={{ display: "flex", gap: "5px" }}>
+            <div style={{ position: "relative" }}>
+              <svg viewBox="0 0 24 24" style={{ width: "10px", height: "10px", stroke: "#0f172a", strokeWidth: 1.8, fill: "none" }}><circle cx="9" cy="20" r="1.5" /><circle cx="17" cy="20" r="1.5" /><path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" /></svg>
+              <span style={{ position: "absolute", top: "-2px", right: "-3px", width: "6px", height: "6px", borderRadius: "999px", background: "#000", color: "#fff", fontSize: "4px", fontWeight: 900, display: "grid", placeItems: "center" }}>1</span>
+            </div>
+            <svg viewBox="0 0 24 24" style={{ width: "10px", height: "10px", stroke: "#0f172a", strokeWidth: 1.8, fill: "none" }}><path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" /><path d="M10 17a2 2 0 0 0 4 0" /></svg>
+            <svg viewBox="0 0 24 24" style={{ width: "10px", height: "10px", stroke: "#0f172a", strokeWidth: 1.8, fill: "none" }}><path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" /><circle cx="12" cy="8" r="4" /></svg>
+          </div>
+        </div>
+      );
+    case "navbar-neo-modern":
+      return (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", background: "#f0f4f9", borderRadius: "999px", padding: "6px 10px", boxShadow: "3px 3px 6px rgba(166,180,200,0.4), -3px -3px 6px rgba(255,255,255,0.9)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+            <div style={{ width: "18px", height: "18px", borderRadius: "5px", background: "#f0f4f9", boxShadow: "2px 2px 4px rgba(166,180,200,0.4), -2px -2px 4px rgba(255,255,255,0.9)", fontSize: "8px", fontWeight: 800, display: "grid", placeItems: "center", color: "#0f172a" }}>YB</div>
+            <span style={{ fontSize: "11px", fontWeight: 700, color: "#0f172a" }}>Your Brand</span>
+          </div>
+          <div style={{ flex: 1, maxWidth: "110px", height: "18px", borderRadius: "999px", background: "#f0f4f9", boxShadow: "inset 2px 2px 4px rgba(166,180,200,0.4), inset -2px -2px 4px rgba(255,255,255,0.9)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 6px" }}>
+            <span style={{ fontSize: "8px", color: "#94a3b8" }}>Search...</span>
+            <svg viewBox="0 0 24 24" style={{ width: "7px", height: "7px", stroke: "#475569", strokeWidth: 2.5, fill: "none" }}><circle cx="11" cy="11" r="7" /><path d="M20 20L16.65 16.65" /></svg>
+          </div>
+          <div style={{ display: "flex", gap: "4px" }}>
+            <div style={{ width: "18px", height: "18px", borderRadius: "999px", background: "#f0f4f9", boxShadow: "2px 2px 4px rgba(166,180,200,0.4), -2px -2px 4px rgba(255,255,255,0.9)", display: "grid", placeItems: "center", position: "relative" }}>
+              <svg viewBox="0 0 24 24" style={{ width: "9px", height: "9px", stroke: "#334155", strokeWidth: 2, fill: "none" }}><circle cx="9" cy="20" r="1.5" /><circle cx="17" cy="20" r="1.5" /><path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" /></svg>
+              <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "7px", height: "7px", borderRadius: "999px", background: "#0066ff", color: "#fff", fontSize: "5px", fontWeight: 900, display: "grid", placeItems: "center" }}>1</span>
+            </div>
+            <div style={{ width: "18px", height: "18px", borderRadius: "999px", background: "#f0f4f9", boxShadow: "2px 2px 4px rgba(166,180,200,0.4), -2px -2px 4px rgba(255,255,255,0.9)", display: "grid", placeItems: "center" }}>
+              <svg viewBox="0 0 24 24" style={{ width: "9px", height: "9px", stroke: "#334155", strokeWidth: 2, fill: "none" }}><path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" /><path d="M10 17a2 2 0 0 0 4 0" /></svg>
+            </div>
+            <div style={{ width: "18px", height: "18px", borderRadius: "999px", background: "#f0f4f9", boxShadow: "2px 2px 4px rgba(166,180,200,0.4), -2px -2px 4px rgba(255,255,255,0.9)", display: "grid", placeItems: "center" }}>
+              <svg viewBox="0 0 24 24" style={{ width: "9px", height: "9px", stroke: "#334155", strokeWidth: 2, fill: "none" }}><path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" /><circle cx="12" cy="8" r="4" /></svg>
+            </div>
+          </div>
+        </div>
+      );
+    default:
+      return null;
+  }
+}
+
 export default function BuilderDrawerPanel({
   activeDrawer,
   onClose,
@@ -395,13 +530,13 @@ export default function BuilderDrawerPanel({
             </div>
 
             {/* Component Assets List */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
               {filteredAssets.map((asset) => {
                 const isJustApplied = appliedAssetId === asset.id;
                 const isCurrentlyActive =
                   siteDefinition?.theme?.navbar_layout ===
                     asset.patch.themePatch?.navbar_layout ||
-                  (asset.id === "navbar-standard" &&
+                  (asset.id === "navbar-apple-minimal" &&
                     !siteDefinition?.theme?.navbar_layout);
 
                 return (
@@ -419,9 +554,10 @@ export default function BuilderDrawerPanel({
                       boxShadow: "0 2px 6px rgba(15,23,42,0.03)",
                       display: "flex",
                       flexDirection: "column",
-                      gap: "8px",
+                      gap: "10px",
                     }}
                   >
+                    {/* Header: Title & Tag */}
                     <div
                       style={{
                         display: "flex",
@@ -455,17 +591,20 @@ export default function BuilderDrawerPanel({
                       </span>
                     </div>
 
-                    <p
+                    {/* Visual Mini Navbar Preview */}
+                    <div
                       style={{
-                        margin: 0,
-                        fontSize: 11,
-                        lineHeight: 1.45,
-                        color: "#64748b",
+                        padding: "6px",
+                        borderRadius: "10px",
+                        background: "#f8fafc",
+                        border: "1px solid rgba(15,23,42,0.06)",
+                        overflow: "hidden",
                       }}
                     >
-                      {asset.description}
-                    </p>
+                      {renderAssetPreview(asset.id)}
+                    </div>
 
+                    {/* Apply Button */}
                     <button
                       type="button"
                       onClick={() => handleApplyAsset(asset)}
