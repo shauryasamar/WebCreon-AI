@@ -1,12 +1,13 @@
+import json
 from contextlib import asynccontextmanager
-from dotenv import load_dotenv
-load_dotenv()
+from dotenv import load_dotenv, find_dotenv
+load_dotenv(find_dotenv(usecwd=True))
 
 from pathlib import Path
 from typing import Any, Dict, Optional
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from langgraph.graph import END, StateGraph
@@ -234,6 +235,55 @@ async def run_generation_pipeline(prompt: str) -> Dict[str, Any]:
     }
 
 
+class StartConversationRequest(BaseModel):
+    prompt: str
+
+class ReplyConversationRequest(BaseModel):
+    session_id: str
+    reply: str
+
+class PublishSiteRequest(BaseModel):
+    draft_definition: Dict[str, Any]
+
+
+@app.post("/conversation/start")
+async def conversation_start_endpoint(req: StartConversationRequest, request: Request):
+    admin_name = "Creator"
+    admin_email = None
+    try:
+        cookie_val = request.cookies.get("admin_session")
+        if cookie_val:
+            decoded = json.loads(cookie_val)
+            admin_email = decoded.get("email")
+            if admin_email:
+                admin_name = admin_email.split("@")[0].title()
+    except Exception:
+        pass
+
+    from agents.conversation_agent import start_session
+    session = await start_session(initial_prompt=req.prompt, admin_name=admin_name, admin_email=admin_email)
+    return session.model_dump()
+
+
+@app.post("/conversation/reply")
+async def conversation_reply_endpoint(req: ReplyConversationRequest):
+    from agents.conversation_agent import reply_session
+    try:
+        session = await reply_session(session_id=req.session_id, user_reply=req.reply)
+        return session.model_dump()
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+
+
+@app.get("/conversation/{session_id}")
+async def conversation_get_endpoint(session_id: str):
+    from agents.conversation_agent import SESSIONS
+    session = SESSIONS.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session.model_dump()
+
+
 @app.post("/understanding", response_model=RequirementsResponse)
 async def understanding_endpoint(req: GenerateSiteRequest):
     requirements = await extract_requirements(req.prompt)
@@ -261,13 +311,82 @@ async def generate_site(req: GenerateSiteRequest):
     return SiteGenerationResponse(**result)
 
 
+class CustomSiteDefinitionRequest(BaseModel):
+    prompt: Optional[str] = None
+    session_id: Optional[str] = None
+
+
 @app.post("/site-definition")
-async def generate_site_definition_endpoint(req: GenerateSiteRequest):
-    result = await run_generation_pipeline(req.prompt)
+async def generate_site_definition_endpoint(req: CustomSiteDefinitionRequest):
+    prompt_text = req.prompt or ""
+    collected_reqs = {}
+
+    if req.session_id:
+        from agents.conversation_agent import SESSIONS
+        session = SESSIONS.get(req.session_id)
+        if session:
+            collected_reqs = session.collected
+            if not prompt_text:
+                prompt_text = "\n".join([f"{t['sender']}: {t['text']}" for t in session.turns])
+
+    # Run base extraction
+    requirements = await extract_requirements(prompt_text or "General store")
+
+    # Merge collected preferences from conversation
+    if collected_reqs.get("brand_name"):
+        requirements["brand_name"] = collected_reqs["brand_name"]
+    if collected_reqs.get("domain"):
+        requirements["domain"] = collected_reqs["domain"]
+        requirements["catalog_type"] = collected_reqs["domain"]
+    if collected_reqs.get("chosen_palette"):
+        requirements["chosen_palette"] = collected_reqs["chosen_palette"]
+    if collected_reqs.get("navbar_position"):
+        requirements["navbar_position"] = collected_reqs["navbar_position"]
+    if collected_reqs.get("navbar_layout"):
+        requirements["navbar_layout"] = collected_reqs["navbar_layout"]
+    if collected_reqs.get("footer_layout"):
+        requirements["footer_layout"] = collected_reqs["footer_layout"]
+    if collected_reqs.get("tagline"):
+        requirements["tagline"] = collected_reqs["tagline"]
+
+    # Run plan and build site definition
+    site_plan = await plan_site(requirements)
+    backend_config = build_backend_config(site_plan["backend_plan"])
+    frontend_config = build_frontend_config(site_plan["frontend_plan"])
+
+    site_definition = build_site_definition(
+        requirements=requirements,
+        site_plan=site_plan,
+        backend_config=backend_config,
+        frontend_config=frontend_config,
+    )
+
     return {
-        "requirements": result["requirements"],
-        "site_definition": result["site_definition"],
+        "requirements": requirements,
+        "site_definition": site_definition,
     }
+
+
+@app.patch("/sites/{site_id}/publish")
+def publish_site(
+    site_id: UUID,
+    payload: PublishSiteRequest,
+    ownership=Depends(enforce_site_ownership),
+    session: Session = Depends(get_session),
+):
+    site = session.get(Site, site_id)
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    site.site_definition = payload.draft_definition
+    site.draft_definition = payload.draft_definition
+    site.version = site.version + 1
+
+    session.add(site)
+    session.commit()
+    session.refresh(site)
+
+    return site
 
 
 @app.get("/auth/admin/me")

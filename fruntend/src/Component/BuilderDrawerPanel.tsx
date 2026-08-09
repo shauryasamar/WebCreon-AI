@@ -492,12 +492,11 @@ export default function BuilderDrawerPanel({
   }
 
   const title = titleForDrawer(activeDrawer);
-  if (!title) return null;
-
   const handleApplyAsset = (asset: ComponentAsset) => {
     if (!siteDefinition || !onSiteDefinitionChange) return;
 
     const nextDefinition = JSON.parse(JSON.stringify(siteDefinition));
+    const targetType = asset.targetType;
 
     // Apply layout theme patches (UI-only variant changes, preserving color scheme intact)
     if (asset.patch.themePatch) {
@@ -507,11 +506,15 @@ export default function BuilderDrawerPanel({
       };
     }
 
+    const mergedPatch = {
+      ...(asset.patch.themePatch ?? {}),
+      ...(asset.patch.blockPatch ?? {}),
+    };
+
     // Apply block patches to target blocks in pages or flat blocks
-    if (asset.patch.blockPatch) {
+    if (Object.keys(mergedPatch).length > 0) {
       const updateBlockList = (blocksList: any[]) => {
         let hasHeroBlock = false;
-        const targetType = asset.targetType;
         const updated = (blocksList ?? []).map((block: any) => {
           const blockType = String(block.type || "").toLowerCase();
           const isHero = targetType === "hero_banner" && (blockType === "hero_banner" || blockType.includes("hero"));
@@ -521,7 +524,7 @@ export default function BuilderDrawerPanel({
             const currentProps = block.props ?? {};
             const newSlide = {
               id: `slide-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-              ...asset.patch.blockPatch,
+              ...mergedPatch,
             };
 
             let existingSlides: any[] = Array.isArray(currentProps.slides) ? [...currentProps.slides] : [];
@@ -546,21 +549,22 @@ export default function BuilderDrawerPanel({
               props: {
                 ...currentProps,
                 slides: existingSlides,
-                ...asset.patch.blockPatch,
+                ...mergedPatch,
               },
             };
           }
 
           if (
             blockType === targetType ||
-            (targetType === "product_grid" && blockType.includes("product")) ||
-            (targetType === "footer" && blockType.includes("footer"))
+            (targetType === "product_grid" && (blockType.includes("product") || blockType === "product_grid")) ||
+            (targetType === "footer" && blockType.includes("footer")) ||
+            (targetType === "navbar" && blockType.includes("nav"))
           ) {
             return {
               ...block,
               props: {
                 ...(block.props ?? {}),
-                ...asset.patch.blockPatch,
+                ...mergedPatch,
               },
             };
           }
@@ -577,7 +581,7 @@ export default function BuilderDrawerPanel({
               slides: [
                 {
                   id: `slide-${Date.now()}`,
-                  ...asset.patch.blockPatch,
+                  ...mergedPatch,
                 },
               ],
             },
@@ -587,10 +591,16 @@ export default function BuilderDrawerPanel({
       };
 
       if (Array.isArray(nextDefinition.pages) && nextDefinition.pages.length > 0) {
-        nextDefinition.pages = nextDefinition.pages.map((page: any) => ({
-          ...page,
-          blocks: updateBlockList(page.blocks ?? []),
-        }));
+        nextDefinition.pages = nextDefinition.pages.map((page: any) => {
+          if (targetType === "hero_banner") {
+            const isHomePage = page.role === "home" || page.id === "home" || page.page_type === "landing" || page.route === "/";
+            if (!isHomePage) return page;
+          }
+          return {
+            ...page,
+            blocks: updateBlockList(page.blocks ?? []),
+          };
+        });
       }
 
       if (Array.isArray(nextDefinition.blocks)) {
@@ -945,6 +955,30 @@ export default function BuilderDrawerPanel({
                   </div>
                 );
               })}
+            </div>
+          </div>
+        ) : activeDrawer === "chat" ? (
+          <div style={{ display: "flex", flexDirection: "column", height: "100%", maxHeight: "calc(100vh - 120px)" }}>
+            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "12px", paddingRight: "4px" }}>
+              <div
+                style={{
+                  padding: "12px 14px",
+                  borderRadius: "12px",
+                  background: "linear-gradient(135deg, #eff6ff, #dbeafe)",
+                  border: "1px solid #bfdbfe",
+                  color: "#1e40af",
+                  fontSize: "13px",
+                  lineHeight: 1.45,
+                }}
+              >
+                👋 Hi <strong>{siteDefinition?.site?.brand_name || "Creator"}</strong>! I can modify your website design live.
+                Try asking:
+                <ul style={{ margin: "6px 0 0 0", paddingLeft: "18px", fontSize: "12px" }}>
+                  <li>"Make navbar floating"</li>
+                  <li>"Change card style to beauty"</li>
+                  <li>"Add a luxury hero tagline"</li>
+                </ul>
+              </div>
             </div>
           </div>
         ) : (

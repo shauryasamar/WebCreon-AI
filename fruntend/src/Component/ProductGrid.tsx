@@ -42,6 +42,8 @@ type ProductGridProps = {
   show_stock_badge?: boolean;
   show_ratings?: boolean;
   show_original_price?: boolean;
+  card_style?: string;
+  cardStyle?: string;
   show_brand_name?: boolean;
 
   theme?: {
@@ -78,6 +80,8 @@ const ProductGrid: React.FC<ProductGridProps> = ({
   card_radius,
   card_border_color,
   card_shadow,
+  card_style,
+  cardStyle,
   image_aspect_ratio,
   image_fit,
   image_bg,
@@ -111,6 +115,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
   const accentColor = theme?.accent_color || "#2563eb";
   const resolvedPrimaryBg = theme?.primary_bg || (isLight ? "#f8fafc" : "#0f172a");
 
+  const cardStyleKey = card_style || cardStyle || theme?.card_style || "fashion";
   const pageText = title_color || theme?.text_color || (isLight ? "#0f172a" : "#f8fafc");
   const mutedText = original_price_color || (theme as any)?.muted_text_color || (isLight ? "rgba(15,23,42,0.65)" : "rgba(248,250,252,0.65)");
   const faintText = brand_color || (theme as any)?.soft_text_color || (isLight ? "rgba(15,23,42,0.5)" : "rgba(248,250,252,0.5)");
@@ -127,8 +132,6 @@ const ProductGrid: React.FC<ProductGridProps> = ({
   const softShadow = isLight
     ? "0 10px 28px rgba(15,23,42,0.055)"
     : "0 12px 28px rgba(0,0,0,0.3)";
-
-  const cardStyleKey = theme?.card_style || "fashion";
 
   let computedRadius = card_radius !== undefined && card_radius !== "" ? `${card_radius}px` : "20px";
   let computedCardBg = card_bg_color || cardBg;

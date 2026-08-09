@@ -6,6 +6,7 @@ import { getCheckoutAddresses, SavedAddress } from "./addressService";
 import { useCustomerAuth } from "./context/CustomerAuthContext";
 import FilterModal, { FilterState } from "./Component/FilterModal";
 import { API_BASE_URL } from "./config/api";
+import { ThemeProvider } from "./context/ThemeContext";
 
 type Block = {
   id?: string;
@@ -588,6 +589,15 @@ const RenderPage: React.FC<RenderPageProps> = ({
 
     let blocks = detailRelevantBlocks;
 
+    // Filter out hero banners on subpages (cart, checkout, product detail, catalog)
+    const isLandingHome = page.role === "home" || page.id === "home" || page.page_type === "landing" || page.route === "/";
+    if (!isLandingHome) {
+      blocks = blocks.filter((b) => {
+        const type = String(b.type || "").toLowerCase();
+        return !type.includes("banner") && !type.includes("hero");
+      });
+    }
+
     if (searchQuery.trim()) {
       blocks = blocks.filter((b) => {
         const type = String(b.type || "").toLowerCase();
@@ -723,23 +733,25 @@ const RenderPage: React.FC<RenderPageProps> = ({
 
   if (!isCheckoutPage) {
     return (
-      <div ref={setContainerEl} style={{ position: "relative", width: "100%", minHeight: "100%" }}>
-        {blocksToRender.map((block, index) => renderBlock(block, index))}
-        <FilterModal
-          open={filterModalOpen}
-          onClose={() => setFilterModalOpen(false)}
-          onApply={(newFilters) => setFilters(newFilters)}
-          currentFilters={filters}
-          categories={categories}
-          collections={collections}
-          productTypes={availableProductTypes}
-          brands={availableBrands}
-          priceRange={{ min: 0, max: 100000 }}
-          theme={theme}
-          container={isInAdminSpace ? containerEl : undefined}
-          isAdmin={isInAdminSpace}
-        />
-      </div>
+      <ThemeProvider theme={theme as any}>
+        <div ref={setContainerEl} style={{ position: "relative", width: "100%", minHeight: "100%" }}>
+          {blocksToRender.map((block, index) => renderBlock(block, index))}
+          <FilterModal
+            open={filterModalOpen}
+            onClose={() => setFilterModalOpen(false)}
+            onApply={(newFilters) => setFilters(newFilters)}
+            currentFilters={filters}
+            categories={categories}
+            collections={collections}
+            productTypes={availableProductTypes}
+            brands={availableBrands}
+            priceRange={{ min: 0, max: 100000 }}
+            theme={theme}
+            container={isInAdminSpace ? containerEl : undefined}
+            isAdmin={isInAdminSpace}
+          />
+        </div>
+      </ThemeProvider>
     );
   }
 
@@ -959,6 +971,145 @@ const RenderPage: React.FC<RenderPageProps> = ({
 
   if (placedOrder) {
     return (
+      <ThemeProvider theme={theme as any}>
+        <div
+          style={{
+            minHeight: "100vh",
+            padding: isCompactCheckout ? "16px 12px 28px" : "20px 16px 36px",
+            background: pageBg,
+          }}
+        >
+          <div
+            style={{
+              maxWidth: "720px",
+              margin: "0 auto",
+              width: "100%",
+            }}
+          >
+            <div
+              style={{
+                borderRadius: "20px",
+                border: shellBorder,
+                background: shellBg,
+                padding: isCompactCheckout ? "20px 16px" : "32px 24px",
+                textAlign: "center",
+                boxShadow: isLight
+                  ? "0 1px 2px rgba(16,24,40,0.04)"
+                  : "0 20px 48px rgba(0,0,0,0.28)",
+              }}
+            >
+              <div
+                style={{
+                  width: "56px",
+                  height: "56px",
+                  borderRadius: "50%",
+                  background: isLight ? "#ecfdf5" : "rgba(16,185,129,0.14)",
+                  color: "#10b981",
+                  display: "grid",
+                  placeItems: "center",
+                  margin: "0 auto 16px auto",
+                }}
+              >
+                <svg
+                  width="28"
+                  height="28"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+              </div>
+
+              <h2
+                style={{
+                  margin: "0 0 8px 0",
+                  fontSize: "24px",
+                  fontWeight: 800,
+                  color: textColor,
+                }}
+              >
+                Thank you for your order!
+              </h2>
+
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "14px",
+                  color: subtleText,
+                  lineHeight: 1.6,
+                }}
+              >
+                Your order has been received and is being processed.
+              </p>
+
+              <div
+                style={{
+                  display: "grid",
+                  gap: "10px",
+                  marginTop: "20px",
+                  textAlign: "left",
+                  borderRadius: "14px",
+                  border: cardBorder,
+                  background: cardBg,
+                  padding: "16px",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+                  <span style={{ fontSize: "13px", color: subtleText }}>Order ID</span>
+                  <span style={{ fontSize: "13px", color: textColor, fontWeight: 700 }}>
+                    {placedOrder.orderId}
+                  </span>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+                  <span style={{ fontSize: "13px", color: subtleText }}>Status</span>
+                  <span style={{ fontSize: "13px", color: textColor, fontWeight: 700, textTransform: "capitalize" }}>
+                    {placedOrder.status.replace(/_/g, " ")}
+                  </span>
+                </div>
+
+                {typeof placedOrder.total === "number" ? (
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+                    <span style={{ fontSize: "13px", color: subtleText }}>Total</span>
+                    <span style={{ fontSize: "13px", color: textColor, fontWeight: 700 }}>
+                      ₹{placedOrder.total}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = siteId ? `/store/${siteId}` : "/";
+                }}
+                style={{
+                  marginTop: "24px",
+                  padding: "10px 24px",
+                  borderRadius: "999px",
+                  border: "none",
+                  background: accentColor,
+                  color: "#ffffff",
+                  fontSize: "14px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Continue Shopping
+              </button>
+            </div>
+          </div>
+        </div>
+      </ThemeProvider>
+    );
+  }
+
+  return (
+    <ThemeProvider theme={theme as any}>
       <div
         style={{
           minHeight: "100vh",
@@ -968,251 +1119,128 @@ const RenderPage: React.FC<RenderPageProps> = ({
       >
         <div
           style={{
-            maxWidth: "720px",
+            maxWidth: "1240px",
             margin: "0 auto",
             width: "100%",
           }}
         >
           <div
             style={{
-              borderRadius: "20px",
+              marginBottom: isCompactCheckout ? "14px" : "18px",
+            }}
+          >
+            <h1
+              style={{
+                margin: 0,
+                fontSize: isCompactCheckout
+                  ? "clamp(28px, 4vw, 32px)"
+                  : "clamp(34px, 4vw, 38px)",
+                lineHeight: 1.05,
+                fontWeight: 800,
+                color: textColor,
+                letterSpacing: "-0.03em",
+              }}
+            >
+              {page.title || page.name || "Checkout"}
+            </h1>
+          </div>
+
+          <div
+            style={{
+              borderRadius: "18px",
               border: shellBorder,
               background: shellBg,
               boxShadow: isLight
                 ? "0 1px 2px rgba(16,24,40,0.04)"
                 : "0 18px 44px rgba(0,0,0,0.22)",
-              padding: isCompactCheckout ? "24px 18px" : "36px 32px",
-              textAlign: "center",
+              padding: isCompactCheckout ? "14px" : "18px",
+              marginBottom: isCompactCheckout ? "14px" : "18px",
             }}
           >
             <div
               style={{
-                width: "72px",
-                height: "72px",
-                borderRadius: "999px",
-                margin: "0 auto 16px",
                 display: "grid",
-                placeItems: "center",
-                background: accentColor,
-                color: "#fff",
-                fontSize: "34px",
-                fontWeight: 800,
-                boxShadow: "0 16px 32px rgba(47,109,246,0.24)",
+                gridTemplateColumns: `repeat(${checkoutSteps.length}, minmax(0, 1fr))`,
+                gap: isCompactCheckout ? "8px" : "12px",
+                alignItems: "center",
               }}
             >
-              ✓
-            </div>
+              {checkoutSteps.map((step, index) => {
+                const isActive = step.key === checkoutStep;
+                const isCompleted = index < currentStepIndex;
+                const isDisabled =
+                  (step.key === "payment" && !canContinueDelivery) ||
+                  (step.key === "review" &&
+                    (!canContinueDelivery || !canContinuePayment));
 
-            <h2
-              style={{
-                margin: "0 0 10px",
-                fontSize: isCompactCheckout ? "28px" : "34px",
-                lineHeight: 1.1,
-                fontWeight: 800,
-                color: textColor,
-              }}
-            >
-              Order placed successfully
-            </h2>
-
-            <p
-              style={{
-                margin: "0 0 10px",
-                fontSize: "14px",
-                color: subtleText,
-                lineHeight: 1.7,
-              }}
-            >
-              Your order has been confirmed and is now being processed.
-            </p>
-
-            <div
-              style={{
-                display: "grid",
-                gap: "10px",
-                marginTop: "20px",
-                textAlign: "left",
-                borderRadius: "14px",
-                border: cardBorder,
-                background: cardBg,
-                padding: "16px",
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                <span style={{ fontSize: "13px", color: subtleText }}>Order ID</span>
-                <span style={{ fontSize: "13px", color: textColor, fontWeight: 700 }}>
-                  {placedOrder.orderId}
-                </span>
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                <span style={{ fontSize: "13px", color: subtleText }}>Status</span>
-                <span style={{ fontSize: "13px", color: textColor, fontWeight: 700, textTransform: "capitalize" }}>
-                  {placedOrder.status.replace(/_/g, " ")}
-                </span>
-              </div>
-
-              {typeof placedOrder.total === "number" ? (
-                <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                  <span style={{ fontSize: "13px", color: subtleText }}>Total</span>
-                  <span style={{ fontSize: "13px", color: textColor, fontWeight: 700 }}>
-                    ₹{placedOrder.total}
-                  </span>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      style={{
-        minHeight: "100vh",
-        padding: isCompactCheckout ? "16px 12px 28px" : "20px 16px 36px",
-        background: pageBg,
-      }}
-    >
-      <div
-        style={{
-          maxWidth: "1240px",
-          margin: "0 auto",
-          width: "100%",
-        }}
-      >
-        <div
-          style={{
-            marginBottom: isCompactCheckout ? "14px" : "18px",
-          }}
-        >
-          <h1
-            style={{
-              margin: 0,
-              fontSize: isCompactCheckout
-                ? "clamp(28px, 4vw, 32px)"
-                : "clamp(34px, 4vw, 38px)",
-              lineHeight: 1.05,
-              fontWeight: 800,
-              color: textColor,
-              letterSpacing: "-0.03em",
-            }}
-          >
-            {page.title || page.name || "Checkout"}
-          </h1>
-        </div>
-
-        <div
-          style={{
-            borderRadius: "18px",
-            border: shellBorder,
-            background: shellBg,
-            boxShadow: isLight
-              ? "0 1px 2px rgba(16,24,40,0.04)"
-              : "0 18px 44px rgba(0,0,0,0.22)",
-            padding: isCompactCheckout ? "14px" : "18px",
-            marginBottom: isCompactCheckout ? "14px" : "18px",
-          }}
-        >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: isCompactCheckout
-                ? "minmax(0,1fr)"
-                : "repeat(3, minmax(0, 1fr))",
-              gap: isCompactCheckout ? "10px" : "16px",
-              alignItems: "center",
-            }}
-          >
-            {checkoutSteps.map((step, index) => {
-              const isCompleted = index < currentStepIndex;
-              const isCurrent = step.key === checkoutStep;
-              const isAccessible =
-                step.key === "delivery" ||
-                (step.key === "payment" && canContinueDelivery) ||
-                (step.key === "review" &&
-                  canContinueDelivery &&
-                  canContinuePayment);
-
-              return (
-                <div
-                  key={step.key}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      !isCompactCheckout && index < checkoutSteps.length - 1
-                        ? "auto 1fr"
-                        : "auto",
-                    alignItems: "center",
-                    gap: "12px",
-                  }}
-                >
+                return (
                   <button
+                    key={step.key}
                     type="button"
-                    onClick={() => isAccessible && goToStep(step.key)}
+                    onClick={() => !isDisabled && goToStep(step.key)}
+                    disabled={isDisabled}
                     style={{
-                      border: "none",
-                      background: "transparent",
-                      padding: 0,
-                      cursor: isAccessible ? "pointer" : "default",
-                      textAlign: "left",
                       display: "flex",
                       alignItems: "center",
-                      gap: "10px",
-                      opacity: isAccessible ? 1 : 0.55,
+                      gap: "8px",
+                      padding: isCompactCheckout ? "8px 10px" : "10px 14px",
+                      borderRadius: "12px",
+                      border: isActive
+                        ? `1.5px solid ${accentColor}`
+                        : "1.5px solid transparent",
+                      background: isActive
+                        ? isLight
+                          ? "#ffffff"
+                          : "rgba(255,255,255,0.08)"
+                        : "transparent",
+                      color: isActive
+                        ? textColor
+                        : isCompleted
+                        ? "#10b981"
+                        : subtleText,
+                      cursor: isDisabled ? "not-allowed" : "pointer",
+                      opacity: isDisabled ? 0.45 : 1,
+                      transition: "all 0.15s ease",
+                      textAlign: "left",
                     }}
                   >
                     <div
                       style={{
                         width: "22px",
                         height: "22px",
-                        borderRadius: "999px",
-                        display: "grid",
-                        placeItems: "center",
+                        borderRadius: "50%",
+                        background: isCompleted
+                          ? "#10b981"
+                          : isActive
+                          ? accentColor
+                          : isLight
+                          ? "#e5e7eb"
+                          : "rgba(255,255,255,0.15)",
+                        color: isCompleted || isActive ? "#ffffff" : subtleText,
                         fontSize: "11px",
                         fontWeight: 700,
-                        border:
-                          isCurrent || isCompleted
-                            ? `1px solid ${accentColor}`
-                            : isLight
-                            ? "1px solid #d5dbe4"
-                            : "1px solid rgba(255,255,255,0.16)",
-                        background:
-                          isCurrent || isCompleted ? accentColor : "transparent",
-                        color:
-                          isCurrent || isCompleted ? "#ffffff" : subtleText,
+                        display: "grid",
+                        placeItems: "center",
                         flexShrink: 0,
                       }}
                     >
-                      {index + 1}
+                      {isCompleted ? "✓" : index + 1}
                     </div>
 
-                    <div
+                    <span
                       style={{
-                        fontSize: "13px",
-                        fontWeight: isCurrent ? 700 : 600,
-                        color: isCurrent ? textColor : subtleText,
+                        fontSize: isCompactCheckout ? "12px" : "13px",
+                        fontWeight: isActive ? 700 : 600,
                         whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
                       }}
                     >
                       {step.label}
-                    </div>
+                    </span>
                   </button>
-
-                  {!isCompactCheckout && index < checkoutSteps.length - 1 ? (
-                    <div
-                      style={{
-                        height: "1px",
-                        background:
-                          index < currentStepIndex ? accentColor : "#e5e7eb",
-                        width: "100%",
-                      }}
-                    />
-                  ) : null}
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         </div>
 
@@ -1541,6 +1569,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
         ) : null}
       </div>
     </div>
+    </ThemeProvider>
   );
 };
 

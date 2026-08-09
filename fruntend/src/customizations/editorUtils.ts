@@ -978,22 +978,30 @@ export function applyThemeMode(
   mode: ThemeMode
 ): EditorSiteDefinition {
   const base = mode === "light" ? DEFAULT_LIGHT_THEME : DEFAULT_DARK_THEME;
+  const currentFestival = siteDefinition.theme?.festival_theme;
+
+  let updatedTheme: any = {
+    ...siteDefinition.theme,
+    ...base,
+    mode,
+    navbar_bg: undefined,
+    navbar_text_color: undefined,
+    navbar_muted_text_color: undefined,
+    navbar_border_color: undefined,
+  };
+
+  if (currentFestival && currentFestival !== "none") {
+    const festivalOverrides = getFestivalThemeOverrides(currentFestival as FestivalThemeKey, mode);
+    updatedTheme = {
+      ...updatedTheme,
+      ...festivalOverrides,
+      festival_theme: currentFestival,
+    };
+  }
 
   return {
     ...siteDefinition,
-    theme: {
-      ...siteDefinition.theme,
-      ...base,
-      mode,
-      name: undefined,
-      festival_theme: undefined,
-      brand_tone: undefined,
-      visual_style: undefined,
-      navbar_bg: undefined,
-      navbar_text_color: undefined,
-      navbar_muted_text_color: undefined,
-      navbar_border_color: undefined,
-    },
+    theme: updatedTheme,
   };
 }
 
@@ -1033,4 +1041,57 @@ export function applyFestivalTheme(
       festival_theme: preset,
     },
   };
+}
+
+export function saveThemeSnapshot(
+  siteDefinition: EditorSiteDefinition,
+  name: string
+): EditorSiteDefinition {
+  const snapshot = {
+    id: `theme_${Date.now()}`,
+    name: name.trim() || `Theme ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
+    created_at: new Date().toISOString(),
+    theme: { ...siteDefinition.theme },
+  };
+
+  const currentSaved = Array.isArray((siteDefinition as any).saved_themes)
+    ? (siteDefinition as any).saved_themes
+    : [];
+
+  return {
+    ...siteDefinition,
+    saved_themes: [snapshot, ...currentSaved].slice(0, 10),
+  } as any;
+}
+
+export function applyThemeSnapshot(
+  siteDefinition: EditorSiteDefinition,
+  snapshotId: string
+): EditorSiteDefinition {
+  const currentSaved = Array.isArray((siteDefinition as any).saved_themes)
+    ? (siteDefinition as any).saved_themes
+    : [];
+  const found = currentSaved.find((s: any) => s.id === snapshotId);
+  if (!found || !found.theme) return siteDefinition;
+
+  return {
+    ...siteDefinition,
+    theme: {
+      ...siteDefinition.theme,
+      ...found.theme,
+    },
+  };
+}
+
+export function deleteThemeSnapshot(
+  siteDefinition: EditorSiteDefinition,
+  snapshotId: string
+): EditorSiteDefinition {
+  const currentSaved = Array.isArray((siteDefinition as any).saved_themes)
+    ? (siteDefinition as any).saved_themes
+    : [];
+  return {
+    ...siteDefinition,
+    saved_themes: currentSaved.filter((s: any) => s.id !== snapshotId),
+  } as any;
 }

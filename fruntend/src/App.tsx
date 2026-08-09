@@ -20,6 +20,7 @@ import BuilderShell from "./Component/BuilderShell";
 import BuilderTopControlBar from "./Component/BuilderTopControlBar";
 import BuilderControlPanel from "./Component/BuilderControlPanel";
 import BuilderDrawerPanel from "./Component/BuilderDrawerPanel";
+import { AiWebpageGeneratingAnimation } from "./Component/AiWebpageGeneratingAnimation";
 
 type Block = {
   id: string;
@@ -81,6 +82,9 @@ type ChatMessage = {
   text: string;
   time: string;
   status?: "loading" | "done" | "error";
+  type?: "text" | "palette_choice" | "choice_list" | "generating_animation";
+  palette_options?: any[];
+  choices?: { id: string; label: string; description?: string }[];
 };
 
 function slugify(value: string) {
@@ -151,6 +155,7 @@ function AdminSitesPage() {
 
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [savedSites, setSavedSites] = useState<SavedSite[]>([]);
   const [activeDrawer, setActiveDrawer] = useState<
     | "saved-sites"
@@ -232,43 +237,32 @@ function AdminSitesPage() {
     }
   };
 
-  const generateSiteWithPrompt = async (promptText: string) => {
-    const trimmed = promptText.trim();
-    if (!trimmed || loading) return;
-
-    const userMsgId = `user-${Date.now()}`;
-    const assistantMsgId = `assistant-${Date.now()}`;
-    const currentTime = new Date().toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    setMessages((prev) => [
-      ...prev,
-      { id: userMsgId, sender: "user", text: trimmed, time: currentTime },
-      {
-        id: assistantMsgId,
-        sender: "assistant",
-        text: "Building your website...",
-        time: currentTime,
-        status: "loading",
-      },
-    ]);
-
-    setPrompt("");
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-    }
+  const triggerFinalSiteGeneration = async (currentSessionId: string) => {
     setLoading(true);
+    const animId = `anim-${Date.now()}`;
+    const currentTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+    setMessages((prev) => {
+      const hasAnim = prev.some((m) => m.type === "generating_animation");
+      if (hasAnim) return prev;
+      return [
+        ...prev,
+        {
+          id: animId,
+          sender: "assistant",
+          text: "Building your website...",
+          time: currentTime,
+          type: "generating_animation",
+        },
+      ];
+    });
 
     try {
       const response = await fetch(`${API_BASE_URL}/site-definition`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ prompt: trimmed }),
+        body: JSON.stringify({ session_id: currentSessionId }),
       });
 
       if (!response.ok) {
@@ -276,19 +270,13 @@ function AdminSitesPage() {
       }
 
       const data: SiteDefinitionResponse = await response.json();
-
-      const brandName =
-        data.site_definition.site.brand_name ||
-        `${data.site_definition.site.site_type} website`;
-
+      const brandName = data.site_definition.site.brand_name || `${data.site_definition.site.site_type} website`;
       const baseSlug = slugify(brandName) || "website";
       const uniqueSlug = `${baseSlug}-${Date.now()}`;
 
       const createResponse = await fetch(`${API_BASE_URL}/sites`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
           slug: uniqueSlug,
@@ -303,38 +291,182 @@ function AdminSitesPage() {
 
       const createdSite: SavedSite = await createResponse.json();
 
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === assistantMsgId
-            ? {
-              ...msg,
-              text: `Created ${brandName}! Opening builder...`,
-              status: "done",
-            }
-            : msg
-        )
-      );
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `done-${Date.now()}`,
+          sender: "assistant",
+          text: `🎉 Created ${brandName}! Opening builder... \n\nRemember: You can customize theme, colors, and component assets anytime in the builder. Click 'Publish' at the bottom to save live updates!`,
+          time: currentTime,
+          status: "done",
+        },
+      ]);
 
       await loadSavedSites();
       setTimeout(() => {
         navigate(`/builder/${createdSite.id}`);
-      }, 800);
+      }, 1200);
     } catch (error) {
-      console.error("Error generating site:", error);
+      console.error("Error generating final site:", error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `err-${Date.now()}`,
+          sender: "assistant",
+          text: "Unable to generate site right now. Please try again.",
+          time: currentTime,
+          status: "error",
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendReply = async (replyText: string) => {
+    const trimmed = replyText.trim();
+    if (!trimmed || loading) return;
+
+    const userMsgId = `user-${Date.now()}`;
+    const assistantMsgId = `assistant-${Date.now()}`;
+    const currentTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+    setMessages((prev) => [
+      ...prev,
+      { id: userMsgId, sender: "user", text: trimmed, time: currentTime },
+      { id: assistantMsgId, sender: "assistant", text: "Thinking...", time: currentTime, status: "loading" },
+    ]);
+
+    setPrompt("");
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
+    setLoading(true);
+
+    try {
+      if (!sessionId) {
+        // Start conversation session
+        const response = await fetch(`${API_BASE_URL}/conversation/start`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ prompt: trimmed }),
+        });
+
+        if (!response.ok) throw new Error("Failed to start session");
+
+        const sessionData = await response.json();
+        setSessionId(sessionData.session_id);
+
+        const lastTurn = sessionData.turns[sessionData.turns.length - 1];
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMsgId
+              ? {
+                  ...msg,
+                  text: lastTurn.text || "Let's build your store!",
+                  type: lastTurn.type || "text",
+                  palette_options: lastTurn.palette_options,
+                  choices: lastTurn.choices,
+                  status: "done",
+                }
+              : msg
+          )
+        );
+
+        if (sessionData.is_complete) {
+          await triggerFinalSiteGeneration(sessionData.session_id);
+        }
+      } else {
+        // Reply to existing session
+        const response = await fetch(`${API_BASE_URL}/conversation/reply`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ session_id: sessionId, reply: trimmed }),
+        });
+
+        if (response.status === 404) {
+          // Session expired due to server restart, start fresh session seamlessly
+          setSessionId(null);
+          const startRes = await fetch(`${API_BASE_URL}/conversation/start`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ prompt: trimmed }),
+          });
+          if (!startRes.ok) throw new Error("Failed to restart session");
+          const sessionData = await startRes.json();
+          setSessionId(sessionData.session_id);
+          const lastTurn = sessionData.turns[sessionData.turns.length - 1];
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMsgId
+                ? {
+                    ...msg,
+                    text: lastTurn.text || "Let's build your store!",
+                    type: lastTurn.type || "text",
+                    palette_options: lastTurn.palette_options,
+                    choices: lastTurn.choices,
+                    status: "done",
+                  }
+                : msg
+            )
+          );
+          if (sessionData.is_complete) {
+            await triggerFinalSiteGeneration(sessionData.session_id);
+          }
+          return;
+        }
+
+        if (!response.ok) throw new Error("Failed to send reply");
+
+        const sessionData = await response.json();
+        const lastTurn = sessionData.turns[sessionData.turns.length - 1];
+
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMsgId
+              ? {
+                  ...msg,
+                  text: lastTurn.text || "Got it!",
+                  type: lastTurn.type || "text",
+                  palette_options: lastTurn.palette_options,
+                  choices: lastTurn.choices,
+                  status: "done",
+                }
+              : msg
+          )
+        );
+
+        if (sessionData.is_complete) {
+          await triggerFinalSiteGeneration(sessionData.session_id);
+        }
+      }
+    } catch (error) {
+      console.error("Error in conversation flow:", error);
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === assistantMsgId
             ? {
-              ...msg,
-              text: "Unable to generate site right now. Please try again.",
-              status: "error",
-            }
+                ...msg,
+                text: "Something went wrong. Please try again.",
+                status: "error",
+              }
             : msg
         )
       );
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSelectPaletteOption = (pal: any) => {
+    handleSendReply(pal.id);
+  };
+
+  const handleSelectChoice = (choice: { id: string; label: string }) => {
+    handleSendReply(choice.label);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -346,7 +478,7 @@ function AdminSitesPage() {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      generateSiteWithPrompt(prompt);
+      handleSendReply(prompt);
     }
   };
 
@@ -431,7 +563,7 @@ function AdminSitesPage() {
                 Describe the website or storefront you want to build.
               </p>
               <p style={{ margin: 0, fontSize: "13px", color: "#94a3b8", maxWidth: "520px", lineHeight: 1.5 }}>
-                Specify your brand name, products, payment preferences, or design style, and WebNirmaan AI will generate your website.
+                Specify your brand name, products, payment preferences, or color vibe, and WebNirmaan AI will guide you through building your custom store.
               </p>
             </div>
           ) : (
@@ -445,6 +577,30 @@ function AdminSitesPage() {
             >
               {messages.map((msg) => {
                 const isUser = msg.sender === "user";
+
+                if (msg.type === "generating_animation") {
+                  return (
+                    <div
+                      key={msg.id}
+                      style={{
+                        display: "flex",
+                        justifyContent: "flex-start",
+                        width: "100%",
+                      }}
+                    >
+                      <AiWebpageGeneratingAnimation
+                        themeMode="light"
+                        brandName={
+                          messages
+                            .find((m) => m.text.includes("Building"))
+                            ?.text.replace("Building ", "")
+                            .replace("...", "") || "Your Store"
+                        }
+                      />
+                    </div>
+                  );
+                }
+
                 return (
                   <div
                     key={msg.id}
@@ -460,7 +616,7 @@ function AdminSitesPage() {
                         gap: "12px",
                         alignItems: "flex-start",
                         flexDirection: isUser ? "row-reverse" : "row",
-                        maxWidth: "80%",
+                        maxWidth: "85%",
                       }}
                     >
                       <div
@@ -500,10 +656,154 @@ function AdminSitesPage() {
                           boxShadow: isUser
                             ? "0 4px 14px rgba(37,99,235,0.22)"
                             : "0 2px 10px rgba(15,23,42,0.04)",
-                          whiteSpace: "pre-wrap",
                         }}
                       >
-                        {msg.text}
+                        <div style={{ whiteSpace: "pre-wrap" }}>{msg.text}</div>
+
+                        {/* Palette Options Card Selection */}
+                        {msg.type === "palette_choice" && msg.palette_options && (
+                          <div
+                            style={{
+                              marginTop: "16px",
+                              display: "grid",
+                              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                              gap: "12px",
+                            }}
+                          >
+                            {msg.palette_options.map((pal: any, idx: number) => (
+                              <div
+                                key={pal.id || idx}
+                                onClick={() => handleSelectPaletteOption(pal)}
+                                style={{
+                                  padding: "12px",
+                                  borderRadius: "12px",
+                                  background: "#ffffff",
+                                  border: "1.5px solid rgba(15,23,42,0.12)",
+                                  cursor: "pointer",
+                                  transition: "all 0.15s ease",
+                                  boxShadow: "0 2px 8px rgba(15,23,42,0.04)",
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.borderColor = "#2563eb";
+                                  e.currentTarget.style.transform = "translateY(-2px)";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.borderColor = "rgba(15,23,42,0.12)";
+                                  e.currentTarget.style.transform = "translateY(0)";
+                                }}
+                              >
+                                <div style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
+                                  {idx + 1}. {pal.name}
+                                </div>
+                                <div style={{ fontSize: "11px", color: "#64748b", margin: "4px 0 10px 0" }}>
+                                  {pal.description}
+                                </div>
+
+                                {/* Swatches */}
+                                <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
+                                  <div
+                                    title={`Primary BG: ${pal.primary_bg}`}
+                                    style={{
+                                      width: "24px",
+                                      height: "24px",
+                                      borderRadius: "6px",
+                                      background: pal.primary_bg,
+                                      border: "1px solid rgba(0,0,0,0.15)",
+                                    }}
+                                  />
+                                  <div
+                                    title={`Accent: ${pal.accent_color}`}
+                                    style={{
+                                      width: "24px",
+                                      height: "24px",
+                                      borderRadius: "6px",
+                                      background: pal.accent_color,
+                                    }}
+                                  />
+                                  <div
+                                    title={`Navbar: ${pal.navbar_bg}`}
+                                    style={{
+                                      width: "24px",
+                                      height: "24px",
+                                      borderRadius: "6px",
+                                      background: pal.navbar_bg,
+                                      border: "1px solid rgba(0,0,0,0.15)",
+                                    }}
+                                  />
+                                  <div
+                                    title={`Footer: ${pal.footer_bg}`}
+                                    style={{
+                                      width: "24px",
+                                      height: "24px",
+                                      borderRadius: "6px",
+                                      background: pal.footer_bg,
+                                      border: "1px solid rgba(0,0,0,0.15)",
+                                    }}
+                                  />
+                                </div>
+
+                                <button
+                                  type="button"
+                                  style={{
+                                    width: "100%",
+                                    padding: "6px 0",
+                                    borderRadius: "8px",
+                                    border: "none",
+                                    background: "#2563eb",
+                                    color: "#ffffff",
+                                    fontSize: "12px",
+                                    fontWeight: 600,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  Select {pal.name}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Choice Pills */}
+                        {msg.choices && msg.choices.length > 0 && (
+                          <div
+                            style={{
+                              marginTop: "14px",
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: "8px",
+                            }}
+                          >
+                            {msg.choices.map((choice) => (
+                              <button
+                                key={choice.id}
+                                type="button"
+                                onClick={() => handleSelectChoice(choice)}
+                                style={{
+                                  padding: "8px 14px",
+                                  borderRadius: "20px",
+                                  border: "1px solid #2563eb",
+                                  background: "#eff6ff",
+                                  color: "#1d4ed8",
+                                  fontSize: "12px",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                  transition: "all 0.15s ease",
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = "#2563eb";
+                                  e.currentTarget.style.color = "#ffffff";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = "#eff6ff";
+                                  e.currentTarget.style.color = "#1d4ed8";
+                                }}
+                              >
+                                {choice.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
                         {msg.status === "loading" && (
                           <div
                             style={{
@@ -579,7 +879,7 @@ function AdminSitesPage() {
               value={prompt}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder="Describe the website you want to build..."
+              placeholder="Describe the website or reply to questions..."
               rows={1}
               disabled={loading}
               style={{
@@ -600,9 +900,9 @@ function AdminSitesPage() {
 
             <button
               type="button"
-              onClick={() => generateSiteWithPrompt(prompt)}
+              onClick={() => handleSendReply(prompt)}
               disabled={loading || !prompt.trim()}
-              title="Send prompt"
+              title="Send message"
               style={{
                 width: "38px",
                 height: "38px",

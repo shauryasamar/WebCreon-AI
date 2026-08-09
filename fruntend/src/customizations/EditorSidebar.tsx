@@ -2,10 +2,13 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   applyFestivalTheme,
   applyThemeMode,
+  applyThemeSnapshot,
+  deleteThemeSnapshot,
   EditorSiteDefinition,
   FestivalThemeKey,
   findBlockById,
   getEditableConfigForBlock,
+  saveThemeSnapshot,
   updateBlockFieldValue,
   updateThemeValues,
 } from "./editorUtils";
@@ -1070,6 +1073,108 @@ export default function EditorSidebar({
 
       {selectedTab === "theme" ? (
         <div style={{ display: "grid", gap: "12px" }}>
+          {/* Saved Themes Section */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "10px", fontWeight: 800, textTransform: "uppercase", color: "#64748b" }}>
+              SAVED THEMES SNAPSHOTS
+            </div>
+            
+            <div style={{ display: "flex", gap: "6px" }}>
+              <input
+                type="text"
+                placeholder="Theme name e.g. Pink Luxury"
+                id="saved-theme-input"
+                style={{ ...sharedInputStyle(isLightMode, textColor), flex: 1 }}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const input = document.getElementById("saved-theme-input") as HTMLInputElement;
+                  const name = input ? input.value : "";
+                  onSiteDefinitionChange(saveThemeSnapshot(siteDefinition, name));
+                  if (input) input.value = "";
+                }}
+                style={{
+                  padding: "4px 8px",
+                  borderRadius: "6px",
+                  border: "none",
+                  background: accentColor,
+                  color: "#ffffff",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                + Save
+              </button>
+            </div>
+
+            {Array.isArray((siteDefinition as any).saved_themes) && (siteDefinition as any).saved_themes.length > 0 && (
+              <div style={{ display: "grid", gap: "6px", marginTop: "4px" }}>
+                {(siteDefinition as any).saved_themes.map((snap: any) => (
+                  <div
+                    key={snap.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "6px 8px",
+                      borderRadius: "6px",
+                      background: "#f8fafc",
+                      border: "1px solid rgba(15,23,42,0.08)",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <div
+                        style={{
+                          width: "14px",
+                          height: "14px",
+                          borderRadius: "4px",
+                          background: snap.theme?.accent_color || "#2563eb",
+                        }}
+                      />
+                      <span style={{ fontSize: "11px", fontWeight: 600, color: "#0f172a" }}>{snap.name}</span>
+                    </div>
+                    <div style={{ display: "flex", gap: "4px" }}>
+                      <button
+                        type="button"
+                        onClick={() => onSiteDefinitionChange(applyThemeSnapshot(siteDefinition, snap.id))}
+                        style={{
+                          padding: "2px 6px",
+                          borderRadius: "4px",
+                          border: "none",
+                          background: "#2563eb",
+                          color: "#ffffff",
+                          fontSize: "10px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Apply
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onSiteDefinitionChange(deleteThemeSnapshot(siteDefinition, snap.id))}
+                        style={{
+                          padding: "2px 6px",
+                          borderRadius: "4px",
+                          border: "none",
+                          background: "rgba(239,68,68,0.1)",
+                          color: "#ef4444",
+                          fontSize: "10px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
           <section style={sectionCardStyle(isLightMode)}>
             <div style={{ fontSize: "10px", fontWeight: 800, textTransform: "uppercase", color: "#64748b" }}>
               APPEARANCE & MODE

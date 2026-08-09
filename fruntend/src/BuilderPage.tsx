@@ -560,11 +560,9 @@ function BuilderPageContent() {
   const siteSlugParam = params.slug;
   const productSlug = params.productSlug;
 
-
   const navigate = useNavigate();
   const location = useLocation();
   const { products } = useCart();
-
 
   const [resolvedSiteId, setResolvedSiteId] = useState("");
   const [siteDefinition, setSiteDefinition] = useState<SiteDefinition | null>(
@@ -575,8 +573,44 @@ function BuilderPageContent() {
   const [siteName, setSiteName] = useState("");
   const [siteSlug, setSiteSlug] = useState("");
   const [loading, setLoading] = useState(true);
+  const [publishing, setPublishing] = useState(false);
+  const [publishSuccess, setPublishSuccess] = useState(false);
   const [adminAuthChecked, setAdminAuthChecked] = useState(false);
   const [adminAuthenticated, setAdminAuthenticated] = useState(false);
+
+  const hasUnpublishedChanges = useMemo(() => {
+    if (!draftSiteDefinition || !siteDefinition) return false;
+    return JSON.stringify(draftSiteDefinition) !== JSON.stringify(siteDefinition);
+  }, [draftSiteDefinition, siteDefinition]);
+
+  const handlePublish = async () => {
+    const currentSiteId = resolvedSiteId || siteId;
+    if (!currentSiteId || !draftSiteDefinition || publishing) return;
+
+    setPublishing(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/sites/${currentSiteId}/publish`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ draft_definition: draftSiteDefinition }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Publish failed: ${response.status}`);
+      }
+
+      const updatedSite = await response.json();
+      setSiteDefinition(updatedSite.site_definition || draftSiteDefinition);
+      setDraftSiteDefinition(updatedSite.draft_definition || draftSiteDefinition);
+      setPublishSuccess(true);
+      setTimeout(() => setPublishSuccess(false), 3000);
+    } catch (err) {
+      console.error("Error publishing site:", err);
+    } finally {
+      setPublishing(false);
+    }
+  };
 
 
   const [editMode, setEditMode] = useState(false);
@@ -1352,6 +1386,73 @@ function BuilderPageContent() {
           siteSlug ? `${window.location.origin}/store/${siteSlug}` : ""
         }
       />
+
+      {/* Floating Dual-Purpose Bottom Publish CTA Bar */}
+      {showAdminTopbar && !isStoreRoute && !isAdminRoute && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "20px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            gap: "14px",
+            padding: "8px 16px 8px 20px",
+            borderRadius: "999px",
+            background: "#0f172a",
+            color: "#ffffff",
+            boxShadow: "0 10px 30px rgba(15,23,42,0.35)",
+            border: hasUnpublishedChanges
+              ? "2px solid #22c55e"
+              : "1px solid rgba(255,255,255,0.15)",
+            transition: "all 0.2s ease",
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.2 }}>
+            <span style={{ fontSize: "12px", fontWeight: 700 }}>
+              {publishSuccess
+                ? "✓ Site Published Live!"
+                : hasUnpublishedChanges
+                ? "Unpublished Draft Edits"
+                : "Live Site Synchronized"}
+            </span>
+            <span style={{ fontSize: "10px", color: "#94a3b8" }}>
+              {hasUnpublishedChanges
+                ? "Save theme, layout & asset changes to DB"
+                : "Draft matches live site definition"}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={handlePublish}
+            disabled={publishing || (!hasUnpublishedChanges && !publishSuccess)}
+            style={{
+              padding: "8px 18px",
+              borderRadius: "999px",
+              border: "none",
+              background: publishSuccess
+                ? "#16a34a"
+                : hasUnpublishedChanges
+                ? "linear-gradient(135deg, #22c55e, #16a34a)"
+                : "rgba(255,255,255,0.15)",
+              color: "#ffffff",
+              fontSize: "12px",
+              fontWeight: 700,
+              cursor: publishing || (!hasUnpublishedChanges && !publishSuccess) ? "default" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              boxShadow: hasUnpublishedChanges ? "0 4px 14px rgba(34,197,94,0.4)" : "none",
+              transition: "all 0.2s ease",
+            }}
+          >
+            {publishing ? "Publishing..." : publishSuccess ? "Published ✓" : "Publish Now 🚀"}
+          </button>
+        </div>
+      )}
     </BuilderShell>
   );
 }

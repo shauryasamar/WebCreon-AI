@@ -4,6 +4,7 @@ import { Product, useCart } from "../CartContext";
 import { componentRegistry } from "../componentRegistry";
 import FilterModal, { FilterState } from "../Component/FilterModal";
 import { API_BASE_URL } from "../config/api";
+import { ThemeProvider } from "../context/ThemeContext";
 
 type Block = {
   id?: string;
@@ -730,23 +731,25 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
 
   if (!isCheckoutPage) {
     return (
-      <div ref={setContainerEl} style={{ position: "relative", width: "100%", minHeight: "100%" }}>
-        {blocksToRender.map((block, index) => renderBlock(block, index))}
-        <FilterModal
-          open={filterModalOpen}
-          onClose={() => setFilterModalOpen(false)}
-          onApply={(newFilters) => setFilters(newFilters)}
-          currentFilters={filters}
-          categories={categories}
-          collections={collections}
-          productTypes={availableProductTypes}
-          brands={availableBrands}
-          priceRange={{ min: 0, max: 100000 }}
-          theme={theme}
-          container={containerEl}
-          isAdmin={true}
-        />
-      </div>
+      <ThemeProvider theme={theme as any}>
+        <div ref={setContainerEl} style={{ position: "relative", width: "100%", minHeight: "100%" }}>
+          {blocksToRender.map((block, index) => renderBlock(block, index))}
+          <FilterModal
+            open={filterModalOpen}
+            onClose={() => setFilterModalOpen(false)}
+            onApply={(newFilters) => setFilters(newFilters)}
+            currentFilters={filters}
+            categories={categories}
+            collections={collections}
+            productTypes={availableProductTypes}
+            brands={availableBrands}
+            priceRange={{ min: 0, max: 100000 }}
+            theme={theme}
+            container={containerEl}
+            isAdmin={true}
+          />
+        </div>
+      </ThemeProvider>
     );
   }
 
@@ -973,13 +976,14 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
   );
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        padding: isCompactCheckout ? "16px 12px 28px" : "20px 16px 36px",
-        background: pageBg,
-      }}
-    >
+    <ThemeProvider theme={theme as any}>
+      <div
+        style={{
+          minHeight: "100vh",
+          padding: isCompactCheckout ? "16px 12px 28px" : "20px 16px 36px",
+          background: pageBg,
+        }}
+      >
       <div
         style={{
           maxWidth: "1240px",
@@ -1411,8 +1415,9 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
             )}
           </div>
         ) : null}
+        </div>
       </div>
-    </div>
+    </ThemeProvider>
   );
 };
 

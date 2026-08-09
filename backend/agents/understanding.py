@@ -1,4 +1,4 @@
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, Dict, Any
 
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
@@ -18,6 +18,10 @@ class WebsiteRequirements(BaseModel):
         default=None,
         description="Explicit brand name only if clearly mentioned by the user."
     )
+    tagline: Optional[str] = Field(
+        default=None,
+        description="Tagline or slogan for the brand."
+    )
     region: Optional[str] = Field(
         default=None,
         description="Country or region if explicitly mentioned."
@@ -33,6 +37,30 @@ class WebsiteRequirements(BaseModel):
     theme: Optional[Literal["light", "dark", "neutral", "pastel", "luxury", "minimal"]] = Field(
         default=None,
         description="Requested theme if clearly specified."
+    )
+    chosen_palette: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Full computed color palette dictionary from color_agent."
+    )
+    navbar_layout: Optional[Literal["apple_minimal", "glassmorphism_premium", "modern_marketplace", "luxury_fashion", "neo_modern"]] = Field(
+        default=None,
+        description="Selected navbar layout style."
+    )
+    navbar_position: Optional[Literal["static", "sticky", "fixed"]] = Field(
+        default="fixed",
+        description="Navbar position behavior."
+    )
+    navbar_variant: Optional[Literal["solid", "soft", "floating", "transparent"]] = Field(
+        default=None,
+        description="Navbar variant visual depth style."
+    )
+    footer_layout: Optional[Literal["apple_minimal", "glassmorphism_premium", "modern_marketplace", "luxury_fashion", "neo_modern"]] = Field(
+        default=None,
+        description="Selected footer layout style."
+    )
+    card_style: Optional[Literal["fashion", "electronics", "beauty", "grocery", "books"]] = Field(
+        default=None,
+        description="Product grid card style matching business domain."
     )
     needs_admin_panel: bool = Field(
         default=True,
@@ -76,65 +104,6 @@ You are an expert requirements extraction assistant for an AI ecommerce website 
 Your task is to read a user prompt and extract structured website requirements.
 
 Return a structured object matching the schema exactly.
-
-Extraction rules:
-1. site_type:
-   - Usually set to "ecommerce" unless the prompt clearly asks for another kind of site.
-
-2. domain:
-   - Infer the business domain as specifically as possible.
-   - Examples: clothing, grocery, electronics, beauty, furniture, bookstore, jewelry, pharmacy, bakery.
-   - Never return null. Always make a reasonable guess.
-
-3. brand_name:
-   - Only set a brand name if the user explicitly gives one.
-   - If the user says "my store", "my brand", "my clothing brand", keep it as null.
-
-4. region:
-   - Only set region if explicitly mentioned.
-
-5. products:
-   - Extract concrete products or product categories from the prompt.
-
-6. payment_preferences:
-   - Extract explicitly mentioned payment methods only.
-
-7. theme:
-   - Use only if clearly mentioned, such as light, dark, minimal, luxury, pastel, neutral.
-
-8. needs_admin_panel:
-   - Default to true for ecommerce unless the user explicitly says otherwise.
-
-9. target_audience:
-   - Extract if directly stated or strongly implied.
-
-10. brand_tone:
-   - Infer from the prompt where reasonable.
-   - Examples: premium, playful, minimalist, bold, elegant, fresh, local, modern.
-
-11. visual_style:
-   - Infer the intended design direction if possible.
-   - Examples: clean minimal, editorial, premium luxury, modern storefront, colorful marketplace.
-
-12. hero_focus:
-   - Capture the main core business message or hero proposition.
-
-13. catalog_type:
-   - Usually same as domain, but normalized for frontend rendering.
-   - Examples: clothing, grocery, electronics, beauty, furniture, general.
-
-14. must_have_sections:
-   - Extract explicitly requested sections and also include obvious ecommerce essentials if strongly implied.
-   - Examples: hero, featured_products, categories, offers, testimonials, newsletter.
-
-15. admin_scope:
-   - For ecommerce, include practical admin scopes such as products, orders, inventory.
-   - Add customers if user mentions user/customer management.
-
-Important:
-- Do not invent a specific brand name.
-- Do not output explanations.
-- Be concise but complete.
 """
 
 prompt_tmpl = ChatPromptTemplate.from_messages([
@@ -142,7 +111,7 @@ prompt_tmpl = ChatPromptTemplate.from_messages([
     ("user", "{user_prompt}"),
 ])
 
-structured_llm = llm.with_structured_output(WebsiteRequirements)
+structured_llm = llm.with_structured_output(WebsiteRequirements, method="function_calling")
 understanding_chain = prompt_tmpl | structured_llm
 
 
@@ -160,6 +129,37 @@ def _normalize_requirements(data: WebsiteRequirements) -> WebsiteRequirements:
 
     if not normalized.must_have_sections:
         normalized.must_have_sections = ["hero", "featured_products"]
+
+    # Auto-infer card_style from domain if not explicitly provided
+    if not normalized.card_style:
+        domain_lower = normalized.domain.lower()
+        if any(w in domain_lower for w in ["cloth", "fashion", "apparel", "wear"]):
+            normalized.card_style = "fashion"
+        elif any(w in domain_lower for w in ["tech", "electron", "gadget", "mobile"]):
+            normalized.card_style = "electronics"
+        elif any(w in domain_lower for w in ["beauty", "cosmetic", "skin", "makeup"]):
+            normalized.card_style = "beauty"
+        elif any(w in domain_lower for w in ["groc", "food", "fruit", "supermarket"]):
+            normalized.card_style = "grocery"
+        elif any(w in domain_lower for w in ["book", "stationery", "paper"]):
+            normalized.card_style = "books"
+        else:
+            normalized.card_style = "fashion"
+
+    # Auto-infer navbar_layout & footer_layout if not provided
+    if not normalized.navbar_layout:
+        if normalized.card_style == "beauty" or "luxury" in str(normalized.brand_tone):
+            normalized.navbar_layout = "luxury_fashion"
+            normalized.footer_layout = normalized.footer_layout or "luxury_fashion"
+        elif normalized.card_style == "electronics":
+            normalized.navbar_layout = "neo_modern"
+            normalized.footer_layout = normalized.footer_layout or "neo_modern"
+        elif normalized.card_style == "grocery":
+            normalized.navbar_layout = "modern_marketplace"
+            normalized.footer_layout = normalized.footer_layout or "modern_marketplace"
+        else:
+            normalized.navbar_layout = "apple_minimal"
+            normalized.footer_layout = normalized.footer_layout or "apple_minimal"
 
     if not normalized.visual_style:
         if normalized.theme in {"luxury"}:
