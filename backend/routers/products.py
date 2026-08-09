@@ -7,13 +7,23 @@ from pathlib import Path
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlmodel import Session, func, select
 
 from auth_middleware import authenticate_customer, enforce_site_ownership
 from db.database import get_session
-from models import Order, OrderItem, Product, ProductReview, Site, User
+from models import (
+    Category,
+    Collection,
+    Order,
+    OrderItem,
+    Product,
+    ProductCollection,
+    ProductReview,
+    Site,
+    User,
+)
 
 
 router = APIRouter(
@@ -126,6 +136,19 @@ def get_product_reviews(session: Session, site_id: UUID, product_id: UUID) -> li
     ]
 
 
+def get_product_collections(session: Session, product_id: UUID) -> list[dict[str, Any]]:
+    rows = session.exec(
+        select(Collection)
+        .join(ProductCollection, ProductCollection.collection_id == Collection.id)
+        .where(ProductCollection.product_id == product_id)
+        .order_by(Collection.name)
+    ).all()
+    return [
+        {"id": str(c.id), "name": c.name, "slug": c.slug}
+        for c in rows
+    ]
+
+
 def to_product_response(
     product: Product,
     session: Session,
@@ -133,12 +156,21 @@ def to_product_response(
 ) -> dict[str, Any]:
     average_rating, review_count = get_product_review_summary(session, product.site_id, product.id)
 
+    category_name = None
+    if product.category_id:
+        cat = session.get(Category, product.category_id)
+        if cat:
+            category_name = cat.name
+
     response = {
         "id": product.id,
         "site_id": product.site_id,
         "name": product.name,
         "brand": product.brand,
         "category": product.category,
+        "category_id": str(product.category_id) if product.category_id else None,
+        "category_name": category_name,
+        "collections": get_product_collections(session, product.id),
         "description": product.description or "",
         "slug": product.slug,
         "price": product.price,
@@ -226,6 +258,8 @@ class ProductCreate(BaseModel):
     name: str
     brand: Optional[str] = None
     category: str
+    category_id: Optional[UUID] = None
+    collection_ids: list[UUID] = Field(default_factory=list)
     description: str
     price: Decimal
     compare_price: Optional[Decimal] = None
@@ -279,6 +313,8 @@ class ProductUpdate(BaseModel):
     name: str
     brand: Optional[str] = None
     category: str
+    category_id: Optional[UUID] = None
+    collection_ids: list[UUID] = Field(default_factory=list)
     description: str
     price: Decimal
     compare_price: Optional[Decimal] = None
@@ -336,6 +372,9 @@ class ProductResponse(BaseModel):
     name: str
     brand: Optional[str] = None
     category: Optional[str] = None
+    category_id: Optional[str] = None
+    category_name: Optional[str] = None
+    collections: list[dict[str, Any]] = Field(default_factory=list)
     description: str
     slug: Optional[str] = None
     price: Decimal
@@ -392,12 +431,96 @@ def list_products(
 @router.get("/public", response_model=list[ProductResponse], include_in_schema=False)
 def list_products_public(
     site_id: UUID,
+    search: Optional[str] = Query(None, description="Search across name, brand, product type"),
+    category_id: Optional[UUID] = Query(None, description="Filter by category ID"),
+    product_type: Optional[list[str]] = Query(None, description="Filter by product type(s)"),
+    collection_id: Optional[list[UUID]] = Query(None, description="Filter by collection ID(s)"),
+    brand: Optional[list[str]] = Query(None, description="Filter by brand(s)"),
+    min_price: Optional[Decimal] = Query(None, description="Minimum price"),
+    max_price: Optional[Decimal] = Query(None, description="Maximum price"),
+    in_stock_only: Optional[bool] = Query(None, description="Only in-stock products"),
+    sort_by: Optional[str] = Query(None, description="Sort: newest, price_asc, price_desc, rating_desc, discount_desc"),
     session: Session = Depends(get_session),
 ):
     get_site_or_404(session, site_id)
-    products = session.exec(
-        select(Product).where(Product.site_id == site_id)
-    ).all()
+
+    query = select(Product).where(Product.site_id == site_id)
+
+    # --- Search ---
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        query = query.where(
+            (Product.name.ilike(term))
+            | (Product.brand.ilike(term))
+            | (Product.category.ilike(term))
+        )
+
+    # --- Category filter (broad category) ---
+    if category_id:
+        query = query.where(Product.category_id == category_id)
+
+    # --- Product type filter (the existing category column) ---
+    if product_type:
+        query = query.where(Product.category.in_(product_type))
+
+    # --- Brand filter ---
+    if brand:
+        query = query.where(Product.brand.in_(brand))
+
+    # --- Collection filter (multi-select) ---
+    if collection_id:
+        product_ids_in_collections = (
+            select(ProductCollection.product_id)
+            .where(ProductCollection.collection_id.in_(collection_id))
+            .distinct()
+        )
+        query = query.where(Product.id.in_(product_ids_in_collections))
+
+    # --- Price range ---
+    if min_price is not None:
+        query = query.where(Product.price >= min_price)
+    if max_price is not None:
+        query = query.where(Product.price <= max_price)
+
+    # --- In-stock filter ---
+    if in_stock_only:
+        query = query.where(Product.in_stock == True)
+
+    # --- Sorting ---
+    if sort_by == "price_asc":
+        query = query.order_by(Product.price.asc())
+    elif sort_by == "price_desc":
+        query = query.order_by(Product.price.desc())
+    elif sort_by == "newest":
+        query = query.order_by(Product.created_at.desc())
+    elif sort_by == "discount_desc":
+        # Sort by discount percentage descending; products without compare_price go last
+        query = query.order_by(
+            func.coalesce(
+                (Product.compare_price - Product.price) / func.nullif(Product.compare_price, 0),
+                0,
+            ).desc()
+        )
+    elif sort_by == "rating_desc":
+        # Sub-query approach: join with avg rating
+        avg_rating_sub = (
+            select(
+                ProductReview.product_id,
+                func.coalesce(func.avg(ProductReview.rating), 0).label("avg_rating"),
+            )
+            .group_by(ProductReview.product_id)
+            .subquery()
+        )
+        query = (
+            query
+            .outerjoin(avg_rating_sub, Product.id == avg_rating_sub.c.product_id)
+            .order_by(func.coalesce(avg_rating_sub.c.avg_rating, 0).desc())
+        )
+    else:
+        # Default: newest first
+        query = query.order_by(Product.created_at.desc())
+
+    products = session.exec(query).all()
     return [to_product_response(product, session) for product in products]
 
 
@@ -554,6 +677,21 @@ def create_product_review(
     }
 
 
+def sync_product_collections(
+    session: Session, product_id: UUID, collection_ids: list[UUID]
+) -> None:
+    """Replace all collection associations for a product."""
+    existing = session.exec(
+        select(ProductCollection).where(ProductCollection.product_id == product_id)
+    ).all()
+    for pc in existing:
+        session.delete(pc)
+    session.flush()
+
+    for cid in collection_ids:
+        session.add(ProductCollection(product_id=product_id, collection_id=cid))
+
+
 @router.post("", response_model=ProductResponse)
 def create_product(
     site_id: UUID,
@@ -570,6 +708,7 @@ def create_product(
         name=product_in.name,
         brand=product_in.brand,
         category=product_in.category,
+        category_id=product_in.category_id,
         description=product_in.description,
         slug=slug_value,
         price=product_in.price,
@@ -585,6 +724,11 @@ def create_product(
     )
 
     session.add(product)
+    session.flush()
+
+    if product_in.collection_ids:
+        sync_product_collections(session, product.id, product_in.collection_ids)
+
     session.commit()
     session.refresh(product)
     return to_product_response(product, session)
@@ -604,6 +748,7 @@ def update_product(
     product.name = product_in.name
     product.brand = product_in.brand
     product.category = product_in.category
+    product.category_id = product_in.category_id
     product.description = product_in.description
     product.slug = product_in.slug or make_slug(product_in.name)
     product.price = product_in.price
@@ -616,6 +761,8 @@ def update_product(
         if product_in.variant_option
         else None
     )
+
+    sync_product_collections(session, product.id, product_in.collection_ids)
 
     session.add(product)
     session.commit()

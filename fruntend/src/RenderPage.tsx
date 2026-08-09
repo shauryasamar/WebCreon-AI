@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useCart, Product } from "./CartContext";
 import { componentRegistry } from "./componentRegistry";
 import { getCheckoutAddresses, SavedAddress } from "./addressService";
 import { useCustomerAuth } from "./context/CustomerAuthContext";
+import FilterModal, { FilterState } from "./Component/FilterModal";
+import { API_BASE_URL } from "./config/api";
 
 type Block = {
   id?: string;
@@ -187,8 +190,41 @@ const RenderPage: React.FC<RenderPageProps> = ({
   const { products, cartItems } = useCart();
   const { isAuthenticated, loading: authLoading } = useCustomerAuth();
 
-  const [selectedFilter, setSelectedFilter] = useState("All");
+  const location = useLocation();
+  const [filterModalOpen, setFilterModalOpen] = useState(false);
+  const [categories, setCategories] = useState<{ id: string; name: string; slug?: string }[]>([]);
+  const [collections, setCollections] = useState<{ id: string; name: string; slug?: string }[]>([]);
+
+  const [filters, setFilters] = useState<FilterState>({
+    categoryId: null,
+    productTypes: [],
+    collections: [],
+    brands: [],
+    minPrice: 0,
+    maxPrice: 100000,
+  });
+  const [sortBy, setSortBy] = useState("newest");
+  const [searchQuery, setSearchQuery] = useState("");
   const [isCompactCheckout, setIsCompactCheckout] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const q = params.get("search") || "";
+    setSearchQuery(q);
+  }, [location.search]);
+
+  useEffect(() => {
+    if (!siteId) return;
+    fetch(`${API_BASE_URL}/sites/${siteId}/categories/public`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setCategories(Array.isArray(data) ? data : []))
+      .catch(() => {});
+
+    fetch(`${API_BASE_URL}/sites/${siteId}/collections/public`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setCollections(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, [siteId]);
 
   const [checkoutStep, setCheckoutStep] = useState<CheckoutStep>("delivery");
   const [deliveryData, setDeliveryData] = useState<DeliveryData>(initialDeliveryData);
@@ -290,20 +326,199 @@ const RenderPage: React.FC<RenderPageProps> = ({
       PRODUCT_DETAIL_TYPES.has(String(block.type || "").toLowerCase())
     );
 
-  const productCategories = useMemo(() => {
+  const availableProductTypes = useMemo(() => {
     return Array.from(
       new Set(
         products
           .map((product) => product.category)
           .filter((category): category is string => Boolean(category))
       )
-    );
+    ).sort();
   }, [products]);
 
-  const filteredProducts = useMemo(() => {
-    if (selectedFilter === "All") return products;
-    return products.filter((product) => product.category === selectedFilter);
-  }, [products, selectedFilter]);
+  const availableBrands = useMemo(() => {
+    return Array.from(
+      new Set(
+        products
+          .map((product) => product.brand)
+          .filter((brand): brand is string => Boolean(brand))
+      )
+    ).sort();
+  }, [products]);
+
+  const filteredAndSortedProducts = useMemo(() => {
+    let list = [...products];
+
+    // Search filter across name, brand, product type
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      list = list.filter(
+        (p) =>
+          (p.name && p.name.toLowerCase().includes(q)) ||
+          (p.brand && p.brand.toLowerCase().includes(q)) ||
+          (p.category && p.category.toLowerCase().includes(q)) ||
+          (p.category_name && p.category_name.toLowerCase().includes(q)) ||
+          (p.description && p.description.toLowerCase().includes(q))
+      );
+    }
+
+    // Broad Category filter
+    if (filters.categoryId) {
+      const targetCatId = String(filters.categoryId).toLowerCase().trim();
+      const matchedCat = categories.find(
+        (c) => String(c.id).toLowerCase().trim() === targetCatId || String(c.name).toLowerCase().trim() === targetCatId
+      );
+      const catIdToken = matchedCat ? String(matchedCat.id).toLowerCase().trim() : targetCatId;
+      const catNameToken = matchedCat ? String(matchedCat.name).toLowerCase().trim() : targetCatId;
+      const cleanName = catNameToken.trim();
+
+      const isWordMatch = (text: string, target: string) => {
+        if (!text || !target) return false;
+        const t = text.toLowerCase().trim();
+        const w = target.toLowerCase().trim();
+        if (t === w) return true;
+        const textWords = t.split(/[^a-z0-9]+/);
+        if (!w.includes(" ")) {
+          return textWords.includes(w);
+        }
+        const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        return new RegExp(`\\b${escaped}\\b`, "i").test(t);
+      };
+
+      list = list.filter((p) => {
+        const pCatId = p.category_id ? String(p.category_id).toLowerCase().trim() : "";
+        const pCatName = p.category_name ? String(p.category_name).toLowerCase().trim() : "";
+        const pCat = p.category ? String(p.category).toLowerCase().trim() : "";
+
+        if (pCatId && pCatId === catIdToken) return true;
+        if (pCatName && isWordMatch(pCatName, cleanName)) return true;
+        if (pCat && isWordMatch(pCat, cleanName)) return true;
+        return false;
+      });
+    }
+
+    // Product Type filter
+    if (filters.productTypes.length > 0) {
+      const selectedTypes = filters.productTypes.map((t) => String(t).toLowerCase().trim());
+      list = list.filter((p) => {
+        const pCat = p.category ? String(p.category).toLowerCase().trim() : "";
+        const pCatName = p.category_name ? String(p.category_name).toLowerCase().trim() : "";
+        const pName = p.name ? String(p.name).toLowerCase().trim() : "";
+        return selectedTypes.some((st) => pCat === st || pCat.includes(st) || st.includes(pCat) || pCatName === st || pName.includes(st));
+      });
+    }
+
+    // Collections filter
+    if (filters.collections.length > 0) {
+      const selectedColTokens = new Set<string>();
+      filters.collections.forEach((colKey) => {
+        const k = String(colKey).toLowerCase().trim();
+        selectedColTokens.add(k);
+        const matchCol = collections.find((c) => String(c.id).toLowerCase().trim() === k || String(c.name).toLowerCase().trim() === k);
+        if (matchCol) {
+          selectedColTokens.add(String(matchCol.id).toLowerCase().trim());
+          selectedColTokens.add(String(matchCol.name).toLowerCase().trim());
+          if (matchCol.slug) selectedColTokens.add(String(matchCol.slug).toLowerCase().trim());
+        }
+      });
+
+      list = list.filter((p) => {
+        if (p.collections && Array.isArray(p.collections)) {
+          const hasMatch = p.collections.some((col: any) => {
+            const colId = col.id ? String(col.id).toLowerCase().trim() : "";
+            const colName = col.name ? String(col.name).toLowerCase().trim() : "";
+            const colSlug = col.slug ? String(col.slug).toLowerCase().trim() : "";
+            return (
+              selectedColTokens.has(colId) ||
+              selectedColTokens.has(colName) ||
+              selectedColTokens.has(colSlug) ||
+              Array.from(selectedColTokens).some((t) => t && (colName.includes(t) || t.includes(colName)))
+            );
+          });
+          if (hasMatch) return true;
+        }
+        const pCat = p.category ? String(p.category).toLowerCase().trim() : "";
+        const pCatName = p.category_name ? String(p.category_name).toLowerCase().trim() : "";
+        const pName = p.name ? String(p.name).toLowerCase().trim() : "";
+        return Array.from(selectedColTokens).some(
+          (token) => token && (pCat === token || pCat.includes(token) || pCatName === token || pName.includes(token))
+        );
+      });
+    }
+
+    // Brand filter
+    if (filters.brands.length > 0) {
+      list = list.filter((p) => p.brand && filters.brands.includes(p.brand));
+    }
+
+    // Price range
+    if (filters.minPrice > 0 || filters.maxPrice < 100000) {
+      list = list.filter((p) => {
+        const price = Number(p.price || 0);
+        return price >= filters.minPrice && price <= filters.maxPrice;
+      });
+    }
+
+    // Sorting
+    if (sortBy === "price_asc") {
+      list.sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
+    } else if (sortBy === "price_desc") {
+      list.sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
+    } else if (sortBy === "rating_desc") {
+      list.sort((a, b) => Number(b.average_rating || 0) - Number(a.average_rating || 0));
+    } else if (sortBy === "discount_desc") {
+      list.sort((a, b) => {
+        const getDisc = (p: any) => {
+          const pVal = Number(p.price || 0);
+          const compVal = Number(p.compare_price || p.originalPrice || 0);
+          return compVal > pVal && compVal > 0 ? ((compVal - pVal) / compVal) * 100 : 0;
+        };
+        return getDisc(b) - getDisc(a);
+      });
+    } else {
+      // default: newest
+      list.sort((a, b) => {
+        const tA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const tB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return tB - tA;
+      });
+    }
+
+    return list;
+  }, [products, searchQuery, filters, sortBy]);
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filters.categoryId) count++;
+    count += filters.productTypes.length;
+    count += filters.collections.length;
+    count += filters.brands.length;
+    if (filters.minPrice > 0) count++;
+    if (filters.maxPrice < 100000) count++;
+    return count;
+  }, [filters]);
+
+  const dynamicTitle = useMemo(() => {
+    if (searchQuery.trim()) return `Search Results for "${searchQuery.trim()}"`;
+    if (filters.categoryId) {
+      const cat = categories.find((c) => c.id === filters.categoryId);
+      if (cat) return cat.name;
+    }
+    if (filters.collections.length > 0) {
+      const matched = collections
+        .filter((c) => filters.collections.includes(c.id))
+        .map((c) => c.name);
+      if (matched.length > 0) return matched.join(", ");
+    }
+    return "New Arrivals";
+  }, [searchQuery, filters, categories, collections]);
+
+  const dynamicSubtitle = useMemo(() => {
+    if (searchQuery.trim()) return "Search";
+    if (filters.categoryId) return "Category";
+    if (filters.collections.length > 0) return "Collection";
+    return "Browse Products";
+  }, [searchQuery, filters]);
 
   const detailRelevantBlocks = useMemo(() => {
     if (!isProductDetailPageContext) return resolvedBlocks;
@@ -370,10 +585,19 @@ const RenderPage: React.FC<RenderPageProps> = ({
   const blocksToRender = useMemo(() => {
     if (isCheckoutPage) return detailRelevantBlocks;
 
+    let blocks = detailRelevantBlocks;
+
+    if (searchQuery.trim()) {
+      blocks = blocks.filter((b) => {
+        const type = String(b.type || "").toLowerCase();
+        return !type.includes("banner") && !type.includes("hero");
+      });
+    }
+
     let hasRenderedPrimaryCartBlock = false;
     let hasRenderedPrimaryProductDetailBlock = false;
 
-    return detailRelevantBlocks.filter((block) => {
+    return blocks.filter((block) => {
       const type = String(block.type || "").toLowerCase();
       const dataSource = block.data_source ?? block.datasource ?? undefined;
 
@@ -394,7 +618,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
 
       return true;
     });
-  }, [detailRelevantBlocks, isCheckoutPage, isCartPage, isProductDetailPageContext]);
+  }, [detailRelevantBlocks, isCheckoutPage, isCartPage, isProductDetailPageContext, searchQuery]);
 
   const renderBlock = (
     block: Block,
@@ -420,6 +644,16 @@ const RenderPage: React.FC<RenderPageProps> = ({
       ...(overrides ?? {}),
     };
 
+    if (block.type === "navbar") {
+      return (
+        <Component
+          key={blockId}
+          {...componentProps}
+          onSearch={(query: string) => setSearchQuery(query)}
+        />
+      );
+    }
+
     if (
       !isProductDetailPageContext &&
       (block.type === "filter_sidebar" || block.type === "filtersidebar")
@@ -428,9 +662,13 @@ const RenderPage: React.FC<RenderPageProps> = ({
         <Component
           key={blockId}
           {...componentProps}
-          filters={productCategories}
-          selectedFilter={selectedFilter}
-          onFilterChange={setSelectedFilter}
+          title={dynamicTitle}
+          subtitle={dynamicSubtitle}
+          itemCount={filteredAndSortedProducts.length}
+          activeFilterCount={activeFilterCount}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
+          onFilterClick={() => setFilterModalOpen(true)}
         />
       );
     }
@@ -446,12 +684,23 @@ const RenderPage: React.FC<RenderPageProps> = ({
       );
     }
 
-    if (!isProductDetailPageContext && resolvedDataSource === "products") {
+    const isProductListingBlock =
+      resolvedDataSource === "products" ||
+      PRODUCT_LISTING_TYPES.has(String(block.type || "").toLowerCase());
+
+    if (!isProductDetailPageContext && isProductListingBlock) {
       return (
         <Component
           key={blockId}
           {...componentProps}
-          products={filteredProducts}
+          products={filteredAndSortedProducts}
+          title={dynamicTitle}
+          subtitle={dynamicSubtitle}
+          itemCount={filteredAndSortedProducts.length}
+          activeFilterCount={activeFilterCount}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
+          onFilterClick={() => setFilterModalOpen(true)}
         />
       );
     }
@@ -470,7 +719,23 @@ const RenderPage: React.FC<RenderPageProps> = ({
   };
 
   if (!isCheckoutPage) {
-    return <>{blocksToRender.map((block, index) => renderBlock(block, index))}</>;
+    return (
+      <>
+        {blocksToRender.map((block, index) => renderBlock(block, index))}
+        <FilterModal
+          open={filterModalOpen}
+          onClose={() => setFilterModalOpen(false)}
+          onApply={(newFilters) => setFilters(newFilters)}
+          currentFilters={filters}
+          categories={categories}
+          collections={collections}
+          productTypes={availableProductTypes}
+          brands={availableBrands}
+          priceRange={{ min: 0, max: 100000 }}
+          theme={theme}
+        />
+      </>
+    );
   }
 
   const deliveryBlock = blocksToRender.find((block) =>

@@ -299,35 +299,38 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
 
   const isLight = theme?.mode === "light";
   const accentColor = theme?.accent_color || "#2563eb";
-  const pageText = isLight ? "#0f172a" : theme?.text_color || "#f8fafc";
-  const mutedText = isLight ? "#475569" : "rgba(255,255,255,0.72)";
-  const subtleText = isLight ? "#64748b" : "rgba(255,255,255,0.56)";
+  const resolvedPrimaryBg = theme?.primary_bg || (isLight ? "#f8fafc" : "#0f172a");
+
+  const pageText = theme?.text_color || (isLight ? "#0f172a" : "#f8fafc");
+  const mutedText = (theme as any)?.muted_text_color || (isLight ? "rgba(15,23,42,0.65)" : "rgba(248,250,252,0.65)");
+  const subtleText = (theme as any)?.soft_text_color || (isLight ? "rgba(15,23,42,0.5)" : "rgba(248,250,252,0.5)");
+
   const panelBg = isLight
-    ? "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.96) 100%)"
-    : "linear-gradient(180deg, rgba(15,23,42,0.90) 0%, rgba(15,23,42,0.78) 100%)";
-  const elevatedBg = isLight ? "rgba(255,255,255,0.78)" : "rgba(255,255,255,0.045)";
-  const softSectionBg = isLight
-    ? "rgba(248,250,252,0.88)"
-    : "rgba(255,255,255,0.035)";
-  const mediaBg = isLight
-    ? "linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%)"
-    : "linear-gradient(180deg, rgba(30,41,59,0.92) 0%, rgba(15,23,42,0.96) 100%)";
+    ? (resolvedPrimaryBg === "#ffffff" ? "#ffffff" : "rgba(255,255,255,0.75)")
+    : "rgba(0,0,0,0.25)";
+
+  const elevatedBg = isLight ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.06)";
+  const softSectionBg = isLight ? "rgba(0,0,0,0.025)" : "rgba(255,255,255,0.04)";
+  const mediaBg = isLight ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.25)";
+
   const subtleBorder = isLight
-    ? "1px solid rgba(15,23,42,0.08)"
-    : "1px solid rgba(255,255,255,0.10)";
+    ? `1px solid ${(theme as any)?.border_color || "rgba(15,23,42,0.10)"}`
+    : `1px solid ${(theme as any)?.border_color || "rgba(255,255,255,0.12)"}`;
+
   const strongerBorder = isLight
-    ? "1px solid rgba(15,23,42,0.14)"
-    : "1px solid rgba(255,255,255,0.14)";
+    ? `1px solid ${(theme as any)?.border_color || "rgba(15,23,42,0.16)"}`
+    : `1px solid ${(theme as any)?.border_color || "rgba(255,255,255,0.18)"}`;
+
   const softShadow = isLight
     ? "0 12px 32px rgba(15,23,42,0.06)"
-    : "0 16px 36px rgba(2,6,23,0.26)";
+    : "0 16px 36px rgba(0,0,0,0.3)";
+
   const panelShadow = isLight
     ? "0 18px 40px rgba(15,23,42,0.08)"
-    : "0 22px 48px rgba(2,6,23,0.30)";
-  const activeRing = isLight
-    ? "0 0 0 3px rgba(37,99,235,0.12)"
-    : "0 0 0 3px rgba(96,165,250,0.18)";
-  const reviewCardBg = isLight ? "rgba(248,250,252,0.88)" : "rgba(255,255,255,0.04)";
+    : "0 22px 48px rgba(0,0,0,0.35)";
+
+  const activeRing = `0 0 0 3px ${accentColor}25`;
+  const reviewCardBg = isLight ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.05)";
 
   const shellCard = {
     border: subtleBorder,

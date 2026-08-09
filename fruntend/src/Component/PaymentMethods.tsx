@@ -182,53 +182,69 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
 
   const palette = useMemo(() => {
     if (!isDark) {
+      // Light or Warm Festive Light Theme
+      const isPureWhiteBg = resolvedPrimaryBg.toLowerCase() === "#ffffff" || resolvedPrimaryBg.toLowerCase() === "#f8fafc" || resolvedPrimaryBg.toLowerCase() === "#f6f7fb";
+      const surfaceBg = background_color || (themeObject as any)?.surface_bg || (themeObject as any)?.card_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.7);
+      const cardBgFinal = background_color || (isPureWhiteBg ? "#ffffff" : surfaceBg);
+      const panelBgFinal = panel_color || cardBgFinal;
+      const optionBgFinal = isPureWhiteBg ? "#ffffff" : mixHex(cardBgFinal, "#ffffff", 0.3);
+      const inputBgFinal = input_color || (isPureWhiteBg ? "#ffffff" : mixHex(cardBgFinal, "#ffffff", 0.5));
+      const borderFinal = border_color || (isPureWhiteBg ? "#e5e7eb" : mixHex(resolvedText, cardBgFinal, 0.15));
+
       return {
-        cardBg: "#ffffff",
-        panelBg: panel_color || "#ffffff",
-        optionBg: "#ffffff",
-        optionSelectedBg: alpha(resolvedAccent, 0.06),
-        inputBg: input_color || "#ffffff",
-        border: border_color || "#e5e7eb",
-        softBorder: soft_border_color || "#edf0f4",
+        cardBg: cardBgFinal,
+        panelBg: panelBgFinal,
+        optionBg: optionBgFinal,
+        optionSelectedBg: alpha(resolvedAccent, 0.08),
+        inputBg: inputBgFinal,
+        border: borderFinal,
+        softBorder: soft_border_color || mixHex(borderFinal, cardBgFinal, 0.5),
         text: resolvedText,
-        textMuted: muted_text_color || "#6b7280",
-        textSoft: "#94a3b8",
-        placeholder: placeholder_color || "#9ca3af",
-        shadow: "0 1px 2px rgba(16,24,40,0.04)",
-        selectedRing: `0 0 0 3px ${resolvedAccent}14`,
+        textMuted: muted_text_color || mixHex(resolvedText, cardBgFinal, 0.4),
+        textSoft: mixHex(resolvedText, cardBgFinal, 0.55),
+        placeholder: placeholder_color || mixHex(resolvedText, cardBgFinal, 0.55),
+        shadow: "0 2px 8px rgba(0,0,0,0.05)",
+        selectedRing: `0 0 0 3px ${resolvedAccent}22`,
         inputRing: `0 0 0 3px ${resolvedAccent}22`,
-        backButtonBg: "#ffffff",
+        backButtonBg: inputBgFinal,
         backButtonText: resolvedText,
-        backButtonBorder: border_color || "#e5e7eb",
+        backButtonBorder: borderFinal,
         primaryButtonBg: resolvedAccent,
-        primaryButtonDisabledBg: "#cbd5e1",
+        primaryButtonDisabledBg: mixHex(resolvedAccent, cardBgFinal, 0.3),
         primaryButtonText: "#ffffff",
-        radioBorder: "#cbd5e1",
+        radioBorder: borderFinal,
       };
     }
 
+    // Dark or Deep Festive Dark Theme
+    const cardBgDark = background_color || (themeObject as any)?.surface_bg || (themeObject as any)?.card_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.06);
+    const panelBgDark = panel_color || mixHex(resolvedPrimaryBg, "#ffffff", 0.07);
+    const optionBgDark = mixHex(resolvedPrimaryBg, "#ffffff", 0.04);
+    const inputBgDark = input_color || mixHex(resolvedPrimaryBg, "#ffffff", 0.09);
+    const borderDark = border_color || mixHex(resolvedText, resolvedPrimaryBg, 0.15);
+
     return {
-      cardBg: background_color || "#111827",
-      panelBg: panel_color || mixHex(resolvedPrimaryBg, "#ffffff", 0.06),
-      optionBg: mixHex(resolvedPrimaryBg, "#ffffff", 0.035),
-      optionSelectedBg: alpha(resolvedAccent, 0.14),
-      inputBg: input_color || mixHex(resolvedPrimaryBg, "#000000", 0.08),
-      border: border_color || "rgba(148,163,184,0.18)",
-      softBorder: soft_border_color || "rgba(148,163,184,0.12)",
+      cardBg: cardBgDark,
+      panelBg: panelBgDark,
+      optionBg: optionBgDark,
+      optionSelectedBg: alpha(resolvedAccent, 0.16),
+      inputBg: inputBgDark,
+      border: borderDark,
+      softBorder: soft_border_color || mixHex(borderDark, resolvedPrimaryBg, 0.5),
       text: resolvedText,
-      textMuted: muted_text_color || "#cbd5e1",
-      textSoft: "#94a3b8",
-      placeholder: placeholder_color || "#64748b",
-      shadow: "0 8px 22px rgba(0,0,0,0.16)",
-      selectedRing: `0 0 0 3px ${resolvedAccent}22`,
+      textMuted: muted_text_color || mixHex(resolvedText, resolvedPrimaryBg, 0.3),
+      textSoft: mixHex(resolvedText, resolvedPrimaryBg, 0.45),
+      placeholder: placeholder_color || mixHex(resolvedText, resolvedPrimaryBg, 0.45),
+      shadow: "0 8px 22px rgba(0,0,0,0.25)",
+      selectedRing: `0 0 0 3px ${resolvedAccent}2e`,
       inputRing: `0 0 0 3px ${resolvedAccent}2e`,
-      backButtonBg: mixHex(resolvedPrimaryBg, "#ffffff", 0.05),
+      backButtonBg: mixHex(resolvedPrimaryBg, "#ffffff", 0.07),
       backButtonText: resolvedText,
-      backButtonBorder: border_color || "rgba(148,163,184,0.18)",
+      backButtonBorder: borderDark,
       primaryButtonBg: resolvedAccent,
       primaryButtonDisabledBg: "rgba(148,163,184,0.28)",
       primaryButtonText: "#ffffff",
-      radioBorder: "rgba(148,163,184,0.4)",
+      radioBorder: borderDark,
     };
   }, [
     background_color,

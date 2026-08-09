@@ -1,147 +1,300 @@
+import React, { useState, useRef, useEffect } from "react";
+
+type SortOption = {
+  value: string;
+  label: string;
+  description: string;
+};
+
+const SORT_OPTIONS: SortOption[] = [
+  { value: "newest", label: "Newest Arrivals", description: "Recently added products" },
+  { value: "price_asc", label: "Price: Low to High", description: "Sort by increasing price" },
+  { value: "price_desc", label: "Price: High to Low", description: "Sort by decreasing price" },
+  { value: "rating_desc", label: "Highest Rated", description: "Sort by customer rating" },
+  { value: "discount_desc", label: "Biggest Discount", description: "Sort by discount percentage" },
+];
+
 type FilterSidebarProps = {
   title?: string;
+  subtitle?: string;
+  itemCount?: number;
+  activeFilterCount?: number;
+  sortBy?: string;
+  onSortChange?: (sort: string) => void;
+  onFilterClick?: () => void;
+  theme?: {
+    mode?: string;
+    text_color?: string;
+    accent_color?: string;
+    primary_bg?: string;
+  };
   filters?: string[];
   selectedFilter?: string;
   onFilterChange?: (filter: string) => void;
 };
 
 export const FilterSidebar = ({
-  title = "Shop by Category",
-  filters = [],
-  selectedFilter = "All",
-  onFilterChange,
+  title,
+  subtitle,
+  itemCount = 0,
+  activeFilterCount = 0,
+  sortBy = "newest",
+  onSortChange,
+  onFilterClick,
+  theme,
 }: FilterSidebarProps) => {
-  const options = ["All", ...filters.filter(Boolean)];
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortRef = useRef<HTMLDivElement>(null);
+
+  const isDark = theme?.mode !== "light";
+  const textPrimary = theme?.text_color || (isDark ? "#f1f5f9" : "#0f172a");
+  const textSecondary = isDark ? "#94a3b8" : "#64748b";
+  const borderColor = isDark ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.12)";
+  const btnBg = isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)";
+  const dropdownBg = isDark ? "#1e293b" : "#ffffff";
+  const hoverBg = isDark ? "rgba(255,255,255,0.08)" : "rgba(15,23,42,0.04)";
+  const accentColor = theme?.accent_color || (isDark ? "#60a5fa" : "#2563eb");
+
+  const currentSort = SORT_OPTIONS.find((o) => o.value === sortBy) || SORT_OPTIONS[0];
+
+  useEffect(() => {
+    if (!sortOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (sortRef.current && !sortRef.current.contains(e.target as Node)) {
+        setSortOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [sortOpen]);
+
+  const displayTitle =
+    (title &&
+    !["featured products", "featured product", "curated collection"].includes(
+      title.toLowerCase().trim()
+    )
+      ? title
+      : null) || "Newest Arrivals";
 
   return (
-    <section
-      style={{
-        maxWidth: "1120px",
-        margin: "0 auto",
-        padding: "18px 12px 10px",
-        position: "sticky",
-        top: "84px",
-        zIndex: 20,
-      }}
-    >
-      <div
-        style={{
-          border: "1px solid rgba(15,23,42,0.10)",
-          borderRadius: "24px",
-          padding: "14px",
-          background: "rgba(248,250,252,0.78)",
-          backdropFilter: "blur(16px)",
-          WebkitBackdropFilter: "blur(16px)",
-          boxShadow:
-            "0 10px 30px rgba(15,23,42,0.10), inset 0 1px 0 rgba(255,255,255,0.65)",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "14px",
-            flexWrap: "wrap",
-            marginBottom: "12px",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-            }}
-          >
-            <div
-              style={{
-                width: "10px",
-                height: "10px",
-                borderRadius: "999px",
-                background: "linear-gradient(135deg, #64748b, #94a3b8)",
-                boxShadow: "0 0 16px rgba(100,116,139,0.28)",
-                flexShrink: 0,
-              }}
-            />
-            <h3
-              style={{
-                margin: 0,
-                fontSize: "15px",
-                fontWeight: 700,
-                letterSpacing: "-0.02em",
-                color: "#0f172a",
-              }}
-            >
-              {title}
-            </h3>
-          </div>
-
-          <span
-            style={{
-              padding: "6px 10px",
-              borderRadius: "999px",
-              fontSize: "11px",
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              color: "rgba(15,23,42,0.62)",
-              background: "rgba(255,255,255,0.55)",
-              border: "1px solid rgba(15,23,42,0.08)",
-            }}
-          >
-            Smart Filter
-          </span>
+    <div className="product-toolbar-wrapper">
+      <div className="product-toolbar-container">
+        {/* Left: Subtitle & Title */}
+        <div className="product-toolbar-title-group">
+          <p className="product-toolbar-subtitle">
+            {subtitle || "Browse Products"}
+          </p>
+          <h2 className="product-toolbar-title">
+            {displayTitle}
+          </h2>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "10px",
-          }}
-        >
-          {options.map((filter) => {
-            const active = selectedFilter === filter;
+        {/* Right: Item Count + Filter Button + Sort Dropdown */}
+        <div className="product-toolbar-actions">
+          {/* Item count */}
+          <span className="product-toolbar-count">
+            {itemCount} item{itemCount !== 1 ? "s" : ""}
+          </span>
 
-            return (
-              <button
-                key={filter}
-                type="button"
-                onClick={() => onFilterChange?.(filter)}
-                style={{
-                  padding: active ? "11px 16px" : "10px 14px",
-                  borderRadius: "999px",
-                  border: active
-                    ? "1px solid rgba(15,23,42,0.04)"
-                    : "1px solid rgba(15,23,42,0.08)",
-                  background: active
-                    ? "linear-gradient(135deg, #0f172a, #334155)"
-                    : "rgba(255,255,255,0.56)",
-                  color: active ? "#ffffff" : "#334155",
-                  fontSize: "13px",
-                  fontWeight: active ? 800 : 700,
-                  letterSpacing: "-0.01em",
-                  cursor: "pointer",
-                  boxShadow: active
-                    ? "0 10px 24px rgba(15,23,42,0.20)"
-                    : "inset 0 1px 0 rgba(255,255,255,0.55)",
-                  transition:
-                    "transform 180ms ease, box-shadow 180ms ease, background 180ms ease, border 180ms ease",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-1px)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "translateY(0)";
-                }}
-              >
-                {filter}
-              </button>
-            );
-          })}
+          {/* Filter & Categories button */}
+          <button
+            onClick={onFilterClick}
+            className="product-toolbar-btn"
+          >
+            <span>☰</span>
+            <span>Filter & Categories</span>
+            {activeFilterCount > 0 && (
+              <span className="product-toolbar-badge">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
+          {/* Sort by dropdown */}
+          <div ref={sortRef} style={{ position: "relative" }}>
+            <button
+              onClick={() => setSortOpen(!sortOpen)}
+              className="product-toolbar-btn"
+            >
+              <span>Sort by: <strong>{currentSort.label}</strong></span>
+              <span style={{ fontSize: "10px", transition: "transform 200ms", transform: sortOpen ? "rotate(180deg)" : "rotate(0)" }}>▾</span>
+            </button>
+
+            {sortOpen && (
+              <div className="product-sort-dropdown">
+                <div className="product-sort-header">
+                  Sort by
+                </div>
+                {SORT_OPTIONS.map((opt) => {
+                  const isActive = sortBy === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={() => {
+                        onSortChange?.(opt.value);
+                        setSortOpen(false);
+                      }}
+                      className="product-sort-item"
+                      style={{
+                        background: isActive ? hoverBg : "transparent",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: "13px", fontWeight: isActive ? 700 : 500, color: isActive ? accentColor : textPrimary }}>
+                          {opt.label}
+                        </div>
+                        <div style={{ fontSize: "11px", color: textSecondary, marginTop: "1px" }}>
+                          {opt.description}
+                        </div>
+                      </div>
+                      {isActive && (
+                        <span style={{ color: accentColor, fontSize: "16px", fontWeight: 700 }}>✓</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </section>
+
+      <style>{`
+        .product-toolbar-wrapper {
+          width: 100%;
+          margin-bottom: 24px;
+          padding-bottom: 14px;
+          border-bottom: 1px solid ${borderColor};
+        }
+        .product-toolbar-container {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          flex-wrap: wrap;
+        }
+        .product-toolbar-title-group {
+          min-width: 200px;
+        }
+        .product-toolbar-subtitle {
+          margin: 0 0 2px;
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: ${textSecondary};
+        }
+        .product-toolbar-title {
+          margin: 0;
+          font-size: 24px;
+          font-weight: 800;
+          letter-spacing: -0.03em;
+          color: ${textPrimary};
+        }
+        .product-toolbar-actions {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .product-toolbar-count {
+          font-size: 13px;
+          color: ${textSecondary};
+          font-weight: 500;
+        }
+        .product-toolbar-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 9px 16px;
+          border-radius: 999px;
+          border: 1px solid ${borderColor};
+          background: ${btnBg};
+          color: ${textPrimary};
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 180ms ease;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+        .product-toolbar-btn:hover {
+          transform: translateY(-1px);
+        }
+        .product-toolbar-badge {
+          background: ${accentColor};
+          color: #fff;
+          font-size: 10px;
+          font-weight: 800;
+          padding: 2px 7px;
+          border-radius: 999px;
+          margin-left: 2px;
+        }
+        .product-sort-dropdown {
+          position: absolute;
+          top: calc(100% + 8px);
+          right: 0;
+          width: 280px;
+          max-width: calc(100vw - 32px);
+          border-radius: 16px;
+          border: 1px solid ${borderColor};
+          background: ${dropdownBg};
+          box-shadow: ${isDark ? "0 20px 45px rgba(0,0,0,0.6)" : "0 20px 45px rgba(15,23,42,0.18)"};
+          padding: 8px;
+          z-index: 99999;
+          animation: sortDropIn 200ms ease;
+        }
+        .product-sort-header {
+          padding: 10px 14px 8px;
+          font-size: 14px;
+          font-weight: 700;
+          color: ${textPrimary};
+          border-bottom: 1px solid ${borderColor};
+          margin-bottom: 4px;
+        }
+        .product-sort-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          width: 100%;
+          padding: 10px 14px;
+          border-radius: 10px;
+          border: none;
+          cursor: pointer;
+          transition: background 150ms ease;
+          text-align: left;
+        }
+
+        @media (max-width: 640px) {
+          .product-toolbar-container {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+          }
+          .product-toolbar-actions {
+            width: 100%;
+            justify-content: space-between;
+          }
+          .product-toolbar-btn {
+            flex: 1;
+            justify-content: center;
+            padding: 10px 12px;
+            font-size: 12px;
+          }
+          .product-toolbar-count {
+            display: none;
+          }
+          .product-sort-dropdown {
+            right: 0;
+            left: auto;
+            width: min(280px, calc(100vw - 24px));
+          }
+        }
+        @keyframes sortDropIn {
+          from { opacity: 0; transform: translateY(-6px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
   );
 };
 

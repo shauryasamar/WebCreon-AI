@@ -1282,14 +1282,17 @@ def get_my_orders(
     user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
-    if str(site_id) != user["siteId"]:
-        raise HTTPException(status_code=403, detail="Customer token does not match requested site")
-
-    customer = get_user_for_site_or_404(session, site_id, UUID(user["userId"]))
+    user_id_uuid = UUID(user["userId"])
+    customer = session.get(User, user_id_uuid)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer account not found")
 
     orders = session.exec(
         select(Order)
-        .where(Order.site_id == site_id, Order.customer_id == customer.id)
+        .where(
+            Order.site_id == site_id,
+            Order.customer_id == customer.id,
+        )
         .order_by(Order.created_at.desc())
     ).all()
 
@@ -1337,10 +1340,10 @@ def get_my_order_detail(
     user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
-    if str(site_id) != user["siteId"]:
-        raise HTTPException(status_code=403, detail="Customer token does not match requested site")
-
-    customer = get_user_for_site_or_404(session, site_id, UUID(user["userId"]))
+    user_id_uuid = UUID(user["userId"])
+    customer = session.get(User, user_id_uuid)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer account not found")
 
     order = session.get(Order, order_id)
     if not order or order.site_id != site_id or order.customer_id != customer.id:
@@ -1384,13 +1387,22 @@ def cancel_my_order(
     user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
-    if str(site_id) != user["siteId"]:
-        raise HTTPException(status_code=403, detail="Customer token does not match requested site")
+    user_id_uuid = UUID(user["userId"])
+    customer = session.get(User, user_id_uuid)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer account not found")
 
-    customer = get_user_for_site_or_404(session, site_id, UUID(user["userId"]))
+    customer_email = customer.email
 
     order = session.get(Order, order_id)
-    if not order or order.site_id != site_id or order.customer_id != customer.id:
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    is_owner = (
+        (order.customer_id == customer.id) or
+        (customer_email and isinstance(order.shipping_address, dict) and order.shipping_address.get("email") == customer_email)
+    )
+    if not is_owner:
         raise HTTPException(status_code=404, detail="Order not found")
 
     if order.status not in {"placed", "confirmed"}:

@@ -141,11 +141,70 @@ class UserAddress(SQLModel, table=True):
     )
 
 
+class Category(SQLModel, table=True):
+    __tablename__ = "categories"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    site_id: UUID = Field(foreign_key="sites.id", index=True)
+    name: str = Field(max_length=255, nullable=False)
+    slug: Optional[str] = Field(default=None, max_length=255)
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            onupdate=utc_now,
+        ),
+    )
+
+
+class Collection(SQLModel, table=True):
+    __tablename__ = "collections"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    site_id: UUID = Field(foreign_key="sites.id", index=True)
+    name: str = Field(max_length=255, nullable=False)
+    slug: Optional[str] = Field(default=None, max_length=255)
+    description: str = Field(default="")
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            onupdate=utc_now,
+        ),
+    )
+
+
+class ProductCollection(SQLModel, table=True):
+    __tablename__ = "product_collections"
+    __table_args__ = (
+        UniqueConstraint("product_id", "collection_id", name="uq_product_collections_product_collection"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    product_id: UUID = Field(foreign_key="products.id", index=True)
+    collection_id: UUID = Field(foreign_key="collections.id", index=True)
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+
+
 class Product(SQLModel, table=True):
     __tablename__ = "products"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     site_id: UUID = Field(foreign_key="sites.id", index=True)
+    category_id: Optional[UUID] = Field(default=None, foreign_key="categories.id", index=True)
 
     name: str
     brand: Optional[str] = Field(default=None, index=True)

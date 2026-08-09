@@ -46,10 +46,34 @@ const Footer: React.FC<FooterProps> = ({
   const isLight = theme?.mode === "light";
   const layout = theme?.footer_layout || "apple_minimal";
 
-  const textColor = theme?.footer_text_color || (isLight ? "#1e293b" : theme?.text_color || "#f8fafc");
-  const mutedText = theme?.footer_muted_color || (isLight ? "#64748b" : "rgba(255,255,255,0.64)");
-  const borderColor = theme?.footer_border_color || (isLight ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.08)");
+  // Dynamic Theme Palette (adapts to Festive, Light, Dark, Emerald, Gold, Maroon, Purple, etc.)
+  const resolvedPrimaryBg = theme?.primary_bg || (isLight ? "#f8fafc" : "#0f172a");
+  
+  const footerBg =
+    theme?.footer_bg ||
+    (isLight
+      ? (resolvedPrimaryBg === "#ffffff" ? "#f8fafc" : resolvedPrimaryBg)
+      : resolvedPrimaryBg);
+
+  const textColor =
+    theme?.footer_text_color ||
+    theme?.text_color ||
+    (isLight ? "#0f172a" : "#f8fafc");
+
+  const mutedText =
+    theme?.footer_muted_color ||
+    (theme as any)?.muted_text_color ||
+    (isLight ? "rgba(15, 23, 42, 0.65)" : "rgba(248, 250, 252, 0.65)");
+
+  const borderColor =
+    theme?.footer_border_color ||
+    (theme as any)?.border_color ||
+    (isLight ? "rgba(15, 23, 42, 0.12)" : "rgba(255, 255, 255, 0.12)");
+
   const accentColor = theme?.accent_color || "#2563eb";
+
+  const inputBg = isLight ? "rgba(255, 255, 255, 0.65)" : "rgba(0, 0, 0, 0.25)";
+  const socialBg = isLight ? "rgba(15, 23, 42, 0.05)" : "rgba(255, 255, 255, 0.08)";
 
   const displayCopyright = copyrightText || `© ${new Date().getFullYear()} ${brandName}. All rights reserved.`;
   const resolvedMaxWidth = theme?.footer_max_width === "full" ? "100%" : theme?.footer_max_width ? `${theme.footer_max_width}px` : "1200px";
@@ -76,7 +100,7 @@ const Footer: React.FC<FooterProps> = ({
               fontWeight: 600,
               color: mutedText,
               textDecoration: "none",
-              background: isLight ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
+              background: socialBg,
               padding: "4px 10px",
               borderRadius: "8px",
               border: `1px solid ${borderColor}`,
@@ -101,7 +125,7 @@ const Footer: React.FC<FooterProps> = ({
               padding: "7px 12px",
               borderRadius: "8px",
               border: `1px solid ${borderColor}`,
-              background: isLight ? "#fff" : "rgba(255,255,255,0.05)",
+              background: inputBg,
               color: textColor,
               fontSize: "12px",
             }}
@@ -128,7 +152,7 @@ const Footer: React.FC<FooterProps> = ({
   // 1. Apple / Vercel Minimal
   if (layout === "apple_minimal") {
     return (
-      <footer style={{ ...footerStyle, background: theme?.footer_bg || (isLight ? "#ffffff" : "#0f172a") }}>
+      <footer style={{ ...footerStyle, background: footerBg }}>
         <div style={{ maxWidth: resolvedMaxWidth, margin: "0 auto", display: "flex", flexDirection: "column", gap: "24px" }}>
           <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start", gap: "20px" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -161,7 +185,7 @@ const Footer: React.FC<FooterProps> = ({
     return (
       <footer style={{
         ...footerStyle,
-        background: theme?.footer_bg || (isLight ? "rgba(255, 255, 255, 0.45)" : "rgba(15, 23, 42, 0.45)"),
+        background: footerBg,
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
         borderTop: `1px solid ${borderColor}`,
@@ -189,7 +213,7 @@ const Footer: React.FC<FooterProps> = ({
   // 3. Modern Marketplace
   if (layout === "modern_marketplace") {
     return (
-      <footer style={{ ...footerStyle, background: theme?.footer_bg || (isLight ? "#f8fafc" : "#020617") }}>
+      <footer style={{ ...footerStyle, background: footerBg }}>
         <div style={{ maxWidth: resolvedMaxWidth, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "32px", paddingBottom: "32px" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <span style={{ fontWeight: 800, fontSize: "18px", color: textColor }}>{brandName}</span>
@@ -214,7 +238,7 @@ const Footer: React.FC<FooterProps> = ({
   // 4. Luxury Fashion
   if (layout === "luxury_fashion") {
     return (
-      <footer style={{ ...footerStyle, background: theme?.footer_bg || (isLight ? "#fafafa" : "#09090b"), textAlign: "center" }}>
+      <footer style={{ ...footerStyle, background: footerBg, textAlign: "center" }}>
         <div style={{ maxWidth: resolvedMaxWidth, margin: "0 auto", display: "flex", flexDirection: "column", gap: "28px", alignItems: "center" }}>
           <div style={{ fontSize: "28px", fontWeight: 300, color: textColor, fontFamily: "serif", letterSpacing: "0.15em" }}>{brandName.toUpperCase()}</div>
           <p style={{ margin: 0, fontSize: "14px", color: mutedText, fontFamily: "serif", fontStyle: "italic", letterSpacing: "0.05em" }}>{tagline}</p>
@@ -237,7 +261,7 @@ const Footer: React.FC<FooterProps> = ({
   return (
     <footer style={{
       ...footerStyle,
-      background: theme?.footer_bg || (isLight ? "#f0f4f9" : "#1e293b"),
+      background: footerBg,
       borderTop: "none",
       boxShadow: isLight
         ? "inset 0 10px 20px rgba(166,180,200,0.15)"

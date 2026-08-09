@@ -684,14 +684,10 @@ def get_my_returns(
     user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
-    if str(site_id) != user["siteId"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Customer token does not match requested site",
-        )
-
     customer_id = UUID(user["userId"])
-    get_user_for_site_or_404(session, site_id, customer_id)
+    customer = session.get(User, customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer account not found")
 
     return_requests = session.exec(
         select(ReturnRequest)
@@ -726,17 +722,13 @@ def get_my_return_detail(
     user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
-    if str(site_id) != user["siteId"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Customer token does not match requested site",
-        )
-
     customer_id = UUID(user["userId"])
-    get_user_for_site_or_404(session, site_id, customer_id)
+    customer = session.get(User, customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer account not found")
 
-    return_request = get_return_request_or_404(session, site_id, return_id)
-    if return_request.customer_id != customer_id:
+    return_request = session.get(ReturnRequest, return_id)
+    if not return_request or return_request.site_id != site_id or return_request.customer_id != customer_id:
         raise HTTPException(status_code=404, detail="Return request not found")
 
     order = get_order_or_404(session, site_id, return_request.order_id)

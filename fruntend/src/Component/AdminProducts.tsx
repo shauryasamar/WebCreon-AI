@@ -19,11 +19,27 @@ type ProductVariantOption = {
 };
 
 
+type Category = {
+  id: string;
+  name: string;
+  slug?: string;
+};
+
+type Collection = {
+  id: string;
+  name: string;
+  slug?: string;
+  description?: string;
+};
+
 type Product = {
   id: string;
   name: string;
   brand?: string;
   category?: string;
+  category_id?: string | null;
+  category_name?: string | null;
+  collections?: { id: string; name: string; slug?: string }[];
   price: number;
   compare_price?: number | null;
   images: string[];
@@ -48,6 +64,8 @@ type ProductFormValues = {
   name: string;
   brand: string;
   category: string;
+  categoryId: string;
+  selectedCollectionIds: string[];
   description: string;
   slug: string;
   imagesText: string;
@@ -81,6 +99,9 @@ const normalizeProduct = (p: any): Product => ({
   name: p.name ?? "",
   brand: p.brand ?? "",
   category: p.category ?? "",
+  category_id: p.category_id ? String(p.category_id) : null,
+  category_name: p.category_name ?? null,
+  collections: Array.isArray(p.collections) ? p.collections : [],
   price: Number(p.price ?? 0),
   compare_price: p.compare_price != null ? Number(p.compare_price) : null,
   images: Array.isArray(p.images) ? p.images.filter(Boolean) : [],
@@ -141,6 +162,14 @@ const getVariantDiscountPercent = (price: string, comparePrice: string) => {
 const AdminProducts = () => {
   const { siteId } = useParams();
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [collections, setCollections] = useState<Collection[]>([]);
+
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [showAddCategory, setShowAddCategory] = useState(false);
+  const [newCollectionName, setNewCollectionName] = useState("");
+  const [showAddCollection, setShowAddCollection] = useState(false);
+
   const [isLoading, setIsLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -153,6 +182,8 @@ const AdminProducts = () => {
     name: "",
     brand: "",
     category: "",
+    categoryId: "",
+    selectedCollectionIds: [],
     description: "",
     slug: "",
     imagesText: "",
@@ -231,7 +262,7 @@ const AdminProducts = () => {
 
 
     if (!formValues.name.trim()) nextErrors.name = "Name is required.";
-    if (!formValues.category.trim()) nextErrors.category = "Category is required.";
+    if (!formValues.category.trim()) nextErrors.category = "Product Type is required.";
     if (!formValues.description.trim()) nextErrors.description = "Description is required.";
     if (images.length === 0) nextErrors.imagesText = "Add at least one image.";
     if (!formValues.optionName.trim()) nextErrors.optionName = "Option name is required.";
@@ -290,6 +321,8 @@ const AdminProducts = () => {
       name: "",
       brand: "",
       category: "",
+      categoryId: "",
+      selectedCollectionIds: [],
       description: "",
       slug: "",
       imagesText: "",
@@ -324,6 +357,8 @@ const AdminProducts = () => {
       name: product.name,
       brand: product.brand ?? "",
       category: product.category ?? "",
+      categoryId: product.category_id ?? "",
+      selectedCollectionIds: (product.collections ?? []).map((c) => c.id),
       description: product.description ?? "",
       slug: product.slug ?? "",
       imagesText: (product.images ?? []).join("\n"),
@@ -335,38 +370,93 @@ const AdminProducts = () => {
   };
 
 
+  const handleCreateCategoryInline = async () => {
+    if (!siteId || !newCategoryName.trim()) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/sites/${siteId}/categories`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ name: newCategoryName.trim() }),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        setCategories((prev) => [...prev, created]);
+        setFormValues((prev) => ({ ...prev, categoryId: created.id }));
+        setNewCategoryName("");
+        setShowAddCategory(false);
+      }
+    } catch (err) {
+      console.error("Error creating category", err);
+    }
+  };
+
+
+  const handleCreateCollectionInline = async () => {
+    if (!siteId || !newCollectionName.trim()) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/sites/${siteId}/collections`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ name: newCollectionName.trim() }),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        setCollections((prev) => [...prev, created]);
+        setFormValues((prev) => ({
+          ...prev,
+          selectedCollectionIds: [...prev.selectedCollectionIds, created.id],
+        }));
+        setNewCollectionName("");
+        setShowAddCollection(false);
+      }
+    } catch (err) {
+      console.error("Error creating collection", err);
+    }
+  };
+
+
   useEffect(() => {
-    const loadProducts = async () => {
+    const loadData = async () => {
       if (!siteId) return;
       setIsLoading(true);
       try {
-        const res = await fetch(`${API_BASE_URL}/sites/${siteId}/products`, {
-          credentials: "include",
-        });
-        if (res.ok) {
-          const data = await res.json();
+        const [prodRes, catRes, colRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/sites/${siteId}/products`, { credentials: "include" }),
+          fetch(`${API_BASE_URL}/sites/${siteId}/categories/public`),
+          fetch(`${API_BASE_URL}/sites/${siteId}/collections/public`),
+        ]);
+
+        if (prodRes.ok) {
+          const data = await prodRes.json();
           setProducts(Array.isArray(data) ? data.map(normalizeProduct) : []);
-        } else {
-          console.error("Failed to load products", res.status);
+        }
+        if (catRes.ok) {
+          const catData = await catRes.json();
+          setCategories(Array.isArray(catData) ? catData : []);
+        }
+        if (colRes.ok) {
+          const colData = await colRes.json();
+          setCollections(Array.isArray(colData) ? colData : []);
         }
       } catch (err) {
-        console.error("Error loading products", err);
+        console.error("Error loading products/categories/collections", err);
       } finally {
         setIsLoading(false);
       }
     };
 
-
-    loadProducts();
+    loadData();
   }, [siteId]);
 
 
   const imagePreviewList = useMemo(() => parseImages(formValues.imagesText), [formValues.imagesText]);
 
 
-  const handleFormChange = (
-    field: keyof ProductFormValues,
-    value: string
+  const handleFormChange = <K extends keyof ProductFormValues>(
+    field: K,
+    value: ProductFormValues[K]
   ) => {
     setFormValues((prev) => ({
       ...prev,
@@ -389,7 +479,7 @@ const AdminProducts = () => {
     }
 
 
-    if (field === "optionValuesText") {
+    if (field === "optionValuesText" && typeof value === "string") {
       setVariantRows((prev) => buildVariantRowsFromText(value, prev));
     }
   };
@@ -473,6 +563,8 @@ const AdminProducts = () => {
       name: formValues.name.trim(),
       brand: formValues.brand.trim() || null,
       category: formValues.category.trim(),
+      category_id: formValues.categoryId ? formValues.categoryId : null,
+      collection_ids: formValues.selectedCollectionIds,
       description: formValues.description.trim(),
       price: fallbackPrice,
       compare_price: fallbackComparePrice,
@@ -602,12 +694,139 @@ const AdminProducts = () => {
               value={formValues.brand}
               onChange={(v) => handleFormChange("brand", v)}
             />
+            
+            {/* Broad Category Dropdown */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={labelStyle}>Category (e.g. Men, Women, Kids)</label>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <select
+                  value={formValues.categoryId}
+                  onChange={(e) => handleFormChange("categoryId", e.target.value)}
+                  style={{ ...inputStyle, flex: 1 }}
+                >
+                  <option value="">Select Category (Optional)</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setShowAddCategory(!showAddCategory)}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1",
+                    background: "#f8fafc",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  + New
+                </button>
+              </div>
+              {showAddCategory && (
+                <div style={{ display: "flex", gap: "6px", marginTop: "4px" }}>
+                  <input
+                    type="text"
+                    placeholder="Category name (e.g. Men)"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCreateCategoryInline}
+                    style={{ ...primaryButtonStyle, padding: "6px 12px", fontSize: "12px" }}
+                  >
+                    Save
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Product Type (renamed from Category) */}
             <FormField
-              label="Category"
+              label="Product Type (e.g. Shirt, Skirt, Jeans)"
               value={formValues.category}
               onChange={(v) => handleFormChange("category", v)}
               error={errors.category}
             />
+
+            {/* Collections Multi-Select */}
+            <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: "6px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <label style={labelStyle}>Collections (e.g. Bestsellers, Festive, New Arrivals)</label>
+                <button
+                  type="button"
+                  onClick={() => setShowAddCollection(!showAddCollection)}
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1",
+                    background: "#f8fafc",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  + Add New Collection
+                </button>
+              </div>
+              {showAddCollection && (
+                <div style={{ display: "flex", gap: "6px", marginBottom: "6px" }}>
+                  <input
+                    type="text"
+                    placeholder="Collection name (e.g. Festive)"
+                    value={newCollectionName}
+                    onChange={(e) => setNewCollectionName(e.target.value)}
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCreateCollectionInline}
+                    style={{ ...primaryButtonStyle, padding: "6px 12px", fontSize: "12px" }}
+                  >
+                    Save Collection
+                  </button>
+                </div>
+              )}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "2px" }}>
+                {collections.map((col) => {
+                  const selected = formValues.selectedCollectionIds.includes(col.id);
+                  return (
+                    <button
+                      key={col.id}
+                      type="button"
+                      onClick={() => {
+                        const next = selected
+                          ? formValues.selectedCollectionIds.filter((id) => id !== col.id)
+                          : [...formValues.selectedCollectionIds, col.id];
+                        handleFormChange("selectedCollectionIds", next);
+                      }}
+                      style={{
+                        padding: "6px 14px",
+                        borderRadius: "999px",
+                        border: selected ? "1px solid #2563eb" : "1px solid #e2e8f0",
+                        background: selected ? "#eff6ff" : "#f8fafc",
+                        color: selected ? "#2563eb" : "#475569",
+                        fontSize: "13px",
+                        fontWeight: selected ? 700 : 500,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {selected ? "✓ " : ""}{col.name}
+                    </button>
+                  );
+                })}
+                {collections.length === 0 && (
+                  <span style={{ fontSize: "13px", color: "#94a3b8" }}>No collections yet. Click "+ Add New Collection" to create one.</span>
+                )}
+              </div>
+            </div>
 
 
             <div style={{ gridColumn: "1 / -1" }}>

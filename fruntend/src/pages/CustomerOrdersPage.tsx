@@ -346,20 +346,25 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
 
   const isLight = theme?.mode === "light";
   const accentColor = theme?.accent_color || "#3b82f6";
-  const pageBg = isLight ? (theme?.primary_bg || "#f8fafc") : "transparent";
-  const cardBg = isLight ? "#ffffff" : "rgba(15,23,42,0.72)";
+  const resolvedPrimaryBg = theme?.primary_bg || (isLight ? "#f8fafc" : "#0f172a");
+
+  // Festive & Theme-adaptive color palette
+  const pageBg = resolvedPrimaryBg;
+  const cardBg = isLight
+    ? (resolvedPrimaryBg === "#ffffff" ? "#ffffff" : "rgba(255,255,255,0.75)")
+    : "rgba(0,0,0,0.25)";
+
   const cardBorder = isLight
-    ? "1px solid rgba(15,23,42,0.08)"
-    : "1px solid rgba(148,163,184,0.18)";
-  const textPrimary = isLight ? "#111827" : "#f8fafc";
-  const textMuted = isLight ? "rgba(17,24,39,0.66)" : "rgba(226,232,240,0.72)";
-  const panelBg = isLight ? "#ffffff" : "rgba(2,6,23,0.22)";
-  const innerBg = isLight ? "#f8fafc" : "rgba(255,255,255,0.03)";
-  const divider = isLight
-    ? "1px solid rgba(15,23,42,0.08)"
-    : "1px solid rgba(148,163,184,0.14)";
-  const timelineRail = isLight ? "#d1d5db" : "rgba(255,255,255,0.16)";
-  const pendingDot = isLight ? "#d1d5db" : "rgba(255,255,255,0.22)";
+    ? `1px solid ${(theme as any)?.border_color || "rgba(15,23,42,0.12)"}`
+    : `1px solid ${(theme as any)?.border_color || "rgba(255,255,255,0.14)"}`;
+
+  const textPrimary = theme?.text_color || (isLight ? "#0f172a" : "#f8fafc");
+  const textMuted = (theme as any)?.muted_text_color || (isLight ? "rgba(15,23,42,0.65)" : "rgba(248,250,252,0.65)");
+  const panelBg = cardBg;
+  const innerBg = isLight ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.2)";
+  const divider = cardBorder;
+  const timelineRail = isLight ? "rgba(15,23,42,0.18)" : "rgba(255,255,255,0.2)";
+  const pendingDot = isLight ? "rgba(15,23,42,0.25)" : "rgba(255,255,255,0.25)";
 
   const isMobile = viewportWidth <= 640;
   const isTablet = viewportWidth > 640 && viewportWidth <= 1024;

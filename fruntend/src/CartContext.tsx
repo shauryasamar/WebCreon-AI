@@ -50,6 +50,9 @@ export type Product = {
   name: string;
   brand?: string;
   category?: string;
+  category_id?: string | null;
+  category_name?: string | null;
+  collections?: { id: string; name: string; slug?: string }[];
   description: string;
   slug?: string;
   price: number;
@@ -70,6 +73,8 @@ export type Product = {
   selectedVariantLabel?: string | null;
   average_rating?: number;
   review_count?: number;
+  created_at?: string | Date | null;
+  updated_at?: string | Date | null;
   reviews?: ProductReview[];
 };
 

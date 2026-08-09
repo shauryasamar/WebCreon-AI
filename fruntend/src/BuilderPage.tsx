@@ -209,6 +209,9 @@ function normalizeStorefrontProduct(raw: any): Product {
     name: raw?.name ?? "",
     brand: raw?.brand ?? "",
     category: raw?.category ?? "",
+    category_id: raw?.category_id != null ? String(raw.category_id) : null,
+    category_name: raw?.category_name ?? null,
+    collections: Array.isArray(raw?.collections) ? raw.collections : [],
     description: raw?.description ?? "",
     slug: raw?.slug || slugify(raw?.name) || String(raw?.id ?? ""),
     price,
@@ -235,6 +238,8 @@ function normalizeStorefrontProduct(raw: any): Product {
         ? raw.review_count
         : Number(raw?.review_count ?? 0),
     reviews: Array.isArray(raw?.reviews) ? raw.reviews : undefined,
+    created_at: raw?.created_at ?? null,
+    updated_at: raw?.updated_at ?? null,
   };
 }
 

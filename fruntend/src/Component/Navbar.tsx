@@ -215,6 +215,12 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchActive, setSearchActive] = useState(false);
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const q = params.get("search") || "";
+    setSearchQuery(q);
+  }, [location.search]);
+
 
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const accountButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -517,14 +523,12 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     setMobileMenuOpen(false);
   };
 
+  const isBuilderContext = location.pathname.startsWith("/builder/");
+
   const handleAccountClick = () => {
     setMobileSearchOpen(false);
     setSearchActive(false);
-    if (isBuilderAdminRoute) {
-      closeAccountMenu();
-      return;
-    }
-    if (isAuthenticated) {
+    if (isAuthenticated || isBuilderAdminRoute || isBuilderContext) {
       setAccountMenuOpen((prev) => !prev);
       return;
     }
@@ -540,17 +544,51 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   };
 
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const q = params.get("search") || "";
+    setSearchQuery(q);
+  }, [location.search]);
+
+  const handleHomeClick = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    setSearchQuery("");
+    if (onSearch) {
+      onSearch("");
+    }
+    const currentSiteId = siteId || (location.pathname.startsWith("/builder/") ? location.pathname.split("/")[2] : undefined);
+    const target = isBuilderContext || isBuilderAdminRoute
+      ? (currentSiteId ? `/builder/${currentSiteId}` : base)
+      : (siteSlug ? `/store/${siteSlug}` : resolvedHomePath);
+
+    navigate(target, { replace: true });
+  };
+
+  const handleSearchInputChange = (val: string) => {
+    setSearchQuery(val);
+    if (onSearch) {
+      onSearch(val);
+    }
+    const params = new URLSearchParams(location.search);
+    if (val.trim()) {
+      params.set("search", val.trim());
+    } else {
+      params.delete("search");
+    }
+    const searchStr = params.toString();
+    const target = `${location.pathname}${searchStr ? `?${searchStr}` : ""}`;
+    navigate(target, { replace: true });
+  };
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (onSearch) {
-      onSearch(searchQuery);
+    if (!searchQuery.trim()) {
+      handleHomeClick();
       return;
     }
-    if (!searchQuery.trim()) return;
-    const searchTarget = siteSlug
-      ? `/store/${siteSlug}?search=${encodeURIComponent(searchQuery.trim())}`
-      : `${resolvedHomePath}?search=${encodeURIComponent(searchQuery.trim())}`;
-    navigate(searchTarget);
+    if (onSearch) {
+      onSearch(searchQuery.trim());
+    }
   };
 
 
@@ -574,6 +612,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   };
 
 
+  const dropdownBg = theme?.dialog_bg || theme?.surface_bg || theme?.primary_bg || (light ? "#ffffff" : "#0f172a");
+  const dropdownBorderColor = (theme as any)?.border_color || (light ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.12)");
+
   const dropdownPanelStyle: React.CSSProperties = {
     position: "absolute",
     top: "calc(100% + 12px)",
@@ -582,11 +623,11 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     maxWidth: "calc(100vw - 32px)",
     padding: "10px",
     borderRadius: "18px",
-    background: light ? "rgba(255,255,255,0.96)" : "rgba(15,23,42,0.96)",
-    border: light ? "1px solid rgba(15,23,42,0.08)" : "1px solid rgba(255,255,255,0.08)",
+    background: dropdownBg,
+    border: `1px solid ${dropdownBorderColor}`,
     boxShadow: light
       ? "0 20px 45px rgba(15,23,42,0.14)"
-      : "0 20px 45px rgba(0,0,0,0.38)",
+      : "0 20px 45px rgba(0,0,0,0.45)",
     backdropFilter: "blur(16px)",
     WebkitBackdropFilter: "blur(16px)",
     zIndex: 400,
@@ -957,7 +998,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     type="text"
                     placeholder="Search products..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => handleSearchInputChange(e.target.value)}
                     style={{
                       flex: 1,
                       border: "none",
@@ -1033,7 +1074,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     {/* Brand */}
                     <button
                       type="button"
-                      onClick={() => navigate(resolvedHomePath)}
+                      onClick={handleHomeClick}
                       style={{ display: "flex", alignItems: "center", gap: "10px", background: "transparent", border: "none", cursor: "pointer", minWidth: 0 }}
                     >
                       {resolvedLogoUrl ? (
@@ -1071,7 +1112,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                           type="text"
                           placeholder="Search products..."
                           value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
+                          onChange={(e) => handleSearchInputChange(e.target.value)}
                           style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", fontWeight: 500 }}
                         />
                         <button
@@ -1158,7 +1199,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     {/* Brand */}
                     <button
                       type="button"
-                      onClick={() => navigate(resolvedHomePath)}
+                      onClick={handleHomeClick}
                       style={{ display: "flex", alignItems: "center", gap: "10px", background: "transparent", border: "none", cursor: "pointer", minWidth: 0 }}
                     >
                       {resolvedLogoUrl ? (
@@ -1194,7 +1235,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                           type="text"
                           placeholder="Search products..."
                           value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
+                          onChange={(e) => handleSearchInputChange(e.target.value)}
                           style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", padding: "8px 14px" }}
                         />
                         <button
@@ -1262,7 +1303,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     {/* Serif Logo */}
                     <button
                       type="button"
-                      onClick={() => navigate(resolvedHomePath)}
+                      onClick={handleHomeClick}
                       style={{ display: "flex", alignItems: "center", gap: isMobile ? "8px" : "16px", background: "transparent", border: "none", cursor: "pointer", minWidth: 0 }}
                     >
                       {resolvedLogoUrl ? (
@@ -1302,7 +1343,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                           type="text"
                           placeholder="Search products..."
                           value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
+                          onChange={(e) => handleSearchInputChange(e.target.value)}
                           style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", fontFamily: "serif" }}
                         />
                         <button
@@ -1389,7 +1430,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     {/* Brand */}
                     <button
                       type="button"
-                      onClick={() => navigate(resolvedHomePath)}
+                      onClick={handleHomeClick}
                       style={{ display: "flex", alignItems: "center", gap: "10px", background: "transparent", border: "none", cursor: "pointer", minWidth: 0 }}
                     >
                       {resolvedLogoUrl ? (
@@ -1426,7 +1467,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                           type="text"
                           placeholder="Search products..."
                           value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
+                          onChange={(e) => handleSearchInputChange(e.target.value)}
                           style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", fontWeight: 500 }}
                         />
                         <button
@@ -1513,7 +1554,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                   {/* Brand */}
                   <button
                     type="button"
-                    onClick={() => navigate(resolvedHomePath)}
+                    onClick={handleHomeClick}
                     style={{ display: "flex", alignItems: "center", gap: "10px", background: "transparent", border: "none", cursor: "pointer", minWidth: 0 }}
                   >
                     {resolvedLogoUrl ? (
@@ -1550,7 +1591,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         type="text"
                         placeholder="Search products..."
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={(e) => handleSearchInputChange(e.target.value)}
                         style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", fontWeight: 500 }}
                       />
                       <button

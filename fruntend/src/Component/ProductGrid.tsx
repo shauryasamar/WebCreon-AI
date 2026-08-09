@@ -1,11 +1,18 @@
 import React, { useMemo } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { useCart, Product } from "../CartContext";
+import FilterSidebar from "./FilterSidebar";
 
 type ProductGridProps = {
   siteId: string;
   products?: Product[];
   title?: string;
+  subtitle?: string;
+  itemCount?: number;
+  activeFilterCount?: number;
+  sortBy?: string;
+  onSortChange?: (sort: string) => void;
+  onFilterClick?: () => void;
 
   // Layout & Spacing
   grid_gap?: string | number;
@@ -58,6 +65,12 @@ const ProductGrid: React.FC<ProductGridProps> = ({
   siteId,
   products: productsProp,
   title,
+  subtitle,
+  itemCount,
+  activeFilterCount,
+  sortBy,
+  onSortChange,
+  onFilterClick,
   grid_gap,
   max_width,
   outer_bg_color,
@@ -95,20 +108,25 @@ const ProductGrid: React.FC<ProductGridProps> = ({
     : `/builder/${siteId}`;
 
   const isLight = theme?.mode === "light";
-  const pageText = title_color || (isLight ? "#0f172a" : theme?.text_color || "#f8fafc");
-  const mutedText = original_price_color || (isLight ? "#6b7280" : "rgba(255,255,255,0.66)");
-  const faintText = brand_color || (isLight ? "#94a3b8" : "rgba(255,255,255,0.48)");
+  const accentColor = theme?.accent_color || "#2563eb";
+  const resolvedPrimaryBg = theme?.primary_bg || (isLight ? "#f8fafc" : "#0f172a");
+
+  const pageText = title_color || theme?.text_color || (isLight ? "#0f172a" : "#f8fafc");
+  const mutedText = original_price_color || (theme as any)?.muted_text_color || (isLight ? "rgba(15,23,42,0.65)" : "rgba(248,250,252,0.65)");
+  const faintText = brand_color || (theme as any)?.soft_text_color || (isLight ? "rgba(15,23,42,0.5)" : "rgba(248,250,252,0.5)");
   const starColor = rating_star_color || "#d97706";
 
   const subtleBorder = isLight
-    ? "1px solid rgba(15,23,42,0.07)"
-    : "1px solid rgba(255,255,255,0.10)";
+    ? `1px solid ${(theme as any)?.border_color || "rgba(15,23,42,0.08)"}`
+    : `1px solid ${(theme as any)?.border_color || "rgba(255,255,255,0.12)"}`;
+
   const cardBg = isLight
-    ? "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(250,250,249,0.96) 100%)"
-    : "linear-gradient(180deg, rgba(15,23,42,0.86) 0%, rgba(15,23,42,0.72) 100%)";
+    ? (resolvedPrimaryBg === "#ffffff" ? "#ffffff" : "rgba(255,255,255,0.75)")
+    : "rgba(0,0,0,0.25)";
+
   const softShadow = isLight
     ? "0 10px 28px rgba(15,23,42,0.055)"
-    : "0 12px 28px rgba(2,6,23,0.28)";
+    : "0 12px 28px rgba(0,0,0,0.3)";
 
   const cardStyleKey = theme?.card_style || "fashion";
 
@@ -221,53 +239,17 @@ const ProductGrid: React.FC<ProductGridProps> = ({
         transition: "all 0.2s ease",
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "end",
-          justifyContent: "space-between",
-          gap: "12px",
-          marginBottom: "18px",
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <p
-            style={{
-              margin: "0 0 6px",
-              fontSize: "11px",
-              fontWeight: 700,
-              letterSpacing: "0.14em",
-              textTransform: "uppercase",
-              color: mutedText,
-            }}
-          >
-            Curated collection
-          </p>
-
-          <h2
-            style={{
-              margin: 0,
-              fontSize: "clamp(24px, 2.8vw, 34px)",
-              lineHeight: 1.04,
-              letterSpacing: "-0.045em",
-              color: pageText,
-            }}
-          >
-            {title || "Featured products"}
-          </h2>
-        </div>
-
-        <div
-          style={{
-            fontSize: "13px",
-            color: mutedText,
-            fontWeight: 500,
-          }}
-        >
-          {normalizedProducts.length} item{normalizedProducts.length > 1 ? "s" : ""}
-        </div>
-      </div>
+      {/* Header & Filter Toolbar */}
+      <FilterSidebar
+        title={title}
+        subtitle={subtitle}
+        itemCount={itemCount ?? normalizedProducts.length}
+        activeFilterCount={activeFilterCount}
+        sortBy={sortBy}
+        onSortChange={onSortChange}
+        onFilterClick={onFilterClick}
+        theme={theme}
+      />
 
       <div
         className="product-grid__items"
@@ -377,6 +359,8 @@ const ProductGrid: React.FC<ProductGridProps> = ({
             opacity: isDisabled ? 0.72 : 1,
             transition: "transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease",
           };
+
+          const resolvedImageBg = image_bg || (isLight ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.2)");
 
           // Aspect ratio evaluation
           const getImgContainerStyle = (defaultAspect: string): React.CSSProperties => ({
