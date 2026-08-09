@@ -47,13 +47,19 @@ export const FilterSidebar = ({
   const sortRef = useRef<HTMLDivElement>(null);
 
   const isDark = theme?.mode !== "light";
-  const textPrimary = theme?.text_color || (isDark ? "#f1f5f9" : "#0f172a");
-  const textSecondary = isDark ? "#94a3b8" : "#64748b";
-  const borderColor = isDark ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.12)";
-  const btnBg = isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)";
-  const dropdownBg = isDark ? "#1e293b" : "#ffffff";
-  const hoverBg = isDark ? "rgba(255,255,255,0.08)" : "rgba(15,23,42,0.04)";
   const accentColor = theme?.accent_color || (isDark ? "#60a5fa" : "#2563eb");
+  const resolvedPrimaryBg = theme?.primary_bg || (isDark ? "#0f172a" : "#f8fafc");
+
+  const textPrimary = theme?.text_color || (isDark ? "#f1f5f9" : "#0f172a");
+  const textSecondary = (theme as any)?.muted_text_color || (isDark ? "rgba(241, 245, 249, 0.65)" : "rgba(15, 23, 42, 0.65)");
+  const borderColor = (theme as any)?.border_color || (isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)");
+
+  const btnBg = isDark
+    ? "rgba(255, 255, 255, 0.08)"
+    : (resolvedPrimaryBg === "#ffffff" ? "rgba(0, 0, 0, 0.04)" : "rgba(255, 255, 255, 0.65)");
+
+  const dropdownBg = (theme as any)?.dialog_bg || (theme as any)?.surface_bg || (theme as any)?.card_bg || resolvedPrimaryBg;
+  const hoverBg = `${accentColor}1c`;
 
   const currentSort = SORT_OPTIONS.find((o) => o.value === sortBy) || SORT_OPTIONS[0];
 

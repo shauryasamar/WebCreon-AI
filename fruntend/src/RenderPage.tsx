@@ -206,6 +206,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
   const [sortBy, setSortBy] = useState("newest");
   const [searchQuery, setSearchQuery] = useState("");
   const [isCompactCheckout, setIsCompactCheckout] = useState(false);
+  const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -718,9 +719,11 @@ const RenderPage: React.FC<RenderPageProps> = ({
     return <Component key={blockId} {...componentProps} />;
   };
 
+  const isInAdminSpace = location.pathname.startsWith("/builder/");
+
   if (!isCheckoutPage) {
     return (
-      <>
+      <div ref={setContainerEl} style={{ position: "relative", width: "100%", minHeight: "100%" }}>
         {blocksToRender.map((block, index) => renderBlock(block, index))}
         <FilterModal
           open={filterModalOpen}
@@ -733,8 +736,10 @@ const RenderPage: React.FC<RenderPageProps> = ({
           brands={availableBrands}
           priceRange={{ min: 0, max: 100000 }}
           theme={theme}
+          container={isInAdminSpace ? containerEl : undefined}
+          isAdmin={isInAdminSpace}
         />
-      </>
+      </div>
     );
   }
 
