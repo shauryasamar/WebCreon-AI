@@ -366,7 +366,7 @@ function AdminSitesPage() {
                   ...msg,
                   text: lastTurn.text || "Let's build your store!",
                   type: lastTurn.type || "text",
-                  palette_options: lastTurn.palette_options,
+                  palette_options: lastTurn.palette_options || lastTurn.palettes,
                   choices: lastTurn.choices,
                   status: "done",
                 }
@@ -374,7 +374,7 @@ function AdminSitesPage() {
           )
         );
 
-        if (sessionData.is_complete) {
+        if (sessionData.is_complete || sessionData.phase === "completed") {
           await triggerFinalSiteGeneration(sessionData.session_id);
         }
       } else {
@@ -431,7 +431,7 @@ function AdminSitesPage() {
                   ...msg,
                   text: lastTurn.text || "Got it!",
                   type: lastTurn.type || "text",
-                  palette_options: lastTurn.palette_options,
+                  palette_options: lastTurn.palette_options || lastTurn.palettes,
                   choices: lastTurn.choices,
                   status: "done",
                 }
@@ -439,7 +439,7 @@ function AdminSitesPage() {
           )
         );
 
-        if (sessionData.is_complete) {
+        if (sessionData.is_complete || sessionData.phase === "completed") {
           await triggerFinalSiteGeneration(sessionData.session_id);
         }
       }
@@ -661,7 +661,7 @@ function AdminSitesPage() {
                         <div style={{ whiteSpace: "pre-wrap" }}>{msg.text}</div>
 
                         {/* Palette Options Card Selection */}
-                        {msg.type === "palette_choice" && msg.palette_options && (
+                        {msg.palette_options && msg.palette_options.length > 0 && (
                           <div
                             style={{
                               marginTop: "16px",

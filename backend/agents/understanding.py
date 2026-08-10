@@ -96,7 +96,7 @@ class WebsiteRequirements(BaseModel):
     )
 
 
-llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0)
+llm = ChatOpenAI(model="gpt-4o", temperature=0)
 
 system_text = """
 You are an expert requirements extraction assistant for an AI ecommerce website builder.

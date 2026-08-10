@@ -88,7 +88,30 @@ const iconStyle: React.CSSProperties = {
 };
 
 
-const isLightTheme = (theme?: NavbarTheme) => theme?.mode === "light";
+function isColorDarkHex(colorHex?: string): boolean {
+  if (!colorHex || typeof colorHex !== "string") return false;
+  const hex = colorHex.replace("#", "").trim();
+  if (hex.length === 3) {
+    const r = parseInt(hex[0] + hex[0], 16);
+    const g = parseInt(hex[1] + hex[1], 16);
+    const b = parseInt(hex[2] + hex[2], 16);
+    return (r * 0.299 + g * 0.587 + b * 0.114) < 160;
+  }
+  if (hex.length >= 6) {
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    return (r * 0.299 + g * 0.587 + b * 0.114) < 160;
+  }
+  return false;
+}
+
+const isLightTheme = (theme?: NavbarTheme) => {
+  if (theme?.navbar_bg) {
+    return !isColorDarkHex(theme.navbar_bg);
+  }
+  return theme?.mode === "light";
+};
 
 
 const getInitials = (brandName?: string) => {
@@ -185,9 +208,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     logo_url,
     theme,
     navigation,
-    showSearch = true,
-    showAccount = true,
-    showCart = true,
+    showSearch = (props as any).show_search ?? props.showSearch ?? true,
+    showAccount = (props as any).show_account ?? props.showAccount ?? true,
+    showCart = (props as any).show_cart ?? props.showCart ?? true,
     homeRoute = "/",
     cartRoute = "/cart",
     topOffset = 0,
@@ -253,18 +276,22 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
 
   const defaultTextColor = theme?.text_color || (light ? "#0f172a" : "#f8fafc");
-  const textColor = theme?.navbar_text_color || defaultTextColor;
+  const textColor = (props as any).navbar_text_color || theme?.navbar_text_color || defaultTextColor;
   const defaultMutedText = light ? "rgba(15,23,42,0.64)" : "rgba(255,255,255,0.68)";
-  const mutedText = theme?.navbar_muted_text_color || defaultMutedText;
+  const mutedText = (props as any).navbar_muted_text_color || theme?.navbar_muted_text_color || defaultMutedText;
 
   const logoHeightStyle = theme?.logo_height ? `${theme.logo_height}px` : "32px";
   const logoFitStyle = (theme?.logo_fit as any) || "contain";
 
-
-  const defaultOuterBorder = light
+  const customBorderColor = (props as any).navbar_border_color || theme?.navbar_border_color;
+  const defaultOuterBorder = customBorderColor
+    ? `1px solid ${customBorderColor}`
+    : light
     ? "1px solid rgba(15,23,42,0.06)"
     : "1px solid rgba(255,255,255,0.05)";
-  const defaultShellBorder = light
+  const defaultShellBorder = customBorderColor
+    ? `1px solid ${customBorderColor}`
+    : light
     ? "1px solid rgba(15,23,42,0.08)"
     : "1px solid rgba(255,255,255,0.08)";
 
@@ -1256,6 +1283,25 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         <button
                           type="button"
                           onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
+                          style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative" }}
+                        >
+                          <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
+                            <circle cx="9" cy="20" r="1.5" />
+                            <circle cx="17" cy="20" r="1.5" />
+                            <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
+                          </svg>
+                          {cartCount > 0 && (
+                            <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
+                              {cartCount}
+                            </span>
+                          )}
+                        </button>
+                      )}
+
+                      {!isMobile && (
+                        <button
+                          type="button"
+                          onClick={handleDummyNotification}
                           style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
                         >
                           <svg viewBox="0 0 24 24" style={iconStyle}>
@@ -1424,9 +1470,23 @@ const Navbar: React.FC<NavbarProps> = (props) => {
             }
 
             if (layoutType === "neo_modern") {
+              const customNavBg = (props as any).navbar_bg || theme?.navbar_bg;
+              const customTextColor = (props as any).navbar_text_color || theme?.navbar_text_color;
+              const neoBg = customNavBg || (light ? "#f0f4f9" : "#1e293b");
+              const neoTextColor = customTextColor || (light ? "#0f172a" : "#ffffff");
+              const outerShadow = light
+                ? "6px 6px 14px rgba(166,180,200,0.4), -6px -6px 14px rgba(255,255,255,0.9)"
+                : "6px 6px 14px rgba(0,0,0,0.5), -6px -6px 14px rgba(255,255,255,0.05)";
+              const insetShadow = light
+                ? "inset 2px 2px 5px rgba(166,180,200,0.4), inset -2px -2px 5px rgba(255,255,255,0.9)"
+                : "inset 2px 2px 5px rgba(0,0,0,0.5), inset -2px -2px 5px rgba(255,255,255,0.05)";
+              const buttonShadow = light
+                ? "3px 3px 6px rgba(166,180,200,0.4), -3px -3px 6px rgba(255,255,255,0.9)"
+                : "3px 3px 6px rgba(0,0,0,0.4), -3px -3px 6px rgba(255,255,255,0.05)";
+
               return (
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: isMobile ? "8px" : "16px", padding: "8px 16px", background: light ? "#f0f4f9" : "#1e293b", borderRadius: "999px", boxShadow: light ? "6px 6px 14px rgba(166,180,200,0.4), -6px -6px 14px rgba(255,255,255,0.9)" : "6px 6px 14px rgba(0,0,0,0.5), -6px -6px 14px rgba(255,255,255,0.05)", boxSizing: "border-box" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: isMobile ? "8px" : "16px", padding: "8px 16px", background: neoBg, borderRadius: "999px", boxShadow: outerShadow, boxSizing: "border-box" }}>
                     {/* Brand */}
                     <button
                       type="button"
@@ -1440,11 +1500,11 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                           style={{ maxHeight: logoHeightStyle, height: logoHeightStyle, maxWidth: "160px", objectFit: logoFitStyle, flexShrink: 0 }}
                         />
                       ) : (
-                        <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: light ? "#f0f4f9" : "#1e293b", boxShadow: light ? "3px 3px 6px rgba(166,180,200,0.4), -3px -3px 6px rgba(255,255,255,0.9)" : "3px 3px 6px rgba(0,0,0,0.4), -3px -3px 6px rgba(255,255,255,0.05)", color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800, flexShrink: 0 }}>
+                        <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800, flexShrink: 0 }}>
                           {getInitials(brandName)}
                         </div>
                       )}
-                      <span style={{ fontSize: isMobile ? "14px" : "15px", fontWeight: 700, color: textColor, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{brandName}</span>
+                      <span style={{ fontSize: isMobile ? "14px" : "15px", fontWeight: 700, color: neoTextColor, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{brandName}</span>
                     </button>
 
                     {/* Inset Neumorphic Search Bar */}
@@ -1459,8 +1519,8 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                           gap: "8px",
                           padding: "4px 4px 4px 16px",
                           borderRadius: "999px",
-                          background: light ? "#f0f4f9" : "#1e293b",
-                          boxShadow: light ? "inset 2px 2px 5px rgba(166,180,200,0.4), inset -2px -2px 5px rgba(255,255,255,0.9)" : "inset 2px 2px 5px rgba(0,0,0,0.5), inset -2px -2px 5px rgba(255,255,255,0.05)",
+                          background: neoBg,
+                          boxShadow: insetShadow,
                         }}
                       >
                         <input
@@ -1468,11 +1528,11 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                           placeholder="Search products..."
                           value={searchQuery}
                           onChange={(e) => handleSearchInputChange(e.target.value)}
-                          style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", fontWeight: 500 }}
+                          style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: neoTextColor, fontSize: "13px", fontWeight: 500 }}
                         />
                         <button
                           type="submit"
-                          style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: light ? "#f0f4f9" : "#1e293b", boxShadow: light ? "3px 3px 6px rgba(166,180,200,0.4), -3px -3px 6px rgba(255,255,255,0.9)" : "3px 3px 6px rgba(0,0,0,0.4), -3px -3px 6px rgba(255,255,255,0.05)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                          style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", cursor: "pointer" }}
                         >
                           <svg viewBox="0 0 24 24" style={{ width: "15px", height: "15px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
                             <circle cx="11" cy="11" r="7" />
@@ -1488,7 +1548,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         <button
                           type="button"
                           onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
-                          style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: light ? "#f0f4f9" : "#1e293b", boxShadow: light ? "4px 4px 8px rgba(166,180,200,0.4), -4px -4px 8px rgba(255,255,255,0.9)" : "4px 4px 8px rgba(0,0,0,0.4), -4px -4px 8px rgba(255,255,255,0.05)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative" }}
+                          style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative" }}
                         >
                           <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
                             <circle cx="9" cy="20" r="1.5" />
@@ -1507,7 +1567,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         <button
                           type="button"
                           onClick={handleDummyNotification}
-                          style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: light ? "#f0f4f9" : "#1e293b", boxShadow: light ? "4px 4px 8px rgba(166,180,200,0.4), -4px -4px 8px rgba(255,255,255,0.9)" : "4px 4px 8px rgba(0,0,0,0.4), -4px -4px 8px rgba(255,255,255,0.05)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                          style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", cursor: "pointer" }}
                         >
                           <svg viewBox="0 0 24 24" style={iconStyle}>
                             <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
@@ -1522,7 +1582,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                             ref={accountButtonRef}
                             type="button"
                             onClick={handleAccountClick}
-                            style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: light ? "#f0f4f9" : "#1e293b", boxShadow: light ? "4px 4px 8px rgba(166,180,200,0.4), -4px -4px 8px rgba(255,255,255,0.9)" : "4px 4px 8px rgba(0,0,0,0.4), -4px -4px 8px rgba(255,255,255,0.05)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                            style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", cursor: "pointer" }}
                           >
                             <svg viewBox="0 0 24 24" style={iconStyle}>
                               <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />

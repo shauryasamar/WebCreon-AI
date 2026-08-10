@@ -1,39 +1,44 @@
+"""
+WebNirmaan AI - Store Onboarding Conversation Agent
+Manages multi-turn requirement gathering interview for new store creation.
+Enforces strict step-by-step stage progression (Brand Name -> Color Palette -> Layout Options).
+"""
+
 import uuid
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 
-from agents.color_agent import generate_color_palettes
+from agents.color_design_agent import generate_color_palettes
 
 
 class ConversationSession(BaseModel):
     session_id: str
-    admin_name: str = "Creator"
+    admin_name: str
     admin_email: Optional[str] = None
     turns: List[Dict[str, Any]] = Field(default_factory=list)
     collected: Dict[str, Any] = Field(default_factory=dict)
-    phase: str = "initial"
     palette_options: List[Dict[str, Any]] = Field(default_factory=list)
+    phase: str = "analyzing"
     is_complete: bool = False
 
 
-# In-memory store for multi-turn sessions
 SESSIONS: Dict[str, ConversationSession] = {}
 
 
 class AgentAnalysis(BaseModel):
     extracted_brand_name: Optional[str] = Field(
         default=None, 
-        description="Brand or store name extracted from conversation if mentioned, chosen, or specified by user. Do NOT set if user is asking for name suggestions."
+        description="Brand or store name ONLY if explicitly chosen/specified by the user (e.g. 'ToyTrove', 'ElectroVault'). Leave null if user is asking for suggestions."
     )
     extracted_domain: Optional[str] = Field(
         default=None, 
-        description="Business domain or product category (e.g. electronics, fashion/apparel, beauty/cosmetics, grocery, books, jewelry, furniture)."
+        description="Business domain or product category (e.g. electronics, fashion/apparel, beauty, toy store, car toys)."
     )
     extracted_color_prompt: Optional[str] = Field(
         default=None, 
-        description="Color theme or aesthetic vibe mentioned by user (e.g. pink luxury, dark mode, obsidian blue, pastel bakery)."
+        description="Color theme or aesthetic vibe mentioned by user (e.g. pink luxury, dark mode, vibrant colorful, racing neon)."
     )
     extracted_tagline: Optional[str] = Field(
         default=None, 
@@ -54,7 +59,7 @@ class AgentAnalysis(BaseModel):
     
     user_requested_name_suggestions: bool = Field(
         default=False, 
-        description="Set to True if the user asks for brand/store name ideas, recommendations, or suggestions."
+        description="Set to True if the user asks for brand/store name ideas or suggestions."
     )
     user_requested_palette_refresh: bool = Field(
         default=False, 
@@ -66,33 +71,30 @@ class AgentAnalysis(BaseModel):
     )
     
     assistant_reply: str = Field(
-        description="Friendly, creative, and highly responsive conversational reply to send to the user. Answer any question they asked (e.g. provide creative store names if requested), confirm choices made, and naturally ask for any remaining missing details."
-    )
-    is_sufficient_for_build: bool = Field(
-        default=False, 
-        description="Set to True ONLY if all required details (brand_name, domain, color palette/theme, navbar style, footer style) are gathered OR user requested immediate build."
+        description="Friendly, conversational assistant response strictly adhering to the current onboarding stage."
     )
 
 
-llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.5)
+llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
 
 analyzer_system = """You are WebNirmaan AI's intelligent e-commerce store design assistant.
-Your goal is to converse naturally, creatively, and responsively with the store owner ({admin_name}) to gather requirements for generating their custom e-commerce website.
+Your goal is to guide the store owner ({admin_name}) through a smooth, strict STEP-BY-STEP onboarding process.
 
-Store parameters to collect:
-1. brand_name: Store/Brand name (e.g., ElectroVault, VelvetGlow)
-2. domain: Product domain (e.g., Electronics, Fashion, Beauty, Grocery, Books, Jewelry, etc.)
-3. color_prompt / chosen_palette: Color theme or aesthetic vibe
-4. navbar_position: Navbar scroll behavior ('fixed', 'sticky', 'static')
-5. navbar_layout: Navbar layout ('apple_minimal', 'glassmorphism_premium', 'modern_marketplace', 'luxury_fashion', 'neo_modern')
-6. footer_layout: Footer layout ('apple_minimal', 'glassmorphism_premium', 'modern_marketplace', 'luxury_fashion', 'neo_modern')
+STRICT STEP-BY-STEP STAGE PROGRESSION RULES:
+- STEP 1 (Brand Name & Domain): Focus ONLY on domain and brand name.
+  * If brand_name is NOT in collected data, help the user choose a brand name. Suggest 4-5 creative names if requested.
+  * DO NOT ask about color themes, navbar, footer, or layout options in Step 1!
+- STEP 2 (Color Palette & Vibe): Focus ONLY on color theme once brand_name IS in collected data.
+  * Once brand_name is confirmed, present color palette options or ask about their preferred aesthetic.
+  * Visual interactive color palette cards (with swatches) are automatically rendered on screen for the user in Step 2.
+  * NEVER claim or tell the user that you cannot display images or cards! Encourage the user to select one of the color palette cards shown on screen.
+  * DO NOT ask about navbar, footer, or layout options in Step 2!
+- STEP 3 (Navbar & Footer Layout): Focus on layout options ONLY once chosen_palette IS in collected data.
+  * Ask for navbar position, navbar layout, and footer layout one by one.
 
-CRITICAL INSTRUCTIONS FOR RESPONSIVENESS:
-- NEVER repeat a hardcoded greeting if the user asks a question or gives an answer.
-- If the user asks for store name suggestions (e.g. "suggest me a few names", "help me pick a name for an electronics store"), offer 4-5 creative, catchy brand names directly in your assistant_reply! Do NOT set `extracted_brand_name` until the user actually selects or specifies a name.
-- If the user provides a store name (e.g., "WebShop", "Let's call it ElectroVault"), set `extracted_brand_name` = "WebShop" / "ElectroVault".
-- Be helpful, enthusiastic, and conversational! Keep responses concise and engaging.
-- If the prompt has full detail or user says "build it", set `user_requested_immediate_build` = True.
+GENERAL RULES:
+- NEVER repeat a hardcoded greeting if the user answers a question.
+- Keep assistant_reply warm, professional, concise, and focused strictly on the CURRENT STEP.
 """
 
 analyzer_prompt = ChatPromptTemplate.from_messages([
@@ -213,7 +215,7 @@ async def advance_session(session_id: str, user_reply: Optional[str] = None) -> 
             session.collected["brand_name"] = analysis.extracted_brand_name
         if analysis.extracted_domain and not session.collected.get("domain"):
             session.collected["domain"] = analysis.extracted_domain
-        if analysis.extracted_color_prompt and not session.collected.get("color_prompt"):
+        if analysis.extracted_color_prompt:
             session.collected["color_prompt"] = analysis.extracted_color_prompt
         if analysis.extracted_tagline and not session.collected.get("tagline"):
             session.collected["tagline"] = analysis.extracted_tagline
@@ -228,33 +230,39 @@ async def advance_session(session_id: str, user_reply: Optional[str] = None) -> 
     except Exception as e:
         print("Error in conversation agent analyzer_chain:", e)
         analysis = None
-        reply_text = f"That sounds great, {session.admin_name}! Tell me more about your vision or preferences for the store."
+        reply_text = f"That sounds great, {session.admin_name}! Tell me more about your vision for the store."
 
-    # 3. Handle Color Palette Generation
-    should_refresh_palettes = analysis.user_requested_palette_refresh if analysis else False
-    has_color_info = bool(session.collected.get("color_prompt") or session.collected.get("domain") or session.collected.get("brand_name"))
-    
-    if (should_refresh_palettes or (has_color_info and not session.collected.get("chosen_palette") and not session.palette_options)):
-        try:
-            color_desc = session.collected.get("color_prompt") or reply_lower or "modern aesthetic"
-            palettes = await generate_color_palettes(
-                brand_name=session.collected.get("brand_name", "Brand"),
-                domain=session.collected.get("domain", "general"),
-                color_description=color_desc,
-                target_audience="general",
-                brand_tone="modern"
-            )
-            session.palette_options = palettes
-        except Exception as pe:
-            print("Error generating palettes:", pe)
-
-    # 4. Check for Interactive UI Attachment (Palette cards or Choice chips)
+    # 3. Handle Step-by-Step UI Attachment
     turn_palettes = None
     turn_choices = None
 
-    if session.palette_options and not session.collected.get("chosen_palette"):
+    has_brand = bool(session.collected.get("brand_name"))
+    has_chosen_palette = bool(session.collected.get("chosen_palette"))
+
+    # STAGE 2: ONLY generate and show palette cards AFTER brand_name is chosen!
+    if has_brand and not has_chosen_palette:
+        should_refresh_palettes = analysis.user_requested_palette_refresh if analysis else False
+        color_keywords = ["color", "palette", "theme", "boy", "car", "kid", "toy", "vibe", "style", "different", "more", "premium", "dark", "light", "neon", "pastel", "racing", "luxury", "fresh"]
+        user_prompted_for_colors = any(k in reply_lower for k in color_keywords)
+        current_prompt = session.collected.get("color_prompt") or reply_lower
+
+        if should_refresh_palettes or user_prompted_for_colors or not session.palette_options:
+            try:
+                color_desc = f"{current_prompt} (User reply: {user_reply or ''})"
+                palettes = await generate_color_palettes(
+                    brand_name=session.collected.get("brand_name", "Brand"),
+                    domain=session.collected.get("domain", "general"),
+                    color_description=color_desc,
+                )
+                if palettes:
+                    session.palette_options = palettes
+            except Exception as pe:
+                print("Error generating palettes:", pe)
+
         turn_palettes = session.palette_options
-    elif session.collected.get("brand_name") and session.collected.get("chosen_palette"):
+
+    # STAGE 3: ONLY show navbar/footer choice chips AFTER palette is chosen!
+    elif has_brand and has_chosen_palette:
         if not session.collected.get("navbar_position"):
             turn_choices = NAVBAR_POSITION_CHOICES
         elif not session.collected.get("navbar_layout"):
@@ -262,7 +270,7 @@ async def advance_session(session_id: str, user_reply: Optional[str] = None) -> 
         elif not session.collected.get("footer_layout"):
             turn_choices = FOOTER_LAYOUT_CHOICES
 
-    # 5. Check Completion Criteria
+    # 4. Check Completion Criteria
     is_fully_collected = bool(
         session.collected.get("brand_name") and
         session.collected.get("domain") and
@@ -272,30 +280,22 @@ async def advance_session(session_id: str, user_reply: Optional[str] = None) -> 
         session.collected.get("footer_layout")
     )
     
-    is_immediate = analysis.user_requested_immediate_build if analysis else False
-    is_sufficient = analysis.is_sufficient_for_build if analysis else False
+    should_build = is_fully_collected or (analysis and analysis.user_requested_immediate_build)
 
-    if is_fully_collected or is_immediate or is_sufficient:
+    if should_build:
+        session.phase = "completed"
         session.is_complete = True
-        session.phase = "complete"
-        brand_str = session.collected.get("brand_name", "your store")
-        session.turns.append({
-            "sender": "assistant",
-            "text": f"{reply_text}\n\nAll preferences collected. Generating **{brand_str}** website now...",
-            "type": "generating_animation"
-        })
-        return session
 
-    # 6. Append Standard Assistant Turn
-    turn_dict: Dict[str, Any] = {
+    session.turns.append({
         "sender": "assistant",
-        "text": reply_text
-    }
-    if turn_palettes:
-        turn_dict["type"] = "palette_choice"
-        turn_dict["palette_options"] = turn_palettes
-    elif turn_choices:
-        turn_dict["choices"] = turn_choices
+        "text": reply_text,
+        "type": "palette_choice" if turn_palettes else ("choice" if turn_choices else "text"),
+        "palettes": turn_palettes,
+        "palette_options": turn_palettes,
+        "choices": turn_choices,
+        "phase": session.phase,
+        "is_complete": session.is_complete,
+        "collected": session.collected,
+    })
 
-    session.turns.append(turn_dict)
     return session

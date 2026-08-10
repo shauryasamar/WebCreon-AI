@@ -781,7 +781,7 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
   });
 
   const pageBg =
-    theme?.mode === "light" ? "#f6f7fb" : theme?.primary_bg || "#0f172a";
+    theme?.primary_bg || (theme?.mode === "light" ? "#f6f7fb" : "#0f172a");
   const textColor =
     theme?.mode === "light" ? "#111827" : theme?.text_color || "#f9fafb";
   const subtleText =

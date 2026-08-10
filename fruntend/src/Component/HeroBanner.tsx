@@ -27,8 +27,10 @@ export type HeroSlide = {
   trust_badges?: string[];
   background_image?: string;
   background_color?: string; // Custom background color / gradient per slide
+  hero_bg?: string;
   background_overlay?: string;
   text_color?: string;
+  hero_text_color?: string;
 };
 
 export type HeroBannerProps = {
@@ -44,8 +46,10 @@ export type HeroBannerProps = {
   };
   background_image?: string;
   background_color?: string;
+  hero_bg?: string;
   background_overlay?: string;
   text_color?: string;
+  hero_text_color?: string;
   size?: "sm" | "md" | "lg" | "xl";
   banner_height?: number | string;
   banner_width?: number | string; // Custom width limit
@@ -55,9 +59,13 @@ export type HeroBannerProps = {
   theme?: {
     mode?: "light" | "dark";
     primary_bg?: string;
+    secondary_bg?: string;
+    hero_bg?: string;
+    hero_text_color?: string;
     text_color?: string;
     accent_color?: string;
     festival_theme?: string;
+    [key: string]: any;
   };
 
   // Multi-Slide Carousel Props
@@ -109,8 +117,10 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   secondary_cta = { label: "Explore Collection", href: "/categories" },
   background_image,
   background_color,
+  hero_bg,
   background_overlay = "rgba(15, 23, 42, 0.45)",
   text_color,
+  hero_text_color,
   banner_height = 380,
   banner_width = "100%",
   border_radius = 16,
@@ -221,11 +231,18 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   const slideBgOverlay = currentSlide.background_overlay || background_overlay;
 
   // Custom slide background color OR Festive Theme aware colorful gradients
-  const slideCustomBgColor = currentSlide.background_color || background_color;
+  const directBlockBg = hero_bg || background_color;
+  const activeThemeHeroBg = currentSlide.hero_bg || theme?.hero_bg || (theme?.secondary_bg && theme.secondary_bg !== "#ffffff" ? theme.secondary_bg : undefined);
+  const slideCustomBgColor =
+    directBlockBg ||
+    activeThemeHeroBg ||
+    currentSlide.background_color ||
+    theme?.primary_bg;
+
   const festivalKey = theme?.festival_theme || "none";
 
   const getFestiveBgStyle = (): React.CSSProperties => {
-    if (slideCustomBgColor) return { background: slideCustomBgColor };
+    if (festivalKey === "none" && slideCustomBgColor) return { background: slideCustomBgColor };
 
     if (festivalKey === "diwali") {
       return isDarkMode
@@ -295,7 +312,14 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
 
   // Theme-adaptive text color
   const defaultTextColor = isDarkMode ? "#ffffff" : "#0f172a";
-  const slideTextColor = currentSlide.text_color || text_color || (hasSlideBgImage ? "#ffffff" : defaultTextColor);
+  const directTextColor = hero_text_color || text_color;
+  const slideTextColor =
+    directTextColor ||
+    currentSlide.hero_text_color ||
+    currentSlide.text_color ||
+    theme?.hero_text_color ||
+    theme?.text_color ||
+    (hasSlideBgImage ? "#ffffff" : defaultTextColor);
   const accentColor = theme?.accent_color || "#2563eb";
 
   // Dynamic Scale-based Sizing

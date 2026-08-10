@@ -23,6 +23,8 @@ export type EditorPage = {
 };
 
 export type EditorSiteDefinition = {
+  id?: string;
+  saved_themes?: any[];
   site: {
     site_type: string;
     domain: string | null;
@@ -38,6 +40,12 @@ export type EditorSiteDefinition = {
     visual_style?: string;
     design_direction?: string;
     primary_bg?: string;
+    secondary_bg?: string;
+    hero_bg?: string;
+    hero_text_color?: string;
+    hero_accent?: string;
+    card_bg?: string;
+    card_shadow?: string;
     text_color?: string;
     accent_color?: string;
     festival_theme?: string;
@@ -65,6 +73,7 @@ export type EditorSiteDefinition = {
     footer_border_color?: string;
     footer_max_width?: string | number;
     footer_layout?: "apple_minimal" | "glassmorphism_premium" | "modern_marketplace" | "luxury_fashion" | "neo_modern";
+    [key: string]: any;
   };
   navigation?: {
     storefront?: Array<{
@@ -106,6 +115,7 @@ export type EditorSiteDefinition = {
     enabled?: boolean;
     features?: string[];
   };
+  [key: string]: any;
 };
 
 export type ThemeMode = "light" | "dark";
@@ -988,6 +998,11 @@ export function applyThemeMode(
     navbar_text_color: undefined,
     navbar_muted_text_color: undefined,
     navbar_border_color: undefined,
+    footer_bg: undefined,
+    footer_text_color: undefined,
+    footer_muted_color: undefined,
+    footer_border_color: undefined,
+    secondary_bg: undefined,
   };
 
   if (currentFestival && currentFestival !== "none") {
@@ -1032,35 +1047,114 @@ export function applyFestivalTheme(
     siteDefinition.theme.mode === "dark" ? "dark" : "light";
 
   const festivalOverrides = getFestivalThemeOverrides(preset, mode);
+  const updatedTheme = {
+    ...siteDefinition.theme,
+    ...festivalOverrides,
+    festival_theme: preset,
+  };
+
+  const heroBg = festivalOverrides.hero_bg || festivalOverrides.secondary_bg || festivalOverrides.primary_bg;
+  const heroText = festivalOverrides.hero_text_color || festivalOverrides.text_color;
+  const accentCol = festivalOverrides.accent_color;
+
+  const nextPages = (siteDefinition.pages || []).map((page) => ({
+    ...page,
+    blocks: (page.blocks || []).map((block) => {
+      const btype = String(block.type || "").toLowerCase();
+      const isHero = btype === "hero_banner" || btype === "hero" || btype === "banner";
+      const isNav = btype === "navbar" || btype === "header";
+      const isFooter = btype === "footer";
+
+      const existingProps = block.props || {};
+      let updatedProps = { ...existingProps };
+
+      if (isNav) {
+        delete updatedProps.navbar_bg;
+        delete updatedProps.navbar_text_color;
+        delete updatedProps.navbar_border_color;
+      }
+      if (isFooter) {
+        delete updatedProps.footer_bg;
+        delete updatedProps.footer_text_color;
+      }
+      if (isHero) {
+        delete updatedProps.hero_bg;
+        delete updatedProps.background_color;
+        if (Array.isArray(updatedProps.slides)) {
+          updatedProps.slides = updatedProps.slides.map((slide: any) => ({
+            ...slide,
+            ...(heroBg ? { hero_bg: heroBg, background_color: heroBg } : {}),
+            ...(heroText ? { hero_text_color: heroText, text_color: heroText } : {}),
+            ...(accentCol ? { accent_color: accentCol } : {}),
+          }));
+        }
+      }
+
+      return {
+        ...block,
+        props: updatedProps,
+      };
+    }),
+  }));
 
   return {
     ...siteDefinition,
-    theme: {
-      ...siteDefinition.theme,
-      ...festivalOverrides,
-      festival_theme: preset,
-    },
+    theme: updatedTheme,
+    pages: nextPages,
   };
+}
+
+export function getSavedThemeSnapshots(siteDefinition: EditorSiteDefinition): any[] {
+  const inMemory = Array.isArray((siteDefinition as any)?.saved_themes)
+    ? (siteDefinition as any).saved_themes
+    : [];
+
+  const siteId = (siteDefinition as any)?.id || (siteDefinition as any)?.site_id || siteDefinition?.site?.brand_name || "";
+  let inStorage: any[] = [];
+  if (typeof window !== "undefined" && siteId) {
+    try {
+      const raw = localStorage.getItem(`webnirmaan_saved_themes_${siteId}`);
+      if (raw) inStorage = JSON.parse(raw);
+    } catch {}
+  }
+
+  const map = new Map<string, any>();
+  if (Array.isArray(inStorage)) {
+    inStorage.forEach((s) => s && s.id && map.set(s.id, s));
+  }
+  if (Array.isArray(inMemory)) {
+    inMemory.forEach((s) => s && s.id && map.set(s.id, s));
+  }
+
+  return Array.from(map.values()).slice(0, 30);
 }
 
 export function saveThemeSnapshot(
   siteDefinition: EditorSiteDefinition,
-  name: string
+  name: string,
+  customThemeProps?: Record<string, any>
 ): EditorSiteDefinition {
+  const themeToSave = customThemeProps ? (customThemeProps.patch || customThemeProps.theme || customThemeProps) : (siteDefinition.theme || {});
   const snapshot = {
     id: `theme_${Date.now()}`,
     name: name.trim() || `Theme ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
     created_at: new Date().toISOString(),
-    theme: { ...siteDefinition.theme },
+    theme: { ...themeToSave },
   };
 
-  const currentSaved = Array.isArray((siteDefinition as any).saved_themes)
-    ? (siteDefinition as any).saved_themes
-    : [];
+  const currentSaved = getSavedThemeSnapshots(siteDefinition);
+  const updatedList = [snapshot, ...currentSaved.filter((s: any) => s.id !== snapshot.id)].slice(0, 30);
+
+  const siteId = (siteDefinition as any)?.id || (siteDefinition as any)?.site_id || siteDefinition?.site?.brand_name || "";
+  if (typeof window !== "undefined" && siteId) {
+    try {
+      localStorage.setItem(`webnirmaan_saved_themes_${siteId}`, JSON.stringify(updatedList));
+    } catch {}
+  }
 
   return {
     ...siteDefinition,
-    saved_themes: [snapshot, ...currentSaved].slice(0, 10),
+    saved_themes: updatedList,
   } as any;
 }
 
@@ -1068,18 +1162,62 @@ export function applyThemeSnapshot(
   siteDefinition: EditorSiteDefinition,
   snapshotId: string
 ): EditorSiteDefinition {
-  const currentSaved = Array.isArray((siteDefinition as any).saved_themes)
-    ? (siteDefinition as any).saved_themes
-    : [];
+  const currentSaved = getSavedThemeSnapshots(siteDefinition);
   const found = currentSaved.find((s: any) => s.id === snapshotId);
   if (!found || !found.theme) return siteDefinition;
 
+  const patchProps = found.theme;
+  const heroBg = patchProps.hero_bg || patchProps.secondary_bg || patchProps.primary_bg;
+  const heroText = patchProps.hero_text_color || patchProps.text_color;
+  const accentCol = patchProps.hero_accent || patchProps.accent_color;
+
+  const nextPages = (siteDefinition.pages || []).map((page) => ({
+    ...page,
+    blocks: (page.blocks || []).map((block) => {
+      const btype = String(block.type || "").toLowerCase();
+      const isHero = btype === "hero_banner" || btype === "hero" || btype === "banner";
+      const isNav = btype === "navbar" || btype === "header";
+      const isFooter = btype === "footer";
+
+      const updatedProps = { ...(block.props || {}) };
+
+      if (isNav) {
+        delete updatedProps.navbar_bg;
+        delete updatedProps.navbar_text_color;
+        delete updatedProps.navbar_border_color;
+      }
+      if (isFooter) {
+        delete updatedProps.footer_bg;
+        delete updatedProps.footer_text_color;
+      }
+      if (isHero) {
+        delete updatedProps.hero_bg;
+        delete updatedProps.background_color;
+        if (Array.isArray(updatedProps.slides)) {
+          updatedProps.slides = updatedProps.slides.map((slide: any) => ({
+            ...slide,
+            ...(heroBg ? { hero_bg: heroBg, background_color: heroBg } : {}),
+            ...(heroText ? { hero_text_color: heroText, text_color: heroText } : {}),
+            ...(accentCol ? { accent_color: accentCol } : {}),
+          }));
+        }
+      }
+
+      return {
+        ...block,
+        props: updatedProps,
+      };
+    }),
+  }));
+
   return {
     ...siteDefinition,
+    saved_themes: currentSaved,
     theme: {
       ...siteDefinition.theme,
-      ...found.theme,
+      ...patchProps,
     },
+    pages: nextPages,
   };
 }
 
@@ -1087,11 +1225,18 @@ export function deleteThemeSnapshot(
   siteDefinition: EditorSiteDefinition,
   snapshotId: string
 ): EditorSiteDefinition {
-  const currentSaved = Array.isArray((siteDefinition as any).saved_themes)
-    ? (siteDefinition as any).saved_themes
-    : [];
+  const currentSaved = getSavedThemeSnapshots(siteDefinition);
+  const updatedList = currentSaved.filter((s: any) => s.id !== snapshotId);
+
+  const siteId = (siteDefinition as any)?.id || (siteDefinition as any)?.site_id || siteDefinition?.site?.brand_name || "";
+  if (typeof window !== "undefined" && siteId) {
+    try {
+      localStorage.setItem(`webnirmaan_saved_themes_${siteId}`, JSON.stringify(updatedList));
+    } catch {}
+  }
+
   return {
     ...siteDefinition,
-    saved_themes: currentSaved.filter((s: any) => s.id !== snapshotId),
+    saved_themes: updatedList,
   } as any;
 }

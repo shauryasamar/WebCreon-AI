@@ -9,9 +9,16 @@ type FooterProps = {
   newsletter_title?: string;
   show_social_links?: boolean;
   social_links?: Array<{ platform: string; url: string }>;
+  footer_bg?: string;
+  background_color?: string;
+  footer_text_color?: string;
+  text_color?: string;
+  footer_muted_color?: string;
+  footer_border_color?: string;
   theme?: {
     mode?: string;
     primary_bg?: string;
+    secondary_bg?: string;
     text_color?: string;
     accent_color?: string;
     footer_layout?: string;
@@ -20,60 +27,109 @@ type FooterProps = {
     footer_muted_color?: string;
     footer_border_color?: string;
     footer_max_width?: string | number;
+    [key: string]: any;
   };
+  [key: string]: any;
 };
 
-const Footer: React.FC<FooterProps> = ({
-  brandName = "Website",
-  tagline = "Your premium shopping destination.",
-  copyrightText,
-  links = [
-    { label: "About Us", href: "/about" },
-    { label: "Contact", href: "/contact" },
-    { label: "Privacy Policy", href: "/privacy" },
-    { label: "Terms of Service", href: "/terms" },
-  ],
-  show_newsletter = true,
-  newsletter_title = "Subscribe to Our Newsletter",
-  show_social_links = true,
-  social_links = [
-    { platform: "Instagram", url: "https://instagram.com" },
-    { platform: "Twitter / X", url: "https://x.com" },
-    { platform: "Facebook", url: "https://facebook.com" },
-  ],
-  theme,
-}) => {
-  const isLight = theme?.mode === "light";
+function isColorDarkHex(colorHex?: string): boolean {
+  if (!colorHex || typeof colorHex !== "string") return false;
+  const hex = colorHex.replace("#", "").trim();
+  if (hex.length === 3) {
+    const r = parseInt(hex[0] + hex[0], 16);
+    const g = parseInt(hex[1] + hex[1], 16);
+    const b = parseInt(hex[2] + hex[2], 16);
+    return (r * 0.299 + g * 0.587 + b * 0.114) < 160;
+  }
+  if (hex.length >= 6) {
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    return (r * 0.299 + g * 0.587 + b * 0.114) < 160;
+  }
+  return false;
+}
+
+const Footer: React.FC<FooterProps> = (props) => {
+  const {
+    brandName = "Website",
+    tagline = "Your premium shopping destination.",
+    copyrightText,
+    links = [
+      { label: "About Us", href: "/about" },
+      { label: "Contact", href: "/contact" },
+      { label: "Privacy Policy", href: "/privacy" },
+      { label: "Terms of Service", href: "/terms" },
+    ],
+    show_newsletter = true,
+    newsletter_title = "Subscribe to Our Newsletter",
+    show_social_links = true,
+    social_links = [
+      { platform: "Instagram", url: "https://instagram.com" },
+      { platform: "Twitter / X", url: "https://x.com" },
+      { platform: "Facebook", url: "https://facebook.com" },
+    ],
+    footer_bg,
+    background_color,
+    footer_text_color,
+    text_color,
+    footer_muted_color,
+    footer_border_color,
+    theme,
+  } = props;
+
   const layout = theme?.footer_layout || "apple_minimal";
 
-  // Dynamic Theme Palette (adapts to Festive, Light, Dark, Emerald, Gold, Maroon, Purple, etc.)
-  const resolvedPrimaryBg = theme?.primary_bg || (isLight ? "#f8fafc" : "#0f172a");
-  
-  const footerBg =
-    theme?.footer_bg ||
-    (isLight
-      ? (resolvedPrimaryBg === "#ffffff" ? "#f8fafc" : resolvedPrimaryBg)
-      : resolvedPrimaryBg);
+  const isDarkTheme = theme?.mode === "dark";
 
+  const darkModeFooterBg = isDarkTheme
+    ? (theme?.footer_bg && isColorDarkHex(theme.footer_bg)
+        ? theme.footer_bg
+        : theme?.primary_bg && isColorDarkHex(theme.primary_bg)
+        ? theme.primary_bg
+        : "#0f172a")
+    : undefined;
+
+  const festivalBg = theme?.festival_theme && theme.festival_theme !== "none"
+    ? (theme?.footer_bg || theme?.secondary_bg || theme?.primary_bg)
+    : undefined;
+
+  const directBg = footer_bg || background_color;
+
+  const footerBg =
+    festivalBg ||
+    darkModeFooterBg ||
+    (theme?.footer_bg && !isDarkTheme ? theme.footer_bg : undefined) ||
+    (theme?.secondary_bg && !isDarkTheme ? theme.secondary_bg : undefined) ||
+    (directBg && !isDarkTheme ? directBg : undefined) ||
+    theme?.primary_bg ||
+    (isDarkTheme ? "#0f172a" : "#f8fafc");
+
+  const isFooterDark = isColorDarkHex(footerBg);
+  const isLight = !isFooterDark;
+
+  const directTextColor = footer_text_color || text_color;
   const textColor =
+    directTextColor ||
     theme?.footer_text_color ||
-    theme?.text_color ||
-    (isLight ? "#0f172a" : "#f8fafc");
+    (isFooterDark ? "#ffffff" : "#0f172a");
 
   const mutedText =
+    footer_muted_color ||
     theme?.footer_muted_color ||
     (theme as any)?.muted_text_color ||
-    (isLight ? "rgba(15, 23, 42, 0.65)" : "rgba(248, 250, 252, 0.65)");
+    (isFooterDark ? "rgba(255, 255, 255, 0.68)" : "rgba(15, 23, 42, 0.65)");
 
   const borderColor =
+    footer_border_color ||
     theme?.footer_border_color ||
     (theme as any)?.border_color ||
-    (isLight ? "rgba(15, 23, 42, 0.12)" : "rgba(255, 255, 255, 0.12)");
+    (isFooterDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)");
 
   const accentColor = theme?.accent_color || "#2563eb";
 
-  const inputBg = isLight ? "rgba(255, 255, 255, 0.65)" : "rgba(0, 0, 0, 0.25)";
-  const socialBg = isLight ? "rgba(15, 23, 42, 0.05)" : "rgba(255, 255, 255, 0.08)";
+  const inputBg = isFooterDark ? "rgba(0, 0, 0, 0.25)" : "rgba(255, 255, 255, 0.85)";
+  const socialBg = isFooterDark ? "rgba(255, 255, 255, 0.08)" : "rgba(15, 23, 42, 0.05)";
 
   const displayCopyright = copyrightText || `© ${new Date().getFullYear()} ${brandName}. All rights reserved.`;
   const resolvedMaxWidth = theme?.footer_max_width === "full" ? "100%" : theme?.footer_max_width ? `${theme.footer_max_width}px` : "1200px";

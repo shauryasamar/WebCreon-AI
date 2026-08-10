@@ -476,6 +476,7 @@ function StorefrontShell({
         </div>
 
         <Footer
+          {...(siteDefinition.footer || {})}
           brandName={siteDefinition.site?.brand_name || (siteDefinition.footer as any)?.brandName}
           tagline={siteDefinition.footer?.tagline}
           copyrightText={siteDefinition.footer?.copyrightText}
@@ -1387,71 +1388,36 @@ function BuilderPageContent() {
         }
       />
 
-      {/* Floating Dual-Purpose Bottom Publish CTA Bar */}
-      {showAdminTopbar && !isStoreRoute && !isAdminRoute && (
-        <div
+      {/* Floating Bottom-Right Corner Publish Button (Appears only when changes exist) */}
+      {showAdminTopbar && !isStoreRoute && !isAdminRoute && (hasUnpublishedChanges || publishing || publishSuccess) && (
+        <button
+          type="button"
+          onClick={handlePublish}
+          disabled={publishing}
           style={{
             position: "fixed",
-            bottom: "20px",
-            left: "50%",
-            transform: "translateX(-50%)",
+            bottom: "24px",
+            right: "24px",
             zIndex: 9999,
+            padding: "10px 22px",
+            borderRadius: "999px",
+            border: "none",
+            background: publishSuccess
+              ? "#16a34a"
+              : "linear-gradient(135deg, #22c55e, #16a34a)",
+            color: "#ffffff",
+            fontSize: "13px",
+            fontWeight: 700,
+            cursor: publishing ? "default" : "pointer",
             display: "flex",
             alignItems: "center",
-            gap: "14px",
-            padding: "8px 16px 8px 20px",
-            borderRadius: "999px",
-            background: "#0f172a",
-            color: "#ffffff",
-            boxShadow: "0 10px 30px rgba(15,23,42,0.35)",
-            border: hasUnpublishedChanges
-              ? "2px solid #22c55e"
-              : "1px solid rgba(255,255,255,0.15)",
-            transition: "all 0.2s ease",
+            gap: "8px",
+            boxShadow: "0 6px 20px rgba(34,197,94,0.45)",
+            transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
           }}
         >
-          <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.2 }}>
-            <span style={{ fontSize: "12px", fontWeight: 700 }}>
-              {publishSuccess
-                ? "✓ Site Published Live!"
-                : hasUnpublishedChanges
-                ? "Unpublished Draft Edits"
-                : "Live Site Synchronized"}
-            </span>
-            <span style={{ fontSize: "10px", color: "#94a3b8" }}>
-              {hasUnpublishedChanges
-                ? "Save theme, layout & asset changes to DB"
-                : "Draft matches live site definition"}
-            </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={handlePublish}
-            disabled={publishing || (!hasUnpublishedChanges && !publishSuccess)}
-            style={{
-              padding: "8px 18px",
-              borderRadius: "999px",
-              border: "none",
-              background: publishSuccess
-                ? "#16a34a"
-                : hasUnpublishedChanges
-                ? "linear-gradient(135deg, #22c55e, #16a34a)"
-                : "rgba(255,255,255,0.15)",
-              color: "#ffffff",
-              fontSize: "12px",
-              fontWeight: 700,
-              cursor: publishing || (!hasUnpublishedChanges && !publishSuccess) ? "default" : "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              boxShadow: hasUnpublishedChanges ? "0 4px 14px rgba(34,197,94,0.4)" : "none",
-              transition: "all 0.2s ease",
-            }}
-          >
-            {publishing ? "Publishing..." : publishSuccess ? "Published ✓" : "Publish Now 🚀"}
-          </button>
-        </div>
+          {publishing ? "Publishing..." : publishSuccess ? "Published ✓" : "Publish 🚀"}
+        </button>
       )}
     </BuilderShell>
   );

@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { AdminCopilotChat } from "./AdminCopilotChat";
 import {
   COMPONENT_ASSETS,
   ComponentAsset,
@@ -60,7 +61,7 @@ function titleForDrawer(key: ControlItemKey | null) {
     case "saved-sites":
       return "Saved Sites";
     case "chat":
-      return "Chat Assistant";
+      return "WebNirmaan Co-Pilot";
     case "admin-panel":
       return "Store Control";
     case "assets":
@@ -482,6 +483,47 @@ export default function BuilderDrawerPanel({
   const [selectedAssetCategory, setSelectedAssetCategory] =
     useState<ComponentAssetCategory>("navbar");
   const [appliedAssetId, setAppliedAssetId] = useState<string | null>(null);
+  const [savedThemes, setSavedThemes] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadSavedThemes = () => {
+      try {
+        const key = `webnirmaan_saved_themes_${selectedSiteId || siteDefinition?.id || ""}`;
+        const cached = localStorage.getItem(key);
+        setSavedThemes(cached ? JSON.parse(cached) : []);
+      } catch {
+        setSavedThemes([]);
+      }
+    };
+    loadSavedThemes();
+
+    window.addEventListener("webnirmaan_theme_saved", loadSavedThemes);
+    return () => {
+      window.removeEventListener("webnirmaan_theme_saved", loadSavedThemes);
+    };
+  }, [selectedSiteId, siteDefinition]);
+
+  const handleDeleteSavedTheme = (id: string) => {
+    const key = `webnirmaan_saved_themes_${selectedSiteId || siteDefinition?.id || ""}`;
+    const updated = savedThemes.filter((t) => t.id !== id);
+    setSavedThemes(updated);
+    try {
+      localStorage.setItem(key, JSON.stringify(updated));
+    } catch {}
+  };
+
+  const handleApplySavedTheme = (themeObj: any) => {
+    if (!siteDefinition || !onSiteDefinitionChange) return;
+    const nextDef = JSON.parse(JSON.stringify(siteDefinition));
+    const patchProps = themeObj.patch || themeObj.theme || themeObj;
+    nextDef.theme = { ...(nextDef.theme || {}), ...patchProps };
+    for (const page of nextDef.pages || []) {
+      for (const block of page.blocks || []) {
+        block.props = { ...(block.props || {}), ...patchProps };
+      }
+    }
+    onSiteDefinitionChange(nextDef);
+  };
 
   if (
     !activeDrawer ||
@@ -754,6 +796,7 @@ export default function BuilderDrawerPanel({
                 { id: "banner", label: "Banner" },
                 { id: "products", label: "Products" },
                 { id: "footer", label: "Footer" },
+                { id: "saved_themes", label: `Saved Themes 📁 (${savedThemes.length})` },
               ].map((cat) => (
                 <button
                   key={cat.id}
@@ -783,6 +826,77 @@ export default function BuilderDrawerPanel({
                 </button>
               ))}
             </div>
+
+            {/* Render Saved Themes Category when selected */}
+            {selectedAssetCategory === "saved_themes" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {savedThemes.length === 0 ? (
+                  <div style={{ padding: "30px 10px", textAlign: "center", color: "#94a3b8", fontSize: "12px" }}>
+                    <p style={{ margin: 0, fontWeight: 600, color: "#64748b" }}>No Saved Themes Yet</p>
+                    <p style={{ margin: "4px 0 0", fontSize: "11px" }}>
+                      Click "Save 💾" on any theme card in Co-Pilot chat to collect custom theme presets here!
+                    </p>
+                  </div>
+                ) : (
+                  savedThemes.map((st) => (
+                    <div
+                      key={st.id}
+                      style={{
+                        padding: "12px",
+                        borderRadius: "10px",
+                        background: "#ffffff",
+                        border: "1px solid #e2e8f0",
+                        boxShadow: "0 2px 6px rgba(15,23,42,0.03)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "6px",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a" }}>{st.name}</div>
+                        <span style={{ fontSize: "9px", color: "#94a3b8" }}>Saved {st.savedAt}</span>
+                      </div>
+                      <div style={{ fontSize: "10px", color: "#64748b" }}>Draft theme preset saved from Co-Pilot sidepanel</div>
+                      <div style={{ display: "flex", gap: "6px", marginTop: "4px" }}>
+                        <button
+                          type="button"
+                          onClick={() => handleApplySavedTheme(st.theme)}
+                          style={{
+                            flex: 1,
+                            padding: "6px",
+                            fontSize: "11px",
+                            fontWeight: 700,
+                            background: "#2563eb",
+                            color: "#ffffff",
+                            border: "none",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Apply Draft Theme ✨
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSavedTheme(st.id)}
+                          style={{
+                            padding: "6px 10px",
+                            fontSize: "11px",
+                            fontWeight: 700,
+                            background: "#ef4444",
+                            color: "#ffffff",
+                            border: "none",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Delete 🗑️
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            ) : null}
 
             {/* Active Banner Carousel Count Info Badge */}
             {selectedAssetCategory === "banner" && (
@@ -958,29 +1072,11 @@ export default function BuilderDrawerPanel({
             </div>
           </div>
         ) : activeDrawer === "chat" ? (
-          <div style={{ display: "flex", flexDirection: "column", height: "100%", maxHeight: "calc(100vh - 120px)" }}>
-            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "12px", paddingRight: "4px" }}>
-              <div
-                style={{
-                  padding: "12px 14px",
-                  borderRadius: "12px",
-                  background: "linear-gradient(135deg, #eff6ff, #dbeafe)",
-                  border: "1px solid #bfdbfe",
-                  color: "#1e40af",
-                  fontSize: "13px",
-                  lineHeight: 1.45,
-                }}
-              >
-                👋 Hi <strong>{siteDefinition?.site?.brand_name || "Creator"}</strong>! I can modify your website design live.
-                Try asking:
-                <ul style={{ margin: "6px 0 0 0", paddingLeft: "18px", fontSize: "12px" }}>
-                  <li>"Make navbar floating"</li>
-                  <li>"Change card style to beauty"</li>
-                  <li>"Add a luxury hero tagline"</li>
-                </ul>
-              </div>
-            </div>
-          </div>
+          <AdminCopilotChat
+            siteId={selectedSiteId || siteDefinition?.id || ""}
+            siteDefinition={siteDefinition}
+            onSiteDefinitionChange={onSiteDefinitionChange}
+          />
         ) : (
           <>
             <p style={{ margin: 0 }}>

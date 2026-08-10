@@ -4,7 +4,7 @@ from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(usecwd=True))
 
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -282,6 +282,25 @@ async def conversation_get_endpoint(session_id: str):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session.model_dump()
+
+
+class CoPilotChatRequest(BaseModel):
+    site_id: str
+    message: str
+    chat_history: Optional[List[Dict[str, str]]] = None
+    draft_definition: Optional[Dict[str, Any]] = None
+
+
+@app.post("/copilot/chat")
+async def copilot_chat_endpoint(req: CoPilotChatRequest):
+    from agents.copilot_agent import process_copilot_request
+    result = await process_copilot_request(
+        message=req.message,
+        site_id=req.site_id,
+        chat_history=req.chat_history,
+        draft_definition=req.draft_definition,
+    )
+    return result
 
 
 @app.post("/understanding", response_model=RequirementsResponse)

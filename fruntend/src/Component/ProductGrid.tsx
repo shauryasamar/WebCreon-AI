@@ -49,9 +49,14 @@ type ProductGridProps = {
   theme?: {
     mode?: string;
     primary_bg?: string;
+    secondary_bg?: string;
     text_color?: string;
     accent_color?: string;
     card_style?: string;
+    card_bg?: string;
+    card_text_color?: string;
+    card_shadow?: string;
+    [key: string]: any;
   };
 };
 
@@ -111,30 +116,47 @@ const ProductGrid: React.FC<ProductGridProps> = ({
       : "/store"
     : `/builder/${siteId}`;
 
+function isColorDarkHex(colorHex?: string): boolean {
+  if (!colorHex || typeof colorHex !== "string") return false;
+  const hex = colorHex.replace("#", "").trim();
+  if (hex.length === 3) {
+    const r = parseInt(hex[0] + hex[0], 16);
+    const g = parseInt(hex[1] + hex[1], 16);
+    const b = parseInt(hex[2] + hex[2], 16);
+    return (r * 0.299 + g * 0.587 + b * 0.114) < 160;
+  }
+  if (hex.length >= 6) {
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    return (r * 0.299 + g * 0.587 + b * 0.114) < 160;
+  }
+  return false;
+}
+
   const isLight = theme?.mode === "light";
   const accentColor = theme?.accent_color || "#2563eb";
   const resolvedPrimaryBg = theme?.primary_bg || (isLight ? "#f8fafc" : "#0f172a");
 
   const cardStyleKey = card_style || cardStyle || theme?.card_style || "fashion";
-  const pageText = title_color || theme?.text_color || (isLight ? "#0f172a" : "#f8fafc");
-  const mutedText = original_price_color || (theme as any)?.muted_text_color || (isLight ? "rgba(15,23,42,0.65)" : "rgba(248,250,252,0.65)");
-  const faintText = brand_color || (theme as any)?.soft_text_color || (isLight ? "rgba(15,23,42,0.5)" : "rgba(248,250,252,0.5)");
+  const cardBg = card_bg_color || theme?.card_bg || (isLight ? (resolvedPrimaryBg === "#ffffff" ? "#ffffff" : "rgba(255,255,255,0.75)") : "#1e293b");
+  const isCardDark = isColorDarkHex(cardBg);
+
+  const pageText = title_color || (theme as any)?.card_text_color || (isCardDark ? "#ffffff" : "#0f172a");
+  const mutedText = original_price_color || (theme as any)?.muted_text_color || (isCardDark ? "rgba(255,255,255,0.68)" : "rgba(15,23,42,0.65)");
+  const faintText = brand_color || (theme as any)?.soft_text_color || (isCardDark ? "rgba(255,255,255,0.5)" : "rgba(15,23,42,0.5)");
   const starColor = rating_star_color || "#d97706";
 
   const subtleBorder = isLight
     ? `1px solid ${(theme as any)?.border_color || "rgba(15,23,42,0.08)"}`
     : `1px solid ${(theme as any)?.border_color || "rgba(255,255,255,0.12)"}`;
 
-  const cardBg = isLight
-    ? (resolvedPrimaryBg === "#ffffff" ? "#ffffff" : "rgba(255,255,255,0.75)")
-    : "rgba(0,0,0,0.25)";
-
   const softShadow = isLight
     ? "0 10px 28px rgba(15,23,42,0.055)"
     : "0 12px 28px rgba(0,0,0,0.3)";
 
   let computedRadius = card_radius !== undefined && card_radius !== "" ? `${card_radius}px` : "20px";
-  let computedCardBg = card_bg_color || cardBg;
+  let computedCardBg = cardBg;
   let computedBorder = card_border_color ? `1px solid ${card_border_color}` : subtleBorder;
 
   let computedShadow = softShadow;

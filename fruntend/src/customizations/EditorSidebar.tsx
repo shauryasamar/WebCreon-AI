@@ -8,6 +8,7 @@ import {
   FestivalThemeKey,
   findBlockById,
   getEditableConfigForBlock,
+  getSavedThemeSnapshots,
   saveThemeSnapshot,
   updateBlockFieldValue,
   updateThemeValues,
@@ -1109,70 +1110,76 @@ export default function EditorSidebar({
               </button>
             </div>
 
-            {Array.isArray((siteDefinition as any).saved_themes) && (siteDefinition as any).saved_themes.length > 0 && (
-              <div style={{ display: "grid", gap: "6px", marginTop: "4px" }}>
-                {(siteDefinition as any).saved_themes.map((snap: any) => (
-                  <div
-                    key={snap.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "6px 8px",
-                      borderRadius: "6px",
-                      background: "#f8fafc",
-                      border: "1px solid rgba(15,23,42,0.08)",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                      <div
-                        style={{
-                          width: "14px",
-                          height: "14px",
-                          borderRadius: "4px",
-                          background: snap.theme?.accent_color || "#2563eb",
-                        }}
-                      />
-                      <span style={{ fontSize: "11px", fontWeight: 600, color: "#0f172a" }}>{snap.name}</span>
+            {(() => {
+              const savedSnapshots = getSavedThemeSnapshots(siteDefinition);
+              if (!savedSnapshots.length) return null;
+              return (
+                <div style={{ display: "grid", gap: "6px", marginTop: "4px" }}>
+                  {savedSnapshots.map((snap: any) => {
+                  const th = snap.theme || {};
+                  return (
+                    <div
+                      key={snap.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "6px 8px",
+                        borderRadius: "6px",
+                        background: "#ffffff",
+                        border: "1px solid rgba(15,23,42,0.1)",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", overflow: "hidden" }}>
+                        <div style={{ display: "flex", gap: "2px", alignItems: "center", flexShrink: 0 }}>
+                          <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: th.primary_bg || "#ffffff", border: "1px solid #cbd5e1" }} title={`Primary: ${th.primary_bg || '#ffffff'}`} />
+                          <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: th.accent_color || "#2563eb", border: "1px solid #cbd5e1" }} title={`Accent: ${th.accent_color || '#2563eb'}`} />
+                          <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: th.navbar_bg || "#0f172a", border: "1px solid #cbd5e1" }} title={`Navbar: ${th.navbar_bg || '#0f172a'}`} />
+                        </div>
+                        <span style={{ fontSize: "11px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{snap.name}</span>
+                      </div>
+                      <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
+                        <button
+                          type="button"
+                          onClick={() => onSiteDefinitionChange(applyThemeSnapshot(siteDefinition, snap.id))}
+                          style={{
+                            padding: "3px 8px",
+                            borderRadius: "4px",
+                            border: "none",
+                            background: "#2563eb",
+                            color: "#ffffff",
+                            fontSize: "10px",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Apply ✨
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onSiteDefinitionChange(deleteThemeSnapshot(siteDefinition, snap.id))}
+                          style={{
+                            padding: "3px 6px",
+                            borderRadius: "4px",
+                            border: "none",
+                            background: "rgba(239,68,68,0.1)",
+                            color: "#ef4444",
+                            fontSize: "10px",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                          title="Delete Theme Snapshot"
+                        >
+                          ×
+                        </button>
+                      </div>
                     </div>
-                    <div style={{ display: "flex", gap: "4px" }}>
-                      <button
-                        type="button"
-                        onClick={() => onSiteDefinitionChange(applyThemeSnapshot(siteDefinition, snap.id))}
-                        style={{
-                          padding: "2px 6px",
-                          borderRadius: "4px",
-                          border: "none",
-                          background: "#2563eb",
-                          color: "#ffffff",
-                          fontSize: "10px",
-                          fontWeight: 600,
-                          cursor: "pointer",
-                        }}
-                      >
-                        Apply
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onSiteDefinitionChange(deleteThemeSnapshot(siteDefinition, snap.id))}
-                        style={{
-                          padding: "2px 6px",
-                          borderRadius: "4px",
-                          border: "none",
-                          background: "rgba(239,68,68,0.1)",
-                          color: "#ef4444",
-                          fontSize: "10px",
-                          fontWeight: 600,
-                          cursor: "pointer",
-                        }}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
-            )}
+            );
+          })()}
           </section>
 
           <section style={sectionCardStyle(isLightMode)}>
