@@ -1105,28 +1105,29 @@ export function applyFestivalTheme(
 }
 
 export function getSavedThemeSnapshots(siteDefinition: EditorSiteDefinition): any[] {
+  const siteId = (siteDefinition as any)?.id || (siteDefinition as any)?.site_id || siteDefinition?.site?.brand_name || "";
+  let inStorage: any[] | null = null;
+
+  if (typeof window !== "undefined" && siteId) {
+    try {
+      const raw = localStorage.getItem(`webnirmaan_saved_themes_${siteId}`);
+      if (raw !== null) {
+        inStorage = JSON.parse(raw);
+      }
+    } catch {}
+  }
+
+  // If localStorage has an active record for this siteId, return it as authoritative
+  if (Array.isArray(inStorage)) {
+    return inStorage.slice(0, 30);
+  }
+
+  // Fallback to siteDefinition.saved_themes in memory
   const inMemory = Array.isArray((siteDefinition as any)?.saved_themes)
     ? (siteDefinition as any).saved_themes
     : [];
 
-  const siteId = (siteDefinition as any)?.id || (siteDefinition as any)?.site_id || siteDefinition?.site?.brand_name || "";
-  let inStorage: any[] = [];
-  if (typeof window !== "undefined" && siteId) {
-    try {
-      const raw = localStorage.getItem(`webnirmaan_saved_themes_${siteId}`);
-      if (raw) inStorage = JSON.parse(raw);
-    } catch {}
-  }
-
-  const map = new Map<string, any>();
-  if (Array.isArray(inStorage)) {
-    inStorage.forEach((s) => s && s.id && map.set(s.id, s));
-  }
-  if (Array.isArray(inMemory)) {
-    inMemory.forEach((s) => s && s.id && map.set(s.id, s));
-  }
-
-  return Array.from(map.values()).slice(0, 30);
+  return inMemory.slice(0, 30);
 }
 
 export function saveThemeSnapshot(
@@ -1134,7 +1135,76 @@ export function saveThemeSnapshot(
   name: string,
   customThemeProps?: Record<string, any>
 ): EditorSiteDefinition {
-  const themeToSave = customThemeProps ? (customThemeProps.patch || customThemeProps.theme || customThemeProps) : (siteDefinition.theme || {});
+  const baseTheme = { ...(siteDefinition.theme || {}) };
+
+  // Scan all current page blocks for manual color overrides across ALL components
+  const extractedBlockOverrides: Record<string, any> = {};
+  (siteDefinition.pages || []).forEach((page) => {
+    (page.blocks || []).forEach((block) => {
+      const btype = String(block.type || "").toLowerCase();
+      const props = block.props || {};
+
+      if (btype === "navbar" || btype === "header") {
+        if (props.navbar_bg) extractedBlockOverrides.navbar_bg = props.navbar_bg;
+        if (props.navbar_outer_bg) extractedBlockOverrides.navbar_outer_bg = props.navbar_outer_bg;
+        if (props.navbar_text_color) extractedBlockOverrides.navbar_text_color = props.navbar_text_color;
+        if (props.navbar_border_color) extractedBlockOverrides.navbar_border_color = props.navbar_border_color;
+        if (props.background_color) extractedBlockOverrides.navbar_bg = props.background_color;
+      } else if (btype === "footer") {
+        if (props.footer_bg) extractedBlockOverrides.footer_bg = props.footer_bg;
+        if (props.footer_text_color) extractedBlockOverrides.footer_text_color = props.footer_text_color;
+        if (props.background_color) extractedBlockOverrides.footer_bg = props.background_color;
+      } else if (btype === "hero_banner" || btype === "hero" || btype === "banner" || btype === "promo_banner") {
+        if (props.hero_bg) extractedBlockOverrides.hero_bg = props.hero_bg;
+        if (props.background_color) extractedBlockOverrides.hero_bg = props.background_color;
+        if (props.hero_text_color) extractedBlockOverrides.hero_text_color = props.hero_text_color;
+        if (props.text_color) extractedBlockOverrides.hero_text_color = props.text_color;
+        if (props.accent_color) extractedBlockOverrides.hero_accent = props.accent_color;
+      } else {
+        if (props.card_bg) extractedBlockOverrides.card_bg = props.card_bg;
+        if (props.background_color && !extractedBlockOverrides.secondary_bg) {
+          extractedBlockOverrides.secondary_bg = props.background_color;
+        }
+        if (props.text_color && !extractedBlockOverrides.text_color) {
+          extractedBlockOverrides.text_color = props.text_color;
+        }
+        if (props.accent_color && !extractedBlockOverrides.accent_color) {
+          extractedBlockOverrides.accent_color = props.accent_color;
+        }
+      }
+    });
+  });
+
+  const cleanBaseTheme: Record<string, any> = {};
+  Object.keys(baseTheme).forEach((k) => {
+    if (baseTheme[k] !== undefined && baseTheme[k] !== null) {
+      cleanBaseTheme[k] = baseTheme[k];
+    }
+  });
+
+  const cleanExtracted: Record<string, any> = {};
+  Object.keys(extractedBlockOverrides).forEach((k) => {
+    if (extractedBlockOverrides[k] !== undefined && extractedBlockOverrides[k] !== null) {
+      cleanExtracted[k] = extractedBlockOverrides[k];
+    }
+  });
+
+  const customPatch = customThemeProps ? (customThemeProps.patch || customThemeProps.theme || customThemeProps) : {};
+  const cleanCustomPatch: Record<string, any> = {};
+  if (customPatch && typeof customPatch === "object") {
+    Object.keys(customPatch).forEach((k) => {
+      if (customPatch[k] !== undefined && customPatch[k] !== null) {
+        cleanCustomPatch[k] = customPatch[k];
+      }
+    });
+  }
+
+  const themeToSave = {
+    ...cleanBaseTheme,
+    ...cleanExtracted,
+    ...cleanCustomPatch,
+  };
+
   const snapshot = {
     id: `theme_${Date.now()}`,
     name: name.trim() || `Theme ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
@@ -1149,6 +1219,7 @@ export function saveThemeSnapshot(
   if (typeof window !== "undefined" && siteId) {
     try {
       localStorage.setItem(`webnirmaan_saved_themes_${siteId}`, JSON.stringify(updatedList));
+      window.dispatchEvent(new Event("webnirmaan_theme_saved"));
     } catch {}
   }
 
@@ -1167,40 +1238,65 @@ export function applyThemeSnapshot(
   if (!found || !found.theme) return siteDefinition;
 
   const patchProps = found.theme;
-  const heroBg = patchProps.hero_bg || patchProps.secondary_bg || patchProps.primary_bg;
-  const heroText = patchProps.hero_text_color || patchProps.text_color;
-  const accentCol = patchProps.hero_accent || patchProps.accent_color;
+
+  const primaryBg = patchProps.primary_bg || patchProps.background_color || "#ffffff";
+  const textColor = patchProps.text_color || "#0f172a";
+  const accentColor = patchProps.accent_color || patchProps.hero_accent || "#2563eb";
+
+  const targetNavBg = patchProps.navbar_bg || primaryBg;
+  const targetNavOuterBg = patchProps.navbar_outer_bg || targetNavBg;
+  const targetNavText = patchProps.navbar_text_color || textColor;
+
+  const targetFooterBg = patchProps.footer_bg || primaryBg;
+  const targetFooterText = patchProps.footer_text_color || textColor;
+
+  const targetHeroBg = patchProps.hero_bg || patchProps.secondary_bg || primaryBg;
+  const targetHeroText = patchProps.hero_text_color || textColor;
 
   const nextPages = (siteDefinition.pages || []).map((page) => ({
     ...page,
     blocks: (page.blocks || []).map((block) => {
       const btype = String(block.type || "").toLowerCase();
-      const isHero = btype === "hero_banner" || btype === "hero" || btype === "banner";
       const isNav = btype === "navbar" || btype === "header";
       const isFooter = btype === "footer";
+      const isHero = btype === "hero_banner" || btype === "hero" || btype === "banner";
 
       const updatedProps = { ...(block.props || {}) };
 
       if (isNav) {
-        delete updatedProps.navbar_bg;
-        delete updatedProps.navbar_text_color;
+        updatedProps.navbar_bg = targetNavBg;
+        updatedProps.navbar_outer_bg = targetNavOuterBg;
+        updatedProps.background_color = targetNavBg;
+        updatedProps.navbar_text_color = targetNavText;
+        updatedProps.text_color = targetNavText;
         delete updatedProps.navbar_border_color;
-      }
-      if (isFooter) {
-        delete updatedProps.footer_bg;
-        delete updatedProps.footer_text_color;
-      }
-      if (isHero) {
-        delete updatedProps.hero_bg;
-        delete updatedProps.background_color;
+      } else if (isFooter) {
+        updatedProps.footer_bg = targetFooterBg;
+        updatedProps.background_color = targetFooterBg;
+        updatedProps.footer_text_color = targetFooterText;
+        updatedProps.text_color = targetFooterText;
+      } else if (isHero) {
+        updatedProps.hero_bg = targetHeroBg;
+        updatedProps.background_color = targetHeroBg;
+        updatedProps.hero_text_color = targetHeroText;
+        updatedProps.text_color = targetHeroText;
+        updatedProps.accent_color = accentColor;
+
         if (Array.isArray(updatedProps.slides)) {
           updatedProps.slides = updatedProps.slides.map((slide: any) => ({
             ...slide,
-            ...(heroBg ? { hero_bg: heroBg, background_color: heroBg } : {}),
-            ...(heroText ? { hero_text_color: heroText, text_color: heroText } : {}),
-            ...(accentCol ? { accent_color: accentCol } : {}),
+            background_color: slide.background_image ? (slide.background_color || targetHeroBg) : targetHeroBg,
+            hero_bg: targetHeroBg,
+            hero_text_color: targetHeroText,
+            text_color: targetHeroText,
+            accent_color: accentColor,
           }));
         }
+      } else {
+        if (updatedProps.card_bg) updatedProps.card_bg = primaryBg;
+        if (updatedProps.background_color) updatedProps.background_color = primaryBg;
+        if (updatedProps.text_color) updatedProps.text_color = textColor;
+        if (updatedProps.accent_color) updatedProps.accent_color = accentColor;
       }
 
       return {
@@ -1210,12 +1306,31 @@ export function applyThemeSnapshot(
     }),
   }));
 
+  const cleanPatchProps: Record<string, any> = {};
+  Object.keys(patchProps).forEach((k) => {
+    if (patchProps[k] !== undefined && patchProps[k] !== null) {
+      cleanPatchProps[k] = patchProps[k];
+    }
+  });
+
+  cleanPatchProps.navbar_bg = targetNavBg;
+  cleanPatchProps.navbar_outer_bg = targetNavOuterBg;
+  cleanPatchProps.navbar_text_color = targetNavText;
+  cleanPatchProps.footer_bg = targetFooterBg;
+  cleanPatchProps.footer_text_color = targetFooterText;
+  cleanPatchProps.hero_bg = targetHeroBg;
+  cleanPatchProps.hero_text_color = targetHeroText;
+  cleanPatchProps.hero_accent = accentColor;
+  cleanPatchProps.primary_bg = primaryBg;
+  cleanPatchProps.text_color = textColor;
+  cleanPatchProps.accent_color = accentColor;
+
   return {
     ...siteDefinition,
     saved_themes: currentSaved,
     theme: {
       ...siteDefinition.theme,
-      ...patchProps,
+      ...cleanPatchProps,
     },
     pages: nextPages,
   };
@@ -1232,6 +1347,7 @@ export function deleteThemeSnapshot(
   if (typeof window !== "undefined" && siteId) {
     try {
       localStorage.setItem(`webnirmaan_saved_themes_${siteId}`, JSON.stringify(updatedList));
+      window.dispatchEvent(new Event("webnirmaan_theme_saved"));
     } catch {}
   }
 

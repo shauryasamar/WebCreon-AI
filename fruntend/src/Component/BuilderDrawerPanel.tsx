@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { API_BASE_URL } from "../config/api";
 import { AdminCopilotChat } from "./AdminCopilotChat";
 import {
   COMPONENT_ASSETS,
@@ -484,6 +485,43 @@ export default function BuilderDrawerPanel({
     useState<ComponentAssetCategory>("navbar");
   const [appliedAssetId, setAppliedAssetId] = useState<string | null>(null);
   const [savedThemes, setSavedThemes] = useState<any[]>([]);
+  const [deleteSiteModal, setDeleteSiteModal] = useState<{
+    siteId: string;
+    brandName: string;
+  } | null>(null);
+  const [deleteCheckLoading, setDeleteCheckLoading] = useState(false);
+  const [deleteCheckData, setDeleteCheckData] = useState<{
+    can_delete: boolean;
+    active_orders: number;
+    active_returns: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!deleteSiteModal) {
+      setDeleteCheckData(null);
+      setDeleteCheckLoading(false);
+      return;
+    }
+    const checkSite = async () => {
+      setDeleteCheckLoading(true);
+      try {
+        const res = await fetch(`${API_BASE_URL}/sites/${deleteSiteModal.siteId}/delete-check`, {
+          credentials: "include",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setDeleteCheckData(data);
+        } else {
+          setDeleteCheckData({ can_delete: true, active_orders: 0, active_returns: 0 });
+        }
+      } catch {
+        setDeleteCheckData({ can_delete: true, active_orders: 0, active_returns: 0 });
+      } finally {
+        setDeleteCheckLoading(false);
+      }
+    };
+    checkSite();
+  }, [deleteSiteModal]);
 
   useEffect(() => {
     const loadSavedThemes = () => {
@@ -743,9 +781,13 @@ export default function BuilderDrawerPanel({
                         <button
                           type="button"
                           aria-label="Delete site"
+                          title={`Delete ${brandName}`}
                           onClick={(e) => {
                             e.stopPropagation();
-                            onDeleteSite?.(site.id);
+                            setDeleteSiteModal({
+                              siteId: site.id,
+                              brandName,
+                            });
                           }}
                           style={{
                             border: "none",
@@ -757,7 +799,11 @@ export default function BuilderDrawerPanel({
                             alignItems: "center",
                             justifyContent: "center",
                             flexShrink: 0,
+                            opacity: 0.85,
+                            transition: "opacity 0.15s ease",
                           }}
+                          onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+                          onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.85")}
                         >
                           <DeleteIcon />
                         </button>
@@ -1079,12 +1125,190 @@ export default function BuilderDrawerPanel({
           />
         ) : (
           <>
-            <p style={{ margin: 0 }}>
+            <p style={{ margin: 0, color: "#4b5563" }}>
               Drawer content for <strong>{title}</strong> will go here.
             </p>
           </>
         )}
       </div>
+
+      {deleteSiteModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(15, 23, 42, 0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 99999,
+            padding: "16px",
+          }}
+          onClick={() => setDeleteSiteModal(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: "360px",
+              background: "#ffffff",
+              borderRadius: "16px",
+              padding: "20px",
+              boxShadow: "0 20px 40px -10px rgba(0, 0, 0, 0.22)",
+              border: "1px solid rgba(226, 232, 240, 0.9)",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            {deleteCheckLoading ? (
+              <div style={{ padding: "16px 0", textAlign: "center", color: "#64748b", fontSize: "13px" }}>
+                Checking store activity...
+              </div>
+            ) : deleteCheckData && !deleteCheckData.can_delete ? (
+              <>
+                <h4
+                  style={{
+                    margin: "0 0 6px 0",
+                    fontSize: "15px",
+                    fontWeight: 700,
+                    color: "#dc2626",
+                  }}
+                >
+                  Cannot Delete Website
+                </h4>
+
+                <p
+                  style={{
+                    margin: "0 0 12px 0",
+                    fontSize: "13px",
+                    color: "#475569",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  <strong>"{deleteSiteModal.brandName}"</strong> has active uncleared customer transactions:
+                </p>
+
+                <div
+                  style={{
+                    background: "#fef2f2",
+                    border: "1px solid #fee2e2",
+                    borderRadius: "10px",
+                    padding: "10px 12px",
+                    marginBottom: "16px",
+                    fontSize: "12px",
+                    color: "#991b1b",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "4px",
+                  }}
+                >
+                  {deleteCheckData.active_orders > 0 && (
+                    <div>• <strong>{deleteCheckData.active_orders}</strong> active order(s) pending delivery/completion</div>
+                  )}
+                  {deleteCheckData.active_returns > 0 && (
+                    <div>• <strong>{deleteCheckData.active_returns}</strong> open return request(s)</div>
+                  )}
+                  <div style={{ marginTop: "4px", fontSize: "11px", opacity: 0.85 }}>
+                    Please resolve, fulfill, or cancel all active orders and return requests before deleting this website.
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteSiteModal(null)}
+                    style={{
+                      padding: "7px 16px",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      background: "#ffffff",
+                      color: "#334155",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Got it
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h4
+                  style={{
+                    margin: "0 0 6px 0",
+                    fontSize: "15px",
+                    fontWeight: 700,
+                    color: "#0f172a",
+                  }}
+                >
+                  Delete website?
+                </h4>
+
+                <p
+                  style={{
+                    margin: "0 0 16px 0",
+                    fontSize: "13px",
+                    color: "#64748b",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Are you sure you want to delete <strong>"{deleteSiteModal.brandName}"</strong>? All associated products, carts, inventory records, and order history for this store will be <strong style={{ color: "#ef4444" }}>permanently purged</strong>.
+                </p>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    justifyContent: "flex-end",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setDeleteSiteModal(null)}
+                    style={{
+                      padding: "7px 14px",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      background: "#ffffff",
+                      color: "#334155",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const targetId = deleteSiteModal.siteId;
+                      setDeleteSiteModal(null);
+                      onDeleteSite?.(targetId);
+                    }}
+                    style={{
+                      padding: "7px 14px",
+                      borderRadius: "8px",
+                      border: "none",
+                      background: "#ef4444",
+                      color: "#ffffff",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

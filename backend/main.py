@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from langgraph.graph import END, StateGraph
 from pydantic import BaseModel, Field
-from sqlmodel import Session, select
+from sqlmodel import Session, select, delete, func
 
 from agents.backend_exec import build_backend_config
 from agents.backend_runtime import register_backend_routes
@@ -25,7 +25,11 @@ from auth_middleware import (
     enforce_site_ownership,
 )
 from db.database import create_db_and_tables, get_session
-from models import AdminSite, Site
+from models import (
+    AdminSite, Site, Product, Category, Collection, Cart, CartItem, Order, OrderItem,
+    ProductCollection, ProductReview, ReturnRequest, ReturnItem, ReturnStatusHistory,
+    Shipment, InventoryMovement, OrderStatusHistory, User, UserAddress
+)
 from routers import auth, cart, categories, checkout, checkout_settings, collections, orders, products, returns
 
 UPLOADS_DIR = Path("uploads")
@@ -546,3 +550,119 @@ def update_site(
     session.refresh(site)
 
     return site
+
+
+@app.get("/sites/{site_id}/delete-check")
+def check_site_deletable(
+    site_id: UUID,
+    ownership=Depends(enforce_site_ownership),
+    session: Session = Depends(get_session),
+):
+    site = session.get(Site, site_id)
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    active_orders_count = session.exec(
+        select(func.count())
+        .select_from(Order)
+        .where(Order.site_id == site_id, Order.status.not_in(["delivered", "cancelled"]))
+    ).one()
+
+    active_returns_count = session.exec(
+        select(func.count())
+        .select_from(ReturnRequest)
+        .where(ReturnRequest.site_id == site_id, ReturnRequest.status.not_in(["closed", "rejected", "refunded"]))
+    ).one()
+
+    can_delete = (active_orders_count == 0 and active_returns_count == 0)
+
+    return {
+        "can_delete": can_delete,
+        "active_orders": active_orders_count,
+        "active_returns": active_returns_count,
+        "site_id": str(site_id),
+    }
+
+
+@app.delete("/sites/{site_id}", status_code=200)
+def delete_site(
+    site_id: UUID,
+    ownership=Depends(enforce_site_ownership),
+    session: Session = Depends(get_session),
+):
+    site = session.get(Site, site_id)
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    # Restriction: Cannot delete website if active orders or active return requests exist
+    active_orders_count = session.exec(
+        select(func.count())
+        .select_from(Order)
+        .where(Order.site_id == site_id, Order.status.not_in(["delivered", "cancelled"]))
+    ).one()
+
+    active_returns_count = session.exec(
+        select(func.count())
+        .select_from(ReturnRequest)
+        .where(ReturnRequest.site_id == site_id, ReturnRequest.status.not_in(["closed", "rejected", "refunded"]))
+    ).one()
+
+    if active_orders_count > 0 or active_returns_count > 0:
+        reasons = []
+        if active_orders_count > 0:
+            reasons.append(f"{active_orders_count} active order(s)")
+        if active_returns_count > 0:
+            reasons.append(f"{active_returns_count} pending return request(s)")
+
+        detail_msg = f"Cannot delete store with uncleared activity ({', '.join(reasons)}). Please resolve or cancel all active orders and return requests first."
+        raise HTTPException(status_code=400, detail=detail_msg)
+
+    # 1. Return related tables
+    return_request_ids = session.exec(select(ReturnRequest.id).where(ReturnRequest.site_id == site_id)).all()
+    if return_request_ids:
+        session.exec(delete(ReturnStatusHistory).where(ReturnStatusHistory.return_request_id.in_(return_request_ids)))
+    session.exec(delete(ReturnItem).where(ReturnItem.site_id == site_id))
+    session.exec(delete(ReturnRequest).where(ReturnRequest.site_id == site_id))
+
+    # 2. Product Reviews
+    session.exec(delete(ProductReview).where(ProductReview.site_id == site_id))
+
+    # 3. Shipments & Inventory Movements
+    session.exec(delete(Shipment).where(Shipment.site_id == site_id))
+    session.exec(delete(InventoryMovement).where(InventoryMovement.site_id == site_id))
+
+    # 4. Orders, Order Items & Order Status History
+    order_ids = session.exec(select(Order.id).where(Order.site_id == site_id)).all()
+    if order_ids:
+        session.exec(delete(OrderStatusHistory).where(OrderStatusHistory.order_id.in_(order_ids)))
+    session.exec(delete(OrderItem).where(OrderItem.site_id == site_id))
+    session.exec(delete(Order).where(Order.site_id == site_id))
+
+    # 5. Cart Items & Carts
+    cart_ids = session.exec(select(Cart.id).where(Cart.site_id == site_id)).all()
+    if cart_ids:
+        session.exec(delete(CartItem).where(CartItem.cart_id.in_(cart_ids)))
+    session.exec(delete(Cart).where(Cart.site_id == site_id))
+
+    # 6. Product Collections & Products
+    product_ids = session.exec(select(Product.id).where(Product.site_id == site_id)).all()
+    if product_ids:
+        session.exec(delete(ProductCollection).where(ProductCollection.product_id.in_(product_ids)))
+    session.exec(delete(Product).where(Product.site_id == site_id))
+
+    # 7. Collections & Categories
+    session.exec(delete(Collection).where(Collection.site_id == site_id))
+    session.exec(delete(Category).where(Category.site_id == site_id))
+
+    # 8. User Addresses & Users
+    session.exec(delete(UserAddress).where(UserAddress.site_id == site_id))
+    session.exec(delete(User).where(User.site_id == site_id))
+
+    # 9. AdminSite associations
+    session.exec(delete(AdminSite).where(AdminSite.site_id == site_id))
+
+    # 10. Delete Site entity
+    session.delete(site)
+    session.commit()
+
+    return {"message": "Site deleted successfully", "site_id": str(site_id)}

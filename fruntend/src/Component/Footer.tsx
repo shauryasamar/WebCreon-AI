@@ -82,36 +82,24 @@ const Footer: React.FC<FooterProps> = (props) => {
 
   const isDarkTheme = theme?.mode === "dark";
 
-  const darkModeFooterBg = isDarkTheme
-    ? (theme?.footer_bg && isColorDarkHex(theme.footer_bg)
-        ? theme.footer_bg
-        : theme?.primary_bg && isColorDarkHex(theme.primary_bg)
-        ? theme.primary_bg
-        : "#0f172a")
-    : undefined;
-
   const festivalBg = theme?.festival_theme && theme.festival_theme !== "none"
     ? (theme?.footer_bg || theme?.secondary_bg || theme?.primary_bg)
     : undefined;
 
-  const directBg = footer_bg || background_color;
+  const directBg = footer_bg || background_color || theme?.footer_bg;
 
   const footerBg =
     festivalBg ||
-    darkModeFooterBg ||
-    (theme?.footer_bg && !isDarkTheme ? theme.footer_bg : undefined) ||
-    (theme?.secondary_bg && !isDarkTheme ? theme.secondary_bg : undefined) ||
-    (directBg && !isDarkTheme ? directBg : undefined) ||
-    theme?.primary_bg ||
-    (isDarkTheme ? "#0f172a" : "#f8fafc");
+    directBg ||
+    theme?.secondary_bg ||
+    (isDarkTheme ? "#0f172a" : theme?.primary_bg || "#f8fafc");
 
   const isFooterDark = isColorDarkHex(footerBg);
   const isLight = !isFooterDark;
 
-  const directTextColor = footer_text_color || text_color;
+  const directTextColor = footer_text_color || text_color || theme?.footer_text_color;
   const textColor =
     directTextColor ||
-    theme?.footer_text_color ||
     (isFooterDark ? "#ffffff" : "#0f172a");
 
   const mutedText =

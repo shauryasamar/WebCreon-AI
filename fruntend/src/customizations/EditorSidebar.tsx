@@ -1075,17 +1075,17 @@ export default function EditorSidebar({
       {selectedTab === "theme" ? (
         <div style={{ display: "grid", gap: "12px" }}>
           {/* Saved Themes Section */}
-          <section style={sectionCardStyle(isLightMode)}>
+          <section style={{ ...sectionCardStyle(isLightMode), boxSizing: "border-box", overflow: "hidden" }}>
             <div style={{ fontSize: "10px", fontWeight: 800, textTransform: "uppercase", color: "#64748b" }}>
               SAVED THEMES SNAPSHOTS
             </div>
             
-            <div style={{ display: "flex", gap: "6px" }}>
+            <div style={{ display: "flex", gap: "6px", width: "100%", boxSizing: "border-box" }}>
               <input
                 type="text"
-                placeholder="Theme name e.g. Pink Luxury"
+                placeholder="Theme name..."
                 id="saved-theme-input"
-                style={{ ...sharedInputStyle(isLightMode, textColor), flex: 1 }}
+                style={{ ...sharedInputStyle(isLightMode, textColor), flex: 1, minWidth: 0, fontSize: "11px" }}
               />
               <button
                 type="button"
@@ -1104,6 +1104,7 @@ export default function EditorSidebar({
                   fontSize: "11px",
                   fontWeight: 600,
                   cursor: "pointer",
+                  flexShrink: 0,
                 }}
               >
                 + Save
@@ -1114,7 +1115,7 @@ export default function EditorSidebar({
               const savedSnapshots = getSavedThemeSnapshots(siteDefinition);
               if (!savedSnapshots.length) return null;
               return (
-                <div style={{ display: "grid", gap: "6px", marginTop: "4px" }}>
+                <div style={{ display: "grid", gap: "6px", marginTop: "4px", width: "100%", boxSizing: "border-box" }}>
                   {savedSnapshots.map((snap: any) => {
                   const th = snap.theme || {};
                   return (
@@ -1129,22 +1130,26 @@ export default function EditorSidebar({
                         background: "#ffffff",
                         border: "1px solid rgba(15,23,42,0.1)",
                         boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                        gap: "6px",
+                        width: "100%",
+                        boxSizing: "border-box",
+                        overflow: "hidden",
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px", overflow: "hidden" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", flex: 1, minWidth: 0, overflow: "hidden" }}>
                         <div style={{ display: "flex", gap: "2px", alignItems: "center", flexShrink: 0 }}>
-                          <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: th.primary_bg || "#ffffff", border: "1px solid #cbd5e1" }} title={`Primary: ${th.primary_bg || '#ffffff'}`} />
-                          <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: th.accent_color || "#2563eb", border: "1px solid #cbd5e1" }} title={`Accent: ${th.accent_color || '#2563eb'}`} />
-                          <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: th.navbar_bg || "#0f172a", border: "1px solid #cbd5e1" }} title={`Navbar: ${th.navbar_bg || '#0f172a'}`} />
+                          <div style={{ width: "9px", height: "9px", borderRadius: "50%", background: th.primary_bg || "#ffffff", border: "1px solid #cbd5e1" }} title={`Primary: ${th.primary_bg || '#ffffff'}`} />
+                          <div style={{ width: "9px", height: "9px", borderRadius: "50%", background: th.accent_color || "#2563eb", border: "1px solid #cbd5e1" }} title={`Accent: ${th.accent_color || '#2563eb'}`} />
+                          <div style={{ width: "9px", height: "9px", borderRadius: "50%", background: th.navbar_bg || "#0f172a", border: "1px solid #cbd5e1" }} title={`Navbar: ${th.navbar_bg || '#0f172a'}`} />
                         </div>
-                        <span style={{ fontSize: "11px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{snap.name}</span>
+                        <span style={{ fontSize: "11px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 }}>{snap.name}</span>
                       </div>
                       <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
                         <button
                           type="button"
                           onClick={() => onSiteDefinitionChange(applyThemeSnapshot(siteDefinition, snap.id))}
                           style={{
-                            padding: "3px 8px",
+                            padding: "3px 7px",
                             borderRadius: "4px",
                             border: "none",
                             background: "#2563eb",
@@ -1152,6 +1157,7 @@ export default function EditorSidebar({
                             fontSize: "10px",
                             fontWeight: 700,
                             cursor: "pointer",
+                            whiteSpace: "nowrap",
                           }}
                         >
                           Apply ✨
@@ -1168,6 +1174,7 @@ export default function EditorSidebar({
                             fontSize: "10px",
                             fontWeight: 700,
                             cursor: "pointer",
+                            whiteSpace: "nowrap",
                           }}
                           title="Delete Theme Snapshot"
                         >

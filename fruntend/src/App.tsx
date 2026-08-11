@@ -215,12 +215,14 @@ function AdminSitesPage() {
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to delete site: ${response.status}`);
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || `Failed to delete site (${response.status})`);
       }
 
       setSavedSites((prev) => prev.filter((site) => site.id !== targetSiteId));
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting site:", error);
+      alert(error?.message || "Failed to delete site.");
     }
   };
 
