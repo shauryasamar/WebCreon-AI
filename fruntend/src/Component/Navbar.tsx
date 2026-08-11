@@ -8,6 +8,9 @@ export type NavbarTheme = {
   name?: string;
   mode?: string;
   primary_bg?: string;
+  surface_bg?: string;
+  dialog_bg?: string;
+  border_color?: string;
   text_color?: string;
   accent_color?: string;
   navbar_variant?: "solid" | "soft" | "floating" | "transparent";
@@ -619,6 +622,15 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   };
 
 
+  const dropdownBg = theme?.dialog_bg || theme?.surface_bg || theme?.primary_bg || (light ? "#ffffff" : "#0f172a");
+  const dropdownBorderColor = (theme as any)?.border_color || (light ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.12)");
+
+  const isDropdownLight = !isColorDarkHex(dropdownBg);
+  const dropdownTextColor = isDropdownLight ? "#0f172a" : "#ffffff";
+  const dropdownMutedText = isDropdownLight ? "#64748b" : "rgba(255,255,255,0.7)";
+  const dropdownIconBg = isDropdownLight ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)";
+  const dropdownIconBorder = isDropdownLight ? "1px solid rgba(15,23,42,0.08)" : "1px solid rgba(255,255,255,0.12)";
+
   const menuItemStyle: React.CSSProperties = {
     width: "100%",
     display: "flex",
@@ -629,7 +641,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     borderRadius: "12px",
     border: "1px solid transparent",
     background: "transparent",
-    color: textColor,
+    color: dropdownTextColor,
     cursor: "pointer",
     textAlign: "left",
     fontSize: "13px",
@@ -637,10 +649,6 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     letterSpacing: "-0.01em",
     transition: "background 160ms ease, border-color 160ms ease, transform 160ms ease",
   };
-
-
-  const dropdownBg = theme?.dialog_bg || theme?.surface_bg || theme?.primary_bg || (light ? "#ffffff" : "#0f172a");
-  const dropdownBorderColor = (theme as any)?.border_color || (light ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.12)");
 
   const dropdownPanelStyle: React.CSSProperties = {
     position: "absolute",
@@ -660,7 +668,6 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     zIndex: 400,
   };
 
-
   const menuRowIconStyle: React.CSSProperties = {
     width: "32px",
     height: "32px",
@@ -668,23 +675,21 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
-    border: light ? "1px solid rgba(15,23,42,0.06)" : "1px solid rgba(255,255,255,0.06)",
-    color: textColor,
+    background: dropdownIconBg,
+    border: dropdownIconBorder,
+    color: dropdownTextColor,
     flexShrink: 0,
   };
 
-
   const menuMetaTextStyle: React.CSSProperties = {
     fontSize: "11px",
-    color: mutedText,
+    color: dropdownMutedText,
     marginTop: "2px",
     letterSpacing: "0.01em",
   };
 
-
   const menuArrowStyle: React.CSSProperties = {
-    color: light ? "rgba(15,23,42,0.32)" : "rgba(255,255,255,0.32)",
+    color: dropdownMutedText,
     fontSize: "14px",
     lineHeight: 1,
     flexShrink: 0,

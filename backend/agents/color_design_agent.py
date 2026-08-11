@@ -13,7 +13,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 
 # Upgraded to GPT-4o with low temperature for high-precision component color targeting
-llm = ChatOpenAI(model="gpt-4o", temperature=0.1)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
 
 
 # ==========================================
@@ -95,7 +95,7 @@ def calculate_contrast_color(bg_val: str) -> str:
 # 3. LLM COLOR GENERATOR FUNCTIONS
 # ==========================================
 
-# High-creativity LLM specifically for diverse, original color palette generation
+# High-creativity Flagship GPT-4o specifically for rich, diverse, original color palette generation
 creative_llm = ChatOpenAI(model="gpt-4o", temperature=0.75)
 
 
@@ -207,8 +207,14 @@ ALWAYS pair dark background colors with light text (#ffffff) and light backgroun
         # Filter keys based on target component to prevent accidental overall page background leakage
         target_lower = target_component.lower().strip()
         
+        # If user requested multiple components at once (e.g., "footer and navbar") -> COMBINE ALLOWED KEYS
+        if target_lower.startswith("multi:"):
+            comps = target_lower.replace("multi:", "").split(",")
+            allowed = set()
+            for c in comps:
+                allowed.update(COMPONENT_ALLOWED_KEYS.get(c, set()))
         # If user explicitly requested whole webpage/website/overall -> ALLOW ALL KEYS
-        if target_lower in ["overall", "webpage", "website", "site", "all", "entire"]:
+        elif target_lower in ["overall", "webpage", "website", "site", "all", "entire", "full"]:
             allowed = None
         else:
             allowed = COMPONENT_ALLOWED_KEYS.get(target_lower)
@@ -218,10 +224,10 @@ ALWAYS pair dark background colors with light text (#ffffff) and light backgroun
         else:
             filtered_patch = raw_patch
 
-        return {"color_patch": filtered_patch}
+        return {"color_patch": filtered_patch, "raw_patch": raw_patch}
     except Exception as e:
         print("Error generating color patch:", e)
-        return {"color_patch": {}}
+        return {"color_patch": {}, "raw_patch": {}}
 
 
 async def generate_component_palette_suggestions(
@@ -334,36 +340,48 @@ def detect_target_component(user_message: str, target_component: Optional[str] =
     msg_lower = user_message.lower().strip()
 
     # Whole webpage / website keywords -> OVERALL (applies theme to full website)
-    if any(w in msg_lower for w in ["webpage", "website", "whole site", "entire site", "full site", "all over", "complete webpage", "theme of webpage", "site theme", "theme of website", "overall"]):
+    if any(w in msg_lower for w in [
+        "webpage", "website", "whole site", "entire site", "full site", "all over", "complete webpage", 
+        "theme of webpage", "site theme", "theme of website", "overall", "complete page", "complete theme", 
+        "full page", "entire page", "whole page", "page theme", "theme for page", "based on navbar", 
+        "based on the navbar", "theme based on navbar", "theme for full page", "theme for complete page",
+        "full page theme", "full website theme", "whole page theme"
+    ]):
         return "overall"
 
-    if target_component and target_component.lower() in ["overall", "webpage", "website", "site", "all", "entire"]:
+    if target_component and target_component.lower() in ["overall", "webpage", "website", "site", "all", "entire", "full"]:
         return "overall"
 
     if target_component and target_component.lower() in COMPONENT_ALLOWED_KEYS:
         return target_component.lower()
 
-    # Individual component keywords
+    # Detect multi-component requests (e.g. "change theme for footer and navbar")
+    found_components = set()
     if any(w in msg_lower for w in ["navbar", "nav bar", "header", "top bar"]):
-        return "navbar"
-    elif "footer" in msg_lower:
-        return "footer"
-    elif any(w in msg_lower for w in ["hero", "banner", "slider"]):
-        return "hero"
-    elif "cart" in msg_lower:
-        return "cart"
-    elif any(w in msg_lower for w in ["checkout", "payment"]):
-        return "checkout"
-    elif any(w in msg_lower for w in ["review", "rating"]):
-        return "review"
-    elif "filter" in msg_lower:
-        return "filter"
-    elif any(w in msg_lower for w in ["detail", "gallery", "product info"]):
-        return "product_detail"
-    elif any(w in msg_lower for w in ["card", "product"]):
-        return "card"
-    elif any(w in msg_lower for w in ["background", "bg", "page bg"]):
-        return "background"
+        found_components.add("navbar")
+    if "footer" in msg_lower:
+        found_components.add("footer")
+    if any(w in msg_lower for w in ["hero", "banner", "slider"]):
+        found_components.add("hero")
+    if "cart" in msg_lower:
+        found_components.add("cart")
+    if any(w in msg_lower for w in ["checkout", "payment"]):
+        found_components.add("checkout")
+    if any(w in msg_lower for w in ["review", "rating"]):
+        found_components.add("review")
+    if "filter" in msg_lower:
+        found_components.add("filter")
+    if any(w in msg_lower for w in ["detail", "gallery", "product info"]):
+        found_components.add("product_detail")
+    if any(w in msg_lower for w in ["card", "product card", "products"]):
+        found_components.add("card")
+    if any(w in msg_lower for w in ["background", "bg", "page bg"]):
+        found_components.add("background")
+
+    if len(found_components) > 1:
+        return "multi:" + ",".join(sorted(list(found_components)))
+    elif len(found_components) == 1:
+        return list(found_components)[0]
 
     return "overall"
 
@@ -425,7 +443,13 @@ async def handle_color_and_design_request(
         }
 
     # 2. Whole Website Component Matcher Handler (e.g. "match whole website to navbar", "card theme as well please")
-    is_match_site_query = any(w in msg_lower for w in ["match whole website", "match whole site", "match the color of whole", "match navbar", "match nav bar", "implement in complete webpage", "match entire site", "whole webpage"])
+    is_match_site_query = any(w in msg_lower for w in [
+        "match whole website", "match whole site", "match the color of whole", "match navbar", 
+        "match nav bar", "implement in complete webpage", "match entire site", "whole webpage",
+        "based on navbar", "based on the navbar", "match navbar color", "theme based on navbar",
+        "complete page theme based on navbar", "same as navbar", "align site to navbar",
+        "match rest of site to navbar"
+    ])
     is_card_match_query = any(w in msg_lower for w in ["card theme as well", "product card theme", "cards as well", "product cards theme"])
 
     if is_match_site_query or is_card_match_query:
@@ -477,18 +501,19 @@ async def handle_color_and_design_request(
         target_component=target_comp
     )
     ai_color_patch = color_res.get("color_patch") or {}
+    raw_keys = color_res.get("raw_patch") or {}
 
     if ai_color_patch:
-        # Guarantee High-Contrast Accessibility: Calculate contrast for every background change so text NEVER camouflage!
-        if "navbar_bg" in ai_color_patch:
+        # Guarantee High-Contrast Accessibility ONLY when text color is not explicitly specified by user!
+        if "navbar_bg" in ai_color_patch and "navbar_text_color" not in raw_keys:
             ai_color_patch["navbar_text_color"] = calculate_contrast_color(ai_color_patch["navbar_bg"])
-        if "footer_bg" in ai_color_patch:
+        if "footer_bg" in ai_color_patch and "footer_text_color" not in raw_keys:
             ai_color_patch["footer_text_color"] = calculate_contrast_color(ai_color_patch["footer_bg"])
-        if "card_bg" in ai_color_patch:
+        if "card_bg" in ai_color_patch and "card_text_color" not in raw_keys:
             ai_color_patch["card_text_color"] = calculate_contrast_color(ai_color_patch["card_bg"])
-        if "hero_bg" in ai_color_patch:
+        if "hero_bg" in ai_color_patch and "hero_text_color" not in raw_keys:
             ai_color_patch["hero_text_color"] = calculate_contrast_color(ai_color_patch["hero_bg"])
-        if "primary_bg" in ai_color_patch:
+        if "primary_bg" in ai_color_patch and "text_color" not in raw_keys:
             ai_color_patch["text_color"] = calculate_contrast_color(ai_color_patch["primary_bg"])
 
         theme.update(ai_color_patch)

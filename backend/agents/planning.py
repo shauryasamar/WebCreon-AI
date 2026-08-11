@@ -156,7 +156,7 @@ class SitePlan(BaseModel):
     frontend_plan: FrontendPlan
 
 
-llm = ChatOpenAI(model="gpt-4o", temperature=0)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
 system_text = """
 You are a planning assistant for an AI website builder.

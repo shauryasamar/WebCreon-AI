@@ -153,8 +153,25 @@ def get_store_metrics_for_period(
         rated_list.sort(key=lambda x: (x["avg_rating"], x["review_count"]), reverse=True)
         top_rated_products = rated_list[:10]
 
-    # Store products list summary for context
-    products_list = [{"name": p.name, "category": p.category, "price": float(p.price or 0)} for p in products_all[:15]]
+    # Inventory & Product Stock metrics calculation
+    total_products_count = len(products_all)
+    total_inventory_stock = sum(p.stock for p in products_all)
+    out_of_stock_count = sum(1 for p in products_all if p.stock <= 0)
+    low_stock_count = sum(1 for p in products_all if 0 < p.stock <= 5)
+
+    # Store products list summary with full stock details for AI context
+    products_list = [
+        {
+            "id": str(p.id)[:8],
+            "name": p.name,
+            "category": p.category or "General",
+            "price": float(p.price or 0),
+            "stock": int(p.stock if p.stock is not None else 0),
+            "in_stock": bool(p.in_stock if p.in_stock is not None else (p.stock > 0)),
+            "brand": p.brand or "Store Item",
+        }
+        for p in products_all
+    ]
 
     return {
         "all_orders": all_orders,
@@ -171,6 +188,10 @@ def get_store_metrics_for_period(
         "avg_rating": avg_rating_str,
         "reviews_count": total_reviews_count,
         "top_rated_products": top_rated_products,
+        "total_products_count": total_products_count,
+        "total_inventory_stock": total_inventory_stock,
+        "out_of_stock_count": out_of_stock_count,
+        "low_stock_count": low_stock_count,
         "store_products": products_list,
         "cancel_rate": cancel_rate_str,
         "time_label": time_label,

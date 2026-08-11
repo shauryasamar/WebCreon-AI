@@ -75,7 +75,7 @@ class AgentAnalysis(BaseModel):
     )
 
 
-llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3)
 
 analyzer_system = """You are WebNirmaan AI's intelligent e-commerce store design assistant.
 Your goal is to guide the store owner ({admin_name}) through a smooth, strict STEP-BY-STEP onboarding process.

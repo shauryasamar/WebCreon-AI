@@ -1085,7 +1085,20 @@ const RenderPage: React.FC<RenderPageProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  window.location.href = siteId ? `/store/${siteId}` : "/";
+                  const path = window.location.pathname;
+                  if (path.startsWith("/builder/")) {
+                    const segments = path.split("/").filter(Boolean);
+                    const currentSiteId = segments[1] || siteId;
+                    window.location.href = `/builder/${currentSiteId}`;
+                  } else if (path.startsWith("/store/")) {
+                    const segments = path.split("/").filter(Boolean);
+                    const currentSlug = segments[1];
+                    window.location.href = `/store/${currentSlug}`;
+                  } else if (siteId) {
+                    window.location.href = `/builder/${siteId}`;
+                  } else {
+                    window.location.href = "/";
+                  }
                 }}
                 style={{
                   marginTop: "24px",

@@ -10,7 +10,7 @@ from typing import Dict, Any, List, Optional
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 
-llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3)
 
 
 def _build_focused_payload_summary(user_message: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -49,10 +49,14 @@ def _build_focused_payload_summary(user_message: str, payload: Dict[str, Any]) -
         summary["total_orders_count"] = m.get("total_orders_count", 0)
         summary["top_product"] = m.get("top_product", "N/A")
 
-        # Include product ratings & review info
+        # Include product ratings, stock, & inventory info
         summary["avg_rating"] = m.get("avg_rating", "No reviews yet")
         summary["reviews_count"] = m.get("reviews_count", 0)
         summary["top_rated_products"] = m.get("top_rated_products", [])
+        summary["total_products_count"] = m.get("total_products_count", 0)
+        summary["total_inventory_stock"] = m.get("total_inventory_stock", 0)
+        summary["out_of_stock_count"] = m.get("out_of_stock_count", 0)
+        summary["low_stock_count"] = m.get("low_stock_count", 0)
         summary["store_products"] = m.get("store_products", [])
 
         if any(w in msg_lower for w in ["most sold", "top product", "best seller", "top seller", "popular", "items"]):
@@ -109,6 +113,9 @@ Your job is to compose a clear, natural, conversational response for the store a
 
 CRITICAL ANTI-HALLUCINATION RULES:
 - You MUST rely STRICTLY on the facts provided in Payload Summary.
+- `store_products` in Payload Summary contains the complete list of products in the store database, including each product's exact `stock` quantity, `brand`, `category`, and `price`.
+- When the user asks for stock levels or inventory numbers for any products or categories (e.g. "how many stocks are there for shirts", "give me stocks for all of them", "what is the stock of Banana"), inspect `store_products` in Payload Summary, find all matching items, and list each product's exact name and `stock` quantity clearly (e.g. "Maroon Linen Shirt: 25 in stock", "Olive Green Linen Shirt: 14 in stock").
+- NEVER state that stock numbers are missing or unavailable when `store_products` is provided in Payload Summary!
 - If the user asks about product ratings, specific items (e.g. "what shirt has the most rated?"), or reviews, inspect `top_rated_products`, `reviews_count`, and `store_products` in Payload Summary.
 - If `reviews_count` is 0 or no products match the user's specific query, state clearly and accurately that there are no ratings or reviews recorded for that product in the store database yet.
 - NEVER invent, guess, or hallucinate product names (e.g. "Classic Cotton Tee"), rating counts (e.g. "150 ratings"), order numbers, or store figures.

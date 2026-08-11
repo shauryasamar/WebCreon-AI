@@ -1468,7 +1468,20 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
 
           <button
             type="button"
-            onClick={() => navigate(`/store/${siteSlug}`)}
+            onClick={() => {
+              const path = window.location.pathname;
+              if (path.startsWith("/builder/")) {
+                const segments = path.split("/").filter(Boolean);
+                const currentSiteId = segments[1] || siteId;
+                navigate(`/builder/${currentSiteId}`);
+              } else if (siteSlug) {
+                navigate(`/store/${siteSlug}`);
+              } else if (siteId) {
+                navigate(`/builder/${siteId}`);
+              } else {
+                navigate("/");
+              }
+            }}
             style={{
               border: cardBorder,
               background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)",

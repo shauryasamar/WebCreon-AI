@@ -25,7 +25,7 @@ def audit_store_health(site_id: str, site_definition: Dict[str, Any]) -> Dict[st
         unfulfilled = [o for o in all_orders if str(o.status or "").lower() in ["placed", "pending", "new", "accepted"]]
         
         # 2. Returns Audit
-        returns_all = db.exec(select(ReturnRequest)).all()
+        returns_all = db.exec(select(ReturnRequest).where(ReturnRequest.site_id == site_uuid)).all()
         pending_returns = [r for r in returns_all if str(r.status or "").lower() in ["requested", "received", "inspected"]]
 
         # 3. Inventory Stock Audit
