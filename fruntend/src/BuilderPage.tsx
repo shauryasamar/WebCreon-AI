@@ -1097,14 +1097,12 @@ function BuilderPageContent() {
 
   const pageBg = isAdminRoute
     ? "#ffffff"
-    : activeSiteDefinition.theme?.mode === "light"
-    ? "#f8fafc"
-    : activeSiteDefinition.theme?.primary_bg || "#0f172a";
+    : activeSiteDefinition.theme?.primary_bg ||
+      (activeSiteDefinition.theme?.mode === "light" ? "#f8fafc" : "#0f172a");
   const textColor = isAdminRoute
     ? "#0f172a"
-    : activeSiteDefinition.theme?.mode === "light"
-    ? "#111827"
-    : activeSiteDefinition.theme?.text_color || "#f9fafb";
+    : activeSiteDefinition.theme?.text_color ||
+      (activeSiteDefinition.theme?.mode === "light" ? "#111827" : "#f9fafb");
 
 
   const topBar = showAdminTopbar ? (

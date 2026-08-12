@@ -475,12 +475,16 @@ function HeroSlidesEditor({
 
   const updateBlockProps = (newSlides: any[], extraProps: Record<string, any> = {}) => {
     const nextDef = JSON.parse(JSON.stringify(siteDefinition));
+    const activeSlide = newSlides[0] || {};
+    const slideBg = activeSlide.background_color || activeSlide.hero_bg;
+    const slideText = activeSlide.hero_text_color || activeSlide.text_color;
+    const slideAccent = activeSlide.accent_color;
+
     if (Array.isArray(nextDef.pages)) {
       nextDef.pages = nextDef.pages.map((page: any) => ({
         ...page,
         blocks: (page.blocks ?? []).map((block: any) => {
           if (block.id === selectedBlock.id) {
-            const activeSlide = newSlides[0] || {};
             return {
               ...block,
               props: {
@@ -503,6 +507,16 @@ function HeroSlidesEditor({
         }),
       }));
     }
+
+    if (slideBg || slideText || slideAccent) {
+      nextDef.theme = {
+        ...(nextDef.theme || {}),
+        ...(slideBg ? { hero_bg: slideBg } : {}),
+        ...(slideText ? { hero_text_color: slideText } : {}),
+        ...(slideAccent ? { hero_accent: slideAccent } : {}),
+      };
+    }
+
     onSiteDefinitionChange(nextDef);
   };
 

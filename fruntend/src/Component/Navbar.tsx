@@ -8,6 +8,8 @@ export type NavbarTheme = {
   name?: string;
   mode?: string;
   primary_bg?: string;
+  secondary_bg?: string;
+  card_bg?: string;
   surface_bg?: string;
   dialog_bg?: string;
   border_color?: string;
@@ -16,12 +18,12 @@ export type NavbarTheme = {
   navbar_variant?: "solid" | "soft" | "floating" | "transparent";
   navbar_position?: "static" | "sticky" | "fixed";
   navbar_layout?:
-    | "standard"
-    | "apple_minimal"
-    | "glassmorphism_premium"
-    | "modern_marketplace"
-    | "luxury_fashion"
-    | "neo_modern";
+  | "standard"
+  | "apple_minimal"
+  | "glassmorphism_premium"
+  | "modern_marketplace"
+  | "luxury_fashion"
+  | "neo_modern";
   navbar_outer_bg?: string;
   navbar_bg?: string;
   navbar_text_color?: string;
@@ -34,6 +36,7 @@ export type NavbarTheme = {
   navbar_padding_y?: number;
   logo_height?: number | string;
   logo_fit?: "contain" | "cover";
+  [key: string]: any;
 };
 
 
@@ -72,8 +75,13 @@ export type NavbarProps = {
   fixedBounds?: NavbarFixedBounds;
   siteSlug?: string;
   appBase?: string;
+  navbar_outer_bg?: string;
+  navbar_bg?: string;
+  navbar_text_color?: string;
+  navbar_border_color?: string;
   onOpenCart?: () => void;
   onSearch?: (query: string) => void;
+  [key: string]: any;
 };
 
 
@@ -290,13 +298,13 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   const defaultOuterBorder = customBorderColor
     ? `1px solid ${customBorderColor}`
     : light
-    ? "1px solid rgba(15,23,42,0.06)"
-    : "1px solid rgba(255,255,255,0.05)";
+      ? "1px solid rgba(15,23,42,0.06)"
+      : "1px solid rgba(255,255,255,0.05)";
   const defaultShellBorder = customBorderColor
     ? `1px solid ${customBorderColor}`
     : light
-    ? "1px solid rgba(15,23,42,0.08)"
-    : "1px solid rgba(255,255,255,0.08)";
+      ? "1px solid rgba(15,23,42,0.08)"
+      : "1px solid rgba(255,255,255,0.08)";
 
 
   const navbarHeight = theme?.navbar_height ?? 72;
@@ -308,18 +316,25 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
   const resolvedLogoUrl = props.logoUrl || props.logo_url || (props as any).logo;
 
-  const hasCustomNavbarBg = Boolean(theme?.navbar_bg);
-  const hasCustomOuterBg = Boolean(theme?.navbar_outer_bg);
-  const hasCustomNavbarBorder = Boolean(theme?.navbar_border_color);
+  const outerBgFromPropsOrTheme =
+    props.navbar_outer_bg ||
+    theme?.navbar_outer_bg ||
+    props.navbar_bg ||
+    theme?.navbar_bg;
 
+  const shellBgFromPropsOrTheme =
+    props.navbar_bg ||
+    theme?.navbar_bg;
 
-  const darkOuterSurface = hasCustomOuterBg ? theme!.navbar_outer_bg! : (primaryBg || "#081226");
-  const darkShellSurface = hasCustomNavbarBg ? theme!.navbar_bg! : "#0f172a";
+  const hasCustomNavbarBorder = Boolean(theme?.navbar_border_color || props.navbar_border_color);
+
+  const darkOuterSurface = outerBgFromPropsOrTheme || theme?.secondary_bg || primaryBg || "#081226";
+  const darkShellSurface = shellBgFromPropsOrTheme || theme?.secondary_bg || primaryBg || "#0f172a";
   const darkSoftSurface = "rgba(255,255,255,0.06)";
 
 
-  const lightOuterSurface = hasCustomOuterBg ? theme!.navbar_outer_bg! : primaryBg;
-  const lightShellSurface = hasCustomNavbarBg ? theme!.navbar_bg! : "#ffffff";
+  const lightOuterSurface = outerBgFromPropsOrTheme || theme?.secondary_bg || primaryBg || "#ffffff";
+  const lightShellSurface = shellBgFromPropsOrTheme || theme?.secondary_bg || primaryBg || "#ffffff";
   const lightSoftSurface = "rgba(15,23,42,0.04)";
 
 

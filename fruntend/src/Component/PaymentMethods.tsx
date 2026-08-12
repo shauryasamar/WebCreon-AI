@@ -184,8 +184,8 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
     if (!isDark) {
       // Light or Warm Festive Light Theme
       const isPureWhiteBg = resolvedPrimaryBg.toLowerCase() === "#ffffff" || resolvedPrimaryBg.toLowerCase() === "#f8fafc" || resolvedPrimaryBg.toLowerCase() === "#f6f7fb";
-      const surfaceBg = background_color || (themeObject as any)?.surface_bg || (themeObject as any)?.card_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.7);
-      const cardBgFinal = background_color || (isPureWhiteBg ? "#ffffff" : surfaceBg);
+      const surfaceBg = background_color || (themeObject as any)?.surface_bg || (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.7);
+      const cardBgFinal = background_color || (isPureWhiteBg ? (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || "#ffffff" : surfaceBg);
       const panelBgFinal = panel_color || cardBgFinal;
       const optionBgFinal = isPureWhiteBg ? "#ffffff" : mixHex(cardBgFinal, "#ffffff", 0.3);
       const inputBgFinal = input_color || (isPureWhiteBg ? "#ffffff" : mixHex(cardBgFinal, "#ffffff", 0.5));
@@ -217,7 +217,7 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
     }
 
     // Dark or Deep Festive Dark Theme
-    const cardBgDark = background_color || (themeObject as any)?.surface_bg || (themeObject as any)?.card_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.06);
+    const cardBgDark = background_color || (themeObject as any)?.surface_bg || (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.06);
     const panelBgDark = panel_color || mixHex(resolvedPrimaryBg, "#ffffff", 0.07);
     const optionBgDark = mixHex(resolvedPrimaryBg, "#ffffff", 0.04);
     const inputBgDark = input_color || mixHex(resolvedPrimaryBg, "#ffffff", 0.09);

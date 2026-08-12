@@ -139,10 +139,15 @@ function isColorDarkHex(colorHex?: string): boolean {
   const resolvedPrimaryBg = theme?.primary_bg || (isLight ? "#f8fafc" : "#0f172a");
 
   const cardStyleKey = card_style || cardStyle || theme?.card_style || "fashion";
-  const cardBg = card_bg_color || theme?.card_bg || (isLight ? (resolvedPrimaryBg === "#ffffff" ? "#ffffff" : "rgba(255,255,255,0.75)") : "#1e293b");
+  const cardBg = card_bg_color || theme?.card_bg || theme?.secondary_bg || (isLight ? (resolvedPrimaryBg === "#ffffff" ? "#ffffff" : "rgba(255,255,255,0.75)") : "#1e293b");
   const isCardDark = isColorDarkHex(cardBg);
 
-  const pageText = title_color || (theme as any)?.card_text_color || (isCardDark ? "#ffffff" : "#0f172a");
+  const preferredTextColor = title_color || (theme as any)?.card_text_color || theme?.text_color;
+  const isPreferredDark = isColorDarkHex(preferredTextColor);
+  const pageText = preferredTextColor && (isPreferredDark !== isCardDark)
+    ? preferredTextColor
+    : (isCardDark ? "#ffffff" : "#0f172a");
+
   const mutedText = original_price_color || (theme as any)?.muted_text_color || (isCardDark ? "rgba(255,255,255,0.68)" : "rgba(15,23,42,0.65)");
   const faintText = brand_color || (theme as any)?.soft_text_color || (isCardDark ? "rgba(255,255,255,0.5)" : "rgba(15,23,42,0.5)");
   const starColor = rating_star_color || "#d97706";

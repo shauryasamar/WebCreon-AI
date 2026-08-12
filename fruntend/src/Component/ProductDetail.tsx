@@ -33,8 +33,13 @@ type ProductDetailProps = {
   theme?: {
     mode?: string;
     primary_bg?: string;
+    secondary_bg?: string;
+    card_bg?: string;
     text_color?: string;
     accent_color?: string;
+    card_text_color?: string;
+    card_shadow?: string;
+    [key: string]: any;
   };
 };
 
@@ -305,9 +310,12 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   const mutedText = (theme as any)?.muted_text_color || (isLight ? "rgba(15,23,42,0.65)" : "rgba(248,250,252,0.65)");
   const subtleText = (theme as any)?.soft_text_color || (isLight ? "rgba(15,23,42,0.5)" : "rgba(248,250,252,0.5)");
 
-  const panelBg = isLight
-    ? (resolvedPrimaryBg === "#ffffff" ? "#ffffff" : "rgba(255,255,255,0.75)")
-    : "rgba(0,0,0,0.25)";
+  const panelBg =
+    theme?.card_bg ||
+    theme?.secondary_bg ||
+    (isLight
+      ? (resolvedPrimaryBg === "#ffffff" ? "#ffffff" : "rgba(255,255,255,0.75)")
+      : "rgba(0,0,0,0.25)");
 
   const elevatedBg = isLight ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.06)";
   const softSectionBg = isLight ? "rgba(0,0,0,0.025)" : "rgba(255,255,255,0.04)";

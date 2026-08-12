@@ -155,6 +155,25 @@ function alpha(hex: string, opacity: number) {
   return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${clamp(opacity, 0, 1)})`;
 }
 
+function getContrastingText(bgHex: string, preferredText?: string): string {
+  if (!bgHex || typeof bgHex !== "string") return preferredText || "#0f172a";
+  const rgb = hexToRgb(bgHex);
+  if (!rgb) return preferredText || "#0f172a";
+  const isBgDark = (rgb.r * 0.299 + rgb.g * 0.587 + rgb.b * 0.114) < 160;
+
+  if (preferredText && typeof preferredText === "string" && preferredText.startsWith("#")) {
+    const textRgb = hexToRgb(preferredText);
+    if (textRgb) {
+      const isTextDark = (textRgb.r * 0.299 + textRgb.g * 0.587 + textRgb.b * 0.114) < 160;
+      if (isBgDark !== isTextDark) {
+        return preferredText;
+      }
+    }
+  }
+
+  return isBgDark ? "#ffffff" : "#0f172a";
+}
+
 function toNumber(value?: string | number | null) {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -384,6 +403,8 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
       const panelBg = panel_color || background_color || mixHex(pageBg, "#ffffff", 0.7);
       const cardBg = card_color || "#ffffff";
 
+      const cardText = getContrastingText(cardBg, text_color || (theme as any)?.card_text_color || theme?.text_color || "#0f172a");
+
       return {
         pageBg,
         shellBg,
@@ -393,18 +414,18 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
         cardBg,
         cardBorder: dynamicCardBorder,
         mutedBg: mixHex(pageBg, "#000000", 0.03),
-        softBg: alpha(resolvedTextColor, 0.04),
-        text: resolvedTextColor,
-        textMuted: muted_text_color || mixHex(resolvedTextColor, pageBg, 0.4),
-        textSoft: muted_text_color || mixHex(resolvedTextColor, pageBg, 0.25),
+        softBg: alpha(cardText, 0.04),
+        text: cardText,
+        textMuted: muted_text_color || mixHex(cardText, cardBg, 0.4),
+        textSoft: muted_text_color || mixHex(cardText, cardBg, 0.25),
         danger: "#dc2626",
         successBg: alpha("#22c55e", 0.10),
         successText: "#166534",
         inputBg: cardBg,
         quantityBg: mixHex(pageBg, "#000000", 0.02),
-        shadow: alpha(resolvedTextColor, 0.06) ? `0 8px 20px ${alpha("#0f172a", 0.06)}` : "none",
+        shadow: alpha(cardText, 0.06) ? `0 8px 20px ${alpha("#0f172a", 0.06)}` : "none",
         cardShadow: `0 4px 14px ${alpha("#0f172a", 0.04)}`,
-        disabledBg: mixHex(resolvedTextColor, pageBg, 0.5),
+        disabledBg: mixHex(cardText, cardBg, 0.5),
       };
     }
 
@@ -429,6 +450,8 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     const inputBg = card_color || mixHex(pageBg, "#000000", 0.15);
     const quantityBg = mixHex(pageBg, "#000000", 0.12);
 
+    const cardText = getContrastingText(cardBg, text_color || (theme as any)?.card_text_color || theme?.text_color || "#e5e7eb");
+
     return {
       pageBg,
       shellBg,
@@ -439,11 +462,11 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
       cardBorder: dynamicCardBorder,
       mutedBg,
       softBg: alpha("#ffffff", 0.05),
-      text: resolvedTextColor,
+      text: cardText,
       textMuted:
-        muted_text_color || mixHex(resolvedTextColor, pageBg, 0.45),
+        muted_text_color || mixHex(cardText, cardBg, 0.45),
       textSoft:
-        muted_text_color || mixHex(resolvedTextColor, pageBg, 0.28),
+        muted_text_color || mixHex(cardText, cardBg, 0.28),
       danger: "#fda4af",
       successBg: alpha("#22c55e", 0.16),
       successText: "#86efac",

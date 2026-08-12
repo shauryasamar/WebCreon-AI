@@ -311,9 +311,9 @@ useEffect(() => {
   const palette = useMemo(() => {
     if (!isDark) {
       // Light or Warm Festive Light Theme
-      const surfaceBg = background_color || (themeObject as any)?.surface_bg || (themeObject as any)?.card_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.7);
+      const surfaceBg = background_color || (themeObject as any)?.surface_bg || (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.7);
       const isPureWhiteBg = resolvedPrimaryBg.toLowerCase() === "#ffffff" || resolvedPrimaryBg.toLowerCase() === "#f8fafc" || resolvedPrimaryBg.toLowerCase() === "#f6f7fb";
-      const cardBgFinal = background_color || (isPureWhiteBg ? "#ffffff" : surfaceBg);
+      const cardBgFinal = background_color || (isPureWhiteBg ? (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || "#ffffff" : surfaceBg);
       const inputBgFinal = input_color || (isPureWhiteBg ? "#ffffff" : mixHex(cardBgFinal, "#ffffff", 0.5));
       const borderFinal = border_color || (isPureWhiteBg ? "#e5e7eb" : mixHex(resolvedText, cardBgFinal, 0.15));
 
@@ -355,7 +355,7 @@ useEffect(() => {
     }
 
     // Dark or Deep Festive Dark Theme (e.g. Deep Maroon, Forest Emerald, Festive Purple, Slate Dark)
-    const cardBgDark = background_color || (themeObject as any)?.surface_bg || (themeObject as any)?.card_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.06);
+    const cardBgDark = background_color || (themeObject as any)?.surface_bg || (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.06);
     const inputBgDark = input_color || mixHex(resolvedPrimaryBg, "#ffffff", 0.09);
     const borderDark = border_color || mixHex(resolvedText, resolvedPrimaryBg, 0.15);
 

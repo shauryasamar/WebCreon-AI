@@ -38,6 +38,7 @@ class PaletteOption(BaseModel):
     soft_border: str = Field(description="Subtle card border hex code")
     
     navbar_bg: str = Field(description="Navbar background hex")
+    navbar_outer_bg: Optional[str] = Field(default=None, description="Navbar outer wrapper background hex")
     navbar_text_color: str = Field(description="Navbar text color hex")
     navbar_border_color: str = Field(description="Navbar border color hex")
     
@@ -126,7 +127,22 @@ CREATIVITY RULES:
             "domain": domain,
             "color_description": color_description or "Modern clean minimalist",
         })
-        return [p.model_dump() for p in res.palettes]
+        output_palettes = []
+        for p in res.palettes:
+            p_dict = p.model_dump()
+            # Enforce strict WCAG AA contrast for generated text colors vs background colors
+            if "primary_bg" in p_dict:
+                p_dict["text_color"] = calculate_contrast_color(p_dict["primary_bg"])
+            if "navbar_bg" in p_dict:
+                p_dict["navbar_text_color"] = calculate_contrast_color(p_dict["navbar_bg"])
+            if "footer_bg" in p_dict:
+                p_dict["footer_text_color"] = calculate_contrast_color(p_dict["footer_bg"])
+            if "hero_bg" in p_dict:
+                p_dict["hero_text_color"] = calculate_contrast_color(p_dict["hero_bg"])
+            if "card_bg" in p_dict:
+                p_dict["card_text_color"] = calculate_contrast_color(p_dict["card_bg"])
+            output_palettes.append(p_dict)
+        return output_palettes
     except Exception as e:
         print("Error generating palettes:", e)
         return []
@@ -256,79 +272,65 @@ def apply_theme_to_blocks(pages: List[Dict[str, Any]], patch_dict: Dict[str, Any
             btype = str(block.get("type") or "").lower()
             bprops = block.setdefault("props", {})
 
-            # 1. Navbar Block Prop Sync
-            if "navbar" in btype or "header" in btype:
-                if "navbar_bg" in patch_dict:
-                    bprops["navbar_bg"] = patch_dict["navbar_bg"]
-                    bprops["background_color"] = patch_dict["navbar_bg"]
-                if "navbar_text_color" in patch_dict:
-                    bprops["navbar_text_color"] = patch_dict["navbar_text_color"]
-                    bprops["text_color"] = patch_dict["navbar_text_color"]
+            if is_overall:
+                # Purge hardcoded block-level color overrides so components inherit cleanly from siteDefinition.theme
+                for key in [
+                    "card_bg_color", "outer_bg_color", "background_color", "card_bg",
+                    "secondary_bg", "primary_bg", "title_color", "brand_color",
+                    "price_color", "original_price_color", "rating_star_color",
+                    "text_color", "accent_color", "panel_color", "input_color",
+                    "border_color", "soft_border_color", "navbar_bg", "navbar_outer_bg",
+                    "navbar_text_color", "navbar_border_color", "footer_bg",
+                    "footer_text_color", "footer_muted_color", "footer_border_color",
+                    "hero_bg", "hero_text_color", "hero_accent"
+                ]:
+                    bprops.pop(key, None)
+            else:
+                # 1. Navbar Block Prop Sync
+                if "navbar" in btype or "header" in btype:
+                    if "navbar_bg" in patch_dict:
+                        bprops["navbar_bg"] = patch_dict["navbar_bg"]
+                        bprops["background_color"] = patch_dict["navbar_bg"]
+                    if "navbar_text_color" in patch_dict:
+                        bprops["navbar_text_color"] = patch_dict["navbar_text_color"]
+                        bprops["text_color"] = patch_dict["navbar_text_color"]
 
-            # 2. Footer Block Prop Sync
-            elif "footer" in btype:
-                if "footer_bg" in patch_dict:
-                    bprops["footer_bg"] = patch_dict["footer_bg"]
-                    bprops["background_color"] = patch_dict["footer_bg"]
-                if "footer_text_color" in patch_dict:
-                    bprops["footer_text_color"] = patch_dict["footer_text_color"]
-                    bprops["text_color"] = patch_dict["footer_text_color"]
+                # 2. Footer Block Prop Sync
+                elif "footer" in btype:
+                    if "footer_bg" in patch_dict:
+                        bprops["footer_bg"] = patch_dict["footer_bg"]
+                        bprops["background_color"] = patch_dict["footer_bg"]
+                    if "footer_text_color" in patch_dict:
+                        bprops["footer_text_color"] = patch_dict["footer_text_color"]
+                        bprops["text_color"] = patch_dict["footer_text_color"]
 
-            # 3. Product / Card / Grid / Details Block Prop Sync
-            elif any(c in btype for c in ["product", "card", "grid", "detail", "gallery", "info"]):
-                if "card_bg" in patch_dict:
-                    bprops["card_bg"] = patch_dict["card_bg"]
-                    bprops["background_color"] = patch_dict["card_bg"]
-                elif is_overall and "secondary_bg" in patch_dict:
-                    bprops["card_bg"] = patch_dict["secondary_bg"]
-                    bprops["background_color"] = patch_dict["secondary_bg"]
+                # 3. Product / Card / Grid / Details Block Prop Sync
+                elif any(c in btype for c in ["product", "card", "grid", "detail", "gallery", "info"]):
+                    if "card_bg" in patch_dict:
+                        bprops["card_bg"] = patch_dict["card_bg"]
+                        bprops["background_color"] = patch_dict["card_bg"]
+                    if "card_text_color" in patch_dict:
+                        bprops["card_text_color"] = patch_dict["card_text_color"]
+                        bprops["text_color"] = patch_dict["card_text_color"]
 
-                if "card_text_color" in patch_dict:
-                    bprops["card_text_color"] = patch_dict["card_text_color"]
-                    bprops["text_color"] = patch_dict["card_text_color"]
-                elif is_overall and "text_color" in patch_dict:
-                    bprops["card_text_color"] = patch_dict["text_color"]
-                    bprops["text_color"] = patch_dict["text_color"]
+                # 4. Hero Banner / Slider Block Prop Sync
+                elif any(h in btype for h in ["hero", "banner", "slider"]):
+                    if "hero_bg" in patch_dict:
+                        bprops["hero_bg"] = patch_dict["hero_bg"]
+                        bprops["background_color"] = patch_dict["hero_bg"]
+                    if "hero_text_color" in patch_dict:
+                        bprops["hero_text_color"] = patch_dict["hero_text_color"]
+                        bprops["text_color"] = patch_dict["hero_text_color"]
 
-            # 4. Hero Banner / Slider Block Prop Sync
-            elif any(h in btype for h in ["hero", "banner", "slider"]):
-                if "hero_bg" in patch_dict:
-                    bprops["hero_bg"] = patch_dict["hero_bg"]
-                    bprops["background_color"] = patch_dict["hero_bg"]
-                elif is_overall and "primary_bg" in patch_dict:
-                    bprops["hero_bg"] = patch_dict["primary_bg"]
-                    bprops["background_color"] = patch_dict["primary_bg"]
-
-                if "hero_text_color" in patch_dict:
-                    bprops["hero_text_color"] = patch_dict["hero_text_color"]
-                    bprops["text_color"] = patch_dict["hero_text_color"]
-                elif is_overall and "text_color" in patch_dict:
-                    bprops["hero_text_color"] = patch_dict["text_color"]
-                    bprops["text_color"] = patch_dict["text_color"]
-
-                if isinstance(bprops.get("slides"), list):
-                    for slide in bprops["slides"]:
-                        if isinstance(slide, dict):
-                            if "hero_bg" in patch_dict:
-                                slide["hero_bg"] = patch_dict["hero_bg"]
-                                slide["background_color"] = patch_dict["hero_bg"]
-                            if "hero_text_color" in patch_dict:
-                                slide["hero_text_color"] = patch_dict["hero_text_color"]
-                                slide["text_color"] = patch_dict["hero_text_color"]
-
-            # 5. Cart / Checkout / Reviews / Filter / Other Block Prop Sync
-            elif any(s in btype for s in ["cart", "checkout", "payment", "review", "filter"]):
-                if "secondary_bg" in patch_dict:
-                    bprops["background_color"] = patch_dict["secondary_bg"]
-                elif "card_bg" in patch_dict:
-                    bprops["background_color"] = patch_dict["card_bg"]
-                elif is_overall and "primary_bg" in patch_dict:
-                    bprops["background_color"] = patch_dict["primary_bg"]
-
-                if "text_color" in patch_dict:
-                    bprops["text_color"] = patch_dict["text_color"]
-                elif "card_text_color" in patch_dict:
-                    bprops["text_color"] = patch_dict["card_text_color"]
+                    if isinstance(bprops.get("slides"), list):
+                        for slide in bprops["slides"]:
+                            if isinstance(slide, dict):
+                                if "hero_bg" in patch_dict:
+                                    slide["hero_bg"] = patch_dict["hero_bg"]
+                                    slide["background_color"] = patch_dict["hero_bg"]
+                                if "hero_text_color" in patch_dict:
+                                    slide["hero_text_color"] = patch_dict["hero_text_color"]
+                                    slide["text_color"] = patch_dict["hero_text_color"]
 
 
 # ==========================================

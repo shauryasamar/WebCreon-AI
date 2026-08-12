@@ -31,6 +31,9 @@ export type HeroSlide = {
   background_overlay?: string;
   text_color?: string;
   hero_text_color?: string;
+  accent_color?: string;
+  hero_accent?: string;
+  [key: string]: any;
 };
 
 export type HeroBannerProps = {
@@ -230,97 +233,32 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   const hasSlideBgImage = Boolean(slideBgImage);
   const slideBgOverlay = currentSlide.background_overlay || background_overlay;
 
-  // Custom slide background color OR Festive Theme aware colorful gradients
+  // Custom slide background color (supports manual block editing & global themes)
   const directBlockBg = hero_bg || background_color;
-  const activeThemeHeroBg = currentSlide.hero_bg || theme?.hero_bg || (theme?.secondary_bg && theme.secondary_bg !== "#ffffff" ? theme.secondary_bg : undefined);
   const slideCustomBgColor =
-    directBlockBg ||
-    activeThemeHeroBg ||
     currentSlide.background_color ||
-    theme?.primary_bg;
+    currentSlide.hero_bg ||
+    directBlockBg ||
+    theme?.hero_bg ||
+    theme?.secondary_bg ||
+    theme?.primary_bg ||
+    (isDarkMode ? "#0f172a" : "#f8fafc");
 
-  const festivalKey = theme?.festival_theme || "none";
-
-  const getFestiveBgStyle = (): React.CSSProperties => {
-    if (festivalKey === "none" && slideCustomBgColor) return { background: slideCustomBgColor };
-
-    if (festivalKey === "diwali") {
-      return isDarkMode
-        ? {
-            // Warm festive gold & ruby amber glow
-            background: "linear-gradient(135deg, rgba(120, 53, 15, 0.92), rgba(67, 20, 7, 0.95), rgba(146, 64, 14, 0.9))",
-            border: "1px solid rgba(245, 158, 11, 0.35)",
-          }
-        : {
-            background: "linear-gradient(135deg, rgba(254, 243, 199, 0.85), rgba(254, 215, 170, 0.75), rgba(253, 230, 138, 0.85))",
-            border: "1px solid rgba(245, 158, 11, 0.3)",
-          };
-    }
-
-    if (festivalKey === "christmas") {
-      return isDarkMode
-        ? {
-            // Rich pine green & festive crimson accent gradient
-            background: "linear-gradient(135deg, rgba(20, 83, 45, 0.95), rgba(153, 27, 27, 0.88), rgba(22, 101, 52, 0.9))",
-            border: "1px solid rgba(34, 197, 94, 0.35)",
-          }
-        : {
-            background: "linear-gradient(135deg, rgba(220, 252, 231, 0.85), rgba(254, 226, 226, 0.85), rgba(240, 253, 244, 0.85))",
-            border: "1px solid rgba(34, 197, 94, 0.3)",
-          };
-    }
-
-    if (festivalKey === "eid") {
-      return isDarkMode
-        ? {
-            // Royal emerald & crescent sapphire gold gradient
-            background: "linear-gradient(135deg, rgba(6, 78, 59, 0.95), rgba(30, 58, 138, 0.92), rgba(4, 120, 87, 0.9))",
-            border: "1px solid rgba(16, 185, 129, 0.35)",
-          }
-        : {
-            background: "linear-gradient(135deg, rgba(209, 250, 229, 0.85), rgba(219, 234, 254, 0.85), rgba(236, 253, 245, 0.85))",
-            border: "1px solid rgba(16, 185, 129, 0.3)",
-          };
-    }
-
-    if (festivalKey === "holi") {
-      return isDarkMode
-        ? {
-            // Vibrant festive magenta, violet & coral sunset gradient
-            background: "linear-gradient(135deg, rgba(131, 24, 67, 0.95), rgba(91, 33, 182, 0.92), rgba(194, 65, 12, 0.9))",
-            border: "1px solid rgba(236, 72, 153, 0.35)",
-          }
-        : {
-            background: "linear-gradient(135deg, rgba(252, 231, 243, 0.85), rgba(237, 233, 254, 0.85), rgba(254, 215, 170, 0.85))",
-            border: "1px solid rgba(236, 72, 153, 0.3)",
-          };
-    }
-
-    // Default (none) Turquoise Green / Mint
-    return isDarkMode
-      ? {
-          background: "linear-gradient(135deg, rgba(15, 47, 53, 0.95), rgba(13, 27, 42, 0.95))",
-          border: "1px solid rgba(20, 184, 166, 0.25)",
-        }
-      : {
-          background: "linear-gradient(135deg, rgba(204, 251, 241, 0.6), rgba(240, 253, 244, 0.6))",
-          border: "1px solid rgba(45, 212, 191, 0.3)",
-        };
+  const defaultBgStyle: React.CSSProperties = {
+    background: slideCustomBgColor,
   };
-
-  const defaultBgStyle = getFestiveBgStyle();
 
   // Theme-adaptive text color
   const defaultTextColor = isDarkMode ? "#ffffff" : "#0f172a";
   const directTextColor = hero_text_color || text_color;
   const slideTextColor =
-    directTextColor ||
     currentSlide.hero_text_color ||
     currentSlide.text_color ||
+    directTextColor ||
     theme?.hero_text_color ||
     theme?.text_color ||
     (hasSlideBgImage ? "#ffffff" : defaultTextColor);
-  const accentColor = theme?.accent_color || "#2563eb";
+  const accentColor = currentSlide.accent_color || theme?.hero_accent || theme?.accent_color || "#2563eb";
 
   // Dynamic Scale-based Sizing
   const containerPadding = `${Math.round(Math.max(14, 28 * hScale))}px ${Math.round(isMobile ? 16 : 32 * hScale)}px`;

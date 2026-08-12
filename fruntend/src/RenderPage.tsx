@@ -774,7 +774,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
   const pageBg =
     theme?.primary_bg || (theme?.mode === "light" ? "#f6f7fb" : "#0f172a");
   const textColor =
-    theme?.mode === "light" ? "#111827" : theme?.text_color || "#f9fafb";
+    theme?.text_color || (theme?.mode === "light" ? "#111827" : "#f9fafb");
   const subtleText =
     theme?.mode === "light" ? "#6b7280" : "rgba(255,255,255,0.68)";
   const accentColor = theme?.accent_color || "#2f6df6";

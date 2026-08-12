@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
-import { saveThemeSnapshot } from "../customizations/editorUtils";
+import { saveThemeSnapshot, updateThemeValues, applyThemeToPages } from "../customizations/editorUtils";
 
 type DataCard = {
   type: "redirect_card" | "orders_card" | "returns_card" | "analytics_card" | "palette_suggestions_card" | "component_palette_suggestions_card" | "camouflage_warning_card";
@@ -94,12 +94,14 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
     if (!siteDefinition || !onSiteDefinitionChange) return;
 
     // Build a complete theme patch from the palette object
-    const themePatch: Record<string, string> = {};
+    const themePatch: Record<string, string> = {
+      festival_theme: "none",
+    };
     const paletteKeys = [
-      "primary_bg", "secondary_bg", "text_color", "muted_text",
+      "primary_bg", "secondary_bg", "text_color", "muted_text", "muted_text_color", "soft_text_color",
       "accent_color", "accent_hover", "accent_text",
       "border_color", "soft_border",
-      "navbar_bg", "navbar_text_color", "navbar_border_color",
+      "navbar_bg", "navbar_outer_bg", "navbar_text_color", "navbar_border_color",
       "footer_bg", "footer_text_color", "footer_muted_color",
       "hero_bg", "hero_text_color", "hero_accent",
       "card_bg", "card_shadow",
@@ -107,12 +109,12 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
     for (const key of paletteKeys) {
       if (palette[key]) themePatch[key] = palette[key];
     }
+    if (palette.muted_text && !themePatch.muted_text_color) {
+      themePatch.muted_text_color = palette.muted_text;
+    }
 
-    // Merge into site definition theme
-    const updatedDef = {
-      ...siteDefinition,
-      theme: { ...(siteDefinition.theme || {}), ...themePatch },
-    };
+    // Apply theme patch via updateThemeValues so all pages and components purge old block-level color locks
+    const updatedDef = updateThemeValues(siteDefinition as any, themePatch);
 
     // Apply immediately on the builder canvas
     onSiteDefinitionChange(updatedDef);
@@ -191,7 +193,15 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
 
       // Trigger Live Design Update in Builder if modified
       if (data.design_modified && data.updated_draft_definition && onSiteDefinitionChange) {
-        onSiteDefinitionChange(data.updated_draft_definition);
+        const nextTheme = data.updated_draft_definition.theme || {};
+        const syncedPages = applyThemeToPages(
+          data.updated_draft_definition.pages || [],
+          nextTheme
+        );
+        onSiteDefinitionChange({
+          ...data.updated_draft_definition,
+          pages: syncedPages,
+        });
       }
 
       setMessages((prev) =>

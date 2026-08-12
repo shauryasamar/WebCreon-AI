@@ -134,9 +134,27 @@ const GLOBAL_FOOTER_BLOCK_ID = "global-footer";
 
 const DEFAULT_LIGHT_THEME: Partial<ThemeValues> = {
   mode: "light",
+  festival_theme: "none",
   primary_bg: "#f8fafc",
+  secondary_bg: "#ffffff",
+  card_bg: "#ffffff",
+  card_shadow: "0 10px 28px rgba(15,23,42,0.055)",
+  card_border_color: "rgba(15,23,42,0.08)",
   text_color: "#111827",
+  muted_text_color: "rgba(15,23,42,0.65)",
   accent_color: "#2563eb",
+  navbar_bg: "#ffffff",
+  navbar_outer_bg: "#f8fafc",
+  navbar_text_color: "#111827",
+  navbar_muted_text_color: "rgba(15,23,42,0.65)",
+  navbar_border_color: "rgba(15,23,42,0.08)",
+  footer_bg: "#ffffff",
+  footer_text_color: "#111827",
+  footer_muted_color: "rgba(15,23,42,0.65)",
+  footer_border_color: "rgba(15,23,42,0.08)",
+  hero_bg: "#ffffff",
+  hero_text_color: "#111827",
+  hero_accent: "#2563eb",
   navbar_variant: "soft",
   navbar_position: "fixed",
   navbar_height: 72,
@@ -148,9 +166,27 @@ const DEFAULT_LIGHT_THEME: Partial<ThemeValues> = {
 
 const DEFAULT_DARK_THEME: Partial<ThemeValues> = {
   mode: "dark",
+  festival_theme: "none",
   primary_bg: "#0f172a",
+  secondary_bg: "#1e293b",
+  card_bg: "#1e293b",
+  card_shadow: "0 12px 28px rgba(0,0,0,0.3)",
+  card_border_color: "rgba(255,255,255,0.12)",
   text_color: "#f9fafb",
+  muted_text_color: "rgba(248,250,252,0.65)",
   accent_color: "#60a5fa",
+  navbar_bg: "#0f172a",
+  navbar_outer_bg: "#0f172a",
+  navbar_text_color: "#f9fafb",
+  navbar_muted_text_color: "rgba(248,250,252,0.65)",
+  navbar_border_color: "rgba(255,255,255,0.12)",
+  footer_bg: "#0f172a",
+  footer_text_color: "#f9fafb",
+  footer_muted_color: "rgba(248,250,252,0.65)",
+  footer_border_color: "rgba(255,255,255,0.12)",
+  hero_bg: "#1e293b",
+  hero_text_color: "#f9fafb",
+  hero_accent: "#60a5fa",
   navbar_variant: "soft",
   navbar_position: "fixed",
   navbar_height: 72,
@@ -246,9 +282,17 @@ function getFestivalThemeOverrides(
     case "diwali":
       return {
         ...FESTIVAL_THEME_PRESETS.diwali,
+        festival_theme: "diwali",
         primary_bg: isDark ? "#1f172a" : "#fff7ed",
+        secondary_bg: isDark ? "#2a1f3d" : "#ffffff",
+        card_bg: isDark ? "#2a1f3d" : "#ffffff",
         text_color: isDark ? "#fff7ed" : "#3b1d12",
+        muted_text_color: isDark
+          ? "rgba(255,247,237,0.74)"
+          : "rgba(59,29,18,0.68)",
+        accent_color: isDark ? "#fbbf24" : "#f59e0b",
         navbar_bg: isDark ? "#2a1f3d" : "#ffffff",
+        navbar_outer_bg: isDark ? "#1f172a" : "#fff7ed",
         navbar_text_color: isDark ? "#fff7ed" : "#3b1d12",
         navbar_muted_text_color: isDark
           ? "rgba(255,247,237,0.74)"
@@ -256,14 +300,30 @@ function getFestivalThemeOverrides(
         navbar_border_color: isDark
           ? "rgba(245,158,11,0.24)"
           : "rgba(245,158,11,0.18)",
+        footer_bg: isDark ? "#1f172a" : "#fff7ed",
+        footer_text_color: isDark ? "#fff7ed" : "#3b1d12",
+        footer_border_color: isDark
+          ? "rgba(245,158,11,0.24)"
+          : "rgba(245,158,11,0.18)",
+        hero_bg: isDark ? "#2a1f3d" : "#fff7ed",
+        hero_text_color: isDark ? "#fff7ed" : "#3b1d12",
+        hero_accent: isDark ? "#fbbf24" : "#f59e0b",
       };
 
     case "christmas":
       return {
         ...FESTIVAL_THEME_PRESETS.christmas,
+        festival_theme: "christmas",
         primary_bg: isDark ? "#0f2e1f" : "#f0fdf4",
+        secondary_bg: isDark ? "#163524" : "#ffffff",
+        card_bg: isDark ? "#163524" : "#ffffff",
         text_color: isDark ? "#f0fdf4" : "#163a2b",
+        muted_text_color: isDark
+          ? "rgba(240,253,244,0.72)"
+          : "rgba(22,58,43,0.68)",
+        accent_color: isDark ? "#ef4444" : "#dc2626",
         navbar_bg: isDark ? "#163524" : "#ffffff",
+        navbar_outer_bg: isDark ? "#0f2e1f" : "#f0fdf4",
         navbar_text_color: isDark ? "#f0fdf4" : "#163a2b",
         navbar_muted_text_color: isDark
           ? "rgba(240,253,244,0.72)"
@@ -271,14 +331,30 @@ function getFestivalThemeOverrides(
         navbar_border_color: isDark
           ? "rgba(220,38,38,0.22)"
           : "rgba(220,38,38,0.18)",
+        footer_bg: isDark ? "#0f2e1f" : "#f0fdf4",
+        footer_text_color: isDark ? "#f0fdf4" : "#163a2b",
+        footer_border_color: isDark
+          ? "rgba(220,38,38,0.22)"
+          : "rgba(220,38,38,0.18)",
+        hero_bg: isDark ? "#163524" : "#f0fdf4",
+        hero_text_color: isDark ? "#f0fdf4" : "#163a2b",
+        hero_accent: isDark ? "#ef4444" : "#dc2626",
       };
 
     case "eid":
       return {
         ...FESTIVAL_THEME_PRESETS.eid,
+        festival_theme: "eid",
         primary_bg: isDark ? "#102a43" : "#f0fdfa",
+        secondary_bg: isDark ? "#173552" : "#ffffff",
+        card_bg: isDark ? "#173552" : "#ffffff",
         text_color: isDark ? "#f8fafc" : "#123040",
+        muted_text_color: isDark
+          ? "rgba(248,250,252,0.74)"
+          : "rgba(18,48,64,0.68)",
+        accent_color: isDark ? "#2dd4bf" : "#14b8a6",
         navbar_bg: isDark ? "#173552" : "#ffffff",
+        navbar_outer_bg: isDark ? "#102a43" : "#f0fdfa",
         navbar_text_color: isDark ? "#f8fafc" : "#123040",
         navbar_muted_text_color: isDark
           ? "rgba(248,250,252,0.74)"
@@ -286,14 +362,30 @@ function getFestivalThemeOverrides(
         navbar_border_color: isDark
           ? "rgba(20,184,166,0.22)"
           : "rgba(20,184,166,0.18)",
+        footer_bg: isDark ? "#102a43" : "#f0fdfa",
+        footer_text_color: isDark ? "#f8fafc" : "#123040",
+        footer_border_color: isDark
+          ? "rgba(20,184,166,0.22)"
+          : "rgba(20,184,166,0.18)",
+        hero_bg: isDark ? "#173552" : "#f0fdfa",
+        hero_text_color: isDark ? "#f8fafc" : "#123040",
+        hero_accent: isDark ? "#2dd4bf" : "#14b8a6",
       };
 
     case "holi":
       return {
         ...FESTIVAL_THEME_PRESETS.holi,
+        festival_theme: "holi",
         primary_bg: isDark ? "#1a1024" : "#fff1f2",
+        secondary_bg: isDark ? "#241235" : "#ffffff",
+        card_bg: isDark ? "#241235" : "#ffffff",
         text_color: isDark ? "#fdf4ff" : "#1f2937",
+        muted_text_color: isDark
+          ? "rgba(253,244,255,0.74)"
+          : "rgba(31,41,55,0.72)",
+        accent_color: isDark ? "#a855f7" : "#9333ea",
         navbar_bg: isDark ? "#241235" : "#ffffff",
+        navbar_outer_bg: isDark ? "#1a1024" : "#fff1f2",
         navbar_text_color: isDark ? "#fdf4ff" : "#1f2937",
         navbar_muted_text_color: isDark
           ? "rgba(253,244,255,0.74)"
@@ -301,12 +393,96 @@ function getFestivalThemeOverrides(
         navbar_border_color: isDark
           ? "rgba(147,51,234,0.24)"
           : "rgba(147,51,234,0.16)",
+        footer_bg: isDark ? "#1a1024" : "#fff1f2",
+        footer_text_color: isDark ? "#fdf4ff" : "#1f2937",
+        footer_border_color: isDark
+          ? "rgba(147,51,234,0.24)"
+          : "rgba(147,51,234,0.16)",
+        hero_bg: isDark ? "#241235" : "#fff1f2",
+        hero_text_color: isDark ? "#fdf4ff" : "#1f2937",
+        hero_accent: isDark ? "#a855f7" : "#9333ea",
       };
 
     case "none":
     default:
       return {};
   }
+}
+
+export function applyThemeToPages(pages: EditorPage[], targetTheme: any): EditorPage[] {
+  return (pages || []).map((page) => ({
+    ...page,
+    blocks: (page.blocks || []).map((block) => {
+      const btype = String(block.type || "").toLowerCase();
+      const isNav = btype === "navbar" || btype === "header";
+      const isFooter = btype === "footer";
+      const isHero = btype === "hero_banner" || btype === "hero" || btype === "banner";
+
+      const updatedProps = { ...(block.props || {}) };
+
+      // Delete all hardcoded block-level color overrides across ALL components
+      delete updatedProps.card_bg_color;
+      delete updatedProps.outer_bg_color;
+      delete updatedProps.background_color;
+      delete updatedProps.card_bg;
+      delete updatedProps.secondary_bg;
+      delete updatedProps.primary_bg;
+      delete updatedProps.title_color;
+      delete updatedProps.brand_color;
+      delete updatedProps.price_color;
+      delete updatedProps.original_price_color;
+      delete updatedProps.rating_star_color;
+      delete updatedProps.text_color;
+      delete updatedProps.accent_color;
+      delete updatedProps.panel_color;
+      delete updatedProps.input_color;
+      delete updatedProps.border_color;
+      delete updatedProps.soft_border_color;
+      delete updatedProps.navbar_bg;
+      delete updatedProps.navbar_outer_bg;
+      delete updatedProps.navbar_text_color;
+      delete updatedProps.navbar_border_color;
+      delete updatedProps.footer_bg;
+      delete updatedProps.footer_text_color;
+      delete updatedProps.footer_muted_color;
+      delete updatedProps.footer_border_color;
+      delete updatedProps.hero_bg;
+      delete updatedProps.hero_text_color;
+      delete updatedProps.hero_accent;
+
+      if (isNav) {
+        if (targetTheme.navbar_bg) updatedProps.navbar_bg = targetTheme.navbar_bg;
+        if (targetTheme.navbar_outer_bg) updatedProps.navbar_outer_bg = targetTheme.navbar_outer_bg;
+        if (targetTheme.navbar_text_color) updatedProps.navbar_text_color = targetTheme.navbar_text_color;
+      } else if (isFooter) {
+        if (targetTheme.footer_bg) updatedProps.footer_bg = targetTheme.footer_bg;
+        if (targetTheme.footer_text_color) updatedProps.footer_text_color = targetTheme.footer_text_color;
+      } else if (isHero) {
+        if (targetTheme.hero_bg) updatedProps.hero_bg = targetTheme.hero_bg;
+        if (targetTheme.hero_text_color) updatedProps.hero_text_color = targetTheme.hero_text_color;
+        if (targetTheme.hero_accent) updatedProps.accent_color = targetTheme.hero_accent;
+
+        if (Array.isArray(updatedProps.slides)) {
+          updatedProps.slides = updatedProps.slides.map((slide: any) => {
+            const nextSlide = { ...slide };
+            if (!nextSlide.background_image) {
+              delete nextSlide.background_color;
+              delete nextSlide.hero_bg;
+              delete nextSlide.hero_text_color;
+              delete nextSlide.text_color;
+              delete nextSlide.accent_color;
+            }
+            return nextSlide;
+          });
+        }
+      }
+
+      return {
+        ...block,
+        props: updatedProps,
+      };
+    }),
+  }));
 }
 
 const PRODUCT_DETAIL_BLOCK_TYPES = new Set([
@@ -974,12 +1150,16 @@ export function updateThemeValues(
   siteDefinition: EditorSiteDefinition,
   themePatch: Record<string, any>
 ): EditorSiteDefinition {
+  const updatedTheme = {
+    ...siteDefinition.theme,
+    ...themePatch,
+  };
+  const nextPages = applyThemeToPages(siteDefinition.pages || [], updatedTheme);
+
   return {
     ...siteDefinition,
-    theme: {
-      ...siteDefinition.theme,
-      ...themePatch,
-    },
+    theme: updatedTheme,
+    pages: nextPages,
   };
 }
 
@@ -987,36 +1167,20 @@ export function applyThemeMode(
   siteDefinition: EditorSiteDefinition,
   mode: ThemeMode
 ): EditorSiteDefinition {
-  const base = mode === "light" ? DEFAULT_LIGHT_THEME : DEFAULT_DARK_THEME;
-  const currentFestival = siteDefinition.theme?.festival_theme;
+  const baseDefaults = mode === "light" ? DEFAULT_LIGHT_THEME : DEFAULT_DARK_THEME;
 
-  let updatedTheme: any = {
-    ...siteDefinition.theme,
-    ...base,
+  const updatedTheme: any = {
+    ...baseDefaults,
     mode,
-    navbar_bg: undefined,
-    navbar_text_color: undefined,
-    navbar_muted_text_color: undefined,
-    navbar_border_color: undefined,
-    footer_bg: undefined,
-    footer_text_color: undefined,
-    footer_muted_color: undefined,
-    footer_border_color: undefined,
-    secondary_bg: undefined,
+    festival_theme: "none",
   };
 
-  if (currentFestival && currentFestival !== "none") {
-    const festivalOverrides = getFestivalThemeOverrides(currentFestival as FestivalThemeKey, mode);
-    updatedTheme = {
-      ...updatedTheme,
-      ...festivalOverrides,
-      festival_theme: currentFestival,
-    };
-  }
+  const nextPages = applyThemeToPages(siteDefinition.pages || [], updatedTheme);
 
   return {
     ...siteDefinition,
     theme: updatedTheme,
+    pages: nextPages,
   };
 }
 
@@ -1024,78 +1188,18 @@ export function applyFestivalTheme(
   siteDefinition: EditorSiteDefinition,
   preset: FestivalThemeKey
 ): EditorSiteDefinition {
-  if (preset === "none") {
-    return {
-      ...siteDefinition,
-      theme: {
-        ...siteDefinition.theme,
-        festival_theme: undefined,
-        brand_tone: undefined,
-        visual_style: undefined,
-        accent_color: undefined,
-        primary_bg: undefined,
-        text_color: undefined,
-        navbar_bg: undefined,
-        navbar_text_color: undefined,
-        navbar_muted_text_color: undefined,
-        navbar_border_color: undefined,
-      },
-    };
-  }
-
-  const mode: ThemeMode =
-    siteDefinition.theme.mode === "dark" ? "dark" : "light";
-
+  const mode: ThemeMode = siteDefinition.theme?.mode === "dark" ? "dark" : "light";
+  const baseDefaults = mode === "light" ? DEFAULT_LIGHT_THEME : DEFAULT_DARK_THEME;
   const festivalOverrides = getFestivalThemeOverrides(preset, mode);
-  const updatedTheme = {
-    ...siteDefinition.theme,
+
+  const updatedTheme: any = {
+    ...baseDefaults,
     ...festivalOverrides,
+    mode,
     festival_theme: preset,
   };
 
-  const heroBg = festivalOverrides.hero_bg || festivalOverrides.secondary_bg || festivalOverrides.primary_bg;
-  const heroText = festivalOverrides.hero_text_color || festivalOverrides.text_color;
-  const accentCol = festivalOverrides.accent_color;
-
-  const nextPages = (siteDefinition.pages || []).map((page) => ({
-    ...page,
-    blocks: (page.blocks || []).map((block) => {
-      const btype = String(block.type || "").toLowerCase();
-      const isHero = btype === "hero_banner" || btype === "hero" || btype === "banner";
-      const isNav = btype === "navbar" || btype === "header";
-      const isFooter = btype === "footer";
-
-      const existingProps = block.props || {};
-      let updatedProps = { ...existingProps };
-
-      if (isNav) {
-        delete updatedProps.navbar_bg;
-        delete updatedProps.navbar_text_color;
-        delete updatedProps.navbar_border_color;
-      }
-      if (isFooter) {
-        delete updatedProps.footer_bg;
-        delete updatedProps.footer_text_color;
-      }
-      if (isHero) {
-        delete updatedProps.hero_bg;
-        delete updatedProps.background_color;
-        if (Array.isArray(updatedProps.slides)) {
-          updatedProps.slides = updatedProps.slides.map((slide: any) => ({
-            ...slide,
-            ...(heroBg ? { hero_bg: heroBg, background_color: heroBg } : {}),
-            ...(heroText ? { hero_text_color: heroText, text_color: heroText } : {}),
-            ...(accentCol ? { accent_color: accentCol } : {}),
-          }));
-        }
-      }
-
-      return {
-        ...block,
-        props: updatedProps,
-      };
-    }),
-  }));
+  const nextPages = applyThemeToPages(siteDefinition.pages || [], updatedTheme);
 
   return {
     ...siteDefinition,
@@ -1137,44 +1241,6 @@ export function saveThemeSnapshot(
 ): EditorSiteDefinition {
   const baseTheme = { ...(siteDefinition.theme || {}) };
 
-  // Scan all current page blocks for manual color overrides across ALL components
-  const extractedBlockOverrides: Record<string, any> = {};
-  (siteDefinition.pages || []).forEach((page) => {
-    (page.blocks || []).forEach((block) => {
-      const btype = String(block.type || "").toLowerCase();
-      const props = block.props || {};
-
-      if (btype === "navbar" || btype === "header") {
-        if (props.navbar_bg) extractedBlockOverrides.navbar_bg = props.navbar_bg;
-        if (props.navbar_outer_bg) extractedBlockOverrides.navbar_outer_bg = props.navbar_outer_bg;
-        if (props.navbar_text_color) extractedBlockOverrides.navbar_text_color = props.navbar_text_color;
-        if (props.navbar_border_color) extractedBlockOverrides.navbar_border_color = props.navbar_border_color;
-        if (props.background_color) extractedBlockOverrides.navbar_bg = props.background_color;
-      } else if (btype === "footer") {
-        if (props.footer_bg) extractedBlockOverrides.footer_bg = props.footer_bg;
-        if (props.footer_text_color) extractedBlockOverrides.footer_text_color = props.footer_text_color;
-        if (props.background_color) extractedBlockOverrides.footer_bg = props.background_color;
-      } else if (btype === "hero_banner" || btype === "hero" || btype === "banner" || btype === "promo_banner") {
-        if (props.hero_bg) extractedBlockOverrides.hero_bg = props.hero_bg;
-        if (props.background_color) extractedBlockOverrides.hero_bg = props.background_color;
-        if (props.hero_text_color) extractedBlockOverrides.hero_text_color = props.hero_text_color;
-        if (props.text_color) extractedBlockOverrides.hero_text_color = props.text_color;
-        if (props.accent_color) extractedBlockOverrides.hero_accent = props.accent_color;
-      } else {
-        if (props.card_bg) extractedBlockOverrides.card_bg = props.card_bg;
-        if (props.background_color && !extractedBlockOverrides.secondary_bg) {
-          extractedBlockOverrides.secondary_bg = props.background_color;
-        }
-        if (props.text_color && !extractedBlockOverrides.text_color) {
-          extractedBlockOverrides.text_color = props.text_color;
-        }
-        if (props.accent_color && !extractedBlockOverrides.accent_color) {
-          extractedBlockOverrides.accent_color = props.accent_color;
-        }
-      }
-    });
-  });
-
   const cleanBaseTheme: Record<string, any> = {};
   Object.keys(baseTheme).forEach((k) => {
     if (baseTheme[k] !== undefined && baseTheme[k] !== null) {
@@ -1182,11 +1248,31 @@ export function saveThemeSnapshot(
     }
   });
 
-  const cleanExtracted: Record<string, any> = {};
-  Object.keys(extractedBlockOverrides).forEach((k) => {
-    if (extractedBlockOverrides[k] !== undefined && extractedBlockOverrides[k] !== null) {
-      cleanExtracted[k] = extractedBlockOverrides[k];
-    }
+  // Capture hero block overrides into theme object for snapshot
+  let heroBlockBg: string | undefined;
+  let heroBlockText: string | undefined;
+  let heroBlockAccent: string | undefined;
+
+  (siteDefinition.pages || []).forEach((page) => {
+    (page.blocks || []).forEach((block) => {
+      const btype = String(block.type || "").toLowerCase();
+      if (btype === "hero_banner" || btype === "hero" || btype === "banner") {
+        const props = block.props || {};
+        const activeSlide = Array.isArray(props.slides) ? props.slides[0] : null;
+        if (props.hero_bg) heroBlockBg = props.hero_bg;
+        else if (props.background_color) heroBlockBg = props.background_color;
+        else if (activeSlide?.background_color) heroBlockBg = activeSlide.background_color;
+        else if (activeSlide?.hero_bg) heroBlockBg = activeSlide.hero_bg;
+
+        if (props.hero_text_color) heroBlockText = props.hero_text_color;
+        else if (props.text_color) heroBlockText = props.text_color;
+        else if (activeSlide?.hero_text_color) heroBlockText = activeSlide.hero_text_color;
+        else if (activeSlide?.text_color) heroBlockText = activeSlide.text_color;
+
+        if (props.accent_color) heroBlockAccent = props.accent_color;
+        else if (activeSlide?.accent_color) heroBlockAccent = activeSlide.accent_color;
+      }
+    });
   });
 
   const customPatch = customThemeProps ? (customThemeProps.patch || customThemeProps.theme || customThemeProps) : {};
@@ -1201,7 +1287,9 @@ export function saveThemeSnapshot(
 
   const themeToSave = {
     ...cleanBaseTheme,
-    ...cleanExtracted,
+    ...(heroBlockBg ? { hero_bg: heroBlockBg } : {}),
+    ...(heroBlockText ? { hero_text_color: heroBlockText } : {}),
+    ...(heroBlockAccent ? { hero_accent: heroBlockAccent } : {}),
     ...cleanCustomPatch,
   };
 
@@ -1225,6 +1313,10 @@ export function saveThemeSnapshot(
 
   return {
     ...siteDefinition,
+    theme: {
+      ...siteDefinition.theme,
+      ...themeToSave,
+    },
     saved_themes: updatedList,
   } as any;
 }
@@ -1238,73 +1330,8 @@ export function applyThemeSnapshot(
   if (!found || !found.theme) return siteDefinition;
 
   const patchProps = found.theme;
-
-  const primaryBg = patchProps.primary_bg || patchProps.background_color || "#ffffff";
-  const textColor = patchProps.text_color || "#0f172a";
-  const accentColor = patchProps.accent_color || patchProps.hero_accent || "#2563eb";
-
-  const targetNavBg = patchProps.navbar_bg || primaryBg;
-  const targetNavOuterBg = patchProps.navbar_outer_bg || targetNavBg;
-  const targetNavText = patchProps.navbar_text_color || textColor;
-
-  const targetFooterBg = patchProps.footer_bg || primaryBg;
-  const targetFooterText = patchProps.footer_text_color || textColor;
-
-  const targetHeroBg = patchProps.hero_bg || patchProps.secondary_bg || primaryBg;
-  const targetHeroText = patchProps.hero_text_color || textColor;
-
-  const nextPages = (siteDefinition.pages || []).map((page) => ({
-    ...page,
-    blocks: (page.blocks || []).map((block) => {
-      const btype = String(block.type || "").toLowerCase();
-      const isNav = btype === "navbar" || btype === "header";
-      const isFooter = btype === "footer";
-      const isHero = btype === "hero_banner" || btype === "hero" || btype === "banner";
-
-      const updatedProps = { ...(block.props || {}) };
-
-      if (isNav) {
-        updatedProps.navbar_bg = targetNavBg;
-        updatedProps.navbar_outer_bg = targetNavOuterBg;
-        updatedProps.background_color = targetNavBg;
-        updatedProps.navbar_text_color = targetNavText;
-        updatedProps.text_color = targetNavText;
-        delete updatedProps.navbar_border_color;
-      } else if (isFooter) {
-        updatedProps.footer_bg = targetFooterBg;
-        updatedProps.background_color = targetFooterBg;
-        updatedProps.footer_text_color = targetFooterText;
-        updatedProps.text_color = targetFooterText;
-      } else if (isHero) {
-        updatedProps.hero_bg = targetHeroBg;
-        updatedProps.background_color = targetHeroBg;
-        updatedProps.hero_text_color = targetHeroText;
-        updatedProps.text_color = targetHeroText;
-        updatedProps.accent_color = accentColor;
-
-        if (Array.isArray(updatedProps.slides)) {
-          updatedProps.slides = updatedProps.slides.map((slide: any) => ({
-            ...slide,
-            background_color: slide.background_image ? (slide.background_color || targetHeroBg) : targetHeroBg,
-            hero_bg: targetHeroBg,
-            hero_text_color: targetHeroText,
-            text_color: targetHeroText,
-            accent_color: accentColor,
-          }));
-        }
-      } else {
-        if (updatedProps.card_bg) updatedProps.card_bg = primaryBg;
-        if (updatedProps.background_color) updatedProps.background_color = primaryBg;
-        if (updatedProps.text_color) updatedProps.text_color = textColor;
-        if (updatedProps.accent_color) updatedProps.accent_color = accentColor;
-      }
-
-      return {
-        ...block,
-        props: updatedProps,
-      };
-    }),
-  }));
+  const mode: ThemeMode = patchProps.mode === "dark" ? "dark" : "light";
+  const baseDefaults = mode === "light" ? DEFAULT_LIGHT_THEME : DEFAULT_DARK_THEME;
 
   const cleanPatchProps: Record<string, any> = {};
   Object.keys(patchProps).forEach((k) => {
@@ -1313,25 +1340,18 @@ export function applyThemeSnapshot(
     }
   });
 
-  cleanPatchProps.navbar_bg = targetNavBg;
-  cleanPatchProps.navbar_outer_bg = targetNavOuterBg;
-  cleanPatchProps.navbar_text_color = targetNavText;
-  cleanPatchProps.footer_bg = targetFooterBg;
-  cleanPatchProps.footer_text_color = targetFooterText;
-  cleanPatchProps.hero_bg = targetHeroBg;
-  cleanPatchProps.hero_text_color = targetHeroText;
-  cleanPatchProps.hero_accent = accentColor;
-  cleanPatchProps.primary_bg = primaryBg;
-  cleanPatchProps.text_color = textColor;
-  cleanPatchProps.accent_color = accentColor;
+  const updatedTheme: any = {
+    ...baseDefaults,
+    ...cleanPatchProps,
+    mode,
+  };
+
+  const nextPages = applyThemeToPages(siteDefinition.pages || [], updatedTheme);
 
   return {
     ...siteDefinition,
     saved_themes: currentSaved,
-    theme: {
-      ...siteDefinition.theme,
-      ...cleanPatchProps,
-    },
+    theme: updatedTheme,
     pages: nextPages,
   };
 }
