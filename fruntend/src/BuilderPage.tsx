@@ -26,6 +26,7 @@ import BuilderTopControlBar from "./Component/BuilderTopControlBar";
 import BuilderControlPanel from "./Component/BuilderControlPanel";
 import QrLinkPopup from "./Component/QrLinkPopup";
 import BuilderDrawerPanel, { AdminNavKey } from "./Component/BuilderDrawerPanel";
+import { useAdminAuth } from "./context/AdminAuthContext";
 
 
 type Block = {
@@ -564,6 +565,7 @@ function BuilderPageContent() {
   const navigate = useNavigate();
   const location = useLocation();
   const { products } = useCart();
+  const { admin: authAdmin, logoutAdmin: authLogoutAdmin } = useAdminAuth();
 
   const [resolvedSiteId, setResolvedSiteId] = useState("");
   const [siteDefinition, setSiteDefinition] = useState<SiteDefinition | null>(
@@ -1109,9 +1111,12 @@ function BuilderPageContent() {
     <BuilderTopControlBar
       siteName={siteName}
       onGoDashboard={() => navigate("/admin/sites")}
-      onLogout={handleLogout}
-      userName={undefined}
-      userEmail={undefined}
+      onLogout={async () => {
+        await authLogoutAdmin();
+        navigate("/admin/login", { replace: true });
+      }}
+      userName={authAdmin?.name}
+      userEmail={authAdmin?.email}
       avatarUrl={undefined}
     />
   ) : null;

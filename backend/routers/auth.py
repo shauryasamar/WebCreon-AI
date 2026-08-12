@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
@@ -33,6 +35,7 @@ CUSTOMER_COOKIE_NAME = "customer_token"
 class AdminSignupRequest(BaseModel):
     email: EmailStr
     password: str
+    name: Optional[str] = None
 
 
 class AdminLoginRequest(BaseModel):
@@ -86,6 +89,19 @@ def validate_name_or_400(name: str):
         raise HTTPException(status_code=400, detail="Name is required")
 
 
+def serialize_admin(admin: Admin) -> dict:
+    name = getattr(admin, "name", None)
+    if not name and admin.email:
+        prefix = admin.email.split("@")[0]
+        parts = [p.capitalize() for p in prefix.replace(".", " ").replace("_", " ").split()]
+        name = " ".join(parts) if parts else "Admin"
+    return {
+        "id": str(admin.id),
+        "email": admin.email,
+        "name": name or "Admin",
+    }
+
+
 def serialize_customer(user: User, site: Site) -> dict:
     return {
         "id": str(user.id),
@@ -115,6 +131,7 @@ def admin_signup(
 
     admin = Admin(
         email=payload.email,
+        name=payload.name.strip() if payload.name and payload.name.strip() else None,
         password_hash=hash_password(payload.password),
     )
     session.add(admin)
@@ -125,10 +142,7 @@ def admin_signup(
 
     response = JSONResponse(
         content={
-            "admin": {
-                "id": str(admin.id),
-                "email": admin.email,
-            }
+            "admin": serialize_admin(admin)
         }
     )
     set_auth_cookie(response, ADMIN_COOKIE_NAME, token)
@@ -161,10 +175,7 @@ def admin_login(
 
     response = JSONResponse(
         content={
-            "admin": {
-                "id": str(admin.id),
-                "email": admin.email,
-            },
+            "admin": serialize_admin(admin),
             "sites": [
                 {
                     "id": str(site.id),
@@ -177,6 +188,23 @@ def admin_login(
     )
     set_auth_cookie(response, ADMIN_COOKIE_NAME, token)
     return response
+
+
+@router.get("/admin/me")
+def get_admin_me(
+    admin=Depends(authenticate_admin),
+    session: Session = Depends(get_session),
+):
+    admin_id = admin["adminId"]
+    admin_obj = session.get(Admin, admin_id)
+    if not admin_obj:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Admin not found",
+        )
+    return {
+        "admin": serialize_admin(admin_obj)
+    }
 
 
 @router.get("/admin/sites")

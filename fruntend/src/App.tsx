@@ -14,6 +14,7 @@ import AdminSignupPage from "./pages/AdminSignupPage";
 import CustomerLoginPage from "./pages/CustomerLoginPage";
 import CustomerSignupPage from "./pages/CustomerSignupPage";
 import { CustomerAuthProvider } from "./context/CustomerAuthContext";
+import { AdminAuthProvider, useAdminAuth } from "./context/AdminAuthContext";
 import { CartProvider } from "./CartContext";
 import { API_BASE_URL } from "./config/api";
 import BuilderShell from "./Component/BuilderShell";
@@ -152,6 +153,7 @@ function RequireAdminAuth() {
 
 function AdminSitesPage() {
   const navigate = useNavigate();
+  const { admin, logoutAdmin } = useAdminAuth();
 
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
@@ -228,10 +230,7 @@ function AdminSitesPage() {
 
   const handleLogout = async () => {
     try {
-      await fetch(`${API_BASE_URL}/auth/admin/logout`, {
-        method: "POST",
-        credentials: "include",
-      });
+      await logoutAdmin();
     } catch (error) {
       console.error("Error logging out:", error);
     } finally {
@@ -489,6 +488,8 @@ function AdminSitesPage() {
       siteName=""
       onGoDashboard={() => navigate("/admin/sites")}
       onLogout={handleLogout}
+      userName={admin?.name}
+      userEmail={admin?.email}
     />
   );
 
@@ -969,13 +970,15 @@ function AppRoutes() {
 
 function App() {
   return (
-    <CustomerAuthProvider>
-      <CartProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
-      </CartProvider>
-    </CustomerAuthProvider>
+    <AdminAuthProvider>
+      <CustomerAuthProvider>
+        <CartProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </CartProvider>
+      </CustomerAuthProvider>
+    </AdminAuthProvider>
   );
 }
 

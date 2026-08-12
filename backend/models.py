@@ -19,6 +19,7 @@ class Admin(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     email: str = Field(index=True, unique=True)
+    name: Optional[str] = Field(default=None)
     password_hash: str
     created_at: datetime = Field(
         default_factory=utc_now,
