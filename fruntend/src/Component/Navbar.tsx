@@ -412,6 +412,17 @@ const Navbar: React.FC<NavbarProps> = (props) => {
       : "1px solid rgba(255,255,255,0.08)";
   const iconButtonBg = softSurface;
 
+  const effectiveShellBg = shellBg && shellBg !== "transparent" ? shellBg : (outerBackground && outerBackground !== "transparent" ? outerBackground : (light ? "#ffffff" : "#0f172a"));
+  const isSearchBgDark = isColorDarkHex(effectiveShellBg);
+
+  const searchPillBg = isSearchBgDark
+    ? "rgba(255, 255, 255, 0.12)"
+    : "rgba(15, 23, 42, 0.06)";
+  const searchPillBorder = isSearchBgDark
+    ? "1px solid rgba(255, 255, 255, 0.18)"
+    : "1px solid rgba(15, 23, 42, 0.12)";
+  const searchTextColor = isSearchBgDark ? "#ffffff" : "#0f172a";
+
 
   const resolvedWrapperPadding =
     navbarPaddingY !== undefined || navbarPaddingX !== undefined
@@ -1031,12 +1042,12 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     gap: "8px",
                     padding: "4px 8px 4px 14px",
                     borderRadius: "999px",
-                    background: light ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.08)",
-                    border: softBorder,
+                    background: searchPillBg,
+                    border: searchPillBorder,
                     boxSizing: "border-box",
                   }}
                 >
-                  <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: textColor, strokeWidth: 2, fill: "none", flexShrink: 0 }}>
+                  <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: searchTextColor, strokeWidth: 2, fill: "none", flexShrink: 0 }}>
                     <circle cx="11" cy="11" r="7" />
                     <path d="M20 20L16.65 16.65" />
                   </svg>
@@ -1051,7 +1062,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                       border: "none",
                       outline: "none",
                       background: "transparent",
-                      color: textColor,
+                      color: searchTextColor,
                       fontSize: "13px",
                       fontWeight: 500,
                       minWidth: 0,
@@ -1066,8 +1077,8 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                       height: "32px",
                       borderRadius: "999px",
                       border: "none",
-                      background: light ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.12)",
-                      color: textColor,
+                      background: isSearchBgDark ? "rgba(255,255,255,0.18)" : "rgba(15,23,42,0.08)",
+                      color: searchTextColor,
                       display: "grid",
                       placeItems: "center",
                       cursor: "pointer",
@@ -1150,9 +1161,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                           gap: "8px",
                           padding: "4px 4px 4px 16px",
                           borderRadius: "999px",
-                          background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)",
+                          background: searchPillBg,
                           backdropFilter: "blur(10px)",
-                          border: light ? "1px solid rgba(255,255,255,0.7)" : "1px solid rgba(255,255,255,0.15)",
+                          border: searchPillBorder,
                         }}
                       >
                         <input
@@ -1160,7 +1171,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                           placeholder="Search products..."
                           value={searchQuery}
                           onChange={(e) => handleSearchInputChange(e.target.value)}
-                          style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", fontWeight: 500 }}
+                          style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontWeight: 500 }}
                         />
                         <button
                           type="submit"
@@ -1273,8 +1284,8 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                           display: "flex",
                           alignItems: "center",
                           borderRadius: "8px",
-                          border: softBorder,
-                          background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
+                          border: searchPillBorder,
+                          background: searchPillBg,
                           overflow: "hidden",
                         }}
                       >
@@ -1283,7 +1294,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                           placeholder="Search products..."
                           value={searchQuery}
                           onChange={(e) => handleSearchInputChange(e.target.value)}
-                          style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", padding: "8px 14px" }}
+                          style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", padding: "8px 14px" }}
                         />
                         <button
                           type="submit"
@@ -1401,8 +1412,8 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                           gap: "8px",
                           padding: "4px 4px 4px 16px",
                           borderRadius: "999px",
-                          background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
-                          border: softBorder,
+                          background: searchPillBg,
+                          border: searchPillBorder,
                         }}
                       >
                         <input
@@ -1410,11 +1421,11 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                           placeholder="Search products..."
                           value={searchQuery}
                           onChange={(e) => handleSearchInputChange(e.target.value)}
-                          style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", fontFamily: "serif" }}
+                          style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontFamily: "serif" }}
                         />
                         <button
                           type="submit"
-                          style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: "transparent", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                          style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: "transparent", color: searchTextColor, display: "grid", placeItems: "center", cursor: "pointer" }}
                         >
                           <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
                             <circle cx="11" cy="11" r="7" />
@@ -1548,7 +1559,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                           placeholder="Search products..."
                           value={searchQuery}
                           onChange={(e) => handleSearchInputChange(e.target.value)}
-                          style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: neoTextColor, fontSize: "13px", fontWeight: 500 }}
+                          style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontWeight: 500 }}
                         />
                         <button
                           type="submit"
@@ -1663,8 +1674,8 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         gap: "8px",
                         padding: "4px 4px 4px 16px",
                         borderRadius: "999px",
-                        background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
-                        border: softBorder,
+                        background: searchPillBg,
+                        border: searchPillBorder,
                       }}
                     >
                       <input
@@ -1672,11 +1683,11 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         placeholder="Search products..."
                         value={searchQuery}
                         onChange={(e) => handleSearchInputChange(e.target.value)}
-                        style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: textColor, fontSize: "13px", fontWeight: 500 }}
+                        style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontWeight: 500 }}
                       />
                       <button
                         type="submit"
-                        style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: light ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.15)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                        style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: isSearchBgDark ? "rgba(255,255,255,0.18)" : "rgba(15,23,42,0.08)", color: searchTextColor, display: "grid", placeItems: "center", cursor: "pointer" }}
                       >
                         <svg viewBox="0 0 24 24" style={{ width: "15px", height: "15px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
                           <circle cx="11" cy="11" r="7" />
