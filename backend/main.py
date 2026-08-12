@@ -413,8 +413,28 @@ def publish_site(
 
 
 @app.get("/auth/admin/me")
-def admin_me(admin=Depends(authenticate_admin)):
-    return admin
+def admin_me(
+    admin=Depends(authenticate_admin),
+    session: Session = Depends(get_session),
+):
+    admin_id = UUID(admin["adminId"])
+    admin_obj = session.get(Admin, admin_id)
+    if not admin_obj:
+        raise HTTPException(status_code=404, detail="Admin not found")
+
+    name = getattr(admin_obj, "name", None)
+    if not name and admin_obj.email:
+        prefix = admin_obj.email.split("@")[0]
+        parts = [p.capitalize() for p in prefix.replace(".", " ").replace("_", " ").split()]
+        name = " ".join(parts) if parts else "Admin"
+
+    return {
+        "admin": {
+            "id": str(admin_obj.id),
+            "email": admin_obj.email,
+            "name": name,
+        }
+    }
 
 
 @app.get("/auth/customer/me")

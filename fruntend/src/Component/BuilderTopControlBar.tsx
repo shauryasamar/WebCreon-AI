@@ -41,15 +41,14 @@ export default function BuilderTopControlBar({
   }, [displayName]);
 
   return (
-    <header
+    <div
       style={{
-        height: "56px",
+        height: "100%",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
         padding: "0 20px",
         background: "#ffffff",
-        borderBottom: "1px solid #f1f5f9",
       }}
     >
       <button
@@ -181,6 +180,6 @@ export default function BuilderTopControlBar({
           </svg>
         </button>
       </div>
-    </header>
+    </div>
   );
 }
