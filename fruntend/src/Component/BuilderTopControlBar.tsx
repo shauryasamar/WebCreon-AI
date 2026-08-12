@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import WebNirmaanAnimatedLogo from "./WebNirmaanAnimatedLogo";
 
 type BuilderTopControlBarProps = {
   siteName: string;
@@ -66,21 +67,18 @@ export default function BuilderTopControlBar({
       >
         <div
           style={{
-            width: "32px",
-            height: "32px",
-            borderRadius: "10px",
-            background: "linear-gradient(135deg, #2563eb, #7c3aed)",
+            width: "36px",
+            height: "36px",
             display: "grid",
             placeItems: "center",
+            flexShrink: 0,
           }}
         >
-          <span style={{ color: "#fff", fontWeight: 800, fontSize: "11px", letterSpacing: "0.04em" }}>
-            WN
-          </span>
+          <WebNirmaanAnimatedLogo staticMode showText={false} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span style={{ fontSize: "13px", fontWeight: 800, color: "#0f172a", letterSpacing: "0.04em" }}>
-            WEB NIRMAAN
+          <span style={{ fontSize: "14px", fontWeight: 900, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+            <span style={{ color: "#0f62ab" }}>WEB</span><span style={{ color: "#ffaa00" }}>NIRMAAN</span>
           </span>
           {siteName ? (
             <>
