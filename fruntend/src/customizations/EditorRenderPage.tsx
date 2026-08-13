@@ -773,6 +773,7 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
             collections={collections}
             productTypes={availableProductTypes}
             brands={availableBrands}
+            products={products}
             priceRange={{ min: 0, max: 100000 }}
             theme={theme}
             container={containerEl}

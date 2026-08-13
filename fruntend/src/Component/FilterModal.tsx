@@ -22,6 +22,7 @@ type FilterModalProps = {
   collections: CollectionOption[];
   productTypes: string[];
   brands: string[];
+  products?: any[];
   priceRange: { min: number; max: number };
   theme?: Record<string, any>;
   container?: HTMLElement | null;
@@ -29,6 +30,89 @@ type FilterModalProps = {
 };
 
 type Tab = "categories" | "price" | "collection" | "type" | "brand";
+
+function matchesCategory(p: any, categoryId: string | null, categories: CategoryOption[]): boolean {
+  if (!categoryId) return true;
+  const targetCatId = String(categoryId).toLowerCase().trim();
+  const matchedCat = categories.find(
+    (c) => String(c.id).toLowerCase().trim() === targetCatId || String(c.name).toLowerCase().trim() === targetCatId
+  );
+  const catIdToken = matchedCat ? String(matchedCat.id).toLowerCase().trim() : targetCatId;
+  const catNameToken = matchedCat ? String(matchedCat.name).toLowerCase().trim() : targetCatId;
+  const cleanName = catNameToken.trim();
+
+  const isWordMatch = (text: string, target: string) => {
+    if (!text || !target) return false;
+    const t = text.toLowerCase().trim();
+    const w = target.toLowerCase().trim();
+    if (t === w) return true;
+    const textWords = t.split(/[^a-z0-9]+/);
+    if (!w.includes(" ")) {
+      return textWords.includes(w);
+    }
+    const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`\\b${escaped}\\b`, "i").test(t);
+  };
+
+  const pCatId = p.category_id ? String(p.category_id).toLowerCase().trim() : "";
+  const pCatName = p.category_name ? String(p.category_name).toLowerCase().trim() : "";
+  const pCat = p.category ? String(p.category).toLowerCase().trim() : "";
+
+  if (pCatId && pCatId === catIdToken) return true;
+  if (pCatName && isWordMatch(pCatName, cleanName)) return true;
+  if (pCat && isWordMatch(pCat, cleanName)) return true;
+  return false;
+}
+
+function matchesCollections(p: any, selectedCollections: string[], collections: CollectionOption[]): boolean {
+  if (!selectedCollections || selectedCollections.length === 0) return true;
+  const selectedColTokens = new Set<string>();
+  selectedCollections.forEach((colKey) => {
+    const k = String(colKey).toLowerCase().trim();
+    selectedColTokens.add(k);
+    const matchCol = collections.find((c) => String(c.id).toLowerCase().trim() === k || String(c.name).toLowerCase().trim() === k);
+    if (matchCol) {
+      selectedColTokens.add(String(matchCol.id).toLowerCase().trim());
+      selectedColTokens.add(String(matchCol.name).toLowerCase().trim());
+      if (matchCol.slug) selectedColTokens.add(String(matchCol.slug).toLowerCase().trim());
+    }
+  });
+
+  if (p.collections && Array.isArray(p.collections)) {
+    const hasMatch = p.collections.some((col: any) => {
+      const colId = col.id ? String(col.id).toLowerCase().trim() : "";
+      const colName = col.name ? String(col.name).toLowerCase().trim() : "";
+      const colSlug = col.slug ? String(col.slug).toLowerCase().trim() : "";
+      return (
+        selectedColTokens.has(colId) ||
+        selectedColTokens.has(colName) ||
+        selectedColTokens.has(colSlug) ||
+        Array.from(selectedColTokens).some((t) => t && (colName.includes(t) || t.includes(colName)))
+      );
+    });
+    if (hasMatch) return true;
+  }
+  const pCat = p.category ? String(p.category).toLowerCase().trim() : "";
+  const pCatName = p.category_name ? String(p.category_name).toLowerCase().trim() : "";
+  const pName = p.name ? String(p.name).toLowerCase().trim() : "";
+  return Array.from(selectedColTokens).some(
+    (token) => token && (pCat === token || pCat.includes(token) || pCatName === token || pName.includes(token))
+  );
+}
+
+function matchesTypes(p: any, selectedTypes: string[]): boolean {
+  if (!selectedTypes || selectedTypes.length === 0) return true;
+  const types = selectedTypes.map((t) => String(t).toLowerCase().trim());
+  const pCat = p.category ? String(p.category).toLowerCase().trim() : "";
+  const pCatName = p.category_name ? String(p.category_name).toLowerCase().trim() : "";
+  const pName = p.name ? String(p.name).toLowerCase().trim() : "";
+  return types.some((st) => pCat === st || pCat.includes(st) || st.includes(pCat) || pCatName === st || pName.includes(st));
+}
+
+function matchesBrands(p: any, selectedBrands: string[]): boolean {
+  if (!selectedBrands || selectedBrands.length === 0) return true;
+  return p.brand && selectedBrands.includes(p.brand);
+}
 
 const FilterModal: React.FC<FilterModalProps> = ({
   open,
@@ -39,6 +123,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
   collections = [],
   productTypes = [],
   brands = [],
+  products = [],
   priceRange,
   theme,
   container,
@@ -54,7 +139,6 @@ const FilterModal: React.FC<FilterModalProps> = ({
 
   const isDark = theme?.mode !== "light";
   
-  // Theme-aware palette that adapts dynamically to Festive, Dark, Light, Emerald, Gold, etc.
   const rawBg = (theme as any)?.dialog_bg || (theme as any)?.surface_bg || theme?.primary_bg;
   const bg = rawBg || (isDark ? "#0f172a" : "#ffffff");
   const navBg = (theme as any)?.nav_bg || (theme as any)?.secondary_bg || (isDark ? "rgba(0, 0, 0, 0.28)" : "rgba(0, 0, 0, 0.03)");
@@ -116,6 +200,130 @@ const FilterModal: React.FC<FilterModalProps> = ({
     onClose();
   };
 
+  // Faceted option computations based on products
+  const categoryCounts = useCallback((catId: string) => {
+    if (!products || products.length === 0) return null;
+    return products.filter((p) =>
+      matchesCategory(p, catId, categories) &&
+      matchesCollections(p, draft.collections, collections) &&
+      matchesTypes(p, draft.productTypes) &&
+      matchesBrands(p, draft.brands)
+    ).length;
+  }, [products, draft.collections, draft.productTypes, draft.brands, categories, collections]);
+
+  const collectionCounts = useCallback((colId: string) => {
+    if (!products || products.length === 0) return null;
+    return products.filter((p) =>
+      matchesCategory(p, draft.categoryId, categories) &&
+      matchesCollections(p, [colId], collections) &&
+      matchesTypes(p, draft.productTypes) &&
+      matchesBrands(p, draft.brands)
+    ).length;
+  }, [products, draft.categoryId, draft.productTypes, draft.brands, categories, collections]);
+
+  const dynamicProductTypes = useCallback(() => {
+    if (!products || products.length === 0) {
+      return productTypes.map((pt) => ({ name: pt, count: null }));
+    }
+    const matchingProds = products.filter((p) =>
+      matchesCategory(p, draft.categoryId, categories) &&
+      matchesCollections(p, draft.collections, collections) &&
+      matchesBrands(p, draft.brands)
+    );
+
+    const typeCountMap = new Map<string, number>();
+    matchingProds.forEach((p) => {
+      const typeVal = (p.category || p.category_name || "").trim();
+      if (typeVal) {
+        typeCountMap.set(typeVal, (typeCountMap.get(typeVal) || 0) + 1);
+      }
+    });
+
+    const setTypes = new Set<string>();
+    const list: { name: string; count: number }[] = [];
+
+    typeCountMap.forEach((count, name) => {
+      setTypes.add(name.toLowerCase());
+      list.push({ name, count });
+    });
+
+    productTypes.forEach((pt) => {
+      if (!setTypes.has(pt.toLowerCase())) {
+        const count = matchingProds.filter((p) => matchesTypes(p, [pt])).length;
+        if (count > 0) {
+          setTypes.add(pt.toLowerCase());
+          list.push({ name: pt, count });
+        }
+      }
+    });
+
+    return list.sort((a, b) => a.name.localeCompare(b.name));
+  }, [products, draft.categoryId, draft.collections, draft.brands, productTypes, categories, collections]);
+
+  const dynamicBrands = useCallback(() => {
+    if (!products || products.length === 0) {
+      return brands.map((b) => ({ name: b, count: null }));
+    }
+    const matchingProds = products.filter((p) =>
+      matchesCategory(p, draft.categoryId, categories) &&
+      matchesCollections(p, draft.collections, collections) &&
+      matchesTypes(p, draft.productTypes)
+    );
+
+    const brandCountMap = new Map<string, number>();
+    matchingProds.forEach((p) => {
+      if (p.brand && String(p.brand).trim()) {
+        const bName = String(p.brand).trim();
+        brandCountMap.set(bName, (brandCountMap.get(bName) || 0) + 1);
+      }
+    });
+
+    const list: { name: string; count: number }[] = [];
+    brandCountMap.forEach((count, name) => {
+      list.push({ name, count });
+    });
+
+    return list.sort((a, b) => a.name.localeCompare(b.name));
+  }, [products, draft.categoryId, draft.collections, draft.productTypes, brands, categories, collections]);
+
+  const selectCategory = (catId: string | null) => {
+    setDraft((prev) => {
+      const nextCategory = catId;
+      if (!products || products.length === 0 || !nextCategory) {
+        return { ...prev, categoryId: nextCategory };
+      }
+      const validProds = products.filter((p) => matchesCategory(p, nextCategory, categories));
+      const validTypes = prev.productTypes.filter((pt) => validProds.some((p) => matchesTypes(p, [pt])));
+      const validBrands = prev.brands.filter((b) => validProds.some((p) => matchesBrands(p, [b])));
+      const validCols = prev.collections.filter((colId) => validProds.some((p) => matchesCollections(p, [colId], collections)));
+      return {
+        ...prev,
+        categoryId: nextCategory,
+        productTypes: validTypes,
+        brands: validBrands,
+        collections: validCols,
+      };
+    });
+  };
+
+  const toggleCollection = (colId: string) => {
+    setDraft((prev) => {
+      const nextCols = toggleArray(prev.collections, colId);
+      if (!products || products.length === 0 || nextCols.length === 0) {
+        return { ...prev, collections: nextCols };
+      }
+      const validProds = products.filter((p) => matchesCollections(p, nextCols, collections));
+      const validTypes = prev.productTypes.filter((pt) => validProds.some((p) => matchesTypes(p, [pt])));
+      const validBrands = prev.brands.filter((b) => validProds.some((p) => matchesBrands(p, [b])));
+      return {
+        ...prev,
+        collections: nextCols,
+        productTypes: validTypes,
+        brands: validBrands,
+      };
+    });
+  };
+
   if (!open) return null;
 
   const toggleArray = (arr: string[], val: string) =>
@@ -136,7 +344,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
               {/* All Option */}
               <div
-                onClick={() => setDraft((d) => ({ ...d, categoryId: null }))}
+                onClick={() => selectCategory(null)}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -170,7 +378,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
                 </div>
               </div>
 
-              {/* Dynamic Categories with productTypes fallback */}
+              {/* Dynamic Categories */}
               {(() => {
                 const displayCategories =
                   categories.length > 0
@@ -187,10 +395,11 @@ const FilterModal: React.FC<FilterModalProps> = ({
 
                 return displayCategories.map((cat) => {
                   const selected = draft.categoryId === cat.id || draft.categoryId === cat.name;
+                  const count = categoryCounts(cat.id);
                   return (
                     <div
                       key={cat.id}
-                      onClick={() => setDraft((d) => ({ ...d, categoryId: cat.id }))}
+                      onClick={() => selectCategory(cat.id)}
                       style={{
                         display: "flex",
                         alignItems: "center",
@@ -206,6 +415,11 @@ const FilterModal: React.FC<FilterModalProps> = ({
                     >
                       <span style={{ fontSize: "13px", fontWeight: selected ? 700 : 500, color: textPrimary }}>
                         {cat.name}
+                        {count !== null && (
+                          <span style={{ fontSize: "11px", color: textSecondary, marginLeft: "6px" }}>
+                            ({count})
+                          </span>
+                        )}
                       </span>
                       <div
                         style={{
@@ -300,10 +514,11 @@ const FilterModal: React.FC<FilterModalProps> = ({
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
               {collections.map((col) => {
                 const checked = draft.collections.includes(col.id) || draft.collections.includes(col.name);
+                const count = collectionCounts(col.id);
                 return (
                   <div
                     key={col.id}
-                    onClick={() => setDraft((d) => ({ ...d, collections: toggleArray(d.collections, col.id) }))}
+                    onClick={() => toggleCollection(col.id)}
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -318,6 +533,11 @@ const FilterModal: React.FC<FilterModalProps> = ({
                   >
                     <span style={{ fontSize: "13px", fontWeight: checked ? 700 : 500, color: textPrimary }}>
                       {col.name}
+                      {count !== null && (
+                        <span style={{ fontSize: "11px", color: textSecondary, marginLeft: "6px" }}>
+                          ({count})
+                        </span>
+                      )}
                     </span>
                     <input
                       type="checkbox"
@@ -347,41 +567,51 @@ const FilterModal: React.FC<FilterModalProps> = ({
               Select product types
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {productTypes.map((pt) => {
-                const checked = draft.productTypes.includes(pt);
-                return (
-                  <div
-                    key={pt}
-                    onClick={() => setDraft((d) => ({ ...d, productTypes: toggleArray(d.productTypes, pt) }))}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "10px 14px",
-                      borderRadius: "10px",
-                      border: `1px solid ${checked ? accentColor : borderColor}`,
-                      background: checked ? activeBg : cardBg,
-                      cursor: "pointer",
-                      transition: "all 140ms ease",
-                    }}
-                  >
-                    <span style={{ fontSize: "13px", fontWeight: checked ? 700 : 500, color: textPrimary }}>
-                      {pt}
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => {}}
-                      style={{ accentColor: accentColor, width: "15px", height: "15px" }}
-                    />
-                  </div>
-                );
-              })}
-              {productTypes.length === 0 && (
-                <div style={{ padding: "16px 0", fontSize: "12px", color: textSecondary, textAlign: "center" }}>
-                  No product types available.
-                </div>
-              )}
+              {(() => {
+                const typesList = dynamicProductTypes();
+                if (typesList.length === 0) {
+                  return (
+                    <div style={{ padding: "16px 0", fontSize: "12px", color: textSecondary, textAlign: "center" }}>
+                      No product types available for the selected category.
+                    </div>
+                  );
+                }
+                return typesList.map(({ name: pt, count }) => {
+                  const checked = draft.productTypes.includes(pt);
+                  return (
+                    <div
+                      key={pt}
+                      onClick={() => setDraft((d) => ({ ...d, productTypes: toggleArray(d.productTypes, pt) }))}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "10px 14px",
+                        borderRadius: "10px",
+                        border: `1px solid ${checked ? accentColor : borderColor}`,
+                        background: checked ? activeBg : cardBg,
+                        cursor: "pointer",
+                        transition: "all 140ms ease",
+                      }}
+                    >
+                      <span style={{ fontSize: "13px", fontWeight: checked ? 700 : 500, color: textPrimary }}>
+                        {pt}
+                        {count !== null && (
+                          <span style={{ fontSize: "11px", color: textSecondary, marginLeft: "6px" }}>
+                            ({count})
+                          </span>
+                        )}
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {}}
+                        style={{ accentColor: accentColor, width: "15px", height: "15px" }}
+                      />
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
         );
@@ -396,41 +626,51 @@ const FilterModal: React.FC<FilterModalProps> = ({
               Select brands
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {brands.map((b) => {
-                const checked = draft.brands.includes(b);
-                return (
-                  <div
-                    key={b}
-                    onClick={() => setDraft((d) => ({ ...d, brands: toggleArray(d.brands, b) }))}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "10px 14px",
-                      borderRadius: "10px",
-                      border: `1px solid ${checked ? accentColor : borderColor}`,
-                      background: checked ? activeBg : cardBg,
-                      cursor: "pointer",
-                      transition: "all 140ms ease",
-                    }}
-                  >
-                    <span style={{ fontSize: "13px", fontWeight: checked ? 700 : 500, color: textPrimary }}>
-                      {b}
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => {}}
-                      style={{ accentColor: accentColor, width: "15px", height: "15px" }}
-                    />
-                  </div>
-                );
-              })}
-              {brands.length === 0 && (
-                <div style={{ padding: "16px 0", fontSize: "12px", color: textSecondary, textAlign: "center" }}>
-                  No brands available.
-                </div>
-              )}
+              {(() => {
+                const brandsList = dynamicBrands();
+                if (brandsList.length === 0) {
+                  return (
+                    <div style={{ padding: "16px 0", fontSize: "12px", color: textSecondary, textAlign: "center" }}>
+                      No brands available for the selected category.
+                    </div>
+                  );
+                }
+                return brandsList.map(({ name: b, count }) => {
+                  const checked = draft.brands.includes(b);
+                  return (
+                    <div
+                      key={b}
+                      onClick={() => setDraft((d) => ({ ...d, brands: toggleArray(d.brands, b) }))}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "10px 14px",
+                        borderRadius: "10px",
+                        border: `1px solid ${checked ? accentColor : borderColor}`,
+                        background: checked ? activeBg : cardBg,
+                        cursor: "pointer",
+                        transition: "all 140ms ease",
+                      }}
+                    >
+                      <span style={{ fontSize: "13px", fontWeight: checked ? 700 : 500, color: textPrimary }}>
+                        {b}
+                        {count !== null && (
+                          <span style={{ fontSize: "11px", color: textSecondary, marginLeft: "6px" }}>
+                            ({count})
+                          </span>
+                        )}
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {}}
+                        style={{ accentColor: accentColor, width: "15px", height: "15px" }}
+                      />
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
         );

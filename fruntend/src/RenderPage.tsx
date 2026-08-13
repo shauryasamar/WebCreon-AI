@@ -775,6 +775,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
             collections={collections}
             productTypes={availableProductTypes}
             brands={availableBrands}
+            products={products}
             priceRange={{ min: 0, max: 100000 }}
             theme={theme}
             container={isInAdminSpace ? containerEl : undefined}
