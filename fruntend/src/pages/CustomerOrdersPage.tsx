@@ -192,10 +192,40 @@ type CustomerOrdersPageProps = {
   theme?: {
     mode?: string;
     primary_bg?: string;
+    secondary_bg?: string;
+    card_bg?: string;
     text_color?: string;
     accent_color?: string;
+    [key: string]: any;
   };
 };
+
+function isColorDarkHex(colorHex?: string): boolean {
+  if (!colorHex || typeof colorHex !== "string") return false;
+  if (colorHex.startsWith("rgb")) {
+    const match = colorHex.match(/\d+/g);
+    if (match && match.length >= 3) {
+      const r = parseInt(match[0], 10);
+      const g = parseInt(match[1], 10);
+      const b = parseInt(match[2], 10);
+      return (r * 0.299 + g * 0.587 + b * 0.114) < 160;
+    }
+  }
+  const hex = colorHex.replace("#", "").trim();
+  if (hex.length === 3) {
+    const r = parseInt(hex[0] + hex[0], 16);
+    const g = parseInt(hex[1] + hex[1], 16);
+    const b = parseInt(hex[2] + hex[2], 16);
+    return (r * 0.299 + g * 0.587 + b * 0.114) < 160;
+  }
+  if (hex.length >= 6) {
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    return (r * 0.299 + g * 0.587 + b * 0.114) < 160;
+  }
+  return false;
+}
 
 type TimelineStep = {
   key: string;

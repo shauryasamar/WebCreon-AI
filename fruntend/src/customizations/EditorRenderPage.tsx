@@ -19,9 +19,12 @@ type Theme = {
   name?: string;
   mode?: string;
   primary_bg?: string;
+  secondary_bg?: string;
+  card_bg?: string;
   text_color?: string;
   accent_color?: string;
   festival_theme?: string;
+  [key: string]: any;
 };
 
 type Page = {
