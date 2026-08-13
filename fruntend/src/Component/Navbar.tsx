@@ -160,7 +160,6 @@ const getNavbarPositionStyle = (
     return { position: "relative", zIndex: 20 };
   }
 
-
   if (position === "fixed") {
     if (fixedBounds) {
       return {
@@ -169,23 +168,21 @@ const getNavbarPositionStyle = (
         left: 0,
         right: 0,
         width: "100%",
-        zIndex: 240,
+        zIndex: 500,
       };
     }
-
 
     return {
       position: "fixed",
       top: `${topOffset}px`,
       left: 0,
-      width: "100vw",
+      width: "100%",
       right: "auto",
-      zIndex: 240,
+      zIndex: 500,
     };
   }
 
-
-  return { position: "sticky", top: `${topOffset}px`, zIndex: 40 };
+  return { position: "sticky", top: `${topOffset}px`, zIndex: 500 };
 };
 
 
@@ -272,7 +269,8 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
   const light = isLightTheme(theme);
   const variant = theme?.navbar_variant || "soft";
-  const position: NavbarPosition = theme?.navbar_position || "fixed";
+  const rawPosition = (props as any).navbar_position || (props as any).position || theme?.navbar_position;
+  const position: NavbarPosition = (rawPosition === "static" || rawPosition === "sticky" || rawPosition === "fixed") ? rawPosition : "fixed";
   const isBuilderAdminRoute =
     location.pathname.startsWith("/builder/") && location.pathname.includes("/admin");
   const isStoreRoute = location.pathname.startsWith("/store/");
@@ -490,6 +488,33 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     }
   }, [mobileSearchOpen]);
 
+  useEffect(() => {
+    if (!searchActive && !mobileSearchOpen) return;
+    const headerEl = document.getElementById("storefront-navbar");
+
+    const updatePosition = () => {
+      if (headerEl && window.visualViewport) {
+        headerEl.style.top = `${window.visualViewport.offsetTop}px`;
+      }
+    };
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", updatePosition);
+      window.visualViewport.addEventListener("scroll", updatePosition);
+      updatePosition();
+    }
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener("resize", updatePosition);
+        window.visualViewport.removeEventListener("scroll", updatePosition);
+      }
+      if (headerEl) {
+        headerEl.style.top = "";
+      }
+    };
+  }, [searchActive, mobileSearchOpen]);
+
 
   useEffect(() => {
     if (!accountMenuOpen && !mobileMenuOpen) return;
@@ -528,16 +553,6 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   }, [accountMenuOpen, mobileMenuOpen]);
 
 
-  useEffect(() => {
-    if (!mobileSearchOpen) return;
-    const onScroll = () => {
-      closeSearch();
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [mobileSearchOpen]);
-
-
   const closeAccountMenu = () => setAccountMenuOpen(false);
 
   const handleGoToProfile = () => {
@@ -570,9 +585,23 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     setMobileMenuOpen(false);
     setMobileSearchOpen(true);
     setSearchActive(true);
+    setTimeout(() => {
+      mobileSearchInputRef.current?.focus();
+    }, 50);
   };
 
   const closeSearch = () => {
+    setSearchQuery("");
+    if (onSearch) {
+      onSearch("");
+    }
+    const params = new URLSearchParams(location.search);
+    if (params.has("search")) {
+      params.delete("search");
+      const searchStr = params.toString();
+      const target = `${location.pathname}${searchStr ? `?${searchStr}` : ""}`;
+      navigate(target, { replace: true });
+    }
     setSearchActive(false);
     setMobileSearchOpen(false);
     setAccountMenuOpen(false);
@@ -806,31 +835,6 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
   const mobilePanelMenu = (
     <div ref={mobileMenuRef} style={mobileMenuPanelStyle}>
-      <button
-        type="button"
-        onClick={openMobileSearch}
-        style={{
-          width: "100%",
-          minHeight: "44px",
-          borderRadius: "14px",
-          border: softBorder,
-          background: iconButtonBg,
-          color: textColor,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: "10px",
-          cursor: "pointer",
-        }}
-      >
-        <svg viewBox="0 0 24 24" style={iconStyle}>
-          <circle cx="11" cy="11" r="7" />
-          <path d="M20 20L16.65 16.65" />
-        </svg>
-        <span style={{ fontSize: "14px", fontWeight: 600, letterSpacing: "-0.01em" }}>
-          Search
-        </span>
-      </button>
 
 
       <button
@@ -977,24 +981,17 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     </div>
   );
 
-
-  useEffect(() => {
-    if (!searchActive) return;
-    const onScroll = () => {
-      closeSearch();
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [searchActive]);
-
-
   return (
     <header
       id="storefront-navbar"
       className={`storefront-navbar storefront-navbar--${position}`}
       data-navbar-position={position}
       style={{
-        ...getNavbarPositionStyle(position, topOffset, fixedBounds),
+        ...(position === "fixed" || searchActive || mobileSearchOpen || Boolean(isMobile && searchQuery.trim())
+          ? { position: "fixed", top: 0, left: 0, right: 0, width: "100%", zIndex: 1000 }
+          : position === "sticky"
+          ? { position: "sticky", top: 0, left: 0, right: 0, width: "100%", zIndex: 1000 }
+          : getNavbarPositionStyle(position, topOffset, fixedBounds)),
         padding: resolvedWrapperPadding,
         background: outerBackground,
         borderBottom: variant === "floating" ? "none" : outerBorder,
@@ -1187,6 +1184,19 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
                     {/* Glass Action Icons */}
                     <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "10px" }}>
+                      {showSearch && isMobile && (
+                        <button
+                          type="button"
+                          aria-label="Open search"
+                          onClick={openMobileSearch}
+                          style={{ width: "38px", height: "38px", borderRadius: "999px", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                        >
+                          <svg viewBox="0 0 24 24" style={iconStyle}>
+                            <circle cx="11" cy="11" r="7" />
+                            <path d="M20 20L16.65 16.65" />
+                          </svg>
+                        </button>
+                      )}
                       {showCart && (
                         <button
                           type="button"
@@ -1310,6 +1320,19 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
                     {/* Action Buttons */}
                     <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "10px" }}>
+                      {showSearch && isMobile && (
+                        <button
+                          type="button"
+                          aria-label="Open search"
+                          onClick={openMobileSearch}
+                          style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                        >
+                          <svg viewBox="0 0 24 24" style={iconStyle}>
+                            <circle cx="11" cy="11" r="7" />
+                            <path d="M20 20L16.65 16.65" />
+                          </svg>
+                        </button>
+                      )}
                       {showCart && (
                         <button
                           type="button"
@@ -1437,6 +1460,19 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
                     {/* Luxury Minimal Icons */}
                     <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "8px" : "14px" }}>
+                      {showSearch && isMobile && (
+                        <button
+                          type="button"
+                          aria-label="Open search"
+                          onClick={openMobileSearch}
+                          style={{ background: "transparent", border: "none", color: textColor, cursor: "pointer", padding: "4px" }}
+                        >
+                          <svg viewBox="0 0 24 24" style={{ width: "19px", height: "19px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
+                            <circle cx="11" cy="11" r="7" />
+                            <path d="M20 20L16.65 16.65" />
+                          </svg>
+                        </button>
+                      )}
                       {showCart && (
                         <button
                           type="button"
@@ -1575,6 +1611,19 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
                     {/* Circular Neumorphic Action Controls */}
                     <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "12px" }}>
+                      {showSearch && isMobile && (
+                        <button
+                          type="button"
+                          aria-label="Open search"
+                          onClick={openMobileSearch}
+                          style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                        >
+                          <svg viewBox="0 0 24 24" style={iconStyle}>
+                            <circle cx="11" cy="11" r="7" />
+                            <path d="M20 20L16.65 16.65" />
+                          </svg>
+                        </button>
+                      )}
                       {showCart && (
                         <button
                           type="button"
@@ -1699,6 +1748,19 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
                   {/* Actions */}
                   <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "10px" }}>
+                    {showSearch && isMobile && (
+                      <button
+                        type="button"
+                        aria-label="Open search"
+                        onClick={openMobileSearch}
+                        style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                      >
+                        <svg viewBox="0 0 24 24" style={iconStyle}>
+                          <circle cx="11" cy="11" r="7" />
+                          <path d="M20 20L16.65 16.65" />
+                        </svg>
+                      </button>
+                    )}
                     {showCart && (
                       <button
                         type="button"

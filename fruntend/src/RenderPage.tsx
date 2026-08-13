@@ -673,7 +673,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
       return null;
     }
 
-    const blockId = block.id ?? `${page.id ?? "page"}-${block.type}-${index}`;
+    const blockId = block.id || block.type || `${page.id ?? "page"}-${block.type}-${index}`;
     const resolvedDataSource = block.data_source ?? block.datasource ?? undefined;
     const blockProps = (block.props ?? {}) as Record<string, any>;
     const resolvedTheme: Theme | undefined = theme;
