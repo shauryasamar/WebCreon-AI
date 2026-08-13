@@ -134,7 +134,15 @@ function isColorDarkHex(colorHex?: string): boolean {
   return false;
 }
 
-  const isLight = theme?.mode === "light";
+  const explicitLightMode = typeof theme?.mode === "string" && theme.mode.toLowerCase() === "light";
+  const explicitDarkMode = typeof theme?.mode === "string" && theme.mode.toLowerCase() === "dark";
+
+  const isLight = explicitLightMode || (!explicitDarkMode && (
+    (theme?.text_color && isColorDarkHex(theme.text_color)) || 
+    (theme?.primary_bg && !isColorDarkHex(theme.primary_bg)) || 
+    (theme?.card_bg && !isColorDarkHex(theme.card_bg)) || 
+    (!theme?.text_color && !theme?.primary_bg && !theme?.card_bg)
+  ));
   const accentColor = theme?.accent_color || "#2563eb";
   const resolvedPrimaryBg = theme?.primary_bg || (isLight ? "#f8fafc" : "#0f172a");
 

@@ -344,7 +344,15 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
     typeof window !== "undefined" ? window.innerWidth : 1280
   );
 
-  const isLight = theme?.mode === "light";
+  const explicitLightMode = typeof theme?.mode === "string" && theme.mode.toLowerCase() === "light";
+  const explicitDarkMode = typeof theme?.mode === "string" && theme.mode.toLowerCase() === "dark";
+
+  const isLight = explicitLightMode || (!explicitDarkMode && (
+    (theme?.text_color && isColorDarkHex(theme.text_color)) || 
+    (theme?.primary_bg && !isColorDarkHex(theme.primary_bg)) || 
+    (theme?.card_bg && !isColorDarkHex(theme.card_bg)) || 
+    (!theme?.text_color && !theme?.primary_bg && !theme?.card_bg)
+  ));
   const accentColor = theme?.accent_color || "#3b82f6";
   const resolvedPrimaryBg = theme?.primary_bg || (isLight ? "#f8fafc" : "#0f172a");
 
@@ -359,7 +367,8 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
     : `1px solid ${(theme as any)?.border_color || "rgba(255,255,255,0.14)"}`;
 
   const textPrimary = theme?.text_color || (isLight ? "#0f172a" : "#f8fafc");
-  const textMuted = (theme as any)?.muted_text_color || (isLight ? "rgba(15,23,42,0.65)" : "rgba(248,250,252,0.65)");
+  const isPrimaryDark = isColorDarkHex(textPrimary);
+  const textMuted = (theme as any)?.muted_text_color || (isPrimaryDark ? "rgba(15,23,42,0.65)" : "rgba(248,250,252,0.65)");
   const panelBg = cardBg;
   const innerBg = isLight ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.2)";
   const divider = cardBorder;

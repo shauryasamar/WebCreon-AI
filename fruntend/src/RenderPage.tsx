@@ -40,6 +40,33 @@ type Page = {
   page_type?: string;
 };
 
+function isColorDarkHex(colorHex?: string): boolean {
+  if (!colorHex || typeof colorHex !== "string") return false;
+  if (colorHex.startsWith("rgb")) {
+    const match = colorHex.match(/\d+/g);
+    if (match && match.length >= 3) {
+      const r = parseInt(match[0], 10);
+      const g = parseInt(match[1], 10);
+      const b = parseInt(match[2], 10);
+      return (r * 0.299 + g * 0.587 + b * 0.114) < 160;
+    }
+  }
+  const hex = colorHex.replace("#", "").trim();
+  if (hex.length === 3) {
+    const r = parseInt(hex[0] + hex[0], 16);
+    const g = parseInt(hex[1] + hex[1], 16);
+    const b = parseInt(hex[2] + hex[2], 16);
+    return (r * 0.299 + g * 0.587 + b * 0.114) < 160;
+  }
+  if (hex.length >= 6) {
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    return (r * 0.299 + g * 0.587 + b * 0.114) < 160;
+  }
+  return false;
+}
+
 type RenderPageProps = {
   page: Page | null | undefined;
   siteId: string;
@@ -771,14 +798,21 @@ const RenderPage: React.FC<RenderPageProps> = ({
     CHECKOUT_SUMMARY_TYPES.has(block.type.toLowerCase())
   );
 
-  const pageBg =
-    theme?.primary_bg || (theme?.mode === "light" ? "#f6f7fb" : "#0f172a");
-  const textColor =
-    theme?.text_color || (theme?.mode === "light" ? "#111827" : "#f9fafb");
-  const subtleText =
-    theme?.mode === "light" ? "#6b7280" : "rgba(255,255,255,0.68)";
+  const explicitLightMode = typeof theme?.mode === "string" && theme.mode.toLowerCase() === "light";
+  const explicitDarkMode = typeof theme?.mode === "string" && theme.mode.toLowerCase() === "dark";
+
+  const isLight = explicitLightMode || (!explicitDarkMode && (
+    (theme?.text_color && isColorDarkHex(theme.text_color)) || 
+    (theme?.primary_bg && !isColorDarkHex(theme.primary_bg)) || 
+    (theme?.card_bg && !isColorDarkHex(theme.card_bg)) || 
+    (!theme?.text_color && !theme?.primary_bg && !theme?.card_bg)
+  ));
+
+  const pageBg = theme?.primary_bg || (isLight ? "#f6f7fb" : "#0f172a");
+  const textColor = theme?.text_color || (isLight ? "#111827" : "#f9fafb");
+  const isTextColorDark = isColorDarkHex(textColor);
+  const subtleText = (theme as any)?.muted_text_color || (isTextColorDark ? "#6b7280" : "rgba(255,255,255,0.68)");
   const accentColor = theme?.accent_color || "#2f6df6";
-  const isLight = theme?.mode === "light";
 
   const shellBg = isLight ? "#ffffff" : "rgba(15,23,42,0.42)";
   const shellBorder = isLight

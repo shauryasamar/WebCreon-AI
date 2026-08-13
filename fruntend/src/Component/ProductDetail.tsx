@@ -75,6 +75,33 @@ type DeliveredOrder = {
   items?: DeliveredOrderItem[];
 };
 
+function isColorDarkHex(colorHex?: string): boolean {
+  if (!colorHex || typeof colorHex !== "string") return false;
+  if (colorHex.startsWith("rgb")) {
+    const match = colorHex.match(/\d+/g);
+    if (match && match.length >= 3) {
+      const r = parseInt(match[0], 10);
+      const g = parseInt(match[1], 10);
+      const b = parseInt(match[2], 10);
+      return (r * 0.299 + g * 0.587 + b * 0.114) < 160;
+    }
+  }
+  const hex = colorHex.replace("#", "").trim();
+  if (hex.length === 3) {
+    const r = parseInt(hex[0] + hex[0], 16);
+    const g = parseInt(hex[1] + hex[1], 16);
+    const b = parseInt(hex[2] + hex[2], 16);
+    return (r * 0.299 + g * 0.587 + b * 0.114) < 160;
+  }
+  if (hex.length >= 6) {
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    return (r * 0.299 + g * 0.587 + b * 0.114) < 160;
+  }
+  return false;
+}
+
 const MAX_GALLERY_IMAGES = 5;
 
 const ProductDetail: React.FC<ProductDetailProps> = ({
@@ -243,31 +270,20 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   }, [product?.id, siteId]);
 
   useEffect(() => {
-    const loadEligibleOrderItem = async () => {
-      if (!isAuthenticated || !product || !siteId) {
-        setEligibleOrderItem(null);
-        return;
-      }
+    if (!isAuthenticated || !product || !siteId) return;
 
+    const loadEligibleOrderItem = async () => {
       setCheckingEligibility(true);
       try {
-        const response = await fetch(`${API_BASE_URL}/orders/${siteId}/my-orders`, {
+        const res = await fetch(`${API_BASE_URL}/sites/${siteId}/orders/delivered`, {
           credentials: "include",
         });
-
-        if (!response.ok) {
-          setEligibleOrderItem(null);
-          return;
-        }
-
-        const data = await response.json();
-        const orders: DeliveredOrder[] = Array.isArray(data) ? data : [];
-
-        const matchedItem =
-          orders
-            .filter((order) => String(order?.status || "").toLowerCase() === "delivered")
-            .flatMap((order) => (Array.isArray(order.items) ? order.items : []))
-            .find((item) => String(item.product_id) === String(product.id)) ?? null;
+        if (!res.ok) throw new Error("Failed to fetch delivered orders");
+        const data = await res.json();
+        
+        const matchedItem = (data?.orders || [])
+          .flatMap((o: DeliveredOrder) => o.items || [])
+          .find((item: DeliveredOrderItem) => String(item.product_id) === String(product.id)) ?? null;
 
         setEligibleOrderItem(matchedItem);
       } catch (error) {
@@ -281,34 +297,27 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     loadEligibleOrderItem();
   }, [isAuthenticated, product, siteId]);
 
-  if (!product) {
-    return (
-      <section style={{ maxWidth: "1160px", margin: "0 auto", padding: "20px 16px 40px" }}>
-        <div
-          style={{
-            border: "1px solid rgba(15,23,42,0.08)",
-            borderRadius: "20px",
-            padding: "24px",
-            background: "#fff",
-            color: "#475569",
-          }}
-        >
-          Product not found.
-        </div>
-      </section>
-    );
-  }
-
   const isMobile = windowWidth < 768;
   const isTablet = windowWidth >= 768 && windowWidth < 1024;
 
-  const isLight = theme?.mode === "light";
+  const explicitLightMode = typeof theme?.mode === "string" && theme.mode.toLowerCase() === "light";
+  const explicitDarkMode = typeof theme?.mode === "string" && theme.mode.toLowerCase() === "dark";
+
+  const isLight = explicitLightMode || (!explicitDarkMode && (
+    (theme?.text_color && isColorDarkHex(theme.text_color)) || 
+    (theme?.primary_bg && !isColorDarkHex(theme.primary_bg)) || 
+    (theme?.card_bg && !isColorDarkHex(theme.card_bg)) || 
+    (!theme?.text_color && !theme?.primary_bg && !theme?.card_bg)
+  ));
+
   const accentColor = theme?.accent_color || "#2563eb";
   const resolvedPrimaryBg = theme?.primary_bg || (isLight ? "#f8fafc" : "#0f172a");
 
   const pageText = theme?.text_color || (isLight ? "#0f172a" : "#f8fafc");
-  const mutedText = (theme as any)?.muted_text_color || (isLight ? "rgba(15,23,42,0.65)" : "rgba(248,250,252,0.65)");
-  const subtleText = (theme as any)?.soft_text_color || (isLight ? "rgba(15,23,42,0.5)" : "rgba(248,250,252,0.5)");
+  const isPageTextDark = isColorDarkHex(pageText);
+  
+  const mutedText = (theme as any)?.muted_text_color || (isPageTextDark ? "rgba(15,23,42,0.65)" : "rgba(248,250,252,0.65)");
+  const subtleText = (theme as any)?.soft_text_color || (isPageTextDark ? "rgba(15,23,42,0.5)" : "rgba(248,250,252,0.5)");
 
   const panelBg =
     theme?.card_bg ||
@@ -317,13 +326,31 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
       ? (resolvedPrimaryBg === "#ffffff" ? "#ffffff" : "rgba(255,255,255,0.75)")
       : "rgba(0,0,0,0.25)");
 
-  const elevatedBg = isLight ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.06)";
-  const softSectionBg = isLight ? "rgba(0,0,0,0.025)" : "rgba(255,255,255,0.04)";
-  const mediaBg = isLight ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.25)";
-
   const subtleBorder = isLight
     ? `1px solid ${(theme as any)?.border_color || "rgba(15,23,42,0.10)"}`
     : `1px solid ${(theme as any)?.border_color || "rgba(255,255,255,0.12)"}`;
+
+  if (!product) {
+    return (
+      <section style={{ maxWidth: "1160px", margin: "0 auto", padding: "20px 16px 40px" }}>
+        <div
+          style={{
+            border: subtleBorder,
+            borderRadius: "20px",
+            padding: "24px",
+            background: panelBg,
+            color: mutedText,
+          }}
+        >
+          Product not found.
+        </div>
+      </section>
+    );
+  }
+
+  const elevatedBg = isLight ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.06)";
+  const softSectionBg = isLight ? "rgba(0,0,0,0.025)" : "rgba(255,255,255,0.04)";
+  const mediaBg = isLight ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.25)";
 
   const strongerBorder = isLight
     ? `1px solid ${(theme as any)?.border_color || "rgba(15,23,42,0.16)"}`
@@ -950,16 +977,16 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                     fontWeight: 700,
                     color:
                       isEntireProductOutOfStock || selectedVariantOutOfStock || isCartLimitReached
-                        ? "#b91c1c"
-                        : "#15803d",
+                        ? (isLight ? "#b91c1c" : "#f87171")
+                        : (isLight ? "#15803d" : "#4ade80"),
                     background:
                       isEntireProductOutOfStock || selectedVariantOutOfStock || isCartLimitReached
-                        ? "rgba(239,68,68,0.10)"
-                        : "rgba(34,197,94,0.10)",
+                        ? (isLight ? "rgba(239,68,68,0.10)" : "rgba(248,113,113,0.15)")
+                        : (isLight ? "rgba(34,197,94,0.10)" : "rgba(74,222,128,0.15)"),
                     border:
                       isEntireProductOutOfStock || selectedVariantOutOfStock || isCartLimitReached
-                        ? "1px solid rgba(239,68,68,0.14)"
-                        : "1px solid rgba(34,197,94,0.14)",
+                        ? (isLight ? "1px solid rgba(239,68,68,0.14)" : "1px solid rgba(248,113,113,0.25)")
+                        : (isLight ? "1px solid rgba(34,197,94,0.14)" : "1px solid rgba(74,222,128,0.25)"),
                     padding: "6px 10px",
                     borderRadius: "999px",
                   }}
@@ -1060,8 +1087,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                         stockMessage === "Out of stock" ||
                         stockMessage.includes("out of stock") ||
                         stockMessage.includes("already in your cart")
-                          ? "#b91c1c"
-                          : "#b45309",
+                          ? (isLight ? "#b91c1c" : "#f87171")
+                          : (isLight ? "#b45309" : "#fbbf24"),
                       fontWeight: 600,
                     }}
                   >
@@ -1070,7 +1097,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 )}
 
                 {!selectedOption && (
-                  <p style={{ margin: 0, fontSize: "12px", color: "#b45309", fontWeight: 600 }}>
+                  <p style={{ margin: 0, fontSize: "12px", color: isLight ? "#b45309" : "#fbbf24", fontWeight: 600 }}>
                     Please select {optionLabel.toLowerCase()} before adding to cart.
                   </p>
                 )}
@@ -1447,7 +1474,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 }}
               />
               {reviewUploadError ? (
-                <p style={{ margin: "8px 0 0", color: "#dc2626", fontSize: "12px" }}>
+                <p style={{ margin: "8px 0 0", color: isLight ? "#dc2626" : "#f87171", fontSize: "12px" }}>
                   {reviewUploadError}
                 </p>
               ) : null}
