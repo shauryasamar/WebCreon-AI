@@ -336,30 +336,26 @@ const RenderPage: React.FC<RenderPageProps> = ({
     };
   }, [siteId, isAuthenticated, authLoading]);
 
-  if (!page) {
-    return <div style={{ padding: "24px" }}>Page not found.</div>;
-  }
-
-  const resolvedBlocks = page.blocks ?? [];
+  const resolvedBlocks = page?.blocks ?? [];
 
   const isCheckoutPage =
-    page.slug === "checkout" ||
-    page.route === "/checkout" ||
-    page.page_type === "checkout" ||
-    page.flow === "checkout";
+    page?.slug === "checkout" ||
+    page?.route === "/checkout" ||
+    page?.page_type === "checkout" ||
+    page?.flow === "checkout";
 
   const isCartPage =
-    page.slug === "cart" ||
-    page.route === "/cart" ||
-    page.page_type === "cart" ||
-    page.role === "cart";
+    page?.slug === "cart" ||
+    page?.route === "/cart" ||
+    page?.page_type === "cart" ||
+    page?.role === "cart";
 
   const isProductDetailPageContext =
     Boolean(selectedProduct) ||
-    page.role === "product_detail" ||
-    page.page_type === "product_detail" ||
-    page.route === "/products/:productSlug" ||
-    page.route === "/products/:slug" ||
+    page?.role === "product_detail" ||
+    page?.page_type === "product_detail" ||
+    page?.route === "/products/:productSlug" ||
+    page?.route === "/products/:slug" ||
     resolvedBlocks.some((block) =>
       PRODUCT_DETAIL_TYPES.has(String(block.type || "").toLowerCase())
     );
@@ -632,7 +628,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
     let blocks = detailRelevantBlocks;
 
     // Filter out hero banners on subpages (cart, checkout, product detail, catalog)
-    const isLandingHome = page.role === "home" || page.id === "home" || page.page_type === "landing" || page.route === "/";
+    const isLandingHome = page?.role === "home" || page?.id === "home" || page?.page_type === "landing" || page?.route === "/";
     if (!isLandingHome) {
       blocks = blocks.filter((b) => {
         const type = String(b.type || "").toLowerCase();
@@ -671,7 +667,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
 
       return true;
     });
-  }, [detailRelevantBlocks, isCheckoutPage, isCartPage, isProductDetailPageContext, searchQuery]);
+  }, [detailRelevantBlocks, isCheckoutPage, isCartPage, isProductDetailPageContext, searchQuery, page]);
 
   const renderBlock = (
     block: Block,
@@ -681,11 +677,10 @@ const RenderPage: React.FC<RenderPageProps> = ({
     const Component = componentRegistry[block.type];
 
     if (!Component) {
-      console.warn(`No component registered for block type: ${block.type}`);
       return null;
     }
 
-    const blockId = block.id || block.type || `${page.id ?? "page"}-${block.type}-${index}`;
+    const blockId = block.id || block.type || `${page?.id ?? "page"}-${block.type}-${index}`;
     const resolvedDataSource = block.data_source ?? block.datasource ?? undefined;
     const blockProps = (block.props ?? {}) as Record<string, any>;
     const resolvedTheme: Theme | undefined = theme;
@@ -1038,6 +1033,10 @@ const RenderPage: React.FC<RenderPageProps> = ({
       )}
     </div>
   );
+
+  if (!page) {
+    return <div style={{ padding: "24px" }}>Page not found.</div>;
+  }
 
   if (placedOrder) {
     return (

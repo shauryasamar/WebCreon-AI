@@ -688,16 +688,19 @@ function BuilderPageContent() {
         return;
       }
 
+      if (authAdmin) {
+        setAdminAuthenticated(true);
+        setAdminAuthChecked(true);
+        return;
+      }
 
       try {
         const response = await fetch(`${API_BASE_URL}/auth/admin/me`, {
           credentials: "include",
         });
 
-
         if (!response.ok) {
           setAdminAuthenticated(false);
-
 
           if (isAdminRoute) {
             navigate("/admin/login", {
@@ -706,16 +709,13 @@ function BuilderPageContent() {
             });
           }
 
-
           return;
         }
-
 
         setAdminAuthenticated(true);
       } catch (error) {
         console.error("Failed to verify admin session:", error);
         setAdminAuthenticated(false);
-
 
         if (isAdminRoute) {
           navigate("/admin/login", {
@@ -728,9 +728,8 @@ function BuilderPageContent() {
       }
     };
 
-
     checkAdminAuth();
-  }, [isAdminRoute, isStoreRoute, navigate, location.pathname]);
+  }, [isAdminRoute, isStoreRoute, authAdmin]);
 
 
   // Fetch pending order/return counts for the notification badge
@@ -843,29 +842,28 @@ function BuilderPageContent() {
 
 
   useEffect(() => {
+    let cancelled = false;
+
     const loadSite = async () => {
-      try {
+      if (!siteDefinition) {
         setLoading(true);
+      }
 
-
+      try {
         let data: SavedSite | null = null;
-
 
         if (siteId) {
           const response = await fetch(`${API_BASE_URL}/sites/${siteId}`, {
             credentials: "include",
           });
 
-
           if (!response.ok) {
             throw new Error(`Failed to load site: ${response.status}`);
           }
 
-
           data = (await response.json()) as SavedSite;
         } else if (siteSlugParam) {
           data = await resolveSiteBySlug(siteSlugParam);
-
 
           if (!data?.id) {
             throw new Error("Site not found for slug");
@@ -874,14 +872,13 @@ function BuilderPageContent() {
           throw new Error("Missing site identifier");
         }
 
+        if (cancelled) return;
 
         const parsedSiteDefinition: SiteDefinition =
           data.draft_definition || data.site_definition;
 
-
         setResolvedSiteId(data.id || "");
         setSiteSlug(data.slug || "");
-
 
         if (!parsedSiteDefinition) {
           setSiteDefinition(null);
@@ -890,23 +887,19 @@ function BuilderPageContent() {
           return;
         }
 
-
         setSiteDefinition(parsedSiteDefinition);
         setDraftSiteDefinition(parsedSiteDefinition);
         setSiteName(
           parsedSiteDefinition.site?.brand_name || data.slug || "Website"
         );
 
-
         const freshAppBase = isStoreRoute
           ? `/store/${siteSlugParam ?? ""}`
           : `/builder/${data.id || siteId || ""}`;
         const freshBuilderBase = `/builder/${data.id || siteId || ""}`;
 
-
         if (parsedSiteDefinition.pages?.length > 0) {
           const currentPath = window.location.pathname;
-
 
           const staticPageRoutes = parsedSiteDefinition.pages.map((page) =>
             toFullAppPath(freshAppBase, page.route)
@@ -917,7 +910,6 @@ function BuilderPageContent() {
           const isOrdersRoute = currentPath === `${freshAppBase}/orders`;
           const isAdminPath =
             !isStoreRoute && currentPath.startsWith(`${freshBuilderBase}/admin`);
-
 
           if (
             !isKnownStaticRoute &&
@@ -933,7 +925,6 @@ function BuilderPageContent() {
                   page.role === "home"
               ) || parsedSiteDefinition.pages[0];
 
-
             navigate(toFullAppPath(freshAppBase, homePage.route), {
               replace: true,
             });
@@ -941,18 +932,25 @@ function BuilderPageContent() {
         }
       } catch (error) {
         console.error("Error loading site:", error);
-        setSiteDefinition(null);
-        setDraftSiteDefinition(null);
+        if (!cancelled) {
+          setSiteDefinition(null);
+          setDraftSiteDefinition(null);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
-
 
     if (siteId || siteSlugParam) {
       loadSite();
     }
-  }, [siteId, siteSlugParam, navigate, isStoreRoute]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [siteId, siteSlugParam, isStoreRoute]);
 
 
   const storefrontHomePath = useMemo(() => {
@@ -1435,37 +1433,32 @@ export default function BuilderPage() {
 
 
   useEffect(() => {
+    let cancelled = false;
+
     const resolveAndLoadProducts = async () => {
       try {
         let targetSiteId = siteId || "";
 
-
         if (!targetSiteId && siteSlugParam) {
           const matchedSite = await resolveSiteBySlug(siteSlugParam);
-
 
           if (!matchedSite?.id) {
             throw new Error("Site not found for slug");
           }
 
-
           targetSiteId = matchedSite.id;
         }
 
-
         if (!targetSiteId) {
-          setSiteProducts([]);
+          if (!cancelled) setSiteProducts([]);
           return;
         }
 
-
-        setResolvedSiteId(targetSiteId);
-
+        if (!cancelled) setResolvedSiteId(targetSiteId);
 
         const res = await fetch(
           `${API_BASE_URL}/sites/${targetSiteId}/products/public`
         );
-
 
         if (res.ok) {
           const data = await res.json();
@@ -1475,25 +1468,31 @@ export default function BuilderPage() {
             ? data.items
             : [];
           const normalizedProducts = rawList.map(normalizeStorefrontProduct);
-          setSiteProducts(normalizedProducts);
+          if (!cancelled) setSiteProducts(normalizedProducts);
         } else {
           console.error("Failed to load products for site", res.status);
-          setSiteProducts([]);
+          if (!cancelled) setSiteProducts([]);
         }
       } catch (err) {
         console.error("Error loading products for site", err);
-        setSiteProducts([]);
+        if (!cancelled) setSiteProducts([]);
       }
     };
 
-
     resolveAndLoadProducts();
+
+    return () => {
+      cancelled = true;
+    };
   }, [siteId, siteSlugParam]);
 
+  const stableKey = siteSlugParam
+    ? `store-${siteSlugParam}`
+    : `builder-${siteId || "default"}`;
 
   return (
     <CartProvider
-      key={resolvedSiteId || siteId || siteSlugParam}
+      key={stableKey}
       products={siteProducts}
       siteId={resolvedSiteId || siteId || ""}
     >

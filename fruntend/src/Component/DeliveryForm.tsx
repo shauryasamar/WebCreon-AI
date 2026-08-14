@@ -203,7 +203,6 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
   isAuthenticated = false,
   isAddressesLoading = false,
 }) => {
-  console.log("DeliveryForm isAuthenticated:", isAuthenticated);
   const [addresses, setAddresses] = useState<DeliveryFormData[]>(savedAddresses);
   const [formMode, setFormMode] = useState<"hidden" | "add" | "edit">("hidden");
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
@@ -752,10 +751,17 @@ useEffect(() => {
                 const isSelected = address.id === selectedAddressId;
 
                 return (
-                  <button
+                  <div
                     key={address.id}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => handleSelectAddress(address)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleSelectAddress(address);
+                      }
+                    }}
                     style={{
                       width: "100%",
                       textAlign: "left",
@@ -768,6 +774,7 @@ useEffect(() => {
                       borderRadius: "12px",
                       padding: isMobile ? "12px" : "14px 16px",
                       cursor: "pointer",
+                      boxSizing: "border-box",
                     }}
                   >
                     <div
@@ -893,7 +900,7 @@ useEffect(() => {
                         Edit
                       </button>
                     </div>
-                  </button>
+                  </div>
                 );
               })
             ) : (

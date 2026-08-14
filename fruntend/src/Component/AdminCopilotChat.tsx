@@ -522,7 +522,9 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
                           </div>
                         </div>
                       );
-                         if (card.type === "returns_card" && card.returns) {
+                    }
+
+                    if (card.type === "returns_card" && card.returns) {
                       return (
                         <div key={cIdx} style={{ padding: "10px", borderRadius: "10px", background: "#f8fafc", border: "1px solid #e2e8f0" }}>
                           <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "8px", color: "#334155" }}>{card.title}</div>
@@ -546,7 +548,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
                           })}
                         </div>
                       );
-                    }                 }
+                    }
 
                     if (card.type === "orders_card" && card.orders) {
                       return (

@@ -275,19 +275,22 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     const loadEligibleOrderItem = async () => {
       setCheckingEligibility(true);
       try {
-        const res = await fetch(`${API_BASE_URL}/sites/${siteId}/orders/delivered`, {
+        const res = await fetch(`${API_BASE_URL}/orders/${siteId}/delivered`, {
           credentials: "include",
         });
-        if (!res.ok) throw new Error("Failed to fetch delivered orders");
+        if (!res.ok) {
+          setEligibleOrderItem(null);
+          return;
+        }
         const data = await res.json();
+        const ordersList = Array.isArray(data?.orders) ? data.orders : [];
         
-        const matchedItem = (data?.orders || [])
-          .flatMap((o: DeliveredOrder) => o.items || [])
-          .find((item: DeliveredOrderItem) => String(item.product_id) === String(product.id)) ?? null;
+        const matchedItem = ordersList
+          .flatMap((o: any) => o.items || [])
+          .find((item: any) => String(item.product_id) === String(product.id)) ?? null;
 
         setEligibleOrderItem(matchedItem);
       } catch (error) {
-        console.error("Failed to load delivered orders for review eligibility", error);
         setEligibleOrderItem(null);
       } finally {
         setCheckingEligibility(false);

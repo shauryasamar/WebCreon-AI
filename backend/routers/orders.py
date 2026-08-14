@@ -1354,6 +1354,59 @@ def get_my_orders(
     return response
 
 
+@router.get("/{site_id}/delivered")
+def get_my_delivered_orders(
+    site_id: UUID,
+    user=Depends(authenticate_customer),
+    session: Session = Depends(get_session),
+):
+    user_id_uuid = UUID(user["userId"])
+    customer = session.get(User, user_id_uuid)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer account not found")
+
+    delivered_orders = session.exec(
+        select(Order)
+        .where(
+            Order.site_id == site_id,
+            Order.customer_id == customer.id,
+            Order.status == "delivered",
+        )
+        .order_by(Order.created_at.desc())
+    ).all()
+
+    order_ids = [order.id for order in delivered_orders]
+    items_map: dict[UUID, list[OrderItem]] = {}
+
+    if order_ids:
+        order_items = session.exec(
+            select(OrderItem)
+            .where(OrderItem.order_id.in_(order_ids))
+            .order_by(OrderItem.id.asc())
+        ).all()
+        for item in order_items:
+            items_map.setdefault(item.order_id, []).append(item)
+
+    response = []
+    for order in delivered_orders:
+        serialized_items = [
+            serialize_customer_order_item(item)
+            for item in items_map.get(order.id, [])
+        ]
+        response.append(
+            {
+                "id": str(order.id),
+                "status": order.status,
+                "total": float(order.total),
+                "payment_method": order.payment_method,
+                "created_at": order.created_at.isoformat() if order.created_at else None,
+                "items": serialized_items,
+            }
+        )
+
+    return {"orders": response}
+
+
 @router.get("/{site_id}/my-orders/{order_id}")
 def get_my_order_detail(
     site_id: UUID,

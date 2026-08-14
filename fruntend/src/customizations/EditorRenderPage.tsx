@@ -680,7 +680,6 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
       | undefined;
 
     if (!Component) {
-      console.warn(`No component registered for block type: ${block.type}`);
       return null;
     }
 
