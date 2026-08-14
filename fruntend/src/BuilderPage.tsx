@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, Suspense } from "react";
 import {
   Link,
   Navigate,
@@ -10,23 +10,27 @@ import {
 } from "react-router-dom";
 import RenderPage from "./RenderPage";
 import { CartProvider, Product, useCart } from "./CartContext";
-import AdminLayout from "./Component/AdminLayout";
-import AdminProducts from "./Component/AdminProducts";
-import AdminOrders from "./Component/AdminOrders";
-import CheckoutChargesPage from "./Component/CheckoutChargesPage";
 import Navbar, { NavbarFixedBounds } from "./Component/Navbar";
 import Footer from "./Component/Footer";
-import EditorRenderPage from "./customizations/EditorRenderPage";
-import EditorSidebar, { EditorTab } from "./customizations/EditorSidebar";
-import { EditorSiteDefinition } from "./customizations/editorUtils";
-import CustomerOrdersPage from "./pages/CustomerOrdersPage";
+import type { EditorTab } from "./customizations/EditorSidebar";
+import type { EditorSiteDefinition } from "./customizations/editorUtils";
 import { API_BASE_URL } from "./config/api";
 import BuilderShell from "./Component/BuilderShell";
 import BuilderTopControlBar from "./Component/BuilderTopControlBar";
 import BuilderControlPanel from "./Component/BuilderControlPanel";
-import QrLinkPopup from "./Component/QrLinkPopup";
-import BuilderDrawerPanel, { AdminNavKey } from "./Component/BuilderDrawerPanel";
+import type { AdminNavKey } from "./Component/BuilderDrawerPanel";
 import { useAdminAuth } from "./context/AdminAuthContext";
+
+// Lazy-loaded Admin and Customizer chunks
+const AdminLayout = React.lazy(() => import("./Component/AdminLayout"));
+const AdminProducts = React.lazy(() => import("./Component/AdminProducts"));
+const AdminOrders = React.lazy(() => import("./Component/AdminOrders"));
+const CheckoutChargesPage = React.lazy(() => import("./Component/CheckoutChargesPage"));
+const EditorRenderPage = React.lazy(() => import("./customizations/EditorRenderPage"));
+const EditorSidebar = React.lazy(() => import("./customizations/EditorSidebar"));
+const CustomerOrdersPage = React.lazy(() => import("./pages/CustomerOrdersPage"));
+const QrLinkPopup = React.lazy(() => import("./Component/QrLinkPopup"));
+const BuilderDrawerPanel = React.lazy(() => import("./Component/BuilderDrawerPanel"));
 
 
 type Block = {
@@ -535,14 +539,29 @@ function StorefrontPage({
       appBase={appBase}
     >
       {editMode ? (
-        <EditorRenderPage
-          page={page}
-          siteId={siteId}
-          selectedProduct={selectedProduct ?? undefined}
-          selectedBlockId={selectedBlockId}
-          onSelectBlock={onSelectBlock}
-          theme={siteDefinition.theme}
-        />
+        <Suspense
+          fallback={
+            <div
+              style={{
+                padding: "32px",
+                textAlign: "center",
+                color: "#64748b",
+                fontSize: "14px",
+              }}
+            >
+              Loading editor canvas...
+            </div>
+          }
+        >
+          <EditorRenderPage
+            page={page}
+            siteId={siteId}
+            selectedProduct={selectedProduct ?? undefined}
+            selectedBlockId={selectedBlockId}
+            onSelectBlock={onSelectBlock}
+            theme={siteDefinition.theme}
+          />
+        </Suspense>
       ) : (
         <RenderPage
           page={page}
@@ -1210,44 +1229,54 @@ function BuilderPageContent() {
               : "rgba(15,23,42,0.96)",
         }}
       >
-        <EditorSidebar
-          siteDefinition={activeSiteDefinition}
-          selectedBlockId={selectedBlockId}
-          selectedTab={editorTab}
-          onTabChange={setEditorTab}
-          onSiteDefinitionChange={(next) =>
-            setDraftSiteDefinition(next as SiteDefinition)
+        <Suspense
+          fallback={
+            <div style={{ padding: "20px", color: "#94a3b8", fontSize: "13px" }}>
+              Loading customizer...
+            </div>
           }
-        />
+        >
+          <EditorSidebar
+            siteDefinition={activeSiteDefinition}
+            selectedBlockId={selectedBlockId}
+            selectedTab={editorTab}
+            onTabChange={setEditorTab}
+            onSiteDefinitionChange={(next) =>
+              setDraftSiteDefinition(next as SiteDefinition)
+            }
+          />
+        </Suspense>
       </div>
     ) : undefined;
 
 
   const drawerNode =
     showAdminTopbar && activeDrawer ? (
-      <BuilderDrawerPanel
-        activeDrawer={activeDrawer}
-        onClose={() => setActiveDrawer(null)}
-        savedSites={savedSites}
-        selectedSiteId={resolvedSiteId || siteId || ""}
-        onSelectSite={(targetSiteId) => {
-          if (targetSiteId === (resolvedSiteId || siteId)) {
+      <Suspense fallback={null}>
+        <BuilderDrawerPanel
+          activeDrawer={activeDrawer}
+          onClose={() => setActiveDrawer(null)}
+          savedSites={savedSites}
+          selectedSiteId={resolvedSiteId || siteId || ""}
+          onSelectSite={(targetSiteId) => {
+            if (targetSiteId === (resolvedSiteId || siteId)) {
+              setActiveDrawer(null);
+              return;
+            }
             setActiveDrawer(null);
-            return;
+            navigate(`/builder/${targetSiteId}`);
+          }}
+          onDeleteSite={handleDeleteSite}
+          activeAdminNavKey={activeAdminNavKey}
+          onSelectAdminNav={(key) => {
+            navigate(`${builderBase}/admin/${key}`);
+          }}
+          siteDefinition={activeSiteDefinition}
+          onSiteDefinitionChange={(next) =>
+            setDraftSiteDefinition(next as SiteDefinition)
           }
-          setActiveDrawer(null);
-          navigate(`/builder/${targetSiteId}`);
-        }}
-        onDeleteSite={handleDeleteSite}
-        activeAdminNavKey={activeAdminNavKey}
-        onSelectAdminNav={(key) => {
-          navigate(`${builderBase}/admin/${key}`);
-        }}
-        siteDefinition={activeSiteDefinition}
-        onSiteDefinitionChange={(next) =>
-          setDraftSiteDefinition(next as SiteDefinition)
-        }
-      />
+        />
+      </Suspense>
     ) : null;
 
 
@@ -1270,99 +1299,40 @@ function BuilderPageContent() {
           zIndex: 1,
         }}
       >
-        <Routes>
-          {!isStoreRoute && (
-            <Route path="admin" element={<AdminLayout />}>
-              <Route index element={<Navigate to="products" replace />} />
-              <Route path="products" element={<AdminProducts />} />
-              <Route path="orders" element={<AdminOrders />} />
-              <Route
-                path="checkout-charges"
-                element={<CheckoutChargesPage />}
-              />
-            </Route>
-          )}
-
-
-          <Route
-            path="orders"
-            element={
-              <StorefrontShell
-                siteDefinition={activeSiteDefinition}
-                siteId={resolvedSiteId || siteId || ""}
-                siteSlug={siteSlug}
-                editMode={editMode}
-                adminTopbarVisible={showAdminTopbar}
-                selectedBlockId={selectedBlockId}
-                onSelectBlock={handleSelectBlock}
-                storefrontNavbarMode={storefrontNavbarMode}
-                navbarFixedBounds={navbarFixedBounds}
-                appBase={appBase}
-              >
-                <CustomerOrdersPage
-                  siteId={resolvedSiteId || siteId || ""}
-                  siteSlug={siteSlug}
-                  theme={activeSiteDefinition.theme}
-                />
-              </StorefrontShell>
-            }
-          />
-
-
-          {activeSiteDefinition.pages
-            .filter((page) => {
-              if (page.flow === "admin") return false;
-
-
-              const sameAsResolvedProductPage =
-                productDetailPage &&
-                (page.id === productDetailPage.id ||
-                  isProductDetailRoute(page.route) ||
-                  page.blocks.some((block) =>
-                    isProductDetailBlockType(block.type)
-                  ));
-
-
-              return !sameAsResolvedProductPage;
-            })
-            .map((page) => {
-              const normalizedRoute = normalizeRoute(page.route);
-
-
-              return (
+        <Suspense
+          fallback={
+            <div
+              style={{
+                minHeight: "50vh",
+                display: "grid",
+                placeItems: "center",
+                color: "#64748b",
+                fontSize: "14px",
+              }}
+            >
+              Loading page...
+            </div>
+          }
+        >
+          <Routes>
+            {!isStoreRoute && (
+              <Route path="admin" element={<AdminLayout />}>
+                <Route index element={<Navigate to="products" replace />} />
+                <Route path="products" element={<AdminProducts />} />
+                <Route path="orders" element={<AdminOrders />} />
                 <Route
-                  key={page.id}
-                  path={normalizedRoute}
-                  element={
-                    <StorefrontPage
-                      page={page}
-                      siteDefinition={activeSiteDefinition}
-                      siteId={resolvedSiteId || siteId || ""}
-                      siteSlug={siteSlug}
-                      selectedProduct={undefined}
-                      editMode={editMode}
-                      adminTopbarVisible={showAdminTopbar}
-                      selectedBlockId={selectedBlockId}
-                      onSelectBlock={handleSelectBlock}
-                      storefrontNavbarMode={storefrontNavbarMode}
-                      navbarFixedBounds={navbarFixedBounds}
-                      appBase={appBase}
-                    />
-                  }
+                  path="checkout-charges"
+                  element={<CheckoutChargesPage />}
                 />
-              );
-            })}
+              </Route>
+            )}
 
 
-          {productDetailPage && (
             <Route
-              path="products/:productSlug"
+              path="orders"
               element={
-                <StorefrontPage
-                  key={`product-detail-${productSlug || "unknown"}`}
-                  page={productDetailPage}
+                <StorefrontShell
                   siteDefinition={activeSiteDefinition}
-                  selectedProduct={selectedProduct}
                   siteId={resolvedSiteId || siteId || ""}
                   siteSlug={siteSlug}
                   editMode={editMode}
@@ -1372,21 +1342,98 @@ function BuilderPageContent() {
                   storefrontNavbarMode={storefrontNavbarMode}
                   navbarFixedBounds={navbarFixedBounds}
                   appBase={appBase}
-                />
+                >
+                  <CustomerOrdersPage
+                    siteId={resolvedSiteId || siteId || ""}
+                    siteSlug={siteSlug}
+                    theme={activeSiteDefinition.theme}
+                  />
+                </StorefrontShell>
               }
             />
-          )}
-        </Routes>
+
+
+            {activeSiteDefinition.pages
+              .filter((page) => {
+                if (page.flow === "admin") return false;
+
+
+                const sameAsResolvedProductPage =
+                  productDetailPage &&
+                  (page.id === productDetailPage.id ||
+                    isProductDetailRoute(page.route) ||
+                    page.blocks.some((block) =>
+                      isProductDetailBlockType(block.type)
+                    ));
+
+
+                return !sameAsResolvedProductPage;
+              })
+              .map((page) => {
+                const normalizedRoute = normalizeRoute(page.route);
+
+
+                return (
+                  <Route
+                    key={page.id}
+                    path={normalizedRoute}
+                    element={
+                      <StorefrontPage
+                        page={page}
+                        siteDefinition={activeSiteDefinition}
+                        siteId={resolvedSiteId || siteId || ""}
+                        siteSlug={siteSlug}
+                        selectedProduct={undefined}
+                        editMode={editMode}
+                        adminTopbarVisible={showAdminTopbar}
+                        selectedBlockId={selectedBlockId}
+                        onSelectBlock={handleSelectBlock}
+                        storefrontNavbarMode={storefrontNavbarMode}
+                        navbarFixedBounds={navbarFixedBounds}
+                        appBase={appBase}
+                      />
+                    }
+                  />
+                );
+              })}
+
+
+            {productDetailPage && (
+              <Route
+                path="products/:productSlug"
+                element={
+                  <StorefrontPage
+                    key={`product-detail-${productSlug || "unknown"}`}
+                    page={productDetailPage}
+                    siteDefinition={activeSiteDefinition}
+                    selectedProduct={selectedProduct}
+                    siteId={resolvedSiteId || siteId || ""}
+                    siteSlug={siteSlug}
+                    editMode={editMode}
+                    adminTopbarVisible={showAdminTopbar}
+                    selectedBlockId={selectedBlockId}
+                    onSelectBlock={handleSelectBlock}
+                    storefrontNavbarMode={storefrontNavbarMode}
+                    navbarFixedBounds={navbarFixedBounds}
+                    appBase={appBase}
+                  />
+                }
+              />
+            )}
+          </Routes>
+        </Suspense>
       </div>
 
 
-      <QrLinkPopup
-        open={qrOpen}
-        onClose={() => setQrOpen(false)}
-        customerUrl={
-          siteSlug ? `${window.location.origin}/store/${siteSlug}` : ""
-        }
-      />
+      <Suspense fallback={null}>
+        <QrLinkPopup
+          open={qrOpen}
+          onClose={() => setQrOpen(false)}
+          customerUrl={
+            siteSlug ? `${window.location.origin}/store/${siteSlug}` : ""
+          }
+        />
+      </Suspense>
 
       {/* Floating Bottom-Right Corner Publish Button (Appears only when changes exist) */}
       {showAdminTopbar && !isStoreRoute && !isAdminRoute && (hasUnpublishedChanges || publishing || publishSuccess) && (

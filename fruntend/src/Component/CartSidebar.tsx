@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useCart } from "../CartContext";
 import { API_BASE_URL } from "../config/api";
+import { isColorDarkHex } from "../context/ThemeContext";
 
 type CartTheme = {
   name?: string;
@@ -369,7 +370,11 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   const totalLabel = total_label || "Total";
   const footerNote = note || "Final charges will be validated at checkout.";
 
-  const isDark = theme?.mode !== "light";
+  const isDark =
+    (theme?.primary_bg ? isColorDarkHex(theme.primary_bg) : false) ||
+    (background_color ? isColorDarkHex(background_color) : false) ||
+    (theme?.text_color ? !isColorDarkHex(theme.text_color) : false) ||
+    theme?.mode === "dark";
   const resolvedAccentColor =
     accent_color || accentColor || theme?.accent_color || "#7c3aed";
   const resolvedPrimaryBg =
@@ -399,11 +404,11 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
       : alpha(resolvedTextColor, isDark ? 0.09 : 0.06);
 
     if (!isDark) {
-      const shellBg = panel_color || background_color || "#ffffff";
-      const panelBg = panel_color || background_color || mixHex(pageBg, "#ffffff", 0.7);
-      const cardBg = card_color || "#ffffff";
+      const shellBg = panel_color || background_color || (theme as any)?.cart_bg || "#ffffff";
+      const panelBg = panel_color || background_color || (theme as any)?.cart_panel_bg || (theme as any)?.cart_bg || mixHex(pageBg, "#ffffff", 0.7);
+      const cardBg = card_color || (theme as any)?.cart_card_bg || "#ffffff";
 
-      const cardText = getContrastingText(cardBg, text_color || (theme as any)?.card_text_color || theme?.text_color || "#0f172a");
+      const cardText = getContrastingText(cardBg, text_color || (theme as any)?.cart_text_color || (theme as any)?.card_text_color || theme?.text_color || "#0f172a");
 
       return {
         pageBg,
@@ -432,17 +437,21 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     const shellBg =
       panel_color ||
       background_color ||
+      (theme as any)?.cart_bg ||
       (hasFestiveTint
         ? mixHex(pageBg, "#ffffff", 0.08)
         : mixHex(pageBg, "#ffffff", 0.04));
     const panelBg =
       panel_color ||
       background_color ||
+      (theme as any)?.cart_panel_bg ||
+      (theme as any)?.cart_bg ||
       (hasFestiveTint
         ? mixHex(pageBg, "#ffffff", 0.12)
         : mixHex(pageBg, "#ffffff", 0.06));
     const cardBg =
       card_color ||
+      (theme as any)?.cart_card_bg ||
       (hasFestiveTint
         ? mixHex(mixHex(pageBg, "#ffffff", 0.14), resolvedAccentColor, 0.06)
         : mixHex(pageBg, "#ffffff", 0.09));
@@ -450,7 +459,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     const inputBg = card_color || mixHex(pageBg, "#000000", 0.15);
     const quantityBg = mixHex(pageBg, "#000000", 0.12);
 
-    const cardText = getContrastingText(cardBg, text_color || (theme as any)?.card_text_color || theme?.text_color || "#e5e7eb");
+    const cardText = getContrastingText(cardBg, text_color || (theme as any)?.cart_text_color || (theme as any)?.card_text_color || theme?.text_color || "#e5e7eb");
 
     return {
       pageBg,

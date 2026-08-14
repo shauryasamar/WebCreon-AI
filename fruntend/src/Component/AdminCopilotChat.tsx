@@ -4,7 +4,7 @@ import { API_BASE_URL } from "../config/api";
 import { saveThemeSnapshot, updateThemeValues, applyThemeToPages } from "../customizations/editorUtils";
 
 type DataCard = {
-  type: "redirect_card" | "orders_card" | "returns_card" | "analytics_card" | "palette_suggestions_card" | "component_palette_suggestions_card" | "camouflage_warning_card";
+  type: "redirect_card" | "orders_card" | "returns_card" | "analytics_card" | "palette_suggestions_card" | "component_palette_suggestions_card" | "camouflage_warning_card" | "table_card";
   title?: string;
   description?: string;
   target_url?: string;
@@ -13,8 +13,11 @@ type DataCard = {
   bg_key?: string;
   new_bg?: string;
   suggested_text?: string;
-  orders?: Array<{ id: string; total: number; status: string; items_count: number }>;
-  returns?: Array<{ id: string; product: string; reason: string; status: string; amount: number }>;
+  columns?: string[];
+  rows?: Array<any>;
+  row_count?: number;
+  orders?: Array<{ id: string; total: number; status: string; items_count?: number; items_summary?: string; date?: string }>;
+  returns?: Array<{ id: string; order_id?: string; product?: string; reason?: string; status?: string; refund_status?: string; amount?: number }>;
   palettes?: Array<any>;
   metrics?: {
     total_sales?: string;
@@ -45,26 +48,53 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
   onSiteDefinitionChange,
 }) => {
   const navigate = useNavigate();
-  const [messages, setMessages] = useState<CopilotMessage[]>([]);
+  const [messages, setMessages] = useState<CopilotMessage[]>(() => {
+    if (typeof window !== "undefined" && siteId) {
+      try {
+        const stored = sessionStorage.getItem(`webnirmaan_copilot_chat_${siteId}`) || localStorage.getItem(`webnirmaan_copilot_chat_${siteId}`);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      } catch {}
+    }
+    return [];
+  });
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [savedThemes, setSavedThemes] = useState<any[]>(() => {
-    try {
-      const cached = localStorage.getItem(`webnirmaan_saved_themes_${siteId}`);
-      return cached ? JSON.parse(cached) : [];
-    } catch {
-      return [];
-    }
-  });
   const [toastMsg, setToastMsg] = useState<string | null>(null);
-  const [showSavedThemes, setShowSavedThemes] = useState(false);
+
+  // Persist messages across drawer closing/opening
+  useEffect(() => {
+    if (typeof window !== "undefined" && siteId) {
+      try {
+        if (messages.length > 0) {
+          sessionStorage.setItem(`webnirmaan_copilot_chat_${siteId}`, JSON.stringify(messages));
+          localStorage.setItem(`webnirmaan_copilot_chat_${siteId}`, JSON.stringify(messages));
+        }
+      } catch {}
+    }
+  }, [messages, siteId]);
+
+  const handleClearChat = () => {
+    setMessages([]);
+    if (typeof window !== "undefined" && siteId) {
+      try {
+        sessionStorage.removeItem(`webnirmaan_copilot_chat_${siteId}`);
+        localStorage.removeItem(`webnirmaan_copilot_chat_${siteId}`);
+      } catch {}
+    }
+    setToastMsg("Chat history cleared 🧹");
+    setTimeout(() => setToastMsg(null), 2500);
+  };
 
   // Clean fixed admin dashboard theme for Copilot UI
   const chatBg = "#ffffff";
   const chatText = "#0f172a";
   const chatMuted = "#64748b";
   const userBubbleBg = "#2563eb";
-  const userBubbleText = "#ffffff";
   const assistantBubbleBg = "#f1f5f9";
   const assistantBubbleText = "#0f172a";
   const inputBorderColor = "#cbd5e1";
@@ -72,7 +102,27 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
 
   const handleSaveThemeToLibrary = (themeObj: any, themeName: string) => {
     if (siteDefinition && onSiteDefinitionChange) {
-      const updatedDef = saveThemeSnapshot(siteDefinition as any, themeName, themeObj);
+      const themePatch: Record<string, string> = { festival_theme: "none" };
+      const paletteKeys = [
+        "primary_bg", "secondary_bg", "text_color", "muted_text", "muted_text_color", "soft_text_color",
+        "accent_color", "accent_hover", "accent_text",
+        "border_color", "soft_border",
+        "navbar_bg", "navbar_outer_bg", "navbar_text_color", "navbar_border_color",
+        "footer_bg", "footer_text_color", "footer_muted_color",
+        "hero_bg", "hero_text_color", "hero_accent",
+        "card_bg", "card_text_color", "card_shadow",
+      ];
+      const sourceObj = themeObj?.patch || themeObj?.theme || themeObj || {};
+      for (const key of paletteKeys) {
+        if (sourceObj[key]) themePatch[key] = sourceObj[key];
+      }
+      if (sourceObj.muted_text && !themePatch.muted_text_color) {
+        themePatch.muted_text_color = sourceObj.muted_text;
+      }
+      if (themePatch.navbar_bg && !themePatch.navbar_outer_bg) {
+        themePatch.navbar_outer_bg = themePatch.navbar_bg;
+      }
+      const updatedDef = saveThemeSnapshot(siteDefinition as any, themeName, themePatch);
       onSiteDefinitionChange(updatedDef);
     }
 
@@ -104,13 +154,16 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
       "navbar_bg", "navbar_outer_bg", "navbar_text_color", "navbar_border_color",
       "footer_bg", "footer_text_color", "footer_muted_color",
       "hero_bg", "hero_text_color", "hero_accent",
-      "card_bg", "card_shadow",
+      "card_bg", "card_text_color", "card_shadow",
     ];
     for (const key of paletteKeys) {
       if (palette[key]) themePatch[key] = palette[key];
     }
     if (palette.muted_text && !themePatch.muted_text_color) {
       themePatch.muted_text_color = palette.muted_text;
+    }
+    if (themePatch.navbar_bg && !themePatch.navbar_outer_bg) {
+      themePatch.navbar_outer_bg = themePatch.navbar_bg;
     }
 
     // Apply theme patch via updateThemeValues so all pages and components purge old block-level color locks
@@ -175,31 +228,90 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
     setLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/copilot/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          site_id: siteId,
-          message: text,
-          chat_history: updatedHistory.map((m) => ({ sender: m.sender, text: m.text })),
-          draft_definition: siteDefinition,
-        }),
-      });
+      let data: any = null;
+      let streamedText = "";
 
-      if (!response.ok) throw new Error("Co-Pilot request failed");
+      try {
+        const streamResponse = await fetch(`${API_BASE_URL}/copilot/chat/stream`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            site_id: siteId,
+            message: text,
+            chat_history: updatedHistory.map((m) => ({ sender: m.sender, text: m.text })),
+            draft_definition: siteDefinition,
+          }),
+        });
 
-      const data = await response.json();
+        if (streamResponse.ok && streamResponse.body) {
+          const reader = streamResponse.body.getReader();
+          const decoder = new TextDecoder("utf-8");
+          let buffer = "";
+
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n\n");
+            buffer = lines.pop() || "";
+
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (trimmed.startsWith("data:")) {
+                try {
+                  const event = JSON.parse(trimmed.slice(5).trim());
+                  if (event.type === "token" && event.content) {
+                    streamedText += event.content;
+                    setMessages((prev) =>
+                      prev.map((msg) =>
+                        msg.id === assistantMsgId
+                          ? { ...msg, text: streamedText }
+                          : msg
+                      )
+                    );
+                  } else if (event.type === "done") {
+                    data = event;
+                  }
+                } catch {
+                  // Ignore partial json in stream
+                }
+              }
+            }
+          }
+        }
+      } catch (streamErr) {
+        console.warn("Copilot SSE stream failed, falling back to standard endpoint:", streamErr);
+      }
+
+      // Fallback if stream did not return done payload
+      if (!data) {
+        const response = await fetch(`${API_BASE_URL}/copilot/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            site_id: siteId,
+            message: text,
+            chat_history: updatedHistory.map((m) => ({ sender: m.sender, text: m.text })),
+            draft_definition: siteDefinition,
+          }),
+        });
+
+        if (!response.ok) throw new Error("Co-Pilot request failed");
+        data = await response.json();
+      }
 
       // Trigger Live Design Update in Builder if modified
-      if (data.design_modified && data.updated_draft_definition && onSiteDefinitionChange) {
-        const nextTheme = data.updated_draft_definition.theme || {};
+      const updatedDraft = data?.updated_draft_definition || data?.next_draft_definition;
+      if (data?.design_modified && updatedDraft && onSiteDefinitionChange) {
+        const nextTheme = updatedDraft.theme || {};
         const syncedPages = applyThemeToPages(
-          data.updated_draft_definition.pages || [],
+          updatedDraft.pages || [],
           nextTheme
         );
         onSiteDefinitionChange({
-          ...data.updated_draft_definition,
+          ...updatedDraft,
           pages: syncedPages,
         });
       }
@@ -209,7 +321,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
           msg.id === assistantMsgId
             ? {
                 ...msg,
-                text: data.assistant_reply || "Done!",
+                text: data.assistant_reply || streamedText || "Done!",
                 cards: data.data_cards,
               }
             : msg
@@ -220,7 +332,10 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === assistantMsgId
-            ? { ...msg, text: "Sorry, I ran into an error processing that request." }
+            ? {
+                ...msg,
+                text: "I ran into an issue connecting to store services. Please try again.",
+              }
             : msg
         )
       );
@@ -381,6 +496,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
                                   <div style={{ width: "14px", height: "14px", borderRadius: "50%", background: pal.primary_bg, border: "1px solid #cbd5e1" }} title={`Primary BG: ${pal.primary_bg}`} />
                                   <div style={{ width: "14px", height: "14px", borderRadius: "50%", background: pal.secondary_bg, border: "1px solid #cbd5e1" }} title={`Secondary BG: ${pal.secondary_bg}`} />
                                   <div style={{ width: "14px", height: "14px", borderRadius: "50%", background: pal.accent_color, border: "1px solid #cbd5e1" }} title={`Accent: ${pal.accent_color}`} />
+                                  {pal.card_bg && <div style={{ width: "14px", height: "14px", borderRadius: "50%", background: pal.card_bg, border: "1px solid #cbd5e1" }} title={`Card BG: ${pal.card_bg}`} />}
                                   <div style={{ width: "14px", height: "14px", borderRadius: "50%", background: pal.navbar_bg, border: "1px solid #cbd5e1" }} title={`Navbar BG: ${pal.navbar_bg}`} />
                                   <div style={{ width: "14px", height: "14px", borderRadius: "50%", background: pal.footer_bg, border: "1px solid #cbd5e1" }} title={`Footer BG: ${pal.footer_bg}`} />
                                 </div>
@@ -573,6 +689,97 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
                               </div>
                             );
                           })}
+                        </div>
+                      );
+                    }
+
+                    if (card.type === "table_card" && Array.isArray(card.rows)) {
+                      const cols = card.columns && card.columns.length > 0 ? card.columns : Object.keys(card.rows[0] || {});
+                      return (
+                        <div key={cIdx} style={{ padding: "10px", borderRadius: "10px", background: "#ffffff", border: "1px solid #e2e8f0", overflowX: "auto" }}>
+                          <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "8px", color: "#1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span>📊 {card.title || "Query Results"}</span>
+                            <span style={{ fontSize: "10px", color: "#64748b", fontWeight: 600 }}>{card.row_count !== undefined ? card.row_count : card.rows.length} rows</span>
+                          </div>
+                          {card.rows.length === 0 ? (
+                            <div style={{ fontSize: "11px", color: "#94a3b8", textAlign: "center", padding: "8px" }}>No matching records found in store database.</div>
+                          ) : (
+                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px", textAlign: "left" }}>
+                              <thead>
+                                <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                                  {cols.map((col: string, colIdx: number) => (
+                                    <th key={colIdx} style={{ padding: "6px 8px", fontWeight: 700, color: "#475569", textTransform: "capitalize", whiteSpace: "nowrap" }}>
+                                      {col.replace(/_/g, " ")}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {card.rows.map((r: any, rIdx: number) => (
+                                  <tr key={rIdx} style={{ borderBottom: "1px solid #f1f5f9", background: rIdx % 2 === 0 ? "#ffffff" : "#f8fafc" }}>
+                                    {cols.map((col: string, cIdx2: number) => {
+                                      const rawVal = r[col];
+                                      const colLower = col.toLowerCase().trim();
+
+                                      const isQuantityOrCount =
+                                        colLower.includes("sold") ||
+                                        colLower.includes("quantity") ||
+                                        colLower.includes("qty") ||
+                                        colLower.includes("count") ||
+                                        colLower.includes("unit") ||
+                                        colLower.includes("stock") ||
+                                        colLower.includes("items") ||
+                                        colLower.includes("orders") ||
+                                        colLower.includes("reviews") ||
+                                        colLower.includes("rank") ||
+                                        colLower.includes("id");
+
+                                      const isRating = colLower.includes("rating") || colLower.includes("stars") || colLower.includes("score");
+
+                                      const isMonetary =
+                                        !isQuantityOrCount &&
+                                        !isRating &&
+                                        typeof rawVal === "number" &&
+                                        (colLower.includes("price") ||
+                                         colLower.includes("revenue") ||
+                                         colLower.includes("sales") ||
+                                         colLower.includes("spent") ||
+                                         colLower.includes("amount") ||
+                                         colLower.includes("cost") ||
+                                         colLower.includes("fee") ||
+                                         colLower.includes("charge") ||
+                                         colLower.includes("refund") ||
+                                         colLower.includes("subtotal") ||
+                                         colLower.includes("line_total") ||
+                                         colLower.includes("grand_total") ||
+                                         colLower.includes("order_total") ||
+                                         colLower === "total");
+
+                                      let displayVal: string;
+                                      if (isMonetary) {
+                                        displayVal = `₹${Number(rawVal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
+                                      } else if (isRating && typeof rawVal === "number") {
+                                        displayVal = `${Number(rawVal).toFixed(1)} ⭐`;
+                                      } else if (isQuantityOrCount && typeof rawVal === "number") {
+                                        const isUnitLabel = colLower.includes("sold") || colLower.includes("unit") || colLower.includes("qty") || colLower.includes("quantity");
+                                        displayVal = `${Number(rawVal).toLocaleString("en-IN")}${isUnitLabel ? " units" : ""}`;
+                                      } else if (typeof rawVal === "number") {
+                                        displayVal = Number(rawVal).toLocaleString("en-IN");
+                                      } else {
+                                        displayVal = String(rawVal !== undefined && rawVal !== null ? rawVal : "-");
+                                      }
+
+                                      return (
+                                        <td key={cIdx2} style={{ padding: "6px 8px", color: "#1e293b", whiteSpace: "nowrap" }}>
+                                          {displayVal}
+                                        </td>
+                                      );
+                                    })}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
                         </div>
                       );
                     }

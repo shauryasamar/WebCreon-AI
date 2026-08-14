@@ -185,9 +185,11 @@ def _normalize_requirements(data: WebsiteRequirements) -> WebsiteRequirements:
     return normalized
 
 
-async def extract_requirements(user_prompt: str) -> dict:
+async def extract_requirements(user_prompt: str, session_id: Optional[str] = None) -> dict:
+    from agents.token_tracker import TokenCostCallback
     result: WebsiteRequirements = await understanding_chain.ainvoke(
-        {"user_prompt": user_prompt}
+        {"user_prompt": user_prompt},
+        config={"callbacks": [TokenCostCallback("SiteGen.Understanding", session_id=session_id)]}
     )
     normalized = _normalize_requirements(result)
     return normalized.model_dump()

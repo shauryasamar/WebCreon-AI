@@ -53,6 +53,20 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } catch (err) {
       console.error("Failed to logout admin", err);
     } finally {
+      try {
+        if (typeof window !== "undefined") {
+          Object.keys(sessionStorage).forEach((key) => {
+            if (key.startsWith("webnirmaan_copilot_chat_")) {
+              sessionStorage.removeItem(key);
+            }
+          });
+          Object.keys(localStorage).forEach((key) => {
+            if (key.startsWith("webnirmaan_copilot_chat_")) {
+              localStorage.removeItem(key);
+            }
+          });
+        }
+      } catch {}
       setAdmin(null);
     }
   }, []);

@@ -18,7 +18,7 @@ from agents.db_analytics_agent import (
 )
 from agents.seo_health_agent import audit_store_health, check_low_stock_inventory
 from agents.copilot_knowledge import search_knowledge_base
-from agents.response_synthesizer import synthesize_agent_response
+from agents.response_synthesizer import synthesize_agent_response, stream_synthesize_agent_response
 
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.0)
 
@@ -100,20 +100,36 @@ Extract parameters carefully:
     ])
 
     try:
+        from agents.token_tracker import TokenCostCallback
         structured_llm = router_prompt | llm.with_structured_output(IntentAnalysis)
-        res: IntentAnalysis = await structured_llm.ainvoke({
-            "user_message": user_msg,
-            "history_str": state.get("history_str", ""),
-        })
+        res: IntentAnalysis = await structured_llm.ainvoke(
+            {
+                "user_message": user_msg,
+                "history_str": state.get("history_str", ""),
+            },
+            config={"callbacks": [TokenCostCallback("Copilot.Router", session_id=state.get("site_id"))]}
+        )
 
         intent = res.intent.upper() if res.intent else "CHAT"
         
-        # Override intent if specific key phrases present
-        if any(w in msg_lower for w in ["audit", "health check", "low stock", "restock"]):
-            intent = "SEO_HEALTH"
-        elif any(w in msg_lower for w in ["match whole website", "card theme as well", "match navbar"]):
+        # Robust Intent Resolution with Clear Precedence:
+        # 1. DESIGN Precedence: If the user mentions colors, palette, themes, or styling actions
+        has_design_keywords = any(w in msg_lower for w in [
+            "color", "colour", "theme", "palette", "pallete", "background", "bg",
+            "pink", "blue", "red", "green", "black", "white", "yellow", "purple", "orange",
+            "dark mode", "light mode", "match navbar", "match whole website", "card theme as well",
+            "style", "font", "look", "button color", "hero color", "card color", "navbar color"
+        ])
+
+        if has_design_keywords:
             intent = "DESIGN"
-        elif any(w in msg_lower for w in ["rating", "ratings", "rated", "review", "reviews", "top rated", "most rated", "most sold"]):
+        elif any(w in msg_lower for w in ["audit", "health check", "low stock", "restock", "inventory check"]):
+            intent = "SEO_HEALTH"
+        elif any(w in msg_lower for w in [
+            "top rated", "most rated", "best rated", "highest rated", "customer reviews", 
+            "show reviews", "list reviews", "how many reviews", "most sold", "top selling", 
+            "sales", "revenue", "orders", "cancellations", "returns", "middle state"
+        ]):
             intent = "DB_QUERY"
         elif any(w in msg_lower for w in ["hi", "hello", "hey", "who are you"]) and len(msg_lower.split()) <= 3:
             intent = "CHAT"
@@ -188,6 +204,7 @@ async def db_agent_node(state: CoPilotGraphState) -> Dict[str, Any]:
     site_uuid = UUID(site_id) if site_id else None
     from agents.db_analytics_agent import engine
     from sqlmodel import Session
+    from agents.sql_agent_engine import run_dynamic_store_query
 
     with Session(engine) as db:
         metrics = get_store_metrics_for_period(
@@ -197,9 +214,36 @@ async def db_agent_node(state: CoPilotGraphState) -> Dict[str, Any]:
             status_filter=state.get("status_filter"),
         )
 
+    # Run Dynamic Safe Text-to-SQL for analytical & custom queries
+    dynamic_sql_res = {}
+    if site_id:
+        try:
+            dynamic_sql_res = await run_dynamic_store_query(
+                user_query=user_msg,
+                site_id=site_id,
+                history_str=state.get("history_str", ""),
+            )
+        except Exception as e:
+            print("Copilot dynamic SQL error:", e)
+
     data_cards = []
+
+    # 1. Dynamic Table Card from SQL execution if multi-row or multi-column data returned
+    if dynamic_sql_res.get("success") and dynamic_sql_res.get("rows"):
+        rows = dynamic_sql_res.get("rows", [])
+        cols = dynamic_sql_res.get("columns", [])
+        # Only render a table card if it's actual tabular data (not a single scalar count like [count: 2])
+        is_single_scalar = len(rows) == 1 and len(cols) == 1
+        if not is_single_scalar and len(rows) > 0:
+            data_cards.append({
+                "type": "table_card",
+                "title": dynamic_sql_res.get("title") or "Database Query Results",
+                "columns": cols,
+                "rows": rows[:15],
+                "row_count": dynamic_sql_res.get("row_count", 0),
+            })
     
-    # Generate UI data cards based on query focus
+    # 2. Generate UI data cards based on query focus
     if any(w in msg_lower for w in ["returned", "return", "refund"]):
         returns_list = [
             {
@@ -218,8 +262,8 @@ async def db_agent_node(state: CoPilotGraphState) -> Dict[str, Any]:
                 "title": f"Return & Refund Requests ({metrics['total_returns_count']})",
                 "returns": returns_list,
             })
-    elif any(w in msg_lower for w in ["middle", "yet to ship", "shipped", "accepted"]):
-        middle_orders = metrics.get("filtered_orders") or []
+    elif any(w in msg_lower for w in ["order", "orders", "middle", "yet to ship", "shipped", "accepted", "placed", "new", "pending", "delivered"]):
+        orders_source = metrics.get("filtered_orders") or metrics.get("all_orders") or []
         orders_list = [
             {
                 "id": str(o.id)[:8],
@@ -228,29 +272,30 @@ async def db_agent_node(state: CoPilotGraphState) -> Dict[str, Any]:
                 "status": str(o.status or "placed").capitalize(),
                 "date": o.created_at.strftime("%b %d, %I:%M %p") if getattr(o, "created_at", None) else "",
             }
-            for o in middle_orders[:15]
+            for o in orders_source[:15]
         ]
-        data_cards.append({
-            "type": "orders_card",
-            "title": f"In-Progress Orders ({len(middle_orders)})",
-            "orders": orders_list,
-        })
-    elif any(w in msg_lower for w in ["sales", "revenue", "analytics", "performance"]):
+        if orders_list and not dynamic_sql_res.get("rows"):
+            data_cards.append({
+                "type": "orders_card",
+                "title": f"Orders Overview ({len(orders_source)})",
+                "orders": orders_list,
+            })
+    elif any(w in msg_lower for w in ["sales", "revenue", "analytics", "performance"]) and not dynamic_sql_res.get("rows"):
         data_cards.append({
             "type": "analytics_card",
             "title": f"Store Sales Analytics ({metrics['time_label']})",
             "metrics": {
-                "period_sales": f"₹{metrics['period_sales']:,.2f}",
-                "lifetime_sales": f"₹{metrics['lifetime_sales']:,.2f}",
-                "period_orders": metrics["period_orders_count"],
-                "total_orders": metrics["total_orders_count"],
-                "top_product": metrics["top_product"],
+                "total_sales": f"₹{metrics['period_sales']:,.2f}",
+                "orders_count": metrics["period_orders_count"],
+                "average_rating": metrics["avg_rating"],
+                "cancellation_rate": metrics["cancel_rate"],
             },
         })
 
     return {
         "agent_payload": {
             "metrics": metrics,
+            "dynamic_query_result": dynamic_sql_res,
             "data_cards": data_cards,
             "days_filter": days_filter,
         },
@@ -383,3 +428,36 @@ workflow.add_edge("guardrail_node", "synthesizer_node")
 workflow.add_edge("synthesizer_node", END)
 
 copilot_langgraph_app = workflow.compile()
+
+
+# Pre-synthesis workflow for streaming execution
+pre_workflow = StateGraph(CoPilotGraphState)
+pre_workflow.add_node("router_node", router_node)
+pre_workflow.add_node("color_agent_node", color_agent_node)
+pre_workflow.add_node("db_agent_node", db_agent_node)
+pre_workflow.add_node("seo_health_node", seo_health_node)
+pre_workflow.add_node("knowledge_agent_node", knowledge_agent_node)
+pre_workflow.add_node("chat_agent_node", chat_agent_node)
+pre_workflow.add_node("guardrail_node", guardrail_node)
+
+pre_workflow.set_entry_point("router_node")
+pre_workflow.add_conditional_edges(
+    "router_node",
+    route_intent,
+    {
+        "guardrail_node": "guardrail_node",
+        "color_agent_node": "color_agent_node",
+        "db_agent_node": "db_agent_node",
+        "seo_health_node": "seo_health_node",
+        "knowledge_agent_node": "knowledge_agent_node",
+        "chat_agent_node": "chat_agent_node",
+    }
+)
+pre_workflow.add_edge("color_agent_node", END)
+pre_workflow.add_edge("db_agent_node", END)
+pre_workflow.add_edge("seo_health_node", END)
+pre_workflow.add_edge("knowledge_agent_node", END)
+pre_workflow.add_edge("chat_agent_node", END)
+pre_workflow.add_edge("guardrail_node", END)
+
+copilot_pre_synthesis_app = pre_workflow.compile()

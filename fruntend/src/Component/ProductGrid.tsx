@@ -3,6 +3,7 @@ import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { useCart, Product } from "../CartContext";
 import FilterSidebar from "./FilterSidebar";
 import { Pagination } from "./Pagination";
+import { resolveThemeTokens } from "../context/ThemeContext";
 
 type ProductGridProps = {
   siteId: string;
@@ -147,35 +148,33 @@ function isColorDarkHex(colorHex?: string): boolean {
   return false;
 }
 
-  const explicitLightMode = typeof theme?.mode === "string" && theme.mode.toLowerCase() === "light";
-  const explicitDarkMode = typeof theme?.mode === "string" && theme.mode.toLowerCase() === "dark";
-
-  const isLight = explicitLightMode || (!explicitDarkMode && (
-    (theme?.text_color && isColorDarkHex(theme.text_color)) || 
-    (theme?.primary_bg && !isColorDarkHex(theme.primary_bg)) || 
-    (theme?.card_bg && !isColorDarkHex(theme.card_bg)) || 
-    (!theme?.text_color && !theme?.primary_bg && !theme?.card_bg)
-  ));
-  const accentColor = theme?.accent_color || "#2563eb";
-  const resolvedPrimaryBg = theme?.primary_bg || (isLight ? "#f8fafc" : "#0f172a");
+  const {
+    isDark,
+    primaryBg: resolvedPrimaryBg,
+    cardBg: defaultCardBg,
+    textColor: defaultTextColor,
+    mutedTextColor: defaultMutedText,
+    softTextColor: defaultFaintText,
+    borderColor: resolvedBorderColor,
+    accentColor,
+  } = resolveThemeTokens(theme);
+  const isLight = !isDark;
 
   const cardStyleKey = card_style || cardStyle || theme?.card_style || "fashion";
-  const cardBg = card_bg_color || theme?.card_bg || theme?.secondary_bg || (isLight ? (resolvedPrimaryBg === "#ffffff" ? "#ffffff" : "rgba(255,255,255,0.75)") : "#1e293b");
+  const cardBg = card_bg_color || defaultCardBg;
   const isCardDark = isColorDarkHex(cardBg);
 
-  const preferredTextColor = title_color || (theme as any)?.card_text_color || theme?.text_color;
+  const preferredTextColor = title_color || (theme as any)?.card_text_color || defaultTextColor;
   const isPreferredDark = isColorDarkHex(preferredTextColor);
   const pageText = preferredTextColor && (isPreferredDark !== isCardDark)
     ? preferredTextColor
     : (isCardDark ? "#ffffff" : "#0f172a");
 
-  const mutedText = original_price_color || (theme as any)?.muted_text_color || (isCardDark ? "rgba(255,255,255,0.68)" : "rgba(15,23,42,0.65)");
-  const faintText = brand_color || (theme as any)?.soft_text_color || (isCardDark ? "rgba(255,255,255,0.5)" : "rgba(15,23,42,0.5)");
+  const mutedText = original_price_color || defaultMutedText;
+  const faintText = brand_color || defaultFaintText;
   const starColor = rating_star_color || "#d97706";
 
-  const subtleBorder = isLight
-    ? `1px solid ${(theme as any)?.border_color || "rgba(15,23,42,0.08)"}`
-    : `1px solid ${(theme as any)?.border_color || "rgba(255,255,255,0.12)"}`;
+  const subtleBorder = `1px solid ${resolvedBorderColor}`;
 
   const softShadow = isLight
     ? "0 10px 28px rgba(15,23,42,0.055)"

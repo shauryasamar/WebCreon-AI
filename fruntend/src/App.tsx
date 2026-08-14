@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, Suspense } from "react";
 import {
   BrowserRouter,
   Navigate,
@@ -8,11 +8,6 @@ import {
   useNavigate,
   useLocation,
 } from "react-router-dom";
-import BuilderPage from "./BuilderPage";
-import AdminLoginPage from "./pages/AdminLoginPage";
-import AdminSignupPage from "./pages/AdminSignupPage";
-import CustomerLoginPage from "./pages/CustomerLoginPage";
-import CustomerSignupPage from "./pages/CustomerSignupPage";
 import { CustomerAuthProvider } from "./context/CustomerAuthContext";
 import { AdminAuthProvider, useAdminAuth } from "./context/AdminAuthContext";
 import { CartProvider } from "./CartContext";
@@ -22,6 +17,43 @@ import BuilderTopControlBar from "./Component/BuilderTopControlBar";
 import BuilderControlPanel from "./Component/BuilderControlPanel";
 import BuilderDrawerPanel from "./Component/BuilderDrawerPanel";
 import { AiWebpageGeneratingAnimation } from "./Component/AiWebpageGeneratingAnimation";
+
+// Lazy-loaded routes for code splitting
+const BuilderPage = React.lazy(() => import("./BuilderPage"));
+const AdminLoginPage = React.lazy(() => import("./pages/AdminLoginPage"));
+const AdminSignupPage = React.lazy(() => import("./pages/AdminSignupPage"));
+const CustomerLoginPage = React.lazy(() => import("./pages/CustomerLoginPage"));
+const CustomerSignupPage = React.lazy(() => import("./pages/CustomerSignupPage"));
+
+function RouteLoadingFallback() {
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+        background: "#0f172a",
+        color: "#f8fafc",
+        fontFamily: "inherit",
+      }}
+    >
+      <div style={{ textAlign: "center" }}>
+        <div
+          style={{
+            width: "36px",
+            height: "36px",
+            border: "3px solid rgba(255,255,255,0.15)",
+            borderTopColor: "#3b82f6",
+            borderRadius: "50%",
+            animation: "spin 0.8s linear infinite",
+            margin: "0 auto 12px",
+          }}
+        />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    </div>
+  );
+}
 
 type Block = {
   id: string;
@@ -259,18 +291,76 @@ function AdminSitesPage() {
     });
 
     try {
-      const response = await fetch(`${API_BASE_URL}/site-definition`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ session_id: currentSessionId }),
-      });
+      let data: SiteDefinitionResponse | null = null;
 
-      if (!response.ok) {
-        throw new Error(`Failed to generate site definition: ${response.status}`);
+      // Try streaming progress first
+      try {
+        const streamResponse = await fetch(`${API_BASE_URL}/site-definition/stream`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ session_id: currentSessionId }),
+        });
+
+        if (streamResponse.ok && streamResponse.body) {
+          const reader = streamResponse.body.getReader();
+          const decoder = new TextDecoder("utf-8");
+          let buffer = "";
+
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n\n");
+            buffer = lines.pop() || "";
+
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (trimmed.startsWith("data:")) {
+                try {
+                  const payload = JSON.parse(trimmed.slice(5).trim());
+                  if (payload.message) {
+                    setMessages((prev) =>
+                      prev.map((msg) =>
+                        msg.id === animId
+                          ? { ...msg, text: payload.message }
+                          : msg
+                      )
+                    );
+                  }
+                  if (payload.step === "complete" && payload.site_definition) {
+                    data = {
+                      requirements: payload.requirements,
+                      site_definition: payload.site_definition,
+                    };
+                  }
+                } catch (err) {
+                  // Ignore partial json in stream
+                }
+              }
+            }
+          }
+        }
+      } catch (streamErr) {
+        console.warn("SSE stream failed, falling back to standard generation:", streamErr);
       }
 
-      const data: SiteDefinitionResponse = await response.json();
+      // Fallback if stream did not return site definition
+      if (!data) {
+        const response = await fetch(`${API_BASE_URL}/site-definition`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ session_id: currentSessionId }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to generate site definition: ${response.status}`);
+        }
+
+        data = (await response.json()) as SiteDefinitionResponse;
+      }
+
       const brandName = data.site_definition.site.brand_name || `${data.site_definition.site.site_type} website`;
       const baseSlug = slugify(brandName) || "website";
       const uniqueSlug = `${baseSlug}-${Date.now()}`;
@@ -950,21 +1040,23 @@ function AdminSitesPage() {
 
 function AppRoutes() {
   return (
-    <Routes>
-      <Route path="/" element={<Navigate to="/admin/login" replace />} />
-      <Route path="/admin/login" element={<AdminLoginPage />} />
-      <Route path="/admin/signup" element={<AdminSignupPage />} />
+    <Suspense fallback={<RouteLoadingFallback />}>
+      <Routes>
+        <Route path="/" element={<Navigate to="/admin/login" replace />} />
+        <Route path="/admin/login" element={<AdminLoginPage />} />
+        <Route path="/admin/signup" element={<AdminSignupPage />} />
 
-      <Route path="/store/:slug/login" element={<CustomerLoginPage />} />
-      <Route path="/store/:slug/signup" element={<CustomerSignupPage />} />
-      <Route path="/store/:slug/*" element={<BuilderPage />} />
+        <Route path="/store/:slug/login" element={<CustomerLoginPage />} />
+        <Route path="/store/:slug/signup" element={<CustomerSignupPage />} />
+        <Route path="/store/:slug/*" element={<BuilderPage />} />
 
-      <Route element={<RequireAdminAuth />}>
-        <Route path="/admin/sites" element={<AdminSitesPage />} />
-      </Route>
+        <Route element={<RequireAdminAuth />}>
+          <Route path="/admin/sites" element={<AdminSitesPage />} />
+        </Route>
 
-      <Route path="/builder/:siteId/*" element={<BuilderPage />} />
-    </Routes>
+        <Route path="/builder/:siteId/*" element={<BuilderPage />} />
+      </Routes>
+    </Suspense>
   );
 }
 

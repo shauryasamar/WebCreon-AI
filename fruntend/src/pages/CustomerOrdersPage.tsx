@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { Pagination } from "../Component/Pagination";
+import { resolveThemeTokens } from "../context/ThemeContext";
 
 type OrderListItem = {
   id: string;
@@ -375,36 +376,23 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
     typeof window !== "undefined" ? window.innerWidth : 1280
   );
 
-  const explicitLightMode = typeof theme?.mode === "string" && theme.mode.toLowerCase() === "light";
-  const explicitDarkMode = typeof theme?.mode === "string" && theme.mode.toLowerCase() === "dark";
+  const {
+    isDark,
+    primaryBg: pageBg,
+    cardBg,
+    textColor: textPrimary,
+    mutedTextColor: textMuted,
+    borderColor: resolvedBorderColor,
+    accentColor,
+    panelBg,
+    subtleBg: innerBg,
+  } = resolveThemeTokens(theme);
+  const isLight = !isDark;
 
-  const isLight = explicitLightMode || (!explicitDarkMode && (
-    (theme?.text_color && isColorDarkHex(theme.text_color)) || 
-    (theme?.primary_bg && !isColorDarkHex(theme.primary_bg)) || 
-    (theme?.card_bg && !isColorDarkHex(theme.card_bg)) || 
-    (!theme?.text_color && !theme?.primary_bg && !theme?.card_bg)
-  ));
-  const accentColor = theme?.accent_color || "#3b82f6";
-  const resolvedPrimaryBg = theme?.primary_bg || (isLight ? "#f8fafc" : "#0f172a");
-
-  // Festive & Theme-adaptive color palette
-  const pageBg = resolvedPrimaryBg;
-  const cardBg = isLight
-    ? (resolvedPrimaryBg === "#ffffff" ? "#ffffff" : "rgba(255,255,255,0.75)")
-    : "rgba(0,0,0,0.25)";
-
-  const cardBorder = isLight
-    ? `1px solid ${(theme as any)?.border_color || "rgba(15,23,42,0.12)"}`
-    : `1px solid ${(theme as any)?.border_color || "rgba(255,255,255,0.14)"}`;
-
-  const textPrimary = theme?.text_color || (isLight ? "#0f172a" : "#f8fafc");
-  const isPrimaryDark = isColorDarkHex(textPrimary);
-  const textMuted = (theme as any)?.muted_text_color || (isPrimaryDark ? "rgba(15,23,42,0.65)" : "rgba(248,250,252,0.65)");
-  const panelBg = cardBg;
-  const innerBg = isLight ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.2)";
+  const cardBorder = `1px solid ${resolvedBorderColor}`;
   const divider = cardBorder;
-  const timelineRail = isLight ? "rgba(15,23,42,0.18)" : "rgba(255,255,255,0.2)";
-  const pendingDot = isLight ? "rgba(15,23,42,0.25)" : "rgba(255,255,255,0.25)";
+  const timelineRail = isLight ? "rgba(15,23,42,0.18)" : "rgba(255,255,255,0.25)";
+  const pendingDot = isLight ? "rgba(15,23,42,0.25)" : "rgba(255,255,255,0.35)";
 
   const isMobile = viewportWidth <= 640;
   const isTablet = viewportWidth > 640 && viewportWidth <= 1024;

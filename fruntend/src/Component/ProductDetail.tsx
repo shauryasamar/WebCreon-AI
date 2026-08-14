@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { useCart, Product, ProductReview } from "../CartContext";
 import { API_BASE_URL } from "../config/api";
 import { useCustomerAuth } from "../context/CustomerAuthContext";
+import { resolveThemeTokens } from "../context/ThemeContext";
 
 type ProductDetailProps = {
   product?: Product | null;
@@ -11,6 +12,9 @@ type ProductDetailProps = {
   add_to_cart_label?: string;
   button_bg_color?: string;
   button_text_color?: string;
+  background_color?: string;
+  panel_color?: string;
+  text_color?: string;
 
   show_delivery_info?: boolean;
   delivery_text?: string;
@@ -110,6 +114,9 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   add_to_cart_label,
   button_bg_color,
   button_text_color,
+  background_color,
+  panel_color,
+  text_color,
   show_delivery_info = true,
   delivery_text,
   show_return_policy = true,
@@ -303,35 +310,45 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   const isMobile = windowWidth < 768;
   const isTablet = windowWidth >= 768 && windowWidth < 1024;
 
-  const explicitLightMode = typeof theme?.mode === "string" && theme.mode.toLowerCase() === "light";
-  const explicitDarkMode = typeof theme?.mode === "string" && theme.mode.toLowerCase() === "dark";
-
-  const isLight = explicitLightMode || (!explicitDarkMode && (
-    (theme?.text_color && isColorDarkHex(theme.text_color)) || 
-    (theme?.primary_bg && !isColorDarkHex(theme.primary_bg)) || 
-    (theme?.card_bg && !isColorDarkHex(theme.card_bg)) || 
-    (!theme?.text_color && !theme?.primary_bg && !theme?.card_bg)
-  ));
-
-  const accentColor = theme?.accent_color || "#2563eb";
-  const resolvedPrimaryBg = theme?.primary_bg || (isLight ? "#f8fafc" : "#0f172a");
-
-  const pageText = theme?.text_color || (isLight ? "#0f172a" : "#f8fafc");
-  const isPageTextDark = isColorDarkHex(pageText);
-  
-  const mutedText = (theme as any)?.muted_text_color || (isPageTextDark ? "rgba(15,23,42,0.65)" : "rgba(248,250,252,0.65)");
-  const subtleText = (theme as any)?.soft_text_color || (isPageTextDark ? "rgba(15,23,42,0.5)" : "rgba(248,250,252,0.5)");
+  const {
+    isDark,
+    primaryBg: resolvedPrimaryBg,
+    cardBg: defaultCardBg,
+    textColor: defaultTextColor,
+    mutedTextColor: mutedText,
+    softTextColor: subtleText,
+    borderColor: resolvedBorderColor,
+    accentColor: defaultAccent,
+    accentHover,
+    accentText: defaultAccentText,
+  } = resolveThemeTokens(theme);
+  const isLight = !isDark;
 
   const panelBg =
-    theme?.card_bg ||
-    theme?.secondary_bg ||
-    (isLight
-      ? (resolvedPrimaryBg === "#ffffff" ? "#ffffff" : "rgba(255,255,255,0.75)")
-      : "rgba(0,0,0,0.25)");
+    panel_color ||
+    background_color ||
+    (theme as any)?.product_detail_bg ||
+    (theme as any)?.detail_bg ||
+    defaultCardBg;
 
-  const subtleBorder = isLight
-    ? `1px solid ${(theme as any)?.border_color || "rgba(15,23,42,0.10)"}`
-    : `1px solid ${(theme as any)?.border_color || "rgba(255,255,255,0.12)"}`;
+  const pageText =
+    text_color ||
+    (theme as any)?.product_detail_text ||
+    defaultTextColor;
+
+  const activeBtnBg =
+    button_bg_color ||
+    (theme as any)?.product_detail_btn_bg ||
+    defaultAccent;
+
+  const activeBtnTextColor =
+    button_text_color ||
+    (theme as any)?.product_detail_btn_text ||
+    (isColorDarkHex(activeBtnBg) ? "#ffffff" : "#0f172a");
+
+  const accentColor = activeBtnBg;
+
+  const subtleBorder = `1px solid ${resolvedBorderColor}`;
 
   if (!product) {
     return (
@@ -652,8 +669,6 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   const supportGridColumns = isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))";
 
   const resolvedAddToCartText = add_to_cart_label || "Add to cart";
-  const activeBtnBg = button_bg_color || accentColor;
-  const activeBtnTextColor = button_text_color || "#ffffff";
   const resolvedMaxWidth = max_width === "full" ? "100%" : max_width ? `${max_width}px` : "1160px";
   const resolvedImageAspect = image_aspect_ratio || "1 / 1";
   const resolvedImageFit = image_fit || "cover";

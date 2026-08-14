@@ -9,6 +9,7 @@ from uuid import UUID
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from langgraph.graph import END, StateGraph
 from pydantic import BaseModel, Field
@@ -26,7 +27,7 @@ from auth_middleware import (
 )
 from db.database import create_db_and_tables, get_session
 from models import (
-    AdminSite, Site, Product, Category, Collection, Cart, CartItem, Order, OrderItem,
+    Admin, AdminSite, Site, Product, Category, Collection, Cart, CartItem, Order, OrderItem,
     ProductCollection, ProductReview, ReturnRequest, ReturnItem, ReturnStatusHistory,
     Shipment, InventoryMovement, OrderStatusHistory, User, UserAddress
 )
@@ -307,6 +308,32 @@ async def copilot_chat_endpoint(req: CoPilotChatRequest):
     return result
 
 
+@app.post("/copilot/chat/stream")
+async def copilot_chat_stream_endpoint(req: CoPilotChatRequest):
+    from agents.copilot_agent import process_copilot_request_stream
+
+    async def event_generator():
+        try:
+            async for event in process_copilot_request_stream(
+                message=req.message,
+                site_id=req.site_id,
+                chat_history=req.chat_history,
+                draft_definition=req.draft_definition,
+            ):
+                yield f"data: {json.dumps(event)}\n\n"
+        except Exception as e:
+            error_payload = {
+                "type": "done",
+                "assistant_reply": "I ran into an issue processing your request. Please try again.",
+                "data_cards": [],
+                "design_modified": False,
+                "updated_draft_definition": None,
+            }
+            yield f"data: {json.dumps(error_payload)}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
 @app.post("/understanding", response_model=RequirementsResponse)
 async def understanding_endpoint(req: GenerateSiteRequest):
     requirements = await extract_requirements(req.prompt)
@@ -390,6 +417,78 @@ async def generate_site_definition_endpoint(req: CustomSiteDefinitionRequest):
     }
 
 
+@app.post("/site-definition/stream")
+async def generate_site_definition_stream_endpoint(req: CustomSiteDefinitionRequest):
+    async def event_generator():
+        try:
+            yield f"data: {json.dumps({'step': 'start', 'progress': 10, 'message': 'Initializing AI generation pipeline...'})}\n\n"
+            
+            prompt_text = req.prompt or ""
+            collected_reqs = {}
+
+            if req.session_id:
+                from agents.conversation_agent import SESSIONS
+                session = SESSIONS.get(req.session_id)
+                if session:
+                    collected_reqs = session.collected
+                    if not prompt_text:
+                        prompt_text = "\n".join([f"{t['sender']}: {t['text']}" for t in session.turns])
+
+            yield f"data: {json.dumps({'step': 'understanding', 'progress': 25, 'message': 'Extracting e-commerce brand requirements and theme tokens...'})}\n\n"
+            requirements = await extract_requirements(prompt_text or "General store")
+
+            if collected_reqs.get("brand_name"):
+                requirements["brand_name"] = collected_reqs["brand_name"]
+            if collected_reqs.get("domain"):
+                requirements["domain"] = collected_reqs["domain"]
+                requirements["catalog_type"] = collected_reqs["domain"]
+            if collected_reqs.get("chosen_palette"):
+                requirements["chosen_palette"] = collected_reqs["chosen_palette"]
+            if collected_reqs.get("navbar_position"):
+                requirements["navbar_position"] = collected_reqs["navbar_position"]
+            if collected_reqs.get("navbar_layout"):
+                requirements["navbar_layout"] = collected_reqs["navbar_layout"]
+            if collected_reqs.get("footer_layout"):
+                requirements["footer_layout"] = collected_reqs["footer_layout"]
+            if collected_reqs.get("tagline"):
+                requirements["tagline"] = collected_reqs["tagline"]
+
+            yield f"data: {json.dumps({'step': 'planning', 'progress': 50, 'message': 'Synthesizing pages, catalog structures, and layout plans...'})}\n\n"
+            site_plan = await plan_site(requirements)
+
+            yield f"data: {json.dumps({'step': 'backend_config', 'progress': 70, 'message': 'Configuring database entities, resources, and routes...'})}\n\n"
+            backend_config = build_backend_config(site_plan["backend_plan"])
+
+            yield f"data: {json.dumps({'step': 'frontend_config', 'progress': 85, 'message': 'Designing UI components, colors, and responsive blocks...'})}\n\n"
+            frontend_config = build_frontend_config(site_plan["frontend_plan"])
+
+            yield f"data: {json.dumps({'step': 'site_schema', 'progress': 95, 'message': 'Compiling final site definition...'})}\n\n"
+            site_definition = build_site_definition(
+                requirements=requirements,
+                site_plan=site_plan,
+                backend_config=backend_config,
+                frontend_config=frontend_config,
+            )
+
+            result_payload = {
+                "step": "complete",
+                "progress": 100,
+                "message": "Site blueprint successfully generated!",
+                "requirements": requirements,
+                "site_definition": site_definition,
+            }
+            yield f"data: {json.dumps(result_payload)}\n\n"
+        except Exception as e:
+            error_payload = {
+                "step": "error",
+                "progress": 0,
+                "message": f"Site generation failed: {str(e)}",
+            }
+            yield f"data: {json.dumps(error_payload)}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
 @app.patch("/sites/{site_id}/publish")
 def publish_site(
     site_id: UUID,
@@ -457,6 +556,20 @@ def get_sites(
     ).all()
 
     return sites
+
+
+@app.get("/api/admin/token-metrics")
+def get_global_token_metrics():
+    """Internal backend monitoring endpoint to inspect live cumulative token usage and costs."""
+    from agents.token_tracker import get_token_tracker
+    return get_token_tracker().get_global_summary()
+
+
+@app.get("/api/admin/token-metrics/{session_id}")
+def get_session_token_metrics(session_id: str):
+    """Internal backend monitoring endpoint to inspect token usage and costs for a specific session."""
+    from agents.token_tracker import get_token_tracker
+    return get_token_tracker().get_session_summary(session_id)
 
 
 @app.get("/sites/{site_id}")

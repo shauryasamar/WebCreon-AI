@@ -24,6 +24,7 @@ class PaletteOption(BaseModel):
     id: str = Field(description="Unique ID for palette option, e.g. palette_1, palette_2")
     name: str = Field(description="Descriptive palette name, e.g. Rose Gold Velvet, Midnight Emerald")
     description: str = Field(description="Explanation of why this color combination suits the brand")
+    visual_style: Optional[str] = Field(default="solid_clean", description="Visual style: 'solid_clean', 'elevated_luxury', 'warm_organic', 'cyber_glow', 'glassmorphic'")
     
     primary_bg: str = Field(description="Main page background hex, e.g. #ffffff, #fafafa, or #0f172a")
     secondary_bg: str = Field(description="Secondary container/sidebar background hex")
@@ -41,6 +42,7 @@ class PaletteOption(BaseModel):
     navbar_outer_bg: Optional[str] = Field(default=None, description="Navbar outer wrapper background hex")
     navbar_text_color: str = Field(description="Navbar text color hex")
     navbar_border_color: str = Field(description="Navbar border color hex")
+    navbar_variant: Optional[str] = Field(default="soft", description="Navbar style: 'solid', 'soft', 'floating', 'transparent'")
     
     footer_bg: str = Field(description="Footer background hex")
     footer_text_color: str = Field(description="Footer text color hex")
@@ -52,6 +54,7 @@ class PaletteOption(BaseModel):
     
     card_bg: str = Field(description="Product card background hex")
     card_shadow: str = Field(description="Product card shadow CSS string, e.g. 0 4px 16px rgba(0,0,0,0.06)")
+    card_radius: Optional[int] = Field(default=20, description="Card corner radius in pixels (e.g. 16, 20, 24)")
 
 
 class PaletteResponse(BaseModel):
@@ -96,37 +99,50 @@ def calculate_contrast_color(bg_val: str) -> str:
 # 3. LLM COLOR GENERATOR FUNCTIONS
 # ==========================================
 
-# High-creativity Flagship GPT-4o specifically for rich, diverse, original color palette generation
-creative_llm = ChatOpenAI(model="gpt-4o", temperature=0.75)
+# High-creativity GPT-4o-mini for rich, diverse, fast and cost-effective color palette generation
+creative_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.85)
 
 
 async def generate_color_palettes(
     brand_name: str = "Store",
     domain: str = "E-Commerce",
     color_description: Optional[str] = None,
+    session_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Generates 4-5 WCAG AA compliant, highly creative color palettes based on brand description and domain."""
+    from agents.token_tracker import TokenCostCallback
     palette_prompt = ChatPromptTemplate.from_messages([
-        ("system", """You are an elite, highly creative color theory director for luxury & modern e-commerce brands.
+        ("system", """You are an elite color theory director for luxury & modern e-commerce brands.
 Your job is to craft 4-5 DISTINCT, UNFORGETTABLE, and WCAG AA compliant color palettes tailored specifically to the user's brand name, domain, and exact aesthetic preference.
 
-CREATIVITY RULES:
-- NEVER output generic or repetitive palettes (e.g. do not just output basic "Playful Rainbow" or "Pastel Dreams" unless requested).
-- If the user specifies a sub-niche (e.g. "car toy shop", "boys toys", "luxury streetwear", "boho bakery"), design palettes custom-tailored to that exact sub-niche!
-  - Examples for Car Toys / Racing: "Turbo Neon & Carbon", "Speedway Checkered Chrome", "Midnight Drift & Crimson", "Formula Racing Emerald", "Cyber Garage Obsidian".
-  - Examples for Boys Toys / Superhero: "Galactic Defender", "Cosmic Cobalt", "Titanium & Lava Red", "Quantum Stealth".
-- Each palette MUST have a unique name, evocative description, and a cohesive palette of 15+ hex values (primary_bg, secondary_bg, text_color, accent_color, navbar_bg, footer_bg, hero_bg, card_bg).
-- Ensure all text_color and navbar_text_color combinations pass WCAG AA readability against their respective background colors."""),
+CREATIVITY & ARCHETYPAL DIVERSITY RULES:
+- NEVER generate 5 repetitive palettes that all use basic white backgrounds with only the navbar color swapped!
+- Each of the 4-5 generated palettes MUST represent a completely DIFFERENT structural design archetype:
+  1. OPTION 1 (Light Studio Minimal): Crisp alabaster/white primary_bg (#ffffff, #fffbf7), crisp floating navbar, vivid action accent buttons.
+  2. OPTION 2 (Deep Dark Luxury): Rich atmospheric obsidian/midnight/slate primary_bg (e.g. #0c0a14, #120a0d, #0f172a), elevated card_bg container, matching dark navbar and footer.
+  3. OPTION 3 (Warm Tinted / Earthy Editorial): Soft organic linen/oat/blush primary_bg (e.g. #faf7f2, #fdf4f4, #f4f7f4), natural toned navbar, elegant secondary surface containers.
+  4. OPTION 4 (Bold High-Contrast Neo-Modern): Striking contrast (e.g. deep carbon black header against vivid saturated CTA accents and sharp typography).
+  5. OPTION 5 (Vibrant Gradient / Atmospheric): Rich modern linear-gradient hero_bg, luminous accent colors, and dynamic surface containers.
+
+- THEMATIC COLOR HARMONY & DYNAMIC VARIETY:
+  - Explore the full gamut of color nuances (e.g. for Red: crimson, scarlet, burgundy, terracotta, coral, ruby, wine, brick, rosewood).
+  - When a color is requested (e.g. "Red", "Green", "Pastel", "Cyber"), apply that color theme across DIFFERENT roles in each palette (e.g. one uses it as high-contrast CTA accents, another as deep burgundy dark mode, another as warm terracotta/rose, another as bold saturated header, another as rich gradient hero).
+  - Every generation must feel fresh, tailor-fit to the brand's industry, and uniquely named with creative concept storytelling.
+- PRODUCT CARDS (CRITICAL): Always give `card_bg` an elevated, distinctive surface background hex that harmonizes with the brand palette (e.g. if primary_bg is dark, card_bg must be elevated container hex; if primary_bg is light, card_bg can be crisp #ffffff or subtle surface tone).
+- Ensure all text_color and navbar_text_color combinations pass strict WCAG AA readability against their respective background colors."""),
         ("user", "Brand: {brand_name}\nDomain/Niche: {domain}\nSpecific Vibe/Request: {color_description}"),
     ])
 
     try:
         structured_llm = palette_prompt | creative_llm.with_structured_output(PaletteResponse)
-        res: PaletteResponse = await structured_llm.ainvoke({
-            "brand_name": brand_name,
-            "domain": domain,
-            "color_description": color_description or "Modern clean minimalist",
-        })
+        res: PaletteResponse = await structured_llm.ainvoke(
+            {
+                "brand_name": brand_name,
+                "domain": domain,
+                "color_description": color_description or "Modern clean minimalist",
+            },
+            config={"callbacks": [TokenCostCallback("ColorAgent.PaletteGenerator", session_id=session_id)]}
+        )
         output_palettes = []
         for p in res.palettes:
             p_dict = p.model_dump()
@@ -135,6 +151,8 @@ CREATIVITY RULES:
                 p_dict["text_color"] = calculate_contrast_color(p_dict["primary_bg"])
             if "navbar_bg" in p_dict:
                 p_dict["navbar_text_color"] = calculate_contrast_color(p_dict["navbar_bg"])
+                if not p_dict.get("navbar_outer_bg"):
+                    p_dict["navbar_outer_bg"] = p_dict["navbar_bg"]
             if "footer_bg" in p_dict:
                 p_dict["footer_text_color"] = calculate_contrast_color(p_dict["footer_bg"])
             if "hero_bg" in p_dict:
@@ -159,6 +177,7 @@ class ColorPatchOutput(BaseModel):
     accent_text: Optional[str] = Field(default=None, description="Text inside accent buttons hex")
     border_color: Optional[str] = Field(default=None, description="Border/divider hex")
     
+    navbar_outer_bg: Optional[str] = Field(default=None, description="Navbar outer wrapper background hex")
     navbar_bg: Optional[str] = Field(default=None, description="Navbar background hex")
     navbar_text_color: Optional[str] = Field(default=None, description="Navbar text hex")
     navbar_border_color: Optional[str] = Field(default=None, description="Navbar border hex")
@@ -166,28 +185,44 @@ class ColorPatchOutput(BaseModel):
     footer_bg: Optional[str] = Field(default=None, description="Footer background hex")
     footer_text_color: Optional[str] = Field(default=None, description="Footer text hex")
     footer_muted_color: Optional[str] = Field(default=None, description="Footer muted text hex")
+    footer_border_color: Optional[str] = Field(default=None, description="Footer border hex")
     
     hero_bg: Optional[str] = Field(default=None, description="Hero background hex or gradient")
     hero_text_color: Optional[str] = Field(default=None, description="Hero text hex")
     hero_accent: Optional[str] = Field(default=None, description="Hero button accent hex")
     
-    card_bg: Optional[str] = Field(default=None, description="Card background hex")
-    card_text_color: Optional[str] = Field(default=None, description="Card text hex")
+    card_bg: Optional[str] = Field(default=None, description="Product catalog card background hex")
+    card_text_color: Optional[str] = Field(default=None, description="Product catalog card text hex")
+    card_border_color: Optional[str] = Field(default=None, description="Product catalog card border hex")
+    
+    product_detail_bg: Optional[str] = Field(default=None, description="Product detail page container background hex")
+    product_detail_text: Optional[str] = Field(default=None, description="Product detail text color hex")
+    product_detail_btn_bg: Optional[str] = Field(default=None, description="Product detail add to cart button background hex")
+    product_detail_btn_text: Optional[str] = Field(default=None, description="Product detail add to cart button text hex")
+
+    cart_bg: Optional[str] = Field(default=None, description="Cart sidebar/drawer background hex")
+    cart_text_color: Optional[str] = Field(default=None, description="Cart sidebar text hex")
+    cart_card_bg: Optional[str] = Field(default=None, description="Cart item card background hex")
+    cart_accent_color: Optional[str] = Field(default=None, description="Cart checkout button background hex")
+
+    review_card_bg: Optional[str] = Field(default=None, description="Review section card background hex")
+    review_text_color: Optional[str] = Field(default=None, description="Review section text hex")
+    review_border_color: Optional[str] = Field(default=None, description="Review section border hex")
 
 
 # Comprehensive Component Scoping Map covering all storefront sections
 COMPONENT_ALLOWED_KEYS = {
-    "navbar": {"navbar_bg", "navbar_text_color", "navbar_border_color"},
-    "footer": {"footer_bg", "footer_text_color", "footer_muted_color"},
+    "navbar": {"navbar_bg", "navbar_outer_bg", "navbar_text_color", "navbar_border_color"},
+    "footer": {"footer_bg", "footer_text_color", "footer_muted_color", "footer_border_color"},
     "hero": {"hero_bg", "hero_text_color", "hero_accent"},
-    "card": {"card_bg", "card_text_color", "card_shadow"},
-    "product": {"card_bg", "card_text_color", "card_shadow"},
-    "product_detail": {"card_bg", "card_text_color", "secondary_bg"},
-    "cart": {"secondary_bg", "card_bg", "text_color", "border_color"},
-    "checkout": {"secondary_bg", "card_bg", "text_color", "accent_color"},
-    "payment": {"secondary_bg", "card_bg", "text_color", "accent_color"},
-    "filter": {"secondary_bg", "card_bg", "border_color"},
-    "review": {"card_bg", "card_text_color", "border_color"},
+    "card": {"card_bg", "card_text_color", "card_border_color", "card_shadow"},
+    "product_grid": {"card_bg", "card_text_color", "card_border_color", "card_shadow"},
+    "product_detail": {"product_detail_bg", "product_detail_text", "product_detail_btn_bg", "product_detail_btn_text", "secondary_bg"},
+    "cart": {"cart_bg", "cart_text_color", "cart_card_bg", "cart_accent_color", "border_color"},
+    "checkout": {"checkout_bg", "checkout_card_bg", "checkout_text_color", "checkout_accent_color"},
+    "payment": {"payment_bg", "payment_card_bg", "payment_text_color", "payment_accent_color"},
+    "filter": {"filter_bg", "filter_card_bg", "filter_text_color", "filter_border_color"},
+    "review": {"review_card_bg", "review_text_color", "review_border_color"},
     "background": {"primary_bg", "secondary_bg", "text_color", "muted_text"},
 }
 
@@ -196,15 +231,19 @@ async def generate_component_color_patch(
     current_theme: Dict[str, Any],
     color_request: str,
     target_component: str = "overall",
+    session_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Generates a component color patch matching user color requests using structured output."""
+    from agents.token_tracker import TokenCostCallback
     patch_prompt = ChatPromptTemplate.from_messages([
         ("system", """You are an expert color theory designer for modern e-commerce.
 Generate a WCAG AA compliant, aesthetically harmonized color patch for the target component.
 STRICT SCOPING RULES:
 - If target_component is 'navbar', ONLY populate navbar_bg, navbar_text_color, navbar_border_color. Do NOT touch primary_bg or card_bg!
-- If target_component is 'footer', ONLY populate footer_bg, footer_text_color, footer_muted_color. Do NOT touch primary_bg!
-- If target_component is 'card' or 'product', ONLY populate card_bg, card_text_color. Do NOT touch primary_bg!
+- If target_component is 'footer', ONLY populate footer_bg, footer_text_color, footer_muted_color, footer_border_color. Do NOT touch primary_bg!
+- If target_component is 'card' or 'product_grid', ONLY populate card_bg, card_text_color, card_border_color for catalog product cards. Do NOT touch product_detail or cart!
+- If target_component is 'product_detail', ONLY populate product_detail_bg, product_detail_text, product_detail_btn_bg, product_detail_btn_text. Do NOT touch global card_bg or navbar!
+- If target_component is 'cart', ONLY populate cart_bg, cart_text_color, cart_card_bg, cart_accent_color.
 - If target_component is 'hero', ONLY populate hero_bg, hero_text_color, hero_accent.
 - If target_component is 'overall', 'webpage', or 'website', populate primary_bg, text_color, secondary_bg, accent_color, navbar_bg, footer_bg, card_bg for a complete webpage theme update.
 ALWAYS pair dark background colors with light text (#ffffff) and light backgrounds with dark text (#0f172a)."""),
@@ -213,11 +252,14 @@ ALWAYS pair dark background colors with light text (#ffffff) and light backgroun
 
     try:
         structured_chain = patch_prompt | llm.with_structured_output(ColorPatchOutput)
-        result: ColorPatchOutput = await structured_chain.ainvoke({
-            "current_theme": json.dumps(current_theme),
-            "target_component": target_component,
-            "color_request": color_request,
-        })
+        result: ColorPatchOutput = await structured_chain.ainvoke(
+            {
+                "current_theme": json.dumps(current_theme),
+                "target_component": target_component,
+                "color_request": color_request,
+            },
+            config={"callbacks": [TokenCostCallback("ColorAgent.ComponentPatch", session_id=session_id)]}
+        )
         raw_patch = {k: v for k, v in result.model_dump().items() if v is not None}
 
         # Filter keys based on target component to prevent accidental overall page background leakage
@@ -263,8 +305,9 @@ async def generate_component_palette_suggestions(
 # ==========================================
 
 def apply_theme_to_blocks(pages: List[Dict[str, Any]], patch_dict: Dict[str, Any], target_type: Optional[str] = None) -> None:
-    """Updates block props across all page definitions in-place with contrast safety."""
+    """Updates block props across all page definitions in-place with isolated component scoping."""
     is_overall = not target_type or target_type.lower() in ["overall", "webpage", "website", "site", "all", "entire"]
+    target_clean = (target_type or "").lower().strip()
 
     for page in pages:
         blocks = page.get("blocks") or []
@@ -282,39 +325,79 @@ def apply_theme_to_blocks(pages: List[Dict[str, Any]], patch_dict: Dict[str, Any
                     "border_color", "soft_border_color", "navbar_bg", "navbar_outer_bg",
                     "navbar_text_color", "navbar_border_color", "footer_bg",
                     "footer_text_color", "footer_muted_color", "footer_border_color",
-                    "hero_bg", "hero_text_color", "hero_accent"
+                    "hero_bg", "hero_text_color", "hero_accent",
+                    "button_bg_color", "button_text_color", "card_color"
                 ]:
                     bprops.pop(key, None)
             else:
-                # 1. Navbar Block Prop Sync
-                if "navbar" in btype or "header" in btype:
+                # 1. Navbar Block Prop Sync (ONLY navbar blocks)
+                if ("navbar" in target_clean or "header" in target_clean) and ("navbar" in btype or "header" in btype):
                     if "navbar_bg" in patch_dict:
                         bprops["navbar_bg"] = patch_dict["navbar_bg"]
                         bprops["background_color"] = patch_dict["navbar_bg"]
                     if "navbar_text_color" in patch_dict:
                         bprops["navbar_text_color"] = patch_dict["navbar_text_color"]
                         bprops["text_color"] = patch_dict["navbar_text_color"]
+                    if "navbar_border_color" in patch_dict:
+                        bprops["navbar_border_color"] = patch_dict["navbar_border_color"]
 
-                # 2. Footer Block Prop Sync
-                elif "footer" in btype:
+                # 2. Footer Block Prop Sync (ONLY footer blocks)
+                elif "footer" in target_clean and "footer" in btype:
                     if "footer_bg" in patch_dict:
                         bprops["footer_bg"] = patch_dict["footer_bg"]
                         bprops["background_color"] = patch_dict["footer_bg"]
                     if "footer_text_color" in patch_dict:
                         bprops["footer_text_color"] = patch_dict["footer_text_color"]
                         bprops["text_color"] = patch_dict["footer_text_color"]
+                    if "footer_border_color" in patch_dict:
+                        bprops["border_color"] = patch_dict["footer_border_color"]
 
-                # 3. Product / Card / Grid / Details Block Prop Sync
-                elif any(c in btype for c in ["product", "card", "grid", "detail", "gallery", "info"]):
-                    if "card_bg" in patch_dict:
-                        bprops["card_bg"] = patch_dict["card_bg"]
+                # 3. Product Detail Page Block Prop Sync (ONLY product detail blocks)
+                elif "product_detail" in target_clean and any(d in btype for d in ["product_detail", "productdetail", "product_info", "productinfo", "product_gallery", "productgallery", "purchase_panel", "purchasepanel"]):
+                    if "product_detail_bg" in patch_dict:
+                        bprops["background_color"] = patch_dict["product_detail_bg"]
+                        bprops["panel_color"] = patch_dict["product_detail_bg"]
+                    elif "card_bg" in patch_dict:
                         bprops["background_color"] = patch_dict["card_bg"]
-                    if "card_text_color" in patch_dict:
-                        bprops["card_text_color"] = patch_dict["card_text_color"]
+                        bprops["panel_color"] = patch_dict["card_bg"]
+                    if "product_detail_text" in patch_dict:
+                        bprops["text_color"] = patch_dict["product_detail_text"]
+                    elif "card_text_color" in patch_dict:
                         bprops["text_color"] = patch_dict["card_text_color"]
+                    if "product_detail_btn_bg" in patch_dict:
+                        bprops["button_bg_color"] = patch_dict["product_detail_btn_bg"]
+                    elif "accent_color" in patch_dict:
+                        bprops["button_bg_color"] = patch_dict["accent_color"]
+                    if "product_detail_btn_text" in patch_dict:
+                        bprops["button_text_color"] = patch_dict["product_detail_btn_text"]
+                    elif "accent_text" in patch_dict:
+                        bprops["button_text_color"] = patch_dict["accent_text"]
 
-                # 4. Hero Banner / Slider Block Prop Sync
-                elif any(h in btype for h in ["hero", "banner", "slider"]):
+                # 4. Product Catalog / Grid / Card Block Prop Sync (ONLY product_grid blocks)
+                elif any(c in target_clean for c in ["card", "product_grid", "grid"]) and any(g in btype for g in ["product_grid", "productgrid", "category_grid", "categorygrid"]):
+                    if "card_bg" in patch_dict:
+                        bprops["card_bg_color"] = patch_dict["card_bg"]
+                    if "card_text_color" in patch_dict:
+                        bprops["title_color"] = patch_dict["card_text_color"]
+                    if "card_border_color" in patch_dict:
+                        bprops["card_border_color"] = patch_dict["card_border_color"]
+
+                # 5. Cart / Cart Drawer / Checkout Summary Block Prop Sync (ONLY cart blocks)
+                elif "cart" in target_clean and any(k in btype for k in ["cart_sidebar", "cartsidebar", "cart_items", "cartitems", "order_summary", "ordersummary"]):
+                    if "cart_bg" in patch_dict:
+                        bprops["background_color"] = patch_dict["cart_bg"]
+                        bprops["panel_color"] = patch_dict["cart_bg"]
+                    elif "secondary_bg" in patch_dict:
+                        bprops["background_color"] = patch_dict["secondary_bg"]
+                    if "cart_card_bg" in patch_dict:
+                        bprops["card_color"] = patch_dict["cart_card_bg"]
+                    if "cart_text_color" in patch_dict:
+                        bprops["text_color"] = patch_dict["cart_text_color"]
+                    if "cart_accent_color" in patch_dict:
+                        bprops["accent_color"] = patch_dict["cart_accent_color"]
+
+                # 6. Hero Banner / Slider Block Prop Sync (ONLY hero blocks)
+                elif any(h in target_clean for h in ["hero", "banner", "slider"]) and any(h in btype for h in ["hero", "banner", "slider"]):
                     if "hero_bg" in patch_dict:
                         bprops["hero_bg"] = patch_dict["hero_bg"]
                         bprops["background_color"] = patch_dict["hero_bg"]
@@ -331,6 +414,21 @@ def apply_theme_to_blocks(pages: List[Dict[str, Any]], patch_dict: Dict[str, Any
                                 if "hero_text_color" in patch_dict:
                                     slide["hero_text_color"] = patch_dict["hero_text_color"]
                                     slide["text_color"] = patch_dict["hero_text_color"]
+
+                # 7. Review Section Block Prop Sync (ONLY review blocks)
+                elif "review" in target_clean and any(r in btype for r in ["review", "reviews", "ratings"]):
+                    if "review_card_bg" in patch_dict:
+                        bprops["card_bg_color"] = patch_dict["review_card_bg"]
+                        bprops["background_color"] = patch_dict["review_card_bg"]
+                    elif "card_bg" in patch_dict:
+                        bprops["card_bg_color"] = patch_dict["card_bg"]
+                        bprops["background_color"] = patch_dict["card_bg"]
+                    if "review_text_color" in patch_dict:
+                        bprops["text_color"] = patch_dict["review_text_color"]
+                    elif "card_text_color" in patch_dict:
+                        bprops["text_color"] = patch_dict["card_text_color"]
+                    if "review_border_color" in patch_dict:
+                        bprops["border_color"] = patch_dict["review_border_color"]
 
 
 # ==========================================
@@ -373,10 +471,12 @@ def detect_target_component(user_message: str, target_component: Optional[str] =
         found_components.add("review")
     if "filter" in msg_lower:
         found_components.add("filter")
-    if any(w in msg_lower for w in ["detail", "gallery", "product info"]):
+    if any(w in msg_lower for w in ["product detail", "product page", "details page", "detail page", "product info", "gallery", "purchase panel"]):
         found_components.add("product_detail")
-    if any(w in msg_lower for w in ["card", "product card", "products"]):
+    elif any(w in msg_lower for w in ["product card", "product cards", "card color", "cards color", "card bg", "card background", "catalog card", "item card", "grid card", "card"]):
         found_components.add("card")
+    elif any(w in msg_lower for w in ["product grid", "products grid", "products section", "product section", "collection grid"]):
+        found_components.add("product_grid")
     if any(w in msg_lower for w in ["background", "bg", "page bg"]):
         found_components.add("background")
 
@@ -507,8 +607,17 @@ async def handle_color_and_design_request(
 
     if ai_color_patch:
         # Guarantee High-Contrast Accessibility ONLY when text color is not explicitly specified by user!
-        if "navbar_bg" in ai_color_patch and "navbar_text_color" not in raw_keys:
-            ai_color_patch["navbar_text_color"] = calculate_contrast_color(ai_color_patch["navbar_bg"])
+        if "navbar_bg" in ai_color_patch:
+            if "navbar_outer_bg" not in raw_keys:
+                ai_color_patch["navbar_outer_bg"] = ai_color_patch["navbar_bg"]
+            if "navbar_text_color" not in raw_keys:
+                ai_color_patch["navbar_text_color"] = calculate_contrast_color(ai_color_patch["navbar_bg"])
+        elif "navbar_outer_bg" in ai_color_patch:
+            if "navbar_bg" not in raw_keys:
+                ai_color_patch["navbar_bg"] = ai_color_patch["navbar_outer_bg"]
+            if "navbar_text_color" not in raw_keys:
+                ai_color_patch["navbar_text_color"] = calculate_contrast_color(ai_color_patch["navbar_outer_bg"])
+
         if "footer_bg" in ai_color_patch and "footer_text_color" not in raw_keys:
             ai_color_patch["footer_text_color"] = calculate_contrast_color(ai_color_patch["footer_bg"])
         if "card_bg" in ai_color_patch and "card_text_color" not in raw_keys:

@@ -107,6 +107,30 @@ def get_store_metrics_for_period(
 
     cancel_rate_str = f"{(cancelled_count / len(all_orders) * 100):.1f}%" if all_orders else "0.0%"
 
+    # Granular order status counts for clear AI answering
+    new_orders_count = sum(v for k, v in status_counts.items() if k in ["placed", "new", "pending"])
+    pending_fulfillment_count = sum(v for k, v in status_counts.items() if k in ["placed", "new", "pending", "accepted", "confirmed", "processing"])
+    accepted_orders_count = sum(v for k, v in status_counts.items() if k in ["accepted", "confirmed"])
+    shipped_orders_count = sum(v for k, v in status_counts.items() if k in ["shipped", "out_for_delivery", "in_transit"])
+    delivered_orders_count = status_counts.get("delivered", 0)
+    cancelled_orders_count = sum(v for k, v in status_counts.items() if "cancel" in k)
+
+    breakdown_parts = []
+    for st_name, count in status_counts.items():
+        breakdown_parts.append(f"{st_name.replace('_', ' ').title()}: {count}")
+    orders_breakdown_summary = ", ".join(breakdown_parts) if breakdown_parts else "No orders recorded yet"
+
+    recent_orders_list = [
+        {
+            "id": str(o.id)[:8],
+            "status": str(o.status or "placed"),
+            "total": f"₹{float(o.total or 0):,.2f}",
+            "customer_name": getattr(o, "customer_name", "Customer"),
+            "created_at": o.created_at.strftime("%Y-%m-%d %H:%M") if getattr(o, "created_at", None) else "",
+        }
+        for o in all_orders[:10]
+    ]
+
     # Returns breakdown from ReturnRequest table
     returns_all = db.exec(select(ReturnRequest).where(ReturnRequest.site_id == site_uuid).order_by(ReturnRequest.created_at.desc())).all()
     return_status_counts: Dict[str, int] = {}
@@ -118,14 +142,14 @@ def get_store_metrics_for_period(
         if rst in ["refunded", "closed"]:
             total_refunded_amount += float(r.final_refund_amount or r.suggested_refund_amount or 0)
 
-    # Real Product Reviews & Ratings calculation from PostgreSQL
+    # Review metrics & Top Rated Products
     reviews_all = db.exec(select(ProductReview).where(ProductReview.site_id == site_uuid)).all()
     products_all = db.exec(select(Product).where(Product.site_id == site_uuid)).all()
     prod_map = {p.id: p for p in products_all}
 
     total_reviews_count = len(reviews_all)
     avg_rating_str = "No reviews yet"
-    top_rated_products = []
+    top_rated_products: List[Dict[str, Any]] = []
 
     if reviews_all:
         avg_num = sum(r.rating for r in reviews_all) / total_reviews_count
@@ -183,6 +207,14 @@ def get_store_metrics_for_period(
         "period_sales": period_sales,
         "lifetime_sales": lifetime_sales,
         "status_counts": status_counts,
+        "new_orders_count": new_orders_count,
+        "pending_orders_count": pending_fulfillment_count,
+        "accepted_orders_count": accepted_orders_count,
+        "shipped_orders_count": shipped_orders_count,
+        "delivered_orders_count": delivered_orders_count,
+        "cancelled_orders_count": cancelled_orders_count,
+        "orders_breakdown_summary": orders_breakdown_summary,
+        "recent_orders_list": recent_orders_list,
         "top_product": top_product,
         "product_sales_qty": product_sales_qty,
         "avg_rating": avg_rating_str,

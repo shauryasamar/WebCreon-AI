@@ -6,7 +6,7 @@ import { getCheckoutAddresses, SavedAddress } from "./addressService";
 import { useCustomerAuth } from "./context/CustomerAuthContext";
 import FilterModal, { FilterState } from "./Component/FilterModal";
 import { API_BASE_URL } from "./config/api";
-import { ThemeProvider } from "./context/ThemeContext";
+import { ThemeProvider, resolveThemeTokens } from "./context/ThemeContext";
 
 type Block = {
   id?: string;
@@ -829,35 +829,23 @@ const RenderPage: React.FC<RenderPageProps> = ({
     CHECKOUT_SUMMARY_TYPES.has(block.type.toLowerCase())
   );
 
-  const explicitLightMode = typeof theme?.mode === "string" && theme.mode.toLowerCase() === "light";
-  const explicitDarkMode = typeof theme?.mode === "string" && theme.mode.toLowerCase() === "dark";
+  const {
+    isDark,
+    primaryBg: pageBg,
+    cardBg,
+    textColor,
+    mutedTextColor: subtleText,
+    borderColor: resolvedBorderColor,
+    accentColor,
+    panelBg: softPanel,
+    subtleBg: mutedPanel,
+  } = resolveThemeTokens(theme);
+  const isLight = !isDark;
 
-  const isLight = explicitLightMode || (!explicitDarkMode && (
-    (theme?.text_color && isColorDarkHex(theme.text_color)) || 
-    (theme?.primary_bg && !isColorDarkHex(theme.primary_bg)) || 
-    (theme?.card_bg && !isColorDarkHex(theme.card_bg)) || 
-    (!theme?.text_color && !theme?.primary_bg && !theme?.card_bg)
-  ));
-
-  const pageBg = theme?.primary_bg || (isLight ? "#f6f7fb" : "#0f172a");
-  const textColor = theme?.text_color || (isLight ? "#111827" : "#f9fafb");
-  const isTextColorDark = isColorDarkHex(textColor);
-  const subtleText = (theme as any)?.muted_text_color || (isTextColorDark ? "#6b7280" : "rgba(255,255,255,0.68)");
-  const accentColor = theme?.accent_color || "#2f6df6";
-
-  const shellBg = isLight ? "#ffffff" : "rgba(15,23,42,0.42)";
-  const shellBorder = isLight
-    ? "1px solid #e8ebf0"
-    : "1px solid rgba(255,255,255,0.08)";
-  const softPanel = isLight ? "#f8fafc" : "rgba(255,255,255,0.04)";
-  const cardBg = isLight ? "#ffffff" : "rgba(255,255,255,0.04)";
-  const cardBorder = isLight
-    ? "1px solid #e5e7eb"
-    : "1px solid rgba(255,255,255,0.08)";
-  const cardDivider = isLight
-    ? "1px solid #edf0f4"
-    : "1px solid rgba(255,255,255,0.08)";
-  const mutedPanel = isLight ? "#f8fafc" : "rgba(255,255,255,0.03)";
+  const shellBg = isLight ? "#ffffff" : "rgba(255,255,255,0.06)";
+  const shellBorder = `1px solid ${resolvedBorderColor}`;
+  const cardBorder = `1px solid ${resolvedBorderColor}`;
+  const cardDivider = `1px solid ${resolvedBorderColor}`;
 
   const selectedAddress =
     savedAddresses.find((address) => address.id === selectedAddressId) || null;

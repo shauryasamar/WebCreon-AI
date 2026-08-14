@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
+import { isColorDarkHex } from "../context/ThemeContext";
 
 export type FilterState = {
   categoryId: string | null;
@@ -137,7 +138,11 @@ const FilterModal: React.FC<FilterModalProps> = ({
   const isInline = Boolean(container);
   const targetContainer = container || document.body;
 
-  const isDark = theme?.mode !== "light";
+  const isDark =
+    (theme?.primary_bg ? isColorDarkHex(theme.primary_bg) : false) ||
+    (theme?.secondary_bg ? isColorDarkHex(theme.secondary_bg) : false) ||
+    (theme?.text_color ? !isColorDarkHex(theme.text_color) : false) ||
+    theme?.mode === "dark";
   
   const rawBg = (theme as any)?.dialog_bg || (theme as any)?.surface_bg || theme?.primary_bg;
   const bg = rawBg || (isDark ? "#0f172a" : "#ffffff");

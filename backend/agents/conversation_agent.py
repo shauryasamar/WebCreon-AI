@@ -204,11 +204,15 @@ async def advance_session(session_id: str, user_reply: Optional[str] = None) -> 
 
     # 2. Run LLM Agent Analysis
     try:
-        analysis: AgentAnalysis = await analyzer_chain.ainvoke({
-            "history": history_str,
-            "collected": str(session.collected),
-            "admin_name": session.admin_name
-        })
+        from agents.token_tracker import TokenCostCallback
+        analysis: AgentAnalysis = await analyzer_chain.ainvoke(
+            {
+                "history": history_str,
+                "collected": str(session.collected),
+                "admin_name": session.admin_name,
+            },
+            config={"callbacks": [TokenCostCallback("Onboarding.Analyzer", session_id=session_id)]}
+        )
 
         # Update collected dict with newly extracted parameters
         if analysis.extracted_brand_name and not session.collected.get("brand_name"):
@@ -253,6 +257,7 @@ async def advance_session(session_id: str, user_reply: Optional[str] = None) -> 
                     brand_name=session.collected.get("brand_name", "Brand"),
                     domain=session.collected.get("domain", "general"),
                     color_description=color_desc,
+                    session_id=session_id,
                 )
                 if palettes:
                     session.palette_options = palettes

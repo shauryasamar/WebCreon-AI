@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
+import { isColorDarkHex } from "../context/ThemeContext";
 
 type ThemeInput =
   | "dark"
@@ -157,7 +158,12 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
   }, []);
 
   const themeObject = typeof theme === "object" ? theme : undefined;
-  const isDark = themeObject ? themeObject.mode !== "light" : theme === "dark";
+  const isDark =
+    theme === "dark" ||
+    (themeObject?.primary_bg ? isColorDarkHex(themeObject.primary_bg) : false) ||
+    (background_color ? isColorDarkHex(background_color) : false) ||
+    themeObject?.mode === "dark" ||
+    (themeObject?.text_color ? !isColorDarkHex(themeObject.text_color) : false);
 
   const resolvedAccent =
     accentColor ||

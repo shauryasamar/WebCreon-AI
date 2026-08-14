@@ -27,7 +27,7 @@ function isColorDarkHex(colorHex?: string): boolean {
       const r = parseInt(match[0], 10);
       const g = parseInt(match[1], 10);
       const b = parseInt(match[2], 10);
-      return (r * 0.299 + g * 0.587 + b * 0.114) < 160;
+      return (r * 0.299 + g * 0.587 + b * 0.114) < 150;
     }
   }
   const hex = colorHex.replace("#", "").trim();
@@ -35,15 +35,20 @@ function isColorDarkHex(colorHex?: string): boolean {
     const r = parseInt(hex[0] + hex[0], 16);
     const g = parseInt(hex[1] + hex[1], 16);
     const b = parseInt(hex[2] + hex[2], 16);
-    return (r * 0.299 + g * 0.587 + b * 0.114) < 160;
+    return (r * 0.299 + g * 0.587 + b * 0.114) < 150;
   }
   if (hex.length >= 6) {
     const r = parseInt(hex.substring(0, 2), 16);
     const g = parseInt(hex.substring(2, 4), 16);
     const b = parseInt(hex.substring(4, 6), 16);
-    return (r * 0.299 + g * 0.587 + b * 0.114) < 160;
+    return (r * 0.299 + g * 0.587 + b * 0.114) < 150;
   }
   return false;
+}
+
+function getContrastTextColor(bgHex?: string, fallbackLight = "#ffffff", fallbackDark = "#0f172a"): string {
+  if (!bgHex) return fallbackDark;
+  return isColorDarkHex(bgHex) ? fallbackLight : fallbackDark;
 }
 
 export const Pagination: React.FC<PaginationProps> = ({
@@ -61,24 +66,35 @@ export const Pagination: React.FC<PaginationProps> = ({
     return null;
   }
 
-  const explicitLightMode = typeof theme?.mode === "string" && theme.mode.toLowerCase() === "light";
-  const explicitDarkMode = typeof theme?.mode === "string" && theme.mode.toLowerCase() === "dark";
+  // Ground-Truth Luminance Darkness Detection (never trust stale theme.mode)
+  const isDarkCanvas =
+    (theme?.primary_bg ? isColorDarkHex(theme.primary_bg) : false) ||
+    (theme?.secondary_bg ? isColorDarkHex(theme.secondary_bg) : false) ||
+    (theme?.text_color ? !isColorDarkHex(theme.text_color) : false) ||
+    theme?.mode === "dark";
 
-  const isLight = explicitLightMode || (!explicitDarkMode && (
-    (theme?.text_color && isColorDarkHex(theme.text_color)) ||
-    (theme?.primary_bg && !isColorDarkHex(theme.primary_bg)) ||
-    (theme?.card_bg && !isColorDarkHex(theme.card_bg)) ||
-    (!theme?.text_color && !theme?.primary_bg && !theme?.card_bg)
-  ));
-
+  // Resolved dynamic theme tokens with guaranteed contrast
   const resolvedAccent = customAccent || theme?.accent_color || "#2563eb";
-  const primaryText = theme?.text_color || (isLight ? "#0f172a" : "#f8fafc");
-  const isTextDark = isColorDarkHex(primaryText);
-  
-  const mutedText = (theme as any)?.muted_text_color || (isTextDark ? "rgba(15, 23, 42, 0.65)" : "rgba(248, 250, 252, 0.65)");
-  const borderColor = (theme as any)?.border_color || (isLight ? "rgba(15, 23, 42, 0.12)" : "rgba(255, 255, 255, 0.12)");
-  const btnBg = isLight ? "#ffffff" : "rgba(255, 255, 255, 0.05)";
-  const btnHoverBg = isLight ? "#f1f5f9" : "rgba(255, 255, 255, 0.10)";
+  const activeBtnTextColor = isColorDarkHex(resolvedAccent) ? "#ffffff" : "#0f172a";
+
+  const btnBg = isDarkCanvas
+    ? "rgba(255, 255, 255, 0.10)"
+    : "#ffffff";
+
+  const btnHoverBg = isDarkCanvas
+    ? "rgba(255, 255, 255, 0.20)"
+    : "#f1f5f9";
+
+  const borderColor = isDarkCanvas
+    ? "rgba(255, 255, 255, 0.18)"
+    : (theme?.border_color || "rgba(15, 23, 42, 0.14)");
+
+  const btnTextColor = isDarkCanvas
+    ? "#ffffff"
+    : (theme?.text_color && isColorDarkHex(theme.text_color) ? theme.text_color : "#0f172a");
+
+  const mutedText = isDarkCanvas ? "rgba(255, 255, 255, 0.85)" : "#475569";
+  const disabledText = isDarkCanvas ? "rgba(255, 255, 255, 0.35)" : "#94a3b8";
 
   const getPageNumbers = (): (number | string)[] => {
     if (totalPages <= 7) {
@@ -115,16 +131,37 @@ export const Pagination: React.FC<PaginationProps> = ({
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: "12px",
+        gap: "14px",
         width: "100%",
         boxSizing: "border-box",
         ...style,
       }}
     >
       {showRangeText && totalItems !== undefined && totalItems > 0 && pageSize && (
-        <span style={{ fontSize: "13px", color: mutedText, fontWeight: 500 }}>
-          Showing <strong>{startItem}</strong> – <strong>{endItem}</strong> of <strong>{totalItems}</strong> items
-        </span>
+        <div
+          style={{
+            fontSize: "13px",
+            color: isDarkCanvas ? "rgba(255, 255, 255, 0.90)" : "#475569",
+            fontWeight: 500,
+            padding: "6px 16px",
+            borderRadius: "20px",
+            background: isDarkCanvas ? "rgba(255, 255, 255, 0.08)" : "rgba(15, 23, 42, 0.04)",
+            border: isDarkCanvas ? "1px solid rgba(255, 255, 255, 0.16)" : "1px solid rgba(15, 23, 42, 0.08)",
+            letterSpacing: "0.01em",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "5px",
+            backdropFilter: "blur(8px)",
+          }}
+        >
+          <span>Showing</span>
+          <span style={{ color: isDarkCanvas ? "#ffffff" : "#0f172a", fontWeight: 800, fontSize: "13.5px" }}>{startItem}</span>
+          <span>–</span>
+          <span style={{ color: isDarkCanvas ? "#ffffff" : "#0f172a", fontWeight: 800, fontSize: "13.5px" }}>{endItem}</span>
+          <span>of</span>
+          <span style={{ color: isDarkCanvas ? "#ffffff" : "#0f172a", fontWeight: 800, fontSize: "13.5px" }}>{totalItems}</span>
+          <span>items</span>
+        </div>
       )}
 
       {totalPages > 1 && (
@@ -153,7 +190,7 @@ export const Pagination: React.FC<PaginationProps> = ({
               borderRadius: "10px",
               border: `1px solid ${borderColor}`,
               background: btnBg,
-              color: currentPage <= 1 ? (isLight ? "#cbd5e1" : "#475569") : primaryText,
+              color: currentPage <= 1 ? disabledText : btnTextColor,
               cursor: currentPage <= 1 ? "not-allowed" : "pointer",
               fontSize: "13px",
               fontWeight: 600,
@@ -218,7 +255,7 @@ export const Pagination: React.FC<PaginationProps> = ({
                   borderRadius: "10px",
                   border: isActive ? `1px solid ${resolvedAccent}` : `1px solid ${borderColor}`,
                   background: isActive ? resolvedAccent : btnBg,
-                  color: isActive ? "#ffffff" : primaryText,
+                  color: isActive ? activeBtnTextColor : btnTextColor,
                   cursor: "pointer",
                   fontSize: "13px",
                   fontWeight: isActive ? 700 : 500,
@@ -260,7 +297,7 @@ export const Pagination: React.FC<PaginationProps> = ({
               borderRadius: "10px",
               border: `1px solid ${borderColor}`,
               background: btnBg,
-              color: currentPage >= totalPages ? (isLight ? "#cbd5e1" : "#475569") : primaryText,
+              color: currentPage >= totalPages ? disabledText : btnTextColor,
               cursor: currentPage >= totalPages ? "not-allowed" : "pointer",
               fontSize: "13px",
               fontWeight: 600,

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { isColorDarkHex } from "../context/ThemeContext";
 
 type SortOption = {
   value: string;
@@ -46,7 +47,10 @@ export const FilterSidebar = ({
   const [sortOpen, setSortOpen] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
 
-  const isDark = theme?.mode !== "light";
+  const isDark =
+    (theme?.primary_bg ? isColorDarkHex(theme.primary_bg) : false) ||
+    (theme?.text_color ? !isColorDarkHex(theme.text_color) : false) ||
+    theme?.mode === "dark";
   const accentColor = theme?.accent_color || (isDark ? "#60a5fa" : "#2563eb");
   const resolvedPrimaryBg = theme?.primary_bg || (isDark ? "#0f172a" : "#f8fafc");
 

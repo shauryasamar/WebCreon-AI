@@ -451,8 +451,12 @@ export function applyThemeToPages(pages: EditorPage[], targetTheme: any): Editor
       delete updatedProps.hero_accent;
 
       if (isNav) {
-        if (targetTheme.navbar_bg) updatedProps.navbar_bg = targetTheme.navbar_bg;
-        if (targetTheme.navbar_outer_bg) updatedProps.navbar_outer_bg = targetTheme.navbar_outer_bg;
+        if (targetTheme.navbar_bg) {
+          updatedProps.navbar_bg = targetTheme.navbar_bg;
+          updatedProps.navbar_outer_bg = targetTheme.navbar_outer_bg || targetTheme.navbar_bg;
+        } else if (targetTheme.navbar_outer_bg) {
+          updatedProps.navbar_outer_bg = targetTheme.navbar_outer_bg;
+        }
         if (targetTheme.navbar_text_color) updatedProps.navbar_text_color = targetTheme.navbar_text_color;
       } else if (isFooter) {
         if (targetTheme.footer_bg) updatedProps.footer_bg = targetTheme.footer_bg;
@@ -1150,9 +1154,13 @@ export function updateThemeValues(
   siteDefinition: EditorSiteDefinition,
   themePatch: Record<string, any>
 ): EditorSiteDefinition {
+  const nextPatch = { ...themePatch };
+  if (nextPatch.navbar_bg && !nextPatch.navbar_outer_bg) {
+    nextPatch.navbar_outer_bg = nextPatch.navbar_bg;
+  }
   const updatedTheme = {
     ...siteDefinition.theme,
-    ...themePatch,
+    ...nextPatch,
   };
   const nextPages = applyThemeToPages(siteDefinition.pages || [], updatedTheme);
 
@@ -1285,13 +1293,17 @@ export function saveThemeSnapshot(
     });
   }
 
-  const themeToSave = {
+  const themeToSave: Record<string, any> = {
     ...cleanBaseTheme,
     ...(heroBlockBg ? { hero_bg: heroBlockBg } : {}),
     ...(heroBlockText ? { hero_text_color: heroBlockText } : {}),
     ...(heroBlockAccent ? { hero_accent: heroBlockAccent } : {}),
     ...cleanCustomPatch,
   };
+
+  if (themeToSave.navbar_bg && !themeToSave.navbar_outer_bg) {
+    themeToSave.navbar_outer_bg = themeToSave.navbar_bg;
+  }
 
   const snapshot = {
     id: `theme_${Date.now()}`,
@@ -1311,12 +1323,19 @@ export function saveThemeSnapshot(
     } catch {}
   }
 
+  const finalTheme: Record<string, any> = {
+    ...siteDefinition.theme,
+    ...themeToSave,
+  };
+  if (finalTheme.navbar_bg && !finalTheme.navbar_outer_bg) {
+    finalTheme.navbar_outer_bg = finalTheme.navbar_bg;
+  }
+  const nextPages = applyThemeToPages(siteDefinition.pages || [], finalTheme);
+
   return {
     ...siteDefinition,
-    theme: {
-      ...siteDefinition.theme,
-      ...themeToSave,
-    },
+    theme: finalTheme,
+    pages: nextPages,
     saved_themes: updatedList,
   } as any;
 }
@@ -1339,6 +1358,10 @@ export function applyThemeSnapshot(
       cleanPatchProps[k] = patchProps[k];
     }
   });
+
+  if (cleanPatchProps.navbar_bg && !cleanPatchProps.navbar_outer_bg) {
+    cleanPatchProps.navbar_outer_bg = cleanPatchProps.navbar_bg;
+  }
 
   const updatedTheme: any = {
     ...baseDefaults,
