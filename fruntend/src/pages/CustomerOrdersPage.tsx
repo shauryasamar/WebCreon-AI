@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
+import { Pagination } from "../Component/Pagination";
 
 type OrderListItem = {
   id: string;
@@ -415,14 +416,45 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const loadOrders = async () => {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(5);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalOrders, setTotalOrders] = useState(0);
+
+  const loadOrders = async (page = currentPage) => {
     if (!siteId) return;
-    const response = await fetch(`${API_BASE_URL}/orders/${siteId}/my-orders`, {
+    const response = await fetch(`${API_BASE_URL}/orders/${siteId}/my-orders?page=${page}&page_size=${pageSize}`, {
       credentials: "include",
     });
     if (!response.ok) throw new Error("Failed to load orders");
     const data = await response.json();
-    setOrders(Array.isArray(data) ? data : []);
+    if (Array.isArray(data)) {
+      setOrders(data);
+      setTotalOrders(data.length);
+      setTotalPages(Math.ceil(data.length / pageSize) || 1);
+    } else if (data && Array.isArray(data.orders)) {
+      setOrders(data.orders);
+      setTotalOrders(data.total ?? data.orders.length);
+      setTotalPages(data.total_pages ?? Math.ceil((data.total ?? data.orders.length) / pageSize) ?? 1);
+    } else {
+      setOrders([]);
+      setTotalOrders(0);
+      setTotalPages(1);
+    }
+  };
+
+  const handlePageChange = async (newPage: number) => {
+    if (newPage === currentPage) return;
+    setCurrentPage(newPage);
+    setLoading(true);
+    try {
+      await loadOrders(newPage);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err) {
+      console.error("Failed to navigate order pages", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const loadReturns = async () => {
@@ -442,7 +474,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       try {
         setLoading(true);
         setError("");
-        await Promise.all([loadOrders(), loadReturns()]);
+        await Promise.all([loadOrders(1), loadReturns()]);
       } catch (err) {
         console.error(err);
         setOrders([]);
@@ -1476,33 +1508,39 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
           style={{
             display: "flex",
             justifyContent: "space-between",
-            alignItems: isMobile ? "flex-start" : "center",
+            alignItems: "center",
             gap: "16px",
             flexWrap: "wrap",
-            marginBottom: "22px",
+            marginBottom: "24px",
           }}
         >
-          <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <h1
               style={{
                 margin: 0,
-                fontSize: isMobile ? "26px" : "32px",
-                lineHeight: 1.1,
+                fontSize: isMobile ? "24px" : "28px",
+                lineHeight: 1.2,
                 fontWeight: 800,
-                letterSpacing: "-0.03em",
+                letterSpacing: "-0.02em",
+                color: textPrimary,
               }}
             >
               Order history
             </h1>
-            <p
-              style={{
-                margin: "8px 0 0",
-                color: textMuted,
-                fontSize: isMobile ? "13px" : "14px",
-              }}
-            >
-              Track orders, view shipment updates, and manage eligible actions.
-            </p>
+            {totalOrders > 0 && (
+              <span
+                style={{
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  padding: "4px 10px",
+                  borderRadius: "999px",
+                  background: isLight ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.08)",
+                  color: textMuted,
+                }}
+              >
+                {totalOrders} {totalOrders === 1 ? "order" : "orders"}
+              </span>
+            )}
           </div>
 
           <button
@@ -1525,15 +1563,19 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
               border: cardBorder,
               background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)",
               color: textPrimary,
-              borderRadius: "14px",
-              padding: "12px 16px",
-              fontSize: "14px",
+              borderRadius: "12px",
+              padding: "10px 16px",
+              fontSize: "13px",
               fontWeight: 700,
               cursor: "pointer",
-              width: isMobile ? "100%" : "auto",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              boxShadow: isLight ? "0 2px 6px rgba(15,23,42,0.04)" : "none",
+              transition: "all 0.15s ease",
             }}
           >
-            Continue shopping
+            ← Continue shopping
           </button>
         </div>
 
@@ -1603,90 +1645,116 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                   key={order.id}
                   style={{
                     background: cardBg,
-                    border: cardBorder,
-                    borderRadius: "22px",
+                    border: isExpanded ? `1px solid ${accentColor}55` : cardBorder,
+                    borderRadius: "20px",
                     overflow: "hidden",
-                    boxShadow: isLight
-                      ? "0 12px 28px rgba(15,23,42,0.06)"
-                      : "0 18px 40px rgba(2,6,23,0.28)",
+                    boxShadow: isExpanded
+                      ? (isLight ? "0 14px 32px rgba(15,23,42,0.10)" : "0 20px 44px rgba(2,6,23,0.40)")
+                      : (isLight ? "0 4px 16px rgba(15,23,42,0.04)" : "0 10px 24px rgba(2,6,23,0.20)"),
+                    transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                   }}
                 >
                   <button
                     type="button"
                     onClick={() => handleToggle(order.id)}
+                    aria-expanded={isExpanded}
                     style={{
                       width: "100%",
                       textAlign: "left",
-                      background: "transparent",
+                      background: isExpanded
+                        ? (isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.03)")
+                        : "transparent",
                       border: "none",
                       color: "inherit",
-                      padding: isCompact ? "16px 14px 14px" : "18px 18px 16px",
+                      padding: isMobile ? "14px 14px" : "18px 20px",
                       cursor: "pointer",
+                      display: "block",
+                      transition: "background 0.15s ease",
                     }}
                   >
                     <div
                       style={{
-                        display: "grid",
-                        gridTemplateColumns: isMobile
-                          ? "1fr"
-                          : isTablet
-                          ? "minmax(0, 1fr) minmax(0, 1fr)"
-                          : "minmax(0, 1.5fr) minmax(0, 1fr) auto auto",
-                        gap: "14px",
-                        alignItems: isMobile ? "flex-start" : "center",
+                        display: "flex",
+                        flexDirection: isMobile ? "column" : "row",
+                        justifyContent: "space-between",
+                        alignItems: isMobile ? "stretch" : "center",
+                        gap: isMobile ? "12px" : "16px",
                       }}
                     >
-                      <div style={{ minWidth: 0 }}>
+                      {/* Left: Order icon, number, date */}
+                      <div style={{ display: "flex", alignItems: "center", gap: "14px", minWidth: 0 }}>
                         <div
                           style={{
-                            fontSize: "15px",
-                            fontWeight: 800,
-                            letterSpacing: "-0.02em",
-                            marginBottom: "6px",
+                            width: "42px",
+                            height: "42px",
+                            borderRadius: "12px",
+                            background: isLight ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)",
+                            display: "grid",
+                            placeItems: "center",
+                            flexShrink: 0,
+                            color: textPrimary,
                           }}
                         >
-                          Order #{order.id.slice(0, 8)}
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+                            <line x1="3" y1="6" x2="21" y2="6"/>
+                            <path d="M16 10a4 4 0 0 1-8 0"/>
+                          </svg>
                         </div>
-                        <div
-                          style={{
-                            fontSize: "13px",
-                            color: textMuted,
-                            whiteSpace: isMobile ? "normal" : "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}
-                        >
-                          {formatDate(order.created_at)}
+
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "3px" }}>
+                            <span
+                              style={{
+                                fontSize: "15px",
+                                fontWeight: 800,
+                                letterSpacing: "-0.01em",
+                                color: textPrimary,
+                              }}
+                            >
+                              Order #{order.id.slice(0, 8)}
+                            </span>
+                            {order.items && order.items.length > 0 && (
+                              <span
+                                style={{
+                                  fontSize: "11px",
+                                  fontWeight: 700,
+                                  padding: "2px 8px",
+                                  borderRadius: "999px",
+                                  background: isLight ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.08)",
+                                  color: textMuted,
+                                }}
+                              >
+                                {order.items.length} {order.items.length === 1 ? "item" : "items"}
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: "13px", color: textMuted }}>
+                            {formatDate(order.created_at)}
+                          </div>
                         </div>
                       </div>
 
-                      <div style={{ minWidth: 0 }}>
-                        <div
-                          style={{
-                            fontSize: "12px",
-                            color: textMuted,
-                            marginBottom: "4px",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.08em",
-                          }}
-                        >
-                          Payment
-                        </div>
-                        <div style={{ fontSize: "14px", fontWeight: 700 }}>
-                          {(order.payment_method || "—").toUpperCase()}
-                        </div>
-                      </div>
-
-                      <div>
+                      {/* Middle & Right: Status, Price, Chevron */}
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: isMobile ? "space-between" : "flex-end",
+                          gap: isMobile ? "10px" : "20px",
+                          flexWrap: isMobile ? "wrap" : "nowrap",
+                        }}
+                      >
+                        {/* Status chip */}
                         <div
                           style={{
                             display: "inline-flex",
                             alignItems: "center",
-                            gap: "8px",
-                            padding: "9px 12px",
+                            gap: "6px",
+                            padding: "6px 12px",
                             borderRadius: "999px",
-                            background: `${statusColor}18`,
-                            border: `1px solid ${statusColor}30`,
+                            background: `${statusColor}14`,
+                            border: `1px solid ${statusColor}28`,
                             color: statusColor,
                             fontSize: "12px",
                             fontWeight: 800,
@@ -1694,18 +1762,66 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                             whiteSpace: "nowrap",
                           }}
                         >
+                          <span
+                            style={{
+                              width: "6px",
+                              height: "6px",
+                              borderRadius: "50%",
+                              background: statusColor,
+                            }}
+                          />
                           {order.status.replaceAll("_", " ")}
                         </div>
-                      </div>
 
-                      <div
-                        style={{
-                          fontSize: "16px",
-                          fontWeight: 800,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {formatPrice(order.total)}
+                        {/* Price */}
+                        <div
+                          style={{
+                            fontSize: "16px",
+                            fontWeight: 800,
+                            color: textPrimary,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {formatPrice(order.total)}
+                        </div>
+
+                        {/* Accordion expand indicator button */}
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "6px 12px",
+                            borderRadius: "10px",
+                            background: isExpanded
+                              ? `${accentColor}16`
+                              : (isLight ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.07)"),
+                            border: `1px solid ${isExpanded ? `${accentColor}33` : "transparent"}`,
+                            color: isExpanded ? accentColor : textMuted,
+                            fontSize: "12px",
+                            fontWeight: 700,
+                            transition: "all 0.2s ease",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <span>{isExpanded ? "Hide" : "Details"}</span>
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            style={{
+                              transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                              transition: "transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                            }}
+                          >
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </div>
                       </div>
                     </div>
                   </button>
@@ -2367,6 +2483,19 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
               );
             })}
           </div>
+        )}
+
+        {totalPages > 1 && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+            totalItems={totalOrders}
+            pageSize={pageSize}
+            showRangeText={true}
+            theme={theme}
+            accentColor={accentColor}
+          />
         )}
       </div>
     </div>

@@ -289,8 +289,14 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
   });
   const [sortBy, setSortBy] = useState("newest");
   const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 12;
   const [isCompactCheckout, setIsCompactCheckout] = useState(false);
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters, searchQuery, sortBy]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -505,6 +511,12 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
 
     return list;
   }, [products, searchQuery, filters, sortBy]);
+
+  const totalPages = Math.ceil(filteredAndSortedProducts.length / pageSize) || 1;
+  const paginatedProducts = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredAndSortedProducts.slice(start, start + pageSize);
+  }, [filteredAndSortedProducts, currentPage, pageSize]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -721,11 +733,23 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
           selectedProduct={selectedProduct}
         />
       );
+    } else if (!isProductDetailPageContext && (block.type === "pagination" || block.type === "Pagination")) {
+      renderedNode = (
+        <Component
+          {...componentProps}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          totalItems={filteredAndSortedProducts.length}
+          pageSize={pageSize}
+          theme={theme}
+        />
+      );
     } else if (!isProductDetailPageContext && isProductListingBlock) {
       renderedNode = (
         <Component
           {...componentProps}
-          products={filteredAndSortedProducts}
+          products={paginatedProducts}
           title={dynamicTitle}
           subtitle={dynamicSubtitle}
           itemCount={filteredAndSortedProducts.length}
@@ -733,6 +757,11 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
           sortBy={sortBy}
           onSortChange={setSortBy}
           onFilterClick={() => setFilterModalOpen(true)}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          pageSize={pageSize}
+          totalProducts={filteredAndSortedProducts.length}
         />
       );
     } else if (resolvedDataSource === "cart") {

@@ -415,22 +415,71 @@ class ProductReviewCreate(BaseModel):
         return [item.strip() for item in v if item and item.strip()]
 
 
-@router.get("", response_model=list[ProductResponse])
+@router.get("")
 def list_products(
     site_id: UUID,
+    page: Optional[int] = Query(None, ge=1, description="Page number"),
+    page_size: Optional[int] = Query(None, ge=1, le=100, description="Items per page"),
+    search: Optional[str] = Query(None, description="Search products by name/brand/category"),
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
     get_site_or_404(session, site_id)
-    products = session.exec(
-        select(Product).where(Product.site_id == site_id)
-    ).all()
+    
+    base_query = select(Product).where(Product.site_id == site_id)
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        base_query = base_query.where(
+            (Product.name.ilike(term))
+            | (Product.brand.ilike(term))
+            | (Product.category.ilike(term))
+        )
+
+    # If pagination is requested
+    if page is not None and page_size is not None:
+        count_query = select(func.count()).select_from(base_query.subquery())
+        total_count = session.exec(count_query).one() or 0
+
+        in_stock_count = session.exec(
+            select(func.count())
+            .select_from(Product)
+            .where(Product.site_id == site_id, Product.in_stock == True)
+        ).one() or 0
+
+        out_of_stock_count = session.exec(
+            select(func.count())
+            .select_from(Product)
+            .where(Product.site_id == site_id, Product.in_stock == False)
+        ).one() or 0
+
+        paginated_query = (
+            base_query.order_by(Product.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        products = session.exec(paginated_query).all()
+        total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
+
+        return {
+            "products": [to_product_response(product, session) for product in products],
+            "total": total_count,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "in_stock_count": in_stock_count,
+            "out_of_stock_count": out_of_stock_count,
+        }
+
+    # Unpaginated fallback
+    products = session.exec(base_query.order_by(Product.created_at.desc())).all()
     return [to_product_response(product, session) for product in products]
 
 
-@router.get("/public", response_model=list[ProductResponse], include_in_schema=False)
+@router.get("/public", include_in_schema=False)
 def list_products_public(
     site_id: UUID,
+    page: Optional[int] = Query(None, ge=1, description="Page number"),
+    page_size: Optional[int] = Query(None, ge=1, le=100, description="Items per page"),
     search: Optional[str] = Query(None, description="Search across name, brand, product type"),
     category_id: Optional[UUID] = Query(None, description="Filter by category ID"),
     product_type: Optional[list[str]] = Query(None, description="Filter by product type(s)"),
@@ -519,6 +568,22 @@ def list_products_public(
     else:
         # Default: newest first
         query = query.order_by(Product.created_at.desc())
+
+    if page is not None and page_size is not None:
+        count_query = select(func.count()).select_from(query.subquery())
+        total_count = session.exec(count_query).one() or 0
+        total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
+
+        paginated_query = query.offset((page - 1) * page_size).limit(page_size)
+        products = session.exec(paginated_query).all()
+
+        return {
+            "items": [to_product_response(product, session) for product in products],
+            "total": total_count,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+        }
 
     products = session.exec(query).all()
     return [to_product_response(product, session) for product in products]

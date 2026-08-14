@@ -1469,9 +1469,12 @@ export default function BuilderPage() {
 
         if (res.ok) {
           const data = await res.json();
-          const normalizedProducts = Array.isArray(data)
-            ? data.map(normalizeStorefrontProduct)
+          const rawList = Array.isArray(data)
+            ? data
+            : Array.isArray(data?.items)
+            ? data.items
             : [];
+          const normalizedProducts = rawList.map(normalizeStorefrontProduct);
           setSiteProducts(normalizedProducts);
         } else {
           console.error("Failed to load products for site", res.status);

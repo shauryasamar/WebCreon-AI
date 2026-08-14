@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { useCart, Product } from "../CartContext";
 import FilterSidebar from "./FilterSidebar";
+import { Pagination } from "./Pagination";
 
 type ProductGridProps = {
   siteId: string;
@@ -13,6 +14,13 @@ type ProductGridProps = {
   sortBy?: string;
   onSortChange?: (sort: string) => void;
   onFilterClick?: () => void;
+
+  // Pagination
+  currentPage?: number;
+  totalPages?: number;
+  onPageChange?: (page: number) => void;
+  pageSize?: number;
+  totalProducts?: number;
 
   // Layout & Spacing
   grid_gap?: string | number;
@@ -78,6 +86,11 @@ const ProductGrid: React.FC<ProductGridProps> = ({
   sortBy,
   onSortChange,
   onFilterClick,
+  currentPage,
+  totalPages,
+  onPageChange,
+  pageSize,
+  totalProducts,
   grid_gap,
   max_width,
   outer_bg_color,
@@ -596,6 +609,19 @@ function isColorDarkHex(colorHex?: string): boolean {
           );
         })}
       </div>
+
+      {totalPages && totalPages > 1 ? (
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={onPageChange}
+          totalItems={totalProducts || itemCount}
+          pageSize={pageSize}
+          showRangeText={true}
+          theme={theme}
+          accentColor={accentColor}
+        />
+      ) : null}
     </section>
   );
 };

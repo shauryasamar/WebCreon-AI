@@ -6,7 +6,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 from sqlmodel import Session, delete, func, select
 
@@ -1279,6 +1279,8 @@ def place_order(
 @router.get("/{site_id}/my-orders")
 def get_my_orders(
     site_id: UUID,
+    page: Optional[int] = Query(None, ge=1, description="Page number"),
+    page_size: Optional[int] = Query(None, ge=1, le=50, description="Orders per page"),
     user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
@@ -1287,14 +1289,24 @@ def get_my_orders(
     if not customer:
         raise HTTPException(status_code=404, detail="Customer account not found")
 
-    orders = session.exec(
-        select(Order)
-        .where(
-            Order.site_id == site_id,
-            Order.customer_id == customer.id,
+    base_query = select(Order).where(
+        Order.site_id == site_id,
+        Order.customer_id == customer.id,
+    )
+
+    if page is not None and page_size is not None:
+        count_query = select(func.count()).select_from(base_query.subquery())
+        total_count = session.exec(count_query).one() or 0
+        total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
+
+        paginated_query = (
+            base_query.order_by(Order.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
         )
-        .order_by(Order.created_at.desc())
-    ).all()
+        orders = session.exec(paginated_query).all()
+    else:
+        orders = session.exec(base_query.order_by(Order.created_at.desc())).all()
 
     order_ids = [order.id for order in orders]
     items_map: dict[UUID, list[OrderItem]] = {}
@@ -1329,6 +1341,15 @@ def get_my_orders(
                 "can_request_return": order.status == "delivered" and has_returnable_items,
             }
         )
+
+    if page is not None and page_size is not None:
+        return {
+            "orders": response,
+            "total": total_count,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+        }
 
     return response
 

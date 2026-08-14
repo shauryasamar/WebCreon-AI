@@ -236,8 +236,14 @@ const RenderPage: React.FC<RenderPageProps> = ({
   });
   const [sortBy, setSortBy] = useState("newest");
   const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 12;
   const [isCompactCheckout, setIsCompactCheckout] = useState(false);
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters, searchQuery, sortBy]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -519,6 +525,12 @@ const RenderPage: React.FC<RenderPageProps> = ({
     return list;
   }, [products, searchQuery, filters, sortBy]);
 
+  const totalPages = Math.ceil(filteredAndSortedProducts.length / pageSize) || 1;
+  const paginatedProducts = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredAndSortedProducts.slice(start, start + pageSize);
+  }, [filteredAndSortedProducts, currentPage, pageSize]);
+
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (filters.categoryId) count++;
@@ -685,6 +697,10 @@ const RenderPage: React.FC<RenderPageProps> = ({
       ...(overrides ?? {}),
     };
 
+    const isProductListingBlock =
+      resolvedDataSource === "products" ||
+      PRODUCT_LISTING_TYPES.has(String(block.type || "").toLowerCase());
+
     if (block.type === "navbar") {
       return (
         <Component
@@ -725,16 +741,27 @@ const RenderPage: React.FC<RenderPageProps> = ({
       );
     }
 
-    const isProductListingBlock =
-      resolvedDataSource === "products" ||
-      PRODUCT_LISTING_TYPES.has(String(block.type || "").toLowerCase());
+    if (!isProductDetailPageContext && (block.type === "pagination" || block.type === "Pagination")) {
+      return (
+        <Component
+          key={blockId}
+          {...componentProps}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          totalItems={filteredAndSortedProducts.length}
+          pageSize={pageSize}
+          theme={theme}
+        />
+      );
+    }
 
     if (!isProductDetailPageContext && isProductListingBlock) {
       return (
         <Component
           key={blockId}
           {...componentProps}
-          products={filteredAndSortedProducts}
+          products={paginatedProducts}
           title={dynamicTitle}
           subtitle={dynamicSubtitle}
           itemCount={filteredAndSortedProducts.length}
@@ -742,6 +769,11 @@ const RenderPage: React.FC<RenderPageProps> = ({
           sortBy={sortBy}
           onSortChange={setSortBy}
           onFilterClick={() => setFilterModalOpen(true)}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          pageSize={pageSize}
+          totalProducts={filteredAndSortedProducts.length}
         />
       );
     }

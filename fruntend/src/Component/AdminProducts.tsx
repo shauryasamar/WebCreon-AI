@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { API_BASE_URL} from "../config/api";
+import { Pagination } from "./Pagination";
 
 
 type VariantValue = {
@@ -142,7 +143,6 @@ const getVariantDiscountPercent = (price: string, comparePrice: string) => {
   const finalPrice = Number(price);
   const original = Number(comparePrice);
 
-
   if (
     !price.trim() ||
     !comparePrice.trim() ||
@@ -154,7 +154,6 @@ const getVariantDiscountPercent = (price: string, comparePrice: string) => {
     return null;
   }
 
-
   return Math.round(((original - finalPrice) / original) * 100);
 };
 
@@ -165,10 +164,21 @@ const AdminProducts = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
 
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalProducts, setTotalProducts] = useState(0);
+  const [inStockCount, setInStockCount] = useState(0);
+  const [outOfStockCount, setOutOfStockCount] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
+
+
   const [newCategoryName, setNewCategoryName] = useState("");
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState("");
   const [showAddCollection, setShowAddCollection] = useState(false);
+
 
   const [isLoading, setIsLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -417,21 +427,50 @@ const AdminProducts = () => {
   };
 
 
+  const loadProducts = async (page = currentPage, limit = pageSize, search = searchQuery) => {
+    if (!siteId) return;
+    setIsLoading(true);
+    try {
+      const searchParam = search.trim() ? `&search=${encodeURIComponent(search.trim())}` : "";
+      const prodRes = await fetch(
+        `${API_BASE_URL}/sites/${siteId}/products?page=${page}&page_size=${limit}${searchParam}`,
+        { credentials: "include" }
+      );
+
+      if (prodRes.ok) {
+        const data = await prodRes.json();
+        if (Array.isArray(data)) {
+          const normalized = data.map(normalizeProduct);
+          setProducts(normalized);
+          setTotalProducts(normalized.length);
+          setTotalPages(Math.ceil(normalized.length / limit) || 1);
+          setInStockCount(normalized.filter((p) => p.in_stock).length);
+          setOutOfStockCount(normalized.filter((p) => !p.in_stock).length);
+        } else if (data && Array.isArray(data.products)) {
+          const normalized = data.products.map(normalizeProduct);
+          setProducts(normalized);
+          setTotalProducts(data.total ?? normalized.length);
+          setTotalPages(data.total_pages ?? Math.ceil((data.total ?? normalized.length) / limit) ?? 1);
+          setInStockCount(data.in_stock_count ?? normalized.filter((p) => p.in_stock).length);
+          setOutOfStockCount(data.out_of_stock_count ?? normalized.filter((p) => !p.in_stock).length);
+        }
+      }
+    } catch (err) {
+      console.error("Error loading products", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const loadData = async () => {
+    const loadInitial = async () => {
       if (!siteId) return;
-      setIsLoading(true);
       try {
-        const [prodRes, catRes, colRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/sites/${siteId}/products`, { credentials: "include" }),
+        const [catRes, colRes] = await Promise.all([
           fetch(`${API_BASE_URL}/sites/${siteId}/categories/public`),
           fetch(`${API_BASE_URL}/sites/${siteId}/collections/public`),
         ]);
 
-        if (prodRes.ok) {
-          const data = await prodRes.json();
-          setProducts(Array.isArray(data) ? data.map(normalizeProduct) : []);
-        }
         if (catRes.ok) {
           const catData = await catRes.json();
           setCategories(Array.isArray(catData) ? catData : []);
@@ -441,13 +480,12 @@ const AdminProducts = () => {
           setCollections(Array.isArray(colData) ? colData : []);
         }
       } catch (err) {
-        console.error("Error loading products/categories/collections", err);
-      } finally {
-        setIsLoading(false);
+        console.error("Error loading categories/collections", err);
       }
+      await loadProducts(1, pageSize, searchQuery);
     };
 
-    loadData();
+    loadInitial();
   }, [siteId]);
 
 
@@ -588,11 +626,7 @@ const AdminProducts = () => {
           }
         );
         if (res.ok) {
-          const updatedRaw = await res.json();
-          const updated = normalizeProduct(updatedRaw);
-          setProducts((prev) =>
-            prev.map((p) => (p.id === updated.id ? updated : p))
-          );
+          await loadProducts(currentPage, pageSize, searchQuery);
         } else {
           console.error("Failed to update product", res.status);
         }
@@ -604,9 +638,7 @@ const AdminProducts = () => {
           body: JSON.stringify(payload),
         });
         if (res.ok) {
-          const createdRaw = await res.json();
-          const created = normalizeProduct(createdRaw);
-          setProducts((prev) => [...prev, created]);
+          await loadProducts(currentPage, pageSize, searchQuery);
         } else {
           console.error("Failed to create product", res.status);
         }
@@ -628,7 +660,7 @@ const AdminProducts = () => {
         { method: "DELETE", credentials: "include" }
       );
       if (res.ok) {
-        setProducts((prev) => prev.filter((p) => p.id !== productId));
+        await loadProducts(currentPage, pageSize, searchQuery);
       } else {
         console.error("Failed to delete product", res.status);
       }
@@ -643,10 +675,67 @@ const AdminProducts = () => {
       <div
         style={{
           display: "flex",
-          justifyContent: "flex-end",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: "12px",
+          flexWrap: "wrap",
           marginBottom: "18px",
         }}
       >
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: "1 1 240px", maxWidth: "380px" }}>
+          <input
+            type="text"
+            placeholder="Search products by name, brand, category..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                setCurrentPage(1);
+                loadProducts(1, pageSize, searchQuery);
+              }
+            }}
+            style={{
+              ...inputStyle,
+              padding: "8px 12px",
+              fontSize: "13px",
+              width: "100%",
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              setCurrentPage(1);
+              loadProducts(1, pageSize, searchQuery);
+            }}
+            style={{
+              ...primaryButtonStyle,
+              padding: "8px 14px",
+              fontSize: "12px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Search
+          </button>
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery("");
+                setCurrentPage(1);
+                loadProducts(1, pageSize, "");
+              }}
+              style={{
+                ...ghostButtonStyle,
+                padding: "8px 10px",
+                fontSize: "12px",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
         <button onClick={openCreateForm} style={primaryButtonStyle}>
           + Add product
         </button>
@@ -1100,15 +1189,9 @@ const AdminProducts = () => {
           marginBottom: "20px",
         }}
       >
-        <StatCard label="Total products" value={String(products.length)} />
-        <StatCard
-          label="In stock"
-          value={String(products.filter((p) => p.in_stock).length)}
-        />
-        <StatCard
-          label="Out of stock"
-          value={String(products.filter((p) => !p.in_stock).length)}
-        />
+        <StatCard label="Total products" value={String(totalProducts)} />
+        <StatCard label="In stock" value={String(inStockCount)} />
+        <StatCard label="Out of stock" value={String(outOfStockCount)} />
       </div>
 
 
@@ -1146,7 +1229,7 @@ const AdminProducts = () => {
               {!isLoading && products.length === 0 && (
                 <tr>
                   <td colSpan={5} style={tdStyle}>
-                    No products yet. Use “Add product” to create one.
+                    {searchQuery ? "No products match your search." : "No products yet. Use “Add product” to create one."}
                   </td>
                 </tr>
               )}
@@ -1282,6 +1365,59 @@ const AdminProducts = () => {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Pagination and page size controls */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "12px",
+          marginTop: "16px",
+          padding: "8px 4px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#64748b" }}>
+          <span>Rows per page:</span>
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              const newSize = Number(e.target.value);
+              setPageSize(newSize);
+              setCurrentPage(1);
+              loadProducts(1, newSize, searchQuery);
+            }}
+            style={{
+              padding: "6px 10px",
+              borderRadius: "6px",
+              border: "1px solid #cbd5e1",
+              background: "#ffffff",
+              color: "#0f172a",
+              fontSize: "13px",
+              cursor: "pointer",
+            }}
+          >
+            <option value={10}>10</option>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+          </select>
+        </div>
+
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={(page) => {
+            setCurrentPage(page);
+            loadProducts(page, pageSize, searchQuery);
+          }}
+          totalItems={totalProducts}
+          pageSize={pageSize}
+          showRangeText={true}
+          accentColor="#2563eb"
+          style={{ padding: 0 }}
+        />
       </div>
     </div>
   );
