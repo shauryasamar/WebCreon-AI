@@ -7,6 +7,7 @@ type AdminMode = "orders" | "returns";
 type OrderStatus =
   | "placed"
   | "confirmed"
+  | "accepted"
   | "shipped"
   | "out_for_delivery"
   | "delivered"
@@ -387,6 +388,7 @@ const getStatusTone = (status: string) => {
     case "placed":
       return { bg: "#eff6ff", text: "#1d4ed8", border: "1px solid #bfdbfe" };
     case "confirmed":
+    case "accepted":
       return { bg: "#ecfeff", text: "#0e7490", border: "1px solid #a5f3fc" };
     case "shipped":
       return { bg: "#fffbeb", text: "#b45309", border: "1px solid #fde68a" };
@@ -422,7 +424,7 @@ const matchesTab = (order: AdminOrderListItem, tab: TabKey) => {
     case "new":
       return order.status === "placed";
     case "yet_to_ship":
-      return order.status === "confirmed";
+      return order.status === "confirmed" || order.status === "accepted";
     case "yet_to_deliver":
       return order.status === "shipped" || order.status === "out_for_delivery";
     case "delivered":

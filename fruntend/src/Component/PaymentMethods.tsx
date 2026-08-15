@@ -167,16 +167,19 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
 
   const resolvedAccent =
     accentColor ||
+    (themeObject as any)?.payment_accent_color ||
     themeObject?.accent_color ||
     (isDark ? "#4f8cff" : "#2f6df6");
 
   const resolvedPrimaryBg =
     background_color ||
+    (themeObject as any)?.payment_bg ||
     themeObject?.primary_bg ||
     (isDark ? "#0f172a" : "#f6f7fb");
 
   const resolvedText =
     text_color ||
+    (themeObject as any)?.payment_text_color ||
     themeObject?.text_color ||
     (isDark ? "#f8fafc" : "#111827");
 
@@ -190,12 +193,12 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
     if (!isDark) {
       // Light or Warm Festive Light Theme
       const isPureWhiteBg = resolvedPrimaryBg.toLowerCase() === "#ffffff" || resolvedPrimaryBg.toLowerCase() === "#f8fafc" || resolvedPrimaryBg.toLowerCase() === "#f6f7fb";
-      const surfaceBg = background_color || (themeObject as any)?.surface_bg || (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.7);
-      const cardBgFinal = background_color || (isPureWhiteBg ? (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || "#ffffff" : surfaceBg);
-      const panelBgFinal = panel_color || cardBgFinal;
-      const optionBgFinal = isPureWhiteBg ? "#ffffff" : mixHex(cardBgFinal, "#ffffff", 0.3);
+      const surfaceBg = background_color || (themeObject as any)?.payment_bg || (themeObject as any)?.surface_bg || (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.7);
+      const cardBgFinal = background_color || (themeObject as any)?.payment_bg || (isPureWhiteBg ? (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || "#ffffff" : surfaceBg);
+      const panelBgFinal = panel_color || (themeObject as any)?.payment_card_bg || cardBgFinal;
+      const optionBgFinal = (themeObject as any)?.payment_card_bg || (isPureWhiteBg ? "#ffffff" : mixHex(cardBgFinal, "#ffffff", 0.3));
       const inputBgFinal = input_color || (isPureWhiteBg ? "#ffffff" : mixHex(cardBgFinal, "#ffffff", 0.5));
-      const borderFinal = border_color || (isPureWhiteBg ? "#e5e7eb" : mixHex(resolvedText, cardBgFinal, 0.15));
+      const borderFinal = border_color || (themeObject as any)?.payment_border_color || (isPureWhiteBg ? "#e5e7eb" : mixHex(resolvedText, cardBgFinal, 0.15));
 
       return {
         cardBg: cardBgFinal,
@@ -223,11 +226,13 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
     }
 
     // Dark or Deep Festive Dark Theme
-    const cardBgDark = background_color || (themeObject as any)?.surface_bg || (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.06);
-    const panelBgDark = panel_color || mixHex(resolvedPrimaryBg, "#ffffff", 0.07);
-    const optionBgDark = mixHex(resolvedPrimaryBg, "#ffffff", 0.04);
-    const inputBgDark = input_color || mixHex(resolvedPrimaryBg, "#ffffff", 0.09);
-    const borderDark = border_color || mixHex(resolvedText, resolvedPrimaryBg, 0.15);
+    const cardBgDark = background_color || (themeObject as any)?.payment_bg || (themeObject as any)?.surface_bg || (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.06);
+    const panelBgDark = panel_color || (themeObject as any)?.payment_card_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.07);
+    const isPaymentCardDark = isColorDarkHex(panelBgDark) || isColorDarkHex(cardBgDark);
+    const optionBgDark = (themeObject as any)?.payment_card_bg || (isPaymentCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.04) : "#f8fafc");
+    const inputBgDark = input_color || (isPaymentCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.09) : "#ffffff");
+    const borderDark = border_color || (themeObject as any)?.payment_border_color || (isPaymentCardDark ? mixHex(resolvedText, resolvedPrimaryBg, 0.15) : "#e2e8f0");
+    const paymentTextFinal = (themeObject as any)?.payment_text_color || (isPaymentCardDark ? resolvedText : "#0f172a");
 
     return {
       cardBg: cardBgDark,
@@ -236,20 +241,20 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
       optionSelectedBg: alpha(resolvedAccent, 0.16),
       inputBg: inputBgDark,
       border: borderDark,
-      softBorder: soft_border_color || mixHex(borderDark, resolvedPrimaryBg, 0.5),
-      text: resolvedText,
-      textMuted: muted_text_color || mixHex(resolvedText, resolvedPrimaryBg, 0.3),
-      textSoft: mixHex(resolvedText, resolvedPrimaryBg, 0.45),
-      placeholder: placeholder_color || mixHex(resolvedText, resolvedPrimaryBg, 0.45),
+      softBorder: soft_border_color || mixHex(borderDark, cardBgDark, 0.5),
+      text: paymentTextFinal,
+      textMuted: muted_text_color || (isPaymentCardDark ? mixHex(resolvedText, resolvedPrimaryBg, 0.3) : "#475569"),
+      textSoft: isPaymentCardDark ? mixHex(resolvedText, resolvedPrimaryBg, 0.45) : "#64748b",
+      placeholder: placeholder_color || (isPaymentCardDark ? mixHex(resolvedText, resolvedPrimaryBg, 0.45) : "#94a3b8"),
       shadow: "0 8px 22px rgba(0,0,0,0.25)",
       selectedRing: `0 0 0 3px ${resolvedAccent}2e`,
       inputRing: `0 0 0 3px ${resolvedAccent}2e`,
-      backButtonBg: mixHex(resolvedPrimaryBg, "#ffffff", 0.07),
-      backButtonText: resolvedText,
+      backButtonBg: isPaymentCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.07) : "#f1f5f9",
+      backButtonText: paymentTextFinal,
       backButtonBorder: borderDark,
       primaryButtonBg: resolvedAccent,
       primaryButtonDisabledBg: "rgba(148,163,184,0.28)",
-      primaryButtonText: "#ffffff",
+      primaryButtonText: (themeObject as any)?.place_order_btn_text || "#ffffff",
       radioBorder: borderDark,
     };
   }, [
@@ -264,6 +269,7 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
     resolvedPrimaryBg,
     resolvedText,
     soft_border_color,
+    themeObject,
   ]);
 
   const updatePayment = (nextMethod: string, nextUpiId: string) => {

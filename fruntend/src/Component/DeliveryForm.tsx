@@ -296,16 +296,19 @@ useEffect(() => {
 
   const resolvedAccent =
     accentColor ||
+    (themeObject as any)?.delivery_form_btn_bg ||
     themeObject?.accent_color ||
     (isDark ? "#4f8cff" : "#2f6df6");
 
   const resolvedPrimaryBg =
     background_color ||
+    (themeObject as any)?.delivery_form_bg ||
     themeObject?.primary_bg ||
     (isDark ? "#0f172a" : "#f6f7fb");
 
   const resolvedText =
     text_color ||
+    (themeObject as any)?.delivery_form_text ||
     themeObject?.text_color ||
     (isDark ? "#f8fafc" : "#111827");
 
@@ -317,11 +320,11 @@ useEffect(() => {
   const palette = useMemo(() => {
     if (!isDark) {
       // Light or Warm Festive Light Theme
-      const surfaceBg = background_color || (themeObject as any)?.surface_bg || (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.7);
+      const surfaceBg = background_color || (themeObject as any)?.delivery_form_bg || (themeObject as any)?.surface_bg || (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.7);
       const isPureWhiteBg = resolvedPrimaryBg.toLowerCase() === "#ffffff" || resolvedPrimaryBg.toLowerCase() === "#f8fafc" || resolvedPrimaryBg.toLowerCase() === "#f6f7fb";
-      const cardBgFinal = background_color || (isPureWhiteBg ? (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || "#ffffff" : surfaceBg);
-      const inputBgFinal = input_color || (isPureWhiteBg ? "#ffffff" : mixHex(cardBgFinal, "#ffffff", 0.5));
-      const borderFinal = border_color || (isPureWhiteBg ? "#e5e7eb" : mixHex(resolvedText, cardBgFinal, 0.15));
+      const cardBgFinal = background_color || (themeObject as any)?.delivery_form_bg || (isPureWhiteBg ? (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || "#ffffff" : surfaceBg);
+      const inputBgFinal = input_color || (themeObject as any)?.delivery_form_input_bg || (isPureWhiteBg ? "#ffffff" : mixHex(cardBgFinal, "#ffffff", 0.5));
+      const borderFinal = border_color || (themeObject as any)?.delivery_form_border || (isPureWhiteBg ? "#e5e7eb" : mixHex(resolvedText, cardBgFinal, 0.15));
 
       return {
         cardBg: cardBgFinal,
@@ -331,7 +334,7 @@ useEffect(() => {
         emptyStateBg: isPureWhiteBg ? "#f8fafc" : mixHex(cardBgFinal, "#000000", 0.03),
         emptyStateBorder: borderFinal,
         inputBg: inputBgFinal,
-        inputText: resolvedText,
+        inputText: (themeObject as any)?.delivery_form_input_text || resolvedText,
         border: borderFinal,
         softBorder: soft_border_color || mixHex(borderFinal, cardBgFinal, 0.5),
         selectedBorder: resolvedAccent,
@@ -349,7 +352,7 @@ useEffect(() => {
         secondaryButtonBorder: borderFinal,
         primaryButtonBg: resolvedAccent,
         primaryButtonDisabledBg: mixHex(resolvedAccent, cardBgFinal, 0.3),
-        primaryButtonText: "#ffffff",
+        primaryButtonText: (themeObject as any)?.delivery_form_btn_text || "#ffffff",
         radioBorder: borderFinal,
         editText: mixHex(resolvedText, cardBgFinal, 0.5),
         deleteText: "#dc2626",
@@ -361,39 +364,41 @@ useEffect(() => {
     }
 
     // Dark or Deep Festive Dark Theme (e.g. Deep Maroon, Forest Emerald, Festive Purple, Slate Dark)
-    const cardBgDark = background_color || (themeObject as any)?.surface_bg || (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.06);
-    const inputBgDark = input_color || mixHex(resolvedPrimaryBg, "#ffffff", 0.09);
-    const borderDark = border_color || mixHex(resolvedText, resolvedPrimaryBg, 0.15);
+    const cardBgDark = background_color || (themeObject as any)?.delivery_form_bg || (themeObject as any)?.surface_bg || (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.06);
+    const isFormCardDark = isColorDarkHex(cardBgDark);
+    const inputBgDark = input_color || (themeObject as any)?.delivery_form_input_bg || (isFormCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.09) : "#ffffff");
+    const borderDark = border_color || (themeObject as any)?.delivery_form_border || (isFormCardDark ? mixHex(resolvedText, resolvedPrimaryBg, 0.15) : "#e2e8f0");
+    const formTextFinal = (themeObject as any)?.delivery_form_text || (isFormCardDark ? resolvedText : "#0f172a");
 
     return {
       cardBg: cardBgDark,
-      panelBg: mixHex(resolvedPrimaryBg, "#ffffff", 0.07),
-      listCardBg: mixHex(resolvedPrimaryBg, "#ffffff", 0.04),
+      panelBg: isFormCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.07) : cardBgDark,
+      listCardBg: isFormCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.04) : "#f8fafc",
       listCardSelectedBg: alpha(resolvedAccent, 0.16),
-      emptyStateBg: mixHex(resolvedPrimaryBg, "#ffffff", 0.04),
+      emptyStateBg: isFormCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.04) : "#f8fafc",
       emptyStateBorder: borderDark,
       inputBg: inputBgDark,
-      inputText: resolvedText,
+      inputText: (themeObject as any)?.delivery_form_input_text || formTextFinal,
       border: borderDark,
-      softBorder: soft_border_color || mixHex(borderDark, resolvedPrimaryBg, 0.5),
+      softBorder: soft_border_color || mixHex(borderDark, cardBgDark, 0.5),
       selectedBorder: resolvedAccent,
-      text: resolvedText,
-      textMuted: muted_text_color || mixHex(resolvedText, resolvedPrimaryBg, 0.3),
-      textSoft: soft_text_color || mixHex(resolvedText, resolvedPrimaryBg, 0.45),
-      placeholder: placeholder_color || mixHex(resolvedText, resolvedPrimaryBg, 0.45),
+      text: formTextFinal,
+      textMuted: muted_text_color || (isFormCardDark ? mixHex(resolvedText, resolvedPrimaryBg, 0.3) : "#475569"),
+      textSoft: soft_text_color || (isFormCardDark ? mixHex(resolvedText, resolvedPrimaryBg, 0.45) : "#64748b"),
+      placeholder: placeholder_color || (isFormCardDark ? mixHex(resolvedText, resolvedPrimaryBg, 0.45) : "#94a3b8"),
       shadow: "0 8px 22px rgba(0,0,0,0.25)",
       accentRing: `0 0 0 3px ${resolvedAccent}2e`,
-      subtleButtonBg: mixHex(resolvedPrimaryBg, "#ffffff", 0.07),
-      subtleButtonText: resolvedText,
+      subtleButtonBg: isFormCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.07) : "#f1f5f9",
+      subtleButtonText: formTextFinal,
       subtleButtonBorder: borderDark,
-      secondaryButtonBg: mixHex(resolvedPrimaryBg, "#ffffff", 0.05),
-      secondaryButtonText: muted_text_color || mixHex(resolvedText, resolvedPrimaryBg, 0.3),
+      secondaryButtonBg: isFormCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.05) : "#f8fafc",
+      secondaryButtonText: muted_text_color || (isFormCardDark ? mixHex(resolvedText, resolvedPrimaryBg, 0.3) : "#475569"),
       secondaryButtonBorder: borderDark,
       primaryButtonBg: resolvedAccent,
       primaryButtonDisabledBg: "rgba(148,163,184,0.28)",
-      primaryButtonText: "#ffffff",
+      primaryButtonText: (themeObject as any)?.delivery_form_btn_text || "#ffffff",
       radioBorder: borderDark,
-      editText: mixHex(resolvedText, resolvedPrimaryBg, 0.35),
+      editText: isFormCardDark ? mixHex(resolvedText, resolvedPrimaryBg, 0.35) : "#64748b",
       deleteText: "#f87171",
       defaultBadgeBg: alpha(resolvedAccent, 0.16),
       errorBg: "rgba(239,68,68,0.12)",

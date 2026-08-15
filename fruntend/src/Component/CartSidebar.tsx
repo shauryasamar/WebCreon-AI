@@ -375,12 +375,26 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     (background_color ? isColorDarkHex(background_color) : false) ||
     (theme?.text_color ? !isColorDarkHex(theme.text_color) : false) ||
     theme?.mode === "dark";
+
   const resolvedAccentColor =
-    accent_color || accentColor || theme?.accent_color || "#7c3aed";
+    accent_color ||
+    accentColor ||
+    (isCheckoutSummary ? (theme as any)?.summary_accent_color : (theme as any)?.cart_accent_color) ||
+    theme?.accent_color ||
+    "#7c3aed";
+
   const resolvedPrimaryBg =
-    background_color || theme?.primary_bg || (isDark ? "#0b1020" : "#f8fafc");
+    background_color ||
+    (isCheckoutSummary ? (theme as any)?.summary_bg : (theme as any)?.cart_bg) ||
+    theme?.primary_bg ||
+    (isDark ? "#0b1020" : "#f8fafc");
+
   const resolvedTextColor =
-    text_color || theme?.text_color || (isDark ? "#e5e7eb" : "#0f172a");
+    text_color ||
+    (isCheckoutSummary ? (theme as any)?.summary_text_color : (theme as any)?.cart_text_color) ||
+    theme?.text_color ||
+    (isDark ? "#e5e7eb" : "#0f172a");
+
   const hasFestiveTint = Boolean(theme?.festival_theme);
 
   const outerRadius = clamp(border_radius ?? 24, 0, 40);
@@ -395,20 +409,39 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   const palette = useMemo(() => {
     const pageBg = resolvedPrimaryBg;
 
-    const dynamicShellBorder = border_color
-      ? border_color
-      : alpha(resolvedTextColor, isDark ? 0.12 : 0.08);
+    const dynamicShellBorder =
+      border_color ||
+      (isCheckoutSummary ? (theme as any)?.summary_border_color : (theme as any)?.cart_border_color) ||
+      alpha(resolvedTextColor, isDark ? 0.12 : 0.08);
 
-    const dynamicCardBorder = border_color
-      ? border_color
-      : alpha(resolvedTextColor, isDark ? 0.09 : 0.06);
+    const dynamicCardBorder =
+      border_color ||
+      (isCheckoutSummary ? (theme as any)?.summary_border_color : (theme as any)?.cart_border_color) ||
+      alpha(resolvedTextColor, isDark ? 0.09 : 0.06);
 
     if (!isDark) {
-      const shellBg = panel_color || background_color || (theme as any)?.cart_bg || "#ffffff";
-      const panelBg = panel_color || background_color || (theme as any)?.cart_panel_bg || (theme as any)?.cart_bg || mixHex(pageBg, "#ffffff", 0.7);
-      const cardBg = card_color || (theme as any)?.cart_card_bg || "#ffffff";
+      const shellBg =
+        panel_color ||
+        background_color ||
+        (isCheckoutSummary ? (theme as any)?.summary_bg : (theme as any)?.cart_bg) ||
+        "#ffffff";
+      const panelBg =
+        panel_color ||
+        background_color ||
+        (isCheckoutSummary ? (theme as any)?.summary_bg : (theme as any)?.cart_panel_bg || (theme as any)?.cart_bg) ||
+        mixHex(pageBg, "#ffffff", 0.7);
+      const cardBg =
+        card_color ||
+        (isCheckoutSummary ? (theme as any)?.summary_card_bg : (theme as any)?.cart_card_bg) ||
+        "#ffffff";
 
-      const cardText = getContrastingText(cardBg, text_color || (theme as any)?.cart_text_color || (theme as any)?.card_text_color || theme?.text_color || "#0f172a");
+      const cardText = getContrastingText(
+        cardBg,
+        text_color ||
+          (isCheckoutSummary ? (theme as any)?.summary_text_color : (theme as any)?.cart_text_color) ||
+          theme?.text_color ||
+          "#0f172a"
+      );
 
       return {
         pageBg,
@@ -890,7 +923,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
             minHeight: "48px",
             borderRadius: "14px",
             background: resolvedAccentColor,
-            color: "#ffffff",
+            color: isColorDarkHex(resolvedAccentColor) ? "#ffffff" : "#0f172a",
             fontSize: "14px",
             fontWeight: 700,
             textDecoration: "none",
@@ -910,7 +943,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
             border: "none",
             borderRadius: "14px",
             background: palette.disabledBg,
-            color: "#ffffff",
+            color: isColorDarkHex(palette.disabledBg) ? "#ffffff" : "#0f172a",
             fontSize: "14px",
             fontWeight: 700,
             cursor: "not-allowed",
@@ -1154,7 +1187,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                           border: "none",
                           borderRadius: "12px",
                           background: resolvedAccentColor,
-                          color: "#ffffff",
+                          color: isColorDarkHex(resolvedAccentColor) ? "#ffffff" : "#0f172a",
                           padding: "0 16px",
                           fontWeight: 700,
                           cursor: "pointer",
@@ -1588,7 +1621,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                           border: "none",
                           borderRadius: "12px",
                           background: resolvedAccentColor,
-                          color: "#ffffff",
+                          color: isColorDarkHex(resolvedAccentColor) ? "#ffffff" : "#0f172a",
                           padding: "0 16px",
                           fontWeight: 700,
                           cursor: "pointer",

@@ -68,30 +68,32 @@ export const Pagination: React.FC<PaginationProps> = ({
 
   // Ground-Truth Luminance Darkness Detection (never trust stale theme.mode)
   const isDarkCanvas =
+    ((theme as any)?.pagination_bg ? isColorDarkHex((theme as any).pagination_bg) : false) ||
     (theme?.primary_bg ? isColorDarkHex(theme.primary_bg) : false) ||
     (theme?.secondary_bg ? isColorDarkHex(theme.secondary_bg) : false) ||
+    ((theme as any)?.pagination_text_color ? !isColorDarkHex((theme as any).pagination_text_color) : false) ||
     (theme?.text_color ? !isColorDarkHex(theme.text_color) : false) ||
     theme?.mode === "dark";
 
   // Resolved dynamic theme tokens with guaranteed contrast
-  const resolvedAccent = customAccent || theme?.accent_color || "#2563eb";
+  const resolvedAccent = (theme as any)?.pagination_active_bg || customAccent || theme?.accent_color || "#2563eb";
   const activeBtnTextColor = isColorDarkHex(resolvedAccent) ? "#ffffff" : "#0f172a";
 
-  const btnBg = isDarkCanvas
+  const btnBg = (theme as any)?.pagination_bg || (isDarkCanvas
     ? "rgba(255, 255, 255, 0.10)"
-    : "#ffffff";
+    : "#ffffff");
 
   const btnHoverBg = isDarkCanvas
     ? "rgba(255, 255, 255, 0.20)"
     : "#f1f5f9";
 
-  const borderColor = isDarkCanvas
+  const borderColor = (theme as any)?.pagination_border_color || (isDarkCanvas
     ? "rgba(255, 255, 255, 0.18)"
-    : (theme?.border_color || "rgba(15, 23, 42, 0.14)");
+    : (theme?.border_color || "rgba(15, 23, 42, 0.14)"));
 
-  const btnTextColor = isDarkCanvas
+  const btnTextColor = (theme as any)?.pagination_text_color || (isDarkCanvas
     ? "#ffffff"
-    : (theme?.text_color && isColorDarkHex(theme.text_color) ? theme.text_color : "#0f172a");
+    : (theme?.text_color && isColorDarkHex(theme.text_color) ? theme.text_color : "#0f172a"));
 
   const mutedText = isDarkCanvas ? "rgba(255, 255, 255, 0.85)" : "#475569";
   const disabledText = isDarkCanvas ? "rgba(255, 255, 255, 0.35)" : "#94a3b8";

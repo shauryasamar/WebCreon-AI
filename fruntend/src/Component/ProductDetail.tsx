@@ -315,15 +315,11 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     primaryBg: resolvedPrimaryBg,
     cardBg: defaultCardBg,
     textColor: defaultTextColor,
-    mutedTextColor: mutedText,
-    softTextColor: subtleText,
     borderColor: resolvedBorderColor,
     accentColor: defaultAccent,
     accentHover,
     accentText: defaultAccentText,
   } = resolveThemeTokens(theme);
-  const isLight = !isDark;
-
   const panelBg =
     panel_color ||
     background_color ||
@@ -331,10 +327,26 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     (theme as any)?.detail_bg ||
     defaultCardBg;
 
+  // Determine dark vs light directly from the panel's own surface background!
+  const isPanelDark = isColorDarkHex(panelBg);
+  const isLight = !isPanelDark;
+
+  // Derive high-contrast typography and subtle elements relative to the panel surface!
+  const surfaceDefaultText = isPanelDark ? "#f8fafc" : "#0f172a";
+  const rawRequestedText = text_color || (theme as any)?.product_detail_text;
+
+  // If text color is provided and has good contrast, keep it; otherwise compute contrast against panel
   const pageText =
-    text_color ||
-    (theme as any)?.product_detail_text ||
-    defaultTextColor;
+    rawRequestedText && (isColorDarkHex(rawRequestedText) !== isPanelDark)
+      ? rawRequestedText
+      : (theme as any)?.card_text_color && (isColorDarkHex((theme as any).card_text_color) !== isPanelDark)
+      ? (theme as any).card_text_color
+      : (defaultTextColor && isColorDarkHex(defaultTextColor) !== isPanelDark)
+      ? defaultTextColor
+      : surfaceDefaultText;
+
+  const mutedText = isPanelDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.68)";
+  const subtleText = isPanelDark ? "rgba(248, 250, 252, 0.50)" : "rgba(15, 23, 42, 0.50)";
 
   const activeBtnBg =
     button_bg_color ||
@@ -348,7 +360,9 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
 
   const accentColor = activeBtnBg;
 
-  const subtleBorder = `1px solid ${resolvedBorderColor}`;
+  const subtleBorder = isPanelDark
+    ? `1px solid ${(theme as any)?.border_color || "rgba(255, 255, 255, 0.12)"}`
+    : `1px solid ${(theme as any)?.border_color || "rgba(15, 23, 42, 0.10)"}`;
 
   if (!product) {
     return (

@@ -270,6 +270,38 @@ async def conversation_start_endpoint(req: StartConversationRequest, request: Re
     return session.model_dump()
 
 
+@app.post("/conversation/start/stream")
+async def conversation_start_stream_endpoint(req: StartConversationRequest, request: Request):
+    admin_name = "Creator"
+    admin_email = None
+    try:
+        cookie_val = request.cookies.get("admin_session")
+        if cookie_val:
+            decoded = json.loads(cookie_val)
+            admin_email = decoded.get("email")
+            if admin_email:
+                admin_name = admin_email.split("@")[0].title()
+    except Exception:
+        pass
+
+    from agents.conversation_agent import start_session_stream
+
+    async def event_generator():
+        try:
+            async for event in start_session_stream(initial_prompt=req.prompt, admin_name=admin_name, admin_email=admin_email):
+                yield f"data: {json.dumps(event)}\n\n"
+        except Exception as e:
+            err_payload = {
+                "type": "done",
+                "text": f"Error starting session: {str(e)}",
+                "phase": "analyzing",
+                "is_complete": False,
+            }
+            yield f"data: {json.dumps(err_payload)}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
 @app.post("/conversation/reply")
 async def conversation_reply_endpoint(req: ReplyConversationRequest):
     from agents.conversation_agent import reply_session
@@ -280,12 +312,70 @@ async def conversation_reply_endpoint(req: ReplyConversationRequest):
         raise HTTPException(status_code=404, detail=str(ve))
 
 
+@app.post("/conversation/reply/stream")
+async def conversation_reply_stream_endpoint(req: ReplyConversationRequest):
+    from agents.conversation_agent import reply_session_stream, SESSIONS
+
+    session = SESSIONS.get(req.session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail=f"Session {req.session_id} not found")
+
+    async def event_generator():
+        try:
+            async for event in reply_session_stream(session_id=req.session_id, user_reply=req.reply):
+                yield f"data: {json.dumps(event)}\n\n"
+        except Exception as e:
+            err_payload = {
+                "type": "done",
+                "text": f"Error processing reply: {str(e)}",
+                "phase": "analyzing",
+                "is_complete": False,
+            }
+            yield f"data: {json.dumps(err_payload)}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
 @app.get("/conversation/{session_id}")
 async def conversation_get_endpoint(session_id: str):
     from agents.conversation_agent import SESSIONS
     session = SESSIONS.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    return session.model_dump()
+
+
+class RehydrateConversationRequest(BaseModel):
+    session_id: Optional[str] = None
+    collected: Optional[Dict[str, Any]] = None
+    turns: Optional[List[Dict[str, Any]]] = None
+    reply: Optional[str] = None
+
+
+@app.post("/conversation/rehydrate")
+async def conversation_rehydrate_endpoint(req: RehydrateConversationRequest, request: Request):
+    admin_name = "Creator"
+    admin_email = None
+    try:
+        cookie_val = request.cookies.get("admin_session")
+        if cookie_val:
+            decoded = json.loads(cookie_val)
+            admin_email = decoded.get("email")
+            if admin_email:
+                admin_name = admin_email.split("@")[0].title()
+    except Exception:
+        pass
+
+    from agents.conversation_agent import rehydrate_session, reply_session
+    session = await rehydrate_session(
+        session_id=req.session_id,
+        collected=req.collected,
+        turns=req.turns,
+        admin_name=admin_name,
+        admin_email=admin_email,
+    )
+    if req.reply:
+        session = await reply_session(session_id=session.session_id, user_reply=req.reply)
     return session.model_dump()
 
 
@@ -370,6 +460,7 @@ class CustomSiteDefinitionRequest(BaseModel):
 async def generate_site_definition_endpoint(req: CustomSiteDefinitionRequest):
     prompt_text = req.prompt or ""
     collected_reqs = {}
+    session = None
 
     if req.session_id:
         from agents.conversation_agent import SESSIONS
@@ -379,28 +470,54 @@ async def generate_site_definition_endpoint(req: CustomSiteDefinitionRequest):
             if not prompt_text:
                 prompt_text = "\n".join([f"{t['sender']}: {t['text']}" for t in session.turns])
 
-    # Run base extraction
-    requirements = await extract_requirements(prompt_text or "General store")
-
-    # Merge collected preferences from conversation
-    if collected_reqs.get("brand_name"):
-        requirements["brand_name"] = collected_reqs["brand_name"]
-    if collected_reqs.get("domain"):
-        requirements["domain"] = collected_reqs["domain"]
-        requirements["catalog_type"] = collected_reqs["domain"]
-    if collected_reqs.get("chosen_palette"):
-        requirements["chosen_palette"] = collected_reqs["chosen_palette"]
-    if collected_reqs.get("navbar_position"):
-        requirements["navbar_position"] = collected_reqs["navbar_position"]
-    if collected_reqs.get("navbar_layout"):
-        requirements["navbar_layout"] = collected_reqs["navbar_layout"]
-    if collected_reqs.get("footer_layout"):
-        requirements["footer_layout"] = collected_reqs["footer_layout"]
-    if collected_reqs.get("tagline"):
-        requirements["tagline"] = collected_reqs["tagline"]
+    # Fast path: If session.collected already has core requirements, compile directly without redundant LLM call
+    if collected_reqs.get("brand_name") and collected_reqs.get("domain") and collected_reqs.get("chosen_palette"):
+        from agents.understanding import WebsiteRequirements, _normalize_requirements
+        fast_reqs = WebsiteRequirements(
+            brand_name=collected_reqs["brand_name"],
+            domain=collected_reqs["domain"],
+            tagline=collected_reqs.get("tagline"),
+            chosen_palette=collected_reqs["chosen_palette"],
+            navbar_position=collected_reqs.get("navbar_position", "fixed"),
+            navbar_layout=collected_reqs.get("navbar_layout", "apple_minimal"),
+            footer_layout=collected_reqs.get("footer_layout", "apple_minimal"),
+            surface_materiality=collected_reqs.get("surface_materiality", "solid"),
+            catalog_type=collected_reqs.get("domain", "general"),
+        )
+        requirements = _normalize_requirements(fast_reqs).model_dump()
+    else:
+        # Fallback to LLM extraction for freeform prompt requests
+        requirements = await extract_requirements(prompt_text or "General store", session_id=req.session_id)
+        if collected_reqs.get("brand_name"):
+            requirements["brand_name"] = collected_reqs["brand_name"]
+        if collected_reqs.get("domain"):
+            requirements["domain"] = collected_reqs["domain"]
+            requirements["catalog_type"] = collected_reqs["domain"]
+        if collected_reqs.get("chosen_palette"):
+            requirements["chosen_palette"] = collected_reqs["chosen_palette"]
+        elif session and isinstance(requirements.get("chosen_palette"), str) and session.palette_options:
+            pal_str = requirements["chosen_palette"].strip().lower()
+            for p in session.palette_options:
+                if (
+                    p.get("id", "").lower() == pal_str
+                    or p.get("name", "").lower() == pal_str
+                    or pal_str.endswith(p.get("id", "").lower())
+                ):
+                    requirements["chosen_palette"] = p
+                    break
+        if collected_reqs.get("navbar_position"):
+            requirements["navbar_position"] = collected_reqs["navbar_position"]
+        if collected_reqs.get("navbar_layout"):
+            requirements["navbar_layout"] = collected_reqs["navbar_layout"]
+        if collected_reqs.get("footer_layout"):
+            requirements["footer_layout"] = collected_reqs["footer_layout"]
+        if collected_reqs.get("surface_materiality"):
+            requirements["surface_materiality"] = collected_reqs["surface_materiality"]
+        if collected_reqs.get("tagline"):
+            requirements["tagline"] = collected_reqs["tagline"]
 
     # Run plan and build site definition
-    site_plan = await plan_site(requirements)
+    site_plan = await plan_site(requirements, session_id=req.session_id)
     backend_config = build_backend_config(site_plan["backend_plan"])
     frontend_config = build_frontend_config(site_plan["frontend_plan"])
 
@@ -425,6 +542,7 @@ async def generate_site_definition_stream_endpoint(req: CustomSiteDefinitionRequ
             
             prompt_text = req.prompt or ""
             collected_reqs = {}
+            session = None
 
             if req.session_id:
                 from agents.conversation_agent import SESSIONS
@@ -435,26 +553,54 @@ async def generate_site_definition_stream_endpoint(req: CustomSiteDefinitionRequ
                         prompt_text = "\n".join([f"{t['sender']}: {t['text']}" for t in session.turns])
 
             yield f"data: {json.dumps({'step': 'understanding', 'progress': 25, 'message': 'Extracting e-commerce brand requirements and theme tokens...'})}\n\n"
-            requirements = await extract_requirements(prompt_text or "General store")
-
-            if collected_reqs.get("brand_name"):
-                requirements["brand_name"] = collected_reqs["brand_name"]
-            if collected_reqs.get("domain"):
-                requirements["domain"] = collected_reqs["domain"]
-                requirements["catalog_type"] = collected_reqs["domain"]
-            if collected_reqs.get("chosen_palette"):
-                requirements["chosen_palette"] = collected_reqs["chosen_palette"]
-            if collected_reqs.get("navbar_position"):
-                requirements["navbar_position"] = collected_reqs["navbar_position"]
-            if collected_reqs.get("navbar_layout"):
-                requirements["navbar_layout"] = collected_reqs["navbar_layout"]
-            if collected_reqs.get("footer_layout"):
-                requirements["footer_layout"] = collected_reqs["footer_layout"]
-            if collected_reqs.get("tagline"):
-                requirements["tagline"] = collected_reqs["tagline"]
+            
+            # Fast path: If session.collected already has core requirements, compile directly without redundant LLM call
+            if collected_reqs.get("brand_name") and collected_reqs.get("domain") and collected_reqs.get("chosen_palette"):
+                from agents.understanding import WebsiteRequirements, _normalize_requirements
+                fast_reqs = WebsiteRequirements(
+                    brand_name=collected_reqs["brand_name"],
+                    domain=collected_reqs["domain"],
+                    tagline=collected_reqs.get("tagline"),
+                    chosen_palette=collected_reqs["chosen_palette"],
+                    navbar_position=collected_reqs.get("navbar_position", "fixed"),
+                    navbar_layout=collected_reqs.get("navbar_layout", "apple_minimal"),
+                    footer_layout=collected_reqs.get("footer_layout", "apple_minimal"),
+                    surface_materiality=collected_reqs.get("surface_materiality", "solid"),
+                    catalog_type=collected_reqs.get("domain", "general"),
+                )
+                requirements = _normalize_requirements(fast_reqs).model_dump()
+            else:
+                requirements = await extract_requirements(prompt_text or "General store", session_id=req.session_id)
+                if collected_reqs.get("brand_name"):
+                    requirements["brand_name"] = collected_reqs["brand_name"]
+                if collected_reqs.get("domain"):
+                    requirements["domain"] = collected_reqs["domain"]
+                    requirements["catalog_type"] = collected_reqs["domain"]
+                if collected_reqs.get("chosen_palette"):
+                    requirements["chosen_palette"] = collected_reqs["chosen_palette"]
+                elif session and isinstance(requirements.get("chosen_palette"), str) and session.palette_options:
+                    pal_str = requirements["chosen_palette"].strip().lower()
+                    for p in session.palette_options:
+                        if (
+                            p.get("id", "").lower() == pal_str
+                            or p.get("name", "").lower() == pal_str
+                            or pal_str.endswith(p.get("id", "").lower())
+                        ):
+                            requirements["chosen_palette"] = p
+                            break
+                if collected_reqs.get("navbar_position"):
+                    requirements["navbar_position"] = collected_reqs["navbar_position"]
+                if collected_reqs.get("navbar_layout"):
+                    requirements["navbar_layout"] = collected_reqs["navbar_layout"]
+                if collected_reqs.get("footer_layout"):
+                    requirements["footer_layout"] = collected_reqs["footer_layout"]
+                if collected_reqs.get("surface_materiality"):
+                    requirements["surface_materiality"] = collected_reqs["surface_materiality"]
+                if collected_reqs.get("tagline"):
+                    requirements["tagline"] = collected_reqs["tagline"]
 
             yield f"data: {json.dumps({'step': 'planning', 'progress': 50, 'message': 'Synthesizing pages, catalog structures, and layout plans...'})}\n\n"
-            site_plan = await plan_site(requirements)
+            site_plan = await plan_site(requirements, session_id=req.session_id)
 
             yield f"data: {json.dumps({'step': 'backend_config', 'progress': 70, 'message': 'Configuring database entities, resources, and routes...'})}\n\n"
             backend_config = build_backend_config(site_plan["backend_plan"])

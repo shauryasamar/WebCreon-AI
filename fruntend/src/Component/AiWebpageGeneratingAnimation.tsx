@@ -3,9 +3,11 @@ import React, { useEffect, useState } from "react";
 type AiWebpageGeneratingAnimationProps = {
   brandName?: string;
   themeMode?: "light" | "dark";
+  progress?: number;
+  currentMessage?: string;
 };
 
-const STEPS = [
+const DEFAULT_STEPS = [
   "Analyzing Brand Vibe & WCAG Palette Tokens...",
   "Synthesizing Responsive Navbar & Layout Specs...",
   "Structuring Product Catalog & Data Bindings...",
@@ -16,32 +18,43 @@ const STEPS = [
 export const AiWebpageGeneratingAnimation: React.FC<AiWebpageGeneratingAnimationProps> = ({
   brandName = "Your Website",
   themeMode = "light",
+  progress: externalProgress,
+  currentMessage: externalMessage,
 }) => {
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [progress, setProgress] = useState(15);
+  const [internalStepIndex, setInternalStepIndex] = useState(0);
+  const [internalProgress, setInternalProgress] = useState(15);
 
   const isDark = themeMode === "dark";
 
   useEffect(() => {
+    if (typeof externalProgress === "number") {
+      setInternalProgress(externalProgress);
+      return;
+    }
+
     const stepInterval = setInterval(() => {
-      setCurrentStepIndex((prev) => {
-        if (prev < STEPS.length - 1) return prev + 1;
+      setInternalStepIndex((prev) => {
+        if (prev < DEFAULT_STEPS.length - 1) return prev + 1;
         return prev;
       });
-    }, 700);
+    }, 900);
 
     const progressInterval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev < 95) return prev + Math.floor(Math.random() * 8) + 5;
-        return 98;
+      setInternalProgress((prev) => {
+        if (prev < 92) return prev + Math.floor(Math.random() * 6) + 4;
+        return 96;
       });
-    }, 120);
+    }, 150);
 
     return () => {
       clearInterval(stepInterval);
       clearInterval(progressInterval);
     };
-  }, []);
+  }, [externalProgress]);
+
+  const activeProgress = typeof externalProgress === "number" ? externalProgress : internalProgress;
+  const activeMessage =
+    externalMessage || DEFAULT_STEPS[Math.min(internalStepIndex, DEFAULT_STEPS.length - 1)];
 
   // Theme-aware tokens
   const containerBg = isDark
@@ -162,14 +175,21 @@ export const AiWebpageGeneratingAnimation: React.FC<AiWebpageGeneratingAnimation
       <div style={{ padding: "14px 16px" }}>
         {/* Status Header */}
         <div style={{ marginBottom: "10px", textAlign: "left" }}>
-          <div style={{ fontSize: "14px", fontWeight: 800, color: textColor, marginBottom: "2px" }}>
-            Building <span style={{ color: isDark ? "#a5b4fc" : "#2563eb" }}>{brandName}</span>
+          <div style={{ fontSize: "14px", fontWeight: 800, color: textColor, marginBottom: "2px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              Building <span style={{ color: isDark ? "#a5b4fc" : "#2563eb" }}>{brandName}</span>
+            </div>
+            <div style={{ fontSize: "12px", fontWeight: 800, color: isDark ? "#38bdf8" : "#2563eb" }}>
+              {Math.round(activeProgress)}%
+            </div>
           </div>
           <div style={{ fontSize: "12px", color: subtextColor, display: "flex", alignItems: "center", gap: "6px" }}>
             <span style={{ color: isDark ? "#38bdf8" : "#0284c7", fontWeight: 700 }}>
-              Step {currentStepIndex + 1}/{STEPS.length}:
+              AI Pipeline:
             </span>
-            {STEPS[currentStepIndex]}
+            <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {activeMessage}
+            </span>
           </div>
         </div>
 
@@ -177,7 +197,7 @@ export const AiWebpageGeneratingAnimation: React.FC<AiWebpageGeneratingAnimation
         <div
           style={{
             width: "100%",
-            height: "4px",
+            height: "5px",
             borderRadius: "999px",
             background: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(15, 23, 42, 0.08)",
             overflow: "hidden",
@@ -187,10 +207,10 @@ export const AiWebpageGeneratingAnimation: React.FC<AiWebpageGeneratingAnimation
           <div
             style={{
               height: "100%",
-              width: `${progress}%`,
+              width: `${Math.min(activeProgress, 100)}%`,
               background: "linear-gradient(90deg, #2563eb 0%, #ec4899 50%, #10b981 100%)",
               borderRadius: "999px",
-              transition: "width 0.2s ease-out",
+              transition: "width 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
             }}
           />
         </div>

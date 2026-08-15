@@ -6,6 +6,7 @@ import {
   ComponentAsset,
   ComponentAssetCategory,
 } from "../customizations/assetsRegistry";
+import { updateThemeValues } from "../customizations/editorUtils";
 
 type ControlItemKey =
   | "saved-sites"
@@ -552,15 +553,9 @@ export default function BuilderDrawerPanel({
 
   const handleApplySavedTheme = (themeObj: any) => {
     if (!siteDefinition || !onSiteDefinitionChange) return;
-    const nextDef = JSON.parse(JSON.stringify(siteDefinition));
     const patchProps = themeObj.patch || themeObj.theme || themeObj;
-    nextDef.theme = { ...(nextDef.theme || {}), ...patchProps };
-    for (const page of nextDef.pages || []) {
-      for (const block of page.blocks || []) {
-        block.props = { ...(block.props || {}), ...patchProps };
-      }
-    }
-    onSiteDefinitionChange(nextDef);
+    const updatedDef = updateThemeValues(siteDefinition, patchProps, true);
+    onSiteDefinitionChange(updatedDef);
   };
 
   if (

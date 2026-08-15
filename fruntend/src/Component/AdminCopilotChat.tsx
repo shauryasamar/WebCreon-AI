@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { saveThemeSnapshot, updateThemeValues, applyThemeToPages } from "../customizations/editorUtils";
+import { AiAvatar } from "./AiAvatar";
 
 type DataCard = {
   type: "redirect_card" | "orders_card" | "returns_card" | "analytics_card" | "palette_suggestions_card" | "component_palette_suggestions_card" | "camouflage_warning_card" | "table_card";
@@ -378,8 +379,9 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
       {/* Messages Feed */}
       <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "10px", paddingRight: "4px" }}>
         {messages.length === 0 ? (
-          <div style={{ margin: "auto", textAlign: "center", maxWidth: "260px", padding: "40px 0" }}>
-            <div style={{ fontSize: "14px", fontWeight: 700, color: chatMuted, marginBottom: "8px" }}>
+          <div style={{ margin: "auto", textAlign: "center", maxWidth: "260px", padding: "32px 0", display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <AiAvatar size={42} style={{ marginBottom: "12px" }} />
+            <div style={{ fontSize: "14px", fontWeight: 700, color: chatText, marginBottom: "6px" }}>
               WebNirmaan Co-Pilot
             </div>
             <p style={{ fontSize: "12px", lineHeight: 1.5, margin: 0, color: chatMuted }}>
@@ -391,22 +393,24 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
           const isUser = msg.sender === "user";
           return (
             <div key={msg.id} style={{ display: "flex", flexDirection: "column", alignItems: isUser ? "flex-end" : "flex-start" }}>
-              <div
-                style={{
-                  maxWidth: "88%",
-                  padding: "10px 14px",
-                  borderRadius: isUser ? "14px 14px 2px 14px" : "14px 14px 14px 2px",
-                  background: isUser ? userBubbleBg : assistantBubbleBg,
-                  color: isUser ? "#ffffff" : assistantBubbleText,
-                  fontSize: "13px",
-                  lineHeight: 1.55,
-                  boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
-                  wordBreak: "break-word" as const,
-                  whiteSpace: "pre-wrap" as const,
-                  overflowWrap: "anywhere" as const,
-                }}
-              >
-                {msg.text}
+              <div style={{ display: "flex", gap: "8px", alignItems: "flex-start", flexDirection: isUser ? "row-reverse" : "row", maxWidth: "92%" }}>
+                {!isUser && <AiAvatar size={24} style={{ marginTop: "2px" }} />}
+                <div
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: isUser ? "14px 14px 2px 14px" : "14px 14px 14px 2px",
+                    background: isUser ? userBubbleBg : assistantBubbleBg,
+                    color: isUser ? "#ffffff" : assistantBubbleText,
+                    fontSize: "13px",
+                    lineHeight: 1.55,
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+                    wordBreak: "break-word" as const,
+                    whiteSpace: "pre-wrap" as const,
+                    overflowWrap: "anywhere" as const,
+                  }}
+                >
+                  {msg.text}
+                </div>
               </div>
 
               {/* Render Structured Data Cards */}

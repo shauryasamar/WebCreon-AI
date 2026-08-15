@@ -409,6 +409,20 @@ function getFestivalThemeOverrides(
   }
 }
 
+export const ALL_COMPONENT_OVERRIDE_KEYS = [
+  "delivery_form_bg", "delivery_form_text", "delivery_form_input_bg", "delivery_form_input_text", "delivery_form_border", "delivery_form_btn_bg", "delivery_form_btn_text",
+  "order_history_bg", "order_history_card_bg", "order_history_text", "order_history_muted_text", "order_history_border",
+  "product_detail_bg", "product_detail_text", "product_detail_btn_bg", "product_detail_btn_text",
+  "cart_bg", "cart_text_color", "cart_card_bg", "cart_accent_color", "cart_border_color", "cart_panel_bg",
+  "summary_bg", "summary_card_bg", "summary_text_color", "summary_accent_color", "summary_border_color",
+  "payment_bg", "payment_card_bg", "payment_text_color", "payment_accent_color", "payment_border_color",
+  "place_order_bg", "place_order_btn_bg", "place_order_btn_text", "place_order_text",
+  "filter_bg", "filter_card_bg", "filter_text_color", "filter_border_color", "filter_accent_color",
+  "pagination_bg", "pagination_text_color", "pagination_active_bg", "pagination_border_color",
+  "review_card_bg", "review_text_color", "review_border_color",
+  "grid_bg", "grid_text_color", "outer_bg_color"
+];
+
 export function applyThemeToPages(pages: EditorPage[], targetTheme: any): EditorPage[] {
   return (pages || []).map((page) => ({
     ...page,
@@ -449,6 +463,14 @@ export function applyThemeToPages(pages: EditorPage[], targetTheme: any): Editor
       delete updatedProps.hero_bg;
       delete updatedProps.hero_text_color;
       delete updatedProps.hero_accent;
+      delete updatedProps.button_bg_color;
+      delete updatedProps.button_text_color;
+      delete updatedProps.card_color;
+      delete updatedProps.active_bg_color;
+
+      for (const k of ALL_COMPONENT_OVERRIDE_KEYS) {
+        delete updatedProps[k];
+      }
 
       if (isNav) {
         if (targetTheme.navbar_bg) {
@@ -1152,7 +1174,8 @@ export function updateBlockProps(
 
 export function updateThemeValues(
   siteDefinition: EditorSiteDefinition,
-  themePatch: Record<string, any>
+  themePatch: Record<string, any>,
+  isGlobalPatch?: boolean
 ): EditorSiteDefinition {
   const nextPatch = { ...themePatch };
   if (nextPatch.navbar_bg && !nextPatch.navbar_outer_bg) {
@@ -1162,6 +1185,23 @@ export function updateThemeValues(
     ...siteDefinition.theme,
     ...nextPatch,
   };
+
+  // If this is a global theme update (e.g. palette change, primary_bg / secondary_bg update),
+  // purge all residual component-level overrides so the new theme takes effect 100% across all components!
+  const isGlobal =
+    isGlobalPatch ||
+    ("primary_bg" in nextPatch && "secondary_bg" in nextPatch) ||
+    ("primary_bg" in nextPatch && "text_color" in nextPatch) ||
+    ("festival_theme" in nextPatch);
+
+  if (isGlobal) {
+    for (const k of ALL_COMPONENT_OVERRIDE_KEYS) {
+      if (!(k in nextPatch)) {
+        delete (updatedTheme as any)[k];
+      }
+    }
+  }
+
   const nextPages = applyThemeToPages(siteDefinition.pages || [], updatedTheme);
 
   return {
@@ -1182,6 +1222,11 @@ export function applyThemeMode(
     mode,
     festival_theme: "none",
   };
+
+  // Purge any residual component-level overrides from prior chats/customizations
+  for (const k of ALL_COMPONENT_OVERRIDE_KEYS) {
+    delete updatedTheme[k];
+  }
 
   const nextPages = applyThemeToPages(siteDefinition.pages || [], updatedTheme);
 
@@ -1206,6 +1251,11 @@ export function applyFestivalTheme(
     mode,
     festival_theme: preset,
   };
+
+  // Purge any residual component-level overrides from prior chats/customizations
+  for (const k of ALL_COMPONENT_OVERRIDE_KEYS) {
+    delete updatedTheme[k];
+  }
 
   const nextPages = applyThemeToPages(siteDefinition.pages || [], updatedTheme);
 

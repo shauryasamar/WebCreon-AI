@@ -1,5 +1,5 @@
 import json
-from typing import Dict, List, Literal
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
@@ -510,11 +510,11 @@ def _build_default_site_plan(requirements: Dict) -> Dict:
     return site_plan
 
 
-async def plan_site(requirements: Dict) -> Dict:
+async def plan_site(requirements: Dict, session_id: Optional[str] = None) -> Dict:
     requirements_json = json.dumps(requirements)
     try:
         from agents.token_tracker import TokenCostCallback
-        sess_id = requirements.get("session_id")
+        sess_id = session_id or requirements.get("session_id")
         result: SitePlan = await planning_chain.ainvoke(
             {"requirements_json": requirements_json},
             config={"callbacks": [TokenCostCallback("SiteGen.Planning", session_id=sess_id)]}

@@ -789,9 +789,31 @@ const RenderPage: React.FC<RenderPageProps> = ({
   const isInAdminSpace = location.pathname.startsWith("/builder/");
 
   if (!isCheckoutPage) {
+    const isFullGlass =
+      (theme as any)?.surface_materiality === "full_glass" ||
+      (theme as any)?.surface_materiality === "glassmorphism" ||
+      (theme as any)?.visual_style === "glassmorphic" ||
+      (theme as any)?.name?.toLowerCase()?.includes("glass");
+
+    const isThemeDark = theme?.mode === "dark" || isColorDarkHex(theme?.primary_bg);
+
+    const glassBackground = isThemeDark
+      ? "radial-gradient(circle at 10% 15%, rgba(56, 189, 248, 0.18) 0%, transparent 45%), radial-gradient(circle at 90% 60%, rgba(139, 92, 246, 0.18) 0%, transparent 50%), radial-gradient(circle at 50% 90%, rgba(236, 72, 153, 0.12) 0%, transparent 45%), #090d16"
+      : "radial-gradient(circle at 10% 15%, rgba(56, 189, 248, 0.14) 0%, transparent 45%), radial-gradient(circle at 90% 60%, rgba(139, 92, 246, 0.12) 0%, transparent 50%), radial-gradient(circle at 50% 90%, rgba(236, 72, 153, 0.08) 0%, transparent 45%), #f8fafc";
+
     return (
       <ThemeProvider theme={theme as any}>
-        <div ref={setContainerEl} style={{ position: "relative", width: "100%", minHeight: "100%" }}>
+        <div
+          ref={setContainerEl}
+          style={{
+            position: "relative",
+            width: "100%",
+            minHeight: "100%",
+            background: isFullGlass ? glassBackground : (theme?.primary_bg || (isThemeDark ? "#0f172a" : "#ffffff")),
+            color: theme?.text_color || (isThemeDark ? "#f8fafc" : "#0f172a"),
+            transition: "background 200ms ease",
+          }}
+        >
           {blocksToRender.map((block, index) => renderBlock(block, index))}
           <FilterModal
             open={filterModalOpen}
@@ -885,10 +907,16 @@ const RenderPage: React.FC<RenderPageProps> = ({
     ? "minmax(0, 1fr)"
     : "minmax(0, 1.2fr) minmax(340px, 0.8fr)";
 
+  const deliveryCardBg = (theme as any)?.delivery_form_bg || (theme as any)?.checkout_card_bg || cardBg;
+  const isDeliveryCardDark = isColorDarkHex(deliveryCardBg);
+  const deliveryText = (theme as any)?.delivery_form_text || (isDeliveryCardDark ? "#f8fafc" : "#0f172a");
+  const reviewCardText = isDeliveryCardDark ? "#f8fafc" : "#0f172a";
+  const reviewCardMuted = isDeliveryCardDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)";
+
   const infoCardStyle: React.CSSProperties = {
     borderRadius: "14px",
     border: cardBorder,
-    background: cardBg,
+    background: deliveryCardBg,
     padding: isCompactCheckout ? "14px" : "16px",
     boxShadow: isLight
       ? "0 1px 2px rgba(16,24,40,0.04)"
@@ -911,7 +939,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
             margin: 0,
             fontSize: "15px",
             fontWeight: 700,
-            color: textColor,
+            color: reviewCardText,
           }}
         >
           Selected items
@@ -923,7 +951,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
           style={{
             margin: 0,
             fontSize: "14px",
-            color: subtleText,
+            color: reviewCardMuted,
             lineHeight: 1.6,
           }}
         >
@@ -972,7 +1000,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
                     margin: "0 0 4px",
                     fontSize: "14px",
                     fontWeight: 700,
-                    color: textColor,
+                    color: reviewCardText,
                     lineHeight: 1.35,
                   }}
                 >
@@ -984,7 +1012,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
                     style={{
                       margin: "0 0 4px",
                       fontSize: "12px",
-                      color: subtleText,
+                      color: reviewCardMuted,
                       lineHeight: 1.45,
                     }}
                   >
@@ -996,7 +1024,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
                   style={{
                     margin: 0,
                     fontSize: "12px",
-                    color: subtleText,
+                    color: reviewCardMuted,
                   }}
                 >
                   Qty {item.quantity} × ₹{item.price}
@@ -1008,7 +1036,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
                   style={{
                     fontSize: "14px",
                     fontWeight: 700,
-                    color: textColor,
+                    color: reviewCardText,
                     whiteSpace: "nowrap",
                   }}
                 >
@@ -1424,7 +1452,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
             style={{
               borderRadius: "16px",
               border: shellBorder,
-              background: isLight ? "#ffffff" : softPanel,
+              background: shellBg,
               boxShadow: isLight
                 ? "0 1px 2px rgba(16,24,40,0.04)"
                 : "0 10px 24px rgba(0,0,0,0.16)",
@@ -1443,7 +1471,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
                   margin: 0,
                   fontSize: "24px",
                   lineHeight: 1.1,
-                  color: textColor,
+                  color: isColorDarkHex(shellBg) ? "#f8fafc" : "#0f172a",
                   fontWeight: 700,
                 }}
               >
@@ -1482,7 +1510,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
                         margin: 0,
                         fontSize: "15px",
                         fontWeight: 700,
-                        color: textColor,
+                        color: deliveryText,
                       }}
                     >
                       Delivery address
@@ -1507,12 +1535,12 @@ const RenderPage: React.FC<RenderPageProps> = ({
 
                   <div
                     style={{
-                      color: subtleText,
+                      color: reviewCardMuted,
                       fontSize: "14px",
                       lineHeight: 1.65,
                     }}
                   >
-                    <div style={{ color: textColor, fontWeight: 700 }}>
+                    <div style={{ color: deliveryText, fontWeight: 700 }}>
                       {selectedAddress?.fullName || deliveryData.fullName || "—"}
                     </div>
                     <div>{selectedAddress?.phone || deliveryData.phone || "—"}</div>
@@ -1542,7 +1570,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
                         margin: 0,
                         fontSize: "15px",
                         fontWeight: 700,
-                        color: textColor,
+                        color: reviewCardText,
                       }}
                     >
                       Payment method
@@ -1567,12 +1595,12 @@ const RenderPage: React.FC<RenderPageProps> = ({
 
                   <div
                     style={{
-                      color: subtleText,
+                      color: reviewCardMuted,
                       fontSize: "14px",
                       lineHeight: 1.65,
                     }}
                   >
-                    <div style={{ color: textColor, fontWeight: 700 }}>
+                    <div style={{ color: reviewCardText, fontWeight: 700 }}>
                       {paymentData.method || "—"}
                     </div>
                     {paymentData.method.toUpperCase() === "UPI" ? (

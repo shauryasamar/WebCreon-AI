@@ -170,8 +170,21 @@ function isColorDarkHex(colorHex?: string): boolean {
     ? preferredTextColor
     : (isCardDark ? "#ffffff" : "#0f172a");
 
-  const mutedText = original_price_color || defaultMutedText;
-  const faintText = brand_color || defaultFaintText;
+  const mutedText =
+    original_price_color ||
+    (defaultMutedText && isColorDarkHex(defaultMutedText) !== isCardDark
+      ? defaultMutedText
+      : isCardDark
+      ? "rgba(248, 250, 252, 0.72)"
+      : "rgba(15, 23, 42, 0.65)");
+
+  const faintText =
+    brand_color ||
+    (defaultFaintText && isColorDarkHex(defaultFaintText) !== isCardDark
+      ? defaultFaintText
+      : isCardDark
+      ? "rgba(248, 250, 252, 0.50)"
+      : "rgba(15, 23, 42, 0.45)");
   const starColor = rating_star_color || "#d97706";
 
   const subtleBorder = `1px solid ${resolvedBorderColor}`;
@@ -189,6 +202,21 @@ function isColorDarkHex(colorHex?: string): boolean {
   else if (card_shadow === "subtle") computedShadow = isLight ? "0 4px 12px rgba(0,0,0,0.04)" : "0 4px 12px rgba(0,0,0,0.2)";
   else if (card_shadow === "soft") computedShadow = softShadow;
   else if (card_shadow === "elevated") computedShadow = isLight ? "0 20px 40px rgba(0,0,0,0.12)" : "0 20px 40px rgba(0,0,0,0.36)";
+
+  const isGlass =
+    (theme as any)?.surface_materiality === "full_glass" ||
+    (theme as any)?.surface_materiality === "glassmorphism" ||
+    (theme as any)?.visual_style === "glassmorphic" ||
+    (theme as any)?.name?.toLowerCase()?.includes("glass") ||
+    (typeof cardBg === "string" && cardBg.startsWith("rgba"));
+
+  if (isGlass) {
+    computedCardBg = card_bg_color || (isLight ? "rgba(255, 255, 255, 0.70)" : "rgba(15, 23, 42, 0.70)");
+    computedBorder = card_border_color ? `1px solid ${card_border_color}` : (isLight ? "1px solid rgba(255, 255, 255, 0.55)" : "1px solid rgba(255, 255, 255, 0.14)");
+    computedShadow = isLight
+      ? "0 8px 32px rgba(31, 38, 135, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.75)"
+      : "0 8px 32px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.16)";
+  }
 
   if (card_radius === undefined || card_radius === "") {
     if (cardStyleKey === "electronics") computedRadius = "18px";
@@ -400,6 +428,8 @@ function isColorDarkHex(colorHex?: string): boolean {
                 ? "linear-gradient(180deg, rgba(248,250,252,0.98) 0%, rgba(241,245,249,0.96) 100%)"
                 : "linear-gradient(180deg, rgba(30,41,59,0.82) 0%, rgba(15,23,42,0.78) 100%)"
               : computedCardBg,
+            backdropFilter: isGlass ? "blur(18px) saturate(180%)" : undefined,
+            WebkitBackdropFilter: isGlass ? "blur(18px) saturate(180%)" : undefined,
             boxShadow: computedShadow,
             display: "flex",
             flexDirection: "column",

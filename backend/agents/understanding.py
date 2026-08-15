@@ -1,4 +1,4 @@
-from typing import List, Literal, Optional, Dict, Any
+from typing import List, Literal, Optional, Dict, Any, Union
 
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
@@ -38,9 +38,9 @@ class WebsiteRequirements(BaseModel):
         default=None,
         description="Requested theme if clearly specified."
     )
-    chosen_palette: Optional[Dict[str, Any]] = Field(
+    chosen_palette: Optional[Union[Dict[str, Any], str]] = Field(
         default=None,
-        description="Full computed color palette dictionary from color_agent."
+        description="Full computed color palette dictionary or palette identifier from color_agent."
     )
     navbar_layout: Optional[Literal["apple_minimal", "glassmorphism_premium", "modern_marketplace", "luxury_fashion", "neo_modern"]] = Field(
         default=None,
@@ -57,6 +57,10 @@ class WebsiteRequirements(BaseModel):
     footer_layout: Optional[Literal["apple_minimal", "glassmorphism_premium", "modern_marketplace", "luxury_fashion", "neo_modern"]] = Field(
         default=None,
         description="Selected footer layout style."
+    )
+    surface_materiality: Optional[Literal["solid", "glass_navbar", "full_glass"]] = Field(
+        default="solid",
+        description="Surface finish and transparency style across components."
     )
     card_style: Optional[Literal["fashion", "electronics", "beauty", "grocery", "books"]] = Field(
         default=None,

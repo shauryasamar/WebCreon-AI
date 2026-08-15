@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import WebNirmaanAnimatedLogo from "./WebNirmaanAnimatedLogo";
+import { UserAvatar } from "./UserAvatar";
 
 type BuilderTopControlBarProps = {
   siteName: string;
@@ -101,32 +102,7 @@ export default function BuilderTopControlBar({
             padding: "4px 0",
           }}
         >
-          <div
-            style={{
-              width: "34px",
-              height: "34px",
-              borderRadius: "50%",
-              overflow: "hidden",
-              background: "#0f172a",
-              display: "grid",
-              placeItems: "center",
-              fontSize: "12px",
-              fontWeight: 700,
-              color: "#ffffff",
-              letterSpacing: "0.02em",
-              flexShrink: 0,
-            }}
-          >
-            {avatarUrl ? (
-              <img
-                src={avatarUrl}
-                alt={displayName}
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
-              />
-            ) : (
-              initials
-            )}
-          </div>
+          <UserAvatar size={34} avatarUrl={avatarUrl} variant="yellow" />
           <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <span style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a", lineHeight: 1.2 }}>
               {displayName}

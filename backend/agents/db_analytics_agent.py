@@ -234,12 +234,23 @@ def get_store_metrics_for_period(
     }
 
 
+import re
+
 def is_data_deletion_attempt(message: str) -> bool:
-    """Checks for explicit data deletion attempts targeting orders, products, or tables with typo tolerance."""
+    """Checks for explicit data deletion attempts targeting orders, products, or tables with regex word boundaries."""
     msg_lower = message.lower()
-    delete_keywords = ["delete", "remove", "drop", "purge", "destroy", "erase", "clear", "del", "remov", "clean"]
-    target_data_keywords = ["order", "orders", "oder", "oders", "product", "products", "prod", "prods", "table", "database", "review", "reviews", "user", "customer"]
-    return any(dk in msg_lower for dk in delete_keywords) and any(tk in msg_lower for tk in target_data_keywords)
+    delete_pattern = r"\b(delete|drop|purge|destroy|erase|truncate|wipe|del|remove)\b"
+    target_pattern = r"\b(all orders|orders|order|products|product|table|tables|database|db|all reviews|reviews|users|customers)\b"
+    
+    # Must match both a delete action and a data entity
+    has_delete = bool(re.search(delete_pattern, msg_lower))
+    has_target = bool(re.search(target_pattern, msg_lower))
+    
+    # Exception: removing a filter or clearing search is UI, not data deletion
+    if "remove filter" in msg_lower or "clear filter" in msg_lower or "clear search" in msg_lower:
+        return False
+        
+    return has_delete and has_target
 
 
 def mutate_order_status_in_db(
@@ -256,16 +267,21 @@ def mutate_order_status_in_db(
         if not matched_order:
             return {"success": False, "error": f"Order #{target_order_id} not found."}
 
-        matched_order.status = target_status
         now_dt = datetime.now(timezone.utc)
-        if target_status == "accepted":
+        if target_status in ["accepted", "confirmed"]:
+            matched_order.status = "confirmed"
             matched_order.confirmed_at = now_dt
         elif target_status == "shipped":
+            matched_order.status = "shipped"
             matched_order.shipped_at = now_dt
         elif target_status == "delivered":
+            matched_order.status = "delivered"
             matched_order.delivered_at = now_dt
         elif target_status == "cancelled":
+            matched_order.status = "cancelled"
             matched_order.cancelled_at = now_dt
+        else:
+            matched_order.status = target_status
 
         db.add(matched_order)
         db.commit()

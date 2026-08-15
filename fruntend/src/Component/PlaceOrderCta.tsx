@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { API_BASE_URL } from "../config/api";
+import { isColorDarkHex } from "../context/ThemeContext";
 
 type ThemeInput =
   | "dark"
@@ -86,14 +87,21 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
 
   const resolvedAccent =
     accentColor ||
+    (typeof theme === "object" && (theme as any)?.place_order_btn_bg) ||
     (typeof theme === "object" && theme?.accent_color) ||
     (resolvedMode === "dark" ? "#60a5fa" : "#2563eb");
+
+  const resolvedButtonTextColor =
+    text_color ||
+    (typeof theme === "object" && (theme as any)?.place_order_btn_text) ||
+    (isColorDarkHex(resolvedAccent) ? "#ffffff" : "#0f172a");
 
   const resolvedRadius = border_radius ?? 14;
   const resolvedPaddingY = padding ?? (compact ? 14 : 16);
   const resolvedPaddingX = compact ? 18 : 22;
   const helperTextColor =
-    resolvedMode === "light" ? "rgba(17,24,39,0.68)" : "rgba(255,255,255,0.68)";
+    (typeof theme === "object" && (theme as any)?.place_order_text) ||
+    (resolvedMode === "light" ? "rgba(17,24,39,0.68)" : "rgba(255,255,255,0.68)");
   const errorTextColor = resolvedMode === "light" ? "#b91c1c" : "#fca5a5";
 
   const finalDisabled = disabled || isSubmitting;
@@ -236,7 +244,7 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
             borderRadius: `${resolvedRadius}px`,
             border: "none",
             background: finalDisabled ? "#94a3b8" : resolvedAccent,
-            color: text_color || "#ffffff",
+            color: resolvedButtonTextColor,
             fontWeight: 800,
             fontSize: compact ? "15px" : "16px",
             letterSpacing: "-0.02em",

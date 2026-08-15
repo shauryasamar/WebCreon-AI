@@ -127,12 +127,17 @@ def serialize_address_snapshot(address: UserAddress) -> dict[str, Any]:
     return {
         "id": str(address.id),
         "fullName": address.full_name,
+        "full_name": address.full_name,
         "mobileNumber": address.mobile_number,
+        "mobile_number": address.mobile_number,
         "addressLine1": address.address_line1,
+        "address_line1": address.address_line1,
         "city": address.city,
         "postalCode": address.postal_code,
+        "postal_code": address.postal_code,
         "email": address.email,
         "addressType": address.address_type,
+        "address_type": address.address_type,
     }
 
 

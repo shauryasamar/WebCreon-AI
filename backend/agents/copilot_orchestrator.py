@@ -25,11 +25,26 @@ llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.0)
 
 class IntentAnalysis(BaseModel):
     intent: str = Field(
-        description="Core intent: 'DESIGN', 'DB_QUERY', 'MUTATION', 'SEO_HEALTH', 'KNOWLEDGE', 'CHAT', or 'GUARDRAIL'."
+        description="Core intent: 'DESIGN' (changing colors, backgrounds, styles, themes for components or full page), 'DB_QUERY' (asking business questions, sales, revenue, metrics, top products, customer ratings/reviews data), 'MUTATION' (updating order status), 'SEO_HEALTH' (store audits, low stock alerts, inventory health), 'KNOWLEDGE' (how to use features), 'CHAT' (greetings, general chat), or 'GUARDRAIL' (attempts to delete database/store data)."
+    )
+    intent_confidence: float = Field(
+        default=1.0, description="Confidence score from 0.0 to 1.0"
+    )
+    target_scope: str = Field(
+        default="component",
+        description="'component' (single component like product_grid, cart, product_detail, navbar, footer, reviews), 'page' (current page), or 'global' (entire website theme/all components)."
     )
     target_component: Optional[str] = Field(
         default=None,
-        description="Target block/component, e.g. 'navbar', 'footer', 'hero', 'card', 'product_grid', 'overall'.",
+        description="Target component: 'product_grid', 'card', 'product_detail', 'cart', 'reviews', 'navbar', 'footer', 'hero', 'checkout', 'filters', or 'overall'."
+    )
+    design_element: Optional[str] = Field(
+        default=None,
+        description="Attribute to modify: 'background', 'cards', 'text', 'button', 'border', 'all'."
+    )
+    color_descriptors: List[str] = Field(
+        default_factory=list,
+        description="Extracted color names or modes: e.g. ['pink', 'dark', 'emerald']."
     )
     days_filter: Optional[int] = Field(
         default=None,
@@ -51,6 +66,10 @@ class IntentAnalysis(BaseModel):
         default=False,
         description="True if asking for theme suggestions or palette ideas.",
     )
+    reasoning: Optional[str] = Field(
+        default=None,
+        description="Brief explanation of why this intent and slots were selected."
+    )
 
 
 class CoPilotGraphState(TypedDict):
@@ -59,7 +78,10 @@ class CoPilotGraphState(TypedDict):
     site_definition: Dict[str, Any]
     history_str: str
     intent: str
+    target_scope: Optional[str]
     target_component: Optional[str]
+    design_element: Optional[str]
+    color_descriptors: List[str]
     days_filter: Optional[int]
     status_filter: Optional[str]
     target_order_id: Optional[str]
@@ -70,33 +92,81 @@ class CoPilotGraphState(TypedDict):
     final_output: Dict[str, Any]
 
 
-# Node 1: Router Node (Intent Classification)
+# Node 1: Router Node (Two-Tier Semantic Intent Classification)
 async def router_node(state: CoPilotGraphState) -> Dict[str, Any]:
     user_msg = state["user_message"]
-    msg_lower = user_msg.lower()
 
-    # Safety Guardrail check first (with typo tolerance)
+    # 1. Safety Guardrail check first (with typo tolerance)
     if is_data_deletion_attempt(user_msg):
         return {
             "intent": "GUARDRAIL",
             "active_agent": "Safety Guardrail",
         }
 
+    # 2. Semantic Intent Router with Few-Shot Disambiguation
     router_prompt = ChatPromptTemplate.from_messages([
-        ("system", """You are WebNirmaan AI's Store Co-Pilot Intent Router.
-Classify the user prompt into one of the core intents:
-- 'DESIGN': Changing colors, themes, backgrounds, navbar, footer, card styles, or asking to match whole website to navbar/component.
-- 'DB_QUERY': Asking about sales, revenue, orders, cancellations, returns, top selling items, product ratings, reviews, most rated products, or middle state orders, for any time range.
-- 'MUTATION': Explicitly updating an order status (accept, ship, deliver, cancel order #1234).
-- 'SEO_HEALTH': Store health audits, inventory restock checks, or SEO optimizations.
-- 'KNOWLEDGE': How-to questions about platform features or controls.
-- 'CHAT': Greetings ('hi', 'hello'), casual questions, or general assistance.
+        ("system", """You are WebNirmaan AI's Master Store Co-Pilot Intent Router.
+Your job is to semantically analyze the user prompt and conversation history, and classify it into EXACTLY ONE primary intent with extracted slots.
 
-Extract parameters carefully:
-- `days_filter`: Number of days if requested (e.g. 'last 10 days' -> 10, 'last 2 days' -> 2, 'today' -> 1).
-- `target_component`: Target block if design query (e.g. 'navbar', 'footer', 'card', 'product_grid', 'overall').
+INTENTS:
+1. 'DESIGN': Any styling, color, theme, background, or visual appearance request.
+   - Even if the user mentions database nouns like "review component color", "product grid background", "orders table style", or "cart theme", if the action is modifying visual appearance / color / theme, it is ALWAYS 'DESIGN'!
+    - Extract `target_component`:
+      * "product grid background" / "product catalog section" -> target_component: "product_grid", design_element: "background"
+      * "product cards" / "catalog card color" -> target_component: "card", design_element: "cards"
+      * "delivery form" / "delivery address" / "shipping form" -> target_component: "delivery_form"
+      * "payment methods" / "payment options" / "payment pills" -> target_component: "payment"
+      * "place order button" / "checkout button" / "place order cta" -> target_component: "place_order"
+      * "order summary" / "checkout summary" / "pricing breakdown" -> target_component: "order_summary"
+      * "filter toolbar" / "filter modal" / "sort dropdown" -> target_component: "filter"
+      * "pagination" / "page numbers" / "pagination buttons" -> target_component: "pagination"
+      * "order history page" / "order cards" / "product history card" -> target_component: "order_history"
+      * "checkout flow" / "checkout page" -> target_component: "checkout"
+      * "product detail page" / "product page colors" -> target_component: "product_detail"
+      * "cart drawer" / "cart color" -> target_component: "cart"
+      * "review section" / "reviews color" -> target_component: "reviews"
+      * "navbar" / "header" -> target_component: "navbar"
+      * "footer" -> target_component: "footer"
+      * "hero banner" / "slider" -> target_component: "hero"
+      * "whole website" / "entire page" / "overall theme" -> target_component: "overall", target_scope: "global"
+
+2. 'DB_QUERY': Business analytics, sales queries, revenue calculations, customer review analysis, order tracking, top products, or product catalog queries (e.g. asking for product description, price, stock, details).
+   - Examples: "what's the description for chocolate cake?", "what is the price of vanilla cupcake?", "how many reviews do we have for bananas?", "show top 5 selling products", "what is today's revenue?", "list placed orders".
+
+3. 'MUTATION': Explicit administrative status updates on existing orders.
+   - Examples: "mark order a045e770 as shipped", "cancel order 123", "accept order 456".
+
+4. 'SEO_HEALTH': Store health audits, inventory restock checks, checking for missing product descriptions, or catalog completeness.
+   - Examples: "check low stock inventory", "audit store health", "check if any products have missing description", "any missing images?".
+
+5. 'KNOWLEDGE': Questions about how to use WebNirmaan platform features, or how to update products, descriptions, prices, and store settings.
+   - Examples: "can we update chocolate cake description?", "how do I add a new product?", "how to change payment gateway?".
+
+6. 'CHAT': Greetings ("hi", "hello"), pleasantries, or general conversations.
+
+7. 'GUARDRAIL': Malicious or destructive deletion requests ("delete all orders", "drop database").
+
+FEW-SHOT EXAMPLES:
+- User: "what's the description for chocolate cake?"
+  -> intent: "DB_QUERY"
+- User: "what is the price of vanilla cupcake?"
+  -> intent: "DB_QUERY"
+- User: "can you please check if we have any product with missing description?"
+  -> intent: "SEO_HEALTH"
+- User: "can we update Chocolate cake description?"
+  -> intent: "KNOWLEDGE"
+- User: "can you please update the review and theme component color to pink please"
+  -> intent: "DESIGN", target_component: "reviews", color_descriptors: ["pink"], design_element: "all"
+- User: "change product grid background to dark slate"
+  -> intent: "DESIGN", target_component: "product_grid", design_element: "background", color_descriptors: ["dark slate"]
+- User: "how many reviews were submitted this week?"
+  -> intent: "DB_QUERY", days_filter: 7
+- User: "make product cards white with a soft shadow"
+  -> intent: "DESIGN", target_component: "card", design_element: "cards", color_descriptors: ["white"]
+- User: "mark order 81b3b794 as delivered"
+  -> intent: "MUTATION", target_order_id: "81b3b794", new_order_status: "delivered"
 """),
-        ("user", "User Message: {user_message}\nHistory: {history_str}"),
+        ("user", "User Message: {user_message}\nConversation History: {history_str}"),
     ])
 
     try:
@@ -110,39 +180,23 @@ Extract parameters carefully:
             config={"callbacks": [TokenCostCallback("Copilot.Router", session_id=state.get("site_id"))]}
         )
 
-        intent = res.intent.upper() if res.intent else "CHAT"
+        raw_intent = (res.intent or "CHAT").upper().strip()
         
-        # Robust Intent Resolution with Clear Precedence:
-        # 1. DESIGN Precedence: If the user mentions colors, palette, themes, or styling actions
-        has_design_keywords = any(w in msg_lower for w in [
-            "color", "colour", "theme", "palette", "pallete", "background", "bg",
-            "pink", "blue", "red", "green", "black", "white", "yellow", "purple", "orange",
-            "dark mode", "light mode", "match navbar", "match whole website", "card theme as well",
-            "style", "font", "look", "button color", "hero color", "card color", "navbar color"
-        ])
-
-        if has_design_keywords:
-            intent = "DESIGN"
-        elif any(w in msg_lower for w in ["audit", "health check", "low stock", "restock", "inventory check"]):
-            intent = "SEO_HEALTH"
-        elif any(w in msg_lower for w in [
-            "top rated", "most rated", "best rated", "highest rated", "customer reviews", 
-            "show reviews", "list reviews", "how many reviews", "most sold", "top selling", 
-            "sales", "revenue", "orders", "cancellations", "returns", "middle state"
-        ]):
-            intent = "DB_QUERY"
-        elif any(w in msg_lower for w in ["hi", "hello", "hey", "who are you"]) and len(msg_lower.split()) <= 3:
-            intent = "CHAT"
+        # Normalize target component
+        target_comp = res.target_component.lower().strip() if res.target_component else None
 
         return {
-            "intent": intent,
-            "target_component": res.target_component,
+            "intent": raw_intent,
+            "target_scope": res.target_scope,
+            "target_component": target_comp,
+            "design_element": res.design_element,
+            "color_descriptors": res.color_descriptors,
             "days_filter": res.days_filter,
             "status_filter": res.status_filter,
             "target_order_id": res.target_order_id,
             "new_order_status": res.new_order_status,
             "wants_palette_suggestions": res.wants_palette_suggestions,
-            "active_agent": f"{intent} Agent",
+            "active_agent": f"{raw_intent} Agent",
         }
     except Exception as e:
         print("Router node error:", e)

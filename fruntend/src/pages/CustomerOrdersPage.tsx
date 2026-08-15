@@ -378,21 +378,36 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
 
   const {
     isDark,
-    primaryBg: pageBg,
-    cardBg,
-    textColor: textPrimary,
-    mutedTextColor: textMuted,
+    primaryBg: defaultPageBg,
+    cardBg: defaultCardBg,
+    textColor: defaultTextPrimary,
+    mutedTextColor: defaultTextMuted,
     borderColor: resolvedBorderColor,
     accentColor,
     panelBg,
     subtleBg: innerBg,
   } = resolveThemeTokens(theme);
-  const isLight = !isDark;
+  const pageBg = (theme as any)?.order_history_bg || defaultPageBg;
+  const cardBg = (theme as any)?.order_history_card_bg || defaultCardBg;
+  const isCardDark = isColorDarkHex(cardBg);
+  const isLight = !isCardDark;
 
-  const cardBorder = `1px solid ${resolvedBorderColor}`;
+  const rawTextPrimary = (theme as any)?.order_history_text;
+  const textPrimary =
+    rawTextPrimary && (isColorDarkHex(rawTextPrimary) !== isCardDark)
+      ? rawTextPrimary
+      : (isCardDark ? "#f8fafc" : "#0f172a");
+
+  const rawTextMuted = (theme as any)?.order_history_muted_text;
+  const textMuted =
+    rawTextMuted && (isColorDarkHex(rawTextMuted) !== isCardDark)
+      ? rawTextMuted
+      : (isCardDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)");
+
+  const cardBorder = `1px solid ${(theme as any)?.order_history_border || (isCardDark ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.10)")}`;
   const divider = cardBorder;
-  const timelineRail = isLight ? "rgba(15,23,42,0.18)" : "rgba(255,255,255,0.25)";
-  const pendingDot = isLight ? "rgba(15,23,42,0.25)" : "rgba(255,255,255,0.35)";
+  const timelineRail = isCardDark ? "rgba(255,255,255,0.25)" : "rgba(15,23,42,0.18)";
+  const pendingDot = isCardDark ? "rgba(255,255,255,0.35)" : "rgba(15,23,42,0.25)";
 
   const isMobile = viewportWidth <= 640;
   const isTablet = viewportWidth > 640 && viewportWidth <= 1024;

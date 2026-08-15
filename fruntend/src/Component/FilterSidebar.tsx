@@ -48,21 +48,23 @@ export const FilterSidebar = ({
   const sortRef = useRef<HTMLDivElement>(null);
 
   const isDark =
+    ((theme as any)?.filter_bg ? isColorDarkHex((theme as any).filter_bg) : false) ||
     (theme?.primary_bg ? isColorDarkHex(theme.primary_bg) : false) ||
+    ((theme as any)?.filter_text_color ? !isColorDarkHex((theme as any).filter_text_color) : false) ||
     (theme?.text_color ? !isColorDarkHex(theme.text_color) : false) ||
     theme?.mode === "dark";
-  const accentColor = theme?.accent_color || (isDark ? "#60a5fa" : "#2563eb");
-  const resolvedPrimaryBg = theme?.primary_bg || (isDark ? "#0f172a" : "#f8fafc");
+  const accentColor = (theme as any)?.filter_accent_color || theme?.accent_color || (isDark ? "#60a5fa" : "#2563eb");
+  const resolvedPrimaryBg = (theme as any)?.filter_bg || theme?.primary_bg || (isDark ? "#0f172a" : "#f8fafc");
 
-  const textPrimary = theme?.text_color || (isDark ? "#f1f5f9" : "#0f172a");
+  const textPrimary = (theme as any)?.filter_text_color || theme?.text_color || (isDark ? "#f1f5f9" : "#0f172a");
   const textSecondary = (theme as any)?.muted_text_color || (isDark ? "rgba(241, 245, 249, 0.65)" : "rgba(15, 23, 42, 0.65)");
-  const borderColor = (theme as any)?.border_color || (isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)");
+  const borderColor = (theme as any)?.filter_border_color || (theme as any)?.border_color || (isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)");
 
-  const btnBg = isDark
+  const btnBg = (theme as any)?.filter_card_bg || (isDark
     ? "rgba(255, 255, 255, 0.08)"
-    : (resolvedPrimaryBg === "#ffffff" ? "rgba(0, 0, 0, 0.04)" : "rgba(255, 255, 255, 0.65)");
+    : (resolvedPrimaryBg === "#ffffff" ? "rgba(0, 0, 0, 0.04)" : "rgba(255, 255, 255, 0.65)"));
 
-  const dropdownBg = (theme as any)?.dialog_bg || (theme as any)?.surface_bg || (theme as any)?.card_bg || resolvedPrimaryBg;
+  const dropdownBg = (theme as any)?.filter_card_bg || (theme as any)?.dialog_bg || (theme as any)?.surface_bg || (theme as any)?.card_bg || resolvedPrimaryBg;
   const hoverBg = `${accentColor}1c`;
 
   const currentSort = SORT_OPTIONS.find((o) => o.value === sortBy) || SORT_OPTIONS[0];

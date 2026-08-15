@@ -17,6 +17,8 @@ import BuilderTopControlBar from "./Component/BuilderTopControlBar";
 import BuilderControlPanel from "./Component/BuilderControlPanel";
 import BuilderDrawerPanel from "./Component/BuilderDrawerPanel";
 import { AiWebpageGeneratingAnimation } from "./Component/AiWebpageGeneratingAnimation";
+import { AiAvatar } from "./Component/AiAvatar";
+import { UserAvatar } from "./Component/UserAvatar";
 
 // Lazy-loaded routes for code splitting
 const BuilderPage = React.lazy(() => import("./BuilderPage"));
@@ -115,9 +117,12 @@ type ChatMessage = {
   text: string;
   time: string;
   status?: "loading" | "done" | "error";
-  type?: "text" | "palette_choice" | "choice_list" | "generating_animation";
+  type?: "text" | "palette_choice" | "choice_list" | "choice" | "generating_animation";
   palette_options?: any[];
   choices?: { id: string; label: string; description?: string }[];
+  progress?: number;
+  currentStepMessage?: string;
+  brandName?: string;
 };
 
 function slugify(value: string) {
@@ -187,9 +192,18 @@ function AdminSitesPage() {
   const navigate = useNavigate();
   const { admin, logoutAdmin } = useAdminAuth();
 
+  const ONBOARDING_CHAT_KEY = "webnirmaan_onboarding_chat";
+  const ONBOARDING_SESSION_KEY = "webnirmaan_onboarding_session_id";
+  const ONBOARDING_COLLECTED_KEY = "webnirmaan_onboarding_collected";
+
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem(ONBOARDING_SESSION_KEY) || localStorage.getItem(ONBOARDING_SESSION_KEY);
+    }
+    return null;
+  });
   const [savedSites, setSavedSites] = useState<SavedSite[]>([]);
   const [activeDrawer, setActiveDrawer] = useState<
     | "saved-sites"
@@ -202,7 +216,28 @@ function AdminSitesPage() {
     | null
   >(null);
 
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = sessionStorage.getItem(ONBOARDING_CHAT_KEY) || localStorage.getItem(ONBOARDING_CHAT_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    return [];
+  });
+
+  const [collectedState, setCollectedState] = useState<Record<string, any>>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = sessionStorage.getItem(ONBOARDING_COLLECTED_KEY) || localStorage.getItem(ONBOARDING_COLLECTED_KEY);
+        if (stored) return JSON.parse(stored);
+      } catch {}
+    }
+    return {};
+  });
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -214,6 +249,39 @@ function AdminSitesPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, loading]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        if (messages.length > 0) {
+          sessionStorage.setItem(ONBOARDING_CHAT_KEY, JSON.stringify(messages));
+          localStorage.setItem(ONBOARDING_CHAT_KEY, JSON.stringify(messages));
+        }
+        if (sessionId) {
+          sessionStorage.setItem(ONBOARDING_SESSION_KEY, sessionId);
+          localStorage.setItem(ONBOARDING_SESSION_KEY, sessionId);
+        }
+        if (Object.keys(collectedState).length > 0) {
+          sessionStorage.setItem(ONBOARDING_COLLECTED_KEY, JSON.stringify(collectedState));
+          localStorage.setItem(ONBOARDING_COLLECTED_KEY, JSON.stringify(collectedState));
+        }
+      } catch {}
+    }
+  }, [messages, sessionId, collectedState]);
+
+  const handleResetOnboarding = () => {
+    setMessages([]);
+    setSessionId(null);
+    setCollectedState({});
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem(ONBOARDING_CHAT_KEY);
+      sessionStorage.removeItem(ONBOARDING_SESSION_KEY);
+      sessionStorage.removeItem(ONBOARDING_COLLECTED_KEY);
+      localStorage.removeItem(ONBOARDING_CHAT_KEY);
+      localStorage.removeItem(ONBOARDING_SESSION_KEY);
+      localStorage.removeItem(ONBOARDING_COLLECTED_KEY);
+    }
+  };
 
   const loadSavedSites = async () => {
     try {
@@ -275,17 +343,32 @@ function AdminSitesPage() {
     const animId = `anim-${Date.now()}`;
     const currentTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
+    // Extract best brand name candidate from previous conversation turns
+    let detectedBrand = "Your Website";
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const text = messages[i].text || "";
+      if (text.includes("Creating") || text.includes("Building") || text.includes("for ")) {
+        const match = text.match(/(?:for|building|brand|store)\s+([A-Za-z0-9\s]+?)(?:[.,!\n]|$)/i);
+        if (match && match[1]?.trim()) {
+          detectedBrand = match[1].trim();
+          break;
+        }
+      }
+    }
+
     setMessages((prev) => {
-      const hasAnim = prev.some((m) => m.type === "generating_animation");
-      if (hasAnim) return prev;
+      const cleanPrev = prev.filter((m) => m.type !== "generating_animation");
       return [
-        ...prev,
+        ...cleanPrev,
         {
           id: animId,
           sender: "assistant",
           text: "Building your website...",
           time: currentTime,
           type: "generating_animation",
+          progress: 15,
+          currentStepMessage: "Initializing AI generation pipeline...",
+          brandName: detectedBrand,
         },
       ];
     });
@@ -319,11 +402,17 @@ function AdminSitesPage() {
               if (trimmed.startsWith("data:")) {
                 try {
                   const payload = JSON.parse(trimmed.slice(5).trim());
-                  if (payload.message) {
+                  if (payload.message || typeof payload.progress === "number") {
                     setMessages((prev) =>
                       prev.map((msg) =>
                         msg.id === animId
-                          ? { ...msg, text: payload.message }
+                          ? {
+                              ...msg,
+                              text: payload.message || msg.text,
+                              currentStepMessage: payload.message || msg.currentStepMessage,
+                              progress: typeof payload.progress === "number" ? payload.progress : msg.progress,
+                              brandName: payload.requirements?.brand_name || msg.brandName || detectedBrand,
+                            }
                           : msg
                       )
                     );
@@ -394,6 +483,7 @@ function AdminSitesPage() {
       ]);
 
       await loadSavedSites();
+      handleResetOnboarding();
       setTimeout(() => {
         navigate(`/builder/${createdSite.id}`);
       }, 1200);
@@ -425,7 +515,7 @@ function AdminSitesPage() {
     setMessages((prev) => [
       ...prev,
       { id: userMsgId, sender: "user", text: trimmed, time: currentTime },
-      { id: assistantMsgId, sender: "assistant", text: "Thinking...", time: currentTime, status: "loading" },
+      { id: assistantMsgId, sender: "assistant", text: "", time: currentTime, status: "loading" },
     ]);
 
     setPrompt("");
@@ -435,107 +525,142 @@ function AdminSitesPage() {
     setLoading(true);
 
     try {
-      if (!sessionId) {
-        // Start conversation session
-        const response = await fetch(`${API_BASE_URL}/conversation/start`, {
+      const endpoint = !sessionId
+        ? `${API_BASE_URL}/conversation/start/stream`
+        : `${API_BASE_URL}/conversation/reply/stream`;
+
+      const requestBody = !sessionId
+        ? { prompt: trimmed }
+        : { session_id: sessionId, reply: trimmed };
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(requestBody),
+      });
+
+      const updateAssistantMsg = (payload: {
+        text?: string;
+        palette_options?: any[];
+        choices?: any[];
+        status?: "loading" | "done" | "error";
+      }) => {
+        const palOpts = payload.palette_options;
+        const choices = payload.choices;
+        const msgType = palOpts && palOpts.length > 0
+          ? "palette_choice"
+          : choices && choices.length > 0
+          ? "choice"
+          : "text";
+
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMsgId
+              ? {
+                  ...msg,
+                  text: payload.text !== undefined ? payload.text : msg.text,
+                  type: msgType,
+                  palette_options: palOpts,
+                  choices: choices,
+                  status: payload.status || "done",
+                }
+              : msg
+          )
+        );
+      };
+
+      if (response.status === 404 && sessionId) {
+        // Rehydrate session seamlessly if server restarted
+        const rehydrateRes = await fetch(`${API_BASE_URL}/conversation/rehydrate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ prompt: trimmed }),
+          body: JSON.stringify({
+            session_id: sessionId,
+            collected: collectedState,
+            turns: messages.map((m) => ({ sender: m.sender, text: m.text })),
+            reply: trimmed,
+          }),
         });
-
-        if (!response.ok) throw new Error("Failed to start session");
-
-        const sessionData = await response.json();
+        if (!rehydrateRes.ok) throw new Error("Failed to rehydrate session");
+        const sessionData = await rehydrateRes.json();
         setSessionId(sessionData.session_id);
-
+        if (sessionData.collected) setCollectedState(sessionData.collected);
         const lastTurn = sessionData.turns[sessionData.turns.length - 1];
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === assistantMsgId
-              ? {
-                  ...msg,
-                  text: lastTurn.text || "Let's build your store!",
-                  type: lastTurn.type || "text",
-                  palette_options: lastTurn.palette_options || lastTurn.palettes,
-                  choices: lastTurn.choices,
-                  status: "done",
-                }
-              : msg
-          )
-        );
 
-        if (sessionData.is_complete || sessionData.phase === "completed") {
-          await triggerFinalSiteGeneration(sessionData.session_id);
-        }
-      } else {
-        // Reply to existing session
-        const response = await fetch(`${API_BASE_URL}/conversation/reply`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ session_id: sessionId, reply: trimmed }),
+        updateAssistantMsg({
+          text: lastTurn.text || "Let's build your store!",
+          palette_options: lastTurn.palette_options || lastTurn.palettes,
+          choices: lastTurn.choices,
+          status: "done",
         });
 
-        if (response.status === 404) {
-          // Session expired due to server restart, start fresh session seamlessly
-          setSessionId(null);
-          const startRes = await fetch(`${API_BASE_URL}/conversation/start`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ prompt: trimmed }),
-          });
-          if (!startRes.ok) throw new Error("Failed to restart session");
-          const sessionData = await startRes.json();
-          setSessionId(sessionData.session_id);
-          const lastTurn = sessionData.turns[sessionData.turns.length - 1];
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantMsgId
-                ? {
-                    ...msg,
-                    text: lastTurn.text || "Let's build your store!",
-                    type: lastTurn.type || "text",
-                    palette_options: lastTurn.palette_options,
-                    choices: lastTurn.choices,
-                    status: "done",
-                  }
-                : msg
-            )
-          );
-          if (sessionData.is_complete) {
-            await triggerFinalSiteGeneration(sessionData.session_id);
-          }
-          return;
-        }
-
-        if (!response.ok) throw new Error("Failed to send reply");
-
-        const sessionData = await response.json();
-        const lastTurn = sessionData.turns[sessionData.turns.length - 1];
-
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === assistantMsgId
-              ? {
-                  ...msg,
-                  text: lastTurn.text || "Got it!",
-                  type: lastTurn.type || "text",
-                  palette_options: lastTurn.palette_options || lastTurn.palettes,
-                  choices: lastTurn.choices,
-                  status: "done",
-                }
-              : msg
-          )
-        );
-
         if (sessionData.is_complete || sessionData.phase === "completed") {
           await triggerFinalSiteGeneration(sessionData.session_id);
+        }
+        return;
+      }
+
+      if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+
+      if (response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let doneReading = false;
+        let buffer = "";
+        let streamedText = "";
+        let finalDoneEvent: any = null;
+
+        while (!doneReading) {
+          const { value, done } = await reader.read();
+          doneReading = done;
+          if (value) {
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n\n");
+            buffer = lines.pop() || "";
+
+            for (const block of lines) {
+              const trimmedBlock = block.trim();
+              if (trimmedBlock.startsWith("data: ")) {
+                try {
+                  const event = JSON.parse(trimmedBlock.slice(6));
+                  if (event.type === "token") {
+                    streamedText += event.content || "";
+                    setMessages((prev) =>
+                      prev.map((msg) =>
+                        msg.id === assistantMsgId
+                          ? { ...msg, text: streamedText, status: "loading" }
+                          : msg
+                      )
+                    );
+                  } else if (event.type === "done") {
+                    finalDoneEvent = event;
+                  }
+                } catch {}
+              }
+            }
+          }
+        }
+
+        if (finalDoneEvent) {
+          if (finalDoneEvent.session_id) setSessionId(finalDoneEvent.session_id);
+          if (finalDoneEvent.collected) setCollectedState(finalDoneEvent.collected);
+
+          updateAssistantMsg({
+            text: finalDoneEvent.text || streamedText || "Let's build your store!",
+            palette_options: finalDoneEvent.palette_options || finalDoneEvent.palettes,
+            choices: finalDoneEvent.choices,
+            status: "done",
+          });
+
+          if (finalDoneEvent.is_complete || finalDoneEvent.phase === "completed") {
+            await triggerFinalSiteGeneration(finalDoneEvent.session_id);
+          }
         }
       }
     } catch (error) {
-      console.error("Error in conversation flow:", error);
+      console.error("Error in conversation stream flow:", error);
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === assistantMsgId
@@ -557,7 +682,7 @@ function AdminSitesPage() {
   };
 
   const handleSelectChoice = (choice: { id: string; label: string }) => {
-    handleSendReply(choice.label);
+    handleSendReply(choice.id);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -683,12 +808,9 @@ function AdminSitesPage() {
                     >
                       <AiWebpageGeneratingAnimation
                         themeMode="light"
-                        brandName={
-                          messages
-                            .find((m) => m.text.includes("Building"))
-                            ?.text.replace("Building ", "")
-                            .replace("...", "") || "Your Store"
-                        }
+                        brandName={msg.brandName || "Your Website"}
+                        progress={msg.progress}
+                        currentMessage={msg.currentStepMessage || msg.text}
                       />
                     </div>
                   );
@@ -712,24 +834,11 @@ function AdminSitesPage() {
                         maxWidth: "85%",
                       }}
                     >
-                      <div
-                        style={{
-                          width: "32px",
-                          height: "32px",
-                          borderRadius: "10px",
-                          background: isUser
-                            ? "#e2e8f0"
-                            : "linear-gradient(135deg, #2563eb, #1d4ed8)",
-                          display: "grid",
-                          placeItems: "center",
-                          color: isUser ? "#334155" : "#ffffff",
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          flexShrink: 0,
-                        }}
-                      >
-                        {isUser ? "You" : "AI"}
-                      </div>
+                      {isUser ? (
+                        <UserAvatar size={32} />
+                      ) : (
+                        <AiAvatar size={32} />
+                      )}
 
                       <div
                         style={{
@@ -856,44 +965,61 @@ function AdminSitesPage() {
                           </div>
                         )}
 
-                        {/* Choice Pills */}
+                        {/* Choice Cards (Layout Archetypes, Surface Materiality, Build Now) */}
                         {msg.choices && msg.choices.length > 0 && (
                           <div
                             style={{
                               marginTop: "14px",
-                              display: "flex",
-                              flexWrap: "wrap",
-                              gap: "8px",
+                              display: "grid",
+                              gridTemplateColumns: msg.choices.length <= 3 ? "repeat(auto-fit, minmax(200px, 1fr))" : "repeat(auto-fit, minmax(180px, 1fr))",
+                              gap: "10px",
                             }}
                           >
-                            {msg.choices.map((choice) => (
-                              <button
-                                key={choice.id}
-                                type="button"
-                                onClick={() => handleSelectChoice(choice)}
-                                style={{
-                                  padding: "8px 14px",
-                                  borderRadius: "20px",
-                                  border: "1px solid #2563eb",
-                                  background: "#eff6ff",
-                                  color: "#1d4ed8",
-                                  fontSize: "12px",
-                                  fontWeight: 600,
-                                  cursor: "pointer",
-                                  transition: "all 0.15s ease",
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.background = "#2563eb";
-                                  e.currentTarget.style.color = "#ffffff";
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.background = "#eff6ff";
-                                  e.currentTarget.style.color = "#1d4ed8";
-                                }}
-                              >
-                                {choice.label}
-                              </button>
-                            ))}
+                            {msg.choices.map((choice) => {
+                              const isBuildNow = choice.id === "build_now";
+                              return (
+                                <button
+                                  key={choice.id}
+                                  type="button"
+                                  onClick={() => handleSelectChoice(choice)}
+                                  style={{
+                                    padding: "10px 14px",
+                                    borderRadius: "12px",
+                                    border: isBuildNow ? "1px solid #10b981" : "1px solid rgba(37,99,235,0.25)",
+                                    background: isBuildNow ? "linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)" : "#ffffff",
+                                    color: isBuildNow ? "#065f46" : "#0f172a",
+                                    textAlign: "left",
+                                    cursor: "pointer",
+                                    transition: "all 0.18s cubic-bezier(0.4, 0, 0.2, 1)",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "4px",
+                                    boxShadow: "0 2px 6px rgba(15,23,42,0.04)",
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.transform = "translateY(-1px)";
+                                    e.currentTarget.style.boxShadow = isBuildNow
+                                      ? "0 6px 16px rgba(16,185,129,0.25)"
+                                      : "0 6px 16px rgba(37,99,235,0.18)";
+                                    e.currentTarget.style.borderColor = isBuildNow ? "#059669" : "#2563eb";
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.transform = "translateY(0)";
+                                    e.currentTarget.style.boxShadow = "0 2px 6px rgba(15,23,42,0.04)";
+                                    e.currentTarget.style.borderColor = isBuildNow ? "#10b981" : "rgba(37,99,235,0.25)";
+                                  }}
+                                >
+                                  <div style={{ fontSize: "13px", fontWeight: 700, color: isBuildNow ? "#047857" : "#1d4ed8" }}>
+                                    {choice.label}
+                                  </div>
+                                  {choice.description && (
+                                    <div style={{ fontSize: "11px", color: "#64748b", lineHeight: 1.4 }}>
+                                      {choice.description}
+                                    </div>
+                                  )}
+                                </button>
+                              );
+                            })}
                           </div>
                         )}
 
@@ -948,11 +1074,50 @@ function AdminSitesPage() {
         {/* Floating Chat Input Bar */}
         <div
           style={{
-            padding: "12px 20px 24px 20px",
+            padding: "8px 20px 24px 20px",
             background: "transparent",
             flexShrink: 0,
           }}
         >
+          {messages.length > 0 && (
+            <div
+              style={{
+                maxWidth: "760px",
+                margin: "0 auto 8px auto",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "0 6px",
+              }}
+            >
+              {collectedState.brand_name ? (
+                <span style={{ fontSize: "11px", color: "#64748b", fontWeight: 500 }}>
+                  Store: <strong style={{ color: "#0f172a" }}>{collectedState.brand_name}</strong>
+                </span>
+              ) : <span />}
+              <button
+                type="button"
+                onClick={handleResetOnboarding}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  fontSize: "11px",
+                  color: "#94a3b8",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  padding: "2px 6px",
+                  borderRadius: "4px",
+                  transition: "color 0.15s ease",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "#0f172a")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "#94a3b8")}
+              >
+                <span>↺ Start Fresh</span>
+              </button>
+            </div>
+          )}
           <div
             style={{
               maxWidth: "760px",

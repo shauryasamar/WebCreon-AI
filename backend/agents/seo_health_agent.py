@@ -32,7 +32,13 @@ def audit_store_health(site_id: str, site_definition: Dict[str, Any]) -> Dict[st
         products = db.exec(select(Product).where(Product.site_id == site_uuid)).all()
         low_stock_prods = [p for p in products if p.stock <= 5]
 
-        # 4. Color Contrast Audit
+        # 4. Product Descriptions Audit
+        missing_desc_prods = [
+            p for p in products 
+            if not p.description or not p.description.strip() or p.description.strip() in ["-", "N/A", "null"]
+        ]
+
+        # 5. Color Contrast Audit
         theme = site_definition.get("theme") or {}
         bg_hex = theme.get("primary_bg") or "#ffffff"
         text_hex = theme.get("text_color") or "#0f172a"
@@ -43,6 +49,11 @@ def audit_store_health(site_id: str, site_definition: Dict[str, Any]) -> Dict[st
             "unfulfilled_orders_count": len(unfulfilled),
             "pending_returns_count": len(pending_returns),
             "total_products": len(products),
+            "missing_description_products": [
+                {"name": p.name, "id": str(p.id)[:8], "category": p.category or "General"}
+                for p in missing_desc_prods
+            ],
+            "missing_description_count": len(missing_desc_prods),
             "low_stock_products": [
                 {"name": p.name, "stock": p.stock, "price": float(p.price or 0)}
                 for p in low_stock_prods
