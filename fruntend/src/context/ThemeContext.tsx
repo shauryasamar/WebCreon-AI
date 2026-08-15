@@ -11,6 +11,8 @@ export type SiteTheme = {
   secondary_bg?: string;
   text_color?: string;
   muted_text?: string;
+  muted_text_color?: string;
+  soft_text_color?: string;
   accent_color?: string;
   accent_hover?: string;
   accent_text?: string;
@@ -40,7 +42,10 @@ export type SiteTheme = {
   festival_theme?: string;
   logo_height?: number | string;
   logo_fit?: string;
+
+  [key: string]: any;
 };
+
 
 export function isColorDarkHex(colorHex?: string): boolean {
   if (!colorHex || typeof colorHex !== "string") return false;
