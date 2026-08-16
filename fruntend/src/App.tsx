@@ -1203,6 +1203,31 @@ function AdminSitesPage() {
   );
 }
 
+function ScrollToTop() {
+  const { pathname, search, hash } = useLocation();
+
+  useEffect(() => {
+    if (hash) {
+      const targetId = hash.replace("#", "");
+      const element = document.getElementById(targetId);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth" });
+        return;
+      }
+    }
+
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "instant" as ScrollBehavior,
+    });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [pathname, search, hash]);
+
+  return null;
+}
+
 function AppRoutes() {
   return (
     <Suspense fallback={<RouteLoadingFallback />}>
@@ -1231,6 +1256,7 @@ function App() {
       <CustomerAuthProvider>
         <CartProvider>
           <BrowserRouter>
+            <ScrollToTop />
             <AppRoutes />
           </BrowserRouter>
         </CartProvider>

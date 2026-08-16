@@ -279,6 +279,16 @@ const RenderPage: React.FC<RenderPageProps> = ({
   }, []);
 
   useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "instant" as ScrollBehavior,
+    });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [page?.id, (selectedProduct as any)?.id, checkoutStep]);
+
+  useEffect(() => {
     if (!siteId) return;
     if (authLoading) return;
 

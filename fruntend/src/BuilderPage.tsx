@@ -607,6 +607,16 @@ function BuilderPageContent() {
     return JSON.stringify(draftSiteDefinition) !== JSON.stringify(siteDefinition);
   }, [draftSiteDefinition, siteDefinition]);
 
+  useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "instant" as ScrollBehavior,
+    });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [location.pathname, location.search]);
+
   const handlePublish = async () => {
     const currentSiteId = resolvedSiteId || siteId;
     if (!currentSiteId || !draftSiteDefinition || publishing) return;

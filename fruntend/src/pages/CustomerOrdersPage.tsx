@@ -539,6 +539,16 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
     bootstrap();
   }, [siteId]);
 
+  useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "instant" as ScrollBehavior,
+    });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, []);
+
   const loadOrderDetail = async (orderId: string, force = false) => {
     if (!siteId) return;
     if (!force && detailMap[orderId]) return;
