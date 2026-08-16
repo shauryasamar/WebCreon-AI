@@ -364,109 +364,135 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
               gap: `${resolvedGap}px`,
             }}
           >
-            {paymentMethods.map((method) => {
-              const isSelected = selectedMethod === method;
-              const inputId = `payment-method-${method.toLowerCase()}`;
+            {(() => {
+              const methodsToDisplay =
+                paymentMethods && paymentMethods.length > 0 && !paymentMethods.includes("CARD") && paymentMethods.includes("UPI")
+                  ? ["UPI", "CARD", "NETBANKING", ...(paymentMethods.includes("COD") ? ["COD"] : [])]
+                  : paymentMethods || ["UPI", "CARD", "NETBANKING", "COD"];
 
-              return (
-                <label
-                  key={method}
-                  htmlFor={inputId}
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "8px",
-                    padding: isMobile ? "12px" : "14px 16px",
-                    borderRadius: `${resolvedItemRadius}px`,
-                    border: `1px solid ${
-                      isSelected ? resolvedAccent : palette.border
-                    }`,
-                    background: isSelected
-                      ? palette.optionSelectedBg
-                      : palette.optionBg,
-                    cursor: "pointer",
-                    boxShadow: isSelected ? palette.selectedRing : "none",
-                    transition: "all 180ms ease",
-                  }}
-                >
-                  <div
+              return methodsToDisplay.map((methodKey) => {
+                const isSelected = (selectedMethod || "").toUpperCase() === methodKey.toUpperCase();
+                const inputId = `payment-method-${methodKey.toLowerCase()}`;
+                
+                let title = methodKey;
+                let subtitle = "";
+                let tag = "";
+
+                if (methodKey.toUpperCase() === "UPI") {
+                  title = "UPI (Google Pay, PhonePe, Paytm, QR)";
+                  subtitle = "Instant payment via any UPI App or QR code";
+                  tag = "Fastest";
+                } else if (methodKey.toUpperCase() === "CARD" || methodKey.toUpperCase() === "CARDS") {
+                  title = "Credit / Debit Card";
+                  subtitle = "Visa, Mastercard, RuPay, Maestro";
+                } else if (methodKey.toUpperCase() === "NETBANKING" || methodKey.toUpperCase() === "NET_BANKING") {
+                  title = "Netbanking";
+                  subtitle = "HDFC, SBI, ICICI, Axis & 50+ Indian banks";
+                } else if (methodKey.toUpperCase() === "COD" || methodKey.toUpperCase() === "CASH_ON_DELIVERY") {
+                  title = "Cash on Delivery (COD)";
+                  subtitle = "Pay with cash upon package delivery";
+                }
+
+                return (
+                  <label
+                    key={methodKey}
+                    htmlFor={inputId}
                     style={{
                       display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: "10px",
-                      flexWrap: "wrap",
+                      flexDirection: "column",
+                      gap: "8px",
+                      padding: isMobile ? "12px" : "14px 16px",
+                      borderRadius: `${resolvedItemRadius}px`,
+                      border: `1px solid ${
+                        isSelected ? resolvedAccent : palette.border
+                      }`,
+                      background: isSelected
+                        ? palette.optionSelectedBg
+                        : palette.optionBg,
+                      cursor: "pointer",
+                      boxShadow: isSelected ? palette.selectedRing : "none",
+                      transition: "all 180ms ease",
                     }}
                   >
                     <div
                       style={{
                         display: "flex",
                         alignItems: "center",
+                        justifyContent: "space-between",
                         gap: "10px",
-                        minWidth: 0,
+                        flexWrap: "wrap",
                       }}
                     >
-                      <input
-                        id={inputId}
-                        type="radio"
-                        name="payment-method"
-                        checked={isSelected}
-                        onChange={() => handleMethodChange(method)}
-                        style={{
-                          accentColor: resolvedAccent,
-                          width: "16px",
-                          height: "16px",
-                          margin: 0,
-                          flexShrink: 0,
-                        }}
-                      />
-
                       <div
                         style={{
-                          fontWeight: 700,
-                          fontSize: "14px",
-                          color: palette.text,
-                          lineHeight: 1.2,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "10px",
+                          minWidth: 0,
                         }}
                       >
-                        {method}
+                        <input
+                          id={inputId}
+                          type="radio"
+                          name="payment-method"
+                          checked={isSelected}
+                          onChange={() => handleMethodChange(methodKey)}
+                          style={{
+                            accentColor: resolvedAccent,
+                            width: "16px",
+                            height: "16px",
+                            margin: 0,
+                            flexShrink: 0,
+                          }}
+                        />
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              fontWeight: 700,
+                              fontSize: "14px",
+                              color: palette.text,
+                              lineHeight: 1.2,
+                            }}
+                          >
+                            <span>{title}</span>
+                            {tag && (
+                              <span
+                                style={{
+                                  fontSize: "10px",
+                                  fontWeight: 800,
+                                  textTransform: "uppercase",
+                                  padding: "2px 6px",
+                                  borderRadius: "4px",
+                                  background: alpha(resolvedAccent, 0.15),
+                                  color: resolvedAccent,
+                                }}
+                              >
+                                {tag}
+                              </span>
+                            )}
+                          </div>
+                          {subtitle && (
+                            <div
+                              style={{
+                                fontSize: "12px",
+                                color: palette.textMuted,
+                                lineHeight: 1.3,
+                              }}
+                            >
+                              {subtitle}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-
-                  {isSelected && method === "UPI" ? (
-                    <div
-                      style={{
-                        marginTop: "2px",
-                        paddingTop: "10px",
-                        borderTop: `1px solid ${palette.softBorder}`,
-                      }}
-                    >
-                      <label
-                        htmlFor="upi-id"
-                        style={{
-                          display: "block",
-                          marginBottom: "6px",
-                          fontSize: "11px",
-                          fontWeight: 600,
-                          color: palette.textMuted,
-                        }}
-                      >
-                        UPI ID
-                      </label>
-                      <input
-                        id="upi-id"
-                        type="text"
-                        value={upiId}
-                        onChange={(e) => handleUpiChange(e.target.value)}
-                        placeholder="name@upi"
-                        style={inputStyle}
-                      />
-                    </div>
-                  ) : null}
-                </label>
-              );
-            })}
+                  </label>
+                );
+              });
+            })()}
           </div>
         </fieldset>
 

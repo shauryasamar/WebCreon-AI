@@ -26,6 +26,8 @@ const AdminLayout = React.lazy(() => import("./Component/AdminLayout"));
 const AdminProducts = React.lazy(() => import("./Component/AdminProducts"));
 const AdminOrders = React.lazy(() => import("./Component/AdminOrders"));
 const CheckoutChargesPage = React.lazy(() => import("./Component/CheckoutChargesPage"));
+const TenantPaymentSettingsPage = React.lazy(() => import("./Component/TenantPaymentSettingsPage"));
+const TenantEarningsPage = React.lazy(() => import("./Component/TenantEarningsPage"));
 const EditorRenderPage = React.lazy(() => import("./customizations/EditorRenderPage"));
 const EditorSidebar = React.lazy(() => import("./customizations/EditorSidebar"));
 const CustomerOrdersPage = React.lazy(() => import("./pages/CustomerOrdersPage"));
@@ -679,7 +681,11 @@ function BuilderPageContent() {
 
 
   const activeAdminNavKey: AdminNavKey | null = isAdminRoute
-    ? location.pathname.includes("/checkout-charges")
+    ? location.pathname.includes("/payment-settings")
+      ? "payment-settings"
+      : location.pathname.includes("/earnings")
+      ? "earnings"
+      : location.pathname.includes("/checkout-charges")
       ? "checkout-charges"
       : location.pathname.includes("/orders")
       ? "orders"
@@ -1320,6 +1326,8 @@ function BuilderPageContent() {
                 <Route index element={<Navigate to="products" replace />} />
                 <Route path="products" element={<AdminProducts />} />
                 <Route path="orders" element={<AdminOrders />} />
+                <Route path="earnings" element={<TenantEarningsPage />} />
+                <Route path="payment-settings" element={<TenantPaymentSettingsPage />} />
                 <Route
                   path="checkout-charges"
                   element={<CheckoutChargesPage />}

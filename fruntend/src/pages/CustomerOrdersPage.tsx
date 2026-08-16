@@ -4,11 +4,27 @@ import { API_BASE_URL } from "../config/api";
 import { Pagination } from "../Component/Pagination";
 import { resolveThemeTokens } from "../context/ThemeContext";
 
+type RefundInfo = {
+  status: string;
+  status_label: string;
+  badge_color?: string;
+  amount: number;
+  payment_method?: string;
+  reference_id?: string | null;
+  arn?: string | null;
+  estimated_days?: string | null;
+  note?: string | null;
+  initiated_at?: string | null;
+};
+
 type OrderListItem = {
   id: string;
   status: string;
+  payment_status?: string | null;
   total: number;
   payment_method?: string | null;
+  razorpay_payment_id?: string | null;
+  razorpay_order_id?: string | null;
   created_at: string;
   items?: Array<{
     id?: string;
@@ -22,6 +38,7 @@ type OrderListItem = {
   }>;
   has_returnable_items?: boolean;
   can_request_return?: boolean;
+  refund_info?: RefundInfo | null;
 };
 
 type OrderItem = {
@@ -57,8 +74,11 @@ type Shipment = {
 type OrderDetail = {
   id: string;
   status: string;
+  payment_status?: string | null;
   total: number;
   payment_method?: string | null;
+  razorpay_payment_id?: string | null;
+  razorpay_order_id?: string | null;
   shipping_address?: any;
   pricing_snapshot?: any;
   created_at: string;
@@ -70,6 +90,7 @@ type OrderDetail = {
   shipment?: Shipment | null;
   has_returnable_items?: boolean;
   can_request_return?: boolean;
+  refund_info?: RefundInfo | null;
 };
 
 type CustomerReturnListItem = {
@@ -185,6 +206,12 @@ type ReturnDraftItem = {
 
 type ReturnDraft = {
   request_note: string;
+  refund_account_type?: "upi" | "bank";
+  refund_upi_id?: string;
+  refund_account_holder?: string;
+  refund_account_number?: string;
+  refund_ifsc_code?: string;
+  refund_bank_name?: string;
   items: Record<string, ReturnDraftItem>;
 };
 
@@ -254,6 +281,27 @@ function formatPrice(value?: number | null) {
 function labelize(value?: string | null) {
   if (!value) return "—";
   return value.replaceAll("_", " ");
+}
+
+function formatPaymentMethodName(method?: string | null): string {
+  if (!method) return "Online Payment";
+  const m = method.toLowerCase();
+  if (m === "upi") return "UPI / QR";
+  if (m === "card") return "Credit / Debit Card";
+  if (m === "netbanking") return "Netbanking";
+  if (m === "cod" || m === "cash_on_delivery") return "Cash on Delivery (COD)";
+  if (m === "razorpay") return "Online Payment (Razorpay)";
+  return labelize(method);
+}
+
+function getPaymentMethodIcon(method?: string | null): string {
+  if (!method) return "💳";
+  const m = method.toLowerCase();
+  if (m === "upi") return "⚡";
+  if (m === "card") return "💳";
+  if (m === "netbanking") return "🏦";
+  if (m === "cod" || m === "cash_on_delivery") return "💵";
+  return "💳";
 }
 
 function getStatusColor(status?: string) {
@@ -511,6 +559,14 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
         [orderId]: data,
       }));
 
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId
+            ? { ...o, refund_info: data.refund_info, payment_status: data.payment_status, status: data.status }
+            : o
+        )
+      );
+
       setReturnDrafts((prev) => {
         const existingDraft = prev[orderId];
         const currentItems = existingDraft?.items || {};
@@ -702,10 +758,79 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       return;
     }
 
+    const draft = returnDrafts[orderId];
+    const detail = detailMap[orderId];
+    const currentOrder = orders.find((o) => o.id === orderId);
+    const paymentMethod = (detail?.payment_method || currentOrder?.payment_method || "").toLowerCase();
+    const isCod = paymentMethod === "cod" || paymentMethod === "cash_on_delivery";
+
+    let customerRefundAccount: any = null;
+    const accountType = draft?.refund_account_type || "upi";
+
+    const UPI_ID_REGEX = /^[a-zA-Z0-9.\-_]{2,64}@[a-zA-Z0-9]{2,30}$/;
+    const EMAIL_DOMAIN_REGEX = /\.(com|in|co|org|net|io|edu|gov|co\.in|org\.in|ac\.in)$/i;
+    const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+    const ACCOUNT_NUMBER_REGEX = /^\d{9,18}$/;
+    const ACCOUNT_HOLDER_REGEX = /^[a-zA-Z\s.]{2,70}$/;
+
+    if (accountType === "bank") {
+      const holder = draft?.refund_account_holder?.trim() || "";
+      const accNum = draft?.refund_account_number?.trim() || "";
+      const ifsc = draft?.refund_ifsc_code?.trim()?.toUpperCase() || "";
+      const bankName = draft?.refund_bank_name?.trim() || "";
+
+      if (isCod || holder || accNum || ifsc) {
+        if (!holder || !ACCOUNT_HOLDER_REGEX.test(holder)) {
+          alert("Please enter a valid Account Holder Full Name (letters and spaces only, at least 2 characters).");
+          return;
+        }
+        if (!accNum || !ACCOUNT_NUMBER_REGEX.test(accNum)) {
+          alert("Please enter a valid 9 to 18-digit Bank Account Number (digits only).");
+          return;
+        }
+        if (!ifsc || !IFSC_REGEX.test(ifsc)) {
+          alert(`'${ifsc}' is not a valid 11-character Indian Bank IFSC Code (e.g. HDFC0001234, SBIN0000456, ICIC0000001). The 5th character must be '0'.`);
+          return;
+        }
+        customerRefundAccount = {
+          type: "bank",
+          account_holder: holder,
+          account_number: accNum,
+          ifsc_code: ifsc,
+          bank_name: bankName || null,
+        };
+      }
+    } else {
+      const upi = draft?.refund_upi_id?.trim() || "";
+      if (isCod || upi) {
+        if (!upi || !upi.includes("@")) {
+          alert("Please provide a valid UPI ID (e.g. yourname@okhdfcbank or 9876543210@paytm).");
+          return;
+        }
+        const parts = upi.split("@");
+        if (parts.length === 2 && EMAIL_DOMAIN_REGEX.test(parts[1])) {
+          alert(`'${upi}' appears to be an email address. A valid UPI ID uses a bank handle (e.g. @okhdfcbank, @paytm, @ybl, @okaxis, @upi) without '.com' or '.in'.`);
+          return;
+        }
+        if (!UPI_ID_REGEX.test(upi)) {
+          alert(`'${upi}' is not a valid UPI ID format (e.g. yourname@okhdfcbank or 9876543210@paytm).`);
+          return;
+        }
+        customerRefundAccount = {
+          type: "upi",
+          upi_id: upi,
+        };
+      }
+    }
+
+    if (isCod && !customerRefundAccount) {
+      alert("For Cash on Delivery (COD) orders, please provide your UPI ID or Bank Account details to receive your refund.");
+      return;
+    }
+
     try {
       setSubmittingReturnOrderId(orderId);
 
-      const draft = returnDrafts[orderId];
       const response = await fetch(`${API_BASE_URL}/returns/${siteId}/request`, {
         method: "POST",
         credentials: "include",
@@ -715,6 +840,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
         body: JSON.stringify({
           order_id: orderId,
           request_note: draft?.request_note?.trim() || null,
+          customer_refund_account: customerRefundAccount,
           items: selectedItems,
         }),
       });
@@ -1632,7 +1758,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
             {orders.map((order) => {
               const detail = detailMap[order.id];
               const isExpanded = expandedOrderId === order.id;
-              const canCancel = order.status === "placed" || order.status === "confirmed";
+              const canCancel = order.status === "placed" || order.status === "confirmed" || order.status === "pending";
               const isDelivered = order.status === "delivered";
               const statusColor = getStatusColor(order.status);
               const canReturn = canRequestReturnForOrder(detail, order);
@@ -1732,8 +1858,17 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                               </span>
                             )}
                           </div>
-                          <div style={{ fontSize: "13px", color: textMuted }}>
-                            {formatDate(order.created_at)}
+                          <div style={{ fontSize: "13px", color: textMuted, display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                            <span>{formatDate(order.created_at)}</span>
+                            {order.payment_method && (
+                              <>
+                                <span>•</span>
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontWeight: 600 }}>
+                                  <span>{getPaymentMethodIcon(order.payment_method)}</span>
+                                  <span>{formatPaymentMethodName(order.payment_method)}</span>
+                                </span>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1749,32 +1884,47 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                         }}
                       >
                         {/* Status chip */}
-                        <div
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            padding: "6px 12px",
-                            borderRadius: "999px",
-                            background: `${statusColor}14`,
-                            border: `1px solid ${statusColor}28`,
-                            color: statusColor,
-                            fontSize: "12px",
-                            fontWeight: 800,
-                            textTransform: "capitalize",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          <span
-                            style={{
-                              width: "6px",
-                              height: "6px",
-                              borderRadius: "50%",
-                              background: statusColor,
-                            }}
-                          />
-                          {order.status.replaceAll("_", " ")}
-                        </div>
+                        {(() => {
+                          const currentRefundInfo = detailMap[order.id]?.refund_info || order.refund_info;
+                          const isRefundFailed = currentRefundInfo?.status === "failed";
+                          const isRefundProcessing = currentRefundInfo?.status === "processing";
+                          const isRefundCompleted = currentRefundInfo?.status === "completed";
+                          const chipColor = isRefundFailed
+                            ? "#ef4444"
+                            : (isRefundProcessing ? "#d97706" : (isRefundCompleted ? "#059669" : statusColor));
+                          const chipLabel = isRefundFailed
+                            ? "Refund Failed"
+                            : (isRefundProcessing ? "Refund in progress" : (isRefundCompleted ? "Refunded" : order.status.replaceAll("_", " ")));
+
+                          return (
+                            <div
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px",
+                                padding: "6px 12px",
+                                borderRadius: "999px",
+                                background: `${chipColor}14`,
+                                border: `1px solid ${chipColor}28`,
+                                color: chipColor,
+                                fontSize: "12px",
+                                fontWeight: 800,
+                                textTransform: "capitalize",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  width: "6px",
+                                  height: "6px",
+                                  borderRadius: "50%",
+                                  background: chipColor,
+                                }}
+                              />
+                              {chipLabel}
+                            </div>
+                          );
+                        })()}
 
                         {/* Price */}
                         <div
@@ -2177,6 +2327,132 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                 </div>
                               </div>
 
+                              <div
+                                style={{
+                                  border: cardBorder,
+                                  borderRadius: "18px",
+                                  padding: isCompact ? "14px" : "16px",
+                                  background: panelBg,
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: "10px",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontSize: "13px",
+                                    fontWeight: 800,
+                                    letterSpacing: "0.04em",
+                                    textTransform: "uppercase",
+                                    color: textMuted,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                  }}
+                                >
+                                  <span>Payment details</span>
+                                  <span
+                                    style={{
+                                      fontSize: "11px",
+                                      fontWeight: 800,
+                                      padding: "3px 9px",
+                                      borderRadius: "999px",
+                                      textTransform: "capitalize",
+                                      background:
+                                        detail.payment_status === "paid"
+                                          ? "rgba(16,185,129,0.14)"
+                                          : detail.payment_status === "refunded"
+                                          ? "rgba(139,92,246,0.14)"
+                                          : detail.payment_status === "failed"
+                                          ? "rgba(239,68,68,0.14)"
+                                          : "rgba(245,158,11,0.14)",
+                                      color:
+                                        detail.payment_status === "paid"
+                                          ? "#059669"
+                                          : detail.payment_status === "refunded"
+                                          ? "#7c3aed"
+                                          : detail.payment_status === "failed"
+                                          ? "#dc2626"
+                                          : "#d97706",
+                                    }}
+                                  >
+                                    {detail.payment_status === "paid"
+                                      ? (detail.payment_method?.toLowerCase() === "cod" ? "● Cash Collected (Paid)" : "● Paid")
+                                      : detail.payment_status === "refunded"
+                                      ? "● Refunded"
+                                      : detail.payment_status === "failed"
+                                      ? "● Payment Failed"
+                                      : (detail.payment_method?.toLowerCase() === "cod" ? "● Pay on Delivery (Pending)" : "● " + (labelize(detail.payment_status) || "Pending"))}
+                                  </span>
+                                </div>
+
+                                <div
+                                  style={{
+                                    display: "grid",
+                                    gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)",
+                                    gap: "10px",
+                                    marginTop: "2px",
+                                  }}
+                                >
+                                  <div>
+                                    <div style={{ fontSize: "12px", color: textMuted, marginBottom: "3px" }}>
+                                      Payment method
+                                    </div>
+                                    <div
+                                      style={{
+                                        fontSize: "13px",
+                                        fontWeight: 700,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "6px",
+                                      }}
+                                    >
+                                      <span>{getPaymentMethodIcon(detail.payment_method)}</span>
+                                      <span>{formatPaymentMethodName(detail.payment_method)}</span>
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <div style={{ fontSize: "12px", color: textMuted, marginBottom: "3px" }}>
+                                      Total amount
+                                    </div>
+                                    <div style={{ fontSize: "14px", fontWeight: 800, color: textPrimary }}>
+                                      {formatPrice(detail.total)}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {detail.razorpay_payment_id && (
+                                  <div
+                                    style={{
+                                      paddingTop: "8px",
+                                      borderTop: divider,
+                                      display: "flex",
+                                      flexDirection: "column",
+                                      gap: "4px",
+                                    }}
+                                  >
+                                    <div style={{ fontSize: "11px", color: textMuted, textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                      Transaction reference
+                                    </div>
+                                    <code
+                                      style={{
+                                        fontSize: "12px",
+                                        fontWeight: 700,
+                                        padding: "4px 8px",
+                                        borderRadius: "6px",
+                                        background: isLight ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)",
+                                        wordBreak: "break-all",
+                                        color: textPrimary,
+                                        width: "fit-content",
+                                      }}
+                                    >
+                                      {detail.razorpay_payment_id}
+                                    </code>
+                                  </div>
+                                )}
+                              </div>
+
                               {renderReturnAccordion(order.id)}
                             </div>
 
@@ -2189,6 +2465,131 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                   background: panelBg,
                                 }}
                               >
+                                {/* Refund Destination Account (Required for COD, or Optional for others) */}
+                                <div
+                                  style={{
+                                    border: cardBorder,
+                                    borderRadius: "14px",
+                                    padding: "14px",
+                                    background: isLight ? "#f8fafc" : "rgba(255,255,255,0.02)",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "12px",
+                                    marginBottom: "14px",
+                                  }}
+                                >
+                                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "6px" }}>
+                                    <span style={{ fontSize: "13px", fontWeight: 800, color: textPrimary, textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                      Where should we send your refund?
+                                    </span>
+                                    <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "999px", background: order.payment_method?.toLowerCase() === "cod" ? "rgba(245,158,11,0.14)" : "rgba(16,185,129,0.14)", color: order.payment_method?.toLowerCase() === "cod" ? "#d97706" : "#059669" }}>
+                                      {order.payment_method?.toLowerCase() === "cod" ? "Required for COD" : "Original Source / Instant UPI"}
+                                    </span>
+                                  </div>
+
+                                  <div style={{ display: "flex", gap: "8px" }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => updateReturnDraft(order.id, (d) => ({ ...d, refund_account_type: "upi" }))}
+                                      style={{
+                                        padding: "7px 14px",
+                                        borderRadius: "10px",
+                                        fontSize: "12px",
+                                        fontWeight: 700,
+                                        cursor: "pointer",
+                                        border: (draft?.refund_account_type || "upi") === "upi" ? `1px solid ${accentColor}` : cardBorder,
+                                        background: (draft?.refund_account_type || "upi") === "upi" ? `${accentColor}18` : "transparent",
+                                        color: (draft?.refund_account_type || "upi") === "upi" ? accentColor : textMuted,
+                                      }}
+                                    >
+                                      ⚡ Instant UPI / QR
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => updateReturnDraft(order.id, (d) => ({ ...d, refund_account_type: "bank" }))}
+                                      style={{
+                                        padding: "7px 14px",
+                                        borderRadius: "10px",
+                                        fontSize: "12px",
+                                        fontWeight: 700,
+                                        cursor: "pointer",
+                                        border: draft?.refund_account_type === "bank" ? `1px solid ${accentColor}` : cardBorder,
+                                        background: draft?.refund_account_type === "bank" ? `${accentColor}18` : "transparent",
+                                        color: draft?.refund_account_type === "bank" ? accentColor : textMuted,
+                                      }}
+                                    >
+                                      🏦 Bank Account (NEFT/IMPS)
+                                    </button>
+                                  </div>
+
+                                  {(draft?.refund_account_type || "upi") === "upi" ? (
+                                    <div>
+                                      <input
+                                        type="text"
+                                        value={draft?.refund_upi_id || ""}
+                                        onChange={(e) => updateReturnDraft(order.id, (d) => ({ ...d, refund_upi_id: e.target.value.trim() }))}
+                                        placeholder="Enter your UPI ID (e.g. yourname@okhdfcbank or 9876543210@paytm - not email)"
+                                        style={{
+                                          width: "100%",
+                                          borderRadius: "10px",
+                                          border: cardBorder,
+                                          background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)",
+                                          color: textPrimary,
+                                          padding: "10px 14px",
+                                          fontSize: "13px",
+                                        }}
+                                      />
+                                      <div style={{ fontSize: "11px", color: textMuted, marginTop: "4px" }}>
+                                        Format: <code style={{ color: accentColor }}>username@bankhandle</code> (e.g. @okhdfcbank, @okicici, @paytm, @ybl, @upi)
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)", gap: "10px" }}>
+                                      <div>
+                                        <input
+                                          type="text"
+                                          maxLength={70}
+                                          value={draft?.refund_account_holder || ""}
+                                          onChange={(e) => updateReturnDraft(order.id, (d) => ({ ...d, refund_account_holder: e.target.value.replace(/[^a-zA-Z\s.]/g, "") }))}
+                                          placeholder="Account Holder Full Name *"
+                                          style={{ width: "100%", borderRadius: "10px", border: cardBorder, background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)", color: textPrimary, padding: "10px 14px", fontSize: "13px" }}
+                                        />
+                                      </div>
+                                      <div>
+                                        <input
+                                          type="text"
+                                          inputMode="numeric"
+                                          maxLength={18}
+                                          value={draft?.refund_account_number || ""}
+                                          onChange={(e) => updateReturnDraft(order.id, (d) => ({ ...d, refund_account_number: e.target.value.replace(/\D/g, "").slice(0, 18) }))}
+                                          placeholder="Bank Account Number (9-18 digits) *"
+                                          style={{ width: "100%", borderRadius: "10px", border: cardBorder, background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)", color: textPrimary, padding: "10px 14px", fontSize: "13px" }}
+                                        />
+                                      </div>
+                                      <div>
+                                        <input
+                                          type="text"
+                                          maxLength={11}
+                                          value={draft?.refund_ifsc_code || ""}
+                                          onChange={(e) => updateReturnDraft(order.id, (d) => ({ ...d, refund_ifsc_code: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 11) }))}
+                                          placeholder="IFSC Code (e.g. HDFC0001234) *"
+                                          style={{ width: "100%", borderRadius: "10px", border: cardBorder, background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)", color: textPrimary, padding: "10px 14px", fontSize: "13px" }}
+                                        />
+                                      </div>
+                                      <div>
+                                        <input
+                                          type="text"
+                                          maxLength={60}
+                                          value={draft?.refund_bank_name || ""}
+                                          onChange={(e) => updateReturnDraft(order.id, (d) => ({ ...d, refund_bank_name: e.target.value }))}
+                                          placeholder="Bank Name (e.g. HDFC Bank, Optional)"
+                                          style={{ width: "100%", borderRadius: "10px", border: cardBorder, background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)", color: textPrimary, padding: "10px 14px", fontSize: "13px" }}
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+
                                 <div
                                   style={{
                                     fontSize: "13px",
@@ -2211,7 +2612,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                     }))
                                   }
                                   placeholder="Optional note for this return request"
-                                  rows={4}
+                                  rows={3}
                                   style={{
                                     width: "100%",
                                     borderRadius: "14px",
@@ -2278,6 +2679,97 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                               gap: "14px",
                             }}
                           >
+                            {detail.refund_info ? (
+                              <div
+                                style={{
+                                  border: detail.refund_info.status === "failed"
+                                    ? "1px solid rgba(239,68,68,0.35)"
+                                    : (detail.refund_info.status === "completed"
+                                      ? "1px solid rgba(16,185,129,0.30)"
+                                      : (detail.refund_info.status === "processing"
+                                        ? "1px solid rgba(245,158,11,0.30)"
+                                        : cardBorder)),
+                                  borderRadius: "18px",
+                                  padding: isCompact ? "14px" : "16px",
+                                  background: detail.refund_info.status === "failed"
+                                    ? (isLight ? "#fef2f2" : "rgba(239,68,68,0.08)")
+                                    : (detail.refund_info.status === "completed"
+                                      ? (isLight ? "#ecfdf5" : "rgba(16,185,129,0.08)")
+                                      : (detail.refund_info.status === "processing"
+                                        ? (isLight ? "#fffbeb" : "rgba(245,158,11,0.08)")
+                                        : panelBg)),
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: "8px",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    flexWrap: "wrap",
+                                    gap: "8px",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "8px",
+                                      fontWeight: 800,
+                                      fontSize: "14px",
+                                      color: detail.refund_info.status === "failed"
+                                        ? "#ef4444"
+                                        : (detail.refund_info.status === "completed"
+                                          ? "#059669"
+                                          : (detail.refund_info.status === "processing" ? "#d97706" : textPrimary)),
+                                    }}
+                                  >
+                                    <span>{detail.refund_info.status === "failed" ? "❌" : (detail.refund_info.status === "completed" ? "✅" : (detail.refund_info.status === "processing" ? "⏳" : "ℹ️"))}</span>
+                                    <span>{detail.refund_info.status_label}</span>
+                                  </div>
+                                  {detail.refund_info.estimated_days && (
+                                    <span
+                                      style={{
+                                        fontSize: "11px",
+                                        fontWeight: 800,
+                                        padding: "3px 8px",
+                                        borderRadius: "6px",
+                                        background: detail.refund_info.status === "failed"
+                                          ? "rgba(239,68,68,0.18)"
+                                          : (detail.refund_info.status === "completed" ? "rgba(16,185,129,0.18)" : "rgba(245,158,11,0.18)"),
+                                        color: detail.refund_info.status === "failed"
+                                          ? "#dc2626"
+                                          : (detail.refund_info.status === "completed" ? "#047857" : "#b45309"),
+                                        textTransform: "uppercase",
+                                        letterSpacing: "0.02em",
+                                      }}
+                                    >
+                                      {detail.refund_info.estimated_days}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div style={{ fontSize: "13px", color: textMuted, lineHeight: 1.55 }}>
+                                  {detail.refund_info.note}
+                                </div>
+
+                                <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center", marginTop: "2px" }}>
+                                  {detail.refund_info.reference_id && (
+                                    <div style={{ fontSize: "12px", color: textMuted }}>
+                                      Gateway Ref: <code style={{ fontWeight: 700, padding: "2px 6px", borderRadius: "4px", background: isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.08)" }}>{detail.refund_info.reference_id}</code>
+                                    </div>
+                                  )}
+                                  {detail.refund_info.arn && (
+                                    <div style={{ fontSize: "12px", color: textMuted }}>
+                                      Bank ARN: <code style={{ fontWeight: 700, padding: "2px 6px", borderRadius: "4px", background: isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.08)" }}>{detail.refund_info.arn}</code>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ) : null}
+
                             {renderTrackingTimeline(detail)}
 
                             <div

@@ -31,7 +31,7 @@ from models import (
     ProductCollection, ProductReview, ReturnRequest, ReturnItem, ReturnStatusHistory,
     Shipment, InventoryMovement, OrderStatusHistory, User, UserAddress
 )
-from routers import auth, cart, categories, checkout, checkout_settings, collections, orders, products, returns
+from routers import auth, cart, categories, checkout, checkout_settings, collections, orders, payments, products, returns
 
 UPLOADS_DIR = Path("uploads")
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
@@ -70,6 +70,7 @@ app.include_router(cart.router)
 app.include_router(checkout.router)
 app.include_router(checkout_settings.router)
 app.include_router(orders.router)
+app.include_router(payments.router)
 app.include_router(returns.router)
 
 

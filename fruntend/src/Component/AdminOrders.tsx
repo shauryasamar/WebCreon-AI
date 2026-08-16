@@ -79,8 +79,11 @@ type AdminOrderListItem = {
   id: string;
   customer_id: string;
   status: OrderStatus;
+  payment_status?: string | null;
   total: number;
   payment_method: string;
+  razorpay_payment_id?: string | null;
+  razorpay_order_id?: string | null;
   created_at: string;
   confirmed_at?: string | null;
   shipped_at?: string | null;
@@ -111,8 +114,11 @@ type AdminOrderDetail = {
   customer_phone?: string | null;
   customer_email?: string | null;
   status: OrderStatus;
+  payment_status?: string | null;
   total: number;
   payment_method: string;
+  razorpay_payment_id?: string | null;
+  razorpay_order_id?: string | null;
   shipping_address?: {
     fullName?: string;
     addressLine1?: string;
@@ -188,6 +194,7 @@ type AdminReturnListItem = {
   suggested_refund_amount: number;
   final_refund_amount: number;
   refund_method?: string | null;
+  customer_refund_account?: any;
   approved_at?: string | null;
   rejected_at?: string | null;
   received_at?: string | null;
@@ -214,6 +221,7 @@ type AdminReturnDetail = {
   suggested_refund_amount: number;
   final_refund_amount: number;
   refund_method?: string | null;
+  customer_refund_account?: any;
   approved_at?: string | null;
   rejected_at?: string | null;
   received_at?: string | null;
@@ -379,6 +387,29 @@ const toIsoOrNull = (value?: string | null) => {
   return d.toISOString();
 };
 
+
+const formatPaymentMethodName = (method?: string | null): string => {
+  if (!method) return "Online Payment";
+  const m = method.toLowerCase();
+  if (m === "upi") return "UPI / QR";
+  if (m === "card") return "Card";
+  if (m === "netbanking") return "Netbanking";
+  if (m === "cod" || m === "cash_on_delivery") return "Cash on Delivery (COD)";
+  if (m === "wallet") return "Wallet";
+  if (m === "razorpay") return "Online Payment";
+  return method.replaceAll("_", " ");
+};
+
+const getPaymentMethodIcon = (method?: string | null): string => {
+  if (!method) return "💳";
+  const m = method.toLowerCase();
+  if (m === "upi") return "⚡";
+  if (m === "card") return "💳";
+  if (m === "netbanking") return "🏦";
+  if (m === "cod" || m === "cash_on_delivery") return "💵";
+  if (m === "wallet") return "👛";
+  return "💳";
+};
 
 const getStatusLabel = (status: string) => status.replaceAll("_", " ");
 
@@ -1494,8 +1525,27 @@ const AdminOrders: React.FC = () => {
                           <div style={{ fontSize: "13px", color: "#64748b", marginBottom: "4px" }}>
                             {formatDate(order.created_at)}
                           </div>
-                          <div style={{ fontSize: "13px", color: "#0f172a", fontWeight: 700 }}>
-                            {formatPrice(order.total)}
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                            <span style={{ fontSize: "13px", color: "#0f172a", fontWeight: 700 }}>
+                              {formatPrice(order.total)}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: "11px",
+                                fontWeight: 700,
+                                padding: "2px 7px",
+                                borderRadius: "4px",
+                                background: "#f1f5f9",
+                                color: "#334155",
+                                border: "1px solid #e2e8f0",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                              }}
+                            >
+                              <span>{getPaymentMethodIcon(order.payment_method)}</span>
+                              <span>{formatPaymentMethodName(order.payment_method)}</span>
+                            </span>
                           </div>
                         </div>
 
@@ -1627,8 +1677,34 @@ const AdminOrders: React.FC = () => {
 
                             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                               <div style={{ ...plainCardStyle, padding: "14px" }}>
-                                <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>
-                                  Customer
+                                <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                  <span>Customer & Payment</span>
+                                  <span
+                                    style={{
+                                      fontSize: "11px",
+                                      fontWeight: 700,
+                                      padding: "2px 8px",
+                                      borderRadius: "4px",
+                                      background: (detail?.payment_status || order.payment_status) === "paid"
+                                        ? "#f0fdf4"
+                                        : (detail?.payment_status || order.payment_status) === "refunded"
+                                        ? "#faf5ff"
+                                        : "#fffbeb",
+                                      color: (detail?.payment_status || order.payment_status) === "paid"
+                                        ? "#15803d"
+                                        : (detail?.payment_status || order.payment_status) === "refunded"
+                                        ? "#7c3aed"
+                                        : "#b45309",
+                                      border: (detail?.payment_status || order.payment_status) === "paid"
+                                        ? "1px solid #bbf7d0"
+                                        : (detail?.payment_status || order.payment_status) === "refunded"
+                                        ? "1px solid #e9d5ff"
+                                        : "1px solid #fde68a",
+                                      textTransform: "capitalize",
+                                    }}
+                                  >
+                                    {(detail?.payment_status || order.payment_status) || "Pending"}
+                                  </span>
                                 </div>
                                 <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "6px" }}>
                                   {detail?.customer_name || order.customer_name || "—"}
@@ -1637,8 +1713,23 @@ const AdminOrders: React.FC = () => {
                                   {detail?.customer_phone || order.customer_phone || "—"}
                                   <br />
                                   {detail?.customer_email || order.customer_email || "—"}
-                                  <br />
-                                  Payment: {order.payment_method.toUpperCase()}
+                                </div>
+                                <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px solid #f1f5f9", display: "flex", flexDirection: "column", gap: "6px" }}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "13px" }}>
+                                    <span style={{ color: "#64748b" }}>Payment Method:</span>
+                                    <span style={{ fontWeight: 700, color: "#0f172a", display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                                      <span>{getPaymentMethodIcon(detail?.payment_method || order.payment_method)}</span>
+                                      <span>{formatPaymentMethodName(detail?.payment_method || order.payment_method)}</span>
+                                    </span>
+                                  </div>
+                                  {(detail?.razorpay_payment_id || order.razorpay_payment_id) && (
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px" }}>
+                                      <span style={{ color: "#64748b" }}>Payment Ref:</span>
+                                      <code style={{ fontSize: "11px", fontWeight: 700, background: "#f8fafc", padding: "2px 6px", borderRadius: "4px", border: "1px solid #e2e8f0", color: "#0f172a" }}>
+                                        {detail?.razorpay_payment_id || order.razorpay_payment_id}
+                                      </code>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
 
@@ -2007,6 +2098,55 @@ const AdminOrders: React.FC = () => {
                                   Suggested Refund: {formatPrice(returnItem.suggested_refund_amount)}
                                   <br />
                                 </div>
+
+                                {(detail?.customer_refund_account || returnItem.customer_refund_account) && (
+                                  <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px solid #e2e8f0" }}>
+                                    <div style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a", marginBottom: "6px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                      <span>⚡ Customer Refund Destination:</span>
+                                      <span style={{ fontSize: "10px", padding: "2px 6px", borderRadius: "4px", background: "#ecfdf5", color: "#059669", fontWeight: 800, textTransform: "uppercase" }}>
+                                        {(detail?.customer_refund_account || returnItem.customer_refund_account).type || "UPI"}
+                                      </span>
+                                    </div>
+                                    {(detail?.customer_refund_account || returnItem.customer_refund_account).type === "upi" ? (
+                                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", background: "#f8fafc", padding: "6px 10px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
+                                        <code style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a" }}>
+                                          {(detail?.customer_refund_account || returnItem.customer_refund_account).upi_id}
+                                        </code>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            navigator.clipboard.writeText((detail?.customer_refund_account || returnItem.customer_refund_account).upi_id);
+                                            alert("Copied UPI ID to clipboard!");
+                                          }}
+                                          style={{ border: "1px solid #cbd5e1", background: "#ffffff", padding: "3px 8px", borderRadius: "4px", cursor: "pointer", fontSize: "11px", color: "#2563eb", fontWeight: 700 }}
+                                        >
+                                          Copy UPI
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div style={{ fontSize: "12px", color: "#334155", background: "#f8fafc", padding: "8px 10px", borderRadius: "6px", border: "1px solid #e2e8f0", lineHeight: 1.6 }}>
+                                        <div><strong>Name:</strong> {(detail?.customer_refund_account || returnItem.customer_refund_account).account_holder || "—"}</div>
+                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                          <div><strong>A/C:</strong> {(detail?.customer_refund_account || returnItem.customer_refund_account).account_number}</div>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              navigator.clipboard.writeText((detail?.customer_refund_account || returnItem.customer_refund_account).account_number);
+                                              alert("Copied Account Number to clipboard!");
+                                            }}
+                                            style={{ border: "1px solid #cbd5e1", background: "#ffffff", padding: "2px 6px", borderRadius: "4px", cursor: "pointer", fontSize: "10px", color: "#2563eb", fontWeight: 700 }}
+                                          >
+                                            Copy A/C
+                                          </button>
+                                        </div>
+                                        <div><strong>IFSC:</strong> {(detail?.customer_refund_account || returnItem.customer_refund_account).ifsc_code}</div>
+                                        {(detail?.customer_refund_account || returnItem.customer_refund_account).bank_name && (
+                                          <div><strong>Bank:</strong> {(detail?.customer_refund_account || returnItem.customer_refund_account).bank_name}</div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
 
                               {returnItem.status === "requested" ? (

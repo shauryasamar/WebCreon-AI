@@ -32,7 +32,12 @@ type SavedSite = {
   } | null;
 };
 
-export type AdminNavKey = "products" | "orders" | "checkout-charges";
+export type AdminNavKey =
+  | "products"
+  | "orders"
+  | "earnings"
+  | "payment-settings"
+  | "checkout-charges";
 
 type AdminNavItem = {
   key: AdminNavKey;
@@ -42,6 +47,8 @@ type AdminNavItem = {
 const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { key: "products", label: "Products" },
   { key: "orders", label: "Orders" },
+  { key: "earnings", label: "Earnings & Ledger" },
+  { key: "payment-settings", label: "Payout Settings" },
   { key: "checkout-charges", label: "Checkout Charges" },
 ];
 

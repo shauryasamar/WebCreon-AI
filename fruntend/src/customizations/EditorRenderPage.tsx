@@ -187,11 +187,7 @@ function isDeliveryValid(data: DeliveryData) {
 }
 
 function isPaymentValid(data: PaymentData) {
-  if (!data.method.trim()) return false;
-  if (data.method.toUpperCase() === "UPI") {
-    return Boolean(data.upiId.trim());
-  }
-  return true;
+  return Boolean(data && data.method && data.method.trim());
 }
 
 function EditorBlockWrapper({
@@ -1429,15 +1425,21 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
                     }}
                   >
                     <div style={{ color: reviewCardText, fontWeight: 700 }}>
-                      {paymentData.method || "—"}
+                      {paymentData.method.toUpperCase() === "UPI"
+                        ? "UPI (Google Pay, PhonePe, Paytm, QR)"
+                        : paymentData.method.toUpperCase() === "CARD"
+                        ? "Credit / Debit Card"
+                        : paymentData.method.toUpperCase() === "NETBANKING"
+                        ? "Netbanking"
+                        : paymentData.method.toUpperCase() === "COD"
+                        ? "Cash on Delivery (COD)"
+                        : paymentData.method || "—"}
                     </div>
-                    {paymentData.method.toUpperCase() === "UPI" ? (
-                      <div>{paymentData.upiId || "—"}</div>
-                    ) : (
-                      <div>
-                        Payment will be completed using the selected method.
-                      </div>
-                    )}
+                    <div>
+                      {paymentData.method.toUpperCase() === "COD"
+                        ? "Pay in cash upon package delivery."
+                        : "You will complete payment securely on the next step."}
+                    </div>
                   </div>
                 </div>
               </div>

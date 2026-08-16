@@ -1,5 +1,4 @@
-from __future__ import annotations
-
+import re
 from copy import deepcopy
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
@@ -20,6 +19,7 @@ from models import (
     ReturnItem,
     ReturnRequest,
     ReturnStatusHistory,
+    TenantLedgerEntry,
     User,
 )
 
@@ -40,6 +40,82 @@ RESTOCK_DECISIONS = {
     "quarantine",
     "discard",
 }
+
+UPI_ID_REGEX = re.compile(r"^[a-zA-Z0-9.\-_]{2,64}@[a-zA-Z0-9]{2,30}$")
+EMAIL_DOMAIN_REGEX = re.compile(r"\.(com|in|co|org|net|io|edu|gov|co\.in|org\.in|ac\.in)$", re.IGNORECASE)
+IFSC_REGEX = re.compile(r"^[A-Z]{4}0[A-Z0-9]{6}$")
+ACCOUNT_NUMBER_REGEX = re.compile(r"^\d{9,18}$")
+ACCOUNT_HOLDER_REGEX = re.compile(r"^[a-zA-Z\s.]{2,70}$")
+
+
+def validate_customer_refund_account(rf_acc: Any, is_cod: bool) -> Optional[dict[str, Any]]:
+    if not rf_acc:
+        if is_cod:
+            raise HTTPException(
+                status_code=400,
+                detail="For Cash on Delivery (COD) orders, please provide your UPI ID or Bank Account details to receive your refund.",
+            )
+        return None
+
+    if not isinstance(rf_acc, dict):
+        raise HTTPException(status_code=400, detail="Invalid refund account payload format")
+
+    acc_type = (rf_acc.get("type") or "").strip().lower()
+    if acc_type == "upi":
+        upi_id = (rf_acc.get("upi_id") or "").strip()
+        if not upi_id or "@" not in upi_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Please provide a valid UPI ID (e.g. yourname@okhdfcbank or 9876543210@paytm).",
+            )
+        parts = upi_id.split("@", 1)
+        if len(parts) == 2 and EMAIL_DOMAIN_REGEX.search(parts[1]):
+            raise HTTPException(
+                status_code=400,
+                detail=f"'{upi_id}' appears to be an email address. A valid UPI ID uses a bank handle (e.g. @okhdfcbank, @paytm, @ybl, @okaxis, @upi) without '.com' or '.in'.",
+            )
+        if not UPI_ID_REGEX.match(upi_id):
+            raise HTTPException(
+                status_code=400,
+                detail=f"'{upi_id}' is not a valid UPI ID format (e.g. yourname@okhdfcbank or 9876543210@paytm).",
+            )
+        return {
+            "type": "upi",
+            "upi_id": upi_id,
+        }
+    elif acc_type == "bank":
+        holder = (rf_acc.get("account_holder") or "").strip()
+        acc_num = (rf_acc.get("account_number") or "").strip()
+        ifsc = (rf_acc.get("ifsc_code") or "").strip().upper()
+        bank_name = (rf_acc.get("bank_name") or "").strip() or None
+
+        if not holder or not ACCOUNT_HOLDER_REGEX.match(holder):
+            raise HTTPException(
+                status_code=400,
+                detail="Please provide a valid Account Holder Full Name (letters and spaces only, at least 2 characters).",
+            )
+        if not acc_num or not ACCOUNT_NUMBER_REGEX.match(acc_num):
+            raise HTTPException(
+                status_code=400,
+                detail="Please provide a valid 9 to 18-digit Bank Account Number (numeric digits only).",
+            )
+        if not ifsc or not IFSC_REGEX.match(ifsc):
+            raise HTTPException(
+                status_code=400,
+                detail=f"'{ifsc}' is not a valid 11-character Indian Bank IFSC Code (e.g. HDFC0001234, SBIN0000456, ICIC0000001). 5th character must be '0'.",
+            )
+        return {
+            "type": "bank",
+            "account_holder": holder,
+            "account_number": acc_num,
+            "ifsc_code": ifsc,
+            "bank_name": bank_name,
+        }
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Please specify a valid refund account type ('upi' or 'bank').",
+        )
 
 
 def utc_now() -> datetime:
@@ -328,6 +404,7 @@ def serialize_return_request_summary(return_request: ReturnRequest, items: list[
         "suggested_refund_amount": to_float(return_request.suggested_refund_amount),
         "final_refund_amount": to_float(return_request.final_refund_amount),
         "refund_method": return_request.refund_method,
+        "customer_refund_account": getattr(return_request, "customer_refund_account", None),
         "item_count": len(items),
         "total_quantity_requested": sum(int(item.quantity_requested or 0) for item in items),
         "total_quantity_approved": sum(int(item.quantity_approved or 0) for item in items),
@@ -366,6 +443,7 @@ def serialize_return_request_detail(
         "suggested_refund_amount": to_float(display_total),
         "final_refund_amount": to_float(displayed_final_total),
         "refund_method": return_request.refund_method,
+        "customer_refund_account": getattr(return_request, "customer_refund_account", None),
         "approved_at": return_request.approved_at.isoformat() if return_request.approved_at else None,
         "rejected_at": return_request.rejected_at.isoformat() if return_request.rejected_at else None,
         "received_at": return_request.received_at.isoformat() if return_request.received_at else None,
@@ -424,6 +502,7 @@ class ReturnItemRequest(BaseModel):
 class CreateReturnRequestPayload(BaseModel):
     order_id: UUID
     request_note: Optional[str] = None
+    customer_refund_account: Optional[dict[str, Any]] = None
     items: list[ReturnItemRequest]
 
     @field_validator("items")
@@ -545,6 +624,9 @@ def create_return_request(
     if order.status != "delivered":
         raise HTTPException(status_code=400, detail="Only delivered orders can be returned")
 
+    is_cod = (order.payment_method or "").lower() in {"cod", "cash_on_delivery"}
+    validated_refund_account = validate_customer_refund_account(payload.customer_refund_account, is_cod)
+
     order_items = session.exec(
         select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.created_at.asc())
     ).all()
@@ -598,6 +680,7 @@ def create_return_request(
             status="requested",
             refund_status="pending",
             request_note=payload.request_note,
+            customer_refund_account=validated_refund_account,
             suggested_refund_amount=money(suggested_total),
             final_refund_amount=money(suggested_total),
             created_at=now,
@@ -1247,6 +1330,39 @@ def refund_return_request(
         return_request.admin_note = payload.admin_note
         return_request.updated_at = now
         session.add(return_request)
+
+        # Get parent order and initiate Razorpay refund if online payment
+        order = get_order_or_404(session, site_id, return_request.order_id)
+        if getattr(order, "payment_status", None) == "paid":
+            if order.razorpay_payment_id and not order.razorpay_payment_id.startswith("pay_mock_"):
+                try:
+                    from routers.payments import get_razorpay_client
+                    client = get_razorpay_client()
+                    if client:
+                        refund_amount_paise = int(Decimal(str(final_amount)) * 100)
+                        refund_resp = client.payment.refund(order.razorpay_payment_id, {"amount": refund_amount_paise})
+                        if isinstance(refund_resp, dict):
+                            snapshot = dict(order.pricing_snapshot or {})
+                            snapshot["refund_details"] = {
+                                "refund_id": refund_resp.get("id"),
+                                "status": refund_resp.get("status", "processed"),
+                                "amount": (refund_resp.get("amount") or refund_amount_paise) / 100,
+                                "arn": refund_resp.get("acquirer_data", {}).get("arn") if isinstance(refund_resp.get("acquirer_data"), dict) else None,
+                                "created_at": refund_resp.get("created_at"),
+                            }
+                            order.pricing_snapshot = snapshot
+                except Exception as rerr:
+                    print(f"Razorpay refund warning on return refund: {rerr}")
+
+            order.payment_status = "refunded"
+            session.add(order)
+
+            ledger_entry = session.exec(
+                select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
+            ).first()
+            if ledger_entry:
+                ledger_entry.status = "refunded"
+                session.add(ledger_entry)
 
         add_return_status_history(
             session=session,

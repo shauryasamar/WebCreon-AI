@@ -22,6 +22,7 @@ from models import (
     Product,
     Shipment,
     Site,
+    TenantLedgerEntry,
     User,
     UserAddress,
 )
@@ -46,9 +47,21 @@ PAYMENT_NORMALIZATION = {
     "cash_on_delivery": "cod",
     "upi": "upi",
     "card": "card",
+    "credit_card": "card",
+    "debit_card": "card",
+    "netbanking": "netbanking",
+    "wallet": "wallet",
     "razorpay": "razorpay",
     "online": "online",
 }
+
+
+def get_effective_payment_status(order: Order) -> str:
+    status = (getattr(order, "payment_status", None) or "pending").lower()
+    method = (getattr(order, "payment_method", None) or "").lower()
+    if method in ("cod", "cash_on_delivery") and order.status == "delivered" and status == "pending":
+        return "paid"
+    return status
 
 ALLOWED_STATUS_TRANSITIONS = {
     "placed": {"confirmed", "cancelled"},
@@ -343,17 +356,21 @@ def evaluate_promo_discount(
 def extract_variant_details(
     product: Product,
     selected_variant_value: Optional[str],
-) -> tuple[Decimal, Optional[Decimal], Optional[str], Optional[int]]:
+    raise_if_out_of_stock: bool = True,
+) -> tuple[Decimal, Optional[Decimal], Optional[str], int]:
     variant_option = product.variant_option or {}
     option_name = variant_option.get("optionName")
     option_values = variant_option.get("optionValues") or []
 
     if not selected_variant_value:
+        available_stock = product.stock if (product.in_stock is not False and product.stock > 0) else 0
+        if raise_if_out_of_stock and (product.in_stock is False or product.stock <= 0):
+            raise HTTPException(status_code=400, detail="Product is out of stock")
         return (
             money(product.price),
             money(product.compare_price) if product.compare_price is not None else None,
             option_name,
-            product.stock,
+            available_stock,
         )
 
     for option in option_values:
@@ -373,7 +390,9 @@ def extract_variant_details(
             option_in_stock = option.get("inStock")
 
             if option_in_stock is False or variant_stock_qty <= 0:
-                raise HTTPException(status_code=400, detail="Selected variant is out of stock")
+                if raise_if_out_of_stock:
+                    raise HTTPException(status_code=400, detail="Selected variant is out of stock")
+                variant_stock_qty = 0
 
             return (
                 price,
@@ -382,7 +401,15 @@ def extract_variant_details(
                 variant_stock_qty,
             )
 
-    raise HTTPException(status_code=400, detail="Invalid selected variant")
+    if raise_if_out_of_stock:
+        raise HTTPException(status_code=400, detail="Invalid selected variant")
+
+    return (
+        money(product.price),
+        money(product.compare_price) if product.compare_price is not None else None,
+        option_name,
+        0,
+    )
 
 
 def decrement_product_stock(
@@ -613,7 +640,8 @@ def build_order_item_pricing_snapshot(
     if order_subtotal > 0:
         ratio = line_total / order_subtotal
 
-    tax_amount = money(Decimal(str(pricing_snapshot["tax"]["amount"])) * ratio)
+    tax_dict = pricing_snapshot.get("tax") if isinstance(pricing_snapshot.get("tax"), dict) else {}
+    tax_amount = money(Decimal(str(tax_dict.get("amount", 0))) * ratio)
     promo_discount = money(Decimal(str(pricing_snapshot.get("promoDiscount", 0))) * ratio)
 
     shipping_allocated = Decimal("0.00")
@@ -792,8 +820,11 @@ def get_admin_orders(
             "id": str(order.id),
             "customer_id": str(order.customer_id),
             "status": order.status,
+            "payment_status": getattr(order, "payment_status", None),
             "total": float(order.total),
             "payment_method": order.payment_method,
+            "razorpay_payment_id": order.razorpay_payment_id,
+            "razorpay_order_id": order.razorpay_order_id,
             "created_at": order.created_at.isoformat() if order.created_at else None,
             "confirmed_at": order.confirmed_at.isoformat() if order.confirmed_at else None,
             "shipped_at": order.shipped_at.isoformat() if order.shipped_at else None,
@@ -866,8 +897,11 @@ def get_admin_order_detail(
         "customer_phone": (order.shipping_address or {}).get("mobileNumber"),
         "customer_email": (order.shipping_address or {}).get("email"),
         "status": order.status,
+        "payment_status": getattr(order, "payment_status", None),
         "total": float(order.total),
         "payment_method": order.payment_method,
+        "razorpay_payment_id": order.razorpay_payment_id,
+        "razorpay_order_id": order.razorpay_order_id,
         "shipping_address": order.shipping_address,
         "pricing_snapshot": order.pricing_snapshot,
         "created_at": order.created_at.isoformat() if order.created_at else None,
@@ -996,6 +1030,15 @@ def update_order_status(
 
         elif payload.status == "delivered":
             order.delivered_at = now
+            if getattr(order, "payment_method", "").lower() in ("cod", "cash_on_delivery"):
+                order.payment_status = "paid"
+                ledger_entry = session.exec(
+                    select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
+                ).first()
+                if ledger_entry:
+                    ledger_entry.status = "paid"
+                    session.add(ledger_entry)
+
             if not shipment:
                 shipment = Shipment(
                     order_id=order.id,
@@ -1021,6 +1064,37 @@ def update_order_status(
 
             order.cancelled_at = now
             order.cancel_reason = payload.cancel_reason
+
+            # If order was paid online, initiate refund and update ledger
+            if getattr(order, "payment_status", None) == "paid":
+                if order.razorpay_payment_id and not order.razorpay_payment_id.startswith("pay_mock_"):
+                    try:
+                        from routers.payments import get_razorpay_client
+                        client = get_razorpay_client()
+                        if client:
+                            refund_amount_paise = int(Decimal(str(order.total)) * 100)
+                            refund_resp = client.payment.refund(order.razorpay_payment_id, {"amount": refund_amount_paise})
+                            if isinstance(refund_resp, dict):
+                                snapshot = dict(order.pricing_snapshot or {})
+                                snapshot["refund_details"] = {
+                                    "refund_id": refund_resp.get("id"),
+                                    "status": refund_resp.get("status", "processed"),
+                                    "amount": (refund_resp.get("amount") or refund_amount_paise) / 100,
+                                    "arn": refund_resp.get("acquirer_data", {}).get("arn") if isinstance(refund_resp.get("acquirer_data"), dict) else None,
+                                    "created_at": refund_resp.get("created_at"),
+                                }
+                                order.pricing_snapshot = snapshot
+                    except Exception as rerr:
+                        print(f"Razorpay refund warning on admin cancellation: {rerr}")
+
+                order.payment_status = "refunded"
+
+                ledger_entry = session.exec(
+                    select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
+                ).first()
+                if ledger_entry:
+                    ledger_entry.status = "refunded"
+                    session.add(ledger_entry)
 
             for item in items:
                 if item.status == "cancelled":
@@ -1281,11 +1355,129 @@ def place_order(
         raise
 
 
+def build_customer_refund_info(
+    order: Order,
+    allow_live_check: bool = False,
+    session: Optional[Session] = None,
+) -> Optional[dict[str, Any]]:
+    if order.status == "cancelled" or getattr(order, "payment_status", None) == "refunded":
+        is_cod = (order.payment_method or "").lower() in {"cod", "cash_on_delivery"}
+        if is_cod:
+            return {
+                "status": "not_applicable",
+                "status_label": "No refund needed",
+                "badge_color": "slate",
+                "amount": 0.0,
+                "payment_method": "Cash on Delivery",
+                "reference_id": None,
+                "arn": None,
+                "estimated_days": None,
+                "note": "No payment was collected for this Cash on Delivery order.",
+                "initiated_at": None,
+            }
+        else:
+            now = utc_now()
+            initiated_dt = order.cancelled_at or order.updated_at or order.created_at
+            # Check elapsed days from initiation
+            days_elapsed = 0
+            if initiated_dt:
+                # Ensure offset-naive/aware compatibility
+                if initiated_dt.tzinfo is None:
+                    initiated_dt_aware = initiated_dt.replace(tzinfo=timezone.utc)
+                else:
+                    initiated_dt_aware = initiated_dt
+                days_elapsed = (now - initiated_dt_aware).days
+
+            refund_details = (order.pricing_snapshot or {}).get("refund_details", {}) if isinstance(order.pricing_snapshot, dict) else {}
+            refund_id = refund_details.get("refund_id") or order.razorpay_payment_id
+            refund_arn = refund_details.get("arn")
+            gateway_status = refund_details.get("status")
+
+            # Only do live network call if explicitly allowed AND refund_details is not yet cached
+            if allow_live_check and not refund_details.get("refund_id") and order.razorpay_payment_id and not order.razorpay_payment_id.startswith("pay_mock_"):
+                try:
+                    from routers.payments import get_razorpay_client
+                    client = get_razorpay_client()
+                    if client:
+                        refunds_res = client.refund.all({"payment_id": order.razorpay_payment_id})
+                        if refunds_res and isinstance(refunds_res, dict) and refunds_res.get("items"):
+                            first_rf = refunds_res["items"][0]
+                            refund_id = first_rf.get("id") or refund_id
+                            refund_arn = first_rf.get("acquirer_data", {}).get("arn")
+                            gateway_status = first_rf.get("status") or gateway_status
+
+                            # Cache in pricing_snapshot so subsequent calls are 0ms instant
+                            if session:
+                                snapshot = dict(order.pricing_snapshot or {})
+                                snapshot["refund_details"] = {
+                                    "refund_id": refund_id,
+                                    "status": gateway_status or "processed",
+                                    "arn": refund_arn,
+                                    "amount": (first_rf.get("amount") or 0) / 100,
+                                }
+                                order.pricing_snapshot = snapshot
+                                session.add(order)
+                except Exception:
+                    pass
+
+            # 1. If payment gateway explicitly reported failure
+            if gateway_status == "failed":
+                return {
+                    "status": "failed",
+                    "status_label": "Refund Failed",
+                    "badge_color": "rose",
+                    "amount": float(order.total),
+                    "payment_method": order.payment_method or "Online Payment",
+                    "reference_id": refund_id,
+                    "arn": refund_arn,
+                    "estimated_days": "Action Required",
+                    "note": f"The refund of ₹{float(order.total):.2f} could not be processed by your bank. Please contact customer support or provide an alternate UPI/bank account for manual settlement.",
+                    "initiated_at": initiated_dt.isoformat() if initiated_dt else None,
+                }
+
+            # 2. If gateway confirmed or settled
+            is_settled = (
+                getattr(order, "refund_settled", False)
+                or gateway_status in ("processed", "completed", "settled")
+                or refund_arn is not None
+                or (getattr(order, "payment_status", None) == "refunded" and bool(refund_id) and gateway_status != "failed")
+                or days_elapsed >= 5
+            )
+
+            if is_settled:
+                return {
+                    "status": "completed",
+                    "status_label": "Refunded",
+                    "badge_color": "emerald",
+                    "amount": float(order.total),
+                    "payment_method": order.payment_method or "Online Payment",
+                    "reference_id": refund_id,
+                    "arn": refund_arn,
+                    "estimated_days": "Completed",
+                    "note": f"A refund of ₹{float(order.total):.2f} has been successfully processed by the payment gateway and credited to your original payment source.",
+                    "initiated_at": initiated_dt.isoformat() if initiated_dt else None,
+                }
+            else:
+                return {
+                    "status": "processing",
+                    "status_label": "Refund in progress",
+                    "badge_color": "amber",
+                    "amount": float(order.total),
+                    "payment_method": order.payment_method or "Online Payment",
+                    "reference_id": refund_id,
+                    "arn": refund_arn,
+                    "estimated_days": "5-7 business days",
+                    "note": f"Your refund of ₹{float(order.total):.2f} has been initiated and will be credited to your account within 5-7 business days.",
+                    "initiated_at": initiated_dt.isoformat() if initiated_dt else None,
+                }
+    return None
+
+
 @router.get("/{site_id}/my-orders")
 def get_my_orders(
     site_id: UUID,
     page: Optional[int] = Query(None, ge=1, description="Page number"),
-    page_size: Optional[int] = Query(None, ge=1, le=50, description="Orders per page"),
+    page_size: Optional[int] = Query(None, ge=1, le=100, description="Orders per page"),
     user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
@@ -1297,7 +1489,11 @@ def get_my_orders(
     base_query = select(Order).where(
         Order.site_id == site_id,
         Order.customer_id == customer.id,
+        Order.status != "pending",
     )
+
+    total_count = 0
+    total_pages = 1
 
     if page is not None and page_size is not None:
         count_query = select(func.count()).select_from(base_query.subquery())
@@ -1337,13 +1533,17 @@ def get_my_orders(
             {
                 "id": str(order.id),
                 "status": order.status,
+                "payment_status": get_effective_payment_status(order),
                 "total": float(order.total),
                 "payment_method": order.payment_method,
+                "razorpay_payment_id": order.razorpay_payment_id,
+                "razorpay_order_id": order.razorpay_order_id,
                 "created_at": order.created_at.isoformat() if order.created_at else None,
                 "items": serialized_items,
                 "pricing_snapshot": order.pricing_snapshot,
                 "has_returnable_items": has_returnable_items,
                 "can_request_return": order.status == "delivered" and has_returnable_items,
+                "refund_info": build_customer_refund_info(order),
             }
         )
 
@@ -1442,8 +1642,11 @@ def get_my_order_detail(
     return {
         "id": str(order.id),
         "status": order.status,
+        "payment_status": get_effective_payment_status(order),
         "total": float(order.total),
         "payment_method": order.payment_method,
+        "razorpay_payment_id": order.razorpay_payment_id,
+        "razorpay_order_id": order.razorpay_order_id,
         "shipping_address": order.shipping_address,
         "pricing_snapshot": order.pricing_snapshot,
         "created_at": order.created_at.isoformat() if order.created_at else None,
@@ -1455,6 +1658,7 @@ def get_my_order_detail(
         "shipment": serialize_shipment(shipment),
         "has_returnable_items": has_returnable_items,
         "can_request_return": order.status == "delivered" and has_returnable_items,
+        "refund_info": build_customer_refund_info(order, allow_live_check=True, session=session),
     }
 
 
@@ -1484,7 +1688,7 @@ def cancel_my_order(
     if not is_owner:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    if order.status not in {"placed", "confirmed"}:
+    if order.status not in {"pending", "placed", "confirmed"}:
         raise HTTPException(status_code=400, detail="This order cannot be cancelled now")
 
     items = session.exec(
@@ -1530,6 +1734,38 @@ def cancel_my_order(
         order.cancel_reason = payload.cancel_reason
         order.cancelled_at = now
         order.updated_at = now
+
+        # If order was paid online, initiate refund and update ledger
+        if getattr(order, "payment_status", None) == "paid":
+            if order.razorpay_payment_id and not order.razorpay_payment_id.startswith("pay_mock_"):
+                try:
+                    from routers.payments import get_razorpay_client
+                    client = get_razorpay_client()
+                    if client:
+                        refund_amount_paise = int(Decimal(str(order.total)) * 100)
+                        refund_resp = client.payment.refund(order.razorpay_payment_id, {"amount": refund_amount_paise})
+                        if isinstance(refund_resp, dict):
+                            snapshot = dict(order.pricing_snapshot or {})
+                            snapshot["refund_details"] = {
+                                "refund_id": refund_resp.get("id"),
+                                "status": refund_resp.get("status", "processed"),
+                                "amount": (refund_resp.get("amount") or refund_amount_paise) / 100,
+                                "arn": refund_resp.get("acquirer_data", {}).get("arn") if isinstance(refund_resp.get("acquirer_data"), dict) else None,
+                                "created_at": refund_resp.get("created_at"),
+                            }
+                            order.pricing_snapshot = snapshot
+                except Exception as rerr:
+                    print(f"Razorpay refund warning on customer cancellation: {rerr}")
+
+            order.payment_status = "refunded"
+
+            ledger_entry = session.exec(
+                select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
+            ).first()
+            if ledger_entry:
+                ledger_entry.status = "refunded"
+                session.add(ledger_entry)
+
         session.add(order)
 
         session.add(
@@ -1554,3 +1790,27 @@ def cancel_my_order(
     except Exception:
         session.rollback()
         raise
+
+
+@router.delete("/{site_id}/{order_id}/draft")
+def discard_unpaid_order(
+    site_id: UUID,
+    order_id: UUID,
+    user=Depends(authenticate_customer),
+    session: Session = Depends(get_session),
+):
+    user_id_uuid = UUID(user["userId"])
+    customer = session.get(User, user_id_uuid)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer account not found")
+
+    order = session.get(Order, order_id)
+    if not order or order.site_id != site_id or order.customer_id != customer.id:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if order.status == "pending" and (order.payment_status == "pending" or not order.payment_status):
+        session.delete(order)
+        session.commit()
+        return {"message": "Draft order session discarded"}
+
+    return {"message": "Order is not in pending state"}

@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, Column, DateTime, Index, Numeric, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, Index, Numeric, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
@@ -366,6 +366,18 @@ class Order(SQLModel, table=True):
         sa_column=Column(JSONB, nullable=True),
     )
     payment_method: Optional[str] = Field(default=None, max_length=30)
+    payment_status: str = Field(default="pending", max_length=30, nullable=False)
+    razorpay_order_id: Optional[str] = Field(default=None, index=True)
+    razorpay_payment_id: Optional[str] = Field(default=None, index=True)
+    razorpay_signature: Optional[str] = Field(default=None)
+    platform_fee: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(12, 2), nullable=False),
+    )
+    tenant_share: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(12, 2), nullable=False),
+    )
     status: str = Field(default="placed", nullable=False)
     cancel_reason: Optional[str] = Field(default=None)
     total: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
@@ -541,6 +553,10 @@ class ReturnRequest(SQLModel, table=True):
     )
 
     refund_method: Optional[str] = Field(default=None, max_length=40)
+    customer_refund_account: Optional[dict[str, Any]] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+    )
 
     approved_at: Optional[datetime] = Field(
         default=None,
@@ -657,6 +673,111 @@ class SiteDefinitionHistory(SQLModel, table=True):
     site_definition: dict[str, Any] = Field(sa_column=Column(JSONB, nullable=False))
     saved_by: UUID = Field(foreign_key="admins.id", index=True)
     saved_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+
+
+class TenantBankAccount(SQLModel, table=True):
+    __tablename__ = "tenant_bank_accounts"
+    __table_args__ = (
+        Index("ix_tenant_bank_accounts_admin_id", "admin_id"),
+        Index("ix_tenant_bank_accounts_site_id", "site_id"),
+        UniqueConstraint("site_id", name="uq_tenant_bank_accounts_site"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    admin_id: UUID = Field(foreign_key="admins.id", nullable=False)
+    site_id: UUID = Field(foreign_key="sites.id", nullable=False)
+
+    account_holder_name: str = Field(max_length=255, nullable=False)
+    account_number_encrypted: str = Field(sa_column=Column(String, nullable=False))
+    account_number_last4: str = Field(max_length=4, nullable=False)
+    ifsc_code: str = Field(max_length=15, nullable=False)
+    bank_name: str = Field(max_length=150, nullable=False)
+    pan_number: Optional[str] = Field(default=None, max_length=10)
+    gst_number: Optional[str] = Field(default=None, max_length=20)
+
+    is_verified: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, default=False),
+    )
+
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            onupdate=utc_now,
+        ),
+    )
+
+
+class TenantLedgerEntry(SQLModel, table=True):
+    __tablename__ = "tenant_ledger_entries"
+    __table_args__ = (
+        Index("ix_tenant_ledger_entries_admin_id", "admin_id"),
+        Index("ix_tenant_ledger_entries_site_id", "site_id"),
+        Index("ix_tenant_ledger_entries_order_id", "order_id", unique=True),
+        Index("ix_tenant_ledger_entries_status", "status"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    admin_id: UUID = Field(foreign_key="admins.id", nullable=False)
+    site_id: UUID = Field(foreign_key="sites.id", nullable=False)
+    order_id: UUID = Field(foreign_key="orders.id", nullable=False)
+
+    gross_amount: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
+    platform_fee_percent: Decimal = Field(
+        default=Decimal("3.00"),
+        sa_column=Column(Numeric(5, 2), nullable=False),
+    )
+    platform_fee: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
+    tenant_share: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
+    currency: str = Field(default="INR", max_length=10, nullable=False)
+
+    # status: pending_payout, paid, refunded, held
+    status: str = Field(default="pending_payout", max_length=40, nullable=False)
+    payout_id: Optional[UUID] = Field(default=None, foreign_key="payouts.id", nullable=True)
+
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            onupdate=utc_now,
+        ),
+    )
+
+
+class Payout(SQLModel, table=True):
+    __tablename__ = "payouts"
+    __table_args__ = (
+        Index("ix_payouts_admin_id", "admin_id"),
+        Index("ix_payouts_site_id", "site_id"),
+        Index("ix_payouts_status", "status"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    admin_id: UUID = Field(foreign_key="admins.id", nullable=False)
+    site_id: UUID = Field(foreign_key="sites.id", nullable=False)
+
+    amount: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
+    currency: str = Field(default="INR", max_length=10, nullable=False)
+    status: str = Field(default="processed", max_length=40, nullable=False)
+    payout_method: str = Field(default="manual_bank_transfer", max_length=40)
+    utr_reference: Optional[str] = Field(default=None, max_length=100)
+    notes: Optional[str] = Field(default=None)
+
+    created_at: datetime = Field(
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False),
     )
