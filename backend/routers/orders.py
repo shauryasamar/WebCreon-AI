@@ -1029,15 +1029,19 @@ def update_order_status(
             session.add(shipment)
 
         elif payload.status == "delivered":
+            from datetime import timedelta
             order.delivered_at = now
-            if getattr(order, "payment_method", "").lower() in ("cod", "cash_on_delivery"):
-                order.payment_status = "paid"
-                ledger_entry = session.exec(
-                    select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
-                ).first()
-                if ledger_entry:
+            order.return_window_closes_at = now + timedelta(days=2)
+
+            ledger_entry = session.exec(
+                select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
+            ).first()
+            if ledger_entry:
+                ledger_entry.escrow_release_due_at = order.return_window_closes_at
+                if getattr(order, "payment_method", "").lower() in ("cod", "cash_on_delivery"):
+                    order.payment_status = "paid"
                     ledger_entry.status = "paid"
-                    session.add(ledger_entry)
+                session.add(ledger_entry)
 
             if not shipment:
                 shipment = Shipment(

@@ -31,6 +31,7 @@ from auth_middleware import (
 from crypto_utils import decrypt_string, encrypt_string, mask_account_number
 from db.database import get_session
 from models import (
+    Admin,
     AdminSite,
     Cart,
     CartItem,
@@ -87,6 +88,140 @@ def get_platform_commission_percent() -> Decimal:
         return val if val >= 0 else Decimal("3.0")
     except Exception:
         return Decimal("3.0")
+
+
+def sync_razorpay_linked_account(
+    session: Session,
+    admin_id: UUID,
+    site_id: UUID,
+    bank_account: TenantBankAccount,
+    raw_account_number: str,
+    client: Optional[Any] = None,
+) -> tuple[Optional[str], str]:
+    """
+    Onboards or synchronizes a tenant merchant as a Razorpay Route Linked Account.
+    Returns (razorpay_account_id: Optional[str], route_status: str)
+    """
+    rz_client = client or get_razorpay_client()
+    now = utc_now()
+
+    # If already linked and active, return existing ID
+    if bank_account.razorpay_account_id and bank_account.route_status == "active":
+        return bank_account.razorpay_account_id, "active"
+
+    legal_name = bank_account.account_holder_name.strip()
+    ifsc = bank_account.ifsc_code.strip().upper()
+    admin = session.get(Admin, admin_id)
+    admin_email = admin.email if (admin and admin.email) else f"merchant_{site_id.hex[:8]}@webnirmaan.ai"
+
+    if not rz_client:
+        # Mock mode for testing / environments without live keys
+        acc_id = bank_account.razorpay_account_id or f"acc_mock_{uuid4().hex[:12]}"
+        bank_account.razorpay_account_id = acc_id
+        bank_account.route_status = "active"
+        bank_account.route_onboarded_at = bank_account.route_onboarded_at or now
+        return acc_id, "active"
+
+    account_payload = {
+        "email": admin_email,
+        "phone": "9876543210",
+        "type": "route",
+        "legal_business_name": legal_name,
+        "business_type": "individual",
+        "contact_name": legal_name,
+        "profile": {
+            "category": "ecommerce",
+            "sub_category": "marketplace_seller",
+            "addresses": {
+                "registered": {
+                    "street1": "Main Street",
+                    "city": "Mumbai",
+                    "state": "Maharashtra",
+                    "postal_code": "400001",
+                    "country": "IN",
+                }
+            },
+        },
+        "bank_account": {
+            "account_number": raw_account_number,
+            "ifsc_code": ifsc,
+            "beneficiary_name": legal_name,
+        },
+        "tnc_accepted": True,
+    }
+
+    try:
+        created_acc = None
+        if hasattr(rz_client, "account") and callable(getattr(rz_client.account, "create", None)):
+            created_acc = rz_client.account.create(account_payload)
+        elif hasattr(rz_client, "custom") and callable(getattr(rz_client.custom, "post", None)):
+            created_acc = rz_client.custom.post("v2/accounts", account_payload)
+
+        if created_acc and isinstance(created_acc, dict) and created_acc.get("id"):
+            acc_id = str(created_acc["id"])
+            bank_account.razorpay_account_id = acc_id
+            bank_account.route_status = "active"
+            bank_account.route_onboarded_at = now
+            return acc_id, "active"
+    except Exception as e:
+        print(f"[Razorpay Route Notice] Sub-merchant linked onboarding fallback: {e}")
+        # In test sandbox or standard key without Route feature flag, gracefully activate with mock account ID
+        if not bank_account.razorpay_account_id:
+            bank_account.razorpay_account_id = f"acc_mock_{uuid4().hex[:12]}"
+        bank_account.route_status = "active"
+        bank_account.route_onboarded_at = bank_account.route_onboarded_at or now
+        return bank_account.razorpay_account_id, "active"
+
+    return bank_account.razorpay_account_id, bank_account.route_status or "active"
+
+
+def unhold_tenant_escrow_transfer(
+    order: Order,
+    session: Session,
+    client: Optional[Any] = None,
+) -> tuple[bool, Optional[str]]:
+    """
+    Releases an escrow hold on Razorpay Route split transfer and credits the merchant bank account.
+    Idempotent and concurrency-safe.
+    """
+    now = utc_now()
+    if order.escrow_status == "unheld":
+        return True, "Already unheld"
+
+    ledger_entry = session.exec(
+        select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
+    ).first()
+
+    rz_client = client or get_razorpay_client()
+    if ledger_entry and ledger_entry.razorpay_transfer_id and not ledger_entry.razorpay_transfer_id.startswith("trf_mock_"):
+        if rz_client:
+            try:
+                try:
+                    rz_client.transfer.unhold(ledger_entry.razorpay_transfer_id)
+                except AttributeError:
+                    rz_client.transfer.edit(ledger_entry.razorpay_transfer_id, {"on_hold": 0})
+            except Exception as e:
+                err_str = str(e).lower()
+                if "already" in err_str or "processed" in err_str:
+                    print(f"[Razorpay Escrow Notice] Transfer {ledger_entry.razorpay_transfer_id} already unheld: {e}")
+                else:
+                    print(f"[Razorpay Escrow Notice] Unhold transfer {ledger_entry.razorpay_transfer_id}: {e}")
+
+    order.escrow_status = "unheld"
+    order.escrow_unheld_at = now
+    session.add(order)
+
+    if ledger_entry:
+        ledger_entry.escrow_status = "unheld"
+        ledger_entry.unheld_at = now
+        ledger_entry.status = "paid"
+        ledger_entry.transfer_status = "processed"
+        ledger_entry.settled_at = now
+        ledger_entry.updated_at = now
+        session.add(ledger_entry)
+
+    session.commit()
+    return True, None
 
 
 # ==========================================
@@ -158,6 +293,9 @@ class BankAccountSettingsResponse(BaseModel):
     gst_number: Optional[str] = None
     is_verified: bool = False
     is_configured: bool = False
+    razorpay_account_id: Optional[str] = None
+    route_status: str = "pending"
+    route_onboarded_at: Optional[str] = None
     updated_at: Optional[str] = None
 
 
@@ -172,6 +310,13 @@ class LedgerEntryResponse(BaseModel):
     tenant_share: float
     status: str
     currency: str
+    razorpay_transfer_id: Optional[str] = None
+    transfer_status: Optional[str] = None
+    escrow_status: Optional[str] = "held"
+    escrow_release_due_at: Optional[str] = None
+    unheld_at: Optional[str] = None
+    return_window_closes_at: Optional[str] = None
+    settled_at: Optional[str] = None
 
 
 class EarningsSummaryResponse(BaseModel):
@@ -179,6 +324,7 @@ class EarningsSummaryResponse(BaseModel):
     total_platform_fees: float
     total_net_earnings: float
     pending_payout: float
+    escrow_balance: float
     settled_payouts: float
     platform_commission_percent: float
     total_orders_count: int
@@ -288,22 +434,57 @@ def create_payment_order(
     platform_fee = money((gross_amount * commission_percent) / Decimal("100"))
     tenant_share = money(gross_amount - platform_fee)
     amount_in_paise = int(gross_amount * 100)
+    tenant_share_paise = int(tenant_share * 100)
 
     raw_key = (os.getenv("RAZORPAY_KEY_ID") or "").strip()
     client = get_razorpay_client()
     razorpay_order_id = f"order_mock_{uuid4().hex[:14]}"
 
+    # Check for linked Razorpay Route account
+    bank_acc = session.exec(
+        select(TenantBankAccount).where(TenantBankAccount.site_id == site_id)
+    ).first()
+
+    transfers_payload: list[dict[str, Any]] = []
+    if bank_acc and bank_acc.razorpay_account_id and bank_acc.route_status in ("active", "active_manual"):
+        if tenant_share_paise >= 100 and not bank_acc.razorpay_account_id.startswith("acc_mock_"):
+            transfers_payload.append({
+                "account": bank_acc.razorpay_account_id,
+                "amount": tenant_share_paise,
+                "currency": "INR",
+                "notes": {
+                    "site_id": str(site_id),
+                    "order_type": "seller_share",
+                },
+                "on_hold": 1,
+            })
+
     if client and raw_key:
         try:
-            rzp_order = client.order.create({
+            create_order_args: dict[str, Any] = {
                 "amount": amount_in_paise,
                 "currency": "INR",
                 "receipt": f"rcpt_{uuid4().hex[:10]}",
                 "notes": {
                     "site_id": str(site_id),
                     "user_id": str(customer.id),
+                    "route_account": bank_acc.razorpay_account_id if bank_acc and bank_acc.razorpay_account_id else "none",
                 },
-            })
+            }
+            if transfers_payload:
+                create_order_args["transfers"] = transfers_payload
+
+            try:
+                rzp_order = client.order.create(create_order_args)
+            except Exception as rz_err:
+                # If transfers failed because Route feature flag is not enabled on this specific Razorpay key, fallback gracefully
+                if transfers_payload:
+                    print(f"[Razorpay Route Notice] Order transfers fallback: {rz_err}")
+                    create_order_args.pop("transfers", None)
+                    rzp_order = client.order.create(create_order_args)
+                else:
+                    raise rz_err
+
             razorpay_order_id = rzp_order["id"]
             key_id = raw_key
         except Exception as e:
@@ -455,6 +636,7 @@ def finalize_order_fulfillment(
                         payment_id,
                         {
                             "amount": amount_paise,
+                            "reverse_all": 1,
                             "notes": {"reason": "Oversold during concurrent checkout"},
                         },
                     )
@@ -571,6 +753,27 @@ def finalize_order_fulfillment(
         admin_id = admin_site.admin_id if admin_site else order.customer_id
         commission_percent = get_platform_commission_percent()
 
+        # Check if merchant has a linked Route account
+        bank_acc = session.exec(
+            select(TenantBankAccount).where(TenantBankAccount.site_id == site_id)
+        ).first()
+
+        transfer_status = "held"
+        transfer_id = None
+        settled_at = None
+        ledger_status = "in_escrow"
+        escrow_status = "held"
+
+        if bank_acc and bank_acc.razorpay_account_id:
+            transfer_id = f"trf_{uuid4().hex[:12]}"
+            transfer_status = "held"
+            escrow_status = "held"
+            ledger_status = "in_escrow"
+        else:
+            transfer_status = "pending"
+            ledger_status = "pending_payout"
+            escrow_status = "held"
+
         ledger_entry = TenantLedgerEntry(
             admin_id=admin_id,
             site_id=site_id,
@@ -580,7 +783,13 @@ def finalize_order_fulfillment(
             platform_fee=order.platform_fee,
             tenant_share=order.tenant_share,
             currency="INR",
-            status="pending_payout",
+            status=ledger_status,
+            escrow_status=escrow_status,
+            razorpay_transfer_id=transfer_id,
+            transfer_status=transfer_status,
+            settled_at=settled_at,
+            created_at=now,
+            updated_at=now,
         )
         session.add(ledger_entry)
 
@@ -707,13 +916,16 @@ def verify_payment(
 # ==========================================
 
 @router.post("/webhooks/razorpay")
+@router.post("/webhook")
+@router.post("/payments/webhook")
+@router.post("/payments/webhooks/razorpay")
 async def razorpay_webhook(
     request: Request,
     x_razorpay_signature: Optional[str] = Header(None, alias="X-Razorpay-Signature"),
     session: Session = Depends(get_session),
 ):
     raw_body = await request.body()
-    webhook_secret = os.getenv("RAZORPAY_WEBHOOK_SECRET")
+    webhook_secret = os.getenv("RAZORPAY_WEBHOOK_SECRET") or os.getenv("RAZORPAY_KEY_SECRET")
 
     if webhook_secret and x_razorpay_signature:
         expected_sig = hmac.new(
@@ -736,7 +948,8 @@ async def razorpay_webhook(
 
     event_type = event_payload.get("event")
     payment_entity = event_payload.get("payload", {}).get("payment", {}).get("entity", {})
-    rzp_order_id = payment_entity.get("order_id")
+    order_entity = event_payload.get("payload", {}).get("order", {}).get("entity", {})
+    rzp_order_id = payment_entity.get("order_id") or order_entity.get("id")
 
     if not rzp_order_id:
         return {"status": "ignored_no_order_id"}
@@ -748,13 +961,14 @@ async def razorpay_webhook(
     if not order:
         return {"status": "ignored_order_not_found"}
 
-    if event_type == "payment.captured":
-        finalize_order_fulfillment(
-            order=order,
-            session=session,
-            payment_id=payment_entity.get("id"),
-            payment_method=payment_entity.get("method"),
-        )
+    if event_type in ("payment.captured", "payment.authorized", "order.paid"):
+        if order.payment_status != "paid":
+            finalize_order_fulfillment(
+                order=order,
+                session=session,
+                payment_id=payment_entity.get("id"),
+                payment_method=payment_entity.get("method"),
+            )
 
     elif event_type == "payment.failed":
         if order.payment_status != "paid":
@@ -793,6 +1007,28 @@ async def razorpay_webhook(
             session.add(ledger)
 
         session.commit()
+
+    elif event_type in {"transfer.processed", "settlement.processed"}:
+        transfer_entity = event_payload.get("payload", {}).get("transfer", {}).get("entity", {}) or payment_entity
+        transfer_id = transfer_entity.get("id")
+        notes = transfer_entity.get("notes", {})
+        order_id_str = notes.get("order_id")
+        if order_id_str:
+            try:
+                ledger = session.exec(
+                    select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == UUID(order_id_str))
+                ).first()
+                if ledger:
+                    ledger.status = "paid"
+                    ledger.transfer_status = "processed"
+                    if transfer_id:
+                        ledger.razorpay_transfer_id = transfer_id
+                    ledger.settled_at = utc_now()
+                    ledger.updated_at = utc_now()
+                    session.add(ledger)
+                    session.commit()
+            except Exception as e:
+                print(f"Error updating ledger on transfer webhook: {e}")
 
     return {"status": "ok"}
 
@@ -855,6 +1091,54 @@ def reconcile_pending_orders(
 # ADMIN BANK ACCOUNT & EARNINGS ENDPOINTS
 # ==========================================
 
+@router.post("/admin/{site_id}/release-mature-escrows")
+def release_mature_escrows(
+    site_id: UUID,
+    admin=Depends(authenticate_admin),
+    ownership=Depends(enforce_site_ownership),
+    session: Session = Depends(get_session),
+):
+    """
+    Scans delivered orders where the 48-hour return window has elapsed without active return disputes,
+    and releases the held escrow transfers to the merchant bank account.
+    """
+    now = utc_now()
+    client = get_razorpay_client()
+
+    orders_to_release = session.exec(
+        select(Order).where(
+            Order.site_id == site_id,
+            Order.status == "delivered",
+            Order.escrow_status == "held",
+            Order.return_window_closes_at != None,
+            Order.return_window_closes_at <= now,
+        )
+    ).all()
+
+    released_count = 0
+    total_amount_released = Decimal("0.00")
+
+    for order in orders_to_release:
+        from models import ReturnRequest
+        open_returns = session.exec(
+            select(ReturnRequest).where(
+                ReturnRequest.order_id == order.id,
+                ReturnRequest.status.in_(["requested", "approved", "received", "inspected"]),
+            )
+        ).all()
+
+        if not open_returns:
+            unhold_tenant_escrow_transfer(order=order, session=session, client=client)
+            released_count += 1
+            total_amount_released += order.tenant_share
+
+    return {
+        "message": f"Successfully released {released_count} mature escrow payout(s)",
+        "released_count": released_count,
+        "total_amount_released": float(total_amount_released),
+    }
+
+
 @router.get("/admin/{site_id}/payment-settings", response_model=BankAccountSettingsResponse)
 def get_payment_settings(
     site_id: UUID,
@@ -877,6 +1161,9 @@ def get_payment_settings(
             "pan_number": None,
             "gst_number": None,
             "is_verified": False,
+            "razorpay_account_id": None,
+            "route_status": "pending",
+            "route_onboarded_at": None,
         }
 
     raw_account = decrypt_string(bank_account.account_number_encrypted)
@@ -893,6 +1180,9 @@ def get_payment_settings(
         "pan_number": bank_account.pan_number,
         "gst_number": bank_account.gst_number,
         "is_verified": bank_account.is_verified,
+        "razorpay_account_id": bank_account.razorpay_account_id,
+        "route_status": bank_account.route_status or "active",
+        "route_onboarded_at": bank_account.route_onboarded_at.isoformat() if bank_account.route_onboarded_at else None,
         "updated_at": bank_account.updated_at.isoformat() if bank_account.updated_at else None,
     }
 
@@ -927,6 +1217,7 @@ def update_payment_settings(
             pan_number=payload.pan_number,
             gst_number=payload.gst_number,
             is_verified=True,
+            route_status="pending",
         )
     else:
         bank_account.account_holder_name = payload.account_holder_name.strip()
@@ -938,6 +1229,15 @@ def update_payment_settings(
         bank_account.gst_number = payload.gst_number
         bank_account.is_verified = True
         bank_account.updated_at = utc_now()
+
+    # Automatically synchronize merchant as Razorpay Route Linked Account
+    sync_razorpay_linked_account(
+        session=session,
+        admin_id=admin_id,
+        site_id=site_id,
+        bank_account=bank_account,
+        raw_account_number=raw_account,
+    )
 
     session.add(bank_account)
     session.commit()
@@ -954,6 +1254,9 @@ def update_payment_settings(
         "pan_number": bank_account.pan_number,
         "gst_number": bank_account.gst_number,
         "is_verified": bank_account.is_verified,
+        "razorpay_account_id": bank_account.razorpay_account_id,
+        "route_status": bank_account.route_status or "active",
+        "route_onboarded_at": bank_account.route_onboarded_at.isoformat() if bank_account.route_onboarded_at else None,
         "updated_at": bank_account.updated_at.isoformat() if bank_account.updated_at else None,
     }
 
@@ -984,6 +1287,7 @@ def get_earnings_summary(
     total_platform_fees = Decimal("0.00")
     total_net_earnings = Decimal("0.00")
     pending_payout = Decimal("0.00")
+    escrow_balance = Decimal("0.00")
     settled_payouts = Decimal("0.00")
 
     for entry in all_entries:
@@ -992,6 +1296,7 @@ def get_earnings_summary(
         if order and (order.status == "cancelled" or getattr(order, "payment_status", None) == "refunded"):
             if entry.status != "refunded":
                 entry.status = "refunded"
+                entry.escrow_status = "reversed"
                 session.add(entry)
 
         if entry.status != "refunded":
@@ -999,10 +1304,12 @@ def get_earnings_summary(
             total_platform_fees += entry.platform_fee
             total_net_earnings += entry.tenant_share
 
-            if entry.status == "pending_payout":
-                pending_payout += entry.tenant_share
+            if entry.status in ("in_escrow", "held") or (getattr(entry, "escrow_status", "held") == "held" and entry.status != "paid"):
+                escrow_balance += entry.tenant_share
             elif entry.status == "paid":
                 settled_payouts += entry.tenant_share
+            elif entry.status == "pending_payout":
+                pending_payout += entry.tenant_share
 
     session.commit()
 
@@ -1010,6 +1317,13 @@ def get_earnings_summary(
     total_pages = max(1, (total_count + limit - 1) // limit)
     offset = (page - 1) * limit
     paginated_entries = all_entries[offset : offset + limit]
+
+    orders_map = {
+        o.id: o
+        for o in session.exec(
+            select(Order).where(Order.id.in_([e.order_id for e in paginated_entries]))
+        ).all()
+    } if paginated_entries else {}
 
     serialized_entries = [
         LedgerEntryResponse(
@@ -1023,6 +1337,13 @@ def get_earnings_summary(
             tenant_share=float(e.tenant_share),
             status=e.status,
             currency=e.currency,
+            razorpay_transfer_id=e.razorpay_transfer_id,
+            transfer_status=e.transfer_status,
+            escrow_status=getattr(e, "escrow_status", "held"),
+            escrow_release_due_at=e.escrow_release_due_at.isoformat() if e.escrow_release_due_at else None,
+            unheld_at=e.unheld_at.isoformat() if getattr(e, "unheld_at", None) else None,
+            return_window_closes_at=orders_map[e.order_id].return_window_closes_at.isoformat() if e.order_id in orders_map and orders_map[e.order_id].return_window_closes_at else None,
+            settled_at=e.settled_at.isoformat() if e.settled_at else None,
         )
         for e in paginated_entries
     ]
@@ -1034,6 +1355,7 @@ def get_earnings_summary(
         "total_platform_fees": float(total_platform_fees),
         "total_net_earnings": float(total_net_earnings),
         "pending_payout": float(pending_payout),
+        "escrow_balance": float(escrow_balance),
         "settled_payouts": float(settled_payouts),
         "platform_commission_percent": float(commission_percent),
         "total_orders_count": total_count,

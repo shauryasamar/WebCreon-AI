@@ -393,6 +393,15 @@ class Order(SQLModel, table=True):
         default=None,
         sa_column=Column(DateTime(timezone=True), nullable=True),
     )
+    return_window_closes_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    escrow_status: str = Field(default="held", max_length=30, nullable=False)
+    escrow_unheld_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
     cancelled_at: Optional[datetime] = Field(
         default=None,
         sa_column=Column(DateTime(timezone=True), nullable=True),
@@ -683,6 +692,7 @@ class TenantBankAccount(SQLModel, table=True):
     __table_args__ = (
         Index("ix_tenant_bank_accounts_admin_id", "admin_id"),
         Index("ix_tenant_bank_accounts_site_id", "site_id"),
+        Index("ix_tenant_bank_accounts_razorpay_account_id", "razorpay_account_id"),
         UniqueConstraint("site_id", name="uq_tenant_bank_accounts_site"),
     )
 
@@ -697,6 +707,14 @@ class TenantBankAccount(SQLModel, table=True):
     bank_name: str = Field(max_length=150, nullable=False)
     pan_number: Optional[str] = Field(default=None, max_length=10)
     gst_number: Optional[str] = Field(default=None, max_length=20)
+
+    # Razorpay Route Linked Account Integration
+    razorpay_account_id: Optional[str] = Field(default=None, max_length=64, nullable=True)
+    route_status: str = Field(default="pending", max_length=30, nullable=False)
+    route_onboarded_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
 
     is_verified: bool = Field(
         default=False,
@@ -723,6 +741,7 @@ class TenantLedgerEntry(SQLModel, table=True):
         Index("ix_tenant_ledger_entries_admin_id", "admin_id"),
         Index("ix_tenant_ledger_entries_site_id", "site_id"),
         Index("ix_tenant_ledger_entries_order_id", "order_id", unique=True),
+        Index("ix_tenant_ledger_entries_razorpay_transfer_id", "razorpay_transfer_id"),
         Index("ix_tenant_ledger_entries_status", "status"),
     )
 
@@ -743,6 +762,23 @@ class TenantLedgerEntry(SQLModel, table=True):
     # status: pending_payout, paid, refunded, held
     status: str = Field(default="pending_payout", max_length=40, nullable=False)
     payout_id: Optional[UUID] = Field(default=None, foreign_key="payouts.id", nullable=True)
+
+    # Razorpay Route Automated Split Transfer tracking
+    razorpay_transfer_id: Optional[str] = Field(default=None, max_length=64, nullable=True)
+    transfer_status: Optional[str] = Field(default="pending", max_length=30, nullable=True)
+    escrow_status: str = Field(default="held", max_length=30, nullable=False)
+    escrow_release_due_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    unheld_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    settled_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
 
     created_at: datetime = Field(
         default_factory=utc_now,

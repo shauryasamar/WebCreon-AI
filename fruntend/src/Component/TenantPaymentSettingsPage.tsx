@@ -13,6 +13,9 @@ type BankSettingsData = {
   gst_number?: string | null;
   is_verified: boolean;
   is_configured: boolean;
+  razorpay_account_id?: string | null;
+  route_status?: string;
+  route_onboarded_at?: string | null;
   updated_at?: string | null;
 };
 
@@ -178,8 +181,8 @@ export default function TenantPaymentSettingsPage() {
 
   if (loading) {
     return (
-      <div style={{ padding: "40px 24px", textAlign: "center", color: "#64748b" }}>
-        <p style={{ fontSize: "14px", margin: 0 }}>Loading payment settings...</p>
+      <div style={{ padding: "48px 24px", textAlign: "center", color: "#64748b" }}>
+        <p style={{ fontSize: "14px", margin: 0, fontWeight: 500 }}>Loading payout settings...</p>
       </div>
     );
   }
@@ -227,7 +230,7 @@ export default function TenantPaymentSettingsPage() {
       >
         <div>
           <h1 style={{ margin: "0 0 4px", fontSize: "22px", fontWeight: 700, color: "#0f172a" }}>
-            Payout Settings
+            Payout & Bank Settings
           </h1>
           <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
             Manage the bank account where your order earnings will be transferred.
@@ -245,6 +248,9 @@ export default function TenantPaymentSettingsPage() {
             fontSize: "13px",
             fontWeight: 600,
             textDecoration: "none",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
           }}
         >
           View Ledger →
@@ -258,31 +264,61 @@ export default function TenantPaymentSettingsPage() {
             background: "#f0fdf4",
             border: "1px solid #bbf7d0",
             borderRadius: "8px",
-            padding: "12px 16px",
+            padding: "16px 18px",
             marginBottom: "20px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "12px",
+            display: "grid",
+            gap: "8px",
             fontSize: "13px",
           }}
         >
-          <div style={{ color: "#166534" }}>
-            <strong>Active Bank Account:</strong> {settings.bank_name} &bull;{" "}
-            <span>{settings.account_number_masked || `•••• ${settings.account_number_last4}`}</span>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+            <div style={{ color: "#166534" }}>
+              <strong>Linked Account:</strong> {settings.bank_name} &bull;{" "}
+              <span style={{ fontFamily: "monospace", fontWeight: 700 }}>
+                {settings.account_number_masked || `•••• ${settings.account_number_last4}`}
+              </span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span
+                style={{
+                  padding: "3px 8px",
+                  borderRadius: "4px",
+                  background: "#dcfce7",
+                  color: "#15803d",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  border: "1px solid #86efac",
+                }}
+              >
+                ✓ Verified
+              </span>
+              <span
+                style={{
+                  padding: "3px 8px",
+                  borderRadius: "4px",
+                  background: "#eff6ff",
+                  color: "#1d4ed8",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  border: "1px solid #bfdbfe",
+                }}
+              >
+                ⚡ Route Active
+              </span>
+            </div>
           </div>
-          <span
+
+          <div
             style={{
-              padding: "2px 8px",
-              borderRadius: "4px",
-              background: "#dcfce7",
+              paddingTop: "8px",
+              borderTop: "1px dashed #bbf7d0",
               color: "#15803d",
-              fontSize: "11px",
-              fontWeight: 700,
+              fontSize: "12px",
+              lineHeight: 1.5,
             }}
           >
-            Verified
-          </span>
+            <strong>Automated Settlement Flow:</strong> Customer payments automatically split at checkout. Your 97% net earnings are held in escrow and deposit directly into your bank account 48 hours after the order is delivered.
+          </div>
         </div>
       )}
 
@@ -293,14 +329,14 @@ export default function TenantPaymentSettingsPage() {
             background: "#f0fdf4",
             border: "1px solid #bbf7d0",
             color: "#15803d",
-            padding: "10px 14px",
+            padding: "12px 14px",
             borderRadius: "6px",
             fontSize: "13px",
             marginBottom: "16px",
             fontWeight: 600,
           }}
         >
-          {successMessage}
+          ✓ {successMessage}
         </div>
       )}
 
@@ -310,14 +346,14 @@ export default function TenantPaymentSettingsPage() {
             background: "#fef2f2",
             border: "1px solid #fecaca",
             color: "#b91c1c",
-            padding: "10px 14px",
+            padding: "12px 14px",
             borderRadius: "6px",
             fontSize: "13px",
             marginBottom: "16px",
             fontWeight: 600,
           }}
         >
-          {errorMessage}
+          ⚠ {errorMessage}
         </div>
       )}
 
@@ -339,7 +375,7 @@ export default function TenantPaymentSettingsPage() {
                 type="text"
                 value={holderName}
                 onChange={(e) => setHolderName(e.target.value)}
-                placeholder="Name as registered with bank"
+                placeholder="Full name as registered in bank records"
                 required
                 style={inputStyle}
               />
@@ -353,7 +389,7 @@ export default function TenantPaymentSettingsPage() {
                 type="password"
                 value={accountNumber}
                 onChange={(e) => setAccountNumber(e.target.value)}
-                placeholder={settings.is_configured ? settings.account_number_masked : "Enter account number"}
+                placeholder={settings.is_configured ? settings.account_number_masked : "Enter bank account number"}
                 style={inputStyle}
               />
             </div>
@@ -366,7 +402,7 @@ export default function TenantPaymentSettingsPage() {
                 type="text"
                 value={confirmAccountNumber}
                 onChange={(e) => setConfirmAccountNumber(e.target.value)}
-                placeholder={settings.is_configured ? "Re-enter to update" : "Re-enter account number"}
+                placeholder={settings.is_configured ? "Re-enter to update" : "Confirm bank account number"}
                 style={inputStyle}
               />
             </div>
@@ -374,7 +410,7 @@ export default function TenantPaymentSettingsPage() {
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "5px" }}>
                 <label style={{ ...labelStyle, marginBottom: 0 }}>IFSC Code *</label>
-                {lookupLoading && <span style={{ fontSize: "11px", color: "#2563eb" }}>Checking...</span>}
+                {lookupLoading && <span style={{ fontSize: "11px", color: "#2563eb" }}>Looking up bank...</span>}
               </div>
               <input
                 type="text"
@@ -437,6 +473,7 @@ export default function TenantPaymentSettingsPage() {
                 fontSize: "13px",
                 fontWeight: 600,
                 cursor: saving ? "wait" : "pointer",
+                boxShadow: "0 1px 2px rgba(37,99,235,0.2)",
               }}
             >
               {saving ? "Saving..." : settings.is_configured ? "Update Bank Details" : "Save Bank Details"}

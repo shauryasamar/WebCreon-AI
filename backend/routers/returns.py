@@ -621,8 +621,16 @@ def create_return_request(
     if order.customer_id != customer_id:
         raise HTTPException(status_code=404, detail="Order not found")
 
+    now = utc_now()
     if order.status != "delivered":
         raise HTTPException(status_code=400, detail="Only delivered orders can be returned")
+
+    if order.return_window_closes_at and now > order.return_window_closes_at:
+        closes_str = order.return_window_closes_at.strftime("%d %b %Y, %I:%M %p")
+        raise HTTPException(
+            status_code=400,
+            detail=f"The 48-hour return window for this order closed on {closes_str}.",
+        )
 
     is_cod = (order.payment_method or "").lower() in {"cod", "cash_on_delivery"}
     validated_refund_account = validate_customer_refund_account(payload.customer_refund_account, is_cod)
@@ -960,6 +968,12 @@ def review_return_request(
                 changed_by_type="admin",
                 note=payload.rejection_reason.strip(),
             )
+
+            # Unfreeze / release escrow hold immediately so merchant gets paid
+            order_obj = get_order_or_404(session, site_id, return_request.order_id)
+            if order_obj and order_obj.escrow_status == "held":
+                from routers.payments import unhold_tenant_escrow_transfer
+                unhold_tenant_escrow_transfer(order=order_obj, session=session)
         else:
             if not payload.items:
                 raise HTTPException(status_code=400, detail="Approved quantities are required")
@@ -1331,16 +1345,30 @@ def refund_return_request(
         return_request.updated_at = now
         session.add(return_request)
 
-        # Get parent order and initiate Razorpay refund if online payment
-        order = get_order_or_404(session, site_id, return_request.order_id)
-        if getattr(order, "payment_status", None) == "paid":
+        # Check if this is a Full Refund vs Partial Refund
+        refund_amount_dec = Decimal(str(final_amount))
+        is_full_refund = refund_amount_dec >= Decimal(str(order.total))
+
+        if getattr(order, "payment_status", None) in ("paid", "partially_refunded"):
             if order.razorpay_payment_id and not order.razorpay_payment_id.startswith("pay_mock_"):
                 try:
                     from routers.payments import get_razorpay_client
                     client = get_razorpay_client()
                     if client:
-                        refund_amount_paise = int(Decimal(str(final_amount)) * 100)
-                        refund_resp = client.payment.refund(order.razorpay_payment_id, {"amount": refund_amount_paise})
+                        refund_amount_paise = int(refund_amount_dec * 100)
+                        refund_resp = client.payment.refund(
+                            order.razorpay_payment_id,
+                            {
+                                "amount": refund_amount_paise,
+                                "reverse_all": 1 if is_full_refund else 0,
+                                "notes": {
+                                    "reason": "Customer return approved",
+                                    "site_id": str(site_id),
+                                    "return_id": str(return_request.id),
+                                    "is_full_refund": str(is_full_refund),
+                                },
+                            },
+                        )
                         if isinstance(refund_resp, dict):
                             snapshot = dict(order.pricing_snapshot or {})
                             snapshot["refund_details"] = {
@@ -1354,15 +1382,37 @@ def refund_return_request(
                 except Exception as rerr:
                     print(f"Razorpay refund warning on return refund: {rerr}")
 
-            order.payment_status = "refunded"
-            session.add(order)
-
             ledger_entry = session.exec(
                 select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
             ).first()
-            if ledger_entry:
-                ledger_entry.status = "refunded"
-                session.add(ledger_entry)
+
+            if is_full_refund:
+                order.payment_status = "refunded"
+                order.escrow_status = "reversed"
+                if ledger_entry:
+                    ledger_entry.status = "refunded"
+                    ledger_entry.escrow_status = "reversed"
+                    ledger_entry.updated_at = now
+                    session.add(ledger_entry)
+            else:
+                # Partial Return: Prorate the ledger entry so the merchant retains their net earnings for non-returned items
+                order.payment_status = "partially_refunded"
+                if ledger_entry:
+                    commission_percent = ledger_entry.platform_fee_percent or Decimal("3.00")
+                    refunded_tenant_share = money(refund_amount_dec * (Decimal("1") - commission_percent / Decimal("100")))
+                    refunded_platform_fee = money(refund_amount_dec - refunded_tenant_share)
+
+                    new_gross = max(Decimal("0.00"), money(ledger_entry.gross_amount - refund_amount_dec))
+                    new_tenant_share = max(Decimal("0.00"), money(ledger_entry.tenant_share - refunded_tenant_share))
+                    new_fee = max(Decimal("0.00"), money(ledger_entry.platform_fee - refunded_platform_fee))
+
+                    ledger_entry.gross_amount = new_gross
+                    ledger_entry.tenant_share = new_tenant_share
+                    ledger_entry.platform_fee = new_fee
+                    ledger_entry.updated_at = now
+                    session.add(ledger_entry)
+
+            session.add(order)
 
         add_return_status_history(
             session=session,
