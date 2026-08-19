@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import logging
 import os
+import secrets
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -206,6 +207,7 @@ class RiderTaskStatusUpdate(BaseModel):
     reason: Optional[str] = None
     rescheduled_at: Optional[str] = None
     picked_items: Optional[dict[str, int]] = None  # { item_id: picked_quantity }
+    delivery_otp: Optional[str] = None
 
 
 class AgentStatusUpdate(BaseModel):
@@ -213,6 +215,7 @@ class AgentStatusUpdate(BaseModel):
     action: str   # accept | picked_up | delivered | failed
     proof_url: Optional[str] = None
     notes: Optional[str] = None
+    delivery_otp: Optional[str] = None
 
 
 class ManualDispatchRequest(BaseModel):
@@ -1080,6 +1083,16 @@ def agent_update_status(
             session.add(OrderStatusHistory(order_id=order.id, status="out_for_delivery", changed_by_type="agent"))
 
     elif action == "delivered":
+        order = session.get(Order, shipment.order_id)
+        if order and order.delivery_otp:
+            expected_otp = order.delivery_otp.strip()
+            provided_otp = (body.delivery_otp or "").strip()
+            if not provided_otp or provided_otp != expected_otp:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid Delivery OTP. Please ask the customer for their 4-digit verification code.",
+                )
+
         # FIX: Idempotency guard — don't double-count stats if already delivered
         if shipment.status == "delivered":
             return {"ok": True, "status": shipment.status}
@@ -1092,7 +1105,6 @@ def agent_update_status(
             shipment.notes = body.notes
 
         # Mark order delivered + start escrow timer (auto_commit=False for single atomic commit)
-        order = session.get(Order, shipment.order_id)
         if order:
             _mark_order_delivered(order, session, auto_commit=False)
 
@@ -1179,6 +1191,14 @@ def track_order(
         "delivered_at": (shipment.delivered_at or order.delivered_at).isoformat() if (shipment and shipment.delivered_at) or order.delivered_at else None,
         "notes": shipment.notes if shipment else None,
         "order_status": order.status,
+        "delivery_otp": (
+            order.delivery_otp
+            if getattr(order, "delivery_otp", None)
+            else (
+                setattr(order, "delivery_otp", f"{secrets.randbelow(9000) + 1000}")
+                or (session.add(order) or session.commit() or order.delivery_otp)
+            )
+        ),
     }
 
 
@@ -1980,6 +2000,16 @@ def rider_update_task_status(
         session.add(order)
         session.add(OrderStatusHistory(order_id=order.id, status="out_for_delivery", changed_by_type="agent"))
     elif action == "delivered":
+        # Enforce Delivery OTP verification if assigned on order
+        expected_otp = (order.delivery_otp or "").strip()
+        if expected_otp:
+            provided_otp = (body.delivery_otp or "").strip()
+            if not provided_otp or provided_otp != expected_otp:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid Delivery OTP. Please ask the customer for their 4-digit verification code.",
+                )
+
         # FIX: Idempotency — don't double-count if already delivered (network retry / double tap)
         if shipment.status == "delivered":
             session.add(shipment)

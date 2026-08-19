@@ -35,6 +35,7 @@ def create_db_and_tables():
                 ALTER TABLE orders ADD COLUMN IF NOT EXISTS return_window_closes_at TIMESTAMPTZ;
                 ALTER TABLE orders ADD COLUMN IF NOT EXISTS escrow_status VARCHAR(30) DEFAULT 'held';
                 ALTER TABLE orders ADD COLUMN IF NOT EXISTS escrow_unheld_at TIMESTAMPTZ;
+                ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_otp VARCHAR(10);
                 CREATE INDEX IF NOT EXISTS ix_orders_razorpay_order_id ON orders(razorpay_order_id);
                 CREATE INDEX IF NOT EXISTS ix_orders_razorpay_payment_id ON orders(razorpay_payment_id);
                 ALTER TABLE return_requests ADD COLUMN IF NOT EXISTS customer_refund_account JSONB;
@@ -66,6 +67,7 @@ def create_db_and_tables():
                 ALTER TABLE shipments ADD COLUMN IF NOT EXISTS tracking_url TEXT;
                 ALTER TABLE shipments ADD COLUMN IF NOT EXISTS proof_of_delivery_url TEXT;
                 ALTER TABLE shipments ADD COLUMN IF NOT EXISTS notes TEXT;
+                ALTER TABLE shipments ADD COLUMN IF NOT EXISTS delivery_otp VARCHAR(10);
                 CREATE INDEX IF NOT EXISTS ix_shipments_delivery_mode ON shipments(delivery_mode);
                 CREATE INDEX IF NOT EXISTS ix_shipments_agent_id ON shipments(agent_id);
 

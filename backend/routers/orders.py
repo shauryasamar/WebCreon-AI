@@ -156,14 +156,38 @@ def serialize_address_snapshot(address: UserAddress) -> dict[str, Any]:
     }
 
 
-def serialize_shipment(shipment: Optional[Shipment]) -> Optional[dict[str, Any]]:
+import secrets
+
+
+def ensure_order_delivery_otp(order: Order, session: Optional[Session] = None) -> str:
+    """Generate a stable 4-digit Delivery OTP and persist to database if not already assigned."""
+    if not getattr(order, "delivery_otp", None):
+        order.delivery_otp = f"{secrets.randbelow(9000) + 1000}"
+        if session:
+            session.add(order)
+            try:
+                session.commit()
+                session.refresh(order)
+            except Exception:
+                session.rollback()
+    return str(order.delivery_otp)
+
+
+def serialize_shipment(shipment: Optional[Shipment], order_status: Optional[str] = None) -> Optional[dict[str, Any]]:
     if not shipment:
         return None
     agent_id_str = str(shipment.agent_id) if getattr(shipment, "agent_id", None) else None
     agent_token = getattr(shipment, "agent_token", None)
+
+    effective_status = shipment.status
+    if order_status in ("delivered", "returned") and shipment.status not in ("delivered", "returned"):
+        effective_status = "delivered"
+    elif order_status == "cancelled" and shipment.status != "cancelled":
+        effective_status = "cancelled"
+
     return {
         "id": str(shipment.id),
-        "status": shipment.status,
+        "status": effective_status,
         "mode": getattr(shipment, "delivery_mode", "manual"),
         "delivery_mode": getattr(shipment, "delivery_mode", "manual"),
         "agent_id": agent_id_str,
@@ -179,6 +203,7 @@ def serialize_shipment(shipment: Optional[Shipment]) -> Optional[dict[str, Any]]
         "out_for_delivery_at": shipment.out_for_delivery_at.isoformat() if shipment.out_for_delivery_at else None,
         "delivered_at": shipment.delivered_at.isoformat() if shipment.delivered_at else None,
         "notes": getattr(shipment, "notes", None),
+        "delivery_otp": getattr(shipment, "delivery_otp", None),
     }
 
 
@@ -1005,6 +1030,7 @@ def get_admin_orders(
             "customer_phone": (order.shipping_address or {}).get("mobileNumber"),
             "customer_email": (order.shipping_address or {}).get("email"),
             "shipping_address": order.shipping_address,
+            "delivery_otp": ensure_order_delivery_otp(order, session),
             "shipment": serialize_shipment(shipment_map.get(order.id)),
             "items": [
                 {
@@ -1080,6 +1106,7 @@ def get_admin_order_detail(
         "razorpay_order_id": order.razorpay_order_id,
         "shipping_address": order.shipping_address,
         "pricing_snapshot": order.pricing_snapshot,
+        "delivery_otp": ensure_order_delivery_otp(order, session),
         "created_at": order.created_at.isoformat() if order.created_at else None,
         "confirmed_at": order.confirmed_at.isoformat() if order.confirmed_at else None,
         "shipped_at": order.shipped_at.isoformat() if order.shipped_at else None,
@@ -1105,7 +1132,7 @@ def get_admin_order_detail(
             }
             for item in items
         ],
-        "shipment": serialize_shipment(shipment),
+        "shipment": serialize_shipment(shipment, order.status),
         "status_history": [
             {
                 "id": str(entry.id),
@@ -1488,6 +1515,7 @@ def place_order(
             pricing_snapshot=pricing_snapshot,
             payment_method=payment_method,
             status="placed",
+            delivery_otp=f"{secrets.randbelow(9000) + 1000}",
             total=money(pricing_snapshot["total"]),
         )
         session.add(order)
@@ -1755,6 +1783,7 @@ def get_my_orders(
                 "created_at": order.created_at.isoformat() if order.created_at else None,
                 "items": serialized_items,
                 "pricing_snapshot": order.pricing_snapshot,
+                "delivery_otp": ensure_order_delivery_otp(order, session),
                 "has_returnable_items": has_returnable_items,
                 "can_request_return": order.status == "delivered" and has_returnable_items,
                 "refund_info": build_customer_refund_info(order),
@@ -1902,7 +1931,8 @@ def get_my_order_detail(
         "delivered_at": order.delivered_at.isoformat() if order.delivered_at else None,
         "cancelled_at": order.cancelled_at.isoformat() if order.cancelled_at else None,
         "items": serialized_items,
-        "shipment": serialize_shipment(shipment),
+        "shipment": serialize_shipment(shipment, order.status),
+        "delivery_otp": ensure_order_delivery_otp(order, session),
         "has_returnable_items": has_returnable_items,
         "can_request_return": order.status == "delivered" and has_returnable_items,
         "refund_info": build_customer_refund_info(order, allow_live_check=True, session=session),

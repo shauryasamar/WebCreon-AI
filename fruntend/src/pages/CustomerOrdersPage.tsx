@@ -36,6 +36,7 @@ type OrderListItem = {
     max_returnable_quantity?: number;
     pricing_snapshot?: any;
   }>;
+  delivery_otp?: string | null;
   has_returnable_items?: boolean;
   can_request_return?: boolean;
   refund_info?: RefundInfo | null;
@@ -79,6 +80,7 @@ type Shipment = {
   agent_accepted_at?: string | null;
   pickup_pincode?: string | null;
   delivery_pincode?: string | null;
+  delivery_otp?: string | null;
   [key: string]: any;
 };
 
@@ -92,6 +94,7 @@ type OrderDetail = {
   razorpay_order_id?: string | null;
   shipping_address?: any;
   pricing_snapshot?: any;
+  delivery_otp?: string | null;
   created_at: string;
   confirmed_at?: string | null;
   shipped_at?: string | null;
@@ -1167,8 +1170,13 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
               gap: "10px",
             }}
           >
-            {/* Show delivery agent card only when order is Out for Delivery */}
-            {(orderStatus === "out_for_delivery" || detail.shipment.status === "out_for_delivery") && (
+            {/* Show delivery agent card ONLY when order is actively in transit / Out for Delivery (NOT when delivered, returned, or cancelled) */}
+            {orderStatus !== "delivered" &&
+              orderStatus !== "returned" &&
+              orderStatus !== "cancelled" &&
+              detail.shipment.status !== "delivered" &&
+              detail.shipment.status !== "cancelled" &&
+              (orderStatus === "out_for_delivery" || detail.shipment.status === "out_for_delivery") && (
               <div
                 style={{
                   padding: "12px 14px",
@@ -2111,6 +2119,30 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                           );
                         })()}
 
+                        {/* Delivery OTP Badge on Card */}
+                        {(order.status === "out_for_delivery" || order.status === "shipped") && order.delivery_otp ? (
+                          <div
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              padding: "5px 12px",
+                              borderRadius: "999px",
+                              background: isLight ? "#ecfdf5" : "rgba(16, 185, 129, 0.12)",
+                              border: "1px dashed #10b981",
+                              color: "#059669",
+                              fontSize: "12px",
+                              fontWeight: 800,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            <span>🔒 OTP:</span>
+                            <span style={{ letterSpacing: "2px", fontFamily: "monospace", fontWeight: 900 }}>
+                              {order.delivery_otp}
+                            </span>
+                          </div>
+                        ) : null}
+
                         {/* Price */}
                         <div
                           style={{
@@ -2126,26 +2158,25 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                         {/* Accordion expand indicator button */}
                         <div
                           style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            padding: "6px 12px",
+                            width: "32px",
+                            height: "32px",
                             borderRadius: "10px",
                             background: isExpanded
-                              ? `${accentColor}16`
-                              : (isLight ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.07)"),
-                            border: `1px solid ${isExpanded ? `${accentColor}33` : "transparent"}`,
+                              ? `${accentColor}18`
+                              : isLight
+                              ? "rgba(0,0,0,0.04)"
+                              : "rgba(255,255,255,0.06)",
                             color: isExpanded ? accentColor : textMuted,
-                            fontSize: "12px",
-                            fontWeight: 700,
-                            transition: "all 0.2s ease",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
                             flexShrink: 0,
+                            transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                           }}
                         >
-                          <span>{isExpanded ? "Hide" : "Details"}</span>
                           <svg
-                            width="14"
-                            height="14"
+                            width="16"
+                            height="16"
                             viewBox="0 0 24 24"
                             fill="none"
                             stroke="currentColor"
@@ -2177,16 +2208,84 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                           Loading order details...
                         </div>
                       ) : detail ? (
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: isTablet || isMobile
-                              ? "1fr"
-                              : "minmax(0, 1.4fr) minmax(320px, 1fr)",
-                            gap: "18px",
-                            alignItems: "start",
-                          }}
-                        >
+                        <>
+                          {/* Delivery Verification Code (OTP) Banner */}
+                          {detail.delivery_otp && (detail.status === "out_for_delivery" || detail.status === "shipped") ? (
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                padding: isCompact ? "12px 14px" : "14px 18px",
+                                background: isLight ? "#f0fdf4" : "rgba(16, 185, 129, 0.08)",
+                                border: "1.5px solid rgba(16, 185, 129, 0.3)",
+                                borderRadius: "16px",
+                                marginBottom: "16px",
+                                flexWrap: "wrap",
+                                gap: "12px",
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                                <div
+                                  style={{
+                                    width: "38px",
+                                    height: "38px",
+                                    borderRadius: "12px",
+                                    background: "rgba(16, 185, 129, 0.18)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontSize: "18px",
+                                  }}
+                                >
+                                  🔒
+                                </div>
+                                <div>
+                                  <div
+                                    style={{
+                                      fontSize: "12px",
+                                      fontWeight: 800,
+                                      color: "#059669",
+                                      textTransform: "uppercase",
+                                      letterSpacing: "0.5px",
+                                    }}
+                                  >
+                                    Delivery Verification OTP
+                                  </div>
+                                  <div style={{ fontSize: "12px", color: textMuted, marginTop: "2px" }}>
+                                    Share this 4-digit code with the delivery partner upon receiving your order.
+                                  </div>
+                                </div>
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: "22px",
+                                  fontWeight: 900,
+                                  letterSpacing: "6px",
+                                  color: "#059669",
+                                  background: isLight ? "#ffffff" : "rgba(0,0,0,0.3)",
+                                  padding: "4px 16px",
+                                  borderRadius: "10px",
+                                  border: "2px dashed #10b981",
+                                  fontFamily: "monospace",
+                                  boxShadow: "0 2px 8px rgba(16, 185, 129, 0.12)",
+                                }}
+                              >
+                                {detail.delivery_otp}
+                              </div>
+                            </div>
+                          ) : null}
+
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: isTablet || isMobile
+                                ? "1fr"
+                                : "minmax(0, 1.4fr) minmax(320px, 1fr)",
+                              gap: "18px",
+                              alignItems: "start",
+                            }}
+                          >
                           <div
                             style={{
                               display: "flex",
@@ -3183,6 +3282,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                             </div>
                           </div>
                         </div>
+                        </>
                       ) : (
                         <div style={{ color: textMuted, fontSize: "14px" }}>
                           Unable to load order details.

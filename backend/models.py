@@ -403,6 +403,7 @@ class Order(SQLModel, table=True):
         default=None,
         sa_column=Column(DateTime(timezone=True), nullable=True),
     )
+    delivery_otp: Optional[str] = Field(default=None, max_length=10, nullable=True)
     cancelled_at: Optional[datetime] = Field(
         default=None,
         sa_column=Column(DateTime(timezone=True), nullable=True),
@@ -532,6 +533,7 @@ class Shipment(SQLModel, table=True):
         sa_column=Column(DateTime(timezone=True), nullable=True),
     )
     proof_of_delivery_url: Optional[str] = Field(default=None, nullable=True)
+    delivery_otp: Optional[str] = Field(default=None, max_length=10, nullable=True)
     notes: Optional[str] = Field(default=None)
 
     created_at: datetime = Field(

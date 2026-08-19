@@ -116,6 +116,7 @@ type AdminOrderListItem = {
   items?: OrderItem[];
   item_count?: number;
   pricing_snapshot?: any;
+  delivery_otp?: string | null;
 };
 
 type AdminOrderDetail = {
@@ -139,6 +140,7 @@ type AdminOrderDetail = {
     email?: string;
   } | null;
   pricing_snapshot?: any;
+  delivery_otp?: string | null;
   created_at: string;
   confirmed_at?: string | null;
   shipped_at?: string | null;
@@ -2800,6 +2802,40 @@ const AdminOrders: React.FC = () => {
                                         <span style={{ color: "#64748b" }}>Payment Reference:</span>
                                         <code style={{ fontSize: "11px", fontWeight: 700, background: "#f8fafc", padding: "2px 6px", borderRadius: "4px", border: "1px solid #e2e8f0", color: "#0f172a" }}>
                                           {detail?.razorpay_payment_id || order.razorpay_payment_id}
+                                        </code>
+                                      </div>
+                                    )}
+
+                                    {(detail?.delivery_otp || order.delivery_otp) && (
+                                      <div
+                                        style={{
+                                          marginTop: "6px",
+                                          padding: "8px 12px",
+                                          background: "#ecfdf5",
+                                          borderRadius: "6px",
+                                          border: "1px solid #a7f3d0",
+                                          display: "flex",
+                                          alignItems: "center",
+                                          justifyContent: "space-between",
+                                        }}
+                                      >
+                                        <span style={{ fontSize: "12px", fontWeight: 700, color: "#065f46" }}>
+                                          🔒 Delivery OTP:
+                                        </span>
+                                        <code
+                                          style={{
+                                            fontSize: "13px",
+                                            fontWeight: 900,
+                                            letterSpacing: "3px",
+                                            fontFamily: "monospace",
+                                            color: "#047857",
+                                            background: "#ffffff",
+                                            padding: "2px 8px",
+                                            borderRadius: "4px",
+                                            border: "1px dashed #059669",
+                                          }}
+                                        >
+                                          {detail?.delivery_otp || order.delivery_otp}
                                         </code>
                                       </div>
                                     )}

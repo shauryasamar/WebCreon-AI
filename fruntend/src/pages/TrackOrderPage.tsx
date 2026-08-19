@@ -21,6 +21,7 @@ type TrackingData = {
   delivered_at: string | null;
   notes?: string | null;
   order_status: string | null;
+  delivery_otp?: string | null;
 };
 
 const TIMELINE = [
@@ -196,13 +197,13 @@ export default function TrackOrderPage() {
                   </p>
                 )}
 
-                {data.estimated_delivery_at && data.status !== "delivered" && (
+                {data.estimated_delivery_at && data.status !== "delivered" && data.order_status !== "delivered" && data.order_status !== "returned" && data.order_status !== "cancelled" && (
                   <p style={{ margin: "3px 0 0", fontSize: "12px", color: data.status === "rescheduled" ? "#b45309" : "#64748b", fontWeight: data.status === "rescheduled" ? 700 : 500 }}>
                     {data.status === "rescheduled" ? "Next Retry Expected:" : "Expected Delivery:"} {formatDate(data.estimated_delivery_at)}
                   </p>
                 )}
 
-                {data.agent_first_name && data.status !== "delivered" && (
+                {data.agent_first_name && data.status !== "delivered" && data.order_status !== "delivered" && data.order_status !== "returned" && data.order_status !== "cancelled" && (
                   <p style={{ margin: "3px 0 0", fontSize: "12px", color: "#64748b" }}>
                     Assigned Rider: <strong style={{ color: "#0f172a" }}>{data.agent_first_name}</strong>
                   </p>
@@ -215,6 +216,66 @@ export default function TrackOrderPage() {
                 )}
               </div>
             </div>
+
+            {/* Delivery OTP Banner */}
+            {data.delivery_otp && (data.status === "out_for_delivery" || data.order_status === "out_for_delivery" || data.status === "shipped") ? (
+              <div
+                style={{
+                  background: "#f0fdf4",
+                  border: "1.5px solid #86efac",
+                  borderRadius: "12px",
+                  padding: "16px 20px",
+                  marginBottom: "20px",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: "12px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <div
+                    style={{
+                      width: "40px",
+                      height: "40px",
+                      borderRadius: "10px",
+                      background: "#dcfce7",
+                      color: "#16a34a",
+                      display: "grid",
+                      placeItems: "center",
+                      fontSize: "20px",
+                    }}
+                  >
+                    🔒
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "12px", fontWeight: 800, color: "#15803d", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Delivery Verification Code
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                      Share this 4-digit OTP with your delivery partner at the doorstep.
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    fontSize: "24px",
+                    fontWeight: 900,
+                    letterSpacing: "6px",
+                    color: "#16a34a",
+                    background: "#ffffff",
+                    padding: "4px 16px",
+                    borderRadius: "8px",
+                    border: "2px dashed #22c55e",
+                    fontFamily: "monospace",
+                  }}
+                >
+                  {data.delivery_otp}
+                </div>
+              </div>
+            ) : null}
 
             {/* Timeline Card */}
             <div

@@ -252,6 +252,12 @@ export default function AgentDeliveryPage() {
   const [pickedQuantitiesMap, setPickedQuantitiesMap] = useState<Record<string, number>>({});
   const [pickupInspectionNote, setPickupInspectionNote] = useState<string>("");
 
+  const [deliverOtpTask, setDeliverOtpTask] = useState<Task | null>(null);
+  const [enteredDeliveryOtp, setEnteredDeliveryOtp] = useState<string>("");
+  const [deliverOtpError, setDeliverOtpError] = useState<string | null>(null);
+
+  const [deliverySuccessTask, setDeliverySuccessTask] = useState<Task | null>(null);
+
   // Single-task fallback data
   const [singleTask, setSingleTask] = useState<Task | null>(null);
 
@@ -453,16 +459,29 @@ export default function AgentDeliveryPage() {
       }
 
       let msg = "Delivery status updated!";
-      if (action === "delivered") msg = "Order marked as delivered successfully!";
-      else if (action === "reschedule") msg = "Delivery rescheduled & notes updated.";
-      else if (action === "reject") msg = "Order released back to pickup pool.";
+      if (action === "delivered") {
+        msg = "Order marked as delivered successfully!";
+        const completedTask =
+          deliverOtpTask ||
+          tasks.find((t) => t.shipment_id === targetShipmentId) ||
+          singleTask;
+        if (completedTask) {
+          setDeliverySuccessTask(completedTask);
+        }
+      } else if (action === "reschedule") {
+        msg = "Delivery rescheduled & notes updated.";
+      } else if (action === "reject") {
+        msg = "Order released back to pickup pool.";
+      }
 
       setSuccessMsg(msg);
       setTimeout(() => setSuccessMsg(null), 3500);
 
-      // Close open modals
+      // Close open input modals
       setRescheduleTask(null);
       setDeclineTask(null);
+      setDeliverOtpTask(null);
+      setDeliverOtpError(null);
 
       // Refresh tasks
       if (authToken) {
@@ -471,7 +490,11 @@ export default function AgentDeliveryPage() {
         await fetchSingleShipment(targetShipmentId, token);
       }
     } catch (e: any) {
-      setError(e.message || "Failed to update status");
+      if (action === "delivered") {
+        setDeliverOtpError(e.message || "Invalid OTP code");
+      } else {
+        setError(e.message || "Failed to update status");
+      }
     } finally {
       setActionLoadingId(null);
     }
@@ -1381,12 +1404,15 @@ export default function AgentDeliveryPage() {
                             <>
                               <button
                                 type="button"
-                                onClick={() =>
-                                  handleUpdateStatus(
-                                    task.shipment_id,
-                                    isRescheduled ? "out_for_delivery" : "delivered"
-                                  )
-                                }
+                                onClick={() => {
+                                  if (isRescheduled) {
+                                    handleUpdateStatus(task.shipment_id, "out_for_delivery");
+                                  } else {
+                                    setDeliverOtpTask(task);
+                                    setEnteredDeliveryOtp("");
+                                    setDeliverOtpError(null);
+                                  }
+                                }}
                                 disabled={actionLoadingId === task.shipment_id}
                                 style={{
                                   width: "100%",
@@ -1406,7 +1432,7 @@ export default function AgentDeliveryPage() {
                                   ? "Updating..."
                                   : isRescheduled
                                   ? "Resume / Start Trip"
-                                  : "Mark Delivered & Collect Cash"}
+                                  : "Mark Delivered (Verify OTP)"}
                               </button>
 
                               {/* Unable to deliver / Reschedule Trigger Button */}
@@ -2172,6 +2198,378 @@ export default function AgentDeliveryPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELIVERY OTP VERIFICATION MODAL */}
+      {deliverOtpTask && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.6)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+            zIndex: 100,
+            padding: "0",
+          }}
+          onClick={() => setDeliverOtpTask(null)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "500px",
+              background: "#ffffff",
+              borderRadius: "20px 20px 0 0",
+              padding: "24px 20px 32px",
+              boxShadow: "0 -10px 25px rgba(0, 0, 0, 0.15)",
+              boxSizing: "border-box",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div
+                  style={{
+                    width: "36px",
+                    height: "36px",
+                    borderRadius: "10px",
+                    background: "#ecfdf5",
+                    color: "#16a34a",
+                    display: "grid",
+                    placeItems: "center",
+                    fontSize: "18px",
+                  }}
+                >
+                  🔒
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "17px", fontWeight: 800, color: "#0f172a" }}>
+                    Customer Delivery Verification
+                  </h3>
+                  <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#64748b" }}>
+                    Order #{deliverOtpTask.order_id.slice(0, 8).toUpperCase()} • {deliverOtpTask.customer_name}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeliverOtpTask(null)}
+                style={{
+                  background: "#f1f5f9",
+                  border: "none",
+                  borderRadius: "50%",
+                  width: "32px",
+                  height: "32px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#64748b",
+                  cursor: "pointer",
+                }}
+              >
+                <CloseIcon />
+              </button>
+            </div>
+
+            {/* COD Cash Alert */}
+            {deliverOtpTask.is_cod && (
+              <div
+                style={{
+                  background: "#fffbeb",
+                  border: "1px solid #fde68a",
+                  borderRadius: "10px",
+                  padding: "12px 14px",
+                  marginBottom: "16px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <span style={{ fontSize: "13px", fontWeight: 700, color: "#b45309" }}>
+                  💵 Cash to Collect:
+                </span>
+                <span style={{ fontSize: "17px", fontWeight: 800, color: "#92400e" }}>
+                  {formatPrice(deliverOtpTask.total_amount)}
+                </span>
+              </div>
+            )}
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!enteredDeliveryOtp || enteredDeliveryOtp.trim().length !== 4) {
+                  setDeliverOtpError("Please enter a valid 4-digit code.");
+                  return;
+                }
+                handleUpdateStatus(deliverOtpTask.shipment_id, "delivered", {
+                  delivery_otp: enteredDeliveryOtp.trim(),
+                });
+              }}
+              style={{ display: "flex", flexDirection: "column", gap: "16px" }}
+            >
+              <div>
+                <label style={modalLabelStyle}>
+                  Enter 4-Digit Delivery OTP (From Customer)
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={4}
+                  autoFocus
+                  value={enteredDeliveryOtp}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, "").slice(0, 4);
+                    setEnteredDeliveryOtp(val);
+                    if (deliverOtpError) setDeliverOtpError(null);
+                  }}
+                  placeholder="• • • •"
+                  style={{
+                    ...modalInputStyle,
+                    fontSize: "28px",
+                    fontWeight: "900",
+                    letterSpacing: "12px",
+                    textAlign: "center",
+                    fontFamily: "monospace",
+                    height: "56px",
+                    borderColor: deliverOtpError ? "#ef4444" : "#cbd5e1",
+                    background: "#f8fafc",
+                  }}
+                  required
+                />
+                <span style={{ fontSize: "11px", color: "#64748b", marginTop: "4px", display: "block", textAlign: "center" }}>
+                  Ask the customer for the verification code shown on their order screen.
+                </span>
+              </div>
+
+              {deliverOtpError && (
+                <div
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: "8px",
+                    background: "#fef2f2",
+                    border: "1px solid #fecaca",
+                    color: "#dc2626",
+                    fontSize: "12.5px",
+                    fontWeight: 600,
+                  }}
+                >
+                  ⚠️ {deliverOtpError}
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
+                <button
+                  type="button"
+                  onClick={() => setDeliverOtpTask(null)}
+                  style={{
+                    flex: 1,
+                    padding: "13px",
+                    borderRadius: "8px",
+                    background: "#f1f5f9",
+                    border: "1px solid #cbd5e1",
+                    color: "#475569",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoadingId === deliverOtpTask.shipment_id || enteredDeliveryOtp.length !== 4}
+                  style={{
+                    flex: 2,
+                    padding: "13px",
+                    borderRadius: "8px",
+                    background: enteredDeliveryOtp.length === 4 ? "#16a34a" : "#94a3b8",
+                    border: "none",
+                    color: "#ffffff",
+                    fontSize: "14px",
+                    fontWeight: 700,
+                    cursor: actionLoadingId === deliverOtpTask.shipment_id || enteredDeliveryOtp.length !== 4 ? "not-allowed" : "pointer",
+                    boxShadow: "0 2px 4px rgba(22, 163, 74, 0.2)",
+                  }}
+                >
+                  {actionLoadingId === deliverOtpTask.shipment_id ? "Verifying..." : "Verify OTP & Complete Delivery"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELIVERY SUCCESS CONFIRMATION MODAL */}
+      {deliverySuccessTask && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.75)",
+            backdropFilter: "blur(6px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 110,
+            padding: "20px 16px",
+            boxSizing: "border-box",
+          }}
+          onClick={() => setDeliverySuccessTask(null)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "460px",
+              background: "#ffffff",
+              borderRadius: "24px",
+              padding: "28px 22px",
+              boxShadow: "0 20px 40px rgba(0, 0, 0, 0.25)",
+              boxSizing: "border-box",
+              textAlign: "center",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Big Animated Success Badge */}
+            <div
+              style={{
+                width: "68px",
+                height: "68px",
+                borderRadius: "50%",
+                background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                color: "#ffffff",
+                display: "grid",
+                placeItems: "center",
+                fontSize: "32px",
+                margin: "0 auto 14px",
+                boxShadow: "0 10px 20px rgba(16, 185, 129, 0.35)",
+              }}
+            >
+              ✓
+            </div>
+
+            <h2 style={{ margin: "0 0 6px", fontSize: "20px", fontWeight: 900, color: "#0f172a" }}>
+              Delivery Confirmed!
+            </h2>
+            <p style={{ margin: "0 0 18px", fontSize: "13px", color: "#64748b" }}>
+              OTP verified successfully. Order is marked as delivered.
+            </p>
+
+            {/* Order Summary Details Card */}
+            <div
+              style={{
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                borderRadius: "16px",
+                padding: "16px",
+                marginBottom: "18px",
+                textAlign: "left",
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  borderBottom: "1px solid #e2e8f0",
+                  paddingBottom: "10px",
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                    Order
+                  </div>
+                  <div style={{ fontSize: "14px", fontWeight: 800, color: "#0f172a" }}>
+                    #{deliverySuccessTask.order_id.slice(0, 8).toUpperCase()}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: "20px",
+                    background: "#dcfce7",
+                    color: "#15803d",
+                    fontSize: "12px",
+                    fontWeight: 800,
+                  }}
+                >
+                  ● Delivered
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Customer
+                </div>
+                <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a", marginTop: "2px" }}>
+                  {deliverySuccessTask.customer_name}
+                </div>
+                <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px", lineHeight: 1.4 }}>
+                  {deliverySuccessTask.address.full}
+                </div>
+              </div>
+
+              {/* Payment Summary */}
+              <div
+                style={{
+                  marginTop: "4px",
+                  padding: "12px",
+                  borderRadius: "12px",
+                  background: deliverySuccessTask.is_cod ? "#fffbeb" : "#f0fdf4",
+                  border: `1px solid ${deliverySuccessTask.is_cod ? "#fde68a" : "#bbf7d0"}`,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 800,
+                      color: deliverySuccessTask.is_cod ? "#b45309" : "#15803d",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {deliverySuccessTask.is_cod ? "💵 Cash Collected" : "💳 Prepaid (Paid Online)"}
+                  </div>
+                  <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
+                    {deliverySuccessTask.is_cod ? "Credited to Cash in Hand" : "No cash collected"}
+                  </div>
+                </div>
+                <div style={{ fontSize: "18px", fontWeight: 900, color: "#0f172a" }}>
+                  {formatPrice(deliverySuccessTask.total_amount)}
+                </div>
+              </div>
+            </div>
+
+            {/* Close / Return to Route Button */}
+            <button
+              type="button"
+              onClick={() => setDeliverySuccessTask(null)}
+              style={{
+                width: "100%",
+                padding: "14px",
+                borderRadius: "12px",
+                background: "#2563eb",
+                color: "#ffffff",
+                fontSize: "15px",
+                fontWeight: 800,
+                border: "none",
+                cursor: "pointer",
+                boxShadow: "0 4px 12px rgba(37, 99, 235, 0.3)",
+                transition: "all 0.15s ease",
+              }}
+            >
+              Close Order & Back to Route →
+            </button>
           </div>
         </div>
       )}
