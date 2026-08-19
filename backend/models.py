@@ -221,6 +221,7 @@ class Product(SQLModel, table=True):
 
     stock: int = Field(default=0, nullable=False)
     in_stock: bool = Field(default=True, nullable=False)
+    weight_grams: int = Field(default=500, nullable=False)  # used for shipping label weight
 
     images: list[str] = Field(
         default_factory=list,
@@ -464,13 +465,56 @@ class OrderItem(SQLModel, table=True):
 
 class Shipment(SQLModel, table=True):
     __tablename__ = "shipments"
+    __table_args__ = (
+        Index("ix_shipments_order_id", "order_id"),
+        Index("ix_shipments_site_id", "site_id"),
+        Index("ix_shipments_status", "status"),
+        Index("ix_shipments_delivery_mode", "delivery_mode"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     order_id: UUID = Field(foreign_key="orders.id", index=True)
     site_id: UUID = Field(foreign_key="sites.id", index=True)
+
+    # Delivery mode: own_agent | shiprocket | manual
+    delivery_mode: str = Field(default="manual", max_length=30, nullable=False)
+
+    # Unified status across all modes
+    # pending | assigned | accepted | picked_up | in_transit | out_for_delivery | delivered | failed | rto
     status: str = Field(default="pending", max_length=40, nullable=False)
+
+    @property
+    def mode(self) -> str:
+        return self.delivery_mode
+
+    @mode.setter
+    def mode(self, value: str):
+        self.delivery_mode = value
+
+    # Own-agent fields
+    agent_id: Optional[UUID] = Field(default=None, foreign_key="delivery_agents.id", nullable=True)
+    agent_token: Optional[str] = Field(default=None, max_length=128, nullable=True)  # signed one-time URL token
+    agent_accepted_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    agent_picked_up_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+
+    # Courier fields (Shiprocket / Delhivery / BlueDart)
+    courier_name: Optional[str] = Field(default=None, max_length=100, nullable=True)
+    courier_order_id: Optional[str] = Field(default=None, max_length=100, nullable=True)
+    awb_number: Optional[str] = Field(default=None, max_length=100, nullable=True)
+    label_url: Optional[str] = Field(default=None, nullable=True)
+    tracking_url: Optional[str] = Field(default=None, nullable=True)
+
+    # Legacy / manual fields (kept for backwards compat)
     delivery_partner_name: Optional[str] = Field(default=None, max_length=255)
     delivery_partner_phone: Optional[str] = Field(default=None, max_length=30)
+
+    # Shared
     estimated_delivery_at: Optional[datetime] = Field(
         default=None,
         sa_column=Column(DateTime(timezone=True), nullable=True),
@@ -487,6 +531,104 @@ class Shipment(SQLModel, table=True):
         default=None,
         sa_column=Column(DateTime(timezone=True), nullable=True),
     )
+    proof_of_delivery_url: Optional[str] = Field(default=None, nullable=True)
+    notes: Optional[str] = Field(default=None)
+
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            onupdate=utc_now,
+        ),
+    )
+
+
+class DeliveryAgent(SQLModel, table=True):
+    """An own delivery agent registered by a tenant (admin)."""
+    __tablename__ = "delivery_agents"
+    __table_args__ = (
+        Index("ix_delivery_agents_site_id", "site_id"),
+        Index("ix_delivery_agents_site_active", "site_id", "is_active"),
+        Index("ix_delivery_agents_site_phone", "site_id", "phone"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    site_id: UUID = Field(foreign_key="sites.id", nullable=False)
+
+    name: str = Field(max_length=255, nullable=False)
+    phone: str = Field(max_length=30, nullable=False)  # WhatsApp / SMS number
+    password_hash: Optional[str] = Field(default=None, max_length=255, nullable=True)
+    vehicle_type: str = Field(default="bike", max_length=50, nullable=False)
+    is_active: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, default=True),
+    )
+    current_order_count: int = Field(default=0, nullable=False)  # live load metric
+    total_deliveries: int = Field(default=0, nullable=False)
+    cash_in_hand: float = Field(default=0.0, nullable=False)
+    last_active_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            onupdate=utc_now,
+        ),
+    )
+
+
+class DeliverySettings(SQLModel, table=True):
+    """Per-tenant delivery configuration: mode, courier credentials, pickup address."""
+    __tablename__ = "delivery_settings"
+
+    site_id: UUID = Field(foreign_key="sites.id", primary_key=True)
+
+    # Mode: own_agent | shiprocket | hybrid | manual
+    delivery_mode: str = Field(default="manual", max_length=30, nullable=False)
+
+    # Hybrid mode: orders within this radius use own agents, outside go to courier
+    own_delivery_radius_km: float = Field(default=10.0, nullable=False)
+
+    # Shiprocket credentials (password stored encrypted)
+    shiprocket_email: Optional[str] = Field(default=None, max_length=255, nullable=True)
+    shiprocket_password_encrypted: Optional[str] = Field(default=None, nullable=True)
+    shiprocket_token: Optional[str] = Field(default=None, nullable=True)
+    shiprocket_token_expires_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+
+    # Courier preferences
+    default_courier_preference: Optional[str] = Field(default=None, max_length=60, nullable=True)
+    auto_assign_courier: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, default=True),
+    )
+
+    # Sender / pickup address (for shipping labels)
+    sender_name: Optional[str] = Field(default=None, max_length=255, nullable=True)
+    sender_phone: Optional[str] = Field(default=None, max_length=30, nullable=True)
+    sender_address: Optional[str] = Field(default=None, nullable=True)
+    sender_pincode: Optional[str] = Field(default=None, max_length=10, nullable=True)
+    sender_city: Optional[str] = Field(default=None, max_length=100, nullable=True)
+    sender_state: Optional[str] = Field(default=None, max_length=100, nullable=True)
+
+    # Default product weight fallback (grams) when product.weight_grams is 0
+    default_weight_grams: int = Field(default=500, nullable=False)
+
     created_at: datetime = Field(
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False),
@@ -563,6 +705,11 @@ class ReturnRequest(SQLModel, table=True):
 
     refund_method: Optional[str] = Field(default=None, max_length=40)
     customer_refund_account: Optional[dict[str, Any]] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+    )
+    pickup_status: Optional[str] = Field(default=None, max_length=40)
+    pickup_details: Optional[dict[str, Any]] = Field(
         default=None,
         sa_column=Column(JSONB, nullable=True),
     )

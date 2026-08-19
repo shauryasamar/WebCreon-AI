@@ -3,7 +3,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
@@ -12,6 +12,7 @@ from sqlmodel import Session, select
 from auth_middleware import authenticate_admin, authenticate_customer, enforce_site_ownership
 from db.database import get_session
 from models import (
+    DeliveryAgent,
     InventoryMovement,
     Order,
     OrderItem,
@@ -255,8 +256,18 @@ def increment_product_stock(
 
 
 def has_remaining_returnable_items(session: Session, order_id: UUID) -> bool:
+    order = session.get(Order, order_id)
+    if not order or order.status != "delivered":
+        return False
     order_items = session.exec(select(OrderItem).where(OrderItem.order_id == order_id)).all()
-    return any(item.status == "delivered" and int(item.returnable_quantity or 0) > 0 for item in order_items)
+    return any(
+        item.status != "cancelled" and (
+            int(item.returnable_quantity or 0) > 0 or 
+            (item.returnable_quantity is None and item.status != "returned") or
+            (item.returnable_quantity == 0 and item.status in ("placed", "confirmed", "delivered"))
+        )
+        for item in order_items
+    )
 
 
 def get_effective_refund_quantity(return_request: ReturnRequest, item: ReturnItem) -> int:
@@ -397,6 +408,8 @@ def serialize_return_request_summary(return_request: ReturnRequest, items: list[
         "customer_id": str(return_request.customer_id),
         "status": return_request.status,
         "refund_status": return_request.refund_status,
+        "pickup_status": getattr(return_request, "pickup_status", None),
+        "pickup_details": getattr(return_request, "pickup_details", None),
         "request_note": return_request.request_note,
         "admin_note": return_request.admin_note,
         "rejection_reason": return_request.rejection_reason,
@@ -436,6 +449,8 @@ def serialize_return_request_detail(
         "customer_id": str(return_request.customer_id),
         "status": return_request.status,
         "refund_status": return_request.refund_status,
+        "pickup_status": getattr(return_request, "pickup_status", None),
+        "pickup_details": getattr(return_request, "pickup_details", None),
         "request_note": return_request.request_note,
         "admin_note": return_request.admin_note,
         "rejection_reason": return_request.rejection_reason,
@@ -463,6 +478,9 @@ def serialize_return_request_detail(
             "id": str(order.id),
             "status": order.status,
             "payment_method": getattr(order, "payment_method", None),
+            "payment_status": getattr(order, "payment_status", None),
+            "razorpay_payment_id": getattr(order, "razorpay_payment_id", None),
+            "razorpay_order_id": getattr(order, "razorpay_order_id", None),
             "total": to_float(getattr(order, "total", 0)),
             "created_at": order.created_at.isoformat() if order.created_at else None,
             "delivered_at": order.delivered_at.isoformat() if getattr(order, "delivered_at", None) else None,
@@ -600,6 +618,15 @@ class RefundReturnRequestPayload(BaseModel):
         return money(value)
 
 
+class DispatchReturnPickupPayload(BaseModel):
+    mode: str = Field(default="own_agent")  # own_agent | shiprocket | manual
+    agent_id: Optional[UUID] = None
+    courier_name: Optional[str] = None
+    tracking_number: Optional[str] = None
+    pickup_notes: Optional[str] = None
+    package_weight_grams: Optional[int] = None
+
+
 @router.post("/{site_id}/request")
 def create_return_request(
     site_id: UUID,
@@ -653,7 +680,18 @@ def create_return_request(
         if not order_item:
             raise HTTPException(status_code=404, detail=f"Order item {entry.order_item_id} not found")
 
-        if order_item.status != "delivered":
+        # Auto-heal: if order is delivered but item was never updated from its original status,
+        # initialize it now so the return can proceed.
+        # IMPORTANT: Only touch items that have NEVER been delivered (status not in delivered/returned).
+        # Never reset returnable_quantity if the item is already in delivered/returned state
+        # as it may already have valid partial-return deductions.
+        if order.status == "delivered" and order_item.status not in ("delivered", "returned", "cancelled"):
+            order_item.status = "delivered"
+            if order_item.returnable_quantity is None:
+                order_item.returnable_quantity = order_item.quantity
+            session.add(order_item)
+
+        if order_item.status not in ("delivered",):
             raise HTTPException(status_code=400, detail=f"Order item {order_item.id} is not eligible for return")
 
         if int(order_item.returnable_quantity or 0) <= 0:
@@ -1073,6 +1111,120 @@ def review_return_request(
         raise
 
 
+@router.post("/admin/{site_id}/{return_id}/dispatch-pickup")
+def dispatch_return_pickup(
+    site_id: UUID,
+    return_id: UUID,
+    payload: DispatchReturnPickupPayload,
+    admin=Depends(authenticate_admin),
+    ownership=Depends(enforce_site_ownership),
+    session: Session = Depends(get_session),
+):
+    return_request = get_return_request_or_404(session, site_id, return_id)
+    if return_request.status in {"rejected"}:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot dispatch pickup for rejected return request.",
+        )
+
+    now = utc_now()
+    pickup_details = dict(return_request.pickup_details or {})
+    mode = (payload.mode or "own_agent").strip().lower()
+
+    if mode == "own_agent":
+        if not payload.agent_id:
+            raise HTTPException(status_code=400, detail="agent_id is required for in-house rider assignment")
+        agent = session.get(DeliveryAgent, payload.agent_id)
+        if not agent or agent.site_id != site_id or not agent.is_active:
+            raise HTTPException(status_code=404, detail="Active delivery rider not found")
+
+        pickup_details.update({
+            "mode": "own_agent",
+            "agent_id": str(agent.id),
+            "agent_name": agent.name,
+            "agent_phone": agent.phone,
+            "pickup_status": "assigned",
+            "pickup_notes": payload.pickup_notes,
+            "assigned_at": now.isoformat(),
+        })
+        return_request.pickup_status = "assigned"
+        agent.current_order_count = (agent.current_order_count or 0) + 1
+        session.add(agent)
+
+        history_note = f"Assigned return pickup to rider {agent.name} ({agent.phone})"
+
+    elif mode == "shiprocket":
+        courier_name = payload.courier_name or "Shiprocket Auto Courier"
+        tracking_num = payload.tracking_number or f"SR-RET-{str(uuid4())[:8].upper()}"
+        pickup_details.update({
+            "mode": "shiprocket",
+            "courier_name": courier_name,
+            "tracking_number": tracking_num,
+            "pickup_status": "booked",
+            "pickup_notes": payload.pickup_notes,
+            "weight_grams": payload.package_weight_grams or 500,
+            "assigned_at": now.isoformat(),
+        })
+        return_request.pickup_status = "booked"
+        history_note = f"Booked automated reverse courier pickup via {courier_name} (AWB: {tracking_num})"
+
+    elif mode == "manual":
+        courier_name = payload.courier_name or "Manual Courier / Self Ship"
+        pickup_details.update({
+            "mode": "manual",
+            "courier_name": courier_name,
+            "tracking_number": payload.tracking_number,
+            "pickup_status": "dispatched",
+            "pickup_notes": payload.pickup_notes,
+            "assigned_at": now.isoformat(),
+        })
+        return_request.pickup_status = "dispatched"
+        history_note = f"Configured return courier/partner: {courier_name}"
+        if payload.tracking_number:
+            history_note += f" (Tracking: {payload.tracking_number})"
+    else:
+        raise HTTPException(status_code=400, detail="Invalid dispatch mode")
+
+    return_request.pickup_details = pickup_details
+    return_request.updated_at = now
+    session.add(return_request)
+
+    history = ReturnStatusHistory(
+        return_request_id=return_request.id,
+        status=return_request.status,
+        changed_by=UUID(admin["adminId"]),
+        changed_by_type="admin",
+        note=history_note,
+        changed_at=now,
+    )
+    session.add(history)
+    session.commit()
+    session.refresh(return_request)
+
+    order = get_order_or_404(session, site_id, return_request.order_id)
+    items = session.exec(
+        select(ReturnItem)
+        .where(ReturnItem.return_request_id == return_request.id)
+        .order_by(ReturnItem.created_at.asc())
+    ).all()
+    all_history = session.exec(
+        select(ReturnStatusHistory)
+        .where(ReturnStatusHistory.return_request_id == return_request.id)
+        .order_by(ReturnStatusHistory.changed_at.asc())
+    ).all()
+
+    return {
+        "message": "Return pickup assigned successfully",
+        "return_request": serialize_return_request_detail(
+            return_request=return_request,
+            order=order,
+            items=items,
+            history=all_history,
+            session=session,
+        ),
+    }
+
+
 @router.patch("/admin/{site_id}/{return_id}/receive")
 def receive_return_request(
     site_id: UUID,
@@ -1086,6 +1238,19 @@ def receive_return_request(
 
     if return_request.status != "approved":
         raise HTTPException(status_code=400, detail="Only approved returns can be received")
+
+    # Strict rule: Reverse pickup rider/courier must be assigned before receiving
+    pickup_details = return_request.pickup_details or {}
+    has_pickup_partner = bool(
+        return_request.pickup_status in {"assigned", "booked", "dispatched", "picked_up"}
+        or pickup_details.get("agent_name")
+        or pickup_details.get("courier_name")
+    )
+    if not has_pickup_partner:
+        raise HTTPException(
+            status_code=400,
+            detail="A reverse pickup rider or courier partner must be assigned before receiving returned items. Please assign an in-house rider or courier in the reverse logistics panel first.",
+        )
 
     items = session.exec(
         select(ReturnItem)
@@ -1306,6 +1471,7 @@ def refund_return_request(
     session: Session = Depends(get_session),
 ):
     return_request = get_return_request_or_404(session, site_id, return_id)
+    order = get_order_or_404(session, site_id, return_request.order_id)
 
     if return_request.status != "inspected":
         raise HTTPException(status_code=400, detail="Only inspected returns can be refunded")
@@ -1349,70 +1515,92 @@ def refund_return_request(
         refund_amount_dec = Decimal(str(final_amount))
         is_full_refund = refund_amount_dec >= Decimal(str(order.total))
 
-        if getattr(order, "payment_status", None) in ("paid", "partially_refunded"):
-            if order.razorpay_payment_id and not order.razorpay_payment_id.startswith("pay_mock_"):
-                try:
-                    from routers.payments import get_razorpay_client
-                    client = get_razorpay_client()
-                    if client:
-                        refund_amount_paise = int(refund_amount_dec * 100)
-                        refund_resp = client.payment.refund(
-                            order.razorpay_payment_id,
-                            {
-                                "amount": refund_amount_paise,
-                                "reverse_all": 1 if is_full_refund else 0,
-                                "notes": {
-                                    "reason": "Customer return approved",
-                                    "site_id": str(site_id),
-                                    "return_id": str(return_request.id),
-                                    "is_full_refund": str(is_full_refund),
-                                },
+        # Update order item statuses for items in this return request
+        for ret_item in items:
+            order_item = session.get(OrderItem, ret_item.order_item_id)
+            if order_item:
+                if (order_item.returnable_quantity or 0) == 0:
+                    order_item.status = "returned"
+                else:
+                    order_item.status = "delivered"
+                order_item.updated_at = now
+                session.add(order_item)
+
+        # Check total returned items across the entire order
+        order_items = session.exec(select(OrderItem).where(OrderItem.order_id == order.id)).all()
+        total_order_qty = sum(item.quantity for item in order_items)
+        all_order_returns = session.exec(select(ReturnRequest).where(ReturnRequest.order_id == order.id)).all()
+        returned_request_ids = [r.id for r in all_order_returns if r.status in ("refunded", "closed") or r.id == return_request.id]
+        all_returned_items = session.exec(select(ReturnItem).where(ReturnItem.return_request_id.in_(returned_request_ids))).all() if returned_request_ids else []
+        total_returned_qty = sum((item.quantity_received if item.quantity_received is not None else (item.quantity_approved or item.quantity_requested or 0)) for item in all_returned_items)
+
+        is_all_returned = is_full_refund or (total_returned_qty >= total_order_qty) or all(getattr(oi, "returnable_quantity", 0) == 0 for oi in order_items)
+
+        # If online payment via Razorpay, trigger gateway refund
+        if order.razorpay_payment_id and not order.razorpay_payment_id.startswith("pay_mock_"):
+            try:
+                from routers.payments import get_razorpay_client
+                client = get_razorpay_client()
+                if client:
+                    refund_amount_paise = int(refund_amount_dec * 100)
+                    refund_resp = client.payment.refund(
+                        order.razorpay_payment_id,
+                        {
+                            "amount": refund_amount_paise,
+                            "reverse_all": 1 if is_full_refund else 0,
+                            "notes": {
+                                "reason": "Customer return approved",
+                                "site_id": str(site_id),
+                                "return_id": str(return_request.id),
+                                "is_full_refund": str(is_full_refund),
                             },
-                        )
-                        if isinstance(refund_resp, dict):
-                            snapshot = dict(order.pricing_snapshot or {})
-                            snapshot["refund_details"] = {
-                                "refund_id": refund_resp.get("id"),
-                                "status": refund_resp.get("status", "processed"),
-                                "amount": (refund_resp.get("amount") or refund_amount_paise) / 100,
-                                "arn": refund_resp.get("acquirer_data", {}).get("arn") if isinstance(refund_resp.get("acquirer_data"), dict) else None,
-                                "created_at": refund_resp.get("created_at"),
-                            }
-                            order.pricing_snapshot = snapshot
-                except Exception as rerr:
-                    print(f"Razorpay refund warning on return refund: {rerr}")
+                        },
+                    )
+                    if isinstance(refund_resp, dict):
+                        snapshot = dict(order.pricing_snapshot or {})
+                        snapshot["refund_details"] = {
+                            "refund_id": refund_resp.get("id"),
+                            "status": refund_resp.get("status", "processed"),
+                            "amount": (refund_resp.get("amount") or refund_amount_paise) / 100,
+                            "arn": refund_resp.get("acquirer_data", {}).get("arn") if isinstance(refund_resp.get("acquirer_data"), dict) else None,
+                            "created_at": refund_resp.get("created_at"),
+                        }
+                        order.pricing_snapshot = snapshot
+            except Exception as rerr:
+                print(f"Razorpay refund warning on return refund: {rerr}")
 
-            ledger_entry = session.exec(
-                select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
-            ).first()
+        ledger_entry = session.exec(
+            select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
+        ).first()
 
-            if is_full_refund:
-                order.payment_status = "refunded"
-                order.escrow_status = "reversed"
-                if ledger_entry:
-                    ledger_entry.status = "refunded"
-                    ledger_entry.escrow_status = "reversed"
-                    ledger_entry.updated_at = now
-                    session.add(ledger_entry)
-            else:
-                # Partial Return: Prorate the ledger entry so the merchant retains their net earnings for non-returned items
-                order.payment_status = "partially_refunded"
-                if ledger_entry:
-                    commission_percent = ledger_entry.platform_fee_percent or Decimal("3.00")
-                    refunded_tenant_share = money(refund_amount_dec * (Decimal("1") - commission_percent / Decimal("100")))
-                    refunded_platform_fee = money(refund_amount_dec - refunded_tenant_share)
+        if is_all_returned:
+            order.status = "returned"
+            order.payment_status = "refunded"
+            order.escrow_status = "reversed"
+            if ledger_entry:
+                ledger_entry.status = "refunded"
+                ledger_entry.escrow_status = "reversed"
+                ledger_entry.updated_at = now
+                session.add(ledger_entry)
+        else:
+            order.payment_status = "partially_refunded"
+            if ledger_entry:
+                commission_percent = ledger_entry.platform_fee_percent or Decimal("3.00")
+                refunded_tenant_share = money(refund_amount_dec * (Decimal("1") - commission_percent / Decimal("100")))
+                refunded_platform_fee = money(refund_amount_dec - refunded_tenant_share)
 
-                    new_gross = max(Decimal("0.00"), money(ledger_entry.gross_amount - refund_amount_dec))
-                    new_tenant_share = max(Decimal("0.00"), money(ledger_entry.tenant_share - refunded_tenant_share))
-                    new_fee = max(Decimal("0.00"), money(ledger_entry.platform_fee - refunded_platform_fee))
+                new_gross = max(Decimal("0.00"), money(ledger_entry.gross_amount - refund_amount_dec))
+                new_tenant_share = max(Decimal("0.00"), money(ledger_entry.tenant_share - refunded_tenant_share))
+                new_fee = max(Decimal("0.00"), money(ledger_entry.platform_fee - refunded_platform_fee))
 
-                    ledger_entry.gross_amount = new_gross
-                    ledger_entry.tenant_share = new_tenant_share
-                    ledger_entry.platform_fee = new_fee
-                    ledger_entry.updated_at = now
-                    session.add(ledger_entry)
+                ledger_entry.gross_amount = new_gross
+                ledger_entry.tenant_share = new_tenant_share
+                ledger_entry.platform_fee = new_fee
+                ledger_entry.updated_at = now
+                session.add(ledger_entry)
 
-            session.add(order)
+        order.updated_at = now
+        session.add(order)
 
         add_return_status_history(
             session=session,

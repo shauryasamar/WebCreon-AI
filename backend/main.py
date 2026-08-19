@@ -29,9 +29,11 @@ from db.database import create_db_and_tables, get_session
 from models import (
     Admin, AdminSite, Site, Product, Category, Collection, Cart, CartItem, Order, OrderItem,
     ProductCollection, ProductReview, ReturnRequest, ReturnItem, ReturnStatusHistory,
-    Shipment, InventoryMovement, OrderStatusHistory, User, UserAddress
+    Shipment, InventoryMovement, OrderStatusHistory, User, UserAddress,
+    DeliveryAgent, DeliverySettings,
 )
 from routers import auth, cart, categories, checkout, checkout_settings, collections, orders, payments, products, returns
+from routers import delivery
 
 UPLOADS_DIR = Path("uploads")
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
@@ -72,6 +74,7 @@ app.include_router(checkout_settings.router)
 app.include_router(orders.router)
 app.include_router(payments.router)
 app.include_router(returns.router)
+app.include_router(delivery.router)
 
 
 class GenerateSiteRequest(BaseModel):

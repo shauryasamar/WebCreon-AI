@@ -1,7 +1,13 @@
 import { FormEvent, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useCustomerAuth } from "../context/CustomerAuthContext";
-import { cleanSiteName, getContrastTextColor, usePublicSiteTheme } from "../hooks/usePublicSiteTheme";
+import {
+  cleanSiteName,
+  getAccessibleAccentColor,
+  getContrastTextColor,
+  getLuminance,
+  usePublicSiteTheme,
+} from "../hooks/usePublicSiteTheme";
 
 type LocationState = {
   from?: string;
@@ -42,17 +48,26 @@ export default function CustomerSignupPage() {
   const primaryBg = theme.primary_bg || (isLight ? "#f8fafc" : "#0f172a");
   const cardBg = theme.card_bg || theme.secondary_bg || (isLight ? "#ffffff" : "#1e293b");
 
-  // Dynamic High Contrast Text Colors
-  const textColor = getContrastTextColor(cardBg);
-  const subtextColor = textColor === "#0f172a" ? "rgba(15, 23, 42, 0.65)" : "rgba(248, 250, 252, 0.7)";
+  // Dynamic High Contrast & Accessible Text Colors
+  const computedContrastText = getContrastTextColor(cardBg);
+  const rawThemeTextColor = theme.text_color;
+  const isDarkCard = computedContrastText === "#ffffff";
+
+  const textColor =
+    rawThemeTextColor && Math.abs(getLuminance(rawThemeTextColor) - getLuminance(cardBg)) > 45
+      ? rawThemeTextColor
+      : computedContrastText;
+
+  const subtextColor = isDarkCard ? "rgba(226, 232, 240, 0.78)" : "rgba(51, 65, 85, 0.78)";
   const accentColor = theme.accent_color || "#2563eb";
+  const accessibleAccentColor = getAccessibleAccentColor(accentColor, cardBg);
   const buttonTextColor = getContrastTextColor(accentColor);
-  const borderColor = textColor === "#0f172a" ? "rgba(15, 23, 42, 0.12)" : "rgba(255, 255, 255, 0.12)";
+  const borderColor = isDarkCard ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)";
 
   // Clean, Non-Camouflaged Input Styling
-  const inputBg = textColor === "#0f172a" ? "#ffffff" : "#0b1220";
-  const inputTextColor = getContrastTextColor(inputBg);
-  const inputBorder = textColor === "#0f172a" ? "rgba(15, 23, 42, 0.2)" : "rgba(255, 255, 255, 0.2)";
+  const inputBg = isDarkCard ? "#0f172a" : "#ffffff";
+  const inputTextColor = isDarkCard ? "#f8fafc" : "#0f172a";
+  const inputBorder = isDarkCard ? "rgba(255, 255, 255, 0.2)" : "rgba(15, 23, 42, 0.2)";
 
   const initials = useMemo(() => {
     const parts = siteName.split(/\s+/).filter(Boolean);
@@ -175,7 +190,7 @@ export default function CustomerSignupPage() {
                   fontWeight: 700,
                   textTransform: "uppercase",
                   letterSpacing: "0.06em",
-                  color: accentColor,
+                  color: accessibleAccentColor,
                 }}
               >
                 {siteName}
@@ -413,7 +428,7 @@ export default function CustomerSignupPage() {
             <Link
               to={websiteName ? `/store/${websiteName}/login` : "/"}
               style={{
-                color: accentColor,
+                color: accessibleAccentColor,
                 textDecoration: "none",
                 fontWeight: 700,
               }}

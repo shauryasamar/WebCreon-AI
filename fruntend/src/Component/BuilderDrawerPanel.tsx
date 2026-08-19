@@ -35,6 +35,7 @@ type SavedSite = {
 export type AdminNavKey =
   | "products"
   | "orders"
+  | "delivery"
   | "earnings"
   | "payment-settings"
   | "checkout-charges";
@@ -47,6 +48,7 @@ type AdminNavItem = {
 const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { key: "products", label: "Products" },
   { key: "orders", label: "Orders" },
+  { key: "delivery", label: "Delivery & Shipping" },
   { key: "earnings", label: "Earnings & Ledger" },
   { key: "payment-settings", label: "Payout Settings" },
   { key: "checkout-charges", label: "Checkout Charges" },

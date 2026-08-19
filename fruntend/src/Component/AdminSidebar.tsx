@@ -23,6 +23,10 @@ const AdminSidebar = () => {
       to: `/builder/${siteId}/admin/orders`,
     },
     {
+      label: "Delivery & Shipping",
+      to: `/builder/${siteId}/admin/delivery`,
+    },
+    {
       label: "Earnings & Ledger",
       to: `/builder/${siteId}/admin/earnings`,
     },

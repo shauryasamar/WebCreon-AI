@@ -12,6 +12,7 @@ JWT_SECRET = os.getenv("JWT_SECRET", "change-this-in-env")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ADMIN_TOKEN_EXPIRE_MINUTES = int(os.getenv("ADMIN_TOKEN_EXPIRE_MINUTES", "1440"))
 CUSTOMER_TOKEN_EXPIRE_MINUTES = int(os.getenv("CUSTOMER_TOKEN_EXPIRE_MINUTES", "1440"))
+RIDER_TOKEN_EXPIRE_MINUTES = int(os.getenv("RIDER_TOKEN_EXPIRE_MINUTES", "43200"))  # 30 days
 
 
 def verify_password(plain_password: str, password_hash: str) -> bool:
@@ -40,6 +41,13 @@ def create_customer_token(user_id: str, site_id: str) -> str:
     return _create_token(
         {"userId": user_id, "siteId": site_id, "tokenType": "customer"},
         CUSTOMER_TOKEN_EXPIRE_MINUTES,
+    )
+
+
+def create_rider_token(agent_id: str, site_id: str) -> str:
+    return _create_token(
+        {"agentId": agent_id, "siteId": site_id, "tokenType": "rider"},
+        RIDER_TOKEN_EXPIRE_MINUTES,
     )
 
 

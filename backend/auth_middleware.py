@@ -72,6 +72,37 @@ def authenticate_customer(
     return request.state.user
 
 
+def authenticate_rider(
+    request: Request,
+    rider_token: Optional[str] = Cookie(default=None, alias="rider_token"),
+):
+    token = rider_token
+    auth_header = request.headers.get("Authorization")
+    if not token and auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.replace("Bearer ", "").strip()
+
+    if not token:
+        raise _unauthorized("Rider authentication required")
+
+    payload = decode_token(token)
+    if not payload:
+        raise _unauthorized("Invalid or expired rider session")
+
+    if payload.get("tokenType") != "rider":
+        raise _unauthorized("Invalid rider token")
+
+    agent_id = payload.get("agentId")
+    site_id = payload.get("siteId")
+    if not agent_id or not site_id:
+        raise _unauthorized("Invalid rider token payload")
+
+    request.state.rider = {
+        "agentId": agent_id,
+        "siteId": site_id,
+    }
+    return request.state.rider
+
+
 def enforce_site_ownership(
     site_id: UUID = Path(...),
     admin=Depends(authenticate_admin),

@@ -65,9 +65,11 @@ def get_effective_payment_status(order: Order) -> str:
 
 ALLOWED_STATUS_TRANSITIONS = {
     "placed": {"confirmed", "cancelled"},
-    "confirmed": {"shipped", "cancelled"},
-    "shipped": {"out_for_delivery"},
-    "out_for_delivery": {"delivered"},
+    "confirmed": {"shipped", "out_for_delivery", "cancelled"},
+    "shipped": {"out_for_delivery", "cancelled", "rescheduled"},
+    "out_for_delivery": {"delivered", "rescheduled", "failed"},
+    "rescheduled": {"out_for_delivery", "shipped", "delivered", "failed", "cancelled"},
+    "failed": {"rescheduled", "shipped", "cancelled"},
     "delivered": set(),
     "partially_cancelled": set(),
     "cancelled": set(),
@@ -157,15 +159,26 @@ def serialize_address_snapshot(address: UserAddress) -> dict[str, Any]:
 def serialize_shipment(shipment: Optional[Shipment]) -> Optional[dict[str, Any]]:
     if not shipment:
         return None
+    agent_id_str = str(shipment.agent_id) if getattr(shipment, "agent_id", None) else None
+    agent_token = getattr(shipment, "agent_token", None)
     return {
         "id": str(shipment.id),
         "status": shipment.status,
+        "mode": getattr(shipment, "delivery_mode", "manual"),
+        "delivery_mode": getattr(shipment, "delivery_mode", "manual"),
+        "agent_id": agent_id_str,
+        "agent_token": agent_token,
         "delivery_partner_name": shipment.delivery_partner_name,
         "delivery_partner_phone": shipment.delivery_partner_phone,
+        "courier_name": getattr(shipment, "courier_name", None),
+        "awb_number": getattr(shipment, "awb_number", None),
+        "tracking_url": getattr(shipment, "tracking_url", None),
+        "label_url": getattr(shipment, "label_url", None),
         "estimated_delivery_at": shipment.estimated_delivery_at.isoformat() if shipment.estimated_delivery_at else None,
         "shipped_at": shipment.shipped_at.isoformat() if shipment.shipped_at else None,
         "out_for_delivery_at": shipment.out_for_delivery_at.isoformat() if shipment.out_for_delivery_at else None,
         "delivered_at": shipment.delivered_at.isoformat() if shipment.delivered_at else None,
+        "notes": getattr(shipment, "notes", None),
     }
 
 
@@ -677,9 +690,21 @@ def build_order_item_pricing_snapshot(
     }
 
 
-def serialize_customer_order_item(item: OrderItem) -> dict[str, Any]:
-    returnable_quantity = max(int(item.returnable_quantity or 0), 0)
-    is_returnable = item.status == "delivered" and returnable_quantity > 0
+def serialize_customer_order_item(item: OrderItem, order_status: Optional[str] = None) -> dict[str, Any]:
+    returnable_quantity = max(int(item.returnable_quantity if item.returnable_quantity is not None else (item.quantity if order_status == "delivered" else 0)), 0)
+
+    effective_status = item.status
+    if order_status == "delivered":
+        if returnable_quantity > 0:
+            effective_status = "delivered"
+        elif returnable_quantity == 0 and item.status == "returned":
+            effective_status = "returned"
+        elif item.status not in ("delivered", "returned", "cancelled"):
+            effective_status = "delivered"
+    elif order_status == "returned":
+        effective_status = "returned"
+
+    is_returnable = (order_status == "delivered" and returnable_quantity > 0)
 
     return {
         "id": str(item.id),
@@ -693,12 +718,147 @@ def serialize_customer_order_item(item: OrderItem) -> dict[str, Any]:
         "compare_price": float(item.compare_price) if item.compare_price is not None else None,
         "quantity": item.quantity,
         "line_total": float(item.line_total),
-        "status": item.status,
+        "status": effective_status,
         "returnable_quantity": returnable_quantity,
         "is_returnable": is_returnable,
         "max_returnable_quantity": returnable_quantity,
         "pricing_snapshot": item.pricing_snapshot,
     }
+
+
+def _sync_order_return_status(order: Order, session: Session, items: Optional[list[OrderItem]] = None) -> bool:
+    """
+    Checks if an order that was 'delivered' has all its items returned & refunded.
+    - If part of the order was refunded: payment_status = 'partially_refunded'.
+    - If ALL items in the order have completed refunds (r.status in ('refunded', 'closed')):
+      order.status = 'returned', order.payment_status = 'refunded', escrow_status = 'reversed'.
+    - Returnable quantity on items reflects remaining units eligible for return.
+    """
+    from models import ReturnRequest, ReturnItem
+
+    if order.status in ("cancelled", "placed", "confirmed", "shipped", "out_for_delivery"):
+        return False
+
+    order_items = items if items is not None else session.exec(
+        select(OrderItem).where(OrderItem.order_id == order.id)
+    ).all()
+    if not order_items:
+        return False
+
+    all_order_returns = session.exec(
+        select(ReturnRequest).where(ReturnRequest.order_id == order.id)
+    ).all()
+
+    has_changes = False
+    now = utc_now()
+
+    # 1. Calculate each item's actual returnable quantity
+    for item in order_items:
+        ret_items = session.exec(
+            select(ReturnItem).where(ReturnItem.order_item_id == item.id)
+        ).all()
+        active_ret_qty = 0
+        for ri in ret_items:
+            req = session.get(ReturnRequest, ri.return_request_id)
+            if req and req.status != "rejected":
+                if req.status in ("received", "inspected", "refunded", "closed"):
+                    actual_qty = ri.quantity_received
+                else:
+                    actual_qty = ri.quantity_approved if (ri.quantity_approved and ri.quantity_approved > 0) else ri.quantity_requested
+                active_ret_qty += int(actual_qty or 0)
+        expected_returnable = max(0, item.quantity - active_ret_qty)
+        if item.returnable_quantity != expected_returnable:
+            item.returnable_quantity = expected_returnable
+            item.updated_at = now
+            session.add(item)
+            has_changes = True
+
+    if not all_order_returns:
+        return has_changes
+
+    # 2. Only consider COMPLETED refunds (refunded or closed)
+    completed_returns = [
+        r for r in all_order_returns
+        if r.status in ("refunded", "closed")
+    ]
+    completed_return_ids = [r.id for r in completed_returns]
+
+    if not completed_return_ids:
+        # No completed refunds yet - ensure status remains delivered / paid
+        if order.status == "returned":
+            order.status = "delivered"
+            order.updated_at = now
+            session.add(order)
+            has_changes = True
+        return has_changes
+
+    refunded_items = session.exec(
+        select(ReturnItem).where(ReturnItem.return_request_id.in_(completed_return_ids))
+    ).all()
+
+    total_order_qty = sum(item.quantity for item in order_items)
+    total_refunded_qty = sum(
+        (ri.quantity_received if ri.quantity_received is not None else (ri.quantity_approved or ri.quantity_requested or 0))
+        for ri in refunded_items
+    )
+
+    # Update item statuses based on completed refunds
+    for item in order_items:
+        item_refunded_qty = sum(
+            (ri.quantity_received if ri.quantity_received is not None else (ri.quantity_approved or ri.quantity_requested or 0))
+            for ri in refunded_items
+            if ri.order_item_id == item.id
+        )
+        if item_refunded_qty >= item.quantity:
+            if item.status != "returned":
+                item.status = "returned"
+                item.updated_at = now
+                session.add(item)
+                has_changes = True
+        else:
+            if item.status == "returned":
+                item.status = "delivered"
+                item.updated_at = now
+                session.add(item)
+                has_changes = True
+
+    # Full refund completed for all items
+    if total_refunded_qty >= total_order_qty and total_order_qty > 0:
+        if order.status != "returned":
+            order.status = "returned"
+            order.updated_at = now
+            session.add(order)
+            has_changes = True
+        if order.payment_status != "refunded":
+            order.payment_status = "refunded"
+            order.updated_at = now
+            session.add(order)
+            has_changes = True
+        if getattr(order, "escrow_status", None) != "reversed":
+            order.escrow_status = "reversed"
+            order.updated_at = now
+            session.add(order)
+            has_changes = True
+    elif total_refunded_qty > 0:
+        # Partial refund completed
+        if order.status == "returned":
+            order.status = "delivered"
+            order.updated_at = now
+            session.add(order)
+            has_changes = True
+        if order.payment_status != "partially_refunded":
+            order.payment_status = "partially_refunded"
+            order.updated_at = now
+            session.add(order)
+            has_changes = True
+    else:
+        if order.status == "returned":
+            order.status = "delivered"
+            order.updated_at = now
+            session.add(order)
+            has_changes = True
+
+    return has_changes
 
 
 class PlaceOrderRequest(BaseModel):
@@ -815,6 +975,16 @@ def get_admin_orders(
         for item in order_items:
             order_items_map.setdefault(item.order_id, []).append(item)
 
+    has_admin_sync = False
+    for order in orders:
+        if _sync_order_return_status(order, session, order_items_map.get(order.id)):
+            has_admin_sync = True
+    if has_admin_sync:
+        try:
+            session.commit()
+        except Exception:
+            session.rollback()
+
     return [
         {
             "id": str(order.id),
@@ -879,6 +1049,12 @@ def get_admin_order_detail(
         .where(OrderItem.order_id == order.id)
         .order_by(OrderItem.id.asc())
     ).all()
+
+    if _sync_order_return_status(order, session, items):
+        try:
+            session.commit()
+        except Exception:
+            session.rollback()
 
     shipment = session.exec(
         select(Shipment).where(Shipment.order_id == order.id)
@@ -983,6 +1159,17 @@ def update_order_status(
             order.confirmed_at = now
 
         elif payload.status == "shipped":
+            # Guard: ensure an agent or partner is assigned before moving to shipped
+            has_partner = bool(
+                payload.delivery_partner_name
+                or (shipment and (shipment.agent_id or shipment.delivery_partner_name or shipment.courier_name))
+            )
+            if not has_partner:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot move order to Shipped without assigning a Delivery Agent or Courier Partner first. Please dispatch or assign a rider.",
+                )
+
             order.shipped_at = now
             if not shipment:
                 shipment = Shipment(
@@ -1006,6 +1193,17 @@ def update_order_status(
             session.add(shipment)
 
         elif payload.status == "out_for_delivery":
+            # Guard: ensure an agent or partner is assigned
+            has_partner = bool(
+                payload.delivery_partner_name
+                or (shipment and (shipment.agent_id or shipment.delivery_partner_name or shipment.courier_name))
+            )
+            if not has_partner:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot move order to Out for Delivery without assigning a Delivery Agent or Courier Partner first. Please dispatch or assign a rider."
+                )
+
             order.shipped_at = order.shipped_at or now
             if not shipment:
                 shipment = Shipment(
@@ -1029,6 +1227,15 @@ def update_order_status(
             session.add(shipment)
 
         elif payload.status == "delivered":
+            has_partner = bool(
+                payload.delivery_partner_name
+                or (shipment and (shipment.agent_id or shipment.delivery_partner_name or shipment.courier_name))
+            )
+            if not has_partner:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot mark order Delivered without an assigned delivery agent or courier partner."
+                )
             from datetime import timedelta
             order.delivered_at = now
             order.return_window_closes_at = now + timedelta(days=2)
@@ -1526,9 +1733,12 @@ def get_my_orders(
             items_map.setdefault(item.order_id, []).append(item)
 
     response = []
+    has_customer_sync = False
     for order in orders:
+        if _sync_order_return_status(order, session, items_map.get(order.id)):
+            has_customer_sync = True
         serialized_items = [
-            serialize_customer_order_item(item)
+            serialize_customer_order_item(item, order.status)
             for item in items_map.get(order.id, [])
         ]
         has_returnable_items = any(item["is_returnable"] for item in serialized_items)
@@ -1550,6 +1760,12 @@ def get_my_orders(
                 "refund_info": build_customer_refund_info(order),
             }
         )
+
+    if has_customer_sync:
+        try:
+            session.commit()
+        except Exception:
+            session.rollback()
 
     if page is not None and page_size is not None:
         return {
@@ -1599,7 +1815,7 @@ def get_my_delivered_orders(
     response = []
     for order in delivered_orders:
         serialized_items = [
-            serialize_customer_order_item(item)
+            serialize_customer_order_item(item, order.status)
             for item in items_map.get(order.id, [])
         ]
         response.append(
@@ -1636,11 +1852,38 @@ def get_my_order_detail(
         select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.id.asc())
     ).all()
 
+    # Self-heal items if order is delivered but individual items were never updated
+    # ONLY heal items that were never transitioned out of their original status.
+    # DO NOT touch returnable_quantity of items already in delivered/returned state
+    # as they may have had valid partial-return deductions applied.
+    if order.status == "delivered":
+        has_changes = False
+        for item in items:
+            if item.status not in ("delivered", "returned", "cancelled"):
+                # This item was never updated from its pre-delivery status
+                item.status = "delivered"
+                if item.returnable_quantity is None:
+                    # Uninitialized: no returns have ever been processed
+                    item.returnable_quantity = item.quantity
+                has_changes = True
+                session.add(item)
+        if has_changes:
+            try:
+                session.commit()
+            except Exception:
+                session.rollback()
+
+    _sync_order_return_status(order, session, items)
+    try:
+        session.commit()
+    except Exception:
+        session.rollback()
+
     shipment = session.exec(
         select(Shipment).where(Shipment.order_id == order.id)
     ).first()
 
-    serialized_items = [serialize_customer_order_item(item) for item in items]
+    serialized_items = [serialize_customer_order_item(item, order.status) for item in items]
     has_returnable_items = any(item["is_returnable"] for item in serialized_items)
 
     return {

@@ -63,12 +63,23 @@ type OrderItem = {
 type Shipment = {
   id: string;
   status: string;
+  courier_name?: string | null;
+  awb_number?: string | null;
+  tracking_number?: string | null;
+  tracking_url?: string | null;
   delivery_partner_name?: string | null;
   delivery_partner_phone?: string | null;
   estimated_delivery_at?: string | null;
   shipped_at?: string | null;
   out_for_delivery_at?: string | null;
   delivered_at?: string | null;
+  notes?: string | null;
+  agent_id?: string | null;
+  agent_token?: string | null;
+  agent_accepted_at?: string | null;
+  pickup_pincode?: string | null;
+  delivery_pincode?: string | null;
+  [key: string]: any;
 };
 
 type OrderDetail = {
@@ -134,6 +145,7 @@ type CustomerReturnItem = {
   quantity_requested: number;
   quantity_approved: number;
   quantity_received: number;
+  effective_refund_quantity?: number;
   reason_code: string;
   reason_note?: string | null;
   unit_price_paid: number;
@@ -278,6 +290,39 @@ function formatPrice(value?: number | null) {
   return `₹${Number(value || 0).toFixed(2)}`;
 }
 
+function clean10DigitPhone(phone: string): string {
+  const digits = (phone || "").replace(/\D/g, "");
+  if (digits.length === 12 && digits.startsWith("91")) {
+    return digits.slice(2);
+  }
+  if (digits.length === 11 && digits.startsWith("0")) {
+    return digits.slice(1);
+  }
+  if (digits.length >= 10) {
+    return digits.slice(-10);
+  }
+  return digits;
+}
+
+function formatPhoneDialable(phone: string): string {
+  const clean = clean10DigitPhone(phone);
+  return clean ? `+91${clean}` : "";
+}
+
+function formatPhoneDisplay(phone: string): string {
+  const clean = clean10DigitPhone(phone);
+  if (clean.length === 10) {
+    return `+91 ${clean.slice(0, 5)} ${clean.slice(5)}`;
+  }
+  return phone ? `+91 ${phone}` : "";
+}
+
+const PhoneIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, display: "inline-block", verticalAlign: "middle" }}>
+    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+  </svg>
+);
+
 function labelize(value?: string | null) {
   if (!value) return "—";
   return value.replaceAll("_", " ");
@@ -309,12 +354,16 @@ function getStatusColor(status?: string) {
     case "delivered":
     case "refunded":
       return "#16a34a";
+    case "returned":
+      return "#7c3aed";
     case "cancelled":
     case "rejected":
       return "#dc2626";
     case "out_for_delivery":
     case "received":
       return "#f59e0b";
+    case "rescheduled":
+      return "#d97706";
     case "shipped":
     case "inspected":
       return "#2563eb";
@@ -350,8 +399,10 @@ function getStatusRank(status?: string) {
     case "shipped":
       return 3;
     case "out_for_delivery":
+    case "rescheduled":
       return 4;
     case "delivered":
+    case "returned":
       return 5;
     case "partially_cancelled":
       return 2;
@@ -695,10 +746,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
   };
 
   const isItemReturnable = (item: OrderItem) => {
-    if (typeof item.is_returnable === "boolean") {
-      return item.is_returnable && Number(item.returnable_quantity || 0) > 0;
-    }
-    return item.status === "delivered" && Number(item.returnable_quantity || 0) > 0;
+    return Number(item.returnable_quantity || 0) > 0;
   };
 
   const canRequestReturnForOrder = (detail?: OrderDetail | null, order?: OrderListItem | null) => {
@@ -1111,23 +1159,141 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
         {detail.shipment ? (
           <div
             style={{
-              marginTop: "10px",
+              marginTop: "12px",
               paddingTop: "14px",
               borderTop: divider,
               display: "flex",
               flexDirection: "column",
-              gap: "6px",
+              gap: "10px",
             }}
           >
-            <div style={{ fontSize: "13px", color: textMuted }}>
-              Delivery partner: {detail.shipment.delivery_partner_name || "—"}
-            </div>
-            <div style={{ fontSize: "13px", color: textMuted }}>
-              Delivery phone: {detail.shipment.delivery_partner_phone || "—"}
-            </div>
-            <div style={{ fontSize: "13px", color: textMuted }}>
-              ETA: {formatDate(detail.shipment.estimated_delivery_at)}
-            </div>
+            {/* Show delivery agent card only when order is Out for Delivery */}
+            {(orderStatus === "out_for_delivery" || detail.shipment.status === "out_for_delivery") && (
+              <div
+                style={{
+                  padding: "12px 14px",
+                  borderRadius: "12px",
+                  background: isLight ? "#f0fdf4" : "rgba(34,197,94,0.12)",
+                  border: `1px solid ${isLight ? "#bbf7d0" : "rgba(34,197,94,0.3)"}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: "10px",
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: "11px", fontWeight: 800, color: "#16a34a", textTransform: "uppercase", marginBottom: "2px" }}>
+                    Delivery Agent on the Way
+                  </div>
+                  <div style={{ fontSize: "15px", fontWeight: 800, color: textPrimary }}>
+                    {detail.shipment.delivery_partner_name || "Delivery Partner"}
+                  </div>
+                  {detail.shipment.delivery_partner_phone && (
+                    <div style={{ fontSize: "13px", color: textMuted, marginTop: "2px", display: "flex", alignItems: "center", gap: "5px" }}>
+                      <PhoneIcon />
+                      <span>{formatPhoneDisplay(detail.shipment.delivery_partner_phone)}</span>
+                    </div>
+                  )}
+                </div>
+
+                {detail.shipment.delivery_partner_phone && (
+                  <a
+                    href={`tel:${formatPhoneDialable(detail.shipment.delivery_partner_phone)}`}
+                    style={{
+                      padding: "8px 14px",
+                      borderRadius: "8px",
+                      background: "#16a34a",
+                      color: "#ffffff",
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      textDecoration: "none",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    <PhoneIcon />
+                    <span>Call Agent</span>
+                  </a>
+                )}
+              </div>
+            )}
+
+            {/* Courier tracking info if shipped with Shiprocket/Courier partner */}
+            {(detail.shipment.courier_name || detail.shipment.awb_number) && (
+              <div
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: "10px",
+                  background: isLight ? "#f8fafc" : "rgba(255,255,255,0.04)",
+                  border: cardBorder,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "8px",
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: textPrimary }}>
+                    📦 {detail.shipment.courier_name || "Express Courier"}
+                  </div>
+                  {detail.shipment.awb_number && (
+                    <div style={{ fontSize: "12px", color: textMuted, marginTop: "2px" }}>
+                      Tracking: <span style={{ fontWeight: 700 }}>{detail.shipment.awb_number}</span>
+                    </div>
+                  )}
+                </div>
+
+                {detail.shipment.tracking_url && (
+                  <a
+                    href={detail.shipment.tracking_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      color: "#2563eb",
+                      textDecoration: "none",
+                    }}
+                  >
+                    Track Courier ↗
+                  </a>
+                )}
+              </div>
+            )}
+
+            {/* Reschedule Notice or Estimated delivery time */}
+            {detail.shipment.notes && (orderStatus === "rescheduled" || detail.shipment.status === "rescheduled") && (
+              <div
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "6px",
+                  background: isDark ? "rgba(217, 119, 6, 0.15)" : "#fffbeb",
+                  border: isDark ? "1px solid rgba(217, 119, 6, 0.3)" : "1px solid #fde68a",
+                  color: isDark ? "#fde68a" : "#92400e",
+                  fontSize: "12px",
+                  lineHeight: 1.4,
+                }}
+              >
+                <div style={{ fontWeight: 700, marginBottom: "2px" }}>
+                  ⚠️ Delivery Attempt Rescheduled
+                </div>
+                <div>{detail.shipment.notes}</div>
+                {detail.shipment.estimated_delivery_at && (
+                  <div style={{ marginTop: "3px", fontWeight: 700 }}>
+                    Next Retry Expected: {formatDate(detail.shipment.estimated_delivery_at)}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {detail.shipment.estimated_delivery_at && orderStatus !== "delivered" && orderStatus !== "rescheduled" && detail.shipment.status !== "rescheduled" && (
+              <div style={{ fontSize: "13px", color: textMuted }}>
+                🕒 Expected Delivery: <strong style={{ color: textPrimary }}>{formatDate(detail.shipment.estimated_delivery_at)}</strong>
+              </div>
+            )}
           </div>
         ) : null}
       </div>
@@ -1523,7 +1689,13 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                             Refund
                           </div>
                           <div style={{ fontSize: "14px", fontWeight: 800 }}>
-                            {formatPrice(item.line_refund_final || item.line_refund_suggested)}
+                            {formatPrice(
+                              item.effective_refund_quantity === 0 || item.quantity_received === 0
+                                ? 0
+                                : (typeof item.line_refund_final === "number"
+                                    ? item.line_refund_final
+                                    : (typeof item.line_refund_suggested === "number" ? item.line_refund_suggested : 0))
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1895,10 +2067,13 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                       >
                         {/* Status chip */}
                         {(() => {
-                          const currentRefundInfo = detailMap[order.id]?.refund_info || order.refund_info;
+                          const isFullyCancelledOrReturned = order.status === "cancelled" || order.status === "returned";
+                          const currentRefundInfo = isFullyCancelledOrReturned
+                            ? (detailMap[order.id]?.refund_info || order.refund_info)
+                            : null;
                           const isRefundFailed = currentRefundInfo?.status === "failed";
                           const isRefundProcessing = currentRefundInfo?.status === "processing";
-                          const isRefundCompleted = currentRefundInfo?.status === "completed";
+                          const isRefundCompleted = currentRefundInfo?.status === "completed" && isFullyCancelledOrReturned;
                           const chipColor = isRefundFailed
                             ? "#ef4444"
                             : (isRefundProcessing ? "#d97706" : (isRefundCompleted ? "#059669" : statusColor));
@@ -2110,10 +2285,11 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                           <div style={{ fontSize: "12px", color: textMuted, marginTop: "4px" }}>
                                             Item status: {item.status.replaceAll("_", " ")}
                                           </div>
-                                          <div style={{ fontSize: "12px", color: textMuted, marginTop: "4px" }}>
-                                            Returnable quantity: {item.returnable_quantity}
-                                          </div>
-                                          {!itemCanReturn && detail.status === "delivered" ? (
+                                          {Number(item.returnable_quantity || 0) > 0 ? (
+                                            <div style={{ fontSize: "12px", color: "#16a34a", marginTop: "4px", fontWeight: 600 }}>
+                                              Returnable quantity: {item.returnable_quantity}
+                                            </div>
+                                          ) : (detail.status === "delivered" || detail.status === "returned") ? (
                                             <div style={{ fontSize: "12px", color: "#dc2626", marginTop: "4px", fontWeight: 600 }}>
                                               Already fully returned or not eligible for return
                                             </div>
@@ -2475,130 +2651,160 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                   background: panelBg,
                                 }}
                               >
-                                {/* Refund Destination Account (Required for COD, or Optional for others) */}
-                                <div
-                                  style={{
-                                    border: cardBorder,
-                                    borderRadius: "14px",
-                                    padding: "14px",
-                                    background: isLight ? "#f8fafc" : "rgba(255,255,255,0.02)",
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    gap: "12px",
-                                    marginBottom: "14px",
-                                  }}
-                                >
-                                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "6px" }}>
-                                    <span style={{ fontSize: "13px", fontWeight: 800, color: textPrimary, textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                                      Where should we send your refund?
-                                    </span>
-                                    <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "999px", background: order.payment_method?.toLowerCase() === "cod" ? "rgba(245,158,11,0.14)" : "rgba(16,185,129,0.14)", color: order.payment_method?.toLowerCase() === "cod" ? "#d97706" : "#059669" }}>
-                                      {order.payment_method?.toLowerCase() === "cod" ? "Required for COD" : "Original Source / Instant UPI"}
-                                    </span>
-                                  </div>
+                                {/* Refund Destination Account: Required for COD, Automatic for Online */}
+                                {order.payment_method?.toLowerCase() === "cod" ? (
+                                  <div
+                                    style={{
+                                      border: cardBorder,
+                                      borderRadius: "14px",
+                                      padding: "14px",
+                                      background: isLight ? "#f8fafc" : "rgba(255,255,255,0.02)",
+                                      display: "flex",
+                                      flexDirection: "column",
+                                      gap: "12px",
+                                      marginBottom: "14px",
+                                    }}
+                                  >
+                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "6px" }}>
+                                      <span style={{ fontSize: "13px", fontWeight: 800, color: textPrimary, textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                        Where should we send your refund?
+                                      </span>
+                                      <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "999px", background: "rgba(245,158,11,0.14)", color: "#d97706" }}>
+                                        Required for COD
+                                      </span>
+                                    </div>
 
-                                  <div style={{ display: "flex", gap: "8px" }}>
-                                    <button
-                                      type="button"
-                                      onClick={() => updateReturnDraft(order.id, (d) => ({ ...d, refund_account_type: "upi" }))}
-                                      style={{
-                                        padding: "7px 14px",
-                                        borderRadius: "10px",
-                                        fontSize: "12px",
-                                        fontWeight: 700,
-                                        cursor: "pointer",
-                                        border: (draft?.refund_account_type || "upi") === "upi" ? `1px solid ${accentColor}` : cardBorder,
-                                        background: (draft?.refund_account_type || "upi") === "upi" ? `${accentColor}18` : "transparent",
-                                        color: (draft?.refund_account_type || "upi") === "upi" ? accentColor : textMuted,
-                                      }}
-                                    >
-                                      ⚡ Instant UPI / QR
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => updateReturnDraft(order.id, (d) => ({ ...d, refund_account_type: "bank" }))}
-                                      style={{
-                                        padding: "7px 14px",
-                                        borderRadius: "10px",
-                                        fontSize: "12px",
-                                        fontWeight: 700,
-                                        cursor: "pointer",
-                                        border: draft?.refund_account_type === "bank" ? `1px solid ${accentColor}` : cardBorder,
-                                        background: draft?.refund_account_type === "bank" ? `${accentColor}18` : "transparent",
-                                        color: draft?.refund_account_type === "bank" ? accentColor : textMuted,
-                                      }}
-                                    >
-                                      🏦 Bank Account (NEFT/IMPS)
-                                    </button>
-                                  </div>
-
-                                  {(draft?.refund_account_type || "upi") === "upi" ? (
-                                    <div>
-                                      <input
-                                        type="text"
-                                        value={draft?.refund_upi_id || ""}
-                                        onChange={(e) => updateReturnDraft(order.id, (d) => ({ ...d, refund_upi_id: e.target.value.trim() }))}
-                                        placeholder="Enter your UPI ID (e.g. yourname@okhdfcbank or 9876543210@paytm - not email)"
+                                    <div style={{ display: "flex", gap: "8px" }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => updateReturnDraft(order.id, (d) => ({ ...d, refund_account_type: "upi" }))}
                                         style={{
-                                          width: "100%",
+                                          padding: "7px 14px",
                                           borderRadius: "10px",
-                                          border: cardBorder,
-                                          background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)",
-                                          color: textPrimary,
-                                          padding: "10px 14px",
-                                          fontSize: "13px",
+                                          fontSize: "12px",
+                                          fontWeight: 700,
+                                          cursor: "pointer",
+                                          border: (draft?.refund_account_type || "upi") === "upi" ? `1px solid ${accentColor}` : cardBorder,
+                                          background: (draft?.refund_account_type || "upi") === "upi" ? `${accentColor}18` : "transparent",
+                                          color: (draft?.refund_account_type || "upi") === "upi" ? accentColor : textMuted,
                                         }}
-                                      />
-                                      <div style={{ fontSize: "11px", color: textMuted, marginTop: "4px" }}>
-                                        Format: <code style={{ color: accentColor }}>username@bankhandle</code> (e.g. @okhdfcbank, @okicici, @paytm, @ybl, @upi)
+                                      >
+                                        ⚡ Instant UPI / QR
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => updateReturnDraft(order.id, (d) => ({ ...d, refund_account_type: "bank" }))}
+                                        style={{
+                                          padding: "7px 14px",
+                                          borderRadius: "10px",
+                                          fontSize: "12px",
+                                          fontWeight: 700,
+                                          cursor: "pointer",
+                                          border: draft?.refund_account_type === "bank" ? `1px solid ${accentColor}` : cardBorder,
+                                          background: draft?.refund_account_type === "bank" ? `${accentColor}18` : "transparent",
+                                          color: draft?.refund_account_type === "bank" ? accentColor : textMuted,
+                                        }}
+                                      >
+                                        🏦 Bank Account (NEFT/IMPS)
+                                      </button>
+                                    </div>
+
+                                    {(draft?.refund_account_type || "upi") === "upi" ? (
+                                      <div>
+                                        <input
+                                          type="text"
+                                          value={draft?.refund_upi_id || ""}
+                                          onChange={(e) => updateReturnDraft(order.id, (d) => ({ ...d, refund_upi_id: e.target.value.trim() }))}
+                                          placeholder="Enter your UPI ID (e.g. yourname@okhdfcbank or 9876543210@paytm)"
+                                          style={{
+                                            width: "100%",
+                                            borderRadius: "10px",
+                                            border: cardBorder,
+                                            background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)",
+                                            color: textPrimary,
+                                            padding: "10px 14px",
+                                            fontSize: "13px",
+                                          }}
+                                        />
+                                        <div style={{ fontSize: "11px", color: textMuted, marginTop: "4px" }}>
+                                          Format: <code style={{ color: accentColor }}>username@bankhandle</code> (e.g. @okhdfcbank, @okicici, @paytm, @ybl, @upi)
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)", gap: "10px" }}>
+                                        <div>
+                                          <input
+                                            type="text"
+                                            maxLength={70}
+                                            value={draft?.refund_account_holder || ""}
+                                            onChange={(e) => updateReturnDraft(order.id, (d) => ({ ...d, refund_account_holder: e.target.value.replace(/[^a-zA-Z\s.]/g, "") }))}
+                                            placeholder="Account Holder Full Name *"
+                                            style={{ width: "100%", borderRadius: "10px", border: cardBorder, background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)", color: textPrimary, padding: "10px 14px", fontSize: "13px" }}
+                                          />
+                                        </div>
+                                        <div>
+                                          <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            maxLength={18}
+                                            value={draft?.refund_account_number || ""}
+                                            onChange={(e) => updateReturnDraft(order.id, (d) => ({ ...d, refund_account_number: e.target.value.replace(/\D/g, "").slice(0, 18) }))}
+                                            placeholder="Bank Account Number (9-18 digits) *"
+                                            style={{ width: "100%", borderRadius: "10px", border: cardBorder, background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)", color: textPrimary, padding: "10px 14px", fontSize: "13px" }}
+                                          />
+                                        </div>
+                                        <div>
+                                          <input
+                                            type="text"
+                                            maxLength={11}
+                                            value={draft?.refund_ifsc_code || ""}
+                                            onChange={(e) => updateReturnDraft(order.id, (d) => ({ ...d, refund_ifsc_code: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 11) }))}
+                                            placeholder="IFSC Code (e.g. HDFC0001234) *"
+                                            style={{ width: "100%", borderRadius: "10px", border: cardBorder, background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)", color: textPrimary, padding: "10px 14px", fontSize: "13px" }}
+                                          />
+                                        </div>
+                                        <div>
+                                          <input
+                                            type="text"
+                                            maxLength={60}
+                                            value={draft?.refund_bank_name || ""}
+                                            onChange={(e) => updateReturnDraft(order.id, (d) => ({ ...d, refund_bank_name: e.target.value }))}
+                                            placeholder="Bank Name (e.g. HDFC Bank, Optional)"
+                                            style={{ width: "100%", borderRadius: "10px", border: cardBorder, background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)", color: textPrimary, padding: "10px 14px", fontSize: "13px" }}
+                                          />
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div
+                                    style={{
+                                      border: cardBorder,
+                                      borderRadius: "14px",
+                                      padding: "14px",
+                                      background: isLight ? "#f0fdf4" : "rgba(16,185,129,0.06)",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "10px",
+                                      marginBottom: "14px",
+                                    }}
+                                  >
+                                    <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "rgba(16,185,129,0.15)", display: "grid", placeItems: "center", color: "#059669", flexShrink: 0 }}>
+                                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <rect x="2" y="5" width="20" height="14" rx="2" />
+                                        <line x1="2" y1="10" x2="22" y2="10" />
+                                      </svg>
+                                    </div>
+                                    <div>
+                                      <div style={{ fontSize: "13px", fontWeight: 700, color: textPrimary }}>
+                                        Automatic Online Refund
+                                      </div>
+                                      <div style={{ fontSize: "12px", color: textMuted }}>
+                                        Refund will be credited back to your original payment method ({formatPaymentMethodName(order.payment_method)}).
                                       </div>
                                     </div>
-                                  ) : (
-                                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)", gap: "10px" }}>
-                                      <div>
-                                        <input
-                                          type="text"
-                                          maxLength={70}
-                                          value={draft?.refund_account_holder || ""}
-                                          onChange={(e) => updateReturnDraft(order.id, (d) => ({ ...d, refund_account_holder: e.target.value.replace(/[^a-zA-Z\s.]/g, "") }))}
-                                          placeholder="Account Holder Full Name *"
-                                          style={{ width: "100%", borderRadius: "10px", border: cardBorder, background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)", color: textPrimary, padding: "10px 14px", fontSize: "13px" }}
-                                        />
-                                      </div>
-                                      <div>
-                                        <input
-                                          type="text"
-                                          inputMode="numeric"
-                                          maxLength={18}
-                                          value={draft?.refund_account_number || ""}
-                                          onChange={(e) => updateReturnDraft(order.id, (d) => ({ ...d, refund_account_number: e.target.value.replace(/\D/g, "").slice(0, 18) }))}
-                                          placeholder="Bank Account Number (9-18 digits) *"
-                                          style={{ width: "100%", borderRadius: "10px", border: cardBorder, background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)", color: textPrimary, padding: "10px 14px", fontSize: "13px" }}
-                                        />
-                                      </div>
-                                      <div>
-                                        <input
-                                          type="text"
-                                          maxLength={11}
-                                          value={draft?.refund_ifsc_code || ""}
-                                          onChange={(e) => updateReturnDraft(order.id, (d) => ({ ...d, refund_ifsc_code: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 11) }))}
-                                          placeholder="IFSC Code (e.g. HDFC0001234) *"
-                                          style={{ width: "100%", borderRadius: "10px", border: cardBorder, background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)", color: textPrimary, padding: "10px 14px", fontSize: "13px" }}
-                                        />
-                                      </div>
-                                      <div>
-                                        <input
-                                          type="text"
-                                          maxLength={60}
-                                          value={draft?.refund_bank_name || ""}
-                                          onChange={(e) => updateReturnDraft(order.id, (d) => ({ ...d, refund_bank_name: e.target.value }))}
-                                          placeholder="Bank Name (e.g. HDFC Bank, Optional)"
-                                          style={{ width: "100%", borderRadius: "10px", border: cardBorder, background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)", color: textPrimary, padding: "10px 14px", fontSize: "13px" }}
-                                        />
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
+                                  </div>
+                                )}
 
                                 <div
                                   style={{

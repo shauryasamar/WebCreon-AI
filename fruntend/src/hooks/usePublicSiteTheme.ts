@@ -23,15 +23,38 @@ export function cleanSiteName(rawName?: string, rawSlug?: string): string {
   return name.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function getContrastTextColor(bgColor?: string, fallback: string = "#0f172a"): string {
-  if (!bgColor || typeof bgColor !== "string") return fallback;
-  let hex = bgColor.trim().replace("#", "");
+export function getLuminance(colorHex?: string): number {
+  if (!colorHex || typeof colorHex !== "string") return 0;
+  let hex = colorHex.trim().replace("#", "");
   if (hex.length === 3) hex = hex.split("").map((c) => c + c).join("");
-  if (hex.length !== 6) return fallback;
+  if (hex.length !== 6) return 0;
   const r = parseInt(hex.substring(0, 2), 16);
   const g = parseInt(hex.substring(2, 4), 16);
   const b = parseInt(hex.substring(4, 6), 16);
-  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  return (r * 299 + g * 587 + b * 114) / 1000;
+}
+
+export function getAccessibleAccentColor(accentColor?: string, cardBg?: string): string {
+  const accent = accentColor || "#2563eb";
+  const bgLuminance = getLuminance(cardBg || "#ffffff");
+  const isLightBg = bgLuminance >= 135;
+  const accentLuminance = getLuminance(accent);
+
+  // If background is light and accent color is very light (like yellow, neon lime, pastel gold),
+  // using it directly for text causes camouflaging. Darken it to a readable tone.
+  if (isLightBg && accentLuminance > 160) {
+    return "#b45309";
+  }
+  // If background is dark and accent color is too dark, lighten it
+  if (!isLightBg && accentLuminance < 85) {
+    return "#60a5fa";
+  }
+  return accent;
+}
+
+export function getContrastTextColor(bgColor?: string, fallback: string = "#0f172a"): string {
+  if (!bgColor || typeof bgColor !== "string") return fallback;
+  const yiq = getLuminance(bgColor);
   return yiq >= 135 ? "#0f172a" : "#ffffff";
 }
 

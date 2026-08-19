@@ -28,6 +28,9 @@ const AdminOrders = React.lazy(() => import("./Component/AdminOrders"));
 const CheckoutChargesPage = React.lazy(() => import("./Component/CheckoutChargesPage"));
 const TenantPaymentSettingsPage = React.lazy(() => import("./Component/TenantPaymentSettingsPage"));
 const TenantEarningsPage = React.lazy(() => import("./Component/TenantEarningsPage"));
+const DeliverySettingsPage = React.lazy(() => import("./Component/DeliverySettingsPage"));
+const AgentDeliveryPage = React.lazy(() => import("./pages/AgentDeliveryPage"));
+const TrackOrderPage = React.lazy(() => import("./pages/TrackOrderPage"));
 const EditorRenderPage = React.lazy(() => import("./customizations/EditorRenderPage"));
 const EditorSidebar = React.lazy(() => import("./customizations/EditorSidebar"));
 const CustomerOrdersPage = React.lazy(() => import("./pages/CustomerOrdersPage"));
@@ -693,6 +696,8 @@ function BuilderPageContent() {
   const activeAdminNavKey: AdminNavKey | null = isAdminRoute
     ? location.pathname.includes("/payment-settings")
       ? "payment-settings"
+      : location.pathname.includes("/delivery")
+      ? "delivery"
       : location.pathname.includes("/earnings")
       ? "earnings"
       : location.pathname.includes("/checkout-charges")
@@ -1336,6 +1341,7 @@ function BuilderPageContent() {
                 <Route index element={<Navigate to="products" replace />} />
                 <Route path="products" element={<AdminProducts />} />
                 <Route path="orders" element={<AdminOrders />} />
+                <Route path="delivery" element={<DeliverySettingsPage />} />
                 <Route path="earnings" element={<TenantEarningsPage />} />
                 <Route path="payment-settings" element={<TenantPaymentSettingsPage />} />
                 <Route
@@ -1344,6 +1350,12 @@ function BuilderPageContent() {
                 />
               </Route>
             )}
+
+            {/* Agent PWA — no auth, token in URL */}
+            <Route path="agent/delivery/:shipmentId" element={<AgentDeliveryPage />} />
+
+            {/* Customer tracking page */}
+            <Route path="track/:siteId/:orderId" element={<TrackOrderPage />} />
 
 
             <Route
