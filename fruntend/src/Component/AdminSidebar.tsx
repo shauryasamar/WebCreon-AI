@@ -22,6 +22,22 @@ const AdminSidebar = () => {
       label: "Orders",
       to: `/builder/${siteId}/admin/orders`,
     },
+    {
+      label: "Delivery & Shipping",
+      to: `/builder/${siteId}/admin/delivery`,
+    },
+    {
+      label: "Earnings & Ledger",
+      to: `/builder/${siteId}/admin/earnings`,
+    },
+    {
+      label: "Payout Settings",
+      to: `/builder/${siteId}/admin/payment-settings`,
+    },
+    {
+      label: "Checkout Charges",
+      to: `/builder/${siteId}/admin/checkout-charges`,
+    },
   ];
 
   return (

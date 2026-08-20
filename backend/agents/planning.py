@@ -1,5 +1,5 @@
 import json
-from typing import Dict, List, Literal
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
@@ -156,7 +156,7 @@ class SitePlan(BaseModel):
     frontend_plan: FrontendPlan
 
 
-llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
 system_text = """
 You are a planning assistant for an AI website builder.
@@ -510,10 +510,15 @@ def _build_default_site_plan(requirements: Dict) -> Dict:
     return site_plan
 
 
-async def plan_site(requirements: Dict) -> Dict:
+async def plan_site(requirements: Dict, session_id: Optional[str] = None) -> Dict:
     requirements_json = json.dumps(requirements)
     try:
-        result: SitePlan = await planning_chain.ainvoke({"requirements_json": requirements_json})
+        from agents.token_tracker import TokenCostCallback
+        sess_id = session_id or requirements.get("session_id")
+        result: SitePlan = await planning_chain.ainvoke(
+            {"requirements_json": requirements_json},
+            config={"callbacks": [TokenCostCallback("SiteGen.Planning", session_id=sess_id)]}
+        )
         site_plan = result.model_dump()
         site_plan["frontend_plan"]["page_plans"] = _normalize_page_plans(
             site_plan.get("frontend_plan", {}).get("page_plans", [])

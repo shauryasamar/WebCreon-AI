@@ -241,13 +241,66 @@ def _default_theme_config(requirements: Dict[str, Any], frontend_config: Dict[st
     theme_name = frontend_config.get("theme") or requirements.get("theme") or "light"
     brand_tone = requirements.get("brand_tone") or "modern approachable"
     visual_style = requirements.get("visual_style") or frontend_config.get("design_direction") or "modern ecommerce storefront"
+    raw_palette = requirements.get("chosen_palette")
+    palette = raw_palette if isinstance(raw_palette, dict) else {}
+
+    is_dark = theme_name == "dark" or palette.get("primary_bg") in {"#0f172a", "#1e293b", "#000000", "#111827"}
+    is_glass = (
+        requirements.get("surface_materiality") in ["glass_navbar", "full_glass", "glassmorphic"] or
+        palette.get("visual_style") == "glassmorphic" or
+        "glass" in (palette.get("name") or "").lower()
+    )
+
+    glass_primary_bg = (
+        "radial-gradient(circle at 10% 15%, rgba(56, 189, 248, 0.18) 0%, transparent 45%), radial-gradient(circle at 90% 60%, rgba(139, 92, 246, 0.18) 0%, transparent 50%), radial-gradient(circle at 50% 90%, rgba(236, 72, 153, 0.12) 0%, transparent 45%), #090d16"
+        if is_dark
+        else "radial-gradient(circle at 10% 15%, rgba(56, 189, 248, 0.14) 0%, transparent 45%), radial-gradient(circle at 90% 60%, rgba(139, 92, 246, 0.12) 0%, transparent 50%), radial-gradient(circle at 50% 90%, rgba(236, 72, 153, 0.08) 0%, transparent 45%), #f8fafc"
+    )
 
     return {
-        "name": theme_name,
-        "mode": theme_name,
+        "name": palette.get("name") or theme_name,
+        "mode": "dark" if is_dark else "light",
         "brand_tone": brand_tone,
-        "visual_style": visual_style,
+        "visual_style": "glassmorphic" if is_glass else visual_style,
         "design_direction": frontend_config.get("design_direction") or visual_style,
+        
+        # Color Token Palette
+        "primary_bg": palette.get("primary_bg") if (palette.get("primary_bg") and "gradient" in str(palette.get("primary_bg"))) else (glass_primary_bg if is_glass else (palette.get("primary_bg") or ("#0f172a" if is_dark else "#ffffff"))),
+        "secondary_bg": palette.get("secondary_bg") or ("rgba(15,23,42,0.65)" if (is_dark and is_glass) else ("rgba(255,255,255,0.65)" if is_glass else ("#1e293b" if is_dark else "#f8fafc"))),
+        "text_color": palette.get("text_color") or ("#f8fafc" if is_dark else "#0f172a"),
+        "muted_text": palette.get("muted_text") or ("#94a3b8" if is_dark else "#64748b"),
+        "accent_color": palette.get("accent_color") or ("#6366f1" if is_dark else "#2563eb"),
+        "accent_hover": palette.get("accent_hover") or ("#4f46e5" if is_dark else "#1d4ed8"),
+        "accent_text": palette.get("accent_text") or "#ffffff",
+        "border_color": palette.get("border_color") or ("rgba(255,255,255,0.14)" if is_dark else ("rgba(255,255,255,0.55)" if is_glass else "#e2e8f0")),
+        "soft_border": palette.get("soft_border") or ("rgba(255,255,255,0.08)" if is_dark else ("rgba(255,255,255,0.30)" if is_glass else "#f1f5f9")),
+        
+        # Surface Materiality & Glass Tokens
+        "surface_materiality": "full_glass" if is_glass else (requirements.get("surface_materiality") or "solid"),
+        
+        # Navbar Config
+        "navbar_layout": "glassmorphism_premium" if is_glass else (requirements.get("navbar_layout") or "apple_minimal"),
+        "navbar_variant": "floating" if is_glass else (requirements.get("navbar_variant") or "soft"),
+        "navbar_position": requirements.get("navbar_position") or "fixed",
+        "navbar_bg": palette.get("navbar_bg") or ("rgba(15,23,42,0.72)" if is_dark else "rgba(255,255,255,0.72)"),
+        "navbar_text_color": palette.get("navbar_text_color") or ("#f8fafc" if is_dark else "#0f172a"),
+        "navbar_border_color": palette.get("navbar_border_color") or ("rgba(255,255,255,0.14)" if is_dark else "rgba(255,255,255,0.45)"),
+        
+        # Footer Config
+        "footer_layout": "glassmorphism_premium" if is_glass else (requirements.get("footer_layout") or "apple_minimal"),
+        "footer_bg": palette.get("footer_bg") or ("#090d16" if is_dark else "#f8fafc"),
+        "footer_text_color": palette.get("footer_text_color") or ("#f8fafc" if is_dark else "#0f172a"),
+        "footer_muted_color": palette.get("footer_muted_color") or ("#94a3b8" if is_dark else "#64748b"),
+        
+        # Hero Config
+        "hero_bg": palette.get("hero_bg") or (glass_primary_bg if is_glass else ("linear-gradient(135deg, #0f172a, #1e293b)" if is_dark else "linear-gradient(135deg, #f8fafc, #e2e8f0)")),
+        "hero_text_color": palette.get("hero_text_color") or ("#ffffff" if is_dark else "#0f172a"),
+        "hero_accent": palette.get("hero_accent") or ("#6366f1" if is_dark else "#2563eb"),
+        
+        # Product Card Config
+        "card_style": requirements.get("card_style") or "fashion",
+        "card_bg": palette.get("card_bg") or ("rgba(15,23,42,0.70)" if (is_dark and is_glass) else ("rgba(255,255,255,0.70)" if is_glass else ("#1e293b" if is_dark else "#ffffff"))),
+        "card_shadow": palette.get("card_shadow") or ("0 8px 32px rgba(0,0,0,0.45), inset 0 1px 1px rgba(255,255,255,0.16)" if is_dark else ("0 8px 32px rgba(31,38,135,0.08), inset 0 1px 1px rgba(255,255,255,0.75)" if is_glass else "0 4px 16px rgba(15,23,42,0.06)")),
     }
 
 
@@ -315,6 +368,8 @@ def _build_block_props(
     brand_name = _safe_brand_name(requirements)
     domain = requirements.get("domain") or "general"
     theme = frontend_config.get("theme") or requirements.get("theme") or "light"
+    raw_palette = requirements.get("chosen_palette")
+    palette = raw_palette if isinstance(raw_palette, dict) else {}
 
     props: Dict[str, Any] = {
         "section_key": section_key,
@@ -326,12 +381,30 @@ def _build_block_props(
     }
 
     if section_key == "hero":
+        hero_tagline = requirements.get("tagline") or page_plan.get("goal") or f"Discover high quality {domain} products."
         props.update(
             {
-                "headline": f"{brand_name} {domain.title()} Store",
-                "subheadline": page_plan.get("goal"),
-                "primary_cta": "Shop Now",
-                "secondary_cta": "Explore Categories",
+                "headline": f"{brand_name}",
+                "subheadline": hero_tagline,
+                "primary_cta": {"label": "Shop Collection", "href": "/products"},
+                "secondary_cta": {"label": "Explore Store", "href": "/categories"},
+                "background_color": palette.get("hero_bg"),
+                "text_color": palette.get("hero_text_color"),
+                "auto_play": True,
+                "auto_play_interval": 4,
+                "slides": [
+                    {
+                        "id": "slide_1",
+                        "headline": f"Welcome to {brand_name}",
+                        "subheadline": hero_tagline,
+                        "badge": "NEW ARRIVAL",
+                        "primary_cta": {"label": "Shop Now", "href": "/products"},
+                        "secondary_cta": {"label": "Browse Catalog", "href": "/products"},
+                        "background_color": palette.get("hero_bg"),
+                        "text_color": palette.get("hero_text_color"),
+                        "trust_badges": ["Free Shipping", "30-Day Money Back", "24/7 VIP Support"],
+                    }
+                ]
             }
         )
     elif section_key in {"featured_products", "featured_books", "bestsellers", "results_grid"}:
@@ -340,6 +413,9 @@ def _build_block_props(
                 "title": "Browse Products" if section_key == "results_grid" else "Featured Products",
                 "layout": "grid",
                 "limit": 8,
+                "card_style": requirements.get("card_style") or "fashion",
+                "card_bg_color": palette.get("card_bg"),
+                "card_shadow": palette.get("card_shadow"),
             }
         )
     elif section_key == "related_products":

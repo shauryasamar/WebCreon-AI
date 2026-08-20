@@ -1,4 +1,13 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  createCheckoutAddress,
+  deleteCheckoutAddress,
+  getCheckoutAddresses,
+  SavedAddress,
+  setDefaultCheckoutAddress,
+  updateCheckoutAddress,
+} from "../addressService";
+import { isColorDarkHex } from "../context/ThemeContext";
 
 type ThemeInput =
   | "dark"
@@ -11,7 +20,20 @@ type ThemeInput =
       festival_theme?: string;
     };
 
+export type DeliveryFormData = {
+  id?: string;
+  label?: string;
+  isDefault?: boolean;
+  fullName: string;
+  phone: string;
+  email: string;
+  address: string;
+  city: string;
+  pincode: string;
+};
+
 type DeliveryFormProps = {
+  siteId: string;
   sectionLabel?: string;
   title?: string;
   theme?: ThemeInput;
@@ -30,6 +52,16 @@ type DeliveryFormProps = {
   padding?: number;
   gap?: number;
   max_width?: number;
+  deliveryData?: DeliveryFormData;
+  onDeliveryDataChange?: (data: DeliveryFormData) => void;
+  onContinue?: () => void;
+  continueDisabled?: boolean;
+  savedAddresses?: DeliveryFormData[];
+  selectedAddressId?: string | null;
+  onSelectAddress?: (address: DeliveryFormData) => void;
+  onSavedAddressesChange?: (addresses: DeliveryFormData[]) => void;
+  isAuthenticated?: boolean;
+  isAddressesLoading?: boolean;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -91,10 +123,61 @@ function alpha(hex: string, opacity: number) {
   return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${clamp(opacity, 0, 1)})`;
 }
 
+function isAddressValid(data: DeliveryFormData) {
+  return Boolean(
+    data.fullName.trim() &&
+      data.phone.trim() &&
+      data.email.trim() &&
+      data.address.trim() &&
+      data.city.trim() &&
+      data.pincode.trim()
+  );
+}
+
+function mapSavedAddressToDeliveryData(address: SavedAddress): DeliveryFormData {
+  return {
+    id: address.id,
+    label: address.addressType || "Home",
+    isDefault: address.isDefault,
+    fullName: address.fullName || "",
+    phone: address.mobileNumber || "",
+    email: address.email || "",
+    address: address.addressLine1 || "",
+    city: address.city || "",
+    pincode: address.postalCode || "",
+  };
+}
+
+function toAddressPayload(data: DeliveryFormData) {
+  return {
+    full_name: data.fullName.trim(),
+    mobile_number: data.phone.trim(),
+    address_line1: data.address.trim(),
+    city: data.city.trim(),
+    postal_code: data.pincode.trim(),
+    email: data.email.trim() || null,
+    address_type: (data.label || "Home").trim(),
+    is_default: Boolean(data.isDefault),
+  };
+}
+
+const emptyDeliveryData: DeliveryFormData = {
+  id: "",
+  label: "Home",
+  isDefault: false,
+  fullName: "",
+  phone: "",
+  email: "",
+  address: "",
+  city: "",
+  pincode: "",
+};
+
 export const DeliveryForm: React.FC<DeliveryFormProps> = ({
+  siteId,
   sectionLabel = "Delivery",
-  title = "Delivery details",
-  theme = "dark",
+  title = "Delivery Address",
+  theme = "light",
   accentColor,
   compact = false,
   background_color,
@@ -110,95 +193,221 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
   padding,
   gap,
   max_width,
+  deliveryData = emptyDeliveryData,
+  onDeliveryDataChange,
+  onContinue,
+  continueDisabled = false,
+  savedAddresses = [],
+  selectedAddressId = null,
+  onSelectAddress,
+  onSavedAddressesChange,
+  isAuthenticated = false,
+  isAddressesLoading = false,
 }) => {
+  const [addresses, setAddresses] = useState<DeliveryFormData[]>(savedAddresses);
+  const [formMode, setFormMode] = useState<"hidden" | "add" | "edit">("hidden");
+  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
+  const [draftAddress, setDraftAddress] = useState<DeliveryFormData>(emptyDeliveryData);
+  const [isMobile, setIsMobile] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  useEffect(() => {
+    const syncViewport = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+    return () => window.removeEventListener("resize", syncViewport);
+  }, []);
+
+useEffect(() => {
+  setAddresses(savedAddresses);
+  
+  if (!isAuthenticated) {
+    setFormMode("hidden");
+    setEditingAddressId(null);
+    setDraftAddress(emptyDeliveryData);
+    return;
+  }
+
+  if (savedAddresses.length === 0) {
+    setEditingAddressId(null);
+
+    if (formMode !== "add") {
+      setFormMode("hidden");
+      setDraftAddress(emptyDeliveryData);
+    }
+
+    return;
+  }
+
+  const selectedStillExists = savedAddresses.some(
+    (address: DeliveryFormData) => address.id === selectedAddressId
+  );
+
+  if (!selectedStillExists) {
+    const defaultAddress =
+      savedAddresses.find((address: DeliveryFormData) => address.isDefault) ||
+      savedAddresses[0];
+
+    if (defaultAddress) {
+      onSelectAddress?.(defaultAddress);
+      onDeliveryDataChange?.(defaultAddress);
+    }
+  }
+}, [
+  savedAddresses,
+  selectedAddressId,
+  onSelectAddress,
+  onDeliveryDataChange,
+  isAuthenticated,
+  formMode,
+]);
+
+  useEffect(() => {
+    if (formMode === "edit" || formMode === "add") return;
+
+    if (
+      deliveryData?.fullName ||
+      deliveryData?.phone ||
+      deliveryData?.email ||
+      deliveryData?.address ||
+      deliveryData?.city ||
+      deliveryData?.pincode
+    ) {
+      setDraftAddress((prev) => ({
+        ...prev,
+        ...emptyDeliveryData,
+        ...deliveryData,
+      }));
+    }
+  }, [deliveryData, formMode]);
+
   const themeObject = typeof theme === "object" ? theme : undefined;
-  const isDark = themeObject ? themeObject.mode !== "light" : theme === "dark";
-  const hasFestiveTheme = Boolean(themeObject?.festival_theme);
+  const isDark =
+    theme === "dark" ||
+    (themeObject?.primary_bg ? isColorDarkHex(themeObject.primary_bg) : false) ||
+    (background_color ? isColorDarkHex(background_color) : false) ||
+    themeObject?.mode === "dark" ||
+    (themeObject?.text_color ? !isColorDarkHex(themeObject.text_color) : false);
 
   const resolvedAccent =
     accentColor ||
+    (themeObject as any)?.delivery_form_btn_bg ||
     themeObject?.accent_color ||
-    (isDark ? "#60a5fa" : "#2563eb");
+    (isDark ? "#4f8cff" : "#2f6df6");
 
   const resolvedPrimaryBg =
     background_color ||
+    (themeObject as any)?.delivery_form_bg ||
     themeObject?.primary_bg ||
-    (isDark ? "#0f172a" : "#f8fafc");
+    (isDark ? "#0f172a" : "#f6f7fb");
 
   const resolvedText =
     text_color ||
+    (themeObject as any)?.delivery_form_text ||
     themeObject?.text_color ||
-    (isDark ? "#f9fafb" : "#111827");
+    (isDark ? "#f8fafc" : "#111827");
 
   const resolvedPadding = padding ?? (compact ? 16 : 18);
-  const resolvedGap = gap ?? (compact ? 12 : 14);
-  const resolvedBorderRadius = border_radius ?? 20;
-  const resolvedFieldRadius = field_radius ?? 12;
+  const resolvedGap = gap ?? 16;
+  const resolvedBorderRadius = border_radius ?? 14;
+  const resolvedFieldRadius = field_radius ?? 8;
 
   const palette = useMemo(() => {
     if (!isDark) {
-      if (hasFestiveTheme) {
-        return {
-          cardBg: background_color || mixHex(resolvedPrimaryBg, "#ffffff", 0.7),
-          inputBg: input_color || "#ffffff",
-          border: border_color || alpha(resolvedAccent, 0.2),
-          softBorder: soft_border_color || alpha(resolvedAccent, 0.14),
-          text: resolvedText,
-          textMuted: muted_text_color || mixHex(resolvedText, resolvedPrimaryBg, 0.38),
-          textSoft: soft_text_color || mixHex(resolvedText, resolvedPrimaryBg, 0.24),
-          placeholder:
-            placeholder_color || mixHex(resolvedText, resolvedPrimaryBg, 0.56),
-          shadow: "0 6px 16px rgba(15,23,42,0.05)",
-          accentRing: `0 0 0 3px ${resolvedAccent}22`,
-        };
-      }
+      // Light or Warm Festive Light Theme
+      const surfaceBg = background_color || (themeObject as any)?.delivery_form_bg || (themeObject as any)?.surface_bg || (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.7);
+      const isPureWhiteBg = resolvedPrimaryBg.toLowerCase() === "#ffffff" || resolvedPrimaryBg.toLowerCase() === "#f8fafc" || resolvedPrimaryBg.toLowerCase() === "#f6f7fb";
+      const cardBgFinal = background_color || (themeObject as any)?.delivery_form_bg || (isPureWhiteBg ? (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || "#ffffff" : surfaceBg);
+      const inputBgFinal = input_color || (themeObject as any)?.delivery_form_input_bg || (isPureWhiteBg ? "#ffffff" : mixHex(cardBgFinal, "#ffffff", 0.5));
+      const borderFinal = border_color || (themeObject as any)?.delivery_form_border || (isPureWhiteBg ? "#e5e7eb" : mixHex(resolvedText, cardBgFinal, 0.15));
 
       return {
-        cardBg: background_color || "#ffffff",
-        inputBg: input_color || "#ffffff",
-        border: border_color || "rgba(15,23,42,0.08)",
-        softBorder: soft_border_color || "rgba(15,23,42,0.06)",
+        cardBg: cardBgFinal,
+        panelBg: cardBgFinal,
+        listCardBg: isPureWhiteBg ? "#ffffff" : mixHex(cardBgFinal, "#ffffff", 0.3),
+        listCardSelectedBg: alpha(resolvedAccent, 0.08),
+        emptyStateBg: isPureWhiteBg ? "#f8fafc" : mixHex(cardBgFinal, "#000000", 0.03),
+        emptyStateBorder: borderFinal,
+        inputBg: inputBgFinal,
+        inputText: (themeObject as any)?.delivery_form_input_text || resolvedText,
+        border: borderFinal,
+        softBorder: soft_border_color || mixHex(borderFinal, cardBgFinal, 0.5),
+        selectedBorder: resolvedAccent,
         text: resolvedText,
-        textMuted: muted_text_color || "#64748b",
-        textSoft: soft_text_color || "#475569",
-        placeholder: placeholder_color || "#94a3b8",
-        shadow: "0 6px 16px rgba(15,23,42,0.05)",
+        textMuted: muted_text_color || mixHex(resolvedText, cardBgFinal, 0.4),
+        textSoft: soft_text_color || mixHex(resolvedText, cardBgFinal, 0.55),
+        placeholder: placeholder_color || mixHex(resolvedText, cardBgFinal, 0.55),
+        shadow: "0 2px 8px rgba(0,0,0,0.05)",
         accentRing: `0 0 0 3px ${resolvedAccent}22`,
+        subtleButtonBg: inputBgFinal,
+        subtleButtonText: resolvedText,
+        subtleButtonBorder: borderFinal,
+        secondaryButtonBg: inputBgFinal,
+        secondaryButtonText: muted_text_color || mixHex(resolvedText, cardBgFinal, 0.4),
+        secondaryButtonBorder: borderFinal,
+        primaryButtonBg: resolvedAccent,
+        primaryButtonDisabledBg: mixHex(resolvedAccent, cardBgFinal, 0.3),
+        primaryButtonText: (themeObject as any)?.delivery_form_btn_text || "#ffffff",
+        radioBorder: borderFinal,
+        editText: mixHex(resolvedText, cardBgFinal, 0.5),
+        deleteText: "#dc2626",
+        defaultBadgeBg: alpha(resolvedAccent, 0.1),
+        errorBg: "#fef2f2",
+        errorText: "#b91c1c",
+        errorBorder: "#fecaca",
       };
     }
 
-    if (hasFestiveTheme) {
-      return {
-        cardBg: background_color || mixHex(resolvedPrimaryBg, "#ffffff", 0.08),
-        inputBg: input_color || mixHex(resolvedPrimaryBg, "#000000", 0.14),
-        border: border_color || alpha(resolvedAccent, 0.22),
-        softBorder: soft_border_color || alpha(resolvedAccent, 0.14),
-        text: resolvedText,
-        textMuted: muted_text_color || mixHex(resolvedText, resolvedPrimaryBg, 0.42),
-        textSoft: soft_text_color || mixHex(resolvedText, resolvedPrimaryBg, 0.28),
-        placeholder:
-          placeholder_color || mixHex(resolvedText, resolvedPrimaryBg, 0.56),
-        shadow: "0 10px 24px rgba(0,0,0,0.18)",
-        accentRing: `0 0 0 3px ${resolvedAccent}2e`,
-      };
-    }
+    // Dark or Deep Festive Dark Theme (e.g. Deep Maroon, Forest Emerald, Festive Purple, Slate Dark)
+    const cardBgDark = background_color || (themeObject as any)?.delivery_form_bg || (themeObject as any)?.surface_bg || (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.06);
+    const isFormCardDark = isColorDarkHex(cardBgDark);
+    const inputBgDark = input_color || (themeObject as any)?.delivery_form_input_bg || (isFormCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.09) : "#ffffff");
+    const borderDark = border_color || (themeObject as any)?.delivery_form_border || (isFormCardDark ? mixHex(resolvedText, resolvedPrimaryBg, 0.15) : "#e2e8f0");
+    const formTextFinal = (themeObject as any)?.delivery_form_text || (isFormCardDark ? resolvedText : "#0f172a");
 
     return {
-      cardBg: background_color || "#111827",
-      inputBg: input_color || "#0f172a",
-      border: border_color || "rgba(148,163,184,0.18)",
-      softBorder: soft_border_color || "rgba(148,163,184,0.12)",
-      text: resolvedText,
-      textMuted: muted_text_color || "#cbd5e1",
-      textSoft: soft_text_color || "#94a3b8",
-      placeholder: placeholder_color || "#64748b",
-      shadow: "0 10px 24px rgba(0,0,0,0.18)",
+      cardBg: cardBgDark,
+      panelBg: isFormCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.07) : cardBgDark,
+      listCardBg: isFormCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.04) : "#f8fafc",
+      listCardSelectedBg: alpha(resolvedAccent, 0.16),
+      emptyStateBg: isFormCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.04) : "#f8fafc",
+      emptyStateBorder: borderDark,
+      inputBg: inputBgDark,
+      inputText: (themeObject as any)?.delivery_form_input_text || formTextFinal,
+      border: borderDark,
+      softBorder: soft_border_color || mixHex(borderDark, cardBgDark, 0.5),
+      selectedBorder: resolvedAccent,
+      text: formTextFinal,
+      textMuted: muted_text_color || (isFormCardDark ? mixHex(resolvedText, resolvedPrimaryBg, 0.3) : "#475569"),
+      textSoft: soft_text_color || (isFormCardDark ? mixHex(resolvedText, resolvedPrimaryBg, 0.45) : "#64748b"),
+      placeholder: placeholder_color || (isFormCardDark ? mixHex(resolvedText, resolvedPrimaryBg, 0.45) : "#94a3b8"),
+      shadow: "0 8px 22px rgba(0,0,0,0.25)",
       accentRing: `0 0 0 3px ${resolvedAccent}2e`,
+      subtleButtonBg: isFormCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.07) : "#f1f5f9",
+      subtleButtonText: formTextFinal,
+      subtleButtonBorder: borderDark,
+      secondaryButtonBg: isFormCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.05) : "#f8fafc",
+      secondaryButtonText: muted_text_color || (isFormCardDark ? mixHex(resolvedText, resolvedPrimaryBg, 0.3) : "#475569"),
+      secondaryButtonBorder: borderDark,
+      primaryButtonBg: resolvedAccent,
+      primaryButtonDisabledBg: "rgba(148,163,184,0.28)",
+      primaryButtonText: (themeObject as any)?.delivery_form_btn_text || "#ffffff",
+      radioBorder: borderDark,
+      editText: isFormCardDark ? mixHex(resolvedText, resolvedPrimaryBg, 0.35) : "#64748b",
+      deleteText: "#f87171",
+      defaultBadgeBg: alpha(resolvedAccent, 0.16),
+      errorBg: "rgba(239,68,68,0.12)",
+      errorText: "#fca5a5",
+      errorBorder: "rgba(248,113,113,0.32)",
     };
   }, [
     background_color,
     border_color,
-    hasFestiveTheme,
     input_color,
     isDark,
     muted_text_color,
@@ -210,25 +419,220 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
     soft_text_color,
   ]);
 
-  const fieldStyle: React.CSSProperties = {
+  const syncAddresses = (nextAddresses: DeliveryFormData[]) => {
+    setAddresses(nextAddresses);
+    onSavedAddressesChange?.(nextAddresses);
+  };
+
+  const handleDraftChange =
+    (field: keyof DeliveryFormData) =>
+    (
+      event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+    ) => {
+      const value =
+        field === "isDefault"
+          ? (event.target as HTMLInputElement).checked
+          : event.target.value;
+
+      const nextDraft = {
+        ...draftAddress,
+        [field]: value,
+      };
+
+      setDraftAddress(nextDraft);
+      onDeliveryDataChange?.(nextDraft);
+    };
+
+  const handleSelectAddress = (address: DeliveryFormData) => {
+    onSelectAddress?.(address);
+    onDeliveryDataChange?.(address);
+  };
+
+  const handleAddNew = () => {
+    if (!isAuthenticated) {
+      setErrorMessage("Please sign in or signup to continue shopping.");
+      return;
+    }
+
+    const hasDefault = addresses.some(
+      (address: DeliveryFormData) => address.isDefault
+    );
+
+    const nextDraft: DeliveryFormData = {
+      ...emptyDeliveryData,
+      label: "Home",
+      isDefault: !hasDefault,
+    };
+
+    setErrorMessage("");
+    setDraftAddress(nextDraft);
+    onDeliveryDataChange?.(nextDraft);
+    setEditingAddressId(null);
+    setFormMode("add");
+  };
+
+  const handleEdit = (address: DeliveryFormData) => {
+    setErrorMessage("");
+    setDraftAddress({
+      ...emptyDeliveryData,
+      ...address,
+      isDefault: Boolean(address.isDefault),
+    });
+    onDeliveryDataChange?.(address);
+    setEditingAddressId(address.id || null);
+    setFormMode("edit");
+  };
+
+  const handleCloseForm = () => {
+  setErrorMessage("");
+  setEditingAddressId(null);
+  setDraftAddress(emptyDeliveryData);
+  setFormMode("hidden");
+
+  if (addresses.length === 0) {
+    onDeliveryDataChange?.(emptyDeliveryData);
+  }
+};
+
+  const refreshAddressesFromServer = async (
+    preferredAddressId?: string | null
+  ): Promise<DeliveryFormData[]> => {
+    const response = await getCheckoutAddresses(siteId);
+    const nextAddresses: DeliveryFormData[] = response.map(
+      (address: SavedAddress) => mapSavedAddressToDeliveryData(address)
+    );
+
+    syncAddresses(nextAddresses);
+
+    const nextSelected =
+      nextAddresses.find(
+        (address: DeliveryFormData) => address.id === preferredAddressId
+      ) ||
+      nextAddresses.find((address: DeliveryFormData) => address.isDefault) ||
+      nextAddresses[0] ||
+      null;
+
+    if (nextSelected) {
+      onSelectAddress?.(nextSelected);
+      onDeliveryDataChange?.(nextSelected);
+    } else {
+      onDeliveryDataChange?.(emptyDeliveryData);
+    }
+
+    return nextAddresses;
+  };
+
+  const handleDeleteAddress = async () => {
+    if (!editingAddressId) return;
+
+    try {
+      setIsDeleting(true);
+      setErrorMessage("");
+      await deleteCheckoutAddress(siteId, editingAddressId);
+      await refreshAddressesFromServer(null);
+
+      setEditingAddressId(null);
+      setDraftAddress(emptyDeliveryData);
+      setFormMode("hidden");
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Failed to delete address"
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleSaveAddress = async () => {
+    if (!isAuthenticated) {
+      setErrorMessage("Please sign in or signup to continue shopping.");
+      return;
+    }
+
+    if (!isAddressValid(draftAddress)) return;
+
+    try {
+      setIsSaving(true);
+      setErrorMessage("");
+
+      let saved: SavedAddress;
+
+      if (formMode === "edit" && editingAddressId) {
+        saved = await updateCheckoutAddress(
+          siteId,
+          editingAddressId,
+          toAddressPayload(draftAddress)
+        );
+      } else {
+        saved = await createCheckoutAddress(siteId, toAddressPayload(draftAddress));
+      }
+
+      if (draftAddress.isDefault && saved.id) {
+        await setDefaultCheckoutAddress(siteId, saved.id);
+      }
+
+      const refreshed = await refreshAddressesFromServer(saved.id);
+      const selected =
+        refreshed.find((address: DeliveryFormData) => address.id === saved.id) ||
+        refreshed[0] ||
+        null;
+
+      if (selected) {
+        setEditingAddressId(selected.id || null);
+      } else {
+        setEditingAddressId(null);
+      }
+
+      setFormMode("hidden");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to save address";
+
+      if (
+        message.toLowerCase().includes("authentication required") ||
+        message.toLowerCase().includes("unauthorized") ||
+        message.toLowerCase().includes("customer authentication required")
+      ) {
+        setErrorMessage("Please sign in or signup to continue shopping.");
+      } else {
+        setErrorMessage(message);
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const selectedAddress =
+    addresses.find((address: DeliveryFormData) => address.id === selectedAddressId) ||
+    addresses.find((address: DeliveryFormData) => address.isDefault) ||
+    null;
+
+  const disableContinue = !selectedAddress || continueDisabled;
+  const showAddressList = addresses.length > 0;
+  const showForm = formMode !== "hidden";
+  const isSplitView = showForm && !compact && !isMobile;
+  const isEditMode = formMode === "edit";
+
+  const inputBaseStyle: React.CSSProperties = {
     width: "100%",
     boxSizing: "border-box",
-    minHeight: compact ? "42px" : "46px",
-    padding: compact ? "10px 12px" : "12px 14px",
+    minHeight: "42px",
+    padding: "10px 12px",
     borderRadius: `${resolvedFieldRadius}px`,
     border: `1px solid ${palette.border}`,
     background: palette.inputBg,
-    color: palette.text,
+    color: palette.inputText,
     outline: "none",
-    fontSize: "14px",
+    fontSize: "13px",
+    lineHeight: 1.4,
   };
 
   const labelStyle: React.CSSProperties = {
     display: "block",
-    fontSize: "12px",
+    fontSize: "11px",
     fontWeight: 600,
     marginBottom: "6px",
-    color: palette.textSoft,
+    color: palette.textMuted,
   };
 
   return (
@@ -241,132 +645,672 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
       <div
         style={{
           width: "100%",
-          border: `1px solid ${palette.border}`,
+          border: `1px solid ${palette.softBorder}`,
           borderRadius: `${resolvedBorderRadius}px`,
           background: palette.cardBg,
           boxSizing: "border-box",
           boxShadow: palette.shadow,
-          padding: `${resolvedPadding}px`,
+          padding: isMobile ? "14px" : `${resolvedPadding}px`,
         }}
       >
         <div
           style={{
             marginBottom: `${resolvedGap}px`,
-            paddingBottom: compact ? "10px" : "12px",
-            borderBottom: `1px solid ${palette.softBorder}`,
+            display: "flex",
+            alignItems: isMobile ? "stretch" : "flex-start",
+            justifyContent: "space-between",
+            gap: "12px",
+            flexWrap: "wrap",
+            flexDirection: isMobile ? "column" : "row",
           }}
         >
-          <p
-            style={{
-              margin: "0 0 6px",
-              fontSize: "11px",
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              color: palette.textMuted,
-              fontWeight: 700,
-            }}
-          >
-            {sectionLabel}
-          </p>
+          <div>
+            <h3
+              style={{
+                margin: 0,
+                fontSize: isMobile ? "20px" : "24px",
+                lineHeight: 1.15,
+                fontWeight: 700,
+                color: palette.text,
+              }}
+            >
+              {title}
+            </h3>
 
-          <h3
+            <p
+              style={{
+                margin: "6px 0 0",
+                fontSize: "12px",
+                lineHeight: 1.5,
+                color: palette.textMuted,
+              }}
+            >
+              {isAuthenticated
+                ? "Select one of your saved delivery addresses or add a new one."
+                : "Please sign in or signup to continue shopping."}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleAddNew}
             style={{
-              margin: 0,
-              fontSize: compact ? "20px" : "22px",
-              lineHeight: 1.1,
-              letterSpacing: "-0.03em",
-              color: palette.text,
+              minHeight: "40px",
+              border: `1px solid ${palette.subtleButtonBorder}`,
+              borderRadius: "10px",
+              background: palette.subtleButtonBg,
+              color: palette.subtleButtonText,
+              padding: isMobile ? "0 12px" : "0 14px",
+              fontSize: "12px",
+              fontWeight: 600,
+              cursor: "pointer",
+              width: isMobile ? "100%" : "auto",
             }}
           >
-            {title}
-          </h3>
+            + Add New Address
+          </button>
         </div>
 
-        <form
+        {errorMessage ? (
+          <div
+            style={{
+              marginBottom: "14px",
+              padding: "10px 12px",
+              borderRadius: "10px",
+              border: `1px solid ${palette.errorBorder}`,
+              background: palette.errorBg,
+              color: palette.errorText,
+              fontSize: "13px",
+              lineHeight: 1.5,
+            }}
+          >
+            {errorMessage}
+          </div>
+        ) : null}
+
+        <div
           style={{
             display: "grid",
-            gap: `${resolvedGap}px`,
+            gridTemplateColumns: isSplitView
+              ? "minmax(0, 1.15fr) minmax(320px, 0.85fr)"
+              : "minmax(0, 1fr)",
+            gap: "16px",
+            alignItems: "start",
           }}
         >
-          <div>
-            <label htmlFor="delivery-full-name" style={labelStyle}>
-              Full name
-            </label>
-            <input
-              id="delivery-full-name"
-              name="fullName"
-              placeholder="Full name"
-              style={fieldStyle}
-            />
-          </div>
-
           <div
             style={{
+              minWidth: 0,
               display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
               gap: "12px",
             }}
           >
-            <div style={{ minWidth: 0 }}>
-              <label htmlFor="delivery-phone" style={labelStyle}>
-                Phone
-              </label>
-              <input id="delivery-phone" name="phone" placeholder="Phone" style={fieldStyle} />
-            </div>
+            {isAddressesLoading ? (
+              <div
+                style={{
+                  borderRadius: "12px",
+                  border: `1px dashed ${palette.emptyStateBorder}`,
+                  background: palette.emptyStateBg,
+                  padding: isMobile ? "16px" : "20px",
+                  fontSize: "13px",
+                  color: palette.textMuted,
+                }}
+              >
+                Loading saved addresses...
+              </div>
+            ) : showAddressList ? (
+              addresses.map((address: DeliveryFormData) => {
+                const isSelected = address.id === selectedAddressId;
 
-            <div style={{ minWidth: 0 }}>
-              <label htmlFor="delivery-email" style={labelStyle}>
-                Email
-              </label>
-              <input id="delivery-email" name="email" placeholder="Email" style={fieldStyle} />
-            </div>
+                return (
+                  <div
+                    key={address.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleSelectAddress(address)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleSelectAddress(address);
+                      }
+                    }}
+                    style={{
+                      width: "100%",
+                      textAlign: "left",
+                      border: `1px solid ${
+                        isSelected ? palette.selectedBorder : palette.border
+                      }`,
+                      background: isSelected
+                        ? palette.listCardSelectedBg
+                        : palette.listCardBg,
+                      borderRadius: "12px",
+                      padding: isMobile ? "12px" : "14px 16px",
+                      cursor: "pointer",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: "12px",
+                        alignItems: "flex-start",
+                        flexDirection: isMobile ? "column" : "row",
+                      }}
+                    >
+                      <div style={{ minWidth: 0, display: "flex", gap: "10px", width: "100%" }}>
+                        <div
+                          style={{
+                            width: "16px",
+                            height: "16px",
+                            borderRadius: "999px",
+                            border: `1.5px solid ${
+                              isSelected ? resolvedAccent : palette.radioBorder
+                            }`,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            marginTop: "2px",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {isSelected ? (
+                            <div
+                              style={{
+                                width: "8px",
+                                height: "8px",
+                                borderRadius: "999px",
+                                background: resolvedAccent,
+                              }}
+                            />
+                          ) : null}
+                        </div>
+
+                        <div style={{ minWidth: 0, width: "100%" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              flexWrap: "wrap",
+                              marginBottom: "6px",
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: "11px",
+                                fontWeight: 600,
+                                color: resolvedAccent,
+                              }}
+                            >
+                              {address.label || "Home"}
+                            </span>
+
+                            {address.isDefault ? (
+                              <span
+                                style={{
+                                  fontSize: "10px",
+                                  fontWeight: 700,
+                                  color: resolvedAccent,
+                                  background: palette.defaultBadgeBg,
+                                  borderRadius: "999px",
+                                  padding: "3px 8px",
+                                }}
+                              >
+                                Default
+                              </span>
+                            ) : null}
+                          </div>
+
+                          <div
+                            style={{
+                              fontSize: isMobile ? "15px" : "16px",
+                              fontWeight: 700,
+                              color: palette.text,
+                              marginBottom: "4px",
+                            }}
+                          >
+                            {address.fullName}
+                          </div>
+
+                          <div
+                            style={{
+                              fontSize: "13px",
+                              lineHeight: 1.6,
+                              color: palette.textMuted,
+                              wordBreak: "break-word",
+                            }}
+                          >
+                            <div>{address.phone}</div>
+                            <div>{address.address}</div>
+                            <div>
+                              {address.city}, {address.pincode}
+                            </div>
+                            <div>{address.email}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEdit(address);
+                        }}
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          color: palette.editText,
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          padding: 0,
+                          flexShrink: 0,
+                          alignSelf: isMobile ? "flex-end" : "flex-start",
+                        }}
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div
+                style={{
+                  borderRadius: "12px",
+                  border: `1px dashed ${palette.emptyStateBorder}`,
+                  background: palette.emptyStateBg,
+                  padding: isMobile ? "16px" : "20px",
+                }}
+              >
+                <h4
+                  style={{
+                    margin: "0 0 6px",
+                    fontSize: "15px",
+                    fontWeight: 700,
+                    color: palette.text,
+                  }}
+                >
+                  No address saved
+                </h4>
+
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "13px",
+                    lineHeight: 1.6,
+                    color: palette.textMuted,
+                  }}
+                >
+                  {isAuthenticated
+                    ? "Add your first delivery address to continue."
+                    : "Please sign in or signup to continue shopping."}
+                </p>
+              </div>
+            )}
           </div>
 
-          <div>
-            <label htmlFor="delivery-address" style={labelStyle}>
-              Address
-            </label>
-            <textarea
-              id="delivery-address"
-              name="address"
-              placeholder="House no, street, area"
-              rows={compact ? 3 : 4}
+          {showForm ? (
+            <div
               style={{
-                ...fieldStyle,
-                resize: "vertical",
-                minHeight: compact ? "84px" : "100px",
-                paddingTop: "12px",
+                minWidth: 0,
+                overflow: "hidden",
               }}
-            />
-          </div>
+            >
+              <div
+                style={{
+                  minWidth: 0,
+                  border: `1px solid ${palette.border}`,
+                  borderRadius: "12px",
+                  background: palette.panelBg,
+                  padding: isMobile ? "14px" : "16px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: isMobile ? "stretch" : "flex-start",
+                    justifyContent: "space-between",
+                    gap: "12px",
+                    marginBottom: "14px",
+                    flexDirection: isMobile ? "column" : "row",
+                  }}
+                >
+                  <div>
+                    <h4
+                      style={{
+                        margin: "0 0 4px",
+                        fontSize: "18px",
+                        fontWeight: 700,
+                        color: palette.text,
+                      }}
+                    >
+                      {formMode === "edit" ? "Edit Address" : "Add New Address"}
+                    </h4>
 
-          <div
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "12px",
+                        lineHeight: 1.5,
+                        color: palette.textMuted,
+                      }}
+                    >
+                      Fill in the details below
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleCloseForm}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      color: palette.textMuted,
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      padding: 0,
+                      alignSelf: isMobile ? "flex-end" : "auto",
+                    }}
+                  >
+                    Close
+                  </button>
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleSaveAddress();
+                  }}
+                  style={{
+                    display: "grid",
+                    gap: "12px",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: isMobile
+                        ? "minmax(0, 1fr)"
+                        : "repeat(2, minmax(0, 1fr))",
+                      gap: "12px",
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <label htmlFor="delivery-full-name" style={labelStyle}>
+                        Full Name
+                      </label>
+                      <input
+                        id="delivery-full-name"
+                        value={draftAddress.fullName}
+                        onChange={handleDraftChange("fullName")}
+                        placeholder="Full name"
+                        style={inputBaseStyle}
+                      />
+                    </div>
+
+                    <div style={{ minWidth: 0 }}>
+                      <label htmlFor="delivery-phone" style={labelStyle}>
+                        Mobile Number
+                      </label>
+                      <input
+                        id="delivery-phone"
+                        value={draftAddress.phone}
+                        onChange={handleDraftChange("phone")}
+                        placeholder="+91 98765 43210"
+                        style={inputBaseStyle}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="delivery-address" style={labelStyle}>
+                      Address Line 1
+                    </label>
+                    <input
+                      id="delivery-address"
+                      value={draftAddress.address}
+                      onChange={handleDraftChange("address")}
+                      placeholder="House no, street, area"
+                      style={inputBaseStyle}
+                    />
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: isMobile
+                        ? "minmax(0, 1fr)"
+                        : "repeat(2, minmax(0, 1fr))",
+                      gap: "12px",
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <label htmlFor="delivery-city" style={labelStyle}>
+                        City
+                      </label>
+                      <input
+                        id="delivery-city"
+                        value={draftAddress.city}
+                        onChange={handleDraftChange("city")}
+                        placeholder="City"
+                        style={inputBaseStyle}
+                      />
+                    </div>
+
+                    <div style={{ minWidth: 0 }}>
+                      <label htmlFor="delivery-pincode" style={labelStyle}>
+                        Postal Code
+                      </label>
+                      <input
+                        id="delivery-pincode"
+                        value={draftAddress.pincode}
+                        onChange={handleDraftChange("pincode")}
+                        placeholder="Postal code"
+                        style={inputBaseStyle}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="delivery-email" style={labelStyle}>
+                      Email Address
+                    </label>
+                    <input
+                      id="delivery-email"
+                      value={draftAddress.email}
+                      onChange={handleDraftChange("email")}
+                      placeholder="Email address"
+                      style={inputBaseStyle}
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="delivery-label" style={labelStyle}>
+                      Address Type
+                    </label>
+                    <select
+                      id="delivery-label"
+                      value={draftAddress.label || "Home"}
+                      onChange={handleDraftChange("label")}
+                      style={inputBaseStyle}
+                    >
+                      <option value="Home">Home</option>
+                      <option value="Office">Office</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+
+                  <label
+                    htmlFor="delivery-default-address"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                      cursor: "pointer",
+                      userSelect: "none",
+                      marginTop: "2px",
+                    }}
+                  >
+                    <input
+                      id="delivery-default-address"
+                      type="checkbox"
+                      checked={Boolean(draftAddress.isDefault)}
+                      onChange={handleDraftChange("isDefault")}
+                      style={{
+                        width: "16px",
+                        height: "16px",
+                        accentColor: resolvedAccent,
+                        cursor: "pointer",
+                        margin: 0,
+                        flexShrink: 0,
+                      }}
+                    />
+                    <span
+                      style={{
+                        fontSize: "13px",
+                        color: palette.textMuted,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      Make this my default address
+                    </span>
+                  </label>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: "12px",
+                      marginTop: "6px",
+                      flexDirection: isMobile ? "column" : "row",
+                      alignItems: isMobile ? "stretch" : "center",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                      {isEditMode ? (
+                        <button
+                          type="button"
+                          onClick={handleDeleteAddress}
+                          disabled={isDeleting}
+                          style={{
+                            minHeight: "42px",
+                            borderRadius: "8px",
+                            border: "none",
+                            background: "transparent",
+                            color: palette.deleteText,
+                            padding: "0 4px",
+                            fontSize: "13px",
+                            fontWeight: 700,
+                            cursor: isDeleting ? "not-allowed" : "pointer",
+                            width: isMobile ? "100%" : "auto",
+                            textAlign: isMobile ? "left" : "left",
+                            opacity: isDeleting ? 0.6 : 1,
+                          }}
+                        >
+                          {isDeleting ? "Deleting..." : "Delete"}
+                        </button>
+                      ) : (
+                        <div />
+                      )}
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "12px",
+                        flexDirection: isMobile ? "column-reverse" : "row",
+                        width: isMobile ? "100%" : "auto",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={handleCloseForm}
+                        style={{
+                          minHeight: "42px",
+                          borderRadius: "8px",
+                          border: `1px solid ${palette.secondaryButtonBorder}`,
+                          background: palette.secondaryButtonBg,
+                          color: palette.secondaryButtonText,
+                          padding: "0 16px",
+                          fontSize: "13px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          width: isMobile ? "100%" : "auto",
+                        }}
+                      >
+                        Cancel
+                      </button>
+
+                      <button
+                        type="submit"
+                        disabled={!isAddressValid(draftAddress) || isSaving}
+                        style={{
+                          minHeight: "42px",
+                          minWidth: isMobile ? "100%" : "140px",
+                          width: isMobile ? "100%" : "auto",
+                          borderRadius: "8px",
+                          border: "none",
+                          background:
+                            isAddressValid(draftAddress) && !isSaving
+                              ? palette.primaryButtonBg
+                              : palette.primaryButtonDisabledBg,
+                          color: palette.primaryButtonText,
+                          padding: "0 18px",
+                          fontSize: "13px",
+                          fontWeight: 700,
+                          cursor:
+                            isAddressValid(draftAddress) && !isSaving
+                              ? "pointer"
+                              : "not-allowed",
+                        }}
+                      >
+                        {isSaving
+                          ? "Saving..."
+                          : formMode === "edit"
+                          ? "Save Changes"
+                          : "Save Address"}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            marginTop: "16px",
+          }}
+        >
+          <button
+            type="button"
+            onClick={onContinue}
+            disabled={disableContinue}
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-              gap: "12px",
+              minHeight: "42px",
+              minWidth: isMobile ? "100%" : "120px",
+              width: isMobile ? "100%" : "auto",
+              borderRadius: "8px",
+              border: "none",
+              background: disableContinue
+                ? palette.primaryButtonDisabledBg
+                : palette.primaryButtonBg,
+              color: palette.primaryButtonText,
+              padding: "0 18px",
+              fontSize: "13px",
+              fontWeight: 700,
+              cursor: disableContinue ? "not-allowed" : "pointer",
             }}
           >
-            <div style={{ minWidth: 0 }}>
-              <label htmlFor="delivery-city" style={labelStyle}>
-                City
-              </label>
-              <input id="delivery-city" name="city" placeholder="City" style={fieldStyle} />
-            </div>
-
-            <div style={{ minWidth: 0 }}>
-              <label htmlFor="delivery-pincode" style={labelStyle}>
-                Pincode
-              </label>
-              <input
-                id="delivery-pincode"
-                name="pincode"
-                placeholder="Pincode"
-                style={fieldStyle}
-              />
-            </div>
-          </div>
-        </form>
+            Continue
+          </button>
+        </div>
       </div>
 
       <style>
@@ -378,9 +1322,19 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
           }
 
           input:focus,
-          textarea:focus {
+          textarea:focus,
+          select:focus {
             border-color: ${resolvedAccent};
             box-shadow: ${palette.accentRing};
+          }
+
+          @media (max-width: 767px) {
+            select,
+            input,
+            textarea,
+            button {
+              font-size: 16px !important;
+            }
           }
         `}
       </style>
