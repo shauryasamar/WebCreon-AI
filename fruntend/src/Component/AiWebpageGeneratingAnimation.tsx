@@ -138,7 +138,7 @@ export const AiWebpageGeneratingAnimation: React.FC<AiWebpageGeneratingAnimation
           <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#f59e0b" }} />
           <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#10b981" }} />
           <span style={{ marginLeft: "6px", fontSize: "11px", color: subtextColor, fontWeight: 600 }}>
-            WebNirmaan AI Engine
+            WebCreon AI Engine
           </span>
         </div>
 

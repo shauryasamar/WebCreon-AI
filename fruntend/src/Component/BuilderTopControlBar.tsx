@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import WebNirmaanAnimatedLogo from "./WebNirmaanAnimatedLogo";
+import WebCreonAnimatedLogo from "./WebCreonAnimatedLogo";
 import { UserAvatar } from "./UserAvatar";
 
 type BuilderTopControlBarProps = {
@@ -75,11 +75,11 @@ export default function BuilderTopControlBar({
             flexShrink: 0,
           }}
         >
-          <WebNirmaanAnimatedLogo staticMode showText={false} />
+          <WebCreonAnimatedLogo staticMode showText={false} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <span style={{ fontSize: "14px", fontWeight: 900, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-            <span style={{ color: "#0f62ab" }}>WEB</span><span style={{ color: "#ffaa00" }}>NIRMAAN</span>
+            <span style={{ color: "#0f62ab" }}>WEB</span><span style={{ color: "#ffaa00" }}>CREON</span>
           </span>
           {siteName ? (
             <>

@@ -1,5 +1,5 @@
 """
-WebNirmaan AI - Store Co-Pilot LangGraph Orchestrator
+Webcreon AI - Store Co-Pilot LangGraph Orchestrator
 Master router using LangGraph StateGraph to coordinate specialized sub-agents.
 """
 
@@ -105,7 +105,7 @@ async def router_node(state: CoPilotGraphState) -> Dict[str, Any]:
 
     # 2. Semantic Intent Router with Few-Shot Disambiguation
     router_prompt = ChatPromptTemplate.from_messages([
-        ("system", """You are WebNirmaan AI's Master Store Co-Pilot Intent Router.
+        ("system", """You are WebCreon AI's Master Store Co-Pilot Intent Router.
 Your job is to semantically analyze the user prompt and conversation history, and classify it into EXACTLY ONE primary intent with extracted slots.
 
 INTENTS:
@@ -139,7 +139,7 @@ INTENTS:
 4. 'SEO_HEALTH': Store health audits, inventory restock checks, checking for missing product descriptions, or catalog completeness.
    - Examples: "check low stock inventory", "audit store health", "check if any products have missing description", "any missing images?".
 
-5. 'KNOWLEDGE': Questions about how to use WebNirmaan platform features, or how to update products, descriptions, prices, and store settings.
+5. 'KNOWLEDGE': Questions about how to use WebCreon platform features, or how to update products, descriptions, prices, and store settings.
    - Examples: "can we update chocolate cake description?", "how do I add a new product?", "how to change payment gateway?".
 
 6. 'CHAT': Greetings ("hi", "hello"), pleasantries, or general conversations.

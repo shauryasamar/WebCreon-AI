@@ -72,7 +72,7 @@ function titleForDrawer(key: ControlItemKey | null) {
     case "saved-sites":
       return "Saved Sites";
     case "chat":
-      return "WebNirmaan Co-Pilot";
+      return "WebCreon Co-Pilot";
     case "admin-panel":
       return "Store Control";
     case "assets":

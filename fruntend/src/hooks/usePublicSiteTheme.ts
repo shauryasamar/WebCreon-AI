@@ -4,6 +4,10 @@ import { API_BASE_URL } from "../config/api";
 export type PublicSiteData = {
   siteName: string;
   logo?: string;
+  navbar?: {
+    brandName?: string;
+    logoUrl?: string;
+  };
   theme: {
     mode?: "light" | "dark";
     primary_bg?: string;
@@ -58,14 +62,41 @@ export function getContrastTextColor(bgColor?: string, fallback: string = "#0f17
   return yiq >= 135 ? "#0f172a" : "#ffffff";
 }
 
+const siteThemeMemoryCache = new Map<string, PublicSiteData>();
+
+function getInitialCachedTheme(slug?: string): PublicSiteData | null {
+  if (!slug) return null;
+  if (siteThemeMemoryCache.has(slug)) {
+    return siteThemeMemoryCache.get(slug)!;
+  }
+  try {
+    const raw = sessionStorage.getItem(`wc_site_theme_${slug}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.siteName) {
+        siteThemeMemoryCache.set(slug, parsed);
+        return parsed;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 export function usePublicSiteTheme(slug?: string) {
-  const [siteData, setSiteData] = useState<PublicSiteData | null>(null);
-  const [loadingSite, setLoadingSite] = useState<boolean>(!!slug);
+  const [siteData, setSiteData] = useState<PublicSiteData | null>(() => getInitialCachedTheme(slug));
+  const [loadingSite, setLoadingSite] = useState<boolean>(() => !getInitialCachedTheme(slug) && !!slug);
 
   useEffect(() => {
     if (!slug) {
       setLoadingSite(false);
       return;
+    }
+
+    const cached = getInitialCachedTheme(slug);
+    if (cached) {
+      setSiteData(cached);
     }
 
     let isMounted = true;
@@ -93,18 +124,37 @@ export function usePublicSiteTheme(slug?: string) {
 
         const themeObj = def.theme || {};
 
+        const navbarObj = def.navbar || def.header || {};
+        const extractedBrandName = navbarObj.brandName || navbarObj.brand_name || rawName || "";
+
+        const finalSiteData: PublicSiteData = {
+          siteName: formattedName,
+          logo: extractedLogo,
+          navbar: {
+            brandName: extractedBrandName,
+            logoUrl: extractedLogo,
+          },
+          theme: themeObj,
+        };
+
+        siteThemeMemoryCache.set(slug, finalSiteData);
+        try {
+          sessionStorage.setItem(`wc_site_theme_${slug}`, JSON.stringify(finalSiteData));
+        } catch {
+          // ignore
+        }
+
         if (isMounted) {
-          setSiteData({
-            siteName: formattedName,
-            logo: extractedLogo,
-            theme: themeObj,
-          });
+          setSiteData(finalSiteData);
         }
       } catch (err) {
         console.error("Failed to load public site theme:", err);
-        if (isMounted) {
+        if (isMounted && !siteData) {
           setSiteData({
             siteName: cleanSiteName("", slug),
+            navbar: {
+              brandName: cleanSiteName("", slug),
+            },
             theme: {},
           });
         }

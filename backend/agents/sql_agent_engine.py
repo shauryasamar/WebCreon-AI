@@ -1,5 +1,5 @@
 """
-WebNirmaan AI - Dynamic Safe SQL Intelligence Engine
+Webcreon AI - Text-to-SQL Dynamic Query Engine
 Translates arbitrary natural language store queries into safe, read-only,
 tenant-isolated PostgreSQL queries against store tables.
 """
@@ -128,7 +128,7 @@ class GeneratedSQL(BaseModel):
 
 
 sql_prompt = ChatPromptTemplate.from_messages([
-    ("system", f"""You are WebNirmaan AI's PostgreSQL Text-to-SQL Engineer.
+    ("system", f"""You are WebCreon AI's PostgreSQL Text-to-SQL Engineer.
 Your job is to generate a high-precision, read-only PostgreSQL SELECT query to answer the user's question.
 
 DATABASE SCHEMA:

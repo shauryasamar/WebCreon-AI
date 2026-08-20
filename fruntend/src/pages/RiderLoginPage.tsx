@@ -375,7 +375,7 @@ export default function RiderLoginPage() {
             fontWeight: 500,
           }}
         >
-          Powered by <span style={{ fontWeight: 700, color: "#475569" }}>WebNirmaan</span>
+          Powered by <span style={{ fontWeight: 700, color: "#475569" }}>WebCreon</span>
         </div>
       </div>
     </div>

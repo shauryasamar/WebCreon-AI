@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from copy import deepcopy
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
@@ -8,10 +9,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy.orm.attributes import flag_modified
 from sqlmodel import Session, delete, func, select
 
 from auth_middleware import authenticate_admin, authenticate_customer, enforce_site_ownership
 from db.database import get_session
+
+logger = logging.getLogger(__name__)
 from models import (
     Cart,
     CartItem,
@@ -238,16 +242,21 @@ def serialize_shipment(shipment: Optional[Shipment], order_status: Optional[str]
                 "date": dt_del,
             })
 
+    # Rider privacy: Only expose live direct rider name and phone when shipment is actively out for delivery
+    is_active_ofd = (effective_status == "out_for_delivery")
+    public_delivery_partner_name = delivery_partner_name if is_active_ofd else None
+    public_delivery_partner_phone = delivery_partner_phone if is_active_ofd else None
+
     return {
         "id": str(shipment.id),
         "status": effective_status,
         "mode": getattr(shipment, "delivery_mode", "manual"),
         "delivery_mode": getattr(shipment, "delivery_mode", "manual"),
-        "agent_id": agent_id_str,
-        "agent_token": agent_token,
-        "delivery_partner_name": delivery_partner_name,
-        "delivery_partner_phone": delivery_partner_phone,
-        "vehicle_type": vehicle_type,
+        "agent_id": agent_id_str if is_active_ofd else None,
+        "agent_token": agent_token if is_active_ofd else None,
+        "delivery_partner_name": public_delivery_partner_name,
+        "delivery_partner_phone": public_delivery_partner_phone,
+        "vehicle_type": vehicle_type if is_active_ofd else None,
         "courier_name": getattr(shipment, "courier_name", None),
         "awb_number": getattr(shipment, "awb_number", None),
         "tracking_url": getattr(shipment, "tracking_url", None),
@@ -2132,9 +2141,10 @@ def cancel_my_order(
                             if getattr(sh, "awb_number", None):
                                 ShiprocketClient.cancel_shipment_by_awb(sr_token, [sh.awb_number])
                 except Exception as sr_err:
-                    print(f"Shiprocket order cancellation error (non-fatal): {sr_err}")
+                    logger.warning("Shiprocket order cancellation error (non-fatal): %s", sr_err)
 
         # If order was paid online, initiate refund and update ledger
+        refund_succeeded = False
         if getattr(order, "payment_status", None) == "paid":
             if order.razorpay_payment_id and not order.razorpay_payment_id.startswith("pay_mock_"):
                 try:
@@ -2153,16 +2163,22 @@ def cancel_my_order(
                                 "created_at": refund_resp.get("created_at"),
                             }
                             order.pricing_snapshot = snapshot
+                            flag_modified(order, "pricing_snapshot")
+                            refund_succeeded = True
                 except Exception as rerr:
-                    print(f"Razorpay refund warning on customer cancellation: {rerr}")
+                    logger.error("Razorpay refund FAILED on customer cancellation for order %s: %s", order.id, rerr)
+                    refund_succeeded = False
+            else:
+                # Mock payment or no payment_id -- mark as refunded directly
+                refund_succeeded = True
 
-            order.payment_status = "refunded"
+            order.payment_status = "refunded" if refund_succeeded else "refund_pending"
 
             ledger_entry = session.exec(
                 select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
             ).first()
             if ledger_entry:
-                ledger_entry.status = "refunded"
+                ledger_entry.status = "refunded" if refund_succeeded else "refund_pending"
                 session.add(ledger_entry)
 
         session.add(order)

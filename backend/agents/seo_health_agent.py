@@ -1,5 +1,5 @@
 """
-WebNirmaan AI - SEO & Store Health Agent
+Webcreon AI - SEO & Store Health Agent
 Specialized agent for store health audits, low stock inventory alerts,
 and SEO metadata optimization recommendations.
 """

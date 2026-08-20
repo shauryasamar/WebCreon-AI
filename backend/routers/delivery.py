@@ -43,7 +43,16 @@ router = APIRouter(prefix="/delivery", tags=["delivery"])
 # Helpers & Security / Rate Limiting
 # ──────────────────────────────────────────────────────────────────────────────
 
-_DELIVERY_SECRET = os.getenv("DELIVERY_TOKEN_SECRET", "delivery-secret-fallback-please-change")
+_DELIVERY_SECRET_ENV = os.getenv("DELIVERY_TOKEN_SECRET", "").strip()
+if _DELIVERY_SECRET_ENV:
+    _DELIVERY_SECRET = _DELIVERY_SECRET_ENV
+else:
+    _DELIVERY_SECRET = secrets.token_hex(32)
+    logger.warning(
+        "DELIVERY_TOKEN_SECRET env var is NOT set. Using auto-generated random secret. "
+        "Agent PWA tokens will be invalidated on server restart. "
+        "Set DELIVERY_TOKEN_SECRET in your .env for persistent tokens."
+    )
 
 # Thread-safe in-memory rate limiter for rider login brute-force prevention
 _RIDER_LOGIN_ATTEMPTS: dict[str, list[float]] = {}
@@ -949,9 +958,10 @@ def _dispatch_shiprocket(
         courier_name = None
         kyc_needed = False
         try:
-            awb = ShiprocketClient.assign_awb(token, shipment_id_sr)
+            awb_result = ShiprocketClient.assign_awb(token, shipment_id_sr)
+            awb = awb_result["awb"]
+            courier_name = awb_result.get("courier_name")
             label_url = ShiprocketClient.get_label_url(token, shipment_id_sr)
-            courier_name = "Delhivery Surface"
         except Exception as awb_err:
             if "KYC" in str(awb_err):
                 kyc_needed = True
@@ -959,16 +969,31 @@ def _dispatch_shiprocket(
 
         # If AWB is pending or blocked by KYC during testing, provide a test AWB
         is_test_awb = False
+        test_awb_warning = None
         if not awb:
             is_test_awb = True
             awb = f"SR-DEL-{sr_order_id or shipment_id_sr or '984210'}"
             label_url = f"http://localhost:8000/delivery/labels/{order.id}"
-            courier_name = "Delhivery Surface (Test AWB)"
+            courier_name = "Test AWB (No Courier Assigned)"
+            test_awb_warning = (
+                "WARNING: This is a TEST AWB. The package will NOT ship via any courier. "
+                "Complete KYC verification on your Shiprocket dashboard to get a live AWB."
+                if kyc_needed else
+                "WARNING: This is a TEST AWB. AWB assignment failed. Check Shiprocket dashboard for details."
+            )
         elif not label_url:
             label_url = f"http://localhost:8000/delivery/labels/{order.id}"
 
+        if not courier_name:
+            courier_name = "Courier Pending"
+
         # Build tracking URL
         tracking_url = f"https://shiprocket.co/tracking/{awb}"
+
+        # Build shipment notes with test AWB warning if applicable
+        shipment_notes = None
+        if is_test_awb and test_awb_warning:
+            shipment_notes = f"[{test_awb_warning}]"
 
         # Save shipment record
         shipment = Shipment(
@@ -980,9 +1005,10 @@ def _dispatch_shiprocket(
             awb_number=awb,
             label_url=label_url,
             tracking_url=tracking_url,
-            courier_name=courier_name or "Delhivery Surface",
+            courier_name=courier_name,
             shipped_at=_utc_now(),
             estimated_delivery_at=_utc_now() + timedelta(days=3),
+            notes=shipment_notes,
         )
         session.add(shipment)
 
@@ -1000,15 +1026,20 @@ def _dispatch_shiprocket(
             else "Order created on Shiprocket! (Test AWB assigned for testing. Complete 1-min KYC on Shiprocket dashboard for live carrier booking)."
         )
 
-        return {
+        response = {
             "shipment_id": str(shipment.id),
             "mode": "shiprocket",
             "status": shipment.status,
             "awb_number": awb,
             "label_url": label_url,
             "tracking_url": tracking_url,
+            "courier_name": courier_name,
             "message": msg,
+            "is_test_awb": is_test_awb,
         }
+        if test_awb_warning:
+            response["warning"] = test_awb_warning
+        return response
 
     except Exception as exc:
         logger.error("Shiprocket dispatch error: %s", exc, exc_info=True)
@@ -1360,19 +1391,25 @@ def track_order(
                     "location": (order.shipping_address or {}).get("city") or "Destination City",
                 })
 
+    current_status = (shipment.status if shipment else order.status) or "placed"
+    # Rider privacy: Only expose direct rider name and phone when order is actively out for delivery
+    is_active_ofd = (current_status == "out_for_delivery")
+    public_agent_name = agent_name if is_active_ofd else None
+    public_agent_phone = agent_phone if is_active_ofd else None
+
     return {
         "order_id": str(order.id),
         "mode": shipment.mode if shipment else "manual",
-        "status": shipment.status if shipment else order.status,
+        "status": current_status,
         "courier_name": shipment.courier_name if (shipment and is_shiprocket) else None,
-        "delivery_partner_name": agent_name,
-        "delivery_partner_phone": agent_phone,
-        "vehicle_type": vehicle_type,
+        "delivery_partner_name": public_agent_name,
+        "delivery_partner_phone": public_agent_phone,
+        "vehicle_type": vehicle_type if is_active_ofd else None,
         "awb_number": shipment.awb_number if shipment else None,
         "tracking_url": shipment.tracking_url if shipment else None,
-        "agent_first_name": agent_name.split()[0] if agent_name else None,
-        "agent_name": agent_name,
-        "agent_phone": agent_phone,
+        "agent_first_name": public_agent_name.split()[0] if public_agent_name else None,
+        "agent_name": public_agent_name,
+        "agent_phone": public_agent_phone,
         "estimated_delivery_at": shipment.estimated_delivery_at.isoformat() if shipment and shipment.estimated_delivery_at else None,
         "shipped_at": (shipment.shipped_at or order.shipped_at).isoformat() if (shipment and shipment.shipped_at) or order.shipped_at else None,
         "out_for_delivery_at": shipment.out_for_delivery_at.isoformat() if shipment and shipment.out_for_delivery_at else None,
@@ -1754,6 +1791,26 @@ async def shiprocket_webhook(
         select(Shipment).where(Shipment.awb_number == awb)
     ).first()
     if not shipment:
+        from models import ReturnRequest
+        returns = session.exec(select(ReturnRequest)).all()
+        matching_return = None
+        for r in returns:
+            pd = r.pickup_details or {}
+            if (
+                pd.get("awb_number") == awb
+                or pd.get("tracking_number") == awb
+                or str(pd.get("shiprocket_shipment_id")) == str(payload.get("shipment_id") or "")
+            ):
+                matching_return = r
+                break
+        if matching_return:
+            if "picked up" in sr_status or "in transit" in sr_status:
+                matching_return.pickup_status = "picked_up"
+            elif "delivered" in sr_status:
+                matching_return.pickup_status = "delivered_to_warehouse"
+            matching_return.updated_at = _utc_now()
+            session.add(matching_return)
+            session.commit()
         return {"ok": True}
 
     now = _utc_now()
@@ -2187,12 +2244,26 @@ def get_available_pickup_pool(
         existing_active = session.exec(
             select(Shipment).where(
                 Shipment.order_id == o.id,
-                Shipment.agent_id != None,
                 Shipment.status.not_in(["failed", "cancelled"]),
             )
         ).first()
         if existing_active:
-            continue
+            # 1. If assigned to an agent already, skip
+            if existing_active.agent_id is not None:
+                continue
+            # 2. If assigned to Shiprocket or has AWB number, skip
+            is_sr = (
+                getattr(existing_active, "delivery_mode", None) == "shiprocket"
+                or getattr(existing_active, "mode", None) == "shiprocket"
+                or bool(getattr(existing_active, "awb_number", None))
+            )
+            # 3. If manual external courier, skip
+            is_manual = (
+                getattr(existing_active, "delivery_mode", None) == "manual"
+                or getattr(existing_active, "mode", None) == "manual"
+            )
+            if is_sr or is_manual:
+                continue
 
         shipping_addr = o.shipping_address or {}
         items = session.exec(select(OrderItem).where(OrderItem.order_id == o.id)).all()
@@ -2251,9 +2322,7 @@ def rider_claim_order(
     if order.status != "shipped":
         raise HTTPException(400, "Order is not ready for delivery (must be marked shipped by admin first).")
 
-    # FIX: Race condition mitigation — re-fetch the shipment inside the transaction
-    # and re-validate that no other rider has claimed it in the window between
-    # the pool listing and this claim request.
+    # Race condition mitigation & courier validation
     existing_shipment = session.exec(
         select(Shipment).where(
             Shipment.order_id == order_id,
@@ -2261,13 +2330,26 @@ def rider_claim_order(
         )
     ).first()
 
-    if (
-        existing_shipment
-        and existing_shipment.agent_id
-        and existing_shipment.agent_id != agent_id
-        and existing_shipment.status not in ["failed", "cancelled"]
-    ):
-        raise HTTPException(400, "Order has already been claimed by another rider")
+    if existing_shipment:
+        is_sr = (
+            getattr(existing_shipment, "delivery_mode", None) == "shiprocket"
+            or getattr(existing_shipment, "mode", None) == "shiprocket"
+            or bool(getattr(existing_shipment, "awb_number", None))
+        )
+        is_manual = (
+            getattr(existing_shipment, "delivery_mode", None) == "manual"
+            or getattr(existing_shipment, "mode", None) == "manual"
+        )
+        if is_sr:
+            raise HTTPException(400, "This order is assigned to third-party courier (Shiprocket) and cannot be claimed by local riders.")
+        if is_manual:
+            raise HTTPException(400, "This order is assigned to manual courier dispatch and cannot be claimed by local riders.")
+        if (
+            existing_shipment.agent_id
+            and existing_shipment.agent_id != agent_id
+            and existing_shipment.status not in ["failed", "cancelled"]
+        ):
+            raise HTTPException(400, "Order has already been claimed by another rider")
 
     now = _utc_now()
     if existing_shipment:

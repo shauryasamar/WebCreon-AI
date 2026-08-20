@@ -1,3 +1,4 @@
+import logging
 import re
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -13,6 +14,7 @@ from auth_middleware import authenticate_admin, authenticate_customer, enforce_s
 from db.database import get_session
 from models import (
     DeliveryAgent,
+    DeliverySettings,
     InventoryMovement,
     Order,
     OrderItem,
@@ -23,6 +25,8 @@ from models import (
     TenantLedgerEntry,
     User,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/returns", tags=["returns"])
 
@@ -1154,19 +1158,133 @@ def dispatch_return_pickup(
         history_note = f"Assigned return pickup to rider {agent.name} ({agent.phone})"
 
     elif mode == "shiprocket":
-        courier_name = payload.courier_name or "Shiprocket Auto Courier"
-        tracking_num = payload.tracking_number or f"SR-RET-{str(uuid4())[:8].upper()}"
+        settings = session.exec(select(DeliverySettings).where(DeliverySettings.site_id == site_id)).first()
+        if not settings or not settings.shiprocket_email or not settings.shiprocket_password_encrypted:
+            raise HTTPException(
+                status_code=400,
+                detail="Shiprocket credentials not configured. Please configure your Shiprocket account in Delivery Settings."
+            )
+
+        from routers.delivery import _get_or_refresh_shiprocket_token
+        from services.shiprocket import ShiprocketClient, ShiprocketError
+
+        token = _get_or_refresh_shiprocket_token(settings, session)
+
+        order = get_order_or_404(session, site_id, return_request.order_id)
+        items = session.exec(
+            select(ReturnItem)
+            .where(ReturnItem.return_request_id == return_request.id)
+            .order_by(ReturnItem.created_at.asc())
+        ).all()
+
+        shipping_addr = order.shipping_address or {}
+        raw_pickup_phone = str(shipping_addr.get("mobileNumber") or shipping_addr.get("mobile_number") or "9999999999").replace("+91", "").strip()
+        if len(raw_pickup_phone) > 10 and raw_pickup_phone.startswith("91"):
+            raw_pickup_phone = raw_pickup_phone[2:]
+        pickup_phone = raw_pickup_phone if raw_pickup_phone else "9999999999"
+
+        raw_merchant_phone = str(settings.sender_phone or "9999999999").replace("+91", "").strip()
+        if len(raw_merchant_phone) > 10 and raw_merchant_phone.startswith("91"):
+            raw_merchant_phone = raw_merchant_phone[2:]
+        merchant_phone = raw_merchant_phone if raw_merchant_phone else "9999999999"
+
+        pickup_customer = {
+            "name": shipping_addr.get("fullName") or shipping_addr.get("full_name") or "Customer",
+            "last_name": "",
+            "address": shipping_addr.get("addressLine1") or shipping_addr.get("address_line1") or "Customer Address",
+            "address_2": shipping_addr.get("addressLine2") or shipping_addr.get("address_line2") or "",
+            "city": shipping_addr.get("city") or "Bangalore",
+            "state": shipping_addr.get("state") or shipping_addr.get("city") or "Karnataka",
+            "country": "India",
+            "pincode": str(shipping_addr.get("postalCode") or shipping_addr.get("postal_code") or "560001"),
+            "email": shipping_addr.get("email") or "customer@example.com",
+            "phone": pickup_phone,
+        }
+
+        shipping_merchant = {
+            "name": settings.sender_name or "Store Merchant",
+            "last_name": "",
+            "address": settings.sender_address or "Merchant Warehouse Address",
+            "address_2": "",
+            "city": settings.sender_city or "Bangalore",
+            "state": settings.sender_state or "Karnataka",
+            "country": "India",
+            "pincode": str(settings.sender_pincode or "560001"),
+            "email": settings.shiprocket_email or "store@example.com",
+            "phone": merchant_phone,
+        }
+
+        sr_items = []
+        if items:
+            for it in items:
+                sr_items.append({
+                    "name": it.product_name or "Return Item",
+                    "sku": str(it.product_id or "SKU")[:30],
+                    "units": int(it.quantity_requested or it.quantity_approved or 1),
+                    "selling_price": float(it.unit_price_paid or 10.0),
+                    "discount": 0,
+                    "qc_enable": False,
+                })
+        else:
+            sr_items.append({
+                "name": "Returned Goods",
+                "sku": f"RET-SKU-{str(return_request.id)[:8]}",
+                "units": 1,
+                "selling_price": float(return_request.suggested_refund_amount or 10.0),
+                "discount": 0,
+                "qc_enable": False,
+            })
+
+        pkg_weight_kg = (float(payload.package_weight_grams) / 1000.0) if payload.package_weight_grams else 0.5
+        pkg_weight_kg = max(0.1, round(pkg_weight_kg, 2))
+
+        order_date_str = (return_request.created_at or now).strftime("%Y-%m-%d %H:%M")
+        sr_payload = ShiprocketClient.build_return_order_payload(
+            order_id=f"RET-{str(order.id)[:8].upper()}-{str(return_request.id)[:4].upper()}",
+            order_date=order_date_str,
+            pickup_customer=pickup_customer,
+            shipping_merchant=shipping_merchant,
+            items=sr_items,
+            payment_method="PREPAID",
+            sub_total=float(return_request.suggested_refund_amount or 0.0),
+            weight=pkg_weight_kg,
+        )
+
+        try:
+            sr_return_data = ShiprocketClient.create_return_order(token, sr_payload)
+        except ShiprocketError as err:
+            raise HTTPException(status_code=400, detail=f"Shiprocket Return Order Creation Failed: {str(err)}")
+
+        sr_order_id = sr_return_data.get("order_id")
+        sr_shipment_id = sr_return_data.get("shipment_id")
+        awb_code = sr_return_data.get("awb_code") or sr_return_data.get("awb")
+        courier_name = payload.courier_name or sr_return_data.get("courier_name") or sr_return_data.get("company_name") or "Shiprocket Reverse Logistics"
+
+        if sr_shipment_id and not awb_code:
+            try:
+                awb_info = ShiprocketClient.assign_awb(token, sr_shipment_id, is_return=True)
+                awb_code = awb_info.get("awb")
+                if awb_info.get("courier_name"):
+                    courier_name = awb_info["courier_name"]
+            except Exception as awb_err:
+                logger.warning("Shiprocket reverse AWB auto-assignment note: %s", awb_err)
+
+        tracking_num = awb_code or f"SR-RET-{sr_shipment_id or str(uuid4())[:8].upper()}"
+
         pickup_details.update({
             "mode": "shiprocket",
             "courier_name": courier_name,
             "tracking_number": tracking_num,
+            "shiprocket_order_id": sr_order_id,
+            "shiprocket_shipment_id": sr_shipment_id,
+            "awb_number": awb_code,
             "pickup_status": "booked",
             "pickup_notes": payload.pickup_notes,
-            "weight_grams": payload.package_weight_grams or 500,
+            "weight_grams": int(pkg_weight_kg * 1000),
             "assigned_at": now.isoformat(),
         })
         return_request.pickup_status = "booked"
-        history_note = f"Booked automated reverse courier pickup via {courier_name} (AWB: {tracking_num})"
+        history_note = f"Booked live reverse pickup with Shiprocket (Order ID: {sr_order_id}, AWB: {tracking_num})"
 
     elif mode == "manual":
         courier_name = payload.courier_name or "Manual Courier / Self Ship"

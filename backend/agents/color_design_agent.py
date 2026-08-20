@@ -1,5 +1,5 @@
 """
-WebNirmaan AI - Unified Master Color & Design Agent
+Webcreon AI - Unified Master Color & Design Agent
 Unified source of truth for color palette generation, WCAG AA accessibility contrast,
 component color patching, live block styling, whole-site theme matching, and AI palette suggestions.
 """

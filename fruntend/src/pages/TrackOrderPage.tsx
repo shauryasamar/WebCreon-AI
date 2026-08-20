@@ -410,7 +410,9 @@ export default function TrackOrderPage() {
                         items: (isOutForDelivery || isDelivered)
                           ? [
                               {
-                                text: `Your order is out for delivery with ${riderName || "Store Delivery Partner"}${riderPhone ? ` (${formatPhoneDisplay(riderPhone)})` : ""}.`,
+                                text: isOutForDelivery && !isDelivered
+                                  ? `Your order is out for delivery with ${riderName || "Store Delivery Partner"}${riderPhone ? ` (${formatPhoneDisplay(riderPhone)})` : ""}.`
+                                  : "Your order was out for delivery with store delivery partner.",
                                 sub: ofdTime,
                               },
                             ]

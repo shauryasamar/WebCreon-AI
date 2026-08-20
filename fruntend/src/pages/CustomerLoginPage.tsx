@@ -18,7 +18,7 @@ export default function CustomerLoginPage() {
   const location = useLocation();
   const { slug } = useParams<{ slug: string }>();
   const { login, loading: authLoading } = useCustomerAuth();
-  const { siteData } = usePublicSiteTheme(slug);
+  const { siteData, loadingSite } = usePublicSiteTheme(slug);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -42,7 +42,7 @@ export default function CustomerLoginPage() {
 
   const siteName = siteData?.siteName || cleanSiteName("", websiteName);
   const theme = siteData?.theme || {};
-  const isLight = theme.mode === "light";
+  const isLight = theme.mode !== "dark";
 
   const primaryBg = theme.primary_bg || (isLight ? "#f8fafc" : "#0f172a");
   const cardBg = theme.card_bg || theme.secondary_bg || (isLight ? "#ffffff" : "#1e293b");
@@ -78,13 +78,8 @@ export default function CustomerLoginPage() {
     event.preventDefault();
     setError("");
 
-    if (!websiteName) {
-      setError("Missing site slug");
-      return;
-    }
-
     if (!email.trim() || !password.trim()) {
-      setError("Email and password are required");
+      setError("Please enter both email and password.");
       return;
     }
 
@@ -93,18 +88,48 @@ export default function CustomerLoginPage() {
         email: email.trim(),
         password,
       });
-
       navigate(safeRedirect, { replace: true });
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Customer login failed";
-      setError(message);
+    } catch (err: any) {
+      setError(err?.message || "Invalid credentials or login failed.");
     }
   };
 
   const handleContinueAsGuest = () => {
     navigate(safeRedirect, { replace: true });
   };
+
+  if (loadingSite && !siteData) {
+    return (
+      <div
+        style={{
+          height: "100vh",
+          width: "100vw",
+          display: "grid",
+          placeItems: "center",
+          background: "#0b0f19",
+          color: "#94a3b8",
+          fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "14px" }}>
+          <div
+            style={{
+              width: "38px",
+              height: "38px",
+              borderRadius: "50%",
+              border: "3px solid rgba(255, 255, 255, 0.1)",
+              borderTopColor: "#3b82f6",
+              animation: "wcSpin 0.75s linear infinite",
+            }}
+          />
+          <span style={{ fontSize: "13px", fontWeight: 600, letterSpacing: "0.02em" }}>
+            Loading store...
+          </span>
+          <style>{`@keyframes wcSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -119,6 +144,7 @@ export default function CustomerLoginPage() {
         background: primaryBg,
         color: textColor,
         boxSizing: "border-box",
+        transition: "background-color 0.25s ease, color 0.25s ease",
       }}
     >
       <div
@@ -139,6 +165,7 @@ export default function CustomerLoginPage() {
           flexDirection: "column",
           justifyContent: "space-between",
           overflowY: "auto",
+          transition: "background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease",
         }}
       >
         {/* Header Section */}
@@ -363,7 +390,7 @@ export default function CustomerLoginPage() {
           </form>
         </div>
 
-        {/* Footer Links & WebNirmaan Badge */}
+        {/* Footer Links & Webcreon Badge */}
         <div>
           <p
             style={{
@@ -418,7 +445,7 @@ export default function CustomerLoginPage() {
                   WebkitTextFillColor: "transparent",
                 }}
               >
-                WebNirmaan AI
+                WebCreon AI
               </span>
             </a>
           </div>

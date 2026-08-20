@@ -784,7 +784,7 @@ function AdminSitesPage() {
                 Describe the website or storefront you want to build.
               </p>
               <p style={{ margin: 0, fontSize: "13px", color: "#94a3b8", maxWidth: "520px", lineHeight: 1.5 }}>
-                Specify your brand name, products, payment preferences, or color vibe, and WebNirmaan AI will guide you through building your custom store.
+                Specify your brand name, products, payment preferences, or color vibe, and WebCreon AI will guide you through building your custom store.
               </p>
             </div>
           ) : (

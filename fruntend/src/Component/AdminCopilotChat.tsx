@@ -382,7 +382,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
           <div style={{ margin: "auto", textAlign: "center", maxWidth: "260px", padding: "32px 0", display: "flex", flexDirection: "column", alignItems: "center" }}>
             <AiAvatar size={42} style={{ marginBottom: "12px" }} />
             <div style={{ fontSize: "14px", fontWeight: 700, color: chatText, marginBottom: "6px" }}>
-              WebNirmaan Co-Pilot
+              WebCreon Co-Pilot
             </div>
             <p style={{ fontSize: "12px", lineHeight: 1.5, margin: 0, color: chatMuted }}>
               Ask Co-Pilot to customize your live store design, manage orders & returns, or analyze store sales performance.

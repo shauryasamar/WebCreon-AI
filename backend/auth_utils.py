@@ -1,14 +1,27 @@
+import logging
 import os
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
+logger = logging.getLogger(__name__)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-JWT_SECRET = os.getenv("JWT_SECRET", "change-this-in-env")
+_JWT_SECRET_ENV = os.getenv("JWT_SECRET", "").strip()
+if _JWT_SECRET_ENV and _JWT_SECRET_ENV != "change-this-in-env":
+    JWT_SECRET = _JWT_SECRET_ENV
+else:
+    JWT_SECRET = secrets.token_hex(32)
+    logger.warning(
+        "JWT_SECRET env var is not securely configured. Using auto-generated random secret. "
+        "User sessions and tokens will be invalidated on server restart. "
+        "Please set a permanent JWT_SECRET in your .env file."
+    )
+
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ADMIN_TOKEN_EXPIRE_MINUTES = int(os.getenv("ADMIN_TOKEN_EXPIRE_MINUTES", "1440"))
 CUSTOMER_TOKEN_EXPIRE_MINUTES = int(os.getenv("CUSTOMER_TOKEN_EXPIRE_MINUTES", "1440"))

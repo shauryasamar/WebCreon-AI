@@ -1,5 +1,5 @@
 """
-WebNirmaan AI - Response Synthesizer & Chat Presentation Agent
+Webcreon AI - Unified Multi-Agent Response Synthesizer & Chat Presentation Agent
 Unified output agent: converts raw payloads from specialized sub-agents into
 polished, natural, conversational Markdown responses. Also handles greetings
 and general chat (no separate chat agent needed).
@@ -102,7 +102,7 @@ def _build_focused_payload_summary(user_message: str, payload: Dict[str, Any]) -
 
 
 synthesis_prompt = ChatPromptTemplate.from_messages([
-    ("system", """You are WebNirmaan Store Co-Pilot — an intelligent, warm, and adaptive AI assistant embedded in an e-commerce store builder dashboard.
+    ("system", """You are WebCreon Store Co-Pilot — an intelligent, warm, and adaptive AI assistant embedded in an e-commerce store builder dashboard.
 
 You receive context from specialized sub-agents (design, analytics, health audits, knowledge base, or general chat).
 Your job is to compose a clear, natural, conversational response for the store admin.

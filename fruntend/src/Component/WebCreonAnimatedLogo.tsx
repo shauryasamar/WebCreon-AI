@@ -1,18 +1,18 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 
-type WebNirmaanAnimatedLogoProps = {
+export type WebCreonAnimatedLogoProps = {
   width?: string | number;
   height?: string | number;
   showText?: boolean;
   staticMode?: boolean;
 };
 
-export default function WebNirmaanAnimatedLogo({
+export function WebCreonAnimatedLogo({
   width = "100%",
   height = "auto",
   showText = true,
   staticMode = false,
-}: WebNirmaanAnimatedLogoProps) {
+}: WebCreonAnimatedLogoProps) {
   const [key, setKey] = useState(0);
 
   const handleReplay = () => {
@@ -416,8 +416,8 @@ export default function WebNirmaanAnimatedLogo({
               alignItems: "center",
             }}
           >
-            <span style={{ color: "#0f62ab" }}>web</span>
-            <span style={{ color: "#ffaa00" }}>nirmaan</span>
+            <span style={{ color: "#0f62ab" }}>WEB</span>
+            <span style={{ color: "#ffaa00" }}>CREON</span>
           </div>
           <div
             style={{
@@ -436,3 +436,5 @@ export default function WebNirmaanAnimatedLogo({
     </div>
   );
 }
+
+export default WebCreonAnimatedLogo;

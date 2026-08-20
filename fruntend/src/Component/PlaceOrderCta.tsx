@@ -252,7 +252,7 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
         key: key_id,
         amount: amount,
         currency: currency || "INR",
-        name: "WebNirmaan Store",
+        name: "WebCreon Store",
         description: `Order #${order_id.slice(0, 8).toUpperCase()}`,
         order_id: razorpay_order_id.startsWith("order_mock_") ? undefined : razorpay_order_id,
         prefill: {

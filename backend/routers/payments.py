@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import os
+import threading
+import time
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Optional
@@ -67,6 +70,49 @@ router = APIRouter(
     tags=["payments"],
 )
 
+logger = logging.getLogger(__name__)
+
+# Thread-safe in-memory sliding window rate limiter for checkout/payment endpoints
+_CHECKOUT_RATE_LIMITS: dict[str, list[float]] = {}
+_CHECKOUT_RATE_LOCK = threading.Lock()
+
+
+def _get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+def check_checkout_rate_limit(
+    request: Request,
+    user_id: Optional[str] = None,
+    max_requests: int = 10,
+    window_sec: int = 60,
+) -> None:
+    """
+    Prevents checkout/payment order spam by restricting requests per IP/User within a sliding time window.
+    Default: max 10 checkout creations per 60 seconds per IP/User.
+    """
+    ip = _get_client_ip(request)
+    key = f"{ip}:{user_id or 'anon'}"
+    now_ts = time.time()
+
+    with _CHECKOUT_RATE_LOCK:
+        timestamps = [t for t in _CHECKOUT_RATE_LIMITS.get(key, []) if now_ts - t < window_sec]
+        if len(timestamps) >= max_requests:
+            retry_after = max(1, int(window_sec - (now_ts - timestamps[0])))
+            logger.warning("Checkout rate limit exceeded for key %s (attempts=%d)", key, len(timestamps))
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Too many checkout attempts. Please wait {retry_after} seconds before trying again.",
+                headers={"Retry-After": str(retry_after)},
+            )
+        timestamps.append(now_ts)
+        _CHECKOUT_RATE_LIMITS[key] = timestamps
+
 
 def get_razorpay_client() -> Optional[Any]:
     if not razorpay:
@@ -112,7 +158,7 @@ def sync_razorpay_linked_account(
     legal_name = bank_account.account_holder_name.strip()
     ifsc = bank_account.ifsc_code.strip().upper()
     admin = session.get(Admin, admin_id)
-    admin_email = admin.email if (admin and admin.email) else f"merchant_{site_id.hex[:8]}@webnirmaan.ai"
+    admin_email = admin.email if (admin and admin.email) else f"merchant_{site_id.hex[:8]}@webcreon.ai"
 
     if not rz_client:
         # Mock mode for testing / environments without live keys
@@ -164,7 +210,7 @@ def sync_razorpay_linked_account(
             bank_account.route_onboarded_at = now
             return acc_id, "active"
     except Exception as e:
-        print(f"[Razorpay Route Notice] Sub-merchant linked onboarding fallback: {e}")
+        logger.warning("Razorpay Route: Sub-merchant linked onboarding fallback: %s", e)
         # In test sandbox or standard key without Route feature flag, gracefully activate with mock account ID
         if not bank_account.razorpay_account_id:
             bank_account.razorpay_account_id = f"acc_mock_{uuid4().hex[:12]}"
@@ -203,9 +249,9 @@ def unhold_tenant_escrow_transfer(
             except Exception as e:
                 err_str = str(e).lower()
                 if "already" in err_str or "processed" in err_str:
-                    print(f"[Razorpay Escrow Notice] Transfer {ledger_entry.razorpay_transfer_id} already unheld: {e}")
+                    logger.info("Razorpay Escrow: Transfer %s already unheld: %s", ledger_entry.razorpay_transfer_id, e)
                 else:
-                    print(f"[Razorpay Escrow Notice] Unhold transfer {ledger_entry.razorpay_transfer_id}: {e}")
+                    logger.warning("Razorpay Escrow: Unhold transfer %s failed: %s", ledger_entry.razorpay_transfer_id, e)
 
     order.escrow_status = "unheld"
     order.escrow_unheld_at = now
@@ -348,9 +394,11 @@ class CreatePayoutRecordRequest(BaseModel):
 def create_payment_order(
     site_id: UUID,
     payload: CreatePaymentOrderRequest,
+    request: Request,
     user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
+    check_checkout_rate_limit(request, user.get("userId"), max_requests=10, window_sec=60)
     get_site_or_404(session, site_id)
 
     if str(site_id) != user["siteId"]:
@@ -479,7 +527,7 @@ def create_payment_order(
             except Exception as rz_err:
                 # If transfers failed because Route feature flag is not enabled on this specific Razorpay key, fallback gracefully
                 if transfers_payload:
-                    print(f"[Razorpay Route Notice] Order transfers fallback: {rz_err}")
+                    logger.warning("Razorpay Route: Order transfers fallback: %s", rz_err)
                     create_order_args.pop("transfers", None)
                     rzp_order = client.order.create(create_order_args)
                 else:
@@ -652,7 +700,7 @@ def finalize_order_fulfillment(
                     flag_modified(order, "pricing_snapshot")
                     order.payment_status = "refunded"
             except Exception as rferr:
-                print(f"Auto-refund error for oversold order {order.id}: {rferr}")
+                logger.error("Auto-refund error for oversold order %s: %s", order.id, rferr)
                 order.payment_status = "refund_pending"
         else:
             order.payment_status = "refunded"
@@ -802,9 +850,11 @@ def finalize_order_fulfillment(
 def verify_payment(
     site_id: UUID,
     payload: VerifyPaymentRequest,
+    request: Request,
     user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
+    check_checkout_rate_limit(request, user.get("userId"), max_requests=15, window_sec=60)
     get_site_or_404(session, site_id)
 
     if str(site_id) != user["siteId"]:
@@ -856,7 +906,7 @@ def verify_payment(
                         payment_id = p.get("id")
                         break
         except Exception as e:
-            print(f"Error fetching order payments from Razorpay: {e}")
+            logger.warning("Error fetching order payments from Razorpay: %s", e)
 
     # Verify signature if both are present
     key_secret = os.getenv("RAZORPAY_KEY_SECRET")
@@ -925,20 +975,33 @@ async def razorpay_webhook(
     session: Session = Depends(get_session),
 ):
     raw_body = await request.body()
-    webhook_secret = os.getenv("RAZORPAY_WEBHOOK_SECRET") or os.getenv("RAZORPAY_KEY_SECRET")
+    webhook_secret = (os.getenv("RAZORPAY_WEBHOOK_SECRET") or "").strip()
 
-    if webhook_secret and x_razorpay_signature:
-        expected_sig = hmac.new(
-            webhook_secret.strip().encode("utf-8"),
-            raw_body,
-            hashlib.sha256,
-        ).hexdigest()
+    # SECURITY: Reject webhooks entirely if no dedicated webhook secret is configured
+    if not webhook_secret:
+        logger.error("Razorpay webhook received but RAZORPAY_WEBHOOK_SECRET is not configured. Rejecting.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Webhook secret not configured on server",
+        )
 
-        if not hmac.compare_digest(expected_sig, x_razorpay_signature):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid webhook signature",
-            )
+    if not x_razorpay_signature:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing X-Razorpay-Signature header",
+        )
+
+    expected_sig = hmac.new(
+        webhook_secret.encode("utf-8"),
+        raw_body,
+        hashlib.sha256,
+    ).hexdigest()
+
+    if not hmac.compare_digest(expected_sig, x_razorpay_signature):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid webhook signature",
+        )
 
     try:
         import json
@@ -979,16 +1042,29 @@ async def razorpay_webhook(
 
     elif event_type in {"refund.created", "refund.processed", "refund.failed", "refund.speed_changed"}:
         refund_entity = event_payload.get("payload", {}).get("refund", {}).get("entity", {})
+
+        # Idempotency: skip if the same refund_id was already recorded
+        existing_refund_details = (order.pricing_snapshot or {}).get("refund_details") or {}
+        incoming_refund_id = refund_entity.get("id") if refund_entity else None
+        if (
+            incoming_refund_id
+            and existing_refund_details.get("refund_id") == incoming_refund_id
+            and order.payment_status in ("refunded", "refund_failed")
+        ):
+            logger.info("Webhook idempotency: refund %s already processed for order %s", incoming_refund_id, order.id)
+            return {"status": "ok_idempotent"}
+
         snapshot = dict(order.pricing_snapshot or {})
         if refund_entity:
             snapshot["refund_details"] = {
-                "refund_id": refund_entity.get("id") or (snapshot.get("refund_details") or {}).get("refund_id"),
+                "refund_id": refund_entity.get("id") or existing_refund_details.get("refund_id"),
                 "status": refund_entity.get("status", "processed"),
-                "arn": refund_entity.get("acquirer_data", {}).get("arn") if isinstance(refund_entity.get("acquirer_data"), dict) else (snapshot.get("refund_details") or {}).get("arn"),
+                "arn": refund_entity.get("acquirer_data", {}).get("arn") if isinstance(refund_entity.get("acquirer_data"), dict) else existing_refund_details.get("arn"),
                 "amount": (refund_entity.get("amount") or 0) / 100,
                 "created_at": refund_entity.get("created_at"),
             }
             order.pricing_snapshot = snapshot
+            flag_modified(order, "pricing_snapshot")
 
         if event_type == "refund.failed":
             order.payment_status = "refund_failed"
@@ -1028,7 +1104,7 @@ async def razorpay_webhook(
                     session.add(ledger)
                     session.commit()
             except Exception as e:
-                print(f"Error updating ledger on transfer webhook: {e}")
+                logger.error("Error updating ledger on transfer webhook: %s", e)
 
     return {"status": "ok"}
 
@@ -1078,7 +1154,7 @@ def reconcile_pending_orders(
                             reconciled_count += 1
                         break
         except Exception as e:
-            print(f"Error reconciling order {order.id}: {e}")
+            logger.error("Error reconciling order %s: %s", order.id, e)
 
     return {
         "status": "success",
@@ -1091,30 +1167,24 @@ def reconcile_pending_orders(
 # ADMIN BANK ACCOUNT & EARNINGS ENDPOINTS
 # ==========================================
 
-@router.post("/admin/{site_id}/release-mature-escrows")
-def release_mature_escrows(
-    site_id: UUID,
-    admin=Depends(authenticate_admin),
-    ownership=Depends(enforce_site_ownership),
-    session: Session = Depends(get_session),
-):
+def process_mature_escrows(session: Session, site_id: Optional[UUID] = None) -> tuple[int, Decimal]:
     """
-    Scans delivered orders where the 48-hour return window has elapsed without active return disputes,
-    and releases the held escrow transfers to the merchant bank account.
+    Releases held escrow transfers for delivered orders whose 48-hour return window has elapsed
+    without open returns/disputes. If site_id is None, processes across all sites.
     """
     now = utc_now()
     client = get_razorpay_client()
 
-    orders_to_release = session.exec(
-        select(Order).where(
-            Order.site_id == site_id,
-            Order.status == "delivered",
-            Order.escrow_status == "held",
-            Order.return_window_closes_at != None,
-            Order.return_window_closes_at <= now,
-        )
-    ).all()
+    query = select(Order).where(
+        Order.status == "delivered",
+        Order.escrow_status == "held",
+        Order.return_window_closes_at != None,
+        Order.return_window_closes_at <= now,
+    )
+    if site_id:
+        query = query.where(Order.site_id == site_id)
 
+    orders_to_release = session.exec(query).all()
     released_count = 0
     total_amount_released = Decimal("0.00")
 
@@ -1128,9 +1198,28 @@ def release_mature_escrows(
         ).all()
 
         if not open_returns:
-            unhold_tenant_escrow_transfer(order=order, session=session, client=client)
-            released_count += 1
-            total_amount_released += order.tenant_share
+            try:
+                unhold_tenant_escrow_transfer(order=order, session=session, client=client)
+                released_count += 1
+                total_amount_released += (order.tenant_share or Decimal("0.00"))
+            except Exception as e:
+                logger.error("Error releasing escrow for order %s: %s", order.id, e)
+
+    return released_count, total_amount_released
+
+
+@router.post("/admin/{site_id}/release-mature-escrows")
+def release_mature_escrows(
+    site_id: UUID,
+    admin=Depends(authenticate_admin),
+    ownership=Depends(enforce_site_ownership),
+    session: Session = Depends(get_session),
+):
+    """
+    Scans delivered orders where the 48-hour return window has elapsed without active return disputes,
+    and releases the held escrow transfers to the merchant bank account.
+    """
+    released_count, total_amount_released = process_mature_escrows(session, site_id=site_id)
 
     return {
         "message": f"Successfully released {released_count} mature escrow payout(s)",

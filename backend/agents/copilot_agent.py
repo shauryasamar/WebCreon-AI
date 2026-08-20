@@ -1,5 +1,5 @@
 """
-WebNirmaan AI Admin Co-Pilot Agent
+Webcreon AI Admin Co-Pilot Agent
 Entry point for the Co-Pilot chat pipeline.
 Delegates all processing to the LangGraph Multi-Agent Orchestrator.
 """

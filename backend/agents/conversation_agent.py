@@ -1,5 +1,5 @@
 """
-WebNirmaan AI - Store Onboarding Conversation Agent
+Webcreon AI - Store Onboarding Conversation Agent
 Manages multi-turn requirement gathering interview for new store creation.
 Designed with Senior Product Design & Agentic Architecture principles:
 1. Natural assimilation of store details in ANY order.
@@ -141,7 +141,7 @@ class AgentAnalysis(BaseModel):
 
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3, request_timeout=15, max_retries=2)
 
-analyzer_system = """You are WebNirmaan AI's Lead Designer assisting {admin_name}.
+analyzer_system = """You are WebCreon AI's Lead Designer assisting {admin_name}.
 
 GOAL: Conduct a natural design consultation to gather store requirements (brand name, product niche, colors, layout).
 

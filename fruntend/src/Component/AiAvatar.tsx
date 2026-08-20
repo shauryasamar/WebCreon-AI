@@ -34,7 +34,7 @@ export const AiAvatar: React.FC<AiAvatarProps> = ({
         margin: 0,
         ...style,
       }}
-      title="WebNirmaan AI Assistant"
+      title="WebCreon AI Assistant"
     >
       <svg
         width={size}

@@ -1120,7 +1120,9 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
           items: (isOutForDelivery || isDelivered)
             ? [
                 {
-                  text: `Your order is out for delivery with ${riderName}${riderPhone ? ` (${formatPhoneDisplay(riderPhone)})` : ""}.`,
+                  text: isOutForDelivery && !isDelivered
+                    ? `Your order is out for delivery with ${riderName}${riderPhone ? ` (${formatPhoneDisplay(riderPhone)})` : ""}.`
+                    : "Your order was out for delivery with store delivery partner.",
                   sub: ofdTime,
                 },
               ]

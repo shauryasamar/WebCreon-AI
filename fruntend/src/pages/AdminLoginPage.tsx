@@ -2,7 +2,7 @@ import { FormEvent, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { useAdminAuth } from "../context/AdminAuthContext";
-import WebNirmaanAnimatedLogo from "../Component/WebNirmaanAnimatedLogo";
+import WebCreonAnimatedLogo from "../Component/WebCreonAnimatedLogo";
 
 type LocationState = {
   from?: string;
@@ -119,7 +119,7 @@ export default function AdminLoginPage() {
           }}
         >
           <div style={{ width: "100%", maxWidth: "420px" }}>
-            <WebNirmaanAnimatedLogo showText={true} />
+            <WebCreonAnimatedLogo showText={true} />
           </div>
         </div>
 
@@ -180,7 +180,7 @@ export default function AdminLoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@webnirmaan.com"
+                  placeholder="admin@webcreon.com"
                   autoComplete="email"
                   required
                   style={{

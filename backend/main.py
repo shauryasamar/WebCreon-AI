@@ -1,4 +1,6 @@
+import asyncio
 import json
+import logging
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(usecwd=True))
@@ -25,7 +27,7 @@ from auth_middleware import (
     authenticate_customer,
     enforce_site_ownership,
 )
-from db.database import create_db_and_tables, get_session
+from db.database import create_db_and_tables, get_session, engine
 from models import (
     Admin, AdminSite, Site, Product, Category, Collection, Cart, CartItem, Order, OrderItem,
     ProductCollection, ProductReview, ReturnRequest, ReturnItem, ReturnStatusHistory,
@@ -35,14 +37,39 @@ from models import (
 from routers import auth, cart, categories, checkout, checkout_settings, collections, orders, payments, products, returns
 from routers import delivery
 
+logger = logging.getLogger(__name__)
+
 UPLOADS_DIR = Path("uploads")
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+async def _mature_escrow_cron_task():
+    while True:
+        try:
+            await asyncio.sleep(1800)  # Check every 30 minutes
+            with Session(engine) as session:
+                from routers.payments import process_mature_escrows
+                released, total = process_mature_escrows(session)
+                if released > 0:
+                    logger.info("Auto-escrow cron: Released %d mature escrow payout(s) totaling ₹%.2f", released, total)
+        except asyncio.CancelledError:
+            break
+        except Exception as err:
+            logger.error("Error in mature escrow background task: %s", err)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
-    yield
+    escrow_task = asyncio.create_task(_mature_escrow_cron_task())
+    try:
+        yield
+    finally:
+        escrow_task.cancel()
+        try:
+            await escrow_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(title="AI Website Builder Backend", lifespan=lifespan)
