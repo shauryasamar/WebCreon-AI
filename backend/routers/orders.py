@@ -15,6 +15,8 @@ from db.database import get_session
 from models import (
     Cart,
     CartItem,
+    DeliveryAgent,
+    DeliverySettings,
     InventoryMovement,
     Order,
     OrderItem,
@@ -26,6 +28,7 @@ from models import (
     User,
     UserAddress,
 )
+from services.shiprocket import ShiprocketClient
 
 router = APIRouter(
     prefix="/orders",
@@ -173,7 +176,7 @@ def ensure_order_delivery_otp(order: Order, session: Optional[Session] = None) -
     return str(order.delivery_otp)
 
 
-def serialize_shipment(shipment: Optional[Shipment], order_status: Optional[str] = None) -> Optional[dict[str, Any]]:
+def serialize_shipment(shipment: Optional[Shipment], order_status: Optional[str] = None, session: Optional[Session] = None) -> Optional[dict[str, Any]]:
     if not shipment:
         return None
     agent_id_str = str(shipment.agent_id) if getattr(shipment, "agent_id", None) else None
@@ -184,6 +187,56 @@ def serialize_shipment(shipment: Optional[Shipment], order_status: Optional[str]
         effective_status = "delivered"
     elif order_status == "cancelled" and shipment.status != "cancelled":
         effective_status = "cancelled"
+    elif order_status == "out_for_delivery" and shipment.status not in ("out_for_delivery", "delivered"):
+        effective_status = "out_for_delivery"
+
+    delivery_partner_name = shipment.delivery_partner_name
+    delivery_partner_phone = shipment.delivery_partner_phone
+    vehicle_type = None
+
+    if shipment.agent_id and session:
+        agent = session.get(DeliveryAgent, shipment.agent_id)
+        if agent:
+            if not delivery_partner_name:
+                delivery_partner_name = agent.name
+            if not delivery_partner_phone:
+                delivery_partner_phone = agent.phone
+            vehicle_type = getattr(agent, "vehicle_type", "bike")
+
+    is_shiprocket = getattr(shipment, "delivery_mode", None) == "shiprocket" or getattr(shipment, "mode", None) == "shiprocket"
+
+    scans: list[dict[str, Any]] = []
+    if is_shiprocket and getattr(shipment, "awb_number", None):
+        dt_shipped = shipment.shipped_at.strftime("%d %b %Y, %I:%M %p") if shipment.shipped_at else None
+        courier_lbl = getattr(shipment, "courier_name", None) or "Delhivery Surface"
+        scans.append({
+            "status": "Manifest Created",
+            "activity": f"Courier AWB {shipment.awb_number} generated ({courier_lbl})",
+            "location": "Origin Warehouse",
+            "date": dt_shipped,
+        })
+        scans.append({
+            "status": "In Transit",
+            "activity": "Package handed over to courier and in transit",
+            "location": "Regional Logistics Hub",
+            "date": dt_shipped,
+        })
+        if effective_status in ("out_for_delivery", "delivered"):
+            dt_ofd = (shipment.out_for_delivery_at or shipment.shipped_at).strftime("%d %b %Y, %I:%M %p") if (shipment.out_for_delivery_at or shipment.shipped_at) else None
+            scans.append({
+                "status": "Out for Delivery",
+                "activity": "Package out for delivery with courier executive",
+                "location": "Destination City",
+                "date": dt_ofd,
+            })
+        if effective_status == "delivered":
+            dt_del = (shipment.delivered_at or shipment.shipped_at).strftime("%d %b %Y, %I:%M %p") if (shipment.delivered_at or shipment.shipped_at) else None
+            scans.append({
+                "status": "Delivered",
+                "activity": "Package delivered to consignee",
+                "location": "Destination City",
+                "date": dt_del,
+            })
 
     return {
         "id": str(shipment.id),
@@ -192,8 +245,9 @@ def serialize_shipment(shipment: Optional[Shipment], order_status: Optional[str]
         "delivery_mode": getattr(shipment, "delivery_mode", "manual"),
         "agent_id": agent_id_str,
         "agent_token": agent_token,
-        "delivery_partner_name": shipment.delivery_partner_name,
-        "delivery_partner_phone": shipment.delivery_partner_phone,
+        "delivery_partner_name": delivery_partner_name,
+        "delivery_partner_phone": delivery_partner_phone,
+        "vehicle_type": vehicle_type,
         "courier_name": getattr(shipment, "courier_name", None),
         "awb_number": getattr(shipment, "awb_number", None),
         "tracking_url": getattr(shipment, "tracking_url", None),
@@ -203,7 +257,8 @@ def serialize_shipment(shipment: Optional[Shipment], order_status: Optional[str]
         "out_for_delivery_at": shipment.out_for_delivery_at.isoformat() if shipment.out_for_delivery_at else None,
         "delivered_at": shipment.delivered_at.isoformat() if shipment.delivered_at else None,
         "notes": getattr(shipment, "notes", None),
-        "delivery_otp": getattr(shipment, "delivery_otp", None),
+        "scans": scans,
+        "delivery_otp": None if is_shiprocket else getattr(shipment, "delivery_otp", None),
     }
 
 
@@ -1030,7 +1085,7 @@ def get_admin_orders(
             "customer_phone": (order.shipping_address or {}).get("mobileNumber"),
             "customer_email": (order.shipping_address or {}).get("email"),
             "shipping_address": order.shipping_address,
-            "delivery_otp": ensure_order_delivery_otp(order, session),
+            "delivery_otp": None if bool(shipment_map.get(order.id) and (getattr(shipment_map.get(order.id), "delivery_mode", None) == "shiprocket" or getattr(shipment_map.get(order.id), "mode", None) == "shiprocket" or shipment_map.get(order.id).courier_name or shipment_map.get(order.id).awb_number)) else ensure_order_delivery_otp(order, session),
             "shipment": serialize_shipment(shipment_map.get(order.id)),
             "items": [
                 {
@@ -1106,7 +1161,7 @@ def get_admin_order_detail(
         "razorpay_order_id": order.razorpay_order_id,
         "shipping_address": order.shipping_address,
         "pricing_snapshot": order.pricing_snapshot,
-        "delivery_otp": ensure_order_delivery_otp(order, session),
+        "delivery_otp": None if bool(shipment and (getattr(shipment, "delivery_mode", None) == "shiprocket" or getattr(shipment, "mode", None) == "shiprocket" or shipment.courier_name or shipment.awb_number)) else ensure_order_delivery_otp(order, session),
         "created_at": order.created_at.isoformat() if order.created_at else None,
         "confirmed_at": order.confirmed_at.isoformat() if order.confirmed_at else None,
         "shipped_at": order.shipped_at.isoformat() if order.shipped_at else None,
@@ -1364,6 +1419,30 @@ def update_order_status(
                     note=f"Stock restored for cancelled order {order.id}",
                 )
                 session.add(movement)
+
+            # Cancel associated shipment & trigger Shiprocket cancellation/RTO if applicable
+            shipments = session.exec(
+                select(Shipment).where(Shipment.order_id == order.id)
+            ).all()
+            for sh in shipments:
+                sh.status = "cancelled"
+                sh.notes = f"{sh.notes or ''} [Cancelled by admin: {payload.cancel_reason or 'Admin cancelled'}]".strip()
+                session.add(sh)
+                if getattr(sh, "delivery_mode", None) == "shiprocket" or getattr(sh, "mode", None) == "shiprocket":
+                    try:
+                        from routers.delivery import _get_or_refresh_shiprocket_token
+                        del_settings = session.exec(
+                            select(DeliverySettings).where(DeliverySettings.site_id == site_id)
+                        ).first()
+                        if del_settings and del_settings.shiprocket_email:
+                            sr_token = _get_or_refresh_shiprocket_token(del_settings, session)
+                            if sr_token:
+                                if getattr(sh, "courier_order_id", None):
+                                    ShiprocketClient.cancel_order(sr_token, [sh.courier_order_id])
+                                if getattr(sh, "awb_number", None):
+                                    ShiprocketClient.cancel_shipment_by_awb(sr_token, [sh.awb_number])
+                    except Exception as sr_err:
+                        print(f"Shiprocket order cancellation error on admin action: {sr_err}")
 
         if payload.status in {"confirmed", "shipped", "out_for_delivery"}:
             for item in items:
@@ -1750,6 +1829,7 @@ def get_my_orders(
 
     order_ids = [order.id for order in orders]
     items_map: dict[UUID, list[OrderItem]] = {}
+    shipment_map: dict[UUID, Shipment] = {}
 
     if order_ids:
         order_items = session.exec(
@@ -1759,6 +1839,15 @@ def get_my_orders(
         ).all()
         for item in order_items:
             items_map.setdefault(item.order_id, []).append(item)
+
+        shipments = session.exec(
+            select(Shipment)
+            .where(Shipment.order_id.in_(order_ids))
+            .order_by(Shipment.created_at.desc())
+        ).all()
+        for sh in shipments:
+            if sh.order_id not in shipment_map:
+                shipment_map[sh.order_id] = sh
 
     response = []
     has_customer_sync = False
@@ -1770,6 +1859,8 @@ def get_my_orders(
             for item in items_map.get(order.id, [])
         ]
         has_returnable_items = any(item["is_returnable"] for item in serialized_items)
+        sh = shipment_map.get(order.id)
+        is_shiprocket = bool(sh and (getattr(sh, "delivery_mode", None) == "shiprocket" or getattr(sh, "mode", None) == "shiprocket" or sh.courier_name or sh.awb_number))
 
         response.append(
             {
@@ -1783,7 +1874,8 @@ def get_my_orders(
                 "created_at": order.created_at.isoformat() if order.created_at else None,
                 "items": serialized_items,
                 "pricing_snapshot": order.pricing_snapshot,
-                "delivery_otp": ensure_order_delivery_otp(order, session),
+                "delivery_otp": None if is_shiprocket else ensure_order_delivery_otp(order, session),
+                "shipment": serialize_shipment(sh, order.status, session=session),
                 "has_returnable_items": has_returnable_items,
                 "can_request_return": order.status == "delivered" and has_returnable_items,
                 "refund_info": build_customer_refund_info(order),
@@ -1931,8 +2023,8 @@ def get_my_order_detail(
         "delivered_at": order.delivered_at.isoformat() if order.delivered_at else None,
         "cancelled_at": order.cancelled_at.isoformat() if order.cancelled_at else None,
         "items": serialized_items,
-        "shipment": serialize_shipment(shipment, order.status),
-        "delivery_otp": ensure_order_delivery_otp(order, session),
+        "shipment": serialize_shipment(shipment, order.status, session=session),
+        "delivery_otp": None if bool(shipment and (getattr(shipment, "delivery_mode", None) == "shiprocket" or getattr(shipment, "mode", None) == "shiprocket" or shipment.courier_name or shipment.awb_number)) else ensure_order_delivery_otp(order, session),
         "has_returnable_items": has_returnable_items,
         "can_request_return": order.status == "delivered" and has_returnable_items,
         "refund_info": build_customer_refund_info(order, allow_live_check=True, session=session),
@@ -1965,8 +2057,11 @@ def cancel_my_order(
     if not is_owner:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    if order.status not in {"pending", "placed", "confirmed"}:
-        raise HTTPException(status_code=400, detail="This order cannot be cancelled now")
+    if order.status in {"delivered", "returned", "cancelled"}:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot cancel order that is already {order.status.replace('_', ' ')}. Please use return request for delivered orders.",
+        )
 
     items = session.exec(
         select(OrderItem).where(OrderItem.order_id == order.id)
@@ -2011,6 +2106,33 @@ def cancel_my_order(
         order.cancel_reason = payload.cancel_reason
         order.cancelled_at = now
         order.updated_at = now
+
+        # Cancel associated shipment & trigger Shiprocket cancellation/RTO if applicable
+        shipments = session.exec(
+            select(Shipment).where(Shipment.order_id == order.id)
+        ).all()
+        for sh in shipments:
+            sh.status = "cancelled"
+            cancel_msg = f"Cancelled by customer: {payload.cancel_reason or 'No reason provided'}"
+            existing_notes = sh.notes or ""
+            if cancel_msg not in existing_notes:
+                sh.notes = f"{existing_notes} [{cancel_msg}]".strip()
+            session.add(sh)
+            if getattr(sh, "delivery_mode", None) == "shiprocket" or getattr(sh, "mode", None) == "shiprocket":
+                try:
+                    from routers.delivery import _get_or_refresh_shiprocket_token
+                    del_settings = session.exec(
+                        select(DeliverySettings).where(DeliverySettings.site_id == site_id)
+                    ).first()
+                    if del_settings and del_settings.shiprocket_email:
+                        sr_token = _get_or_refresh_shiprocket_token(del_settings, session)
+                        if sr_token:
+                            if getattr(sh, "courier_order_id", None):
+                                ShiprocketClient.cancel_order(sr_token, [sh.courier_order_id])
+                            if getattr(sh, "awb_number", None):
+                                ShiprocketClient.cancel_shipment_by_awb(sr_token, [sh.awb_number])
+                except Exception as sr_err:
+                    print(f"Shiprocket order cancellation error (non-fatal): {sr_err}")
 
         # If order was paid online, initiate refund and update ledger
         if getattr(order, "payment_status", None) == "paid":

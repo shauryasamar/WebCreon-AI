@@ -71,7 +71,12 @@ type OrderItem = {
 type Shipment = {
   id: string;
   status: string;
+  mode?: string | null;
+  delivery_mode?: string | null;
   courier_name?: string | null;
+  awb_number?: string | null;
+  tracking_url?: string | null;
+  label_url?: string | null;
   delivery_partner_name?: string | null;
   delivery_partner_phone?: string | null;
   estimated_delivery_at?: string | null;
@@ -84,6 +89,8 @@ type Shipment = {
   agent_accepted_at?: string | null;
   pickup_pincode?: string | null;
   delivery_pincode?: string | null;
+  delivery_otp?: string | null;
+  [key: string]: any;
 };
 
 type AdminOrderListItem = {
@@ -437,6 +444,16 @@ const formatDate = (value?: string | null) => {
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleString();
 };
+
+function cleanShipmentNotes(notes?: string | null): string {
+  if (!notes) return "";
+  const matches = notes.match(/\[(.*?)\]/g);
+  if (matches && matches.length > 0) {
+    const unique = Array.from(new Set(matches.map((m) => m.trim())));
+    return unique.join(" ");
+  }
+  return notes;
+}
 
 
 const formatPrice = (value?: number | null) => {
@@ -2974,8 +2991,97 @@ const AdminOrders: React.FC = () => {
 
                                     return (
                                       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                                        {/* If Order is already dispatched / has shipment partner */}
-                                        {currentShipment?.delivery_partner_name ? (
+                                        {/* If Order is already dispatched via Courier / Shiprocket */}
+                                        {Boolean(currentShipment?.courier_name || currentShipment?.awb_number || currentShipment?.delivery_mode === "shiprocket" || currentShipment?.mode === "shiprocket") ? (
+                                          <div
+                                            style={{
+                                              padding: "14px",
+                                              background: "#f8fafc",
+                                              borderRadius: "8px",
+                                              border: "1px solid #e2e8f0",
+                                            }}
+                                          >
+                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                                              <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                                Courier Partner (Shiprocket)
+                                              </div>
+                                              <span
+                                                style={{
+                                                  fontSize: "11px",
+                                                  fontWeight: 700,
+                                                  padding: "2px 7px",
+                                                  borderRadius: "4px",
+                                                  background: "#eff6ff",
+                                                  color: "#1d4ed8",
+                                                  border: "1px solid #bfdbfe",
+                                                  textTransform: "capitalize",
+                                                }}
+                                              >
+                                                {(currentShipment?.status || "In Transit").replaceAll("_", " ")}
+                                              </span>
+                                            </div>
+
+                                            <div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a", marginBottom: "6px" }}>
+                                              {currentShipment?.courier_name || "Delhivery Surface"}
+                                            </div>
+
+                                            {currentShipment?.awb_number && (
+                                              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px", fontSize: "13px" }}>
+                                                <span style={{ color: "#64748b" }}>AWB Number:</span>
+                                                <code style={{ background: "#e2e8f0", padding: "2px 6px", borderRadius: "4px", fontWeight: 700, color: "#0f172a" }}>
+                                                  {currentShipment.awb_number}
+                                                </code>
+                                              </div>
+                                            )}
+
+                                            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "10px" }}>
+                                              {currentShipment?.tracking_url && (
+                                                <a
+                                                  href={currentShipment.tracking_url}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  style={{
+                                                    display: "inline-flex",
+                                                    alignItems: "center",
+                                                    gap: "5px",
+                                                    padding: "6px 12px",
+                                                    borderRadius: "6px",
+                                                    background: "#2563eb",
+                                                    color: "#ffffff",
+                                                    fontSize: "12px",
+                                                    fontWeight: 700,
+                                                    textDecoration: "none",
+                                                  }}
+                                                >
+                                                  Track Parcel
+                                                </a>
+                                              )}
+
+                                              {currentShipment?.label_url && (
+                                                <a
+                                                  href={currentShipment.label_url}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  style={{
+                                                    display: "inline-flex",
+                                                    alignItems: "center",
+                                                    gap: "5px",
+                                                    padding: "6px 12px",
+                                                    borderRadius: "6px",
+                                                    background: "#ffffff",
+                                                    color: "#0f172a",
+                                                    border: "1px solid #cbd5e1",
+                                                    fontSize: "12px",
+                                                    fontWeight: 700,
+                                                    textDecoration: "none",
+                                                  }}
+                                                >
+                                                  Print Shipping Label (PDF)
+                                                </a>
+                                              )}
+                                            </div>
+                                          </div>
+                                        ) : currentShipment?.delivery_partner_name ? (
                                           <div
                                             style={{
                                               padding: "14px",
@@ -2988,22 +3094,39 @@ const AdminOrders: React.FC = () => {
                                               <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
                                                 Assigned Delivery Partner
                                               </div>
-                                              <button
-                                                type="button"
-                                                onClick={() => setReassigningOrderIdMap((p) => ({ ...p, [order.id]: !p[order.id] }))}
-                                                style={{
-                                                  background: "none",
-                                                  border: "none",
-                                                  color: "#2563eb",
-                                                  fontSize: "12px",
-                                                  fontWeight: 600,
-                                                  cursor: "pointer",
-                                                  padding: "0",
-                                                  textDecoration: "underline",
-                                                }}
-                                              >
-                                                {isReassigning ? "Close" : "Reassign Rider"}
-                                              </button>
+                                              {order.status === "cancelled" ? (
+                                                <span
+                                                  style={{
+                                                    fontSize: "11px",
+                                                    fontWeight: 700,
+                                                    padding: "2px 7px",
+                                                    borderRadius: "4px",
+                                                    background: currentShipment?.status === "returned_to_warehouse" ? "#f0fdf4" : "#fef2f2",
+                                                    color: currentShipment?.status === "returned_to_warehouse" ? "#16a34a" : "#dc2626",
+                                                    border: `1px solid ${currentShipment?.status === "returned_to_warehouse" ? "#bbf7d0" : "#fecaca"}`,
+                                                    textTransform: "capitalize",
+                                                  }}
+                                                >
+                                                  {currentShipment?.status === "returned_to_warehouse" ? "Returned to Warehouse" : "Cancelled"}
+                                                </span>
+                                              ) : (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => setReassigningOrderIdMap((p) => ({ ...p, [order.id]: !p[order.id] }))}
+                                                  style={{
+                                                    background: "none",
+                                                    border: "none",
+                                                    color: "#2563eb",
+                                                    fontSize: "12px",
+                                                    fontWeight: 600,
+                                                    cursor: "pointer",
+                                                    padding: "0",
+                                                    textDecoration: "underline",
+                                                  }}
+                                                >
+                                                  {isReassigning ? "Close" : "Reassign Rider"}
+                                                </button>
+                                              )}
                                             </div>
 
                                             <div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
@@ -3022,19 +3145,37 @@ const AdminOrders: React.FC = () => {
                                                   style={{
                                                     marginTop: "10px",
                                                     padding: "9px 12px",
-                                                    background: "#fffbeb",
+                                                    background: order.status === "cancelled"
+                                                      ? (currentShipment?.status === "returned_to_warehouse" ? "#f0fdf4" : "#fef2f2")
+                                                      : "#fffbeb",
                                                     borderRadius: "6px",
-                                                    border: "1px solid #fde68a",
+                                                    border: `1px solid ${
+                                                      order.status === "cancelled"
+                                                        ? (currentShipment?.status === "returned_to_warehouse" ? "#bbf7d0" : "#fecaca")
+                                                        : "#fde68a"
+                                                    }`,
                                                     fontSize: "12px",
-                                                    color: "#92400e",
+                                                    color: order.status === "cancelled"
+                                                      ? (currentShipment?.status === "returned_to_warehouse" ? "#166534" : "#991b1b")
+                                                      : "#92400e",
                                                     lineHeight: 1.4,
                                                   }}
                                                 >
-                                                  <div style={{ fontWeight: 700, color: "#b45309", marginBottom: "2px" }}>
-                                                    Delivery Note / Reschedule:
+                                                  <div
+                                                    style={{
+                                                      fontWeight: 700,
+                                                      color: order.status === "cancelled"
+                                                        ? (currentShipment?.status === "returned_to_warehouse" ? "#15803d" : "#b91c1c")
+                                                        : "#b45309",
+                                                      marginBottom: "2px",
+                                                    }}
+                                                  >
+                                                    {order.status === "cancelled"
+                                                      ? (currentShipment?.status === "returned_to_warehouse" ? "Warehouse Return & Cancellation Note:" : "Cancellation Note:")
+                                                      : "Delivery Note / Reschedule:"}
                                                   </div>
-                                                  <div>{currentShipment.notes}</div>
-                                                  {currentShipment.estimated_delivery_at && (
+                                                  <div>{cleanShipmentNotes(currentShipment.notes)}</div>
+                                                  {order.status !== "cancelled" && currentShipment.estimated_delivery_at && (
                                                     <div style={{ marginTop: "4px", fontWeight: 700, color: "#78350f" }}>
                                                       Next Delivery Retry: {formatDate(currentShipment.estimated_delivery_at)}
                                                     </div>

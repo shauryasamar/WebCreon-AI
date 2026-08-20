@@ -61,10 +61,10 @@ class ShiprocketClient:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def get_token(email: str, password: str) -> tuple[str, str]:
+    def get_token(email: str, password: str) -> str:
         """
-        Authenticate and return (token, expires_at_iso_str).
-        The token is valid for 240 hours (10 days).
+        Authenticate with Shiprocket API and return JWT token string.
+        Endpoint: POST https://apiv2.shiprocket.in/v1/external/auth/login
         """
         resp = requests.post(
             f"{SHIPROCKET_BASE}/auth/login",
@@ -96,6 +96,7 @@ class ShiprocketClient:
         """
         Returns a list of available couriers for the given route,
         sorted by rate ascending (cheapest first).
+        Endpoint: GET https://apiv2.shiprocket.in/v1/external/courier/serviceability
         """
         params = {
             "pickup_postcode": pickup_pincode,
@@ -132,6 +133,27 @@ class ShiprocketClient:
         return options
 
     # ------------------------------------------------------------------
+    # Pickup Locations
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def get_pickup_locations(token: str) -> list[dict[str, Any]]:
+        """
+        Fetch merchant's registered pickup locations from Shiprocket.
+        Endpoint: GET https://apiv2.shiprocket.in/v1/external/settings/company/pickup
+        """
+        resp = requests.get(
+            f"{SHIPROCKET_BASE}/settings/company/pickup",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=15,
+        )
+        if not resp.ok:
+            return []
+        data = resp.json()
+        addresses = data.get("data", {}).get("shipping_address", [])
+        return addresses
+
+    # ------------------------------------------------------------------
     # Order creation
     # ------------------------------------------------------------------
 
@@ -142,7 +164,7 @@ class ShiprocketClient:
     ) -> dict[str, Any]:
         """
         Create a Shiprocket order.
-        Returns the raw response dict from Shiprocket.
+        Endpoint: POST https://apiv2.shiprocket.in/v1/external/orders/create/adhoc
         """
         resp = requests.post(
             f"{SHIPROCKET_BASE}/orders/create/adhoc",
@@ -171,7 +193,7 @@ class ShiprocketClient:
     ) -> str:
         """
         Assign an AWB to a shipment.
-        Returns the AWB number string.
+        Endpoint: POST https://apiv2.shiprocket.in/v1/external/courier/assign/awb
         """
         body: dict[str, Any] = {"shipment_id": str(shipment_id)}
         if courier_id:
@@ -194,7 +216,6 @@ class ShiprocketClient:
             .get("awb_code")
         )
         if not awb:
-            # Some responses put it at top level
             awb = data.get("awb_code") or data.get("awb")
         if not awb:
             raise ShiprocketError(f"AWB not found in response: {data}")
@@ -208,7 +229,7 @@ class ShiprocketClient:
     def get_label_url(token: str, shipment_id: int) -> Optional[str]:
         """
         Request a PDF shipping label for the given shipment.
-        Returns the label URL or None if not yet ready.
+        Endpoint: POST https://apiv2.shiprocket.in/v1/external/courier/generate/label
         """
         resp = requests.post(
             f"{SHIPROCKET_BASE}/courier/generate/label",
@@ -230,7 +251,7 @@ class ShiprocketClient:
     def get_shipment_status(token: str, awb: str) -> Optional[str]:
         """
         Track a shipment by AWB.
-        Returns the current status string or None.
+        Endpoint: GET https://apiv2.shiprocket.in/v1/external/courier/track/awb/{awb}
         """
         resp = requests.get(
             f"{SHIPROCKET_BASE}/courier/track/awb/{awb}",
@@ -245,6 +266,93 @@ class ShiprocketClient:
             .get("shipment_track", [{}])[0]
             .get("current_status")
         )
+
+    @staticmethod
+    def get_tracking_details(token: str, awb: str) -> dict[str, Any]:
+        """
+        Track a shipment by AWB and return full tracking details including scans/checkpoints.
+        Endpoint: GET https://apiv2.shiprocket.in/v1/external/courier/track/awb/{awb}
+        """
+        try:
+            resp = requests.get(
+                f"{SHIPROCKET_BASE}/courier/track/awb/{awb}",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=15,
+            )
+            if not resp.ok:
+                return {"scans": [], "current_status": None, "courier_name": None}
+            data = resp.json()
+            tracking_data = data.get("tracking_data", {})
+            shipment_track = tracking_data.get("shipment_track", [{}])[0] if tracking_data.get("shipment_track") else {}
+            activities = tracking_data.get("shipment_track_activities", [])
+            
+            scans = []
+            for act in activities:
+                scans.append({
+                    "date": act.get("date"),
+                    "status": act.get("status") or act.get("sr-status"),
+                    "activity": act.get("activity"),
+                    "location": act.get("location"),
+                })
+                
+            return {
+                "current_status": shipment_track.get("current_status"),
+                "courier_name": shipment_track.get("courier_name"),
+                "edd": shipment_track.get("edd"),
+                "scans": scans,
+            }
+        except Exception as err:
+            logger.warning("Error fetching Shiprocket tracking details: %s", err)
+            return {"scans": [], "current_status": None, "courier_name": None}
+
+    # ------------------------------------------------------------------
+    # Cancellation & RTO
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def cancel_order(token: str, order_ids: list[int | str]) -> dict[str, Any]:
+        """
+        Cancel one or more custom orders in Shiprocket.
+        Endpoint: POST https://apiv2.shiprocket.in/v1/external/orders/cancel
+        """
+        try:
+            int_ids = [int(oid) for oid in order_ids if str(oid).isdigit()]
+            if not int_ids:
+                return {"message": "No numeric Shiprocket order IDs provided"}
+            resp = requests.post(
+                f"{SHIPROCKET_BASE}/orders/cancel",
+                json={"ids": int_ids},
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=15,
+            )
+            if not resp.ok:
+                logger.warning("Shiprocket cancel order failed [%s]: %s", resp.status_code, resp.text[:300])
+                return {"success": False, "error": resp.text[:300]}
+            return resp.json()
+        except Exception as err:
+            logger.warning("Shiprocket cancel_order error: %s", err)
+            return {"success": False, "error": str(err)}
+
+    @staticmethod
+    def cancel_shipment_by_awb(token: str, awbs: list[str]) -> dict[str, Any]:
+        """
+        Cancel an active shipment by AWB in Shiprocket (initiates RTO if in transit).
+        Endpoint: POST https://apiv2.shiprocket.in/v1/external/orders/cancel/shipment/awbs
+        """
+        try:
+            resp = requests.post(
+                f"{SHIPROCKET_BASE}/orders/cancel/shipment/awbs",
+                json={"awbs": awbs},
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=15,
+            )
+            if not resp.ok:
+                logger.warning("Shiprocket cancel AWB failed [%s]: %s", resp.status_code, resp.text[:300])
+                return {"success": False, "error": resp.text[:300]}
+            return resp.json()
+        except Exception as err:
+            logger.warning("Shiprocket cancel_shipment_by_awb error: %s", err)
+            return {"success": False, "error": str(err)}
 
     # ------------------------------------------------------------------
     # Convenience: build order payload

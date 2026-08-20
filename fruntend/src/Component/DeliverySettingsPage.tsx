@@ -10,6 +10,8 @@ type DeliverySettingsData = {
   own_delivery_radius_km: number;
   shiprocket_email: string;
   shiprocket_connected: boolean;
+  shiprocket_saved?: boolean;
+  shiprocket_verified?: boolean;
   default_courier_preference: string;
   auto_assign_courier: boolean;
   sender_name: string;
@@ -95,6 +97,21 @@ const TrashIcon = () => (
   </svg>
 );
 
+const AlertTriangleIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+    <line x1="12" y1="9" x2="12" y2="13" />
+    <line x1="12" y1="17" x2="12.01" y2="17" />
+  </svg>
+);
+
+const CloseIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
 export default function DeliverySettingsPage() {
   const { siteId } = useParams<{ siteId: string }>();
   const [tab, setTab] = useState<Tab>("mode");
@@ -151,7 +168,7 @@ export default function DeliverySettingsPage() {
 
   const showFeedback = (msg: string, type: "success" | "error" | "info" = "success") => {
     setFeedback({ msg, type });
-    setTimeout(() => setFeedback(null), 3500);
+    setTimeout(() => setFeedback(null), 4000);
   };
 
   useEffect(() => {
@@ -257,10 +274,17 @@ export default function DeliverySettingsPage() {
         showFeedback(data.message || "Connected to Shiprocket successfully!", "success");
         await fetchSettings();
       } else {
-        showFeedback(data.detail || "Connection failed. Please check credentials.", "error");
+        const detail = data.detail || "Connection failed. Please check credentials.";
+        if (detail.includes("Temporarily Locked") || detail.includes("too many failed") || detail.includes("User blocked")) {
+          showFeedback("Shiprocket account temporarily locked (too many failed attempts). Please wait 15–20 minutes.", "error");
+        } else if (detail.includes("Invalid") || detail.includes("401") || detail.includes("422") || detail.includes("combination") || detail.includes("Authentication failed")) {
+          showFeedback("Invalid Shiprocket credentials. The email or password is incorrect.", "error");
+        } else {
+          showFeedback(detail, "error");
+        }
       }
     } catch {
-      showFeedback("Network error while verifying Shiprocket credentials.", "error");
+      showFeedback("Network error while testing Shiprocket connection.", "error");
     } finally {
       setTestingConnection(false);
     }
@@ -491,22 +515,25 @@ export default function DeliverySettingsPage() {
         <div
           style={{
             position: "fixed",
-            top: "20px",
-            right: "20px",
+            top: "80px",
+            left: "50%",
+            transform: "translateX(-50%)",
             zIndex: 9999,
-            padding: "10px 16px",
-            borderRadius: "6px",
-            background: feedback.type === "success" ? "#0f172a" : "#b91c1c",
+            padding: "11px 20px",
+            borderRadius: "8px",
+            background: feedback.type === "success" ? "#0f172a" : "#991b1b",
             color: "#ffffff",
             fontSize: "13px",
             fontWeight: 600,
-            boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.2)",
+            boxShadow: "0 10px 25px -3px rgba(0, 0, 0, 0.25), 0 4px 6px -2px rgba(0, 0, 0, 0.1)",
             display: "flex",
             alignItems: "center",
-            gap: "8px",
+            gap: "10px",
+            maxWidth: "90%",
+            width: "max-content",
           }}
         >
-          {feedback.type === "success" ? <CheckCircleIcon /> : null}
+          {feedback.type === "success" ? <CheckCircleIcon /> : <AlertTriangleIcon />}
           <span>{feedback.msg}</span>
         </div>
       )}
@@ -1421,25 +1448,47 @@ export default function DeliverySettingsPage() {
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "5px",
-                    padding: "2px 7px",
+                    padding: "2px 8px",
                     borderRadius: "4px",
                     fontSize: "11px",
                     fontWeight: 700,
-                    background: settings.shiprocket_connected ? "#f0fdf4" : "#fef2f2",
-                    color: settings.shiprocket_connected ? "#15803d" : "#b91c1c",
-                    border: `1px solid ${settings.shiprocket_connected ? "#bbf7d0" : "#fecaca"}`,
+                    background: settings.shiprocket_verified
+                      ? "#f0fdf4"
+                      : settings.shiprocket_saved
+                      ? "#fffbeb"
+                      : "#fef2f2",
+                    color: settings.shiprocket_verified
+                      ? "#15803d"
+                      : settings.shiprocket_saved
+                      ? "#b45309"
+                      : "#b91c1c",
+                    border: `1px solid ${
+                      settings.shiprocket_verified
+                        ? "#bbf7d0"
+                        : settings.shiprocket_saved
+                        ? "#fde68a"
+                        : "#fecaca"
+                    }`,
                     whiteSpace: "nowrap",
                   }}
                 >
                   <span
                     style={{
-                      width: "5px",
-                      height: "5px",
+                      width: "6px",
+                      height: "6px",
                       borderRadius: "50%",
-                      background: settings.shiprocket_connected ? "#16a34a" : "#dc2626",
+                      background: settings.shiprocket_verified
+                        ? "#16a34a"
+                        : settings.shiprocket_saved
+                        ? "#f59e0b"
+                        : "#dc2626",
                     }}
                   />
-                  {settings.shiprocket_connected ? "Connected & Verified" : "Not Connected"}
+                  {settings.shiprocket_verified
+                    ? "Verified with Shiprocket"
+                    : settings.shiprocket_saved
+                    ? "Saved (Unverified — Click Test Connection)"
+                    : "Not Configured"}
                 </span>
               </div>
               <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>
@@ -1447,12 +1496,12 @@ export default function DeliverySettingsPage() {
               </p>
             </div>
 
-            <div style={{ display: "flex", gap: "10px" }}>
+            <div>
               <button
                 type="button"
                 onClick={testShiprocket}
                 disabled={testingConnection}
-                style={{ ...ghostButtonStyle, padding: "7px 12px", fontSize: "12px", whiteSpace: "nowrap" }}
+                style={{ ...ghostButtonStyle, padding: "7px 14px", fontSize: "12px", whiteSpace: "nowrap" }}
               >
                 {testingConnection ? "Verifying..." : "Test Connection"}
               </button>

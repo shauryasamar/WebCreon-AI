@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { Pagination } from "../Component/Pagination";
 import { resolveThemeTokens } from "../context/ThemeContext";
@@ -40,6 +40,8 @@ type OrderListItem = {
   has_returnable_items?: boolean;
   can_request_return?: boolean;
   refund_info?: RefundInfo | null;
+  shipment?: Shipment | null;
+  [key: string]: any;
 };
 
 type OrderItem = {
@@ -342,14 +344,43 @@ function formatPaymentMethodName(method?: string | null): string {
   return labelize(method);
 }
 
-function getPaymentMethodIcon(method?: string | null): string {
-  if (!method) return "💳";
-  const m = method.toLowerCase();
-  if (m === "upi") return "⚡";
-  if (m === "card") return "💳";
-  if (m === "netbanking") return "🏦";
-  if (m === "cod" || m === "cash_on_delivery") return "💵";
-  return "💳";
+function getPaymentMethodIcon(method?: string | null): React.ReactNode {
+  const m = (method || "").toLowerCase();
+  if (m === "upi") {
+    return (
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+      </svg>
+    );
+  }
+  if (m === "netbanking") {
+    return (
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="3" y1="21" x2="21" y2="21" />
+        <line x1="3" y1="10" x2="21" y2="10" />
+        <polyline points="3 10 12 3 21 10" />
+        <line x1="6" y1="10" x2="6" y2="21" />
+        <line x1="10" y1="10" x2="10" y2="21" />
+        <line x1="14" y1="10" x2="14" y2="21" />
+        <line x1="18" y1="10" x2="18" y2="21" />
+      </svg>
+    );
+  }
+  if (m === "cod" || m === "cash_on_delivery") {
+    return (
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="6" width="20" height="12" rx="2" />
+        <circle cx="12" cy="12" r="2" />
+        <path d="M6 12h.01M18 12h.01" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+      <line x1="1" y1="10" x2="23" y2="10" />
+    </svg>
+  );
 }
 
 function getStatusColor(status?: string) {
@@ -383,12 +414,49 @@ function getStatusColor(status?: string) {
   }
 }
 
+function formatFlipkartDate(dateStr?: string | null): string {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const dayName = d.toLocaleDateString("en-US", { weekday: "short" });
+    const day = d.getDate();
+    const s = ["th", "st", "nd", "rd"];
+    const v = day % 100;
+    const suffix = s[(v - 20) % 10] || s[v] || s[0];
+    const month = d.toLocaleDateString("en-US", { month: "short" });
+    const year = d.getFullYear().toString().slice(-2);
+    return `${dayName}, ${day}${suffix} ${month} '${year}`;
+  } catch {
+    return dateStr || "";
+  }
+}
+
+function formatFlipkartDateTime(dateStr?: string | null): string {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const dayName = d.toLocaleDateString("en-US", { weekday: "short" });
+    const day = d.getDate();
+    const s = ["th", "st", "nd", "rd"];
+    const v = day % 100;
+    const suffix = s[(v - 20) % 10] || s[v] || s[0];
+    const month = d.toLocaleDateString("en-US", { month: "short" });
+    const year = d.getFullYear().toString().slice(-2);
+    const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }).toLowerCase();
+    return `${dayName}, ${day}${suffix} ${month} '${year} - ${time}`;
+  } catch {
+    return dateStr || "";
+  }
+}
+
 function getTimelineSteps(detail: OrderDetail): TimelineStep[] {
   return [
     { key: "placed", label: "Order Placed", time: detail.created_at },
-    { key: "confirmed", label: "Order Confirmed", time: detail.confirmed_at },
+    { key: "confirmed", label: "Order Confirmed", time: detail.confirmed_at || detail.created_at },
     { key: "shipped", label: "Shipped", time: detail.shipped_at || detail.shipment?.shipped_at },
-    { key: "out_for_delivery", label: "Out For Delivery", time: detail.shipment?.out_for_delivery_at },
+    { key: "out_for_delivery", label: "Out for Delivery", time: detail.shipment?.out_for_delivery_at },
     { key: "delivered", label: "Delivered", time: detail.delivered_at || detail.shipment?.delivered_at },
   ];
 }
@@ -473,6 +541,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
   const [returnDrafts, setReturnDrafts] = useState<Record<string, ReturnDraft>>({});
   const [showReturnFormOrderId, setShowReturnFormOrderId] = useState<string | null>(null);
   const [expandedReturnId, setExpandedReturnId] = useState<string | null>(null);
+  const [expandedScansMap, setExpandedScansMap] = useState<Record<string, boolean>>({});
   const [error, setError] = useState("");
   const [viewportWidth, setViewportWidth] = useState<number>(
     typeof window !== "undefined" ? window.innerWidth : 1280
@@ -704,10 +773,16 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
     }
   };
 
-  const handleCancelOrder = async (orderId: string) => {
+  const handleCancelOrder = async (orderId: string, currentStatus?: string) => {
     if (!siteId) return;
 
-    const cancelReason = window.prompt("Reason for cancellation (optional)") || "";
+    const isInTransit = currentStatus === "shipped" || currentStatus === "out_for_delivery" || currentStatus === "rescheduled";
+    const promptMsg = isInTransit
+      ? "This order has already been dispatched. If you cancel, the courier/rider will return the package to the store warehouse and your refund will be initiated.\n\nReason for cancellation (optional):"
+      : "Reason for cancellation (optional):";
+
+    const cancelReason = window.prompt(promptMsg);
+    if (cancelReason === null) return; // User clicked cancel in prompt dialog
 
     try {
       setCancellingOrderId(orderId);
@@ -719,7 +794,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          cancel_reason: cancelReason,
+          cancel_reason: cancelReason || "Cancelled by customer",
         }),
       });
 
@@ -966,15 +1041,208 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
   const renderTrackingTimeline = (detail: OrderDetail) => {
     const orderStatus = detail.status;
     const isCancelled = orderStatus === "cancelled";
-    const currentRank = getStatusRank(orderStatus);
-    const timelineSteps = getTimelineSteps(detail);
+    const currentRank = isCancelled ? 0 : getStatusRank(orderStatus);
+    const isDelivered = !isCancelled && (orderStatus === "delivered" || currentRank >= 5);
+    const isOutForDelivery = !isCancelled && (currentRank >= 4 || orderStatus === "out_for_delivery");
+    const isShipped = !isCancelled && (currentRank >= 3 || isOutForDelivery || isDelivered);
+    const isPacked = !isCancelled && (currentRank >= 2 || isShipped);
+    const isPlaced = true;
+
+    const isOwnAgent =
+      detail.shipment?.delivery_mode === "own_agent" ||
+      detail.shipment?.mode === "own_agent" ||
+      Boolean(detail.shipment?.agent_id) ||
+      Boolean(detail.shipment?.delivery_partner_name && !detail.shipment?.awb_number);
+
+    const isShiprocket =
+      !isOwnAgent && (
+        detail.shipment?.delivery_mode === "shiprocket" ||
+        detail.shipment?.mode === "shiprocket" ||
+        Boolean(detail.shipment?.awb_number) ||
+        Boolean(detail.shipment?.courier_name)
+      );
+
+    const orderedDate = formatFlipkartDate(detail.created_at);
+    const orderedTime = formatFlipkartDateTime(detail.created_at);
+
+    const packedDate = formatFlipkartDate(detail.confirmed_at || detail.created_at);
+    const packedTime = formatFlipkartDateTime(detail.confirmed_at || detail.created_at);
+
+    const shippedDate = formatFlipkartDate(detail.shipped_at || detail.shipment?.shipped_at);
+    const shippedTime = formatFlipkartDateTime(detail.shipped_at || detail.shipment?.shipped_at);
+
+    const ofdDate = formatFlipkartDate(detail.shipment?.out_for_delivery_at || detail.shipped_at || detail.shipment?.shipped_at);
+    const ofdTime = formatFlipkartDateTime(detail.shipment?.out_for_delivery_at || detail.shipped_at || detail.shipment?.shipped_at);
+
+    const deliveredDate = formatFlipkartDate(detail.delivered_at || detail.shipment?.delivered_at);
+    const deliveredTime = formatFlipkartDateTime(detail.delivered_at || detail.shipment?.delivered_at);
+    const expectedDeliveryDate = formatFlipkartDate(detail.shipment?.estimated_delivery_at || detail.created_at);
+
+    let nodes: Array<{
+      key: string;
+      isDone: boolean;
+      title: string;
+      date?: string;
+      courier?: string | null;
+      trackingUrl?: string | null;
+      items: Array<{ text: string; sub?: string }>;
+      scans?: any[];
+    }> = [];
+
+    if (isOwnAgent) {
+      const riderName = detail.shipment?.delivery_partner_name || "Store Delivery Partner";
+      const riderPhone = detail.shipment?.delivery_partner_phone;
+
+      nodes = [
+        {
+          key: "ordered",
+          isDone: isPlaced,
+          title: "Ordered",
+          date: orderedDate,
+          items: [{ text: "Your order has been placed.", sub: orderedTime }],
+        },
+        {
+          key: "packed",
+          isDone: isPacked,
+          title: "Packed",
+          date: isPacked ? packedDate : "",
+          items: isPacked
+            ? [
+                { text: "Seller has processed your order and assigned a store delivery partner.", sub: packedTime },
+              ]
+            : [{ text: "Seller will process your order soon." }],
+        },
+        {
+          key: "out_for_delivery",
+          isDone: isOutForDelivery || isDelivered,
+          title: "Out for Delivery",
+          date: (isOutForDelivery || isDelivered) ? ofdDate : "",
+          items: (isOutForDelivery || isDelivered)
+            ? [
+                {
+                  text: `Your order is out for delivery with ${riderName}${riderPhone ? ` (${formatPhoneDisplay(riderPhone)})` : ""}.`,
+                  sub: ofdTime,
+                },
+              ]
+            : [{ text: "Item yet to be dispatched with delivery partner." }],
+        },
+        {
+          key: "delivered",
+          isDone: isDelivered,
+          title: isDelivered ? "Delivered" : "Delivery Expected soon",
+          date: isDelivered ? deliveredDate : "",
+          items: isDelivered
+            ? [{ text: "Your order has been handed over safely.", sub: deliveredTime }]
+            : [{ text: "Item yet to be delivered." }],
+        },
+      ];
+    } else if (isShiprocket) {
+      const courierLine = detail.shipment?.courier_name || detail.shipment?.awb_number
+        ? `${detail.shipment.courier_name || "Courier Partner"}${detail.shipment.awb_number ? ` - AWB: ${detail.shipment.awb_number}` : ""}`
+        : null;
+
+      nodes = [
+        {
+          key: "ordered",
+          isDone: isPlaced,
+          title: "Ordered",
+          date: orderedDate,
+          items: [{ text: "Your order has been placed.", sub: orderedTime }],
+        },
+        {
+          key: "packed",
+          isDone: isPacked,
+          title: "Packed",
+          date: isPacked ? packedDate : "",
+          items: isPacked
+            ? [
+                { text: "Seller has processed your order. Manifest created.", sub: packedTime },
+                ...(isShipped ? [{ text: `Package handed over to ${detail.shipment?.courier_name || "courier partner"}.`, sub: shippedTime }] : []),
+              ]
+            : [{ text: "Seller will process your order soon." }],
+        },
+        {
+          key: "shipped",
+          isDone: isShipped,
+          title: "In Transit",
+          date: isShipped ? shippedDate : "",
+          courier: isShipped ? courierLine : null,
+          trackingUrl: isShipped ? detail.shipment?.tracking_url : null,
+          items: isShipped
+            ? [{ text: `In transit with ${detail.shipment?.courier_name || "courier partner"}.`, sub: shippedTime }]
+            : [{ text: "Item yet to be picked up by courier." }],
+          scans: isShipped ? (detail.shipment?.scans || []) : [],
+        },
+        {
+          key: "out_for_delivery",
+          isDone: isOutForDelivery || isDelivered,
+          title: "Out for Delivery",
+          date: (isOutForDelivery || isDelivered) ? ofdDate : "",
+          items: (isOutForDelivery || isDelivered)
+            ? [{ text: "Package is out for delivery with courier delivery executive.", sub: ofdTime }]
+            : [{ text: "Package not yet out for delivery." }],
+        },
+        {
+          key: "delivered",
+          isDone: isDelivered,
+          title: isDelivered ? "Delivered" : (expectedDeliveryDate ? `Delivery Expected by ${expectedDeliveryDate}` : "Delivery Expected soon"),
+          date: isDelivered ? deliveredDate : "",
+          items: isDelivered
+            ? [{ text: "Your item has been delivered.", sub: deliveredTime }]
+            : [{ text: "Item yet to be delivered." }],
+        },
+      ];
+    } else {
+      // Manual Dispatch
+      const partnerLine = detail.shipment?.delivery_partner_name || detail.shipment?.courier_name || detail.shipment?.awb_number
+        ? `${detail.shipment.delivery_partner_name || detail.shipment.courier_name || "Delivery Partner"}${detail.shipment.awb_number ? ` - ${detail.shipment.awb_number}` : ""}`
+        : null;
+
+      nodes = [
+        {
+          key: "ordered",
+          isDone: isPlaced,
+          title: "Ordered",
+          date: orderedDate,
+          items: [{ text: "Your order has been placed.", sub: orderedTime }],
+        },
+        {
+          key: "packed",
+          isDone: isPacked,
+          title: "Packed",
+          date: isPacked ? packedDate : "",
+          items: isPacked
+            ? [{ text: "Seller has processed your order.", sub: packedTime }]
+            : [{ text: "Seller will process your order soon." }],
+        },
+        {
+          key: "shipped",
+          isDone: isShipped,
+          title: "Shipped",
+          date: isShipped ? shippedDate : "",
+          courier: isShipped ? partnerLine : null,
+          items: isShipped
+            ? [{ text: "Your item has been dispatched.", sub: shippedTime }]
+            : [{ text: "Item yet to be shipped." }],
+        },
+        {
+          key: "delivered",
+          isDone: isDelivered,
+          title: isDelivered ? "Delivered" : `Delivery Expected by ${expectedDeliveryDate || "soon"}`,
+          date: isDelivered ? deliveredDate : "",
+          items: isDelivered
+            ? [{ text: "Your item has been delivered.", sub: deliveredTime }]
+            : [{ text: "Item yet to be delivered." }],
+        },
+      ];
+    }
 
     return (
       <div
         style={{
           border: cardBorder,
           borderRadius: "18px",
-          padding: isCompact ? "14px" : "18px",
+          padding: isCompact ? "16px" : "20px",
           background: panelBg,
         }}
       >
@@ -982,7 +1250,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
           style={{
             fontSize: "13px",
             fontWeight: 800,
-            marginBottom: "14px",
+            marginBottom: "16px",
             letterSpacing: "0.04em",
             textTransform: "uppercase",
             color: textMuted,
@@ -994,21 +1262,14 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
         {isCancelled ? (
           <div
             style={{
-              borderRadius: "16px",
+              borderRadius: "14px",
               border: "1px solid rgba(239,68,68,0.18)",
               background: "rgba(239,68,68,0.08)",
               padding: "14px 16px",
-              marginBottom: "14px",
+              marginBottom: "16px",
             }}
           >
-            <div
-              style={{
-                fontSize: "15px",
-                fontWeight: 800,
-                color: "#dc2626",
-                marginBottom: "4px",
-              }}
-            >
+            <div style={{ fontSize: "15px", fontWeight: 800, color: "#dc2626", marginBottom: "4px" }}>
               Order Cancelled
             </div>
             <div style={{ fontSize: "13px", color: textMuted }}>
@@ -1017,293 +1278,252 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
           </div>
         ) : null}
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-          {timelineSteps.map((step, index) => {
-            const stepRank = getStepRank(step.key);
-            const isCompleted =
-              !isCancelled &&
-              (step.time
-                ? stepRank < currentRank || orderStatus === "delivered" || stepRank === currentRank
-                : false);
-            const isCurrent =
-              !isCancelled &&
-              ((stepRank === currentRank && orderStatus !== "delivered") ||
-                (orderStatus === "delivered" && step.key === "delivered"));
-            const isPending = !isCompleted && !isCurrent;
-
-            const dotOuterColor = isCompleted
-              ? "#16a34a"
-              : isCurrent
-              ? getStatusColor(orderStatus)
-              : pendingDot;
-
-            const dotInnerColor = isCompleted
-              ? "#ffffff"
-              : isCurrent
-              ? "#f59e0b"
-              : "transparent";
-
-            const lineColor =
-              !isCancelled && (isCompleted || (orderStatus === "delivered" && step.key !== "delivered"))
-                ? "#16a34a"
-                : timelineRail;
+        {/* Continuous Flipkart-Style Vertical Stepper */}
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {nodes.map((node, nIdx) => {
+            const isLast = nIdx === nodes.length - 1;
+            const nextNode = nodes[nIdx + 1];
+            const lineIsDone = node.isDone && (nextNode ? nextNode.isDone : false);
 
             return (
-              <div
-                key={step.key}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "30px minmax(0, 1fr)",
-                  gap: "12px",
-                  alignItems: "flex-start",
-                  minHeight: isCompact ? "62px" : "72px",
-                }}
-              >
-                <div
-                  style={{
-                    position: "relative",
-                    display: "flex",
-                    justifyContent: "center",
-                    paddingTop: "2px",
-                    minHeight: isCompact ? "62px" : "72px",
-                  }}
-                >
-                  {index < timelineSteps.length - 1 ? (
+              <div key={node.key} style={{ display: "flex", gap: "16px" }}>
+                {/* Left Rail with Dot & Connecting Vertical Line */}
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  <div
+                    style={{
+                      width: "12px",
+                      height: "12px",
+                      borderRadius: "50%",
+                      background: node.isDone ? "#22c55e" : "transparent",
+                      border: node.isDone ? "none" : `2px solid ${isLight ? "#cbd5e1" : "rgba(255,255,255,0.25)"}`,
+                      marginTop: "4px",
+                      flexShrink: 0,
+                    }}
+                  />
+                  {!isLast && (
                     <div
                       style={{
-                        position: "absolute",
-                        top: "22px",
-                        bottom: "-8px",
-                        left: "50%",
-                        transform: "translateX(-50%)",
-                        width: "4px",
-                        borderRadius: "999px",
-                        background: lineColor,
-                        opacity: isPending ? 0.7 : 1,
+                        width: "2px",
+                        flex: 1,
+                        minHeight: "44px",
+                        background: lineIsDone ? "#22c55e" : (isLight ? "#cbd5e1" : "rgba(255,255,255,0.15)"),
+                        margin: "4px 0",
                       }}
                     />
-                  ) : null}
-
-                  <div
-                    style={{
-                      width: isCurrent ? "22px" : "20px",
-                      height: isCurrent ? "22px" : "20px",
-                      borderRadius: "999px",
-                      background: dotOuterColor,
-                      border: isPending
-                        ? `1px solid ${isLight ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.12)"}`
-                        : "none",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      boxShadow: isCurrent ? `0 0 0 4px ${getStatusColor(orderStatus)}20` : "none",
-                      position: "relative",
-                      zIndex: 2,
-                      marginTop: "2px",
-                    }}
-                  >
-                    {isCompleted ? (
-                      <div
-                        style={{
-                          width: "8px",
-                          height: "8px",
-                          borderRadius: "999px",
-                          background: dotInnerColor,
-                        }}
-                      />
-                    ) : isCurrent ? (
-                      <div
-                        style={{
-                          width: "10px",
-                          height: "10px",
-                          borderRadius: "999px",
-                          background: dotInnerColor,
-                        }}
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          width: "8px",
-                          height: "8px",
-                          borderRadius: "4px",
-                          background: pendingDot,
-                        }}
-                      />
-                    )}
-                  </div>
+                  )}
                 </div>
 
-                <div style={{ paddingTop: "1px" }}>
-                  <div
-                    style={{
-                      fontSize: isMobile ? "16px" : "18px",
-                      fontWeight: isCurrent ? 800 : 700,
-                      color: textPrimary,
-                      marginBottom: "4px",
-                      letterSpacing: "-0.02em",
-                    }}
-                  >
-                    {step.label}
+                {/* Right Node Details */}
+                <div style={{ paddingBottom: isLast ? "0" : "22px", flex: 1 }}>
+                  {/* Title & Date on the same line */}
+                  <div style={{ fontSize: "14.5px", color: textPrimary, marginBottom: "4px", lineHeight: 1.3 }}>
+                    <strong style={{ fontWeight: 800 }}>{node.title}</strong>
+                    {node.date && (
+                      <span style={{ color: textMuted, fontWeight: 500, fontSize: "13px", marginLeft: "8px" }}>
+                        {node.date}
+                      </span>
+                    )}
                   </div>
-                  <div
-                    style={{
-                      fontSize: isMobile ? "13px" : "14px",
-                      color: textMuted,
-                    }}
-                  >
-                    {step.time ? formatDate(step.time) : "Pending"}
+
+                  {/* Courier Partner & AWB Line */}
+                  {node.courier && (
+                    <div style={{ fontSize: "13.5px", fontWeight: 700, color: textPrimary, marginBottom: "4px" }}>
+                      {node.courier}
+                    </div>
+                  )}
+
+                  {/* Tracking link for courier */}
+                  {node.trackingUrl && (
+                    <div style={{ marginBottom: "6px" }}>
+                      <a
+                        href={node.trackingUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          fontSize: "12px",
+                          fontWeight: 700,
+                          color: "#2563eb",
+                          textDecoration: "none",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        Track on Courier Website ↗
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Node Events */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    {node.items.map((item, iIdx) => (
+                      <div key={iIdx} style={{ fontSize: "13px" }}>
+                        <div style={{ color: node.isDone ? textPrimary : textMuted, fontWeight: 500 }}>
+                          {item.text}
+                        </div>
+                        {item.sub && (
+                          <div style={{ color: textMuted, fontSize: "12px", marginTop: "1px" }}>
+                            {item.sub}
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
+
+                  {/* Collapsible Scans for Shipped Step */}
+                  {node.scans && node.scans.length > 0 && (
+                    <div style={{ marginTop: "8px" }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExpandedScansMap((prev) => ({
+                            ...prev,
+                            [detail.id]: !prev[detail.id],
+                          }));
+                        }}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          padding: "3px 0",
+                          color: "#2563eb",
+                          fontSize: "12.5px",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        {expandedScansMap[detail.id]
+                          ? "Hide tracking updates ▴"
+                          : `See all tracking updates (${node.scans.length}) ▾`}
+                      </button>
+
+                      {expandedScansMap[detail.id] && (
+                        <div
+                          style={{
+                            marginTop: "10px",
+                            marginLeft: "8px",
+                            paddingLeft: "12px",
+                            borderLeft: `2px solid ${isLight ? "#bfdbfe" : "rgba(37,99,235,0.3)"}`,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "8px",
+                          }}
+                        >
+                          {node.scans.map((scan: any, sIdx: number) => (
+                            <div key={sIdx} style={{ fontSize: "12.5px" }}>
+                              <div style={{ color: textPrimary, fontWeight: 600 }}>
+                                {scan.activity}
+                              </div>
+                              <div style={{ color: textMuted, fontSize: "11.5px", marginTop: "1px" }}>
+                                {scan.date && <span>{scan.date}</span>}
+                                {scan.location && <span>{scan.date ? " - " : ""}{scan.location}</span>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
 
-        {detail.shipment ? (
+        {/* Own Fleet Rider Contact Card — below tracker, only when out for delivery and not cancelled */}
+        {isOwnAgent && !isCancelled && isOutForDelivery && (detail.shipment?.delivery_partner_name || detail.shipment?.delivery_partner_phone) && (
           <div
             style={{
-              marginTop: "12px",
-              paddingTop: "14px",
-              borderTop: divider,
+              marginTop: "16px",
+              padding: "12px 16px",
+              borderRadius: "14px",
+              background: isLight ? "#f0fdf4" : "rgba(16, 185, 129, 0.06)",
+              border: "1.5px solid rgba(16, 185, 129, 0.25)",
               display: "flex",
-              flexDirection: "column",
-              gap: "10px",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: "12px",
             }}
           >
-            {/* Show delivery agent card ONLY when order is actively in transit / Out for Delivery (NOT when delivered, returned, or cancelled) */}
-            {orderStatus !== "delivered" &&
-              orderStatus !== "returned" &&
-              orderStatus !== "cancelled" &&
-              detail.shipment.status !== "delivered" &&
-              detail.shipment.status !== "cancelled" &&
-              (orderStatus === "out_for_delivery" || detail.shipment.status === "out_for_delivery") && (
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               <div
                 style={{
-                  padding: "12px 14px",
-                  borderRadius: "12px",
-                  background: isLight ? "#f0fdf4" : "rgba(34,197,94,0.12)",
-                  border: `1px solid ${isLight ? "#bbf7d0" : "rgba(34,197,94,0.3)"}`,
+                  width: "38px",
+                  height: "38px",
+                  borderRadius: "50%",
+                  background: "#10b981",
+                  color: "#ffffff",
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "space-between",
-                  flexWrap: "wrap",
-                  gap: "10px",
+                  justifyContent: "center",
+                  fontWeight: 800,
+                  fontSize: "15px",
+                  flexShrink: 0,
                 }}
               >
-                <div>
-                  <div style={{ fontSize: "11px", fontWeight: 800, color: "#16a34a", textTransform: "uppercase", marginBottom: "2px" }}>
-                    Delivery Agent on the Way
-                  </div>
-                  <div style={{ fontSize: "15px", fontWeight: 800, color: textPrimary }}>
-                    {detail.shipment.delivery_partner_name || "Delivery Partner"}
-                  </div>
-                  {detail.shipment.delivery_partner_phone && (
-                    <div style={{ fontSize: "13px", color: textMuted, marginTop: "2px", display: "flex", alignItems: "center", gap: "5px" }}>
-                      <PhoneIcon />
-                      <span>{formatPhoneDisplay(detail.shipment.delivery_partner_phone)}</span>
-                    </div>
-                  )}
+                {detail.shipment.delivery_partner_name?.[0]?.toUpperCase() || "R"}
+              </div>
+              <div>
+                <div style={{ fontSize: "11px", fontWeight: 800, color: "#059669", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Store Delivery Partner
                 </div>
-
+                <div style={{ fontSize: "14px", fontWeight: 800, color: textPrimary }}>
+                  {detail.shipment.delivery_partner_name || "Assigned Rider"}
+                </div>
                 {detail.shipment.delivery_partner_phone && (
-                  <a
-                    href={`tel:${formatPhoneDialable(detail.shipment.delivery_partner_phone)}`}
-                    style={{
-                      padding: "8px 14px",
-                      borderRadius: "8px",
-                      background: "#16a34a",
-                      color: "#ffffff",
-                      fontSize: "13px",
-                      fontWeight: 700,
-                      textDecoration: "none",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
-                    }}
-                  >
-                    <PhoneIcon />
-                    <span>Call Agent</span>
-                  </a>
+                  <div style={{ fontSize: "12px", color: textMuted, marginTop: "1px" }}>
+                    {formatPhoneDisplay(detail.shipment.delivery_partner_phone)}
+                  </div>
                 )}
               </div>
-            )}
+            </div>
 
-            {/* Courier tracking info if shipped with Shiprocket/Courier partner */}
-            {(detail.shipment.courier_name || detail.shipment.awb_number) && (
-              <div
+            {detail.shipment.delivery_partner_phone && (
+              <a
+                href={`tel:${detail.shipment.delivery_partner_phone}`}
                 style={{
-                  padding: "10px 12px",
-                  borderRadius: "10px",
-                  background: isLight ? "#f8fafc" : "rgba(255,255,255,0.04)",
-                  border: cardBorder,
-                  display: "flex",
-                  justifyContent: "space-between",
+                  display: "inline-flex",
                   alignItems: "center",
-                  flexWrap: "wrap",
-                  gap: "8px",
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: "13px", fontWeight: 700, color: textPrimary }}>
-                    📦 {detail.shipment.courier_name || "Express Courier"}
-                  </div>
-                  {detail.shipment.awb_number && (
-                    <div style={{ fontSize: "12px", color: textMuted, marginTop: "2px" }}>
-                      Tracking: <span style={{ fontWeight: 700 }}>{detail.shipment.awb_number}</span>
-                    </div>
-                  )}
-                </div>
-
-                {detail.shipment.tracking_url && (
-                  <a
-                    href={detail.shipment.tracking_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      fontSize: "12px",
-                      fontWeight: 700,
-                      color: "#2563eb",
-                      textDecoration: "none",
-                    }}
-                  >
-                    Track Courier ↗
-                  </a>
-                )}
-              </div>
-            )}
-
-            {/* Reschedule Notice or Estimated delivery time */}
-            {detail.shipment.notes && (orderStatus === "rescheduled" || detail.shipment.status === "rescheduled") && (
-              <div
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: "6px",
-                  background: isDark ? "rgba(217, 119, 6, 0.15)" : "#fffbeb",
-                  border: isDark ? "1px solid rgba(217, 119, 6, 0.3)" : "1px solid #fde68a",
-                  color: isDark ? "#fde68a" : "#92400e",
+                  gap: "6px",
+                  padding: "7px 14px",
+                  borderRadius: "8px",
+                  background: "#10b981",
+                  color: "#ffffff",
                   fontSize: "12px",
-                  lineHeight: 1.4,
+                  fontWeight: 700,
+                  textDecoration: "none",
                 }}
               >
-                <div style={{ fontWeight: 700, marginBottom: "2px" }}>
-                  ⚠️ Delivery Attempt Rescheduled
-                </div>
-                <div>{detail.shipment.notes}</div>
-                {detail.shipment.estimated_delivery_at && (
-                  <div style={{ marginTop: "3px", fontWeight: 700 }}>
-                    Next Retry Expected: {formatDate(detail.shipment.estimated_delivery_at)}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {detail.shipment.estimated_delivery_at && orderStatus !== "delivered" && orderStatus !== "rescheduled" && detail.shipment.status !== "rescheduled" && (
-              <div style={{ fontSize: "13px", color: textMuted }}>
-                🕒 Expected Delivery: <strong style={{ color: textPrimary }}>{formatDate(detail.shipment.estimated_delivery_at)}</strong>
-              </div>
+                <PhoneIcon />
+                <span>Call Delivery Partner</span>
+              </a>
             )}
           </div>
-        ) : null}
+        )}
+
+        {/* Reschedule Notice if applicable */}
+        {detail.shipment?.notes && (orderStatus === "rescheduled" || detail.shipment.status === "rescheduled") && (
+          <div
+            style={{
+              marginTop: "14px",
+              padding: "10px 14px",
+              borderRadius: "8px",
+              background: isDark ? "rgba(217, 119, 6, 0.15)" : "#fffbeb",
+              border: isDark ? "1px solid rgba(217, 119, 6, 0.3)" : "1px solid #fde68a",
+              color: isDark ? "#fde68a" : "#92400e",
+              fontSize: "12.5px",
+              lineHeight: 1.4,
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: "2px" }}>
+              Delivery Attempt Rescheduled
+            </div>
+            <div>{detail.shipment.notes}</div>
+          </div>
+        )}
       </div>
     );
   };
@@ -1948,7 +2168,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
             {orders.map((order) => {
               const detail = detailMap[order.id];
               const isExpanded = expandedOrderId === order.id;
-              const canCancel = order.status === "placed" || order.status === "confirmed" || order.status === "pending";
+              const canCancel = order.status !== "delivered" && order.status !== "returned" && order.status !== "cancelled";
               const isDelivered = order.status === "delivered";
               const statusColor = getStatusColor(order.status);
               const canReturn = canRequestReturnForOrder(detail, order);
@@ -2119,8 +2339,8 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                           );
                         })()}
 
-                        {/* Delivery OTP Badge on Card */}
-                        {(order.status === "out_for_delivery" || order.status === "shipped") && order.delivery_otp ? (
+                        {/* Delivery OTP Badge on Card — only for Own Fleet */}
+                        {(order.status === "out_for_delivery" || order.status === "shipped") && order.delivery_otp && order.shipment?.mode !== "shiprocket" && order.shipment?.delivery_mode !== "shiprocket" ? (
                           <div
                             style={{
                               display: "inline-flex",
@@ -2136,7 +2356,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                               whiteSpace: "nowrap",
                             }}
                           >
-                            <span>🔒 OTP:</span>
+                            <span>OTP:</span>
                             <span style={{ letterSpacing: "2px", fontFamily: "monospace", fontWeight: 900 }}>
                               {order.delivery_otp}
                             </span>
@@ -2209,8 +2429,8 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                         </div>
                       ) : detail ? (
                         <>
-                          {/* Delivery Verification Code (OTP) Banner */}
-                          {detail.delivery_otp && (detail.status === "out_for_delivery" || detail.status === "shipped") ? (
+                          {/* Delivery Verification Code (OTP) Banner — only for Own Fleet */}
+                          {detail.delivery_otp && detail.shipment?.mode !== "shiprocket" && detail.shipment?.delivery_mode !== "shiprocket" && (detail.status === "out_for_delivery" || detail.status === "shipped") ? (
                             <div
                               style={{
                                 display: "flex",
@@ -2225,36 +2445,20 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                 gap: "12px",
                               }}
                             >
-                              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                              <div>
                                 <div
                                   style={{
-                                    width: "38px",
-                                    height: "38px",
-                                    borderRadius: "12px",
-                                    background: "rgba(16, 185, 129, 0.18)",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    fontSize: "18px",
+                                    fontSize: "12px",
+                                    fontWeight: 800,
+                                    color: "#059669",
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.5px",
                                   }}
                                 >
-                                  🔒
+                                  Delivery Verification OTP
                                 </div>
-                                <div>
-                                  <div
-                                    style={{
-                                      fontSize: "12px",
-                                      fontWeight: 800,
-                                      color: "#059669",
-                                      textTransform: "uppercase",
-                                      letterSpacing: "0.5px",
-                                    }}
-                                  >
-                                    Delivery Verification OTP
-                                  </div>
-                                  <div style={{ fontSize: "12px", color: textMuted, marginTop: "2px" }}>
-                                    Share this 4-digit code with the delivery partner upon receiving your order.
-                                  </div>
+                                <div style={{ fontSize: "12px", color: textMuted, marginTop: "2px" }}>
+                                  Share this 4-digit code with the delivery partner upon receiving your order.
                                 </div>
                               </div>
                               <div
@@ -3041,7 +3245,18 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                           : (detail.refund_info.status === "processing" ? "#d97706" : textPrimary)),
                                     }}
                                   >
-                                    <span>{detail.refund_info.status === "failed" ? "❌" : (detail.refund_info.status === "completed" ? "✅" : (detail.refund_info.status === "processing" ? "⏳" : "ℹ️"))}</span>
+                                    <span
+                                      style={{
+                                        width: "8px",
+                                        height: "8px",
+                                        borderRadius: "50%",
+                                        background: detail.refund_info.status === "failed"
+                                          ? "#ef4444"
+                                          : (detail.refund_info.status === "completed"
+                                            ? "#059669"
+                                            : (detail.refund_info.status === "processing" ? "#d97706" : textMuted)),
+                                      }}
+                                    />
                                     <span>{detail.refund_info.status_label}</span>
                                   </div>
                                   {detail.refund_info.estimated_days && (
@@ -3185,7 +3400,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                               {canCancel ? (
                                 <button
                                   type="button"
-                                  onClick={() => handleCancelOrder(order.id)}
+                                  onClick={() => handleCancelOrder(order.id, order.status)}
                                   disabled={cancellingOrderId === order.id}
                                   style={{
                                     border: "1px solid rgba(239,68,68,0.26)",

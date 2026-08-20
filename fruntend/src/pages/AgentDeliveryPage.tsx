@@ -46,6 +46,7 @@ type Task = {
   estimated_delivery_at?: string | null;
   created_at?: string;
   assigned_at?: string;
+  is_cancelled?: boolean;
 };
 
 type PoolOrder = {
@@ -472,6 +473,8 @@ export default function AgentDeliveryPage() {
         msg = "Delivery rescheduled & notes updated.";
       } else if (action === "reject") {
         msg = "Order released back to pickup pool.";
+      } else if (action === "return_to_hub") {
+        msg = "Parcel returned to store warehouse successfully.";
       }
 
       setSuccessMsg(msg);
@@ -914,6 +917,7 @@ export default function AgentDeliveryPage() {
               </div>
             ) : (
               tasks.map((task, index) => {
+                const isCancelled = task.is_cancelled || task.status === "cancelled" || task.order_status === "cancelled";
                 const isReturnPickup = task.task_type === "return_pickup";
                 const isRescheduled = task.status === "rescheduled";
                 const isAssigned = task.status === "assigned";
@@ -928,12 +932,16 @@ export default function AgentDeliveryPage() {
                       background: "#ffffff",
                       borderRadius: "14px",
                       padding: "16px",
-                      border: isReturnPickup
+                      border: isCancelled
+                        ? "1.5px solid #fca5a5"
+                        : isReturnPickup
                         ? "1px solid #ddd6fe"
                         : isRescheduled
                         ? "1px solid #fde68a"
                         : "1px solid #e2e8f0",
-                      boxShadow: isReturnPickup
+                      boxShadow: isCancelled
+                        ? "0 4px 12px -1px rgba(239, 68, 68, 0.12)"
+                        : isReturnPickup
                         ? "0 4px 10px -1px rgba(124, 58, 237, 0.08)"
                         : "0 4px 6px -1px rgba(0, 0, 0, 0.04)",
                       position: "relative",
@@ -946,21 +954,21 @@ export default function AgentDeliveryPage() {
                           style={{
                             fontSize: "11px",
                             fontWeight: 800,
-                            color: isReturnPickup ? "#6b21a8" : "#1d4ed8",
-                            background: isReturnPickup ? "#f5f3ff" : "#eff6ff",
-                            border: `1px solid ${isReturnPickup ? "#ddd6fe" : "#bfdbfe"}`,
+                            color: isCancelled ? "#991b1b" : isReturnPickup ? "#6b21a8" : "#1d4ed8",
+                            background: isCancelled ? "#fef2f2" : isReturnPickup ? "#f5f3ff" : "#eff6ff",
+                            border: `1px solid ${isCancelled ? "#fca5a5" : isReturnPickup ? "#ddd6fe" : "#bfdbfe"}`,
                             padding: "2px 7px",
                             borderRadius: "4px",
                           }}
                         >
-                          {isReturnPickup ? `RETURN PICKUP #${index + 1}` : `STOP #${index + 1}`}
+                          {isCancelled ? `CANCELLED #${index + 1}` : isReturnPickup ? `RETURN PICKUP #${index + 1}` : `STOP #${index + 1}`}
                         </span>
                         <span
                           style={{
                             fontSize: "11px",
                             fontWeight: 700,
-                            color: isReturnPickup ? "#7c3aed" : "#64748b",
-                            background: isReturnPickup ? "#f5f3ff" : "#f1f5f9",
+                            color: isCancelled ? "#b91c1c" : isReturnPickup ? "#7c3aed" : "#64748b",
+                            background: isCancelled ? "#fff1f2" : isReturnPickup ? "#f5f3ff" : "#f1f5f9",
                             padding: "2px 6px",
                             borderRadius: "4px",
                           }}
@@ -975,7 +983,9 @@ export default function AgentDeliveryPage() {
                           fontWeight: 700,
                           padding: "3px 8px",
                           borderRadius: "4px",
-                          background: isReturnPickup
+                          background: isCancelled
+                            ? "#fef2f2"
+                            : isReturnPickup
                             ? isPickedUpReturn
                               ? "#ecfdf5"
                               : "#f5f3ff"
@@ -986,7 +996,9 @@ export default function AgentDeliveryPage() {
                             : isAssigned
                             ? "#f1f5f9"
                             : "#eff6ff",
-                          color: isReturnPickup
+                          color: isCancelled
+                            ? "#b91c1c"
+                            : isReturnPickup
                             ? isPickedUpReturn
                               ? "#059669"
                               : "#6b21a8"
@@ -998,7 +1010,9 @@ export default function AgentDeliveryPage() {
                             ? "#475569"
                             : "#1d4ed8",
                           border: `1px solid ${
-                            isReturnPickup
+                            isCancelled
+                              ? "#fca5a5"
+                              : isReturnPickup
                               ? isPickedUpReturn
                                 ? "#a7f3d0"
                                 : "#ddd6fe"
@@ -1013,7 +1027,9 @@ export default function AgentDeliveryPage() {
                           textTransform: "capitalize",
                         }}
                       >
-                        {isReturnPickup
+                        {isCancelled
+                          ? "Cancelled by Customer"
+                          : isReturnPickup
                           ? isPickedUpReturn
                             ? "Picked Up & Inspected"
                             : isAccepted
@@ -1024,6 +1040,29 @@ export default function AgentDeliveryPage() {
                           : task.status.replace("_", " ")}
                       </span>
                     </div>
+
+                    {/* Cancelled Alert Banner */}
+                    {isCancelled && (
+                      <div
+                        style={{
+                          padding: "10px 12px",
+                          borderRadius: "8px",
+                          background: "#fef2f2",
+                          border: "1px solid #fecaca",
+                          color: "#991b1b",
+                          fontSize: "12px",
+                          marginBottom: "12px",
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        <div style={{ fontWeight: 800, marginBottom: "2px" }}>
+                          Order Cancelled by Customer
+                        </div>
+                        <div>
+                          Customer cancelled this order. Do not deliver. Please return the parcel to the store warehouse.
+                        </div>
+                      </div>
+                    )}
 
                     {/* Rescheduled Notice Banner */}
                     {isRescheduled && (
@@ -1307,164 +1346,188 @@ export default function AgentDeliveryPage() {
                       ) : (
                         /* Forward Delivery Actions */
                         <>
-                          {isAssigned && (
-                            <div style={{ display: "flex", gap: "8px" }}>
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateStatus(task.shipment_id, "accept")}
-                                disabled={actionLoadingId === task.shipment_id}
-                                style={{
-                                  flex: 1,
-                                  padding: "12px",
-                                  borderRadius: "8px",
-                                  background: "#2563eb",
-                                  color: "#ffffff",
-                                  fontSize: "14px",
-                                  fontWeight: 700,
-                                  border: "none",
-                                  cursor: actionLoadingId === task.shipment_id ? "wait" : "pointer",
-                                  boxShadow: "0 2px 4px rgba(37, 99, 235, 0.2)",
-                                }}
-                              >
-                                {actionLoadingId === task.shipment_id ? "Accepting..." : "Accept Order"}
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setDeclineTask(task);
-                                  setDeclineReason(DECLINE_REASONS[0]);
-                                  setDeclineNote("");
-                                }}
-                                disabled={actionLoadingId === task.shipment_id}
-                                style={{
-                                  padding: "12px 14px",
-                                  borderRadius: "8px",
-                                  background: "#fef2f2",
-                                  color: "#b91c1c",
-                                  fontSize: "13px",
-                                  fontWeight: 700,
-                                  border: "1px solid #fecaca",
-                                  cursor: "pointer",
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
-                                Decline
-                              </button>
-                            </div>
-                          )}
-
-                          {isAccepted && (
-                            <div style={{ display: "flex", gap: "8px" }}>
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateStatus(task.shipment_id, "out_for_delivery")}
-                                disabled={actionLoadingId === task.shipment_id}
-                                style={{
-                                  flex: 1,
-                                  padding: "13px",
-                                  borderRadius: "8px",
-                                  background: "#2563eb",
-                                  color: "#ffffff",
-                                  fontSize: "14px",
-                                  fontWeight: 700,
-                                  border: "none",
-                                  cursor: actionLoadingId === task.shipment_id ? "wait" : "pointer",
-                                  boxShadow: "0 4px 6px -1px rgba(37, 99, 235, 0.2)",
-                                }}
-                              >
-                                {actionLoadingId === task.shipment_id ? "Starting Trip..." : "Start Trip / Out for Delivery"}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setDeclineTask(task);
-                                  setDeclineReason(DECLINE_REASONS[0]);
-                                  setDeclineNote("");
-                                }}
-                                disabled={actionLoadingId === task.shipment_id}
-                                style={{
-                                  padding: "12px 14px",
-                                  borderRadius: "8px",
-                                  background: "#fef2f2",
-                                  color: "#b91c1c",
-                                  fontSize: "13px",
-                                  fontWeight: 700,
-                                  border: "1px solid #fecaca",
-                                  cursor: "pointer",
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
-                                Decline
-                              </button>
-                            </div>
-                          )}
-
-                          {(isOutForDelivery || isRescheduled) && (
+                          {isCancelled ? (
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateStatus(task.shipment_id, "return_to_hub")}
+                              disabled={actionLoadingId === task.shipment_id}
+                              style={{
+                                width: "100%",
+                                padding: "13px",
+                                borderRadius: "8px",
+                                background: "#dc2626",
+                                color: "#ffffff",
+                                fontSize: "14px",
+                                fontWeight: 700,
+                                border: "none",
+                                cursor: actionLoadingId === task.shipment_id ? "wait" : "pointer",
+                                boxShadow: "0 4px 6px -1px rgba(220, 38, 38, 0.2)",
+                              }}
+                            >
+                              {actionLoadingId === task.shipment_id ? "Updating..." : "Return Parcel to Store Warehouse"}
+                            </button>
+                          ) : (
                             <>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (isRescheduled) {
-                                    handleUpdateStatus(task.shipment_id, "out_for_delivery");
-                                  } else {
-                                    setDeliverOtpTask(task);
-                                    setEnteredDeliveryOtp("");
-                                    setDeliverOtpError(null);
-                                  }
-                                }}
-                                disabled={actionLoadingId === task.shipment_id}
-                                style={{
-                                  width: "100%",
-                                  padding: "13px",
-                                  borderRadius: "8px",
-                                  background: isOutForDelivery ? "#16a34a" : "#2563eb",
-                                  color: "#ffffff",
-                                  fontSize: "14px",
-                                  fontWeight: 700,
-                                  border: "none",
-                                  cursor: actionLoadingId === task.shipment_id ? "wait" : "pointer",
-                                  boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.15)",
-                                  transition: "all 0.15s ease",
-                                }}
-                              >
-                                {actionLoadingId === task.shipment_id
-                                  ? "Updating..."
-                                  : isRescheduled
-                                  ? "Resume / Start Trip"
-                                  : "Mark Delivered (Verify OTP)"}
-                              </button>
+                              {isAssigned && (
+                                <div style={{ display: "flex", gap: "8px" }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateStatus(task.shipment_id, "accept")}
+                                    disabled={actionLoadingId === task.shipment_id}
+                                    style={{
+                                      flex: 1,
+                                      padding: "12px",
+                                      borderRadius: "8px",
+                                      background: "#2563eb",
+                                      color: "#ffffff",
+                                      fontSize: "14px",
+                                      fontWeight: 700,
+                                      border: "none",
+                                      cursor: actionLoadingId === task.shipment_id ? "wait" : "pointer",
+                                      boxShadow: "0 2px 4px rgba(37, 99, 235, 0.2)",
+                                    }}
+                                  >
+                                    {actionLoadingId === task.shipment_id ? "Accepting..." : "Accept Order"}
+                                  </button>
 
-                              {/* Unable to deliver / Reschedule Trigger Button */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setRescheduleTask(task);
-                                  setRescheduleReason(RESCHEDULE_REASONS[0]);
-                                  setRescheduleNote("");
-                                }}
-                                disabled={actionLoadingId === task.shipment_id}
-                                style={{
-                                  width: "100%",
-                                  padding: "10px",
-                                  borderRadius: "8px",
-                                  background: "#fffbeb",
-                                  color: "#b45309",
-                                  fontSize: "13px",
-                                  fontWeight: 700,
-                                  border: "1px solid #fde68a",
-                                  cursor: "pointer",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  gap: "6px",
-                                }}
-                              >
-                                <CalendarIcon />
-                                <span>
-                                  {isRescheduled ? "Update Reschedule Slot / Notes" : "Unable to Deliver? Reschedule"}
-                                </span>
-                              </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDeclineTask(task);
+                                      setDeclineReason(DECLINE_REASONS[0]);
+                                      setDeclineNote("");
+                                    }}
+                                    disabled={actionLoadingId === task.shipment_id}
+                                    style={{
+                                      padding: "12px 14px",
+                                      borderRadius: "8px",
+                                      background: "#fef2f2",
+                                      color: "#b91c1c",
+                                      fontSize: "13px",
+                                      fontWeight: 700,
+                                      border: "1px solid #fecaca",
+                                      cursor: "pointer",
+                                      whiteSpace: "nowrap",
+                                    }}
+                                  >
+                                    Decline
+                                  </button>
+                                </div>
+                              )}
+
+                              {isAccepted && (
+                                <div style={{ display: "flex", gap: "8px" }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateStatus(task.shipment_id, "out_for_delivery")}
+                                    disabled={actionLoadingId === task.shipment_id}
+                                    style={{
+                                      flex: 1,
+                                      padding: "13px",
+                                      borderRadius: "8px",
+                                      background: "#2563eb",
+                                      color: "#ffffff",
+                                      fontSize: "14px",
+                                      fontWeight: 700,
+                                      border: "none",
+                                      cursor: actionLoadingId === task.shipment_id ? "wait" : "pointer",
+                                      boxShadow: "0 4px 6px -1px rgba(37, 99, 235, 0.2)",
+                                    }}
+                                  >
+                                    {actionLoadingId === task.shipment_id ? "Starting Trip..." : "Start Trip / Out for Delivery"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDeclineTask(task);
+                                      setDeclineReason(DECLINE_REASONS[0]);
+                                      setDeclineNote("");
+                                    }}
+                                    disabled={actionLoadingId === task.shipment_id}
+                                    style={{
+                                      padding: "12px 14px",
+                                      borderRadius: "8px",
+                                      background: "#fef2f2",
+                                      color: "#b91c1c",
+                                      fontSize: "13px",
+                                      fontWeight: 700,
+                                      border: "1px solid #fecaca",
+                                      cursor: "pointer",
+                                      whiteSpace: "nowrap",
+                                    }}
+                                  >
+                                    Decline
+                                  </button>
+                                </div>
+                              )}
+
+                              {(isOutForDelivery || isRescheduled) && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (isRescheduled) {
+                                        handleUpdateStatus(task.shipment_id, "out_for_delivery");
+                                      } else {
+                                        setDeliverOtpTask(task);
+                                        setEnteredDeliveryOtp("");
+                                        setDeliverOtpError(null);
+                                      }
+                                    }}
+                                    disabled={actionLoadingId === task.shipment_id}
+                                    style={{
+                                      width: "100%",
+                                      padding: "13px",
+                                      borderRadius: "8px",
+                                      background: isOutForDelivery ? "#16a34a" : "#2563eb",
+                                      color: "#ffffff",
+                                      fontSize: "14px",
+                                      fontWeight: 700,
+                                      border: "none",
+                                      cursor: actionLoadingId === task.shipment_id ? "wait" : "pointer",
+                                      boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.15)",
+                                      transition: "all 0.15s ease",
+                                    }}
+                                  >
+                                    {actionLoadingId === task.shipment_id
+                                      ? "Updating..."
+                                      : isRescheduled
+                                      ? "Resume / Start Trip"
+                                      : "Mark Delivered (Verify OTP)"}
+                                  </button>
+
+                                  {/* Unable to deliver / Reschedule Trigger Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setRescheduleTask(task);
+                                      setRescheduleReason(RESCHEDULE_REASONS[0]);
+                                      setRescheduleNote("");
+                                    }}
+                                    disabled={actionLoadingId === task.shipment_id}
+                                    style={{
+                                      width: "100%",
+                                      padding: "10px",
+                                      borderRadius: "8px",
+                                      background: "#fffbeb",
+                                      color: "#b45309",
+                                      fontSize: "13px",
+                                      fontWeight: 700,
+                                      border: "1px solid #fde68a",
+                                      cursor: "pointer",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      gap: "6px",
+                                    }}
+                                  >
+                                    <CalendarIcon />
+                                    <span>
+                                      {isRescheduled ? "Update Reschedule Slot / Notes" : "Unable to Deliver? Reschedule"}
+                                    </span>
+                                  </button>
+                                </>
+                              )}
                             </>
                           )}
                         </>
