@@ -536,7 +536,7 @@ const CheckoutChargesPage: React.FC = () => {
                     ? "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
                     : "none",
                   fontSize: "13px",
-                  fontWeight: isActive ? 700 : 500,
+                  fontWeight: 600,
                   cursor: "pointer",
                   transition: "all 0.15s ease",
                   display: "inline-flex",
@@ -545,36 +545,6 @@ const CheckoutChargesPage: React.FC = () => {
                 }}
               >
                 <span>{tab.label}</span>
-                {tab.id === "standard" && (
-                  <span
-                    style={{
-                      fontSize: "11px",
-                      fontWeight: 700,
-                      padding: "1px 5px",
-                      borderRadius: "10px",
-                      background: isActive ? "#eff6ff" : "#f1f5f9",
-                      color: isActive ? "#2563eb" : "#64748b",
-                      border: `1px solid ${isActive ? "#bfdbfe" : "#e2e8f0"}`,
-                    }}
-                  >
-                    {standardCharges.filter((c) => c.enabled).length}/{standardCharges.length}
-                  </span>
-                )}
-                {tab.id === "custom" && customCharges.length > 0 && (
-                  <span
-                    style={{
-                      fontSize: "11px",
-                      fontWeight: 700,
-                      padding: "1px 5px",
-                      borderRadius: "10px",
-                      background: isActive ? "#eff6ff" : "#f1f5f9",
-                      color: isActive ? "#2563eb" : "#64748b",
-                      border: `1px solid ${isActive ? "#bfdbfe" : "#e2e8f0"}`,
-                    }}
-                  >
-                    {customCharges.length}
-                  </span>
-                )}
               </button>
             );
           })}
@@ -676,23 +646,25 @@ const CheckoutChargesPage: React.FC = () => {
                   background: "transparent",
                   color: isActive ? "#2563eb" : "#64748b",
                   fontSize: "13px",
-                  fontWeight: isActive ? 700 : 500,
+                  fontWeight: 600,
                   cursor: "pointer",
                   transition: "all 0.15s ease",
                   marginBottom: "-1px",
                 }}
               >
                 <span>{shortLabel}</span>
-                <span
-                  style={{
-                    width: "6px",
-                    height: "6px",
-                    minWidth: "6px",
-                    borderRadius: "999px",
-                    background: charge.enabled ? "#16a34a" : "#cbd5e1",
-                    display: "inline-block",
-                  }}
-                />
+                {charge.enabled && (
+                  <span
+                    style={{
+                      width: "6px",
+                      height: "6px",
+                      minWidth: "6px",
+                      borderRadius: "999px",
+                      background: "#16a34a",
+                      display: "inline-block",
+                    }}
+                  />
+                )}
               </button>
             );
           })}
@@ -726,23 +698,25 @@ const CheckoutChargesPage: React.FC = () => {
                   background: "transparent",
                   color: isActive ? "#2563eb" : "#64748b",
                   fontSize: "13px",
-                  fontWeight: isActive ? 700 : 500,
+                  fontWeight: 600,
                   cursor: "pointer",
                   transition: "all 0.15s ease",
                   marginBottom: "-1px",
                 }}
               >
                 <span>{charge.label}</span>
-                <span
-                  style={{
-                    width: "6px",
-                    height: "6px",
-                    minWidth: "6px",
-                    borderRadius: "999px",
-                    background: charge.enabled ? "#16a34a" : "#cbd5e1",
-                    display: "inline-block",
-                  }}
-                />
+                {charge.enabled && (
+                  <span
+                    style={{
+                      width: "6px",
+                      height: "6px",
+                      minWidth: "6px",
+                      borderRadius: "999px",
+                      background: "#16a34a",
+                      display: "inline-block",
+                    }}
+                  />
+                )}
               </button>
             );
           })}

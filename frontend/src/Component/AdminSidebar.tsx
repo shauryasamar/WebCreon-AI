@@ -19,12 +19,16 @@ const AdminSidebar = () => {
       to: `/builder/${siteId}/admin/products`,
     },
     {
-      label: "Orders",
+      label: "Orders & Returns",
       to: `/builder/${siteId}/admin/orders`,
     },
     {
       label: "Delivery & Shipping",
       to: `/builder/${siteId}/admin/delivery`,
+    },
+    {
+      label: "Checkout Charges",
+      to: `/builder/${siteId}/admin/checkout-charges`,
     },
     {
       label: "Earnings & Ledger",
@@ -33,10 +37,6 @@ const AdminSidebar = () => {
     {
       label: "Payout Settings",
       to: `/builder/${siteId}/admin/payment-settings`,
-    },
-    {
-      label: "Checkout Charges",
-      to: `/builder/${siteId}/admin/checkout-charges`,
     },
   ];
 

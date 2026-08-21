@@ -20,16 +20,8 @@ type ControlItemKey =
 type SavedSite = {
   id: string;
   slug: string;
-  site_definition?: {
-    site?: {
-      brand_name?: string | null;
-    };
-  } | null;
-  draft_definition?: {
-    site?: {
-      brand_name?: string | null;
-    };
-  } | null;
+  site_definition?: any;
+  draft_definition?: any;
 };
 
 export type AdminNavKey =
@@ -47,11 +39,11 @@ type AdminNavItem = {
 
 const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { key: "products", label: "Products" },
-  { key: "orders", label: "Orders" },
+  { key: "orders", label: "Orders & Returns" },
   { key: "delivery", label: "Delivery & Shipping" },
+  { key: "checkout-charges", label: "Checkout Charges" },
   { key: "earnings", label: "Earnings & Ledger" },
   { key: "payment-settings", label: "Payout Settings" },
-  { key: "checkout-charges", label: "Checkout Charges" },
 ];
 
 type BuilderDrawerPanelProps = {
@@ -70,11 +62,11 @@ type BuilderDrawerPanelProps = {
 function titleForDrawer(key: ControlItemKey | null) {
   switch (key) {
     case "saved-sites":
-      return "Saved Sites";
+      return "SAVED SITES";
     case "chat":
       return "WebCreon Co-Pilot";
     case "admin-panel":
-      return "Store Control";
+      return "STORE CONTROL";
     case "assets":
       return "Component Assets";
     case "settings":
@@ -90,6 +82,317 @@ function getBrandName(site: SavedSite) {
     site.site_definition?.site?.brand_name ||
     site.slug ||
     "Website"
+  );
+}
+
+function getSiteDescription(site: SavedSite): string {
+  const def = site.draft_definition || site.site_definition;
+  const brandName = getBrandName(site);
+  if (!def) {
+    return `Online store for ${brandName} with curated collections and secure checkout.`;
+  }
+
+  const siteObj = def.site || {};
+  const domain = (siteObj.domain || siteObj.catalog_type || "").trim();
+
+  // 1. Direct user-defined site description / tagline
+  if (siteObj.description && typeof siteObj.description === "string" && siteObj.description.trim()) {
+    return siteObj.description.trim();
+  }
+  if (siteObj.tagline && typeof siteObj.tagline === "string" && siteObj.tagline.trim()) {
+    return siteObj.tagline.trim();
+  }
+  if (def.meta?.description && typeof def.meta.description === "string" && def.meta.description.trim()) {
+    return def.meta.description.trim();
+  }
+
+  // 2. Check blocks for genuine custom copy (filter out agent prompt instructions like 'Introduce the...')
+  const pages = def.pages;
+  let homePrompt = "";
+  if (Array.isArray(pages)) {
+    for (const p of pages) {
+      if (p?.role === "home" || p?.page_type === "landing" || p?.name === "Home" || p?.id === "home") {
+        homePrompt = p?.generation_prompt || "";
+        if (Array.isArray(p.blocks)) {
+          for (const b of p.blocks) {
+            const props = b?.props || {};
+            for (const key of ["subheadline", "subtitle", "description", "subtext"]) {
+              const val = props[key];
+              if (typeof val === "string" && val.trim()) {
+                const cleanVal = val.trim();
+                // If not an AI instruction starting with 'Introduce', 'Create', 'Generate', etc.
+                if (!/^(introduce|create|generate|design|showcase)\b/i.test(cleanVal)) {
+                  return cleanVal;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 3. Domain & niche awareness for clean natural human-grade copy
+  const combinedContext = `${domain} ${homePrompt} ${brandName} ${def.prompt || ""}`.toLowerCase();
+
+  if (combinedContext.includes("skincare") || combinedContext.includes("beauty") || combinedContext.includes("korean")) {
+    return "Premium Korean skincare & beauty essentials with natural nourishing formulations.";
+  }
+  if (combinedContext.includes("book") || combinedContext.includes("novel") || combinedContext.includes("read")) {
+    return "Curated bookstore featuring bestselling fiction, literature, and reader favorites.";
+  }
+  if (combinedContext.includes("toy") || combinedContext.includes("kid") || combinedContext.includes("game")) {
+    return "Playful toy collections, vehicles, racing cars, and interactive games for kids.";
+  }
+  if (combinedContext.includes("cloth") || combinedContext.includes("apparel") || combinedContext.includes("fashion") || combinedContext.includes("shirt")) {
+    return "Modern clothing & fashion apparel featuring stylish collections and everyday wear.";
+  }
+  if (combinedContext.includes("grocer") || combinedContext.includes("market") || combinedContext.includes("fruit") || combinedContext.includes("vegetable")) {
+    return "Fresh groceries, farm produce, daily essentials, and household staples.";
+  }
+  if (combinedContext.includes("baker") || combinedContext.includes("cake") || combinedContext.includes("pastry")) {
+    return "Artisan baked treats, freshly crafted cakes, and delightful confectionery.";
+  }
+  if (combinedContext.includes("pharmacy") || combinedContext.includes("health") || combinedContext.includes("med")) {
+    return "Healthcare essentials, wellness products, and everyday pharmacy supplies.";
+  }
+  if (combinedContext.includes("underwear") || combinedContext.includes("innerwear")) {
+    return "Comfortable and elegant innerwear essentials crafted with premium soft fabrics.";
+  }
+  if (combinedContext.includes("jewel") || combinedContext.includes("gem") || combinedContext.includes("gold")) {
+    return "Exquisite handcrafted jewelry, fine accessories, and timeless luxury pieces.";
+  }
+  if (combinedContext.includes("electronic") || combinedContext.includes("gadget") || combinedContext.includes("audio")) {
+    return "Cutting-edge electronics, smart devices, and high-performance audio essentials.";
+  }
+
+  if (domain && domain.toLowerCase() !== "general" && domain.toLowerCase() !== "ecommerce") {
+    return `Curated ${domain} storefront with special collections, offers, and fast delivery.`;
+  }
+
+  return `Online storefront for ${brandName} with curated catalog and easy checkout.`;
+}
+
+function LinkIcon({ isSelected }: { isSelected?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={isSelected ? "#2563eb" : "#64748b"}
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ width: 16, height: 16, flexShrink: 0, marginTop: "2px" }}
+    >
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </svg>
+  );
+}
+
+function SavedSiteCard({
+  site,
+  isSelected,
+  onClick,
+  onDelete,
+}: {
+  site: SavedSite;
+  isSelected: boolean;
+  onClick: () => void;
+  onDelete?: () => void;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+  const brandName = getBrandName(site);
+  const description = getSiteDescription(site);
+
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{
+        width: "100%",
+        textAlign: "left",
+        borderRadius: "10px",
+        padding: "10px 12px",
+        background: isSelected ? "#eff6ff" : isHovered ? "#f8fafc" : "transparent",
+        border: isSelected ? "1px solid rgba(59, 130, 246, 0.2)" : "1px solid transparent",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "flex-start",
+        gap: "10px",
+        transition: "all 0.12s ease",
+        position: "relative",
+      }}
+    >
+      <LinkIcon isSelected={isSelected} />
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: "13px",
+            fontWeight: 600,
+            lineHeight: 1.3,
+            color: isSelected ? "#1d4ed8" : "#0f172a",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {brandName}
+        </div>
+        <div
+          style={{
+            fontSize: "11.5px",
+            lineHeight: "1.45",
+            color: "#64748b",
+            marginTop: "3px",
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            wordBreak: "break-word",
+          }}
+        >
+          {description}
+        </div>
+      </div>
+
+      {isSelected && onDelete && (
+        <button
+          type="button"
+          aria-label="Delete site"
+          title={`Delete ${brandName}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          style={{
+            border: "none",
+            background: "transparent",
+            color: "#ef4444",
+            cursor: "pointer",
+            padding: 4,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+            opacity: 0.85,
+            transition: "opacity 0.15s ease",
+            alignSelf: "center",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+          onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.85")}
+        >
+          <DeleteIcon />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function AdminNavIcon({ navKey, isSelected }: { navKey: AdminNavKey; isSelected: boolean }) {
+  const stroke = isSelected ? "#2563eb" : "#64748b";
+  const style = { width: 16, height: 16, flexShrink: 0 };
+
+  switch (navKey) {
+    case "products":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+          <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+          <line x1="12" y1="22.08" x2="12" y2="12" />
+        </svg>
+      );
+    case "orders":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+          <rect x="9" y="3" width="6" height="4" rx="1" />
+          <path d="M9 12h6" />
+          <path d="M9 16h6" />
+        </svg>
+      );
+    case "delivery":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <rect x="1" y="3" width="15" height="13" />
+          <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
+          <circle cx="5.5" cy="18.5" r="2.5" />
+          <circle cx="18.5" cy="18.5" r="2.5" />
+        </svg>
+      );
+    case "earnings":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <rect x="2" y="5" width="20" height="14" rx="2" />
+          <line x1="2" y1="10" x2="22" y2="10" />
+        </svg>
+      );
+    case "payment-settings":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M8 10v11M12 10v11M16 10v11M20 10v11" />
+        </svg>
+      );
+    case "checkout-charges":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <line x1="19" y1="5" x2="5" y2="19" />
+          <circle cx="6.5" cy="6.5" r="2.5" />
+          <circle cx="17.5" cy="17.5" r="2.5" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
+function AdminNavCard({
+  item,
+  isSelected,
+  onClick,
+}: {
+  item: AdminNavItem;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{
+        width: "100%",
+        textAlign: "left",
+        borderRadius: "10px",
+        padding: "10px 12px",
+        background: isSelected ? "#eff6ff" : isHovered ? "#f8fafc" : "transparent",
+        border: isSelected ? "1px solid rgba(59, 130, 246, 0.2)" : "1px solid transparent",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        gap: "10px",
+        transition: "all 0.12s ease",
+      }}
+    >
+      <AdminNavIcon navKey={item.key} isSelected={isSelected} />
+      <span
+        style={{
+          fontSize: "13px",
+          fontWeight: 600,
+          color: isSelected ? "#1d4ed8" : "#0f172a",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {item.label}
+      </span>
+    </div>
   );
 }
 
@@ -494,7 +797,6 @@ export default function BuilderDrawerPanel({
   const [selectedAssetCategory, setSelectedAssetCategory] =
     useState<ComponentAssetCategory>("navbar");
   const [appliedAssetId, setAppliedAssetId] = useState<string | null>(null);
-  const [savedThemes, setSavedThemes] = useState<any[]>([]);
   const [deleteSiteModal, setDeleteSiteModal] = useState<{
     siteId: string;
     brandName: string;
@@ -532,40 +834,6 @@ export default function BuilderDrawerPanel({
     };
     checkSite();
   }, [deleteSiteModal]);
-
-  useEffect(() => {
-    const loadSavedThemes = () => {
-      try {
-        const key = `webnirmaan_saved_themes_${selectedSiteId || siteDefinition?.id || ""}`;
-        const cached = localStorage.getItem(key);
-        setSavedThemes(cached ? JSON.parse(cached) : []);
-      } catch {
-        setSavedThemes([]);
-      }
-    };
-    loadSavedThemes();
-
-    window.addEventListener("webnirmaan_theme_saved", loadSavedThemes);
-    return () => {
-      window.removeEventListener("webnirmaan_theme_saved", loadSavedThemes);
-    };
-  }, [selectedSiteId, siteDefinition]);
-
-  const handleDeleteSavedTheme = (id: string) => {
-    const key = `webnirmaan_saved_themes_${selectedSiteId || siteDefinition?.id || ""}`;
-    const updated = savedThemes.filter((t) => t.id !== id);
-    setSavedThemes(updated);
-    try {
-      localStorage.setItem(key, JSON.stringify(updated));
-    } catch {}
-  };
-
-  const handleApplySavedTheme = (themeObj: any) => {
-    if (!siteDefinition || !onSiteDefinitionChange) return;
-    const patchProps = themeObj.patch || themeObj.theme || themeObj;
-    const updatedDef = updateThemeValues(siteDefinition, patchProps, true);
-    onSiteDefinitionChange(updatedDef);
-  };
 
   if (
     !activeDrawer ||
@@ -713,14 +981,34 @@ export default function BuilderDrawerPanel({
     >
       <div
         style={{
-          padding: "10px 12px",
+          padding:
+            activeDrawer === "saved-sites" || activeDrawer === "admin-panel"
+              ? "14px 16px 10px"
+              : "10px 12px",
           borderBottom: "1px solid rgba(15,23,42,0.06)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          fontSize: 13,
-          fontWeight: 600,
-          color: "#111827",
+          fontSize:
+            activeDrawer === "saved-sites" || activeDrawer === "admin-panel"
+              ? 11.5
+              : 13,
+          fontWeight:
+            activeDrawer === "saved-sites" || activeDrawer === "admin-panel"
+              ? 700
+              : 600,
+          letterSpacing:
+            activeDrawer === "saved-sites" || activeDrawer === "admin-panel"
+              ? "0.05em"
+              : "normal",
+          color:
+            activeDrawer === "saved-sites" || activeDrawer === "admin-panel"
+              ? "#64748b"
+              : "#111827",
+          textTransform:
+            activeDrawer === "saved-sites" || activeDrawer === "admin-panel"
+              ? "uppercase"
+              : "none",
           flexShrink: 0,
         }}
       >
@@ -734,7 +1022,9 @@ export default function BuilderDrawerPanel({
             cursor: "pointer",
             fontSize: 18,
             lineHeight: 1,
-            color: "#6b7280",
+            color: "#94a3b8",
+            display: "grid",
+            placeItems: "center",
           }}
         >
           ×
@@ -769,61 +1059,34 @@ export default function BuilderDrawerPanel({
               No saved sites found.
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
               {savedSites.map((site) => {
                 const brandName = getBrandName(site);
                 const isSelected = selectedSiteId === site.id;
 
                 return (
-                  <PlainCard
+                  <SavedSiteCard
                     key={site.id}
-                    label={brandName}
+                    site={site}
                     isSelected={isSelected}
                     onClick={() => onSelectSite?.(site.id)}
-                    trailing={
-                      isSelected ? (
-                        <button
-                          type="button"
-                          aria-label="Delete site"
-                          title={`Delete ${brandName}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteSiteModal({
-                              siteId: site.id,
-                              brandName,
-                            });
-                          }}
-                          style={{
-                            border: "none",
-                            background: "transparent",
-                            color: "#ef4444",
-                            cursor: "pointer",
-                            padding: 4,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            flexShrink: 0,
-                            opacity: 0.85,
-                            transition: "opacity 0.15s ease",
-                          }}
-                          onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
-                          onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.85")}
-                        >
-                          <DeleteIcon />
-                        </button>
-                      ) : undefined
-                    }
+                    onDelete={() => {
+                      setDeleteSiteModal({
+                        siteId: site.id,
+                        brandName,
+                      });
+                    }}
                   />
                 );
               })}
             </div>
           )
         ) : activeDrawer === "admin-panel" ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
             {ADMIN_NAV_ITEMS.map((item) => (
-              <PlainCard
+              <AdminNavCard
                 key={item.key}
-                label={item.label}
+                item={item}
                 isSelected={activeAdminNavKey === item.key}
                 onClick={() => onSelectAdminNav?.(item.key)}
               />
@@ -846,7 +1109,6 @@ export default function BuilderDrawerPanel({
                 { id: "banner", label: "Banner" },
                 { id: "products", label: "Products" },
                 { id: "footer", label: "Footer" },
-                { id: "saved_themes", label: `Saved Themes 📁 (${savedThemes.length})` },
               ].map((cat) => (
                 <button
                   key={cat.id}
@@ -876,77 +1138,6 @@ export default function BuilderDrawerPanel({
                 </button>
               ))}
             </div>
-
-            {/* Render Saved Themes Category when selected */}
-            {selectedAssetCategory === "saved_themes" ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                {savedThemes.length === 0 ? (
-                  <div style={{ padding: "30px 10px", textAlign: "center", color: "#94a3b8", fontSize: "12px" }}>
-                    <p style={{ margin: 0, fontWeight: 600, color: "#64748b" }}>No Saved Themes Yet</p>
-                    <p style={{ margin: "4px 0 0", fontSize: "11px" }}>
-                      Click "Save 💾" on any theme card in Co-Pilot chat to collect custom theme presets here!
-                    </p>
-                  </div>
-                ) : (
-                  savedThemes.map((st) => (
-                    <div
-                      key={st.id}
-                      style={{
-                        padding: "12px",
-                        borderRadius: "10px",
-                        background: "#ffffff",
-                        border: "1px solid #e2e8f0",
-                        boxShadow: "0 2px 6px rgba(15,23,42,0.03)",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "6px",
-                      }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <div style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a" }}>{st.name}</div>
-                        <span style={{ fontSize: "9px", color: "#94a3b8" }}>Saved {st.savedAt}</span>
-                      </div>
-                      <div style={{ fontSize: "10px", color: "#64748b" }}>Draft theme preset saved from Co-Pilot sidepanel</div>
-                      <div style={{ display: "flex", gap: "6px", marginTop: "4px" }}>
-                        <button
-                          type="button"
-                          onClick={() => handleApplySavedTheme(st.theme)}
-                          style={{
-                            flex: 1,
-                            padding: "6px",
-                            fontSize: "11px",
-                            fontWeight: 700,
-                            background: "#2563eb",
-                            color: "#ffffff",
-                            border: "none",
-                            borderRadius: "6px",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Apply Draft Theme ✨
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteSavedTheme(st.id)}
-                          style={{
-                            padding: "6px 10px",
-                            fontSize: "11px",
-                            fontWeight: 700,
-                            background: "#ef4444",
-                            color: "#ffffff",
-                            border: "none",
-                            borderRadius: "6px",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Delete 🗑️
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            ) : null}
 
             {/* Active Banner Carousel Count Info Badge */}
             {selectedAssetCategory === "banner" && (

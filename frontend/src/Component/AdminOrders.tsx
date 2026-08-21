@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { API_BASE_URL as API_BASE } from "../config/api";
 import { Pagination } from "./Pagination";
 
@@ -685,6 +685,7 @@ const matchesReturnTab = (item: AdminReturnListItem, tab: ReturnTabKey) => item.
 
 const AdminOrders: React.FC = () => {
   const { siteId } = useParams<{ siteId: string }>();
+  const [searchParams] = useSearchParams();
   const [mode, setMode] = useState<AdminMode>("orders");
 
 
@@ -1094,6 +1095,57 @@ const AdminOrders: React.FC = () => {
 
     loadByMode();
   }, [siteId, mode]);
+
+  // Deep-linking support for direct order/return links (e.g. from Earnings/Ledger page)
+  const targetOrderId = searchParams.get("orderId");
+  const targetReturnId = searchParams.get("returnId");
+
+  useEffect(() => {
+    if (targetOrderId && orders.length > 0) {
+      const found = orders.find(
+        (o) => o.id === targetOrderId || o.id.toLowerCase() === targetOrderId.toLowerCase() || o.id.startsWith(targetOrderId)
+      );
+      if (found) {
+        setMode("orders");
+        if (found.status === "placed") setActiveTab("new");
+        else if (found.status === "confirmed" || found.status === "accepted") setActiveTab("yet_to_ship");
+        else if (
+          found.status === "shipped" ||
+          found.status === "out_for_delivery" ||
+          found.status === "rescheduled" ||
+          found.status === "failed"
+        )
+          setActiveTab("yet_to_deliver");
+        else if (found.status === "delivered" || found.status === "returned") setActiveTab("delivered");
+        else if (found.status === "cancelled" || found.status === "partially_cancelled") setActiveTab("cancelled");
+
+        setDateFilter("all");
+        setPaymentFilter("all");
+        setFulfillmentFilter("all");
+        setSearchQuery(found.id.slice(0, 8).toUpperCase());
+        setExpandedOrderId(found.id);
+        ensureOrderDetail(found.id);
+      } else {
+        setMode("orders");
+        setDateFilter("all");
+        setSearchQuery(targetOrderId.slice(0, 8).toUpperCase());
+        setExpandedOrderId(targetOrderId);
+        ensureOrderDetail(targetOrderId);
+      }
+    } else if (targetReturnId && adminReturns.length > 0) {
+      const found = adminReturns.find(
+        (r) => r.id === targetReturnId || r.id.toLowerCase() === targetReturnId.toLowerCase() || r.id.startsWith(targetReturnId)
+      );
+      if (found) {
+        setMode("returns");
+        setActiveReturnTab(found.status);
+        setDateFilter("all");
+        setSearchQuery(found.id.slice(0, 8).toUpperCase());
+        setExpandedReturnId(found.id);
+        ensureReturnDetail(found.id);
+      }
+    }
+  }, [targetOrderId, targetReturnId, orders, adminReturns]);
 
 
   const hasActiveFilters =
@@ -3651,8 +3703,10 @@ const AdminOrders: React.FC = () => {
                   }}
                 >
                   <option value={10}>10</option>
+                  <option value={15}>15</option>
                   <option value={25}>25</option>
                   <option value={50}>50</option>
+                  <option value={100}>100</option>
                 </select>
               </div>
 
@@ -5523,8 +5577,10 @@ const AdminOrders: React.FC = () => {
                   }}
                 >
                   <option value={10}>10</option>
+                  <option value={15}>15</option>
                   <option value={25}>25</option>
                   <option value={50}>50</option>
+                  <option value={100}>100</option>
                 </select>
               </div>
 
