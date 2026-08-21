@@ -167,6 +167,7 @@ def _mark_order_delivered(order: Order, session: Session, auto_commit: bool = Tr
 class DeliverySettingsUpdate(BaseModel):
     delivery_mode: Optional[str] = None               # own_agent | shiprocket | hybrid | manual
     own_delivery_radius_km: Optional[float] = None
+    allow_open_pickup: Optional[bool] = None          # own delivery fleet pool claiming toggle
     shiprocket_email: Optional[str] = None
     shiprocket_password: Optional[str] = None          # plain-text; stored encrypted
     default_courier_preference: Optional[str] = None
@@ -263,6 +264,7 @@ def get_delivery_settings(
         "site_id": str(settings.site_id),
         "delivery_mode": settings.delivery_mode,
         "own_delivery_radius_km": settings.own_delivery_radius_km,
+        "allow_open_pickup": getattr(settings, "allow_open_pickup", True) if getattr(settings, "allow_open_pickup", None) is not None else True,
         "shiprocket_email": settings.shiprocket_email,
         "shiprocket_connected": is_verified,
         "shiprocket_saved": is_saved,
@@ -296,6 +298,9 @@ def update_delivery_settings(
 
     if body.own_delivery_radius_km is not None:
         settings.own_delivery_radius_km = body.own_delivery_radius_km
+
+    if body.allow_open_pickup is not None:
+        settings.allow_open_pickup = body.allow_open_pickup
 
     email_changed = False
     if body.shiprocket_email is not None:
@@ -2025,6 +2030,9 @@ def get_rider_profile(
 
     curr_cnt, tot_deliv = _sync_rider_stats(agent, session)
     site = session.get(Site, agent.site_id)
+    settings = _get_settings_or_default(session, agent.site_id)
+    allow_open = getattr(settings, "allow_open_pickup", True) if getattr(settings, "allow_open_pickup", None) is not None else True
+
     return {
         "id": str(agent.id),
         "name": agent.name,
@@ -2034,6 +2042,7 @@ def get_rider_profile(
         "cash_in_hand": float(getattr(agent, "cash_in_hand", 0.0) or 0.0),
         "current_order_count": curr_cnt,
         "total_deliveries": tot_deliv,
+        "allow_open_pickup": allow_open,
         "site_id": str(agent.site_id),
         "site_name": (getattr(site, "name", None) or site.slug) if site else "Store",
         "site_slug": site.slug if site else str(agent.site_id),
@@ -2229,6 +2238,11 @@ def get_available_pickup_pool(
     """Fetch unassigned shipped orders ready for pickup claiming by delivery riders."""
     site_id = UUID(rider["siteId"])
 
+    settings = _get_settings_or_default(session, site_id)
+    allow_open = getattr(settings, "allow_open_pickup", True) if getattr(settings, "allow_open_pickup", None) is not None else True
+    if not allow_open:
+        return []
+
     # Riders can ONLY claim orders that are packed and marked 'shipped' by the Store Admin
     orders = session.exec(
         select(Order)
@@ -2310,6 +2324,11 @@ def rider_claim_order(
     """Rider claims an unassigned shipped order from the open store pool."""
     agent_id = UUID(rider["agentId"])
     site_id = UUID(rider["siteId"])
+
+    settings = _get_settings_or_default(session, site_id)
+    allow_open = getattr(settings, "allow_open_pickup", True) if getattr(settings, "allow_open_pickup", None) is not None else True
+    if not allow_open:
+        raise HTTPException(403, "Open pickup claiming is disabled by the store admin. Deliveries must be directly assigned by the admin.")
 
     agent = session.get(DeliveryAgent, agent_id)
     if not agent or not agent.is_active:

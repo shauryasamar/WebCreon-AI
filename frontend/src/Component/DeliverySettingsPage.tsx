@@ -8,6 +8,7 @@ type DeliveryMode = "own_agent" | "shiprocket" | "hybrid" | "manual";
 type DeliverySettingsData = {
   delivery_mode: DeliveryMode;
   own_delivery_radius_km: number;
+  allow_open_pickup?: boolean;
   shiprocket_email: string;
   shiprocket_connected: boolean;
   shiprocket_saved?: boolean;
@@ -119,6 +120,7 @@ export default function DeliverySettingsPage() {
   const [settings, setSettings] = useState<DeliverySettingsData>({
     delivery_mode: "manual",
     own_delivery_radius_km: 10,
+    allow_open_pickup: true,
     shiprocket_email: "",
     shiprocket_connected: false,
     default_courier_preference: "",
@@ -223,6 +225,7 @@ export default function DeliverySettingsPage() {
       const body: Record<string, any> = {
         delivery_mode: payload.delivery_mode,
         own_delivery_radius_km: Number(payload.own_delivery_radius_km) || 10,
+        allow_open_pickup: payload.allow_open_pickup !== undefined ? Boolean(payload.allow_open_pickup) : true,
         shiprocket_email: payload.shiprocket_email || "",
         default_courier_preference: payload.default_courier_preference || "",
         auto_assign_courier: Boolean(payload.auto_assign_courier),
@@ -840,7 +843,7 @@ export default function DeliverySettingsPage() {
             <StatCard label="Pending COD in Hand" value={formatPrice(totalCashInHand)} />
           </div>
 
-          {/* Action Bar (Search + Add Rider Button) */}
+          {/* Action Bar (Search + Open Pickup Toggle + Add Rider Button) */}
           <div
             style={{
               display: "flex",
@@ -886,13 +889,86 @@ export default function DeliverySettingsPage() {
               )}
             </div>
 
-            <button
-              type="button"
-              onClick={() => setShowAgentForm(!showAgentForm)}
-              style={{ ...primaryButtonStyle, padding: "8px 14px", fontSize: "12px", whiteSpace: "nowrap" }}
-            >
-              {showAgentForm ? "Cancel" : "+ Add delivery agent"}
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              {/* Compact Open Pickup Toggle */}
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "5px 10px",
+                  borderRadius: "6px",
+                  background: "#ffffff",
+                  border: "1px solid #cbd5e1",
+                }}
+                title="When enabled, riders can self-claim unassigned orders from the open pickup pool"
+              >
+                <span
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    color: "#334155",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Open Pickup
+                </span>
+                <label
+                  style={{
+                    position: "relative",
+                    display: "inline-block",
+                    width: "32px",
+                    height: "18px",
+                    cursor: savingSettings ? "wait" : "pointer",
+                    margin: 0,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={settings.allow_open_pickup ?? true}
+                    disabled={savingSettings}
+                    onChange={(e) => {
+                      const nextVal = e.target.checked;
+                      setSettings((prev) => ({ ...prev, allow_open_pickup: nextVal }));
+                      saveSettings({ allow_open_pickup: nextVal });
+                    }}
+                    style={{ opacity: 0, width: 0, height: 0, position: "absolute" }}
+                  />
+                  <span
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      borderRadius: "18px",
+                      background: (settings.allow_open_pickup ?? true) ? "#2563eb" : "#cbd5e1",
+                      transition: "background-color 0.15s ease",
+                      display: "block",
+                    }}
+                  >
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: "2px",
+                        left: (settings.allow_open_pickup ?? true) ? "16px" : "2px",
+                        width: "14px",
+                        height: "14px",
+                        borderRadius: "50%",
+                        background: "#ffffff",
+                        boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
+                        transition: "left 0.15s ease",
+                      }}
+                    />
+                  </span>
+                </label>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowAgentForm(!showAgentForm)}
+                style={{ ...primaryButtonStyle, padding: "8px 14px", fontSize: "12px", whiteSpace: "nowrap" }}
+              >
+                {showAgentForm ? "Cancel" : "+ Add delivery agent"}
+              </button>
+            </div>
           </div>
 
           {/* Inline Add Agent Form (matches AdminProducts Form layout) */}

@@ -76,6 +76,8 @@ def create_db_and_tables():
                 ALTER TABLE delivery_agents ADD COLUMN IF NOT EXISTS cash_in_hand NUMERIC(12, 2) DEFAULT 0.00;
                 ALTER TABLE delivery_agents ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMPTZ;
                 CREATE INDEX IF NOT EXISTS ix_delivery_agents_site_phone ON delivery_agents(site_id, phone);
+
+                ALTER TABLE delivery_settings ADD COLUMN IF NOT EXISTS allow_open_pickup BOOLEAN DEFAULT TRUE;
             """))
             conn.commit()
     except Exception as e:

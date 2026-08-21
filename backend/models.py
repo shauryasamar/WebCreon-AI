@@ -604,6 +604,12 @@ class DeliverySettings(SQLModel, table=True):
     # Hybrid mode: orders within this radius use own agents, outside go to courier
     own_delivery_radius_km: float = Field(default=10.0, nullable=False)
 
+    # Open pickup toggle: whether own delivery fleet riders can self-claim unassigned orders from the store pool
+    allow_open_pickup: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, default=True),
+    )
+
     # Shiprocket credentials (password stored encrypted)
     shiprocket_email: Optional[str] = Field(default=None, max_length=255, nullable=True)
     shiprocket_password_encrypted: Optional[str] = Field(default=None, nullable=True)
