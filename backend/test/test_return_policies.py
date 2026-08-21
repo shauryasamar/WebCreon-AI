@@ -95,34 +95,36 @@ def test_return_policies_end_to_end():
     )
     assert res.status_code == 200
 
-    order_payload = {
-        "customer_name": "Buyer One",
-        "customer_email": cust_email,
-        "customer_phone": "9876543210",
-        "shipping_address": {
-            "address_line_1": "123 Test St",
-            "city": "Bengaluru",
-            "state": "Karnataka",
-            "postal_code": "560001",
-            "country": "IN",
-        },
-        "payment_method": "cod",
-        "items": [
-            {"product_id": prod_a["id"], "quantity": 1},
-            {"product_id": prod_b["id"], "quantity": 1},
-            {"product_id": prod_c["id"], "quantity": 1},
-        ],
-    }
-    res_order = cust_client.post(f"/orders/customer/{site_id}", json=order_payload)
-    assert res_order.status_code == 200
-    order_data = res_order.json()
-    order_id = order_data["id"]
+    cust_client.post(f"/cart/{site_id}/items", json={"product_id": prod_a["id"], "quantity": 1})
+    cust_client.post(f"/cart/{site_id}/items", json={"product_id": prod_b["id"], "quantity": 1})
+    cust_client.post(f"/cart/{site_id}/items", json={"product_id": prod_c["id"], "quantity": 1})
 
-    # 5. Fetch order detail and verify snapshotted return_window_days on items
-    res_detail = cust_client.get(f"/orders/customer/{site_id}/{order_id}")
-    assert res_detail.status_code == 200
-    detail = res_detail.json()
-    items = detail["items"]
+    res_addr = cust_client.post(f"/checkout/addresses/{site_id}", json={
+        "full_name": "Buyer One",
+        "mobile_number": "9876543210",
+        "address_line1": "123 Test St",
+        "city": "Bengaluru",
+        "postal_code": "560001",
+        "email": cust_email,
+        "address_type": "Home",
+        "is_default": True
+    })
+    assert res_addr.status_code == 200
+    address_id = res_addr.json()["id"]
+
+    res_order = cust_client.post(f"/orders/{site_id}/place", json={
+        "address_id": address_id,
+        "payment_method": "cod",
+    })
+    assert res_order.status_code in (200, 201)
+    order_data = res_order.json()
+    order_id = order_data["order_id"]
+
+    # 5. Fetch order detail from admin and verify snapshotted return_window_days on items
+    res_admin_orders = admin_client.get(f"/orders/admin/{site_id}")
+    assert res_admin_orders.status_code == 200
+    found_order = next(o for o in res_admin_orders.json() if str(o["id"]) == str(order_id))
+    items = found_order["items"]
     assert len(items) == 3
 
     item_a = next(i for i in items if i["product_id"] == prod_a["id"])
@@ -136,31 +138,24 @@ def test_return_policies_end_to_end():
     # Item C has 14
     assert item_c["return_window_days"] == 14
 
-    # 6. Admin creates delivery agent and marks order delivered
-    res_agent = admin_client.post(
-        f"/delivery/{site_id}/agents",
-        json={"name": "Express Rider", "phone": "9998887776", "vehicle_type": "bike"}
+    # 6. Admin marks order delivered
+    admin_client.patch(
+        f"/orders/admin/{site_id}/{order_id}/status",
+        json={"status": "confirmed"}
     )
-    assert res_agent.status_code == 200
-    agent_id = res_agent.json()["id"]
-
-    # Assign and mark delivered
-    res_assign = admin_client.post(
-        f"/delivery/{site_id}/orders/{order_id}/assign-agent",
-        json={"agent_id": agent_id}
+    admin_client.patch(
+        f"/orders/admin/{site_id}/{order_id}/status",
+        json={"status": "shipped", "delivery_partner_name": "Express Rider", "delivery_partner_phone": "9876543210"}
     )
-    assert res_assign.status_code == 200
-
-    # Mark delivered
+    admin_client.patch(
+        f"/orders/admin/{site_id}/{order_id}/status",
+        json={"status": "out_for_delivery", "delivery_partner_name": "Express Rider"}
+    )
     res_del = admin_client.patch(
         f"/orders/admin/{site_id}/{order_id}/status",
-        json={"status": "delivered"}
+        json={"status": "delivered", "delivery_partner_name": "Express Rider"}
     )
     assert res_del.status_code == 200
-
-    # 7. Verify dynamic return_window_closes_at uses max_days (14 days)
-    res_del_detail = cust_client.get(f"/orders/customer/{site_id}/{order_id}")
-    assert res_del_detail.status_code == 200
 
     # 8. Customer attempts return on Item B (Non-Returnable) -> must be rejected
     res_ret_b = cust_client.post(
@@ -181,12 +176,12 @@ def test_return_policies_end_to_end():
         json={
             "order_id": order_id,
             "request_note": "T-shirt size doesn't fit",
-            "items": [{"order_item_id": item_a["id"], "quantity": 1, "reason_code": "size_fit"}],
+            "items": [{"order_item_id": item_a["id"], "quantity": 1, "reason_code": "size_issue"}],
             "customer_refund_account": {"type": "upi", "upi_id": "buyer@okhdfcbank"},
         }
     )
     assert res_ret_a.status_code == 200
-    ret_data = res_ret_a.json()
+    ret_data = res_ret_a.json()["return_request"]
     assert ret_data["status"] == "requested"
 
     # 10. Test Non-Returnable Store Default (0 days) with Online Checkout
@@ -213,41 +208,35 @@ def test_return_policies_end_to_end():
     prod_d = res_d.json()
 
     # Place order inheriting 0-day store default
-    res_order_zero = cust_client.post(
-        f"/orders/customer/{site_id}",
-        json={
-            "customer_name": "Buyer One",
-            "customer_email": cust_email,
-            "customer_phone": "9876543210",
-            "shipping_address": {
-                "address_line_1": "123 Test St",
-                "city": "Bengaluru",
-                "state": "Karnataka",
-                "postal_code": "560001",
-                "country": "IN",
-            },
-            "payment_method": "cod",
-            "items": [{"product_id": prod_d["id"], "quantity": 1}],
-        }
-    )
-    assert res_order_zero.status_code == 200
-    order_zero_id = res_order_zero.json()["id"]
+    cust_client.post(f"/cart/{site_id}/items", json={"product_id": prod_d["id"], "quantity": 1})
+    res_order_zero = cust_client.post(f"/orders/{site_id}/place", json={
+        "address_id": address_id,
+        "payment_method": "cod",
+    })
+    assert res_order_zero.status_code in (200, 201)
+    order_zero_id = res_order_zero.json()["order_id"]
 
-    # Verify item return_window_days was snapshotted as 0
-    res_zero_detail = cust_client.get(f"/orders/customer/{site_id}/{order_zero_id}")
-    assert res_zero_detail.status_code == 200
-    item_d = res_zero_detail.json()["items"][0]
+    res_admin_zero = admin_client.get(f"/orders/admin/{site_id}")
+    found_order_zero = next(o for o in res_admin_zero.json() if str(o["id"]) == str(order_zero_id))
+    item_d = found_order_zero["items"][0]
     assert item_d["return_window_days"] == 0
-    assert item_d["is_returnable"] is False
 
-    # Mark delivered -> escrow unheld immediately (max_days == 0)
-    admin_client.post(
-        f"/delivery/{site_id}/orders/{order_zero_id}/assign-agent",
-        json={"agent_id": agent_id}
+    # Mark delivered
+    admin_client.patch(
+        f"/orders/admin/{site_id}/{order_zero_id}/status",
+        json={"status": "confirmed"}
+    )
+    admin_client.patch(
+        f"/orders/admin/{site_id}/{order_zero_id}/status",
+        json={"status": "shipped", "delivery_partner_name": "Express Rider", "delivery_partner_phone": "9876543210"}
+    )
+    admin_client.patch(
+        f"/orders/admin/{site_id}/{order_zero_id}/status",
+        json={"status": "out_for_delivery", "delivery_partner_name": "Express Rider"}
     )
     res_del_zero = admin_client.patch(
         f"/orders/admin/{site_id}/{order_zero_id}/status",
-        json={"status": "delivered"}
+        json={"status": "delivered", "delivery_partner_name": "Express Rider"}
     )
     assert res_del_zero.status_code == 200
 

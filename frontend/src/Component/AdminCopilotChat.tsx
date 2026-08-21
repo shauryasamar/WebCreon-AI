@@ -79,18 +79,6 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
     }
   }, [messages, siteId]);
 
-  const handleClearChat = () => {
-    setMessages([]);
-    if (typeof window !== "undefined" && siteId) {
-      try {
-        sessionStorage.removeItem(`webnirmaan_copilot_chat_${siteId}`);
-        localStorage.removeItem(`webnirmaan_copilot_chat_${siteId}`);
-      } catch {}
-    }
-    setToastMsg("Chat history cleared 🧹");
-    setTimeout(() => setToastMsg(null), 2500);
-  };
-
   // Clean fixed admin dashboard theme for Copilot UI
   const chatBg = "#ffffff";
   const chatText = "#0f172a";
@@ -361,15 +349,18 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
       {toastMsg && (
         <div
           style={{
-            padding: "6px 12px",
-            background: "#10b981",
-            color: "#ffffff",
-            fontSize: "11px",
-            fontWeight: 700,
-            borderRadius: "6px",
+            padding: "8px 12px",
+            background: "rgba(240, 253, 244, 0.7)",
+            backdropFilter: "blur(12px) saturate(180%)",
+            WebkitBackdropFilter: "blur(12px) saturate(180%)",
+            color: "#14532d",
+            border: "1px solid rgba(22, 163, 74, 0.3)",
+            fontSize: "12px",
+            fontWeight: 600,
+            borderRadius: "8px",
             marginBottom: "8px",
             textAlign: "center",
-            boxShadow: "0 2px 8px rgba(16,185,129,0.2)",
+            boxShadow: "0 8px 24px 0 rgba(22, 101, 52, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.4)",
           }}
         >
           {toastMsg}

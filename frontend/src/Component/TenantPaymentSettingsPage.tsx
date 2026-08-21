@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
+import GlassToast from "./GlassToast";
 
 type BankSettingsData = {
   id?: string;
@@ -322,39 +323,22 @@ export default function TenantPaymentSettingsPage() {
         </div>
       )}
 
-      {/* Alerts */}
+      {/* Glass Toasts */}
       {successMessage && (
-        <div
-          style={{
-            background: "#f0fdf4",
-            border: "1px solid #bbf7d0",
-            color: "#15803d",
-            padding: "12px 14px",
-            borderRadius: "6px",
-            fontSize: "13px",
-            marginBottom: "16px",
-            fontWeight: 600,
-          }}
-        >
-          ✓ {successMessage}
-        </div>
+        <GlassToast
+          message={successMessage}
+          type="success"
+          onClose={() => setSuccessMessage("")}
+          top="76px"
+        />
       )}
-
       {errorMessage && (
-        <div
-          style={{
-            background: "#fef2f2",
-            border: "1px solid #fecaca",
-            color: "#b91c1c",
-            padding: "12px 14px",
-            borderRadius: "6px",
-            fontSize: "13px",
-            marginBottom: "16px",
-            fontWeight: 600,
-          }}
-        >
-          ⚠ {errorMessage}
-        </div>
+        <GlassToast
+          message={errorMessage}
+          type="error"
+          onClose={() => setErrorMessage("")}
+          top="76px"
+        />
       )}
 
       {/* Main Settings Card */}

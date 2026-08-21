@@ -308,6 +308,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": True,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "99",
                 "applyConditionType": "none",
@@ -323,6 +324,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "29",
                 "applyConditionType": "none",
@@ -338,6 +340,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": True,
                 "amountType": "fixed",
                 "amountValue": "19",
                 "applyConditionType": "none",
@@ -353,6 +356,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "15",
                 "applyConditionType": "none",
@@ -368,6 +372,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "9",
                 "applyConditionType": "none",
@@ -383,6 +388,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "49",
                 "applyConditionType": "subtotal_lt",
@@ -398,6 +404,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "39",
                 "applyConditionType": "payment_method",
@@ -413,6 +420,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": True,
                 "customerSelectable": True,
+                "refundable": True,
                 "amountType": "fixed",
                 "amountValue": "49",
                 "applyConditionType": "none",
@@ -689,6 +697,7 @@ def evaluate_pricing(
             "finalAmount": float(final_amount),
             "applied": True,
             "waived": waived,
+            "refundable": bool(charge.get("refundable", True)),
             "applyConditionType": charge.get("applyConditionType"),
             "applyConditionValue": charge.get("applyConditionValue"),
             "waiveConditionType": charge.get("waiveConditionType"),
@@ -764,11 +773,22 @@ def build_order_item_pricing_snapshot(
     shipping_allocated = Decimal("0.00")
     cod_fee_allocated = Decimal("0.00")
     other_charges_allocated = Decimal("0.00")
+    refundable_charges_allocated = Decimal("0.00")
+    non_refundable_charges_allocated = Decimal("0.00")
+    charges_breakdown: list[dict[str, Any]] = []
 
     for charge in pricing_snapshot.get("charges", []):
+        charge_id = charge.get("id")
         code = charge.get("code")
+        label = charge.get("label") or code or "Charge"
+        is_refundable = bool(charge.get("refundable", True))
         final_amount = money(charge.get("finalAmount") or 0)
         allocated = money(final_amount * ratio)
+
+        if is_refundable:
+            refundable_charges_allocated += allocated
+        else:
+            non_refundable_charges_allocated += allocated
 
         if code == "shipping_fee":
             shipping_allocated += allocated
@@ -777,8 +797,20 @@ def build_order_item_pricing_snapshot(
         else:
             other_charges_allocated += allocated
 
+        charges_breakdown.append({
+            "id": charge_id,
+            "code": code,
+            "label": label,
+            "refundable": is_refundable,
+            "total_order_amount": float(final_amount),
+            "item_allocated_amount": float(allocated),
+        })
+
+    refundable_line_total = money(
+        line_total - promo_discount + tax_amount + refundable_charges_allocated
+    )
     final_paid_for_line = money(
-        line_total - promo_discount + tax_amount + shipping_allocated + cod_fee_allocated + other_charges_allocated
+        line_total - promo_discount + tax_amount + refundable_charges_allocated + non_refundable_charges_allocated
     )
 
     return {
@@ -790,7 +822,11 @@ def build_order_item_pricing_snapshot(
         "shipping_allocated": float(shipping_allocated),
         "cod_fee_allocated": float(cod_fee_allocated),
         "other_charges_allocated": float(other_charges_allocated),
+        "refundable_charges_allocated": float(refundable_charges_allocated),
+        "non_refundable_charges_allocated": float(non_refundable_charges_allocated),
+        "refundable_line_total": float(refundable_line_total),
         "final_paid_for_line": float(final_paid_for_line),
+        "charges_breakdown": charges_breakdown,
     }
 
 
@@ -1128,6 +1164,8 @@ def get_admin_orders(
                     "line_total": float(item.line_total),
                     "status": item.status,
                     "returnable_quantity": item.returnable_quantity,
+                    "return_window_days": getattr(item, "return_window_days", 7),
+                    "is_returnable": getattr(item, "return_window_days", 7) > 0,
                     "pricing_snapshot": item.pricing_snapshot,
                 }
                 for item in order_items_map.get(order.id, [])
@@ -1209,6 +1247,8 @@ def get_admin_order_detail(
                 "line_total": float(item.line_total),
                 "status": item.status,
                 "returnable_quantity": item.returnable_quantity,
+                "return_window_days": getattr(item, "return_window_days", 7),
+                "is_returnable": getattr(item, "return_window_days", 7) > 0,
                 "pricing_snapshot": item.pricing_snapshot,
             }
             for item in items

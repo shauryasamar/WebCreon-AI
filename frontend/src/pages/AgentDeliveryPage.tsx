@@ -8,6 +8,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { usePublicSiteTheme, cleanSiteName } from "../hooks/usePublicSiteTheme";
+import GlassToast from "../Component/GlassToast";
 
 type DeliveryItem = {
   id?: string;
@@ -691,15 +692,20 @@ export default function AgentDeliveryPage() {
       <div style={{ maxWidth: "520px", margin: "0 auto", padding: "16px" }}>
         {/* Toast / Status Alerts */}
         {error && (
-          <div style={{ padding: "10px 14px", borderRadius: "8px", background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", fontSize: "13px", marginBottom: "14px", fontWeight: 500 }}>
-            {error}
-          </div>
+          <GlassToast
+            message={error}
+            type="error"
+            onClose={() => setError(null)}
+            top="76px"
+          />
         )}
         {successMsg && (
-          <div style={{ padding: "10px 14px", borderRadius: "8px", background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#15803d", fontSize: "13px", marginBottom: "14px", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }}>
-            <CheckCircleIcon />
-            <span>{successMsg}</span>
-          </div>
+          <GlassToast
+            message={successMsg}
+            type="success"
+            onClose={() => setSuccessMsg(null)}
+            top="76px"
+          />
         )}
 
         {/* Pure White Bento Shift Summary Card */}

@@ -294,7 +294,25 @@ type AdminReturnDetail = {
   received_at?: string | null;
   inspected_at?: string | null;
   refunded_at?: string | null;
-  closed_at?: string | null;
+  refund_breakdown?: {
+    items_subtotal: number;
+    discounts_prorated: number;
+    tax_refund: number;
+    refundable_charges_added: number;
+    non_refundable_charges_retained: number;
+    suggested_refund_amount: number;
+    max_refundable_amount: number;
+    actual_refund_amount?: number;
+    exception_refund_added?: number;
+    charge_allocations: Array<{
+      id: string;
+      code: string;
+      label: string;
+      refundable: boolean;
+      total_order_amount: number;
+      allocated_amount: number;
+    }>;
+  };
   created_at: string;
   updated_at?: string | null;
   order: {
@@ -788,6 +806,40 @@ const AdminOrders: React.FC = () => {
           refundOverrideReason: detail.refund_override_reason || "",
           adminNote: detail.admin_note || "",
         },
+    }));
+  };
+
+
+  const [selectedExtraChargesByReturn, setSelectedExtraChargesByReturn] = useState<Record<string, Record<string, boolean>>>({});
+
+  const toggleExtraCharge = (
+    returnId: string,
+    chargeId: string,
+    baseSuggested: number,
+    allAllocations: Array<{ id: string; label: string; allocated_amount: number; refundable: boolean }>
+  ) => {
+    const currentChecked = selectedExtraChargesByReturn[returnId] || {};
+    const willBeChecked = !currentChecked[chargeId];
+    const nextChecked = { ...currentChecked, [chargeId]: willBeChecked };
+    setSelectedExtraChargesByReturn((prev) => ({ ...prev, [returnId]: nextChecked }));
+
+    let addedAmount = 0;
+    const includedLabels: string[] = [];
+    allAllocations.forEach((ch) => {
+      if (nextChecked[ch.id]) {
+        addedAmount += Number(ch.allocated_amount || 0);
+        includedLabels.push(ch.label);
+      }
+    });
+
+    const newTotal = Number((baseSuggested + addedAmount).toFixed(2));
+    setRefundDraftValue(returnId, (draft) => ({
+      ...draft,
+      finalRefundAmount: String(newTotal),
+      refundOverrideReason:
+        includedLabels.length > 0
+          ? `Exception: Refunded non-refundable charge(s) (${includedLabels.join(", ")}) upon admin review.`
+          : "",
     }));
   };
 
@@ -1602,6 +1654,13 @@ const AdminOrders: React.FC = () => {
     const draft = reviewDrafts[returnId];
     if (!draft) return;
 
+    if (draft.action === "approve") {
+      const totalAppr = Object.values(draft.approvedQuantities).reduce((acc, q) => acc + Number(q || 0), 0);
+      if (totalAppr <= 0) {
+        window.alert("Cannot approve return with 0 items. Please specify an approved quantity of at least 1, or select 'Reject Return' to decline the request.");
+        return;
+      }
+    }
 
     setActionLoadingId(returnId);
     try {
@@ -2454,11 +2513,10 @@ const AdminOrders: React.FC = () => {
           <div
             style={{
               display: "flex",
+              flexWrap: "wrap",
               gap: "4px",
-              overflowX: "auto",
               borderBottom: "1px solid #e2e8f0",
               marginBottom: "16px",
-              WebkitOverflowScrolling: "touch",
             }}
           >
             {tabs.map((tab) => {
@@ -2518,9 +2576,8 @@ const AdminOrders: React.FC = () => {
                 {hasActiveFilters ? "No orders match your filter criteria." : "No records in this tab."}
               </div>
             ) : (
-              <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-                <div style={{ minWidth: "760px", display: "flex", flexDirection: "column" }}>
-                  {/* Clean Table Header */}
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {/* Clean Table Header */}
                   <div
                     style={{
                       display: "grid",
@@ -3557,7 +3614,6 @@ const AdminOrders: React.FC = () => {
                     </div>
                   );
                 })}
-                </div>
               </div>
             )}
           </div>
@@ -3621,11 +3677,10 @@ const AdminOrders: React.FC = () => {
           <div
             style={{
               display: "flex",
+              flexWrap: "wrap",
               gap: "4px",
-              overflowX: "auto",
               borderBottom: "1px solid #e2e8f0",
               marginBottom: "16px",
-              WebkitOverflowScrolling: "touch",
             }}
           >
             {returnTabs.map((tab) => {
@@ -3850,7 +3905,7 @@ const AdminOrders: React.FC = () => {
                         <div style={{ minWidth: 0 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                             <span style={{ fontSize: "13.5px", color: "#0f172a", fontWeight: 700 }}>
-                              {formatPrice(returnItem.final_refund_amount || returnItem.suggested_refund_amount)}
+                              {formatPrice(detail?.final_refund_amount || returnItem.final_refund_amount || returnItem.suggested_refund_amount)}
                             </span>
                             {returnItem.refund_status && (
                               <span
@@ -4089,7 +4144,7 @@ const AdminOrders: React.FC = () => {
                                     Return Items ({detail?.items?.length || returnItem.item_count || 1})
                                   </span>
                                   <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
-                                    Refund: {formatPrice(returnItem.final_refund_amount)}
+                                    Refund: {formatPrice(detail?.final_refund_amount || returnItem.final_refund_amount || returnItem.suggested_refund_amount)}
                                   </span>
                                 </div>
 
@@ -4199,8 +4254,81 @@ const AdminOrders: React.FC = () => {
                                   {detail?.order?.payment_method && detail.order.payment_method !== "cod" && detail.order.payment_method !== "cash_on_delivery" && (
                                     <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "1px solid #f1f5f9" }}>
                                       <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "8px 10px", borderRadius: "6px", fontSize: "12px", color: "#166534" }}>
-                                        <span>💳</span>
                                         <span><strong>Online Payment ({detail.order.payment_method}):</strong> Refund is automatically credited back to customer's original payment source via Razorpay.</span>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {detail?.refund_breakdown && (
+                                    <div
+                                      style={{
+                                        marginTop: "12px",
+                                        padding: "10px 12px",
+                                        borderRadius: "6px",
+                                        background: "#f8fafc",
+                                        border: "1px solid #e2e8f0",
+                                        fontSize: "12px",
+                                      }}
+                                    >
+                                      <div
+                                        style={{
+                                          display: "flex",
+                                          justifyContent: "space-between",
+                                          alignItems: "center",
+                                          marginBottom: "8px",
+                                          fontSize: "11px",
+                                          fontWeight: 700,
+                                          color: "#64748b",
+                                          textTransform: "uppercase",
+                                          letterSpacing: "0.04em",
+                                        }}
+                                      >
+                                        <span>Refund Breakdown</span>
+                                        <span style={{ fontSize: "10px", color: "#64748b", background: "#f1f5f9", padding: "1px 6px", borderRadius: "4px" }}>
+                                          Prorated
+                                        </span>
+                                      </div>
+                                      <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between", color: "#475569" }}>
+                                          <span>Items Subtotal</span>
+                                          <span style={{ fontWeight: 600, color: "#0f172a" }}>+{formatPrice(detail.refund_breakdown.items_subtotal)}</span>
+                                        </div>
+                                        {detail.refund_breakdown.discounts_prorated > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: "#475569" }}>
+                                            <span>Discount</span>
+                                            <span style={{ fontWeight: 600, color: "#dc2626" }}>-{formatPrice(detail.refund_breakdown.discounts_prorated)}</span>
+                                          </div>
+                                        )}
+                                        {detail.refund_breakdown.tax_refund > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: "#475569" }}>
+                                            <span>Tax (GST)</span>
+                                            <span style={{ fontWeight: 600, color: "#0f172a" }}>+{formatPrice(detail.refund_breakdown.tax_refund)}</span>
+                                          </div>
+                                        )}
+                                        {detail.refund_breakdown.refundable_charges_added > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: "#475569" }}>
+                                            <span>Refundable Charges</span>
+                                            <span style={{ fontWeight: 600, color: "#0f172a" }}>+{formatPrice(detail.refund_breakdown.refundable_charges_added)}</span>
+                                          </div>
+                                        )}
+                                        {detail.refund_breakdown.non_refundable_charges_retained > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: "#475569" }}>
+                                            <span>Non-Refundable Retained</span>
+                                            <span style={{ fontWeight: 600, color: "#dc2626" }}>-{formatPrice(detail.refund_breakdown.non_refundable_charges_retained)}</span>
+                                          </div>
+                                        )}
+                                        {(detail.refund_breakdown.exception_refund_added || 0) > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: "#15803d", fontWeight: 600, background: "#f0fdf4", padding: "4px 6px", borderRadius: "4px" }}>
+                                            <span>Retained Charges Refunded (Exception)</span>
+                                            <span style={{ fontWeight: 700 }}>+{formatPrice(detail.refund_breakdown.exception_refund_added || 0)}</span>
+                                          </div>
+                                        )}
+                                        <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid #e2e8f0", paddingTop: "6px", marginTop: "2px", fontWeight: 700, fontSize: "12.5px" }}>
+                                          <span>Total Refund</span>
+                                          <span style={{ color: "#15803d" }}>
+                                            {formatPrice(detail.final_refund_amount || returnItem.final_refund_amount || returnItem.suggested_refund_amount)}
+                                          </span>
+                                        </div>
                                       </div>
                                     </div>
                                   )}
@@ -4368,6 +4496,10 @@ const AdminOrders: React.FC = () => {
                                               </div>
                                             </div>
                                           )}
+                                        </div>
+                                      ) : (returnItem.status === "rejected" || detail?.status === "rejected") ? (
+                                        <div style={{ padding: "10px 12px", background: "#fef2f2", color: "#991b1b", borderRadius: "6px", fontSize: "12px", border: "1px solid #fecaca", fontWeight: 600 }}>
+                                          Return request is rejected. Reverse logistics is disabled.
                                         </div>
                                       ) : (
                                         /* If Not assigned and return is approved or requested */
@@ -4985,9 +5117,136 @@ const AdminOrders: React.FC = () => {
                                       Process Customer Refund
                                     </span>
                                     <span style={{ fontSize: "12px", fontWeight: 700, color: "#166534", background: "#dcfce7", border: "1px solid #bbf7d0", padding: "2px 7px", borderRadius: "4px" }}>
-                                      Allowed: {formatPrice(returnItem.suggested_refund_amount)}
+                                      Suggested: {formatPrice(returnItem.suggested_refund_amount)}
                                     </span>
                                   </div>
+
+                                  {/* Refund Calculation Breakdown Box */}
+                                  {detail?.refund_breakdown ? (
+                                    <div
+                                      style={{
+                                        background: "#f8fafc",
+                                        border: "1px solid #e2e8f0",
+                                        borderRadius: "8px",
+                                        padding: "12px 14px",
+                                        marginBottom: "14px",
+                                        fontSize: "12.5px",
+                                      }}
+                                    >
+                                      <div style={{ fontWeight: 700, color: "#0f172a", marginBottom: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                        <span style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#475569" }}>
+                                          Refund Breakdown
+                                        </span>
+                                        <span style={{ fontSize: "11px", fontWeight: 500, color: "#64748b" }}>Prorated</span>
+                                      </div>
+
+                                      <div style={{ display: "grid", gap: "6px", color: "#475569" }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                          <span>Items Subtotal</span>
+                                          <span style={{ fontWeight: 600, color: "#0f172a" }}>+{formatPrice(detail.refund_breakdown.items_subtotal)}</span>
+                                        </div>
+
+                                        {detail.refund_breakdown.discounts_prorated > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: "#b91c1c" }}>
+                                            <span>Discount</span>
+                                            <span style={{ fontWeight: 600 }}>-{formatPrice(detail.refund_breakdown.discounts_prorated)}</span>
+                                          </div>
+                                        )}
+
+                                        {detail.refund_breakdown.tax_refund > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                            <span>Tax (GST)</span>
+                                            <span style={{ fontWeight: 600, color: "#0f172a" }}>+{formatPrice(detail.refund_breakdown.tax_refund)}</span>
+                                          </div>
+                                        )}
+
+                                        {detail.refund_breakdown.refundable_charges_added > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: "#16a34a" }}>
+                                            <span>Refundable Charges</span>
+                                            <span style={{ fontWeight: 600 }}>+{formatPrice(detail.refund_breakdown.refundable_charges_added)}</span>
+                                          </div>
+                                        )}
+
+                                        {detail.refund_breakdown.non_refundable_charges_retained > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: "#b45309" }}>
+                                            <span>Non-Refundable Retained</span>
+                                            <span style={{ fontWeight: 600 }}>-{formatPrice(detail.refund_breakdown.non_refundable_charges_retained)}</span>
+                                          </div>
+                                        )}
+
+                                        <div
+                                          style={{
+                                            display: "flex",
+                                            justifyContent: "space-between",
+                                            alignItems: "center",
+                                            borderTop: "1px solid #e2e8f0",
+                                            paddingTop: "8px",
+                                            marginTop: "4px",
+                                            fontWeight: 700,
+                                            fontSize: "13px",
+                                            color: "#0f172a",
+                                          }}
+                                        >
+                                          <span>Suggested Refund</span>
+                                          <span style={{ color: "#16a34a", fontSize: "14px" }}>{formatPrice(detail.refund_breakdown.suggested_refund_amount)}</span>
+                                        </div>
+                                      </div>
+
+                                      {/* Non-Refundable Exception Checkboxes */}
+                                      {detail.refund_breakdown.charge_allocations?.some((c) => !c.refundable && c.allocated_amount > 0) && (
+                                        <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "1px solid #e2e8f0" }}>
+                                          <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b", marginBottom: "6px" }}>
+                                            Refund Retained Charges
+                                          </div>
+
+                                          <div style={{ display: "grid", gap: "6px" }}>
+                                            {detail.refund_breakdown.charge_allocations
+                                              .filter((c) => !c.refundable && c.allocated_amount > 0)
+                                              .map((charge) => {
+                                                const isChecked = Boolean(selectedExtraChargesByReturn[returnItem.id]?.[charge.id]);
+                                                return (
+                                                  <label
+                                                    key={charge.id}
+                                                    style={{
+                                                      display: "flex",
+                                                      alignItems: "center",
+                                                      justifyContent: "space-between",
+                                                      padding: "7px 10px",
+                                                      borderRadius: "6px",
+                                                      background: isChecked ? "#f0fdf4" : "#ffffff",
+                                                      border: isChecked ? "1px solid #86efac" : "1px solid #e2e8f0",
+                                                      cursor: "pointer",
+                                                      fontSize: "12px",
+                                                      transition: "all 0.15s ease",
+                                                    }}
+                                                  >
+                                                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                                      <input
+                                                        type="checkbox"
+                                                        checked={isChecked}
+                                                        onChange={() =>
+                                                          toggleExtraCharge(
+                                                            returnItem.id,
+                                                            charge.id,
+                                                            detail.refund_breakdown!.suggested_refund_amount,
+                                                            detail.refund_breakdown!.charge_allocations
+                                                          )
+                                                        }
+                                                        style={{ cursor: "pointer", accentColor: "#16a34a" }}
+                                                      />
+                                                      <span style={{ fontWeight: 500, color: "#0f172a" }}>{charge.label}</span>
+                                                    </div>
+                                                    <span style={{ color: isChecked ? "#16a34a" : "#64748b", fontWeight: 600 }}>
+                                                      +{formatPrice(charge.allocated_amount)}
+                                                    </span>
+                                                  </label>
+                                                );
+                                              })}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : null}
 
                                   {/* Original Order Payment Source Banner */}
                                   {isOrderOnlinePaid ? (
@@ -5007,14 +5266,14 @@ const AdminOrders: React.FC = () => {
                                     >
                                       <div>
                                         <div style={{ fontSize: "12.5px", fontWeight: 700, color: "#166534" }}>
-                                          💳 Original Payment: Online ({formatPaymentMethodName(detail?.order?.payment_method)})
+                                          Payment Source: Online ({formatPaymentMethodName(detail?.order?.payment_method)})
                                         </div>
                                         <div style={{ fontSize: "11px", color: "#15803d", marginTop: "2px" }}>
                                           {detail?.order?.razorpay_payment_id ? `Razorpay Payment ID: ${detail.order.razorpay_payment_id}` : "Gateway Reversal Enabled"}
                                         </div>
                                       </div>
                                       <span style={{ fontSize: "10.5px", fontWeight: 700, color: "#15803d", background: "#ffffff", border: "1px solid #86efac", padding: "2px 6px", borderRadius: "4px" }}>
-                                        Instant Auto-Reversal
+                                        Auto-Reversal
                                       </span>
                                     </div>
                                   ) : (
@@ -5029,7 +5288,7 @@ const AdminOrders: React.FC = () => {
                                     >
                                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
                                         <span style={{ fontSize: "12.5px", fontWeight: 700, color: "#92400e" }}>
-                                          💵 Original Payment: Cash on Delivery (COD)
+                                          Payment Source: Cash on Delivery (COD)
                                         </span>
                                         {(detail?.customer_refund_account || returnItem.customer_refund_account) && (
                                           <span style={{ fontSize: "10px", fontWeight: 800, color: "#92400e", background: "#fef3c7", border: "1px solid #fde68a", padding: "1px 6px", borderRadius: "4px", textTransform: "uppercase" }}>
@@ -5083,10 +5342,10 @@ const AdminOrders: React.FC = () => {
                                         style={inputStyle}
                                       >
                                         {isOrderOnlinePaid && (
-                                          <option value="original_payment">⚡ Auto-Refund to Source (Razorpay Gateway)</option>
+                                          <option value="original_payment">Auto-Refund to Source (Razorpay Gateway)</option>
                                         )}
-                                        <option value="cod_refund">🏦 Direct Bank Transfer / UPI Refund (Manual Payout)</option>
-                                        <option value="store_credit">🎟️ Store Credit / Gift Voucher Code</option>
+                                        <option value="cod_refund">Direct Bank Transfer / UPI Refund (Manual Payout)</option>
+                                        <option value="store_credit">Store Credit / Voucher Code</option>
                                         {!isOrderOnlinePaid && (
                                           <option value="original_payment">Original Payment Gateway (Fallback)</option>
                                         )}

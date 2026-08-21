@@ -163,6 +163,28 @@ type CustomerReturnItem = {
   updated_at?: string | null;
 };
 
+type RefundChargeAllocation = {
+  id: string;
+  code?: string | null;
+  label: string;
+  refundable: boolean;
+  total_order_amount: number;
+  allocated_amount: number;
+};
+
+type RefundBreakdown = {
+  items_subtotal: number;
+  discounts_prorated: number;
+  tax_refund: number;
+  refundable_charges_added: number;
+  non_refundable_charges_retained: number;
+  suggested_refund_amount: number;
+  max_refundable_amount: number;
+  actual_refund_amount?: number;
+  exception_refund_added?: number;
+  charge_allocations: RefundChargeAllocation[];
+};
+
 type CustomerReturnDetail = {
   id: string;
   site_id: string;
@@ -176,6 +198,7 @@ type CustomerReturnDetail = {
   refund_override_reason?: string | null;
   suggested_refund_amount: number;
   final_refund_amount: number;
+  refund_breakdown?: RefundBreakdown | null;
   refund_method?: string | null;
   approved_at?: string | null;
   rejected_at?: string | null;
@@ -1441,8 +1464,8 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
           })}
         </div>
 
-        {/* Own Fleet Rider Contact Card — below tracker, only when out for delivery and not cancelled */}
-        {isOwnAgent && !isCancelled && isOutForDelivery && (detail.shipment?.delivery_partner_name || detail.shipment?.delivery_partner_phone) && (
+        {/* Own Fleet Rider Contact Card — below tracker, only when actively out for delivery and not delivered/cancelled */}
+        {isOwnAgent && !isCancelled && !isDelivered && (orderStatus === "out_for_delivery" || detail.shipment?.status === "out_for_delivery") && (detail.shipment?.delivery_partner_name || detail.shipment?.delivery_partner_phone) && (
           <div
             style={{
               marginTop: "16px",
@@ -1626,7 +1649,12 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                 <div style={{ fontSize: "13px", color: textMuted }}>
                   Refund:{" "}
                   <span style={{ color: textPrimary, fontWeight: 700 }}>
-                    {formatPrice(latestReturn.final_refund_amount || latestReturn.suggested_refund_amount)}
+                    {formatPrice(
+                      latestDetail?.final_refund_amount ||
+                      latestReturn.final_refund_amount ||
+                      latestDetail?.suggested_refund_amount ||
+                      latestReturn.suggested_refund_amount
+                    )}
                   </span>
                 </div>
 
@@ -1833,8 +1861,12 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                   >
                     <div>
                       <div style={{ fontSize: "12px", color: textMuted, marginBottom: "4px" }}>Refund amount</div>
-                      <div style={{ fontSize: "16px", fontWeight: 800 }}>
-                        {formatPrice(latestDetail.final_refund_amount || latestDetail.suggested_refund_amount)}
+                      <div style={{ fontSize: "16px", fontWeight: 800, color: "#16a34a" }}>
+                        {formatPrice(
+                          typeof latestDetail.final_refund_amount === "number" && latestDetail.final_refund_amount > 0
+                            ? latestDetail.final_refund_amount
+                            : latestDetail.suggested_refund_amount
+                        )}
                       </div>
                     </div>
                     <div>
@@ -1851,6 +1883,148 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                     </div>
                   </div>
                 </div>
+
+                {latestDetail.refund_breakdown ? (
+                  <div
+                    style={{
+                      borderRadius: "16px",
+                      background: innerBg,
+                      border: cardBorder,
+                      padding: isCompact ? "12px" : "14px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          fontWeight: 800,
+                          letterSpacing: "0.05em",
+                          textTransform: "uppercase",
+                          color: textMuted,
+                        }}
+                      >
+                        Refund breakdown
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          color: textMuted,
+                          background: isLight ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.06)",
+                          padding: "2px 8px",
+                          borderRadius: "999px",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Prorated
+                      </span>
+                    </div>
+
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "13px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", color: textMuted }}>
+                        <span>Items Subtotal</span>
+                        <span style={{ fontWeight: 600, color: textPrimary }}>
+                          +{formatPrice(latestDetail.refund_breakdown.items_subtotal)}
+                        </span>
+                      </div>
+
+                      {latestDetail.refund_breakdown.discounts_prorated > 0 ? (
+                        <div style={{ display: "flex", justifyContent: "space-between", color: textMuted }}>
+                          <span>Discount</span>
+                          <span style={{ fontWeight: 600, color: "#dc2626" }}>
+                            -{formatPrice(latestDetail.refund_breakdown.discounts_prorated)}
+                          </span>
+                        </div>
+                      ) : null}
+
+                      {latestDetail.refund_breakdown.tax_refund > 0 ? (
+                        <div style={{ display: "flex", justifyContent: "space-between", color: textMuted }}>
+                          <span>Tax (GST)</span>
+                          <span style={{ fontWeight: 600, color: textPrimary }}>
+                            +{formatPrice(latestDetail.refund_breakdown.tax_refund)}
+                          </span>
+                        </div>
+                      ) : null}
+
+                      {latestDetail.refund_breakdown.refundable_charges_added > 0 ? (
+                        <div style={{ display: "flex", justifyContent: "space-between", color: textMuted }}>
+                          <span>Refundable Charges</span>
+                          <span style={{ fontWeight: 600, color: textPrimary }}>
+                            +{formatPrice(latestDetail.refund_breakdown.refundable_charges_added)}
+                          </span>
+                        </div>
+                      ) : null}
+
+                      {latestDetail.refund_breakdown.non_refundable_charges_retained > 0 ? (
+                        <div style={{ display: "flex", justifyContent: "space-between", color: textMuted }}>
+                          <div>
+                            <span>Non-Refundable Retained</span>
+                            <div style={{ fontSize: "11px", opacity: 0.7 }}>
+                              {latestDetail.refund_breakdown.charge_allocations
+                                ?.filter((c) => !c.refundable)
+                                .map((c) => c.label)
+                                .join(", ") || "Shipping / COD fee"}
+                            </div>
+                          </div>
+                          <span style={{ fontWeight: 600, color: "#dc2626" }}>
+                            -{formatPrice(latestDetail.refund_breakdown.non_refundable_charges_retained)}
+                          </span>
+                        </div>
+                      ) : null}
+
+                      {(latestDetail.refund_breakdown.exception_refund_added || 0) > 0 ? (
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            color: "#16a34a",
+                            fontWeight: 600,
+                            padding: "6px 8px",
+                            borderRadius: "8px",
+                            background: "rgba(22,163,74,0.08)",
+                          }}
+                        >
+                          <div>
+                            <div>Retained Charges Refunded</div>
+                            <div style={{ fontSize: "11px", fontWeight: 400, opacity: 0.85 }}>
+                              Approved exception upon review
+                            </div>
+                          </div>
+                          <span style={{ fontWeight: 700 }}>
+                            +{formatPrice(latestDetail.refund_breakdown.exception_refund_added || 0)}
+                          </span>
+                        </div>
+                      ) : null}
+
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          paddingTop: "8px",
+                          marginTop: "2px",
+                          borderTop: divider,
+                          fontWeight: 800,
+                          fontSize: "14px",
+                        }}
+                      >
+                        <span>Total Refund</span>
+                        <span style={{ color: "#16a34a" }}>
+                          {formatPrice(
+                            typeof latestDetail.final_refund_amount === "number" && latestDetail.final_refund_amount > 0
+                              ? latestDetail.final_refund_amount
+                              : latestDetail.suggested_refund_amount
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
 
                 <div
                   style={{
@@ -3127,6 +3301,59 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                     </div>
                                   </div>
                                 )}
+
+                                {(() => {
+                                   const selectedEntries = Object.entries(draft?.items || {}).filter(([_, it]) => it.selected);
+                                   if (!selectedEntries.length) return null;
+                                   let estItemsSubtotal = 0;
+                                   let estRefundTotal = 0;
+                                   let estNonRefundableRetained = 0;
+
+                                   selectedEntries.forEach(([itemId, draftItem]) => {
+                                     const matchedItem = detail.items.find((i) => i.id === itemId);
+                                     if (matchedItem && draftItem.quantity > 0) {
+                                       const qty = draftItem.quantity;
+                                       const totalQty = matchedItem.quantity || 1;
+                                       const unitPrice = Number(matchedItem.unit_price || 0);
+                                       estItemsSubtotal += unitPrice * qty;
+
+                                       const snap = matchedItem.pricing_snapshot;
+                                       if (snap && snap.refundable_line_total != null) {
+                                         estRefundTotal += (Number(snap.refundable_line_total) / totalQty) * qty;
+                                         estNonRefundableRetained += (Number(snap.non_refundable_charges_allocated || 0) / totalQty) * qty;
+                                       } else {
+                                         estRefundTotal += (Number(matchedItem.line_total || 0) / totalQty) * qty;
+                                       }
+                                     }
+                                   });
+
+                                   return (
+                                     <div
+                                       style={{
+                                         border: cardBorder,
+                                         borderRadius: "14px",
+                                         padding: "12px 14px",
+                                         background: isLight ? "#f0fdf4" : "rgba(16,185,129,0.06)",
+                                         marginBottom: "14px",
+                                         fontSize: "12.5px",
+                                       }}
+                                     >
+                                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                                         <span style={{ fontWeight: 700, color: textPrimary }}>
+                                           Estimated Refund Amount
+                                         </span>
+                                         <span style={{ fontWeight: 800, fontSize: "14px", color: "#16a34a" }}>
+                                           {formatPrice(estRefundTotal)}
+                                         </span>
+                                       </div>
+                                       {estNonRefundableRetained > 0 && (
+                                         <div style={{ fontSize: "11.5px", color: textMuted, marginTop: "2px" }}>
+                                           Note: Non-refundable checkout charges ({formatPrice(estNonRefundableRetained)} prorated) are deducted according to store policy.
+                                         </div>
+                                       )}
+                                     </div>
+                                   );
+                                 })()}
 
                                 <div
                                   style={{

@@ -678,8 +678,8 @@ export default function TrackOrderPage() {
               </div>
             </div>
 
-            {/* Own Fleet Rider Contact Card — below tracker, only when out for delivery and not cancelled */}
-            {isOwnAgent && data.order_status !== "cancelled" && data.status !== "cancelled" && currentStatus === "out_for_delivery" && (riderName || riderPhone) && (
+            {/* Own Fleet Rider Contact Card — below tracker, only when actively out for delivery and not cancelled/delivered */}
+            {isOwnAgent && data.order_status !== "cancelled" && data.status !== "cancelled" && data.order_status !== "delivered" && data.status !== "delivered" && currentStatus === "out_for_delivery" && (riderName || riderPhone) && (
               <div
                 style={{
                   background: "#f0fdf4",

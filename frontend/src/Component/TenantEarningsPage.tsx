@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
+import { Pagination } from "./Pagination";
+import GlassToast from "./GlassToast";
 
 type LedgerEntry = {
   id: string;
@@ -45,7 +47,7 @@ export default function TenantEarningsPage() {
   const [releasingEscrow, setReleasingEscrow] = useState(false);
   const [data, setData] = useState<EarningsSummaryData | null>(null);
   const [page, setPage] = useState(1);
-  const [feedbackMsg, setFeedbackMsg] = useState("");
+  const [feedback, setFeedback] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
   const fetchEarnings = async (targetPage = 1, showRefreshState = false) => {
     if (!siteId) return;
@@ -81,20 +83,20 @@ export default function TenantEarningsPage() {
     if (!siteId || releasingEscrow) return;
     try {
       setReleasingEscrow(true);
-      setFeedbackMsg("");
+      setFeedback(null);
       const res = await fetch(`${API_BASE_URL}/admin/${siteId}/release-mature-escrows`, {
         method: "POST",
         credentials: "include",
       });
       const json = await res.json();
       if (res.ok) {
-        setFeedbackMsg(json.message || "Payouts processed successfully.");
+        setFeedback({ text: json.message || "Payouts processed successfully.", type: "success" });
         await fetchEarnings(page);
       } else {
-        setFeedbackMsg(json.detail || "Failed to process payouts.");
+        setFeedback({ text: json.detail || "Failed to process payouts.", type: "error" });
       }
     } catch (err: any) {
-      setFeedbackMsg(err.message || "Network error while releasing payouts.");
+      setFeedback({ text: err.message || "Network error while releasing payouts.", type: "error" });
     } finally {
       setReleasingEscrow(false);
     }
@@ -295,22 +297,14 @@ export default function TenantEarningsPage() {
         </div>
       </div>
 
-      {/* Feedback Alert */}
-      {feedbackMsg && (
-        <div
-          style={{
-            background: "#eff6ff",
-            border: "1px solid #bfdbfe",
-            color: "#1d4ed8",
-            borderRadius: "8px",
-            padding: "12px 16px",
-            marginBottom: "20px",
-            fontSize: "13px",
-            fontWeight: 600,
-          }}
-        >
-          {feedbackMsg}
-        </div>
+      {/* Feedback Toast */}
+      {feedback && (
+        <GlassToast
+          message={feedback.text}
+          type={feedback.type}
+          onClose={() => setFeedback(null)}
+          top="76px"
+        />
       )}
 
       {/* Bank Alert if Not Configured */}

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { Pagination } from "./Pagination";
+import GlassToast from "./GlassToast";
 
 type DeliveryMode = "own_agent" | "shiprocket" | "hybrid" | "manual";
 
@@ -515,30 +516,12 @@ export default function DeliverySettingsPage() {
     <div style={{ width: "100%", maxWidth: "100%", color: "#0f172a", boxSizing: "border-box" }}>
       {/* Toast Feedback */}
       {feedback && (
-        <div
-          style={{
-            position: "fixed",
-            top: "80px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 9999,
-            padding: "11px 20px",
-            borderRadius: "8px",
-            background: feedback.type === "success" ? "#0f172a" : "#991b1b",
-            color: "#ffffff",
-            fontSize: "13px",
-            fontWeight: 600,
-            boxShadow: "0 10px 25px -3px rgba(0, 0, 0, 0.25), 0 4px 6px -2px rgba(0, 0, 0, 0.1)",
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-            maxWidth: "90%",
-            width: "max-content",
-          }}
-        >
-          {feedback.type === "success" ? <CheckCircleIcon /> : <AlertTriangleIcon />}
-          <span>{feedback.msg}</span>
-        </div>
+        <GlassToast
+          message={feedback.msg}
+          type={feedback.type}
+          onClose={() => setFeedback(null)}
+          top="76px"
+        />
       )}
 
       {/* Top Header */}

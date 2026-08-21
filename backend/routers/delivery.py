@@ -2181,6 +2181,11 @@ def get_rider_tasks(
     ).all()
 
     for ret in return_requests:
+        if ret.status in ("rejected", "closed", "refunded"):
+            continue
+        if ret.pickup_status in ("delivered_to_hub", "doorstep_rejected", "cancelled", "failed"):
+            continue
+
         p_details = ret.pickup_details or {}
         if str(p_details.get("agent_id") or "") != str(agent_id):
             continue
@@ -2213,20 +2218,25 @@ def get_rider_tasks(
             select(ReturnItem).where(ReturnItem.return_request_id == ret.id)
         ).all()
 
-        task_items = [
-            {
+        task_items = []
+        for item in ret_items:
+            appr = int(item.quantity_approved if item.quantity_approved is not None else item.quantity_requested or 0)
+            if appr <= 0:
+                continue
+            task_items.append({
                 "id": str(item.id),
                 "product_name": item.product_name,
-                "quantity": int(item.quantity_approved or item.quantity_requested or 1),
+                "quantity": appr,
                 "quantity_requested": int(item.quantity_requested or 1),
-                "quantity_approved": int(item.quantity_approved or item.quantity_requested or 1),
+                "quantity_approved": appr,
                 "quantity_received": int(item.quantity_received or 0),
                 "variant": item.selected_variant_value,
                 "price": float(item.line_refund_suggested or item.unit_price_paid or 0),
                 "reason": item.reason_code,
-            }
-            for item in ret_items
-        ]
+            })
+
+        if not task_items or sum(it["quantity"] for it in task_items) <= 0:
+            continue
 
         tasks.append({
             "task_type": "return_pickup",
@@ -2500,8 +2510,13 @@ def rider_update_task_status(
                     picked_qty = appr_qty
 
                 item.quantity_received = picked_qty
+                if (item.quantity_approved or 0) < picked_qty:
+                    item.quantity_approved = picked_qty
                 session.add(item)
                 total_picked += picked_qty
+
+            from routers.returns import recalculate_return_amounts
+            recalculate_return_amounts(session, return_request, ret_items, persist_final=False)
 
             p_details["total_approved_quantity"] = total_approved
             p_details["total_picked_quantity"] = total_picked

@@ -69,6 +69,7 @@ type ChargeRule = {
   enabled: boolean;
   optional: boolean;
   customerSelectable: boolean;
+  refundable?: boolean;
   amountType: "fixed" | "percent";
   amountValue: string;
   applyConditionType: "none" | "subtotal_lt" | "subtotal_gte" | "payment_method";

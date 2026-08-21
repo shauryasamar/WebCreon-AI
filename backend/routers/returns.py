@@ -22,6 +22,7 @@ from models import (
     ReturnItem,
     ReturnRequest,
     ReturnStatusHistory,
+    Site,
     TenantLedgerEntry,
     User,
 )
@@ -180,18 +181,21 @@ def get_prorated_refund_for_quantity(order_item: OrderItem, quantity: int) -> De
     if quantity <= 0:
         return Decimal("0.00")
 
-    line_total_paid = None
+    refundable_line_total = None
     if getattr(order_item, "pricing_snapshot", None):
-        line_total_paid = order_item.pricing_snapshot.get("final_paid_for_line")
+        if "refundable_line_total" in order_item.pricing_snapshot:
+            refundable_line_total = order_item.pricing_snapshot.get("refundable_line_total")
+        elif "final_paid_for_line" in order_item.pricing_snapshot:
+            refundable_line_total = order_item.pricing_snapshot.get("final_paid_for_line")
 
-    if line_total_paid is None:
-        line_total_paid = getattr(order_item, "line_total", 0)
+    if refundable_line_total is None:
+        refundable_line_total = getattr(order_item, "line_total", 0)
 
     quantity_base = int(getattr(order_item, "quantity", 0) or 0)
     if quantity_base <= 0:
         return Decimal("0.00")
 
-    per_unit = money(line_total_paid) / Decimal(quantity_base)
+    per_unit = money(refundable_line_total) / Decimal(quantity_base)
     return money(per_unit * quantity)
 
 
@@ -309,10 +313,16 @@ def recalculate_return_amounts(
     persist_final: bool = False,
 ) -> Decimal:
     total = Decimal("0.00")
+    is_already_refunded = (
+        return_request.status in ("refunded", "closed")
+        or return_request.refund_status == "processed"
+    )
 
     for item in items:
         current_amount = recalculate_item_refund(session, return_request, item)
-        item.line_refund_final = money(current_amount)
+        item.line_refund_suggested = money(current_amount)
+        if not is_already_refunded:
+            item.line_refund_final = money(current_amount)
         item.updated_at = utc_now()
         session.add(item)
         total += current_amount
@@ -320,12 +330,15 @@ def recalculate_return_amounts(
     total = money(total)
     return_request.suggested_refund_amount = total
 
-    if persist_final:
-        current_final = money(return_request.final_refund_amount)
-        if current_final > total:
+    if not is_already_refunded:
+        breakdown = calculate_return_breakdown(session, return_request, items)
+        max_refundable = money(breakdown.get("max_refundable_amount", total))
+        if persist_final:
+            current_final = money(return_request.final_refund_amount)
+            if current_final > max_refundable:
+                return_request.final_refund_amount = max_refundable
+        else:
             return_request.final_refund_amount = total
-    else:
-        return_request.final_refund_amount = total
 
     return_request.updated_at = utc_now()
     session.add(return_request)
@@ -348,6 +361,108 @@ def calculate_display_return_amounts(
             total += amount
 
     return money(total), item_amounts
+
+
+def calculate_return_breakdown(
+    session: Session,
+    return_request: ReturnRequest,
+    items: list[ReturnItem],
+) -> dict[str, Any]:
+    order = session.get(Order, return_request.order_id)
+    items_subtotal = Decimal("0.00")
+    discounts_prorated = Decimal("0.00")
+    tax_refund = Decimal("0.00")
+    refundable_charges_added = Decimal("0.00")
+    non_refundable_charges_retained = Decimal("0.00")
+    total_gross_returned = Decimal("0.00")
+    suggested_refund = Decimal("0.00")
+
+    charges_allocations_map: dict[str, dict[str, Any]] = {}
+
+    with session.no_autoflush:
+        for item in items:
+            source_order_item = session.get(OrderItem, item.order_item_id)
+            if not source_order_item:
+                continue
+
+            effective_qty = get_effective_refund_quantity(return_request, item)
+            if effective_qty <= 0:
+                continue
+
+            qty_base = int(getattr(source_order_item, "quantity", 0) or 1)
+            item_ratio = Decimal(effective_qty) / Decimal(qty_base)
+
+            item_snapshot = getattr(source_order_item, "pricing_snapshot", {}) or {}
+
+            # 1. Base unit price & gross
+            unit_price = money(getattr(source_order_item, "unit_price", 0))
+            item_gross = money(unit_price * effective_qty)
+            items_subtotal += item_gross
+
+            # 2. Discount & Tax
+            disc = money(Decimal(str(item_snapshot.get("discount_allocated", 0))) * item_ratio)
+            discounts_prorated += disc
+
+            tax = money(Decimal(str(item_snapshot.get("tax_amount", 0))) * item_ratio)
+            tax_refund += tax
+
+            # 3. Charges breakdown
+            ref_charges = money(Decimal(str(item_snapshot.get("refundable_charges_allocated", 0))) * item_ratio)
+            refundable_charges_added += ref_charges
+
+            non_ref_charges = money(Decimal(str(item_snapshot.get("non_refundable_charges_allocated", 0))) * item_ratio)
+            non_refundable_charges_retained += non_ref_charges
+
+            # Charge details for checkbox UI
+            charges_breakdown = item_snapshot.get("charges_breakdown") or []
+            for ch in charges_breakdown:
+                c_id = str(ch.get("id") or ch.get("code") or "charge")
+                c_label = str(ch.get("label") or ch.get("code") or "Charge")
+                is_ref = bool(ch.get("refundable", True))
+                allocated_for_this_return = money(Decimal(str(ch.get("item_allocated_amount", 0))) * item_ratio)
+
+                if c_id not in charges_allocations_map:
+                    charges_allocations_map[c_id] = {
+                        "id": c_id,
+                        "code": ch.get("code"),
+                        "label": c_label,
+                        "refundable": is_ref,
+                        "total_order_amount": Decimal(str(ch.get("total_order_amount", 0))),
+                        "allocated_amount": Decimal("0.00"),
+                    }
+                charges_allocations_map[c_id]["allocated_amount"] += allocated_for_this_return
+
+            item_suggested = get_prorated_refund_for_quantity(source_order_item, effective_qty)
+            suggested_refund += item_suggested
+
+            # Max refundable for this item (including non-refundable charges if waived as exception)
+            final_paid_for_line = Decimal(str(item_snapshot.get("final_paid_for_line", getattr(source_order_item, "line_total", 0))))
+            per_unit_gross = final_paid_for_line / Decimal(qty_base)
+            total_gross_returned += money(per_unit_gross * effective_qty)
+
+    order_total = money(getattr(order, "total", 0)) if order else Decimal("0.00")
+    max_refundable = min(total_gross_returned, order_total) if total_gross_returned > 0 else suggested_refund
+
+    return {
+        "items_subtotal": float(money(items_subtotal)),
+        "discounts_prorated": float(money(discounts_prorated)),
+        "tax_refund": float(money(tax_refund)),
+        "refundable_charges_added": float(money(refundable_charges_added)),
+        "non_refundable_charges_retained": float(money(non_refundable_charges_retained)),
+        "suggested_refund_amount": float(money(suggested_refund)),
+        "max_refundable_amount": float(money(max_refundable)),
+        "charge_allocations": [
+            {
+                "id": data["id"],
+                "code": data["code"],
+                "label": data["label"],
+                "refundable": data["refundable"],
+                "total_order_amount": float(money(data["total_order_amount"])),
+                "allocated_amount": float(money(data["allocated_amount"])),
+            }
+            for data in charges_allocations_map.values()
+        ],
+    }
 
 
 def restore_order_item_returnable_quantity(
@@ -404,7 +519,25 @@ def serialize_return_item(
     }
 
 
-def serialize_return_request_summary(return_request: ReturnRequest, items: list[ReturnItem]) -> dict[str, Any]:
+def serialize_return_request_summary(
+    return_request: ReturnRequest,
+    items: list[ReturnItem],
+    order: Optional[Order] = None,
+    session: Optional[Session] = None,
+) -> dict[str, Any]:
+    is_refunded = return_request.status in ("refunded", "closed") or return_request.refund_status == "processed"
+    final_amt = to_float(return_request.final_refund_amount)
+    sugg_amt = to_float(return_request.suggested_refund_amount)
+
+    if is_refunded and order and getattr(order, "pricing_snapshot", None) and isinstance(order.pricing_snapshot, dict):
+        snap_amt = order.pricing_snapshot.get("refund_details", {}).get("amount")
+        if snap_amt is not None and float(snap_amt) > final_amt:
+            final_amt = float(snap_amt)
+            if session:
+                return_request.final_refund_amount = money(Decimal(str(snap_amt)))
+                session.add(return_request)
+
+    effective_final = final_amt if (is_refunded and final_amt > 0) else (final_amt or sugg_amt)
     return {
         "id": str(return_request.id),
         "site_id": str(return_request.site_id),
@@ -418,8 +551,8 @@ def serialize_return_request_summary(return_request: ReturnRequest, items: list[
         "admin_note": return_request.admin_note,
         "rejection_reason": return_request.rejection_reason,
         "refund_override_reason": return_request.refund_override_reason,
-        "suggested_refund_amount": to_float(return_request.suggested_refund_amount),
-        "final_refund_amount": to_float(return_request.final_refund_amount),
+        "suggested_refund_amount": sugg_amt,
+        "final_refund_amount": effective_final,
         "refund_method": return_request.refund_method,
         "customer_refund_account": getattr(return_request, "customer_refund_account", None),
         "item_count": len(items),
@@ -439,12 +572,43 @@ def serialize_return_request_detail(
     session: Session,
 ) -> dict[str, Any]:
     display_total, item_amounts = calculate_display_return_amounts(session, return_request, items)
-    displayed_final_total = min(money(return_request.final_refund_amount), display_total)
+    refund_breakdown = calculate_return_breakdown(session, return_request, items)
+    max_refundable = money(refund_breakdown.get("max_refundable_amount", display_total))
+    
+    is_refunded = return_request.status in ("refunded", "closed") or return_request.refund_status == "processed"
+    final_val = money(return_request.final_refund_amount)
 
-    serialized_items = [
-        serialize_return_item(return_request, item, item_amounts.get(item.id))
-        for item in items
-    ]
+    # If order pricing snapshot has higher actual refund amount recorded from gateway/Razorpay, recover it
+    snapshot_refund_amt = Decimal("0.00")
+    if order and getattr(order, "pricing_snapshot", None) and isinstance(order.pricing_snapshot, dict):
+        snap_amt = order.pricing_snapshot.get("refund_details", {}).get("amount")
+        if snap_amt is not None:
+            snapshot_refund_amt = money(Decimal(str(snap_amt)))
+    if is_refunded and snapshot_refund_amt > final_val:
+        final_val = min(snapshot_refund_amt, max_refundable)
+        return_request.final_refund_amount = final_val
+        session.add(return_request)
+
+    displayed_final_total = min(final_val, max_refundable) if (is_refunded and final_val > 0) else display_total
+
+    # Prorate final refunded amount to items if status is refunded or closed
+    serialized_items = []
+    if is_refunded and display_total > 0 and displayed_final_total > 0:
+        ratio = displayed_final_total / display_total
+        for item in items:
+            base_amt = item_amounts.get(item.id, money(item.line_refund_final or item.line_refund_suggested))
+            item_final = money(base_amt * ratio)
+            serialized_items.append(serialize_return_item(return_request, item, item_final))
+    elif len(items) == 1 and is_refunded and displayed_final_total > 0:
+        serialized_items.append(serialize_return_item(return_request, items[0], displayed_final_total))
+    else:
+        for item in items:
+            serialized_items.append(serialize_return_item(return_request, item, item_amounts.get(item.id)))
+
+    # Enhance refund breakdown with actual refunded amounts and exceptions
+    exception_amount = max(Decimal("0.00"), displayed_final_total - money(refund_breakdown["suggested_refund_amount"])) if is_refunded else Decimal("0.00")
+    refund_breakdown["actual_refund_amount"] = float(displayed_final_total if is_refunded else display_total)
+    refund_breakdown["exception_refund_added"] = float(money(exception_amount))
 
     return {
         "id": str(return_request.id),
@@ -461,6 +625,7 @@ def serialize_return_request_detail(
         "refund_override_reason": return_request.refund_override_reason,
         "suggested_refund_amount": to_float(display_total),
         "final_refund_amount": to_float(displayed_final_total),
+        "refund_breakdown": refund_breakdown,
         "refund_method": return_request.refund_method,
         "customer_refund_account": getattr(return_request, "customer_refund_account", None),
         "approved_at": return_request.approved_at.isoformat() if return_request.approved_at else None,
@@ -648,6 +813,7 @@ def create_return_request(
     get_user_for_site_or_404(session, site_id, customer_id)
 
     order = get_order_or_404(session, site_id, payload.order_id)
+    site = session.get(Site, site_id)
 
     if order.customer_id != customer_id:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -677,7 +843,8 @@ def create_return_request(
         if not order_item:
             raise HTTPException(status_code=404, detail=f"Order item {entry.order_item_id} not found")
 
-        item_return_days = order_item.return_window_days if getattr(order_item, "return_window_days", None) is not None else getattr(site, "default_return_window_days", 7)
+        site_default_window = getattr(site, "default_return_window_days", 7) if site else 7
+        item_return_days = order_item.return_window_days if getattr(order_item, "return_window_days", None) is not None else site_default_window
         if item_return_days == 0:
             raise HTTPException(
                 status_code=400,
@@ -851,10 +1018,16 @@ def get_my_returns(
     for item in return_items:
         items_by_return_id.setdefault(item.return_request_id, []).append(item)
 
-    return [
-        serialize_return_request_summary(req, items_by_return_id.get(req.id, []))
+    order_ids = list({req.order_id for req in return_requests})
+    orders = session.exec(select(Order).where(Order.id.in_(order_ids))).all() if order_ids else []
+    orders_by_id = {o.id: o for o in orders}
+
+    serialized = [
+        serialize_return_request_summary(req, items_by_return_id.get(req.id, []), orders_by_id.get(req.order_id), session)
         for req in return_requests
     ]
+    session.commit()
+    return serialized
 
 
 @router.get("/{site_id}/my-returns/{return_id}")
@@ -923,10 +1096,16 @@ def get_admin_returns(
     for item in return_items:
         items_by_return_id.setdefault(item.return_request_id, []).append(item)
 
-    return [
-        serialize_return_request_summary(req, items_by_return_id.get(req.id, []))
+    order_ids = list({req.order_id for req in return_requests})
+    orders = session.exec(select(Order).where(Order.id.in_(order_ids))).all() if order_ids else []
+    orders_by_id = {o.id: o for o in orders}
+
+    serialized = [
+        serialize_return_request_summary(req, items_by_return_id.get(req.id, []), orders_by_id.get(req.order_id), session)
         for req in return_requests
     ]
+    session.commit()
+    return serialized
 
 
 @router.get("/admin/{site_id}/{return_id}")
@@ -1028,6 +1207,13 @@ def review_return_request(
         else:
             if not payload.items:
                 raise HTTPException(status_code=400, detail="Approved quantities are required")
+
+            total_appr_requested = sum(int(line.quantity_approved or 0) for line in payload.items)
+            if total_appr_requested <= 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot approve return with 0 items. Please enter an approved quantity of at least 1, or select 'Reject' to decline the request.",
+                )
 
             reviewed_item_ids: set[UUID] = set()
 
@@ -1134,13 +1320,38 @@ def dispatch_return_pickup(
     session: Session = Depends(get_session),
 ):
     return_request = get_return_request_or_404(session, site_id, return_id)
-    if return_request.status in {"rejected"}:
+    if return_request.status in {"rejected", "refunded", "closed"}:
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot dispatch pickup for rejected return request.",
+            detail=f"Cannot dispatch pickup for {return_request.status} return request.",
         )
 
     now = utc_now()
+    items = session.exec(
+        select(ReturnItem)
+        .where(ReturnItem.return_request_id == return_request.id)
+        .order_by(ReturnItem.created_at.asc())
+    ).all()
+
+    # If return is still in 'requested' state, dispatching automatically approves it
+    if return_request.status == "requested":
+        for it in items:
+            if it.quantity_approved is None or it.quantity_approved == 0:
+                it.quantity_approved = int(it.quantity_requested or 1)
+                session.add(it)
+        return_request.status = "approved"
+        return_request.approved_at = now
+        recalculate_return_amounts(session, return_request, items, persist_final=False)
+        session.add(return_request)
+
+    # Check total approved quantity
+    total_approved = sum(int(it.quantity_approved or 0) for it in items)
+    if total_approved <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot dispatch pickup for a return request with 0 approved items. Please approve at least 1 item or reject the return.",
+        )
+
     pickup_details = dict(return_request.pickup_details or {})
     mode = (payload.mode or "own_agent").strip().lower()
 
@@ -1611,10 +1822,16 @@ def refund_return_request(
 
     allowed_amount = recalculate_return_amounts(session, return_request, items, persist_final=True)
     suggested_amount = money(allowed_amount)
+    breakdown = calculate_return_breakdown(session, return_request, items)
+    max_refundable_amount = money(breakdown.get("max_refundable_amount", suggested_amount))
+
     final_amount = money(payload.final_refund_amount) if payload.final_refund_amount is not None else suggested_amount
 
-    if final_amount > suggested_amount:
-        raise HTTPException(status_code=400, detail="Final refund amount cannot exceed the allowed refund amount")
+    if final_amount > max_refundable_amount:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Final refund amount (₹{final_amount}) cannot exceed maximum allowed amount (₹{max_refundable_amount})",
+        )
 
     if final_amount != suggested_amount:
         if not payload.refund_override_reason or not payload.refund_override_reason.strip():
@@ -1637,6 +1854,16 @@ def refund_return_request(
         return_request.admin_note = payload.admin_note
         return_request.updated_at = now
         session.add(return_request)
+
+        # Update return items with final refund amount
+        if len(items) == 1:
+            items[0].line_refund_final = final_amount
+            session.add(items[0])
+        elif suggested_amount > 0:
+            ratio = final_amount / suggested_amount
+            for item in items:
+                item.line_refund_final = money(money(item.line_refund_suggested or item.line_refund_final) * ratio)
+                session.add(item)
 
         # Check if this is a Full Refund vs Partial Refund
         refund_amount_dec = Decimal(str(final_amount))
