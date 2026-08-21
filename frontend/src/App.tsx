@@ -110,6 +110,7 @@ type SavedSite = {
   site_definition: SiteDefinition;
   draft_definition: SiteDefinition | null;
   version: number;
+  default_return_window_days?: number;
   created_at: string;
   updated_at: string;
 };
