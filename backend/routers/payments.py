@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import logging
 import os
+import re
 import threading
 import time
 from datetime import datetime, timezone
@@ -302,30 +303,51 @@ class VerifyPaymentRequest(BaseModel):
 
 class BankAccountSettingsPayload(BaseModel):
     account_holder_name: str = Field(min_length=2, max_length=255)
-    account_number: str = Field(min_length=6, max_length=30)
+    account_number: Optional[str] = Field(default=None, max_length=30)
     ifsc_code: str = Field(min_length=11, max_length=11)
     bank_name: str = Field(min_length=2, max_length=150)
     pan_number: Optional[str] = Field(default=None, max_length=10)
     gst_number: Optional[str] = Field(default=None, max_length=20)
 
-    @field_validator("ifsc_code", mode="before")
+    @field_validator("ifsc_code")
     @classmethod
-    def normalize_ifsc(cls, v: Any) -> str:
-        return str(v or "").strip().upper()
+    def validate_ifsc(cls, v: str) -> str:
+        code = (v or "").strip().upper()
+        if not re.match(r"^[A-Z]{4}0[A-Z0-9]{6}$", code):
+            raise ValueError("Invalid IFSC code format (e.g. HDFC0001234). 5th character must be '0'.")
+        return code
 
-    @field_validator("pan_number", mode="before")
+    @field_validator("account_number")
     @classmethod
-    def normalize_pan(cls, v: Any) -> Optional[str]:
+    def validate_account_number(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        cleaned = str(v).strip()
+        if not cleaned:
+            return None
+        if not re.match(r"^\d{9,18}$", cleaned):
+            raise ValueError("Bank account number must contain 9 to 18 digits.")
+        return cleaned
+
+    @field_validator("pan_number")
+    @classmethod
+    def validate_pan(cls, v: Optional[str]) -> Optional[str]:
         if not v:
             return None
-        return str(v).strip().upper()
+        cleaned = str(v).strip().upper()
+        if not re.match(r"^[A-Z]{5}[0-9]{4}[A-Z]{1}$", cleaned):
+            raise ValueError("Invalid PAN format (e.g. ABCDE1234F).")
+        return cleaned
 
-    @field_validator("gst_number", mode="before")
+    @field_validator("gst_number")
     @classmethod
-    def normalize_gst(cls, v: Any) -> Optional[str]:
+    def validate_gst(cls, v: Optional[str]) -> Optional[str]:
         if not v:
             return None
-        return str(v).strip().upper()
+        cleaned = str(v).strip().upper()
+        if not re.match(r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$", cleaned):
+            raise ValueError("Invalid GST number format (e.g. 22AAAAA0000A1Z5).")
+        return cleaned
 
 
 class BankAccountSettingsResponse(BaseModel):
@@ -1296,11 +1318,16 @@ def update_payment_settings(
         select(TenantBankAccount).where(TenantBankAccount.site_id == site_id)
     ).first()
 
-    raw_account = payload.account_number.strip()
-    last4 = raw_account[-4:] if len(raw_account) >= 4 else raw_account
-    encrypted_account = encrypt_string(raw_account)
-
     if not bank_account:
+        if not payload.account_number or len(payload.account_number.strip()) < 6:
+            raise HTTPException(
+                status_code=400,
+                detail="A valid bank account number (at least 6 digits) is required.",
+            )
+        raw_account = payload.account_number.strip()
+        last4 = raw_account[-4:]
+        encrypted_account = encrypt_string(raw_account)
+
         bank_account = TenantBankAccount(
             admin_id=admin_id,
             site_id=site_id,
@@ -1316,8 +1343,18 @@ def update_payment_settings(
         )
     else:
         bank_account.account_holder_name = payload.account_holder_name.strip()
-        bank_account.account_number_encrypted = encrypted_account
-        bank_account.account_number_last4 = last4
+        if payload.account_number and payload.account_number.strip():
+            raw_account = payload.account_number.strip()
+            if len(raw_account) < 6:
+                raise HTTPException(
+                    status_code=400,
+                    detail="A valid bank account number (at least 6 digits) is required.",
+                )
+            bank_account.account_number_encrypted = encrypt_string(raw_account)
+            bank_account.account_number_last4 = raw_account[-4:]
+        else:
+            raw_account = decrypt_string(bank_account.account_number_encrypted)
+
         bank_account.ifsc_code = payload.ifsc_code.strip().upper()
         bank_account.bank_name = payload.bank_name.strip()
         bank_account.pan_number = payload.pan_number
