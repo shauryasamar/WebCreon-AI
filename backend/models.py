@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, Column, DateTime, Index, Numeric, String, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, Index, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
@@ -42,6 +42,10 @@ class Site(SQLModel, table=True):
     checkout_settings: Optional[dict[str, Any]] = Field(
         default=None,
         sa_column=Column(JSONB, nullable=True),
+    )
+    default_return_window_days: int = Field(
+        default=7,
+        sa_column=Column(Integer, nullable=False, default=7),
     )
     version: int = Field(default=1, nullable=False)
     created_at: datetime = Field(
@@ -222,6 +226,10 @@ class Product(SQLModel, table=True):
     stock: int = Field(default=0, nullable=False)
     in_stock: bool = Field(default=True, nullable=False)
     weight_grams: int = Field(default=500, nullable=False)  # used for shipping label weight
+    return_window_days: Optional[int] = Field(
+        default=None,
+        sa_column=Column(Integer, nullable=True),
+    )
 
     images: list[str] = Field(
         default_factory=list,
@@ -446,6 +454,10 @@ class OrderItem(SQLModel, table=True):
     line_total: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
     status: str = Field(default="placed", max_length=40, nullable=False)
     returnable_quantity: int = Field(default=0, nullable=False)
+    return_window_days: int = Field(
+        default=7,
+        sa_column=Column(Integer, nullable=False, default=7),
+    )
     pricing_snapshot: Optional[dict[str, Any]] = Field(
         default=None,
         sa_column=Column(JSONB, nullable=True),

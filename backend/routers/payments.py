@@ -712,6 +712,9 @@ def finalize_order_fulfillment(
 
     # 5. DEDUCT STOCK & CREATE ORDERITEMS
     order_subtotal = sum((money(it.get("line_total", 0)) for it in order_items_payload), Decimal("0.00"))
+    site = session.get(Site, site_id)
+    site_default_return_days = getattr(site, "default_return_window_days", 7) if site else 7
+
     existing_items = session.exec(select(OrderItem).where(OrderItem.order_id == order.id)).all()
     if not existing_items:
         for item in order_items_payload:
@@ -720,6 +723,8 @@ def finalize_order_fulfillment(
             if product:
                 decrement_product_stock(product, item.get("quantity", 1), item.get("selected_variant_value"))
                 session.add(product)
+
+                item_return_days = product.return_window_days if product.return_window_days is not None else site_default_return_days
 
                 order_item = OrderItem(
                     order_id=order.id,
@@ -736,6 +741,7 @@ def finalize_order_fulfillment(
                     line_total=money(item.get("line_total", 0)),
                     status="placed",
                     returnable_quantity=0,
+                    return_window_days=item_return_days,
                     pricing_snapshot=build_order_item_pricing_snapshot(
                         line_total=money(item.get("line_total", 0)),
                         quantity=item.get("quantity", 1),
@@ -1379,14 +1385,33 @@ def get_earnings_summary(
     escrow_balance = Decimal("0.00")
     settled_payouts = Decimal("0.00")
 
+    now = utc_now()
     for entry in all_entries:
-        # Auto-reconcile status if underlying order was cancelled or refunded
+        # Auto-reconcile status if underlying order was cancelled, delivered, or return window matured
         order = session.get(Order, entry.order_id)
-        if order and (order.status == "cancelled" or getattr(order, "payment_status", None) == "refunded"):
-            if entry.status != "refunded":
-                entry.status = "refunded"
-                entry.escrow_status = "reversed"
-                session.add(entry)
+        if order:
+            if order.status == "cancelled" or getattr(order, "payment_status", None) == "refunded":
+                if entry.status != "refunded":
+                    entry.status = "refunded"
+                    entry.escrow_status = "reversed"
+                    session.add(entry)
+            elif order.status == "delivered" and entry.status not in ("paid", "refunded"):
+                # Escrow matures ONLY after order is delivered AND the return window has passed
+                window_closes = order.return_window_closes_at
+                if window_closes and now >= window_closes:
+                    from models import ReturnRequest
+                    open_returns = session.exec(
+                        select(ReturnRequest).where(
+                            ReturnRequest.order_id == order.id,
+                            ReturnRequest.status.in_(["requested", "approved", "pickup_scheduled", "in_transit", "received", "inspected"])
+                        )
+                    ).all()
+                    if not open_returns and entry.escrow_status == "held":
+                        entry.escrow_status = "unheld"
+                        entry.status = "pending_payout"
+                        order.escrow_status = "unheld"
+                        session.add(entry)
+                        session.add(order)
 
         if entry.status != "refunded":
             gross_gmv += entry.gross_amount

@@ -394,14 +394,14 @@ export default function TenantEarningsPage() {
               In Escrow Hold
             </p>
             <span style={{ fontSize: "10px", fontWeight: 700, background: "#fef3c7", color: "#92400e", padding: "2px 6px", borderRadius: "4px", border: "1px solid #fde68a" }}>
-              48h Return Lock
+              Return Window Lock
             </span>
           </div>
           <p style={{ margin: 0, fontSize: "22px", fontWeight: 700, color: "#b45309" }}>
             {formatCurrency(escrowBalance)}
           </p>
           <p style={{ margin: "4px 0 0", fontSize: "11px", color: "#92400e" }}>
-            Releases 48h after order delivery
+            Releases automatically after return window closes
           </p>
         </div>
 
@@ -563,7 +563,7 @@ export default function TenantEarningsPage() {
                                 width: "fit-content",
                               }}
                             >
-                              🔒 In Escrow (48h lock)
+                              🔒 In Escrow (Return Lock)
                             </span>
                           ) : isRefunded ? (
                             <span

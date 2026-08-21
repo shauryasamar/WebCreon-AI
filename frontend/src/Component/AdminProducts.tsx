@@ -49,6 +49,7 @@ type Product = {
   stock: number;
   slug?: string | null;
   variant_option?: ProductVariantOption | null;
+  return_window_days?: number | null;
 };
 
 
@@ -73,6 +74,7 @@ type ProductFormValues = {
   optionType: ProductVariantOption["optionType"];
   optionName: string;
   optionValuesText: string;
+  return_window_days: string;
 };
 
 
@@ -111,6 +113,7 @@ const normalizeProduct = (p: any): Product => ({
   stock: Number(p.stock ?? 0),
   slug: p.slug ?? null,
   variant_option: p.variant_option ?? null,
+  return_window_days: p.return_window_days != null ? Number(p.return_window_days) : null,
 });
 
 
@@ -188,6 +191,9 @@ const AdminProducts = () => {
   const [variantRows, setVariantRows] = useState<VariantRow[]>([]);
 
 
+  const [defaultReturnWindowDays, setDefaultReturnWindowDays] = useState<number>(7);
+  const [isUpdatingReturnPolicy, setIsUpdatingReturnPolicy] = useState(false);
+
   const [formValues, setFormValues] = useState<ProductFormValues>({
     name: "",
     brand: "",
@@ -200,6 +206,7 @@ const AdminProducts = () => {
     optionType: "custom",
     optionName: "",
     optionValuesText: "",
+    return_window_days: "",
   });
 
 
@@ -339,6 +346,7 @@ const AdminProducts = () => {
       optionType: "custom",
       optionName: "",
       optionValuesText: "",
+      return_window_days: "",
     });
   };
 
@@ -375,6 +383,7 @@ const AdminProducts = () => {
       optionType: product.variant_option?.optionType ?? "custom",
       optionName: product.variant_option?.optionName ?? "",
       optionValuesText: optionValues.map((v) => v.value).join(", "),
+      return_window_days: product.return_window_days != null ? String(product.return_window_days) : "",
     });
     setShowForm(true);
   };
@@ -466,11 +475,18 @@ const AdminProducts = () => {
     const loadInitial = async () => {
       if (!siteId) return;
       try {
-        const [catRes, colRes] = await Promise.all([
+        const [siteRes, catRes, colRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/sites/${siteId}`, { credentials: "include" }),
           fetch(`${API_BASE_URL}/sites/${siteId}/categories/public`),
           fetch(`${API_BASE_URL}/sites/${siteId}/collections/public`),
         ]);
 
+        if (siteRes.ok) {
+          const siteData = await siteRes.json();
+          if (siteData && siteData.default_return_window_days != null) {
+            setDefaultReturnWindowDays(Number(siteData.default_return_window_days));
+          }
+        }
         if (catRes.ok) {
           const catData = await catRes.json();
           setCategories(Array.isArray(catData) ? catData : []);
@@ -480,13 +496,37 @@ const AdminProducts = () => {
           setCollections(Array.isArray(colData) ? colData : []);
         }
       } catch (err) {
-        console.error("Error loading categories/collections", err);
+        console.error("Error loading initial data", err);
       }
       await loadProducts(1, pageSize, searchQuery);
     };
 
     loadInitial();
   }, [siteId]);
+
+  const handleUpdateDefaultReturnPolicy = async (days: number) => {
+    if (!siteId) return;
+    setIsUpdatingReturnPolicy(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/sites/${siteId}/default-return-policy`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ default_return_window_days: days }),
+      });
+      if (res.ok) {
+        setDefaultReturnWindowDays(days);
+        await loadProducts(currentPage, pageSize, searchQuery);
+      } else {
+        alert("Failed to update store default return policy");
+      }
+    } catch (err) {
+      console.error("Error updating default return policy", err);
+      alert("Error updating store default return policy");
+    } finally {
+      setIsUpdatingReturnPolicy(false);
+    }
+  };
 
 
   const imagePreviewList = useMemo(() => parseImages(formValues.imagesText), [formValues.imagesText]);
@@ -611,6 +651,7 @@ const AdminProducts = () => {
       slug: formValues.slug.trim() || null,
       images: parseImages(formValues.imagesText),
       variant_option: buildVariantOption(),
+      return_window_days: formValues.return_window_days === "" ? null : Number(formValues.return_window_days),
     };
 
 
@@ -736,9 +777,54 @@ const AdminProducts = () => {
           )}
         </div>
 
-        <button onClick={openCreateForm} style={primaryButtonStyle}>
-          + Add product
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          {/* Store Default Return Policy Selector */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              background: "#ffffff",
+              border: "1px solid #cbd5e1",
+              borderRadius: "8px",
+              padding: "6px 12px",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+            }}
+          >
+            <span style={{ fontSize: "13px", fontWeight: 600, color: "#475569", whiteSpace: "nowrap" }}>
+              Store Return Policy:
+            </span>
+            <select
+              value={defaultReturnWindowDays}
+              disabled={isUpdatingReturnPolicy}
+              onChange={(e) => handleUpdateDefaultReturnPolicy(Number(e.target.value))}
+              style={{
+                border: "none",
+                background: "transparent",
+                fontSize: "13px",
+                fontWeight: 700,
+                color: "#1e293b",
+                cursor: "pointer",
+                outline: "none",
+                padding: "2px 4px",
+              }}
+            >
+              <option value={0}>0 Days (Non-Returnable)</option>
+              <option value={2}>2 Days</option>
+              <option value={7}>7 Days</option>
+              <option value={10}>10 Days</option>
+              <option value={14}>14 Days</option>
+              <option value={30}>30 Days</option>
+            </select>
+            {isUpdatingReturnPolicy && (
+              <span style={{ fontSize: "11px", color: "#2563eb", fontWeight: 600 }}>Saving...</span>
+            )}
+          </div>
+
+          <button onClick={openCreateForm} style={primaryButtonStyle}>
+            + Add product
+          </button>
+        </div>
       </div>
 
 
@@ -844,6 +930,27 @@ const AdminProducts = () => {
               onChange={(v) => handleFormChange("category", v)}
               error={errors.category}
             />
+
+            {/* Return Policy Setting */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={labelStyle}>Return Policy</label>
+              <select
+                value={formValues.return_window_days}
+                onChange={(e) => handleFormChange("return_window_days", e.target.value)}
+                style={{ ...inputStyle, background: "#ffffff" }}
+              >
+                <option value="">Use Store Default ({defaultReturnWindowDays} Days)</option>
+                <option value="0">Non-Returnable (Final Sale - Instant Payout)</option>
+                <option value="2">2 Days Returnable</option>
+                <option value="7">7 Days Returnable</option>
+                <option value="10">10 Days Returnable</option>
+                <option value="14">14 Days Returnable</option>
+                <option value="30">30 Days Returnable</option>
+              </select>
+              <span style={{ fontSize: "11px", color: "#64748b" }}>
+                Controls buyer return eligibility and escrow hold period post-delivery.
+              </span>
+            </div>
 
             {/* Collections Multi-Select */}
             <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -1311,7 +1418,57 @@ const AdminProducts = () => {
                         )}
                       </div>
                     </td>
-                    <td style={tdStyle}>{product.category}</td>
+                    <td style={tdStyle}>
+                      <div style={{ fontWeight: 600, color: "#1e293b" }}>{product.category || "General"}</div>
+                      <div style={{ marginTop: "4px" }}>
+                        {product.return_window_days === 0 ? (
+                          <span
+                            style={{
+                              display: "inline-block",
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                              fontSize: "11px",
+                              fontWeight: 600,
+                              background: "#fef2f2",
+                              color: "#991b1b",
+                              border: "1px solid #fecaca",
+                            }}
+                          >
+                            Non-Returnable
+                          </span>
+                        ) : product.return_window_days != null ? (
+                          <span
+                            style={{
+                              display: "inline-block",
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                              fontSize: "11px",
+                              fontWeight: 600,
+                              background: "#eff6ff",
+                              color: "#2563eb",
+                              border: "1px solid #bfdbfe",
+                            }}
+                          >
+                            {product.return_window_days}d Return
+                          </span>
+                        ) : (
+                          <span
+                            style={{
+                              display: "inline-block",
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                              fontSize: "11px",
+                              fontWeight: 500,
+                              background: "#f8fafc",
+                              color: "#64748b",
+                              border: "1px solid #e2e8f0",
+                            }}
+                          >
+                            Store Default ({defaultReturnWindowDays}d)
+                          </span>
+                        )}
+                      </div>
+                    </td>
 
 
                     <td style={tdStyle}>

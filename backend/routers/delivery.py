@@ -31,6 +31,7 @@ from models import (
     ReturnStatusHistory,
     Shipment,
     Site,
+    TenantLedgerEntry,
     User,
 )
 
@@ -120,13 +121,10 @@ def _get_admin_site_id(admin: dict, session: Session) -> UUID:
 
 
 def _mark_order_delivered(order: Order, session: Session, auto_commit: bool = True) -> None:
-    """Shared helper: mark order delivered, update order items, and start the 48-h escrow window."""
+    """Shared helper: mark order delivered, update order items, and start dynamic escrow window."""
     now = _utc_now()
     order.status = "delivered"
     order.delivered_at = now
-    order.return_window_closes_at = now + timedelta(hours=48)  # type: ignore[attr-defined]
-    order.escrow_status = "held"
-    session.add(order)
 
     # Update all non-cancelled order items to delivered and set returnable_quantity
     order_items = session.exec(select(OrderItem).where(OrderItem.order_id == order.id)).all()
@@ -149,6 +147,35 @@ def _mark_order_delivered(order: Order, session: Session, auto_commit: bool = Tr
             item.returnable_quantity = max(0, item.quantity - active_ret_qty)
             item.updated_at = now
             session.add(item)
+
+    site = session.get(Site, order.site_id)
+    site_default = getattr(site, "default_return_window_days", 7) if site else 7
+    max_window_days = max(
+        (
+            item.return_window_days if getattr(item, "return_window_days", None) is not None else site_default
+            for item in order_items
+            if item.status != "cancelled"
+        ),
+        default=0,
+    )
+    if max_window_days == 0:
+        order.return_window_closes_at = now
+        order.escrow_status = "unheld"
+    else:
+        order.return_window_closes_at = now + timedelta(days=max_window_days)
+        order.escrow_status = "held"
+    session.add(order)
+
+    ledger_entry = session.exec(
+        select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
+    ).first()
+    if ledger_entry:
+        ledger_entry.escrow_release_due_at = order.return_window_closes_at
+        if max_window_days == 0:
+            ledger_entry.escrow_status = "unheld"
+            ledger_entry.status = "paid"
+            ledger_entry.settled_at = now
+        session.add(ledger_entry)
 
     history = OrderStatusHistory(
         order_id=order.id,

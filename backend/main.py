@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(usecwd=True))
@@ -860,6 +861,32 @@ def update_site(
     session.refresh(site)
 
     return site
+
+
+class UpdateDefaultReturnPolicyRequest(BaseModel):
+    default_return_window_days: int = Field(ge=0, le=365)
+
+
+@app.patch("/sites/{site_id}/default-return-policy")
+def update_site_default_return_policy(
+    site_id: UUID,
+    payload: UpdateDefaultReturnPolicyRequest,
+    ownership=Depends(enforce_site_ownership),
+    session: Session = Depends(get_session),
+):
+    site = session.get(Site, site_id)
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    site.default_return_window_days = payload.default_return_window_days
+    site.updated_at = datetime.now(timezone.utc)
+    session.add(site)
+    session.commit()
+    session.refresh(site)
+    return {
+        "message": "Store default return policy updated",
+        "default_return_window_days": site.default_return_window_days,
+    }
 
 
 @app.get("/sites/{site_id}/delete-check")

@@ -73,6 +73,7 @@ export type Product = {
   selectedVariantLabel?: string | null;
   average_rating?: number;
   review_count?: number;
+  return_window_days?: number | null;
   created_at?: string | Date | null;
   updated_at?: string | Date | null;
   reviews?: ProductReview[];
@@ -102,6 +103,7 @@ type CartContextType = {
   ) => Promise<void>;
   clearCart: () => Promise<void>;
   refreshCart: () => Promise<void>;
+  defaultReturnWindowDays?: number;
 };
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -110,6 +112,7 @@ type CartProviderProps = {
   children: React.ReactNode;
   products?: Product[];
   siteId?: string;
+  defaultReturnWindowDays?: number;
 };
 
 type BackendCartItem = {
@@ -189,6 +192,7 @@ export function CartProvider({
   children,
   products = [],
   siteId,
+  defaultReturnWindowDays = 7,
 }: CartProviderProps) {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartItemIds, setCartItemIds] = useState<Record<string, string>>({});
@@ -515,6 +519,7 @@ export function CartProvider({
       updateQuantity,
       clearCart,
       refreshCart,
+      defaultReturnWindowDays,
     }),
     [
       products,
@@ -527,6 +532,7 @@ export function CartProvider({
       updateQuantity,
       clearCart,
       refreshCart,
+      defaultReturnWindowDays,
     ]
   );
 

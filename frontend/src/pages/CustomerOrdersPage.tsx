@@ -58,6 +58,7 @@ type OrderItem = {
   line_total: number;
   status: string;
   returnable_quantity: number;
+  return_window_days?: number | null;
   is_returnable?: boolean;
   max_returnable_quantity?: number;
   pricing_snapshot?: any;
@@ -823,8 +824,14 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   };
 
-  const isItemReturnable = (item: OrderItem) => {
-    return Number(item.returnable_quantity || 0) > 0;
+  const isItemReturnable = (item: OrderItem, deliveredAt?: string | null) => {
+    if (item.return_window_days === 0) return false;
+    if (Number(item.returnable_quantity || 0) <= 0) return false;
+    if (deliveredAt && item.return_window_days != null && item.return_window_days > 0) {
+      const windowClosesMs = new Date(deliveredAt).getTime() + item.return_window_days * 24 * 60 * 60 * 1000;
+      if (Date.now() > windowClosesMs) return false;
+    }
+    return true;
   };
 
   const canRequestReturnForOrder = (detail?: OrderDetail | null, order?: OrderListItem | null) => {
@@ -837,7 +844,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
     }
 
     if (!detail || detail.status !== "delivered") return false;
-    return detail.items.some((item) => isItemReturnable(item));
+    return detail.items.some((item) => isItemReturnable(item, detail.delivered_at));
   };
 
   const getSelectedReturnItems = (orderId: string) => {
@@ -2179,7 +2186,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
               const orderReturns = getReturnsForOrder(order.id);
               const hasExistingReturn = orderReturns.length > 0;
               const hasSelectableReturnItems =
-                !!detail && detail.items.some((item) => isItemReturnable(item));
+                !!detail && detail.items.some((item) => isItemReturnable(item, detail.delivered_at));
 
               return (
                 <div
@@ -2529,7 +2536,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                               >
                                 {detail.items.map((item) => {
                                   const draftItem = draft?.items?.[item.id];
-                                  const itemCanReturn = isItemReturnable(item);
+                                  const itemCanReturn = isItemReturnable(item, detail.delivered_at);
                                   const isEligible = itemCanReturn && isReturnFormOpen;
 
                                   return (
@@ -2590,13 +2597,23 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                           <div style={{ fontSize: "12px", color: textMuted, marginTop: "4px" }}>
                                             Item status: {item.status.replaceAll("_", " ")}
                                           </div>
-                                          {Number(item.returnable_quantity || 0) > 0 ? (
-                                            <div style={{ fontSize: "12px", color: "#16a34a", marginTop: "4px", fontWeight: 600 }}>
-                                              Returnable quantity: {item.returnable_quantity}
-                                            </div>
-                                          ) : (detail.status === "delivered" || detail.status === "returned") ? (
+                                          {item.return_window_days === 0 ? (
                                             <div style={{ fontSize: "12px", color: "#dc2626", marginTop: "4px", fontWeight: 600 }}>
-                                              Already fully returned or not eligible for return
+                                              Non-Returnable (Final Sale)
+                                            </div>
+                                          ) : Number(item.returnable_quantity || 0) > 0 ? (
+                                            itemCanReturn ? (
+                                              <div style={{ fontSize: "12px", color: "#16a34a", marginTop: "4px", fontWeight: 600 }}>
+                                                Returnable ({item.return_window_days != null ? `${item.return_window_days} Days Policy` : "Returnable"} • Qty: {item.returnable_quantity})
+                                              </div>
+                                            ) : (
+                                              <div style={{ fontSize: "12px", color: "#dc2626", marginTop: "4px", fontWeight: 600 }}>
+                                                Return window expired {item.return_window_days != null ? `(${item.return_window_days} Days Policy)` : ""}
+                                              </div>
+                                            )
+                                          ) : (detail.status === "delivered" || detail.status === "returned") ? (
+                                            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px", fontWeight: 600 }}>
+                                              Already fully returned
                                             </div>
                                           ) : null}
                                         </div>

@@ -248,6 +248,12 @@ function normalizeStorefrontProduct(raw: any): Product {
         ? raw.review_count
         : Number(raw?.review_count ?? 0),
     reviews: Array.isArray(raw?.reviews) ? raw.reviews : undefined,
+    return_window_days:
+      raw?.return_window_days !== undefined
+        ? raw.return_window_days != null
+          ? Number(raw.return_window_days)
+          : null
+        : undefined,
     created_at: raw?.created_at ?? null,
     updated_at: raw?.updated_at ?? null,
   };
@@ -1500,14 +1506,13 @@ function BuilderPageContent() {
   );
 }
 
-
 export default function BuilderPage() {
   const params = useParams();
   const siteId = params.siteId;
   const siteSlugParam = params.slug;
   const [resolvedSiteId, setResolvedSiteId] = useState(siteId || "");
   const [siteProducts, setSiteProducts] = useState<Product[]>([]);
-
+  const [defaultReturnWindowDays, setDefaultReturnWindowDays] = useState<number>(7);
 
   useEffect(() => {
     let cancelled = false;
@@ -1515,6 +1520,7 @@ export default function BuilderPage() {
     const resolveAndLoadProducts = async () => {
       try {
         let targetSiteId = siteId || "";
+        let defaultDays = 7;
 
         if (!targetSiteId && siteSlugParam) {
           const matchedSite = await resolveSiteBySlug(siteSlugParam);
@@ -1524,6 +1530,19 @@ export default function BuilderPage() {
           }
 
           targetSiteId = matchedSite.id;
+          if (matchedSite.default_return_window_days != null) {
+            defaultDays = Number(matchedSite.default_return_window_days);
+          }
+        } else if (targetSiteId) {
+          try {
+            const siteRes = await fetch(`${API_BASE_URL}/sites/${targetSiteId}`, { credentials: "include" });
+            if (siteRes.ok) {
+              const siteData = await siteRes.json();
+              if (siteData?.default_return_window_days != null) {
+                defaultDays = Number(siteData.default_return_window_days);
+              }
+            }
+          } catch (_) {}
         }
 
         if (!targetSiteId) {
@@ -1531,7 +1550,10 @@ export default function BuilderPage() {
           return;
         }
 
-        if (!cancelled) setResolvedSiteId(targetSiteId);
+        if (!cancelled) {
+          setResolvedSiteId(targetSiteId);
+          setDefaultReturnWindowDays(defaultDays);
+        }
 
         const res = await fetch(
           `${API_BASE_URL}/sites/${targetSiteId}/products/public`
@@ -1572,6 +1594,7 @@ export default function BuilderPage() {
       key={stableKey}
       products={siteProducts}
       siteId={resolvedSiteId || siteId || ""}
+      defaultReturnWindowDays={defaultReturnWindowDays}
     >
       <BuilderPageContent />
     </CartProvider>

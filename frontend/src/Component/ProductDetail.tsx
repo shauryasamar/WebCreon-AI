@@ -134,7 +134,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   image_fit,
   theme,
 }) => {
-  const { addToCart, products, cartItems } = useCart();
+  const { addToCart, products, cartItems, defaultReturnWindowDays = 7 } = useCart();
   const { isAuthenticated } = useCustomerAuth();
   const { productSlug } = useParams();
 
@@ -196,6 +196,20 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     if (typeof anyProduct?.image === "string" && anyProduct.image.trim()) return [anyProduct.image];
     return [];
   }, [anyProduct]);
+
+  const effectiveReturnPolicyText = useMemo(() => {
+    const days =
+      product?.return_window_days !== undefined && product?.return_window_days !== null
+        ? product.return_window_days
+        : defaultReturnWindowDays;
+
+    if (days === 0) return "Non-Returnable (Final Sale)";
+    if (days === 1) return "1 Day Easy Return";
+    if (days && days > 1) {
+      return `${days} Days Easy Return`;
+    }
+    return return_policy_text || `${defaultReturnWindowDays} Days Easy Return`;
+  }, [product?.return_window_days, defaultReturnWindowDays, return_policy_text]);
 
   const variantOption: VariantOption | null = anyProduct?.variant_option
     ? {
@@ -1332,8 +1346,19 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                     }}
                   >
                     <p style={{ margin: "0 0 5px", ...tagText }}>Returns</p>
-                    <p style={{ margin: 0, fontSize: "12px", fontWeight: 600, color: pageText }}>
-                      {return_policy_text || "Easy return"}
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        color:
+                          product?.return_window_days === 0 ||
+                          (product?.return_window_days == null && defaultReturnWindowDays === 0)
+                            ? "#dc2626"
+                            : pageText,
+                      }}
+                    >
+                      {effectiveReturnPolicyText}
                     </p>
                   </div>
                 )}

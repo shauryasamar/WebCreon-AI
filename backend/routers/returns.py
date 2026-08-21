@@ -1,7 +1,7 @@
 import logging
 import re
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Optional
 from uuid import UUID, uuid4
@@ -656,13 +656,6 @@ def create_return_request(
     if order.status != "delivered":
         raise HTTPException(status_code=400, detail="Only delivered orders can be returned")
 
-    if order.return_window_closes_at and now > order.return_window_closes_at:
-        closes_str = order.return_window_closes_at.strftime("%d %b %Y, %I:%M %p")
-        raise HTTPException(
-            status_code=400,
-            detail=f"The 48-hour return window for this order closed on {closes_str}.",
-        )
-
     is_cod = (order.payment_method or "").lower() in {"cod", "cash_on_delivery"}
     validated_refund_account = validate_customer_refund_account(payload.customer_refund_account, is_cod)
 
@@ -683,6 +676,22 @@ def create_return_request(
         order_item = order_item_map.get(entry.order_item_id)
         if not order_item:
             raise HTTPException(status_code=404, detail=f"Order item {entry.order_item_id} not found")
+
+        item_return_days = order_item.return_window_days if getattr(order_item, "return_window_days", None) is not None else getattr(site, "default_return_window_days", 7)
+        if item_return_days == 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"'{order_item.product_name}' is marked as non-returnable (Final Sale) and cannot be returned.",
+            )
+
+        if order.delivered_at:
+            item_window_closes = order.delivered_at + timedelta(days=item_return_days)
+            if now > item_window_closes:
+                closes_str = item_window_closes.strftime("%d %b %Y, %I:%M %p")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"The {item_return_days}-day return window for '{order_item.product_name}' expired on {closes_str}.",
+                )
 
         # Auto-heal: if order is delivered but item was never updated from its original status,
         # initialize it now so the return can proceed.

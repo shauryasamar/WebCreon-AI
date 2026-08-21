@@ -180,7 +180,12 @@ def ensure_order_delivery_otp(order: Order, session: Optional[Session] = None) -
     return str(order.delivery_otp)
 
 
-def serialize_shipment(shipment: Optional[Shipment], order_status: Optional[str] = None, session: Optional[Session] = None) -> Optional[dict[str, Any]]:
+def serialize_shipment(
+    shipment: Optional[Shipment],
+    order_status: Optional[str] = None,
+    session: Optional[Session] = None,
+    is_admin: bool = False,
+) -> Optional[dict[str, Any]]:
     if not shipment:
         return None
     agent_id_str = str(shipment.agent_id) if getattr(shipment, "agent_id", None) else None
@@ -242,21 +247,31 @@ def serialize_shipment(shipment: Optional[Shipment], order_status: Optional[str]
                 "date": dt_del,
             })
 
-    # Rider privacy: Only expose live direct rider name and phone when shipment is actively out for delivery
+    # For Admin: ALWAYS expose assigned delivery partner info regardless of order status
+    # For Customer: Expose partner name, but withhold direct phone/tracking token until out for delivery
     is_active_ofd = (effective_status == "out_for_delivery")
-    public_delivery_partner_name = delivery_partner_name if is_active_ofd else None
-    public_delivery_partner_phone = delivery_partner_phone if is_active_ofd else None
+
+    if is_admin:
+        resolved_partner_name = delivery_partner_name
+        resolved_partner_phone = delivery_partner_phone
+        resolved_agent_id = agent_id_str
+        resolved_vehicle_type = vehicle_type
+    else:
+        resolved_partner_name = delivery_partner_name
+        resolved_partner_phone = delivery_partner_phone if is_active_ofd else None
+        resolved_agent_id = agent_id_str if is_active_ofd else None
+        resolved_vehicle_type = vehicle_type if is_active_ofd else None
 
     return {
         "id": str(shipment.id),
         "status": effective_status,
         "mode": getattr(shipment, "delivery_mode", "manual"),
         "delivery_mode": getattr(shipment, "delivery_mode", "manual"),
-        "agent_id": agent_id_str if is_active_ofd else None,
-        "agent_token": agent_token if is_active_ofd else None,
-        "delivery_partner_name": public_delivery_partner_name,
-        "delivery_partner_phone": public_delivery_partner_phone,
-        "vehicle_type": vehicle_type if is_active_ofd else None,
+        "agent_id": resolved_agent_id,
+        "agent_token": agent_token if (is_admin or is_active_ofd) else None,
+        "delivery_partner_name": resolved_partner_name,
+        "delivery_partner_phone": resolved_partner_phone,
+        "vehicle_type": resolved_vehicle_type,
         "courier_name": getattr(shipment, "courier_name", None),
         "awb_number": getattr(shipment, "awb_number", None),
         "tracking_url": getattr(shipment, "tracking_url", None),
@@ -793,7 +808,8 @@ def serialize_customer_order_item(item: OrderItem, order_status: Optional[str] =
     elif order_status == "returned":
         effective_status = "returned"
 
-    is_returnable = (order_status == "delivered" and returnable_quantity > 0)
+    item_return_days = getattr(item, "return_window_days", 7)
+    is_returnable = (order_status == "delivered" and returnable_quantity > 0 and item_return_days > 0)
 
     return {
         "id": str(item.id),
@@ -809,6 +825,7 @@ def serialize_customer_order_item(item: OrderItem, order_status: Optional[str] =
         "line_total": float(item.line_total),
         "status": effective_status,
         "returnable_quantity": returnable_quantity,
+        "return_window_days": item_return_days,
         "is_returnable": is_returnable,
         "max_returnable_quantity": returnable_quantity,
         "pricing_snapshot": item.pricing_snapshot,
@@ -1095,7 +1112,7 @@ def get_admin_orders(
             "customer_email": (order.shipping_address or {}).get("email"),
             "shipping_address": order.shipping_address,
             "delivery_otp": None if bool(shipment_map.get(order.id) and (getattr(shipment_map.get(order.id), "delivery_mode", None) == "shiprocket" or getattr(shipment_map.get(order.id), "mode", None) == "shiprocket" or shipment_map.get(order.id).courier_name or shipment_map.get(order.id).awb_number)) else ensure_order_delivery_otp(order, session),
-            "shipment": serialize_shipment(shipment_map.get(order.id)),
+            "shipment": serialize_shipment(shipment_map.get(order.id), order_status=order.status, session=session, is_admin=True),
             "items": [
                 {
                     "id": str(item.id),
@@ -1196,7 +1213,7 @@ def get_admin_order_detail(
             }
             for item in items
         ],
-        "shipment": serialize_shipment(shipment, order.status),
+        "shipment": serialize_shipment(shipment, order_status=order.status, session=session, is_admin=True),
         "status_history": [
             {
                 "id": str(entry.id),
@@ -1329,13 +1346,37 @@ def update_order_status(
                 )
             from datetime import timedelta
             order.delivered_at = now
-            order.return_window_closes_at = now + timedelta(days=2)
+
+            order_items = session.exec(
+                select(OrderItem).where(OrderItem.order_id == order.id)
+            ).all()
+            site = session.get(Site, order.site_id)
+            site_default = getattr(site, "default_return_window_days", 7) if site else 7
+            max_days = max(
+                (
+                    it.return_window_days if getattr(it, "return_window_days", None) is not None else site_default
+                    for it in order_items
+                    if it.status != "cancelled"
+                ),
+                default=0,
+            )
+
+            if max_days == 0:
+                order.return_window_closes_at = now
+                order.escrow_status = "unheld"
+            else:
+                order.return_window_closes_at = now + timedelta(days=max_days)
+                order.escrow_status = "held"
 
             ledger_entry = session.exec(
                 select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
             ).first()
             if ledger_entry:
                 ledger_entry.escrow_release_due_at = order.return_window_closes_at
+                if max_days == 0:
+                    ledger_entry.escrow_status = "unheld"
+                    ledger_entry.status = "paid"
+                    ledger_entry.settled_at = now
                 if getattr(order, "payment_method", "").lower() in ("cod", "cash_on_delivery"):
                     order.payment_status = "paid"
                     ledger_entry.status = "paid"
@@ -1375,7 +1416,14 @@ def update_order_status(
                         client = get_razorpay_client()
                         if client:
                             refund_amount_paise = int(Decimal(str(order.total)) * 100)
-                            refund_resp = client.payment.refund(order.razorpay_payment_id, {"amount": refund_amount_paise})
+                            refund_resp = client.payment.refund(
+                                order.razorpay_payment_id,
+                                {
+                                    "amount": refund_amount_paise,
+                                    "reverse_all": 1,
+                                    "notes": {"reason": "Admin cancellation refund"},
+                                },
+                            )
                             if isinstance(refund_resp, dict):
                                 snapshot = dict(order.pricing_snapshot or {})
                                 snapshot["refund_details"] = {
@@ -1499,7 +1547,7 @@ def place_order(
     user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
-    get_site_or_404(session, site_id)
+    site = get_site_or_404(session, site_id)
 
     if str(site_id) != user["siteId"]:
         raise HTTPException(
@@ -1519,7 +1567,7 @@ def place_order(
         raise HTTPException(status_code=400, detail="Cart is empty")
 
     payment_method = normalize_payment_method(payload.payment_method)
-    checkout_settings = get_site_or_404(session, site_id).checkout_settings or build_default_checkout_settings()
+    checkout_settings = site.checkout_settings or build_default_checkout_settings()
 
     order_line_items: list[dict[str, Any]] = []
     product_map: dict[UUID, Product] = {}
@@ -1616,6 +1664,8 @@ def place_order(
             decrement_product_stock(product, item["quantity"], item["selected_variant_value"])
             session.add(product)
 
+            item_return_days = product.return_window_days if product.return_window_days is not None else getattr(site, "default_return_window_days", 7)
+
             order_item = OrderItem(
                 order_id=order.id,
                 site_id=site_id,
@@ -1631,6 +1681,7 @@ def place_order(
                 line_total=item["line_total"],
                 status="placed",
                 returnable_quantity=0,
+                return_window_days=item_return_days,
                 pricing_snapshot=build_order_item_pricing_snapshot(
                     line_total=item["line_total"],
                     quantity=item["quantity"],
@@ -2152,7 +2203,14 @@ def cancel_my_order(
                     client = get_razorpay_client()
                     if client:
                         refund_amount_paise = int(Decimal(str(order.total)) * 100)
-                        refund_resp = client.payment.refund(order.razorpay_payment_id, {"amount": refund_amount_paise})
+                        refund_resp = client.payment.refund(
+                            order.razorpay_payment_id,
+                            {
+                                "amount": refund_amount_paise,
+                                "reverse_all": 1,
+                                "notes": {"reason": "Customer cancellation refund"},
+                            },
+                        )
                         if isinstance(refund_resp, dict):
                             snapshot = dict(order.pricing_snapshot or {})
                             snapshot["refund_details"] = {

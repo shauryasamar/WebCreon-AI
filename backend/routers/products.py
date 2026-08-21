@@ -179,6 +179,7 @@ def to_product_response(
         "in_stock": product.in_stock,
         "images": product.images or [],
         "variant_option": product.variant_option,
+        "return_window_days": product.return_window_days,
         "average_rating": average_rating,
         "review_count": review_count,
         "created_at": product.created_at,
@@ -268,6 +269,7 @@ class ProductCreate(BaseModel):
     slug: Optional[str] = None
     images: list[str] = Field(default_factory=list)
     variant_option: Optional[ProductVariantOption] = None
+    return_window_days: Optional[int] = None
 
     @field_validator("name", "category", "description")
     @classmethod
@@ -323,6 +325,7 @@ class ProductUpdate(BaseModel):
     slug: Optional[str] = None
     images: list[str] = Field(default_factory=list)
     variant_option: Optional[ProductVariantOption] = None
+    return_window_days: Optional[int] = None
 
     @field_validator("name", "category", "description")
     @classmethod
@@ -383,6 +386,7 @@ class ProductResponse(BaseModel):
     in_stock: bool
     images: list[str]
     variant_option: Optional[dict[str, Any]] = None
+    return_window_days: Optional[int] = None
     average_rating: float = 0.0
     review_count: int = 0
     reviews: Optional[list[dict[str, Any]]] = None
@@ -780,6 +784,7 @@ def create_product(
         compare_price=product_in.compare_price,
         stock=product_in.stock,
         in_stock=product_in.in_stock,
+        return_window_days=product_in.return_window_days,
         images=product_in.images,
         variant_option=(
             json_safe(product_in.variant_option.model_dump())
@@ -820,6 +825,7 @@ def update_product(
     product.compare_price = product_in.compare_price
     product.stock = product_in.stock
     product.in_stock = product_in.in_stock
+    product.return_window_days = product_in.return_window_days
     product.images = product_in.images
     product.variant_option = (
         json_safe(product_in.variant_option.model_dump())
