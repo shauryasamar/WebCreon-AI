@@ -257,6 +257,54 @@ const TrashIcon = () => (
   </svg>
 );
 
+const ToggleSwitch: React.FC<{
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+  id?: string;
+}> = ({ checked, onChange, disabled, id }) => (
+  <button
+    type="button"
+    role="switch"
+    id={id}
+    aria-checked={checked}
+    disabled={disabled}
+    onClick={(e) => {
+      e.stopPropagation();
+      onChange(!checked);
+    }}
+    style={{
+      position: "relative",
+      display: "inline-flex",
+      alignItems: "center",
+      width: "32px",
+      height: "18px",
+      flexShrink: 0,
+      cursor: disabled ? "not-allowed" : "pointer",
+      borderRadius: "999px",
+      border: "none",
+      backgroundColor: checked ? "#16a34a" : "#cbd5e1",
+      transition: "background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+      padding: "2px",
+      outline: "none",
+      boxSizing: "border-box",
+    }}
+  >
+    <span
+      style={{
+        display: "inline-block",
+        width: "14px",
+        height: "14px",
+        borderRadius: "50%",
+        backgroundColor: "#ffffff",
+        boxShadow: "0 1px 2px rgba(0, 0, 0, 0.2)",
+        transform: checked ? "translateX(14px)" : "translateX(0px)",
+        transition: "transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+      }}
+    />
+  </button>
+);
+
 const getShortTabLabel = (label: string) => {
   const map: Record<string, string> = {
     "Shipping fee": "Shipping",
@@ -811,27 +859,30 @@ const CheckoutChargesPage: React.FC = () => {
               </div>
             </div>
 
-            <label
+            <div
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "8px",
                 cursor: "pointer",
-                fontSize: "13px",
-                fontWeight: 600,
-                color: "#0f172a",
+                userSelect: "none",
               }}
+              onClick={() => setTaxSettings((prev) => ({ ...prev, enabled: !prev.enabled }))}
             >
-              <input
-                type="checkbox"
-                checked={taxSettings.enabled}
-                onChange={(e) => {
-                  setTaxSettings((prev) => ({ ...prev, enabled: e.target.checked }));
+              <span
+                style={{
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  color: taxSettings.enabled ? "#0f172a" : "#64748b",
                 }}
-                style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#2563eb" }}
+              >
+                Enable Tax
+              </span>
+              <ToggleSwitch
+                checked={taxSettings.enabled}
+                onChange={(val) => setTaxSettings((prev) => ({ ...prev, enabled: val }))}
               />
-              Enable Tax
-            </label>
+            </div>
           </div>
 
           {/* Form Content */}
@@ -953,25 +1004,30 @@ const ChargeConfigCard: React.FC<{
             </button>
           )}
 
-          <label
+          <div
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: "6px",
+              gap: "8px",
               cursor: "pointer",
-              fontSize: "13px",
-              fontWeight: 600,
-              color: "#0f172a",
+              userSelect: "none",
             }}
+            onClick={() => onChange(charge.id, "enabled", !charge.enabled)}
           >
-            <input
-              type="checkbox"
+            <span
+              style={{
+                fontSize: "13px",
+                fontWeight: 600,
+                color: charge.enabled ? "#0f172a" : "#64748b",
+              }}
+            >
+              Active
+            </span>
+            <ToggleSwitch
               checked={charge.enabled}
-              onChange={(e) => onChange(charge.id, "enabled", e.target.checked)}
-              style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#2563eb" }}
+              onChange={(val) => onChange(charge.id, "enabled", val)}
             />
-            Active
-          </label>
+          </div>
         </div>
       </div>
 
