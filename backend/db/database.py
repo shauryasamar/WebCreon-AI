@@ -78,6 +78,9 @@ def create_db_and_tables():
                 CREATE INDEX IF NOT EXISTS ix_delivery_agents_site_phone ON delivery_agents(site_id, phone);
 
                 ALTER TABLE delivery_settings ADD COLUMN IF NOT EXISTS allow_open_pickup BOOLEAN DEFAULT TRUE;
+                ALTER TABLE delivery_settings ADD COLUMN IF NOT EXISTS enable_fleet BOOLEAN DEFAULT TRUE;
+                ALTER TABLE delivery_settings ADD COLUMN IF NOT EXISTS enable_shiprocket BOOLEAN DEFAULT FALSE;
+                ALTER TABLE delivery_settings ADD COLUMN IF NOT EXISTS enable_manual BOOLEAN DEFAULT TRUE;
 
                 ALTER TABLE sites ADD COLUMN IF NOT EXISTS default_return_window_days INTEGER DEFAULT 7;
                 ALTER TABLE products ADD COLUMN IF NOT EXISTS return_window_days INTEGER;

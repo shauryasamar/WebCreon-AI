@@ -653,18 +653,18 @@ const CheckoutChargesPage: React.FC = () => {
                 }}
               >
                 <span>{shortLabel}</span>
-                {charge.enabled && (
-                  <span
-                    style={{
-                      width: "6px",
-                      height: "6px",
-                      minWidth: "6px",
-                      borderRadius: "999px",
-                      background: "#16a34a",
-                      display: "inline-block",
-                    }}
-                  />
-                )}
+                <span
+                  style={{
+                    width: "6px",
+                    height: "6px",
+                    minWidth: "6px",
+                    borderRadius: "999px",
+                    background: charge.enabled ? "#16a34a" : "#cbd5e1",
+                    display: "inline-block",
+                    transition: "background 0.2s ease",
+                  }}
+                  title={charge.enabled ? "Active" : "Disabled"}
+                />
               </button>
             );
           })}
@@ -705,18 +705,18 @@ const CheckoutChargesPage: React.FC = () => {
                 }}
               >
                 <span>{charge.label}</span>
-                {charge.enabled && (
-                  <span
-                    style={{
-                      width: "6px",
-                      height: "6px",
-                      minWidth: "6px",
-                      borderRadius: "999px",
-                      background: "#16a34a",
-                      display: "inline-block",
-                    }}
-                  />
-                )}
+                <span
+                  style={{
+                    width: "6px",
+                    height: "6px",
+                    minWidth: "6px",
+                    borderRadius: "999px",
+                    background: charge.enabled ? "#16a34a" : "#cbd5e1",
+                    display: "inline-block",
+                    transition: "background 0.2s ease",
+                  }}
+                  title={charge.enabled ? "Active" : "Disabled"}
+                />
               </button>
             );
           })}

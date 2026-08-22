@@ -193,6 +193,9 @@ def _mark_order_delivered(order: Order, session: Session, auto_commit: bool = Tr
 
 class DeliverySettingsUpdate(BaseModel):
     delivery_mode: Optional[str] = None               # own_agent | shiprocket | hybrid | manual
+    enable_fleet: Optional[bool] = None
+    enable_shiprocket: Optional[bool] = None
+    enable_manual: Optional[bool] = None
     own_delivery_radius_km: Optional[float] = None
     allow_open_pickup: Optional[bool] = None          # own delivery fleet pool claiming toggle
     shiprocket_email: Optional[str] = None
@@ -287,9 +290,24 @@ def get_delivery_settings(
     )
     is_saved = bool(settings.shiprocket_email and settings.shiprocket_password_encrypted)
 
+    # Resolve independent toggles with safe fallback for legacy records
+    ef = getattr(settings, "enable_fleet", None)
+    es = getattr(settings, "enable_shiprocket", None)
+    em = getattr(settings, "enable_manual", None)
+
+    if ef is None:
+        ef = settings.delivery_mode in ("own_agent", "hybrid")
+    if es is None:
+        es = settings.delivery_mode in ("shiprocket", "hybrid")
+    if em is None:
+        em = settings.delivery_mode == "manual" or (not ef and not es)
+
     return {
         "site_id": str(settings.site_id),
         "delivery_mode": settings.delivery_mode,
+        "enable_fleet": bool(ef),
+        "enable_shiprocket": bool(es),
+        "enable_manual": bool(em),
         "own_delivery_radius_km": settings.own_delivery_radius_km,
         "allow_open_pickup": getattr(settings, "allow_open_pickup", True) if getattr(settings, "allow_open_pickup", None) is not None else True,
         "shiprocket_email": settings.shiprocket_email,
@@ -317,11 +335,34 @@ def update_delivery_settings(
 ):
     settings = _get_settings_or_default(session, site_id)
 
+    new_ef = bool(body.enable_fleet) if body.enable_fleet is not None else getattr(settings, "enable_fleet", True)
+    new_es = bool(body.enable_shiprocket) if body.enable_shiprocket is not None else getattr(settings, "enable_shiprocket", False)
+    new_em = bool(body.enable_manual) if body.enable_manual is not None else getattr(settings, "enable_manual", True)
+
+    if not new_ef and not new_es and not new_em:
+        raise HTTPException(
+            status_code=400,
+            detail="At least one delivery method (Own Fleet, Shiprocket, or Manual) must remain enabled."
+        )
+
+    settings.enable_fleet = new_ef
+    settings.enable_shiprocket = new_es
+    settings.enable_manual = new_em
+
     if body.delivery_mode is not None:
         valid_modes = {"own_agent", "shiprocket", "hybrid", "manual"}
         if body.delivery_mode not in valid_modes:
             raise HTTPException(400, f"Invalid delivery_mode. Valid: {valid_modes}")
         settings.delivery_mode = body.delivery_mode
+    else:
+        if new_ef and new_es:
+            settings.delivery_mode = "hybrid"
+        elif new_ef:
+            settings.delivery_mode = "own_agent"
+        elif new_es:
+            settings.delivery_mode = "shiprocket"
+        else:
+            settings.delivery_mode = "manual"
 
     if body.own_delivery_radius_km is not None:
         settings.own_delivery_radius_km = body.own_delivery_radius_km
@@ -744,8 +785,8 @@ def dispatch_order(
     settings = _get_settings_or_default(session, site_id)
     mode = body.mode or settings.delivery_mode or "manual"
 
-    # If already dispatched and NOT a reassignment request
-    if existing and not body.force_reassign and not body.agent_id:
+    # If already dispatched and NOT a reassignment request (and mode hasn't changed)
+    if existing and not body.force_reassign and not body.agent_id and (body.mode == existing.mode or not body.mode):
         return {
             "shipment_id": str(existing.id),
             "mode": existing.mode,
@@ -762,7 +803,7 @@ def dispatch_order(
         return _dispatch_shiprocket(order, site_id, body, settings, session)
     else:
         # Manual — admin just fills in the tracking info
-        return _dispatch_manual(order, site_id, body, session)
+        return _dispatch_manual(order, site_id, body, session, existing_shipment=existing)
 
 
 def _dispatch_own_agent(
@@ -1083,6 +1124,7 @@ def _dispatch_manual(
     site_id: UUID,
     body: ManualDispatchRequest,
     session: Session,
+    existing_shipment: Optional[Shipment] = None,
 ) -> dict:
     """Manual shipment — admin fills in courier name, AWB, tracking URL."""
     estimated_at = None
@@ -1092,25 +1134,44 @@ def _dispatch_manual(
         except ValueError:
             pass
 
-    shipment = Shipment(
-        order_id=order.id,
-        site_id=site_id,
-        mode="manual",
-        status="in_transit" if body.awb_number else "assigned",
-        delivery_partner_name=body.courier_name,
-        courier_name=body.courier_name,
-        awb_number=body.awb_number,
-        tracking_url=body.tracking_url,
-        estimated_delivery_at=estimated_at,
-        shipped_at=_utc_now() if body.awb_number else None,
-    )
+    now = _utc_now()
+    if existing_shipment:
+        shipment = existing_shipment
+        shipment.mode = "manual"
+        shipment.status = "in_transit" if body.awb_number else "assigned"
+        shipment.delivery_partner_name = body.courier_name
+        shipment.courier_name = body.courier_name
+        shipment.awb_number = body.awb_number
+        shipment.delivery_partner_phone = getattr(body, "courier_phone", None) or body.awb_number
+        shipment.tracking_url = body.tracking_url
+        shipment.estimated_delivery_at = estimated_at
+        if body.awb_number:
+            shipment.shipped_at = shipment.shipped_at or now
+        shipment.agent_id = None
+        shipment.agent_token = None
+        shipment.agent_accepted_at = None
+    else:
+        shipment = Shipment(
+            order_id=order.id,
+            site_id=site_id,
+            mode="manual",
+            status="in_transit" if body.awb_number else "assigned",
+            delivery_partner_name=body.courier_name,
+            courier_name=body.courier_name,
+            awb_number=body.awb_number,
+            delivery_partner_phone=getattr(body, "courier_phone", None) or body.awb_number,
+            tracking_url=body.tracking_url,
+            estimated_delivery_at=estimated_at,
+            shipped_at=now if body.awb_number else None,
+        )
     session.add(shipment)
 
     order.status = "shipped" if body.awb_number else "confirmed"
+    order.delivery_otp = None  # Clear OTP for manual courier
     if body.awb_number:
-        order.shipped_at = _utc_now()
+        order.shipped_at = order.shipped_at or now
     session.add(order)
-    session.add(OrderStatusHistory(order_id=order.id, status=order.status, changed_by_type="admin"))
+    session.add(OrderStatusHistory(order_id=order.id, status=order.status, changed_by_type="admin", notes=f"Dispatched via Manual Courier ({body.courier_name or 'Courier Partner'})"))
 
     session.commit()
     session.refresh(shipment)
@@ -1362,7 +1423,24 @@ def track_order(
         agent_name = shipment.delivery_partner_name
         agent_phone = shipment.delivery_partner_phone
 
-    is_shiprocket = bool(shipment and (shipment.delivery_mode == "shiprocket" or shipment.mode == "shiprocket" or shipment.awb_number))
+    is_shiprocket = bool(
+        shipment
+        and (
+            getattr(shipment, "delivery_mode", None) == "shiprocket"
+            or getattr(shipment, "mode", None) == "shiprocket"
+            or bool(getattr(shipment, "courier_name", None))
+            or bool(getattr(shipment, "awb_number", None))
+        )
+    )
+
+    is_own_agent = bool(
+        shipment
+        and (
+            getattr(shipment, "delivery_mode", None) == "own_agent"
+            or getattr(shipment, "mode", None) == "own_agent"
+            or getattr(shipment, "agent_id", None)
+        )
+    ) and not is_shiprocket
 
     scans: list[dict[str, Any]] = []
     if is_shiprocket and shipment and shipment.awb_number:
@@ -1422,24 +1500,73 @@ def track_order(
                     "activity": "Package delivered to consignee",
                     "location": (order.shipping_address or {}).get("city") or "Destination City",
                 })
+    elif not is_shiprocket and not is_own_agent and shipment and (shipment.delivery_partner_name or shipment.delivery_partner_phone):
+        # Manual courier checkpoints
+        dt_created = (order.created_at or _utc_now()).strftime("%d %b %Y, %I:%M %p")
+        dt_shipped = (shipment.shipped_at or order.shipped_at or _utc_now()).strftime("%d %b %Y, %I:%M %p")
+        partner_lbl = shipment.delivery_partner_name or "Courier Partner"
+        tracking_lbl = f" (Tracking/Contact: {shipment.delivery_partner_phone})" if shipment.delivery_partner_phone else ""
+        scans = [
+            {
+                "date": dt_created,
+                "status": "Order Placed",
+                "activity": "Order confirmed and received by seller",
+                "location": "Origin Warehouse",
+            },
+            {
+                "date": dt_shipped,
+                "status": "Dispatched via Courier",
+                "activity": f"Dispatched via {partner_lbl}{tracking_lbl}",
+                "location": "Origin Warehouse",
+            },
+        ]
+        if shipment.status in ("out_for_delivery", "delivered"):
+            dt_ofd = (shipment.out_for_delivery_at or _utc_now()).strftime("%d %b %Y, %I:%M %p")
+            scans.append({
+                "date": dt_ofd,
+                "status": "In Transit / Out for Delivery",
+                "activity": f"In transit with {partner_lbl}",
+                "location": (order.shipping_address or {}).get("city") or "Destination City",
+            })
+        if shipment.status == "delivered":
+            dt_del = (shipment.delivered_at or _utc_now()).strftime("%d %b %Y, %I:%M %p")
+            scans.append({
+                "date": dt_del,
+                "status": "Delivered",
+                "activity": "Package delivered to consignee",
+                "location": (order.shipping_address or {}).get("city") or "Destination City",
+            })
 
     current_status = (shipment.status if shipment else order.status) or "placed"
-    # Rider privacy: Only expose direct rider name and phone when order is actively out for delivery
     is_active_ofd = (current_status == "out_for_delivery")
-    public_agent_name = agent_name if is_active_ofd else None
-    public_agent_phone = agent_phone if is_active_ofd else None
+
+    if is_own_agent:
+        public_agent_name = agent_name if is_active_ofd else None
+        public_agent_phone = agent_phone if is_active_ofd else None
+        public_delivery_otp = getattr(order, "delivery_otp", None) if (is_active_ofd or current_status == "shipped") else None
+    elif is_shiprocket:
+        public_agent_name = None
+        public_agent_phone = None
+        public_delivery_otp = None
+    else:
+        # Manual Courier: ALWAYS expose courier name and tracking/contact number
+        public_agent_name = (shipment.delivery_partner_name if shipment else None) or "Courier Partner"
+        public_agent_phone = (shipment.delivery_partner_phone if shipment else None)
+        public_delivery_otp = None
+
+    resolved_mode = "shiprocket" if is_shiprocket else ("own_agent" if is_own_agent else "manual")
 
     return {
         "order_id": str(order.id),
-        "mode": shipment.mode if shipment else "manual",
+        "mode": resolved_mode,
         "status": current_status,
-        "courier_name": shipment.courier_name if (shipment and is_shiprocket) else None,
+        "courier_name": (shipment.courier_name if shipment else None) or (public_agent_name if resolved_mode == "manual" else None),
         "delivery_partner_name": public_agent_name,
         "delivery_partner_phone": public_agent_phone,
         "vehicle_type": vehicle_type if is_active_ofd else None,
-        "awb_number": shipment.awb_number if shipment else None,
+        "awb_number": (shipment.awb_number if shipment else None) or (public_agent_phone if resolved_mode == "manual" else None),
         "tracking_url": shipment.tracking_url if shipment else None,
-        "agent_first_name": public_agent_name.split()[0] if public_agent_name else None,
+        "agent_first_name": public_agent_name.split()[0] if (public_agent_name and is_own_agent) else None,
         "agent_name": public_agent_name,
         "agent_phone": public_agent_phone,
         "estimated_delivery_at": shipment.estimated_delivery_at.isoformat() if shipment and shipment.estimated_delivery_at else None,
@@ -1449,18 +1576,7 @@ def track_order(
         "notes": shipment.notes if shipment else None,
         "order_status": order.status,
         "scans": scans,
-        "delivery_otp": (
-            None
-            if is_shiprocket
-            else (
-                order.delivery_otp
-                if getattr(order, "delivery_otp", None)
-                else (
-                    setattr(order, "delivery_otp", f"{secrets.randbelow(9000) + 1000}")
-                    or (session.add(order) or session.commit() or order.delivery_otp)
-                )
-            )
-        ),
+        "delivery_otp": public_delivery_otp,
     }
 
 

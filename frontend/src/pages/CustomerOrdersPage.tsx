@@ -123,6 +123,8 @@ type CustomerReturnListItem = {
   refund_override_reason?: string | null;
   suggested_refund_amount: number;
   final_refund_amount: number;
+  pickup_status?: string | null;
+  pickup_details?: any;
   refund_method?: string | null;
   approved_at?: string | null;
   rejected_at?: string | null;
@@ -198,6 +200,8 @@ type CustomerReturnDetail = {
   refund_override_reason?: string | null;
   suggested_refund_amount: number;
   final_refund_amount: number;
+  pickup_status?: string | null;
+  pickup_details?: any;
   refund_breakdown?: RefundBreakdown | null;
   refund_method?: string | null;
   approved_at?: string | null;
@@ -1078,19 +1082,20 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
     const isPacked = !isCancelled && (currentRank >= 2 || isShipped);
     const isPlaced = true;
 
-    const isOwnAgent =
-      detail.shipment?.delivery_mode === "own_agent" ||
-      detail.shipment?.mode === "own_agent" ||
-      Boolean(detail.shipment?.agent_id) ||
-      Boolean(detail.shipment?.delivery_partner_name && !detail.shipment?.awb_number);
+    const isShiprocket = Boolean(
+      detail.shipment?.delivery_mode === "shiprocket" ||
+      detail.shipment?.mode === "shiprocket" ||
+      (detail.shipment?.awb_number && !detail.shipment?.agent_id) ||
+      Boolean(detail.shipment?.courier_name && !detail.shipment?.agent_id)
+    );
 
-    const isShiprocket =
-      !isOwnAgent && (
-        detail.shipment?.delivery_mode === "shiprocket" ||
-        detail.shipment?.mode === "shiprocket" ||
-        Boolean(detail.shipment?.awb_number) ||
-        Boolean(detail.shipment?.courier_name)
-      );
+    const isOwnAgent = Boolean(
+      !isShiprocket && (
+        detail.shipment?.delivery_mode === "own_agent" ||
+        detail.shipment?.mode === "own_agent" ||
+        Boolean(detail.shipment?.agent_id)
+      )
+    );
 
     const orderedDate = formatFlipkartDate(detail.created_at);
     const orderedTime = formatFlipkartDateTime(detail.created_at);
@@ -1536,6 +1541,57 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
           </div>
         )}
 
+        {/* Manual Courier Partner Card — shows partner name and tracking/contact number */}
+        {!isOwnAgent && !isShiprocket && !isCancelled && (isShipped || isOutForDelivery || isDelivered) && (detail.shipment?.delivery_partner_name || detail.shipment?.delivery_partner_phone) && (
+          <div
+            style={{
+              marginTop: "16px",
+              padding: "12px 16px",
+              borderRadius: "14px",
+              background: isLight ? "#f8fafc" : "rgba(148, 163, 184, 0.08)",
+              border: "1.5px solid rgba(148, 163, 184, 0.25)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: "12px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <div
+                style={{
+                  width: "38px",
+                  height: "38px",
+                  borderRadius: "10px",
+                  background: "#2563eb",
+                  color: "#ffffff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 800,
+                  fontSize: "18px",
+                  flexShrink: 0,
+                }}
+              >
+                🚚
+              </div>
+              <div>
+                <div style={{ fontSize: "11px", fontWeight: 800, color: "#2563eb", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Dispatched via Courier Partner
+                </div>
+                <div style={{ fontSize: "14px", fontWeight: 800, color: textPrimary }}>
+                  {detail.shipment.delivery_partner_name || "Courier Partner"}
+                </div>
+                {detail.shipment.delivery_partner_phone && (
+                  <div style={{ fontSize: "12px", color: textMuted, marginTop: "2px" }}>
+                    Tracking No. / Contact: <strong style={{ color: textPrimary }}>{detail.shipment.delivery_partner_phone}</strong>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Reschedule Notice if applicable */}
         {detail.shipment?.notes && (orderStatus === "rescheduled" || detail.shipment.status === "rescheduled") && (
           <div
@@ -1839,6 +1895,137 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                     </div>
                   ) : null}
                 </div>
+
+                {/* Reverse Logistics & Return Pickup Card */}
+                {(() => {
+                  const pickup = latestDetail.pickup_details || latestReturn.pickup_details;
+                  if (!pickup || latestDetail.status === "rejected") return null;
+
+                  const isManual = pickup.mode === "manual" || (!pickup.agent_name && Boolean(pickup.courier_name));
+                  const isFleet = pickup.mode === "own_agent" || Boolean(pickup.agent_name);
+                  const isShiprocket = pickup.mode === "shiprocket";
+
+                  return (
+                    <div
+                      style={{
+                        borderRadius: "16px",
+                        background: innerBg,
+                        border: cardBorder,
+                        padding: isCompact ? "12px" : "14px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          marginBottom: "10px",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: "12px",
+                            fontWeight: 800,
+                            letterSpacing: "0.05em",
+                            textTransform: "uppercase",
+                            color: textMuted,
+                          }}
+                        >
+                          Reverse Logistics & Pickup
+                        </span>
+                        <span
+                          style={{
+                            fontSize: "11px",
+                            color: isManual ? "#0369a1" : isFleet ? "#15803d" : "#7c3aed",
+                            background: isManual
+                              ? isLight ? "#e0f2fe" : "rgba(3,105,161,0.18)"
+                              : isFleet
+                              ? isLight ? "#f0fdf4" : "rgba(21,128,61,0.18)"
+                              : isLight ? "#f5f3ff" : "rgba(124,58,237,0.18)",
+                            padding: "2px 8px",
+                            borderRadius: "999px",
+                            fontWeight: 700,
+                          }}
+                        >
+                          {isManual ? "Self-Ship / Courier" : isFleet ? "Store Rider" : "Shiprocket"}
+                        </span>
+                      </div>
+
+                      {isManual ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          <div style={{ fontSize: "14px", fontWeight: 700, color: textPrimary }}>
+                            {pickup.courier_name || "Manual Courier / Self Ship"}
+                          </div>
+                          {pickup.tracking_number ? (
+                            <div style={{ fontSize: "13px", color: textMuted }}>
+                              AWB / Tracking Number:{" "}
+                              <strong style={{ color: textPrimary }}>{pickup.tracking_number}</strong>
+                            </div>
+                          ) : null}
+                          {pickup.pickup_notes ? (
+                            <div
+                              style={{
+                                marginTop: "4px",
+                                fontSize: "12px",
+                                color: isLight ? "#92400e" : "#fde68a",
+                                background: isLight ? "#fffbeb" : "rgba(253,230,138,0.1)",
+                                padding: "8px 10px",
+                                borderRadius: "8px",
+                                border: `1px solid ${isLight ? "#fde68a" : "rgba(253,230,138,0.2)"}`,
+                              }}
+                            >
+                              {pickup.pickup_notes}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : isFleet ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          <div style={{ fontSize: "14px", fontWeight: 700, color: textPrimary }}>
+                            {pickup.agent_name || "Assigned Store Rider"}
+                          </div>
+                          {pickup.agent_phone ? (
+                            <div style={{ fontSize: "13px", color: textMuted }}>
+                              Rider Contact:{" "}
+                              <a
+                                href={`tel:${pickup.agent_phone}`}
+                                style={{ color: "#2563eb", fontWeight: 600, textDecoration: "none" }}
+                              >
+                                {pickup.agent_phone}
+                              </a>
+                            </div>
+                          ) : null}
+                          {pickup.inspection_result === "failed" || pickup.pickup_status === "doorstep_rejected" ? (
+                            <div
+                              style={{
+                                marginTop: "4px",
+                                fontSize: "12px",
+                                color: "#dc2626",
+                                background: isLight ? "#fef2f2" : "rgba(220,38,38,0.1)",
+                                padding: "8px 10px",
+                                borderRadius: "8px",
+                                border: "1px solid rgba(220,38,38,0.2)",
+                              }}
+                            >
+                              <strong>Doorstep Verification Failed:</strong>{" "}
+                              {pickup.inspection_failed_reason || "Item did not match return conditions."}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : isShiprocket ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          <div style={{ fontSize: "14px", fontWeight: 700, color: textPrimary }}>
+                            {pickup.courier_name || "Shiprocket Reverse Logistics"}
+                          </div>
+                          {pickup.tracking_number ? (
+                            <div style={{ fontSize: "13px", color: textMuted }}>
+                              AWB: <strong style={{ color: textPrimary }}>{pickup.tracking_number}</strong>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })()}
 
                 <div
                   style={{
@@ -2523,7 +2710,11 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                         })()}
 
                         {/* Delivery OTP Badge on Card — only for Own Fleet */}
-                        {(order.status === "out_for_delivery" || order.status === "shipped") && order.delivery_otp && order.shipment?.mode !== "shiprocket" && order.shipment?.delivery_mode !== "shiprocket" ? (
+                        {(order.status === "out_for_delivery" || order.status === "shipped") &&
+                        order.delivery_otp &&
+                        (order.shipment?.delivery_mode === "own_agent" ||
+                          order.shipment?.mode === "own_agent" ||
+                          Boolean(order.shipment?.agent_id)) ? (
                           <div
                             style={{
                               display: "inline-flex",
@@ -2613,7 +2804,11 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                       ) : detail ? (
                         <>
                           {/* Delivery Verification Code (OTP) Banner — only for Own Fleet */}
-                          {detail.delivery_otp && detail.shipment?.mode !== "shiprocket" && detail.shipment?.delivery_mode !== "shiprocket" && (detail.status === "out_for_delivery" || detail.status === "shipped") ? (
+                          {detail.delivery_otp &&
+                          (detail.shipment?.delivery_mode === "own_agent" ||
+                            detail.shipment?.mode === "own_agent" ||
+                            Boolean(detail.shipment?.agent_id)) &&
+                          (detail.status === "out_for_delivery" || detail.status === "shipped") ? (
                             <div
                               style={{
                                 display: "flex",

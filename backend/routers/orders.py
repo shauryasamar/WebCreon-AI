@@ -71,12 +71,12 @@ def get_effective_payment_status(order: Order) -> str:
     return status
 
 ALLOWED_STATUS_TRANSITIONS = {
-    "placed": {"confirmed", "cancelled"},
-    "confirmed": {"shipped", "out_for_delivery", "cancelled"},
-    "shipped": {"out_for_delivery", "cancelled", "rescheduled"},
-    "out_for_delivery": {"delivered", "rescheduled", "failed"},
+    "placed": {"confirmed", "shipped", "cancelled"},
+    "confirmed": {"shipped", "out_for_delivery", "delivered", "cancelled"},
+    "shipped": {"out_for_delivery", "delivered", "cancelled", "rescheduled"},
+    "out_for_delivery": {"delivered", "rescheduled", "failed", "cancelled"},
     "rescheduled": {"out_for_delivery", "shipped", "delivered", "failed", "cancelled"},
-    "failed": {"rescheduled", "shipped", "cancelled"},
+    "failed": {"rescheduled", "shipped", "delivered", "cancelled"},
     "delivered": set(),
     "partially_cancelled": set(),
     "cancelled": set(),
@@ -212,7 +212,29 @@ def serialize_shipment(
                 delivery_partner_phone = agent.phone
             vehicle_type = getattr(agent, "vehicle_type", "bike")
 
-    is_shiprocket = getattr(shipment, "delivery_mode", None) == "shiprocket" or getattr(shipment, "mode", None) == "shiprocket"
+    is_manual = (
+        getattr(shipment, "delivery_mode", None) == "manual"
+        or getattr(shipment, "mode", None) == "manual"
+        or (
+            bool(getattr(shipment, "delivery_partner_name", None))
+            and getattr(shipment, "delivery_mode", None) != "own_agent"
+            and getattr(shipment, "mode", None) != "own_agent"
+            and not getattr(shipment, "agent_id", None)
+        )
+    )
+
+    is_shiprocket = (
+        getattr(shipment, "delivery_mode", None) == "shiprocket"
+        or getattr(shipment, "mode", None) == "shiprocket"
+        or bool(getattr(shipment, "courier_name", None))
+        or bool(getattr(shipment, "awb_number", None))
+    ) and not is_manual
+
+    is_own_agent = (
+        getattr(shipment, "delivery_mode", None) == "own_agent"
+        or getattr(shipment, "mode", None) == "own_agent"
+        or bool(shipment.agent_id)
+    ) and not is_shiprocket and not is_manual
 
     scans: list[dict[str, Any]] = []
     if is_shiprocket and getattr(shipment, "awb_number", None):
@@ -246,34 +268,75 @@ def serialize_shipment(
                 "location": "Destination City",
                 "date": dt_del,
             })
+    elif is_manual or (not is_shiprocket and not is_own_agent and (delivery_partner_name or delivery_partner_phone)):
+        dt_shipped = shipment.shipped_at.strftime("%d %b %Y, %I:%M %p") if shipment.shipped_at else None
+        partner_lbl = delivery_partner_name or getattr(shipment, "courier_name", None) or "Courier Partner"
+        tracking_lbl = f" (Tracking/Contact: {delivery_partner_phone or getattr(shipment, 'awb_number', None)})" if (delivery_partner_phone or getattr(shipment, "awb_number", None)) else ""
+        scans.append({
+            "status": "Dispatched",
+            "activity": f"Dispatched via {partner_lbl}{tracking_lbl}",
+            "location": "Origin Warehouse",
+            "date": dt_shipped,
+        })
+        if effective_status in ("out_for_delivery", "delivered"):
+            dt_ofd = (shipment.out_for_delivery_at or shipment.shipped_at).strftime("%d %b %Y, %I:%M %p") if (shipment.out_for_delivery_at or shipment.shipped_at) else None
+            scans.append({
+                "status": "In Transit / Out for Delivery",
+                "activity": f"In transit with {partner_lbl}",
+                "location": "Destination City",
+                "date": dt_ofd,
+            })
+        if effective_status == "delivered":
+            dt_del = (shipment.delivered_at or shipment.shipped_at).strftime("%d %b %Y, %I:%M %p") if (shipment.delivered_at or shipment.shipped_at) else None
+            scans.append({
+                "status": "Delivered",
+                "activity": "Package delivered to consignee",
+                "location": "Destination City",
+                "date": dt_del,
+            })
 
     # For Admin: ALWAYS expose assigned delivery partner info regardless of order status
-    # For Customer: Expose partner name, but withhold direct phone/tracking token until out for delivery
+    # For Customer:
+    # - If own_agent: withhold direct phone/tracking token until out for delivery
+    # - If manual courier: ALWAYS expose delivery_partner_name and delivery_partner_phone (tracking/AWB)
     is_active_ofd = (effective_status == "out_for_delivery")
 
-    if is_admin:
+    if is_manual:
+        resolved_partner_name = shipment.delivery_partner_name or getattr(shipment, "courier_name", None)
+        resolved_partner_phone = shipment.delivery_partner_phone or getattr(shipment, "awb_number", None)
+        resolved_agent_id = None
+        resolved_vehicle_type = None
+    elif is_admin:
         resolved_partner_name = delivery_partner_name
         resolved_partner_phone = delivery_partner_phone
         resolved_agent_id = agent_id_str
         resolved_vehicle_type = vehicle_type
-    else:
+    elif is_own_agent:
         resolved_partner_name = delivery_partner_name
         resolved_partner_phone = delivery_partner_phone if is_active_ofd else None
         resolved_agent_id = agent_id_str if is_active_ofd else None
         resolved_vehicle_type = vehicle_type if is_active_ofd else None
+    else:
+        # Manual Courier / Shiprocket
+        resolved_partner_name = delivery_partner_name or getattr(shipment, "courier_name", None)
+        resolved_partner_phone = delivery_partner_phone or getattr(shipment, "awb_number", None)
+        resolved_agent_id = None
+        resolved_vehicle_type = None
+
+    resolved_mode = "shiprocket" if is_shiprocket else ("own_agent" if is_own_agent else "manual")
 
     return {
         "id": str(shipment.id),
         "status": effective_status,
-        "mode": getattr(shipment, "delivery_mode", "manual"),
-        "delivery_mode": getattr(shipment, "delivery_mode", "manual"),
+        "mode": resolved_mode,
+        "delivery_mode": resolved_mode,
         "agent_id": resolved_agent_id,
         "agent_token": agent_token if (is_admin or is_active_ofd) else None,
         "delivery_partner_name": resolved_partner_name,
         "delivery_partner_phone": resolved_partner_phone,
         "vehicle_type": resolved_vehicle_type,
-        "courier_name": getattr(shipment, "courier_name", None),
-        "awb_number": getattr(shipment, "awb_number", None),
+        "courier_name": getattr(shipment, "courier_name", None) or (resolved_partner_name if resolved_mode == "manual" else None),
+        "awb_number": getattr(shipment, "awb_number", None) or (resolved_partner_phone if resolved_mode == "manual" else None),
         "tracking_url": getattr(shipment, "tracking_url", None),
         "label_url": getattr(shipment, "label_url", None),
         "estimated_delivery_at": shipment.estimated_delivery_at.isoformat() if shipment.estimated_delivery_at else None,
@@ -282,7 +345,7 @@ def serialize_shipment(
         "delivered_at": shipment.delivered_at.isoformat() if shipment.delivered_at else None,
         "notes": getattr(shipment, "notes", None),
         "scans": scans,
-        "delivery_otp": None if is_shiprocket else getattr(shipment, "delivery_otp", None),
+        "delivery_otp": getattr(shipment, "delivery_otp", None) if (resolved_mode == "own_agent" and (is_admin or is_active_ofd or effective_status == "shipped")) else None,
     }
 
 
@@ -1323,9 +1386,12 @@ def update_order_status(
                 shipment = Shipment(
                     order_id=order.id,
                     site_id=site_id,
+                    mode="manual",
                     status="shipped",
                     delivery_partner_name=payload.delivery_partner_name,
                     delivery_partner_phone=payload.delivery_partner_phone,
+                    awb_number=payload.delivery_partner_phone,
+                    courier_name=payload.delivery_partner_name,
                     estimated_delivery_at=payload.estimated_delivery_at,
                     shipped_at=now,
                 )
@@ -1333,8 +1399,15 @@ def update_order_status(
                 shipment.status = "shipped"
                 if payload.delivery_partner_name is not None:
                     shipment.delivery_partner_name = payload.delivery_partner_name
+                    shipment.courier_name = payload.delivery_partner_name
+                    shipment.mode = "manual"
+                    shipment.agent_id = None
+                    shipment.agent_token = None
+                    shipment.agent_accepted_at = None
+                    order.delivery_otp = None
                 if payload.delivery_partner_phone is not None:
                     shipment.delivery_partner_phone = payload.delivery_partner_phone
+                    shipment.awb_number = payload.delivery_partner_phone
                 if payload.estimated_delivery_at is not None:
                     shipment.estimated_delivery_at = payload.estimated_delivery_at
                 shipment.shipped_at = now
@@ -1357,9 +1430,12 @@ def update_order_status(
                 shipment = Shipment(
                     order_id=order.id,
                     site_id=site_id,
+                    mode="manual",
                     status="out_for_delivery",
                     delivery_partner_name=payload.delivery_partner_name,
                     delivery_partner_phone=payload.delivery_partner_phone,
+                    awb_number=payload.delivery_partner_phone,
+                    courier_name=payload.delivery_partner_name,
                     estimated_delivery_at=payload.estimated_delivery_at,
                     out_for_delivery_at=now,
                 )
@@ -1367,8 +1443,15 @@ def update_order_status(
                 shipment.status = "out_for_delivery"
                 if payload.delivery_partner_name is not None:
                     shipment.delivery_partner_name = payload.delivery_partner_name
+                    shipment.courier_name = payload.delivery_partner_name
+                    shipment.mode = "manual"
+                    shipment.agent_id = None
+                    shipment.agent_token = None
+                    shipment.agent_accepted_at = None
+                    order.delivery_otp = None
                 if payload.delivery_partner_phone is not None:
                     shipment.delivery_partner_phone = payload.delivery_partner_phone
+                    shipment.awb_number = payload.delivery_partner_phone
                 if payload.estimated_delivery_at is not None:
                     shipment.estimated_delivery_at = payload.estimated_delivery_at
                 shipment.out_for_delivery_at = now
@@ -1960,7 +2043,15 @@ def get_my_orders(
         ]
         has_returnable_items = any(item["is_returnable"] for item in serialized_items)
         sh = shipment_map.get(order.id)
-        is_shiprocket = bool(sh and (getattr(sh, "delivery_mode", None) == "shiprocket" or getattr(sh, "mode", None) == "shiprocket" or sh.courier_name or sh.awb_number))
+        is_own_agent = bool(
+            sh
+            and (
+                getattr(sh, "delivery_mode", None) == "own_agent"
+                or getattr(sh, "mode", None) == "own_agent"
+                or getattr(sh, "agent_id", None)
+            )
+            and not (getattr(sh, "courier_name", None) or getattr(sh, "awb_number", None))
+        )
 
         response.append(
             {
@@ -1974,7 +2065,7 @@ def get_my_orders(
                 "created_at": order.created_at.isoformat() if order.created_at else None,
                 "items": serialized_items,
                 "pricing_snapshot": order.pricing_snapshot,
-                "delivery_otp": None if is_shiprocket else ensure_order_delivery_otp(order, session),
+                "delivery_otp": ensure_order_delivery_otp(order, session) if is_own_agent else None,
                 "shipment": serialize_shipment(sh, order.status, session=session),
                 "has_returnable_items": has_returnable_items,
                 "can_request_return": order.status == "delivered" and has_returnable_items,
@@ -2124,7 +2215,19 @@ def get_my_order_detail(
         "cancelled_at": order.cancelled_at.isoformat() if order.cancelled_at else None,
         "items": serialized_items,
         "shipment": serialize_shipment(shipment, order.status, session=session),
-        "delivery_otp": None if bool(shipment and (getattr(shipment, "delivery_mode", None) == "shiprocket" or getattr(shipment, "mode", None) == "shiprocket" or shipment.courier_name or shipment.awb_number)) else ensure_order_delivery_otp(order, session),
+        "delivery_otp": (
+            ensure_order_delivery_otp(order, session)
+            if bool(
+                shipment
+                and (
+                    getattr(shipment, "delivery_mode", None) == "own_agent"
+                    or getattr(shipment, "mode", None) == "own_agent"
+                    or getattr(shipment, "agent_id", None)
+                )
+                and not (getattr(shipment, "courier_name", None) or getattr(shipment, "awb_number", None))
+            )
+            else None
+        ),
         "has_returnable_items": has_returnable_items,
         "can_request_return": order.status == "delivered" and has_returnable_items,
         "refund_info": build_customer_refund_info(order, allow_live_check=True, session=session),

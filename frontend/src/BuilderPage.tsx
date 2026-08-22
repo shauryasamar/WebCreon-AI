@@ -1486,21 +1486,19 @@ function BuilderPageContent() {
             padding: "10px 22px",
             borderRadius: "999px",
             border: "none",
-            background: publishSuccess
-              ? "#16a34a"
-              : "linear-gradient(135deg, #22c55e, #16a34a)",
-            color: "#ffffff",
+            background: "linear-gradient(135deg, #0f62ab, #0a467c)",
+            color: "#fbbf24",
             fontSize: "13px",
-            fontWeight: 700,
+            fontWeight: 800,
             cursor: publishing ? "default" : "pointer",
             display: "flex",
             alignItems: "center",
             gap: "8px",
-            boxShadow: "0 6px 20px rgba(34,197,94,0.45)",
+            boxShadow: "0 6px 20px rgba(15,98,171,0.45)",
             transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
           }}
         >
-          {publishing ? "Publishing..." : publishSuccess ? "Published ✓" : "Publish 🚀"}
+          {publishing ? "Publishing..." : publishSuccess ? "Published" : "Publish"}
         </button>
       )}
     </BuilderShell>

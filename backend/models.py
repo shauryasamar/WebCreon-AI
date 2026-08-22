@@ -613,6 +613,20 @@ class DeliverySettings(SQLModel, table=True):
     # Mode: own_agent | shiprocket | hybrid | manual
     delivery_mode: str = Field(default="manual", max_length=30, nullable=False)
 
+    # Independent delivery channel toggles
+    enable_fleet: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, default=True),
+    )
+    enable_shiprocket: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, default=False),
+    )
+    enable_manual: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, default=True),
+    )
+
     # Hybrid mode: orders within this radius use own agents, outside go to courier
     own_delivery_radius_km: float = Field(default=10.0, nullable=False)
 

@@ -671,6 +671,9 @@ type DeliveryAgentItem = {
 
 type DeliverySettingsSummary = {
   delivery_mode: string;
+  enable_fleet?: boolean;
+  enable_shiprocket?: boolean;
+  enable_manual?: boolean;
   shiprocket_connected: boolean;
   shiprocket_enabled?: boolean;
   allow_own_delivery_agents?: boolean;
@@ -704,12 +707,14 @@ const AdminOrders: React.FC = () => {
   const [reassigningOrderIdMap, setReassigningOrderIdMap] = useState<Record<string, boolean>>({});
   const [reassignAgentIdMap, setReassignAgentIdMap] = useState<Record<string, string>>({});
   const [packageWeightMap, setPackageWeightMap] = useState<Record<string, number>>({});
+  const [editingCourierOrderIdMap, setEditingCourierOrderIdMap] = useState<Record<string, boolean>>({});
 
   // Return Reverse Logistics state
   const [selectedReturnAgentMap, setSelectedReturnAgentMap] = useState<Record<string, string>>({});
   const [selectedReturnDispatchModeMap, setSelectedReturnDispatchModeMap] = useState<Record<string, "own_agent" | "shiprocket" | "manual">>({});
   const [returnPackageWeightMap, setReturnPackageWeightMap] = useState<Record<string, number>>({});
   const [returnManualCourierMap, setReturnManualCourierMap] = useState<Record<string, { courierName: string; trackingNumber: string; notes: string }>>({});
+  const [editingReturnCourierMap, setEditingReturnCourierMap] = useState<Record<string, boolean>>({});
   const [reassigningReturnIdMap, setReassigningReturnIdMap] = useState<Record<string, boolean>>({});
   const [reassignReturnAgentIdMap, setReassignReturnAgentIdMap] = useState<Record<string, string>>({});
 
@@ -808,6 +813,17 @@ const AdminOrders: React.FC = () => {
           adminNote: detail.admin_note || "",
         },
     }));
+
+    if (detail.pickup_details) {
+      setReturnManualCourierMap((prev) => ({
+        ...prev,
+        [returnId]: {
+          courierName: detail.pickup_details?.courier_name || "",
+          trackingNumber: detail.pickup_details?.tracking_number || "",
+          notes: detail.pickup_details?.pickup_notes || "",
+        },
+      }));
+    }
   };
 
 
@@ -886,8 +902,10 @@ const AdminOrders: React.FC = () => {
     if (!siteId) return;
     setActionLoadingId(orderId);
     try {
-      const storeDefaultMode = (deliverySettings?.delivery_mode as any) || "own_agent";
-      const chosenMode = customMode || selectedDispatchModeMap[orderId] || (storeDefaultMode === "hybrid" ? "own_agent" : storeDefaultMode);
+      const isFleet = deliverySettings?.enable_fleet !== undefined ? Boolean(deliverySettings.enable_fleet) : (deliverySettings?.delivery_mode === "own_agent" || deliverySettings?.delivery_mode === "hybrid");
+      const isSr = deliverySettings?.enable_shiprocket !== undefined ? Boolean(deliverySettings.enable_shiprocket) : (deliverySettings?.delivery_mode === "shiprocket" || deliverySettings?.delivery_mode === "hybrid");
+      const fallbackMode = isFleet ? "own_agent" : (isSr ? "shiprocket" : "manual");
+      const chosenMode = customMode || selectedDispatchModeMap[orderId] || fallbackMode;
       const agentId = selectedAgentMap[orderId] || "";
       const customWeight = packageWeightMap[orderId] || deliverySettings?.default_weight_grams || 500;
       const body: Record<string, any> = {
@@ -968,8 +986,10 @@ const AdminOrders: React.FC = () => {
     if (!siteId) return;
     setActionLoadingId(returnId);
     try {
-      const storeDefaultMode = (deliverySettings?.delivery_mode as any) || "own_agent";
-      const chosenMode = customMode || selectedReturnDispatchModeMap[returnId] || (storeDefaultMode === "hybrid" ? "own_agent" : storeDefaultMode);
+      const isFleet = deliverySettings?.enable_fleet !== undefined ? Boolean(deliverySettings.enable_fleet) : (deliverySettings?.delivery_mode === "own_agent" || deliverySettings?.delivery_mode === "hybrid");
+      const isSr = deliverySettings?.enable_shiprocket !== undefined ? Boolean(deliverySettings.enable_shiprocket) : (deliverySettings?.delivery_mode === "shiprocket" || deliverySettings?.delivery_mode === "hybrid");
+      const fallbackMode = isFleet ? "own_agent" : (isSr ? "shiprocket" : "manual");
+      const chosenMode = customMode || selectedReturnDispatchModeMap[returnId] || fallbackMode;
       const agentId = selectedReturnAgentMap[returnId] || "";
       const customWeight = returnPackageWeightMap[returnId] || deliverySettings?.default_weight_grams || 500;
       const manualData = returnManualCourierMap[returnId] || { courierName: "", trackingNumber: "", notes: "" };
@@ -1016,6 +1036,7 @@ const AdminOrders: React.FC = () => {
       if (data.return_request) {
         setReturnDetailsMap((prev) => ({ ...prev, [returnId]: data.return_request }));
       }
+      setEditingReturnCourierMap((p) => ({ ...p, [returnId]: false }));
       await loadReturnsForSite();
       await loadDeliveryMeta();
     } catch (err: any) {
@@ -1056,6 +1077,40 @@ const AdminOrders: React.FC = () => {
       await loadDeliveryMeta();
     } catch (err: any) {
       alert(err?.message || "Failed to reassign rider");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleSwitchReturnToManual = async (returnId: string) => {
+    if (!siteId) return;
+    const manualData = returnManualCourierMap[returnId] || { courierName: "", trackingNumber: "", notes: "" };
+    setActionLoadingId(returnId);
+    try {
+      const res = await fetch(`${API_BASE}/returns/admin/${siteId}/${returnId}/dispatch-pickup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          mode: "manual",
+          courier_name: manualData.courierName || "Manual Courier / Self Ship",
+          tracking_number: manualData.trackingNumber || "",
+          pickup_notes: manualData.notes || "",
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to switch return to manual courier");
+      }
+      const data = await res.json();
+      if (data.return_request) {
+        setReturnDetailsMap((prev) => ({ ...prev, [returnId]: data.return_request }));
+      }
+      setReassigningReturnIdMap((p) => ({ ...p, [returnId]: false }));
+      await loadReturnsForSite();
+      await loadDeliveryMeta();
+    } catch (err: any) {
+      alert(err?.message || "Failed to switch to manual return");
     } finally {
       setActionLoadingId(null);
     }
@@ -1683,21 +1738,18 @@ const AdminOrders: React.FC = () => {
   const handleSaveShipment = async (orderId: string) => {
     const order = orders.find((item) => item.id === orderId);
     if (!order) return;
-
-
-    if (order.status === "confirmed") {
-      await handleMarkShipped(orderId);
-      return;
-    }
-
+    const draft = getShipmentDraft(order);
 
     if (order.status === "shipped") {
       await handleOutForDelivery(orderId);
       return;
     }
 
-
-    window.alert("Shipment details are saved when moving the order to shipped/out for delivery.");
+    await updateStatus(orderId, "shipped", {
+      delivery_partner_name: draft.deliveryPartnerName || null,
+      delivery_partner_phone: draft.deliveryPartnerPhone || null,
+      estimated_delivery_at: toIsoOrNull(draft.estimatedDeliveryAt),
+    });
   };
 
 
@@ -2932,39 +2984,69 @@ const AdminOrders: React.FC = () => {
                                       </div>
                                     )}
 
-                                    {(detail?.delivery_otp || order.delivery_otp) && (
-                                      <div
-                                        style={{
-                                          marginTop: "6px",
-                                          padding: "8px 12px",
-                                          background: "#ecfdf5",
-                                          borderRadius: "6px",
-                                          border: "1px solid #a7f3d0",
-                                          display: "flex",
-                                          alignItems: "center",
-                                          justifyContent: "space-between",
-                                        }}
-                                      >
-                                        <span style={{ fontSize: "12px", fontWeight: 700, color: "#065f46" }}>
-                                          🔒 Delivery OTP:
-                                        </span>
-                                        <code
+                                    {(() => {
+                                      const currentShipment = detail?.shipment || order.shipment;
+                                      const isShiprocket = Boolean(
+                                        currentShipment && (
+                                          currentShipment.delivery_mode === "shiprocket" ||
+                                          currentShipment.mode === "shiprocket" ||
+                                          (Boolean(currentShipment.awb_number) && !currentShipment.agent_id && currentShipment.delivery_mode !== "manual")
+                                        )
+                                      );
+                                      const isManual = Boolean(
+                                        currentShipment && (
+                                          currentShipment.delivery_mode === "manual" ||
+                                          currentShipment.mode === "manual" ||
+                                          (Boolean(currentShipment.delivery_partner_name) && currentShipment.delivery_mode !== "own_agent" && currentShipment.mode !== "own_agent" && !currentShipment.agent_id) ||
+                                          ((order.status === "shipped" || order.status === "out_for_delivery") && !currentShipment.agent_id && currentShipment.delivery_mode !== "own_agent")
+                                        )
+                                      );
+                                      const isOwnAgent = !isShiprocket && !isManual && Boolean(
+                                        currentShipment && (
+                                          currentShipment.delivery_mode === "own_agent" ||
+                                          currentShipment.mode === "own_agent" ||
+                                          Boolean(currentShipment.agent_id)
+                                        )
+                                      );
+
+                                      if (!isOwnAgent || !(detail?.delivery_otp || order.delivery_otp) || order.status === "delivered" || order.status === "cancelled") {
+                                        return null;
+                                      }
+
+                                      return (
+                                        <div
                                           style={{
-                                            fontSize: "13px",
-                                            fontWeight: 900,
-                                            letterSpacing: "3px",
-                                            fontFamily: "monospace",
-                                            color: "#047857",
-                                            background: "#ffffff",
-                                            padding: "2px 8px",
-                                            borderRadius: "4px",
-                                            border: "1px dashed #059669",
+                                            marginTop: "6px",
+                                            padding: "8px 12px",
+                                            background: "#ecfdf5",
+                                            borderRadius: "6px",
+                                            border: "1px solid #a7f3d0",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "space-between",
                                           }}
                                         >
-                                          {detail?.delivery_otp || order.delivery_otp}
-                                        </code>
-                                      </div>
-                                    )}
+                                          <span style={{ fontSize: "12px", fontWeight: 700, color: "#065f46" }}>
+                                            Delivery OTP:
+                                          </span>
+                                          <code
+                                            style={{
+                                              fontSize: "13px",
+                                              fontWeight: 900,
+                                              letterSpacing: "3px",
+                                              fontFamily: "monospace",
+                                              color: "#047857",
+                                              background: "#ffffff",
+                                              padding: "2px 8px",
+                                              borderRadius: "4px",
+                                              border: "1px dashed #059669",
+                                            }}
+                                          >
+                                            {detail?.delivery_otp || order.delivery_otp}
+                                          </code>
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
                                 </div>
 
@@ -3091,8 +3173,25 @@ const AdminOrders: React.FC = () => {
 
                                   {(() => {
                                     const currentShipment = detail?.shipment || order.shipment;
-                                    const storeDeliveryMode = deliverySettings?.delivery_mode || "own_agent";
-                                    const activeMode = selectedDispatchModeMap[order.id] || (storeDeliveryMode === "hybrid" ? "own_agent" : storeDeliveryMode);
+                                    const isFleetOn = deliverySettings?.enable_fleet !== undefined ? Boolean(deliverySettings.enable_fleet) : (deliverySettings?.delivery_mode === "own_agent" || deliverySettings?.delivery_mode === "hybrid");
+                                    const isShiprocketOn = deliverySettings?.enable_shiprocket !== undefined ? Boolean(deliverySettings.enable_shiprocket) : (deliverySettings?.delivery_mode === "shiprocket" || deliverySettings?.delivery_mode === "hybrid");
+                                    const isManualOn = deliverySettings?.enable_manual !== undefined ? Boolean(deliverySettings.enable_manual) : (deliverySettings?.delivery_mode === "manual");
+
+                                    const availableModes: Array<{ id: "own_agent" | "shiprocket" | "manual"; label: string }> = [];
+                                    if (isFleetOn) availableModes.push({ id: "own_agent", label: "Own Fleet" });
+                                    if (isShiprocketOn) availableModes.push({ id: "shiprocket", label: "Shiprocket" });
+                                    if (isManualOn) availableModes.push({ id: "manual", label: "Manual" });
+
+                                    if (availableModes.length === 0) {
+                                      availableModes.push({ id: "manual", label: "Manual" });
+                                    }
+
+                                    const activeMode: "own_agent" | "shiprocket" | "manual" = (
+                                      selectedDispatchModeMap[order.id] && availableModes.some((m) => m.id === selectedDispatchModeMap[order.id])
+                                        ? selectedDispatchModeMap[order.id]
+                                        : availableModes[0].id
+                                    ) as "own_agent" | "shiprocket" | "manual";
+
                                     const assignedRider = deliveryAgents.find((a) => a.id === currentShipment?.delivery_partner_phone || a.name === currentShipment?.delivery_partner_name);
                                     const riderName = currentShipment?.delivery_partner_name || assignedRider?.name || "Assigned Rider";
                                     const riderPhone = currentShipment?.delivery_partner_phone || assignedRider?.phone || "";
@@ -3100,8 +3199,14 @@ const AdminOrders: React.FC = () => {
 
                                     return (
                                       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                                        {/* If Order is already dispatched via Courier / Shiprocket */}
-                                        {Boolean(currentShipment?.courier_name || currentShipment?.awb_number || currentShipment?.delivery_mode === "shiprocket" || currentShipment?.mode === "shiprocket") ? (
+                                        {/* If Order is already dispatched via Shiprocket */}
+                                        {Boolean(
+                                          currentShipment && (
+                                            currentShipment.delivery_mode === "shiprocket" ||
+                                            currentShipment.mode === "shiprocket" ||
+                                            (Boolean(currentShipment.awb_number) && !currentShipment.agent_id && currentShipment.delivery_mode !== "manual")
+                                          )
+                                        ) ? (
                                           <div
                                             style={{
                                               padding: "14px",
@@ -3190,7 +3295,259 @@ const AdminOrders: React.FC = () => {
                                               )}
                                             </div>
                                           </div>
-                                        ) : currentShipment?.delivery_partner_name ? (
+                                        ) : Boolean(
+                                          currentShipment && (
+                                            currentShipment.delivery_mode === "manual" ||
+                                            currentShipment.mode === "manual" ||
+                                            (Boolean(currentShipment.delivery_partner_name) && currentShipment.delivery_mode !== "own_agent" && currentShipment.mode !== "own_agent" && !currentShipment.agent_id) ||
+                                            ((order.status === "shipped" || order.status === "out_for_delivery") && !currentShipment.agent_id && currentShipment.delivery_mode !== "own_agent")
+                                          )
+                                        ) ? (
+                                          /* If Order is dispatched via Manual Courier */
+                                          <div
+                                            style={{
+                                              padding: "14px",
+                                              background: "#f8fafc",
+                                              borderRadius: "8px",
+                                              border: "1px solid #e2e8f0",
+                                            }}
+                                          >
+                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                                              <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                                Manual Courier Partner
+                                              </div>
+                                              <span
+                                                style={{
+                                                  fontSize: "11px",
+                                                  fontWeight: 700,
+                                                  padding: "2px 7px",
+                                                  borderRadius: "4px",
+                                                  background: (order.status === "delivered" || currentShipment?.status === "delivered")
+                                                    ? "#f0fdf4"
+                                                    : (order.status === "out_for_delivery" || currentShipment?.status === "out_for_delivery")
+                                                    ? "#fff7ed"
+                                                    : "#eff6ff",
+                                                  color: (order.status === "delivered" || currentShipment?.status === "delivered")
+                                                    ? "#16a34a"
+                                                    : (order.status === "out_for_delivery" || currentShipment?.status === "out_for_delivery")
+                                                    ? "#c2410c"
+                                                    : "#1d4ed8",
+                                                  border: `1px solid ${
+                                                    (order.status === "delivered" || currentShipment?.status === "delivered")
+                                                      ? "#bbf7d0"
+                                                      : (order.status === "out_for_delivery" || currentShipment?.status === "out_for_delivery")
+                                                      ? "#ffedd5"
+                                                      : "#bfdbfe"
+                                                  }`,
+                                                  textTransform: "capitalize",
+                                                }}
+                                              >
+                                                {(order.status || currentShipment?.status || "Shipped").replaceAll("_", " ")}
+                                              </span>
+                                            </div>
+
+                                            <div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a", marginBottom: "4px" }}>
+                                              {currentShipment?.delivery_partner_name || "Courier Partner"}
+                                            </div>
+
+                                            {currentShipment?.delivery_partner_phone && (
+                                              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", fontSize: "13px" }}>
+                                                <span style={{ color: "#64748b" }}>Tracking No. / Contact:</span>
+                                                <code style={{ background: "#e2e8f0", padding: "2px 6px", borderRadius: "4px", fontWeight: 700, color: "#0f172a" }}>
+                                                  {currentShipment.delivery_partner_phone}
+                                                </code>
+                                              </div>
+                                            )}
+
+                                            {currentShipment?.notes && (
+                                              <div
+                                                style={{
+                                                  marginTop: "8px",
+                                                  marginBottom: "8px",
+                                                  padding: "8px 10px",
+                                                  background: "#fffbeb",
+                                                  borderRadius: "6px",
+                                                  border: "1px solid #fde68a",
+                                                  fontSize: "12px",
+                                                  color: "#92400e",
+                                                  lineHeight: 1.4,
+                                                }}
+                                              >
+                                                <div style={{ fontWeight: 700, color: "#b45309", marginBottom: "2px" }}>
+                                                  Delivery Note:
+                                                </div>
+                                                <div>{cleanShipmentNotes(currentShipment.notes)}</div>
+                                              </div>
+                                            )}
+
+                                            {/* Admin Control Actions for Manual Courier */}
+                                            {order.status !== "delivered" && order.status !== "cancelled" ? (
+                                              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "12px", paddingTop: "10px", borderTop: "1px solid #e2e8f0" }}>
+                                                <div style={{ fontSize: "12px", fontWeight: 700, color: "#475569" }}>
+                                                  Admin Delivery Controls:
+                                                </div>
+                                                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                                                  {order.status === "shipped" && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => handleOutForDelivery(order.id)}
+                                                      disabled={actionLoadingId === order.id}
+                                                      style={{
+                                                        padding: "7px 12px",
+                                                        borderRadius: "6px",
+                                                        background: "#d97706",
+                                                        color: "#ffffff",
+                                                        border: "none",
+                                                        fontSize: "12px",
+                                                        fontWeight: 700,
+                                                        cursor: actionLoadingId === order.id ? "wait" : "pointer",
+                                                      }}
+                                                    >
+                                                      {actionLoadingId === order.id ? "Updating..." : "Mark Out for Delivery"}
+                                                    </button>
+                                                  )}
+
+                                                  {(order.status === "shipped" || order.status === "out_for_delivery" || order.status === "rescheduled") && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => handleDelivered(order.id)}
+                                                      disabled={actionLoadingId === order.id}
+                                                      style={{
+                                                        padding: "7px 12px",
+                                                        borderRadius: "6px",
+                                                        background: "#16a34a",
+                                                        color: "#ffffff",
+                                                        border: "none",
+                                                        fontSize: "12px",
+                                                        fontWeight: 700,
+                                                        cursor: actionLoadingId === order.id ? "wait" : "pointer",
+                                                      }}
+                                                    >
+                                                      {actionLoadingId === order.id ? "Updating..." : "Mark Delivered"}
+                                                    </button>
+                                                  )}
+
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => setEditingCourierOrderIdMap((p) => ({ ...p, [order.id]: !p[order.id] }))}
+                                                    style={{
+                                                      padding: "7px 12px",
+                                                      borderRadius: "6px",
+                                                      background: "#ffffff",
+                                                      color: "#475569",
+                                                      border: "1px solid #cbd5e1",
+                                                      fontSize: "12px",
+                                                      fontWeight: 600,
+                                                      cursor: "pointer",
+                                                    }}
+                                                  >
+                                                    {editingCourierOrderIdMap[order.id] ? "Close Form" : "Edit Courier / Tracking"}
+                                                  </button>
+                                                </div>
+
+                                                {/* Edit Form */}
+                                                {editingCourierOrderIdMap[order.id] && (
+                                                  <div
+                                                    style={{
+                                                      marginTop: "8px",
+                                                      padding: "10px",
+                                                      background: "#ffffff",
+                                                      borderRadius: "6px",
+                                                      border: "1px solid #cbd5e1",
+                                                      display: "flex",
+                                                      flexDirection: "column",
+                                                      gap: "8px",
+                                                    }}
+                                                  >
+                                                    <div>
+                                                      <div style={labelStyle}>Courier Partner Name</div>
+                                                      <input
+                                                        value={shipmentDraft.deliveryPartnerName}
+                                                        onChange={(e) => setShipmentDraftValue(order.id, "deliveryPartnerName", e.target.value)}
+                                                        placeholder="e.g. BlueDart / DTDC / SpeedPost"
+                                                        style={inputStyle}
+                                                      />
+                                                    </div>
+                                                    <div>
+                                                      <div style={labelStyle}>Tracking Number / Contact</div>
+                                                      <input
+                                                        value={shipmentDraft.deliveryPartnerPhone}
+                                                        onChange={(e) => setShipmentDraftValue(order.id, "deliveryPartnerPhone", e.target.value)}
+                                                        placeholder="e.g. AWB12345678"
+                                                        style={inputStyle}
+                                                      />
+                                                    </div>
+                                                    <div style={{ display: "flex", gap: "6px" }}>
+                                                      <button
+                                                        type="button"
+                                                        onClick={async () => {
+                                                          const draft = getShipmentDraft(order);
+                                                          await updateStatus(order.id, order.status as OrderStatus, {
+                                                            delivery_partner_name: draft.deliveryPartnerName || null,
+                                                            delivery_partner_phone: draft.deliveryPartnerPhone || null,
+                                                          });
+                                                          setEditingCourierOrderIdMap((p) => ({ ...p, [order.id]: false }));
+                                                        }}
+                                                        disabled={actionLoadingId === order.id}
+                                                        style={{
+                                                          padding: "6px 12px",
+                                                          borderRadius: "5px",
+                                                          background: "#2563eb",
+                                                          color: "#ffffff",
+                                                          border: "none",
+                                                          fontSize: "12px",
+                                                          fontWeight: 700,
+                                                          cursor: "pointer",
+                                                        }}
+                                                      >
+                                                        {actionLoadingId === order.id ? "Saving..." : "Save Changes"}
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => setEditingCourierOrderIdMap((p) => ({ ...p, [order.id]: false }))}
+                                                        style={{
+                                                          padding: "6px 10px",
+                                                          borderRadius: "5px",
+                                                          background: "#ffffff",
+                                                          color: "#475569",
+                                                          border: "1px solid #cbd5e1",
+                                                          fontSize: "12px",
+                                                          fontWeight: 600,
+                                                          cursor: "pointer",
+                                                        }}
+                                                      >
+                                                        Cancel
+                                                      </button>
+                                                    </div>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            ) : order.status === "delivered" ? (
+                                              <div
+                                                style={{
+                                                  marginTop: "10px",
+                                                  padding: "8px 12px",
+                                                  background: "#f0fdf4",
+                                                  border: "1px solid #bbf7d0",
+                                                  borderRadius: "6px",
+                                                  fontSize: "12px",
+                                                  color: "#166534",
+                                                  fontWeight: 600,
+                                                }}
+                                              >
+                                                ✓ Package delivered to customer.
+                                              </div>
+                                            ) : null}
+                                          </div>
+                                        ) : Boolean(
+                                          currentShipment && (
+                                            currentShipment.delivery_mode === "own_agent" ||
+                                            currentShipment.mode === "own_agent" ||
+                                            Boolean(currentShipment.agent_id) ||
+                                            Boolean(assignedRider)
+                                          )
+                                        ) ? (
+                                          /* If Order is dispatched via Own Fleet Rider */
                                           <div
                                             style={{
                                               padding: "14px",
@@ -3201,7 +3558,7 @@ const AdminOrders: React.FC = () => {
                                           >
                                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                                               <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                                                Assigned Delivery Partner
+                                                Store Delivery Partner (Own Fleet)
                                               </div>
                                               {order.status === "cancelled" ? (
                                                 <span
@@ -3233,7 +3590,7 @@ const AdminOrders: React.FC = () => {
                                                     textDecoration: "underline",
                                                   }}
                                                 >
-                                                  {isReassigning ? "Close" : "Reassign Rider"}
+                                                  {isReassigning ? "Close" : "Reassign Rider / Courier"}
                                                 </button>
                                               )}
                                             </div>
@@ -3304,12 +3661,12 @@ const AdminOrders: React.FC = () => {
                                                   border: "1px solid #cbd5e1",
                                                   display: "flex",
                                                   flexDirection: "column",
-                                                  gap: "8px",
+                                                  gap: "10px",
                                                 }}
                                               >
-                                                <label style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a" }}>
-                                                  Select Replacement Rider
-                                                </label>
+                                                <div style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a" }}>
+                                                  Option 1: Choose Replacement In-House Rider
+                                                </div>
                                                 <select
                                                   value={reassignAgentIdMap[order.id] || ""}
                                                   onChange={(e) => setReassignAgentIdMap((p) => ({ ...p, [order.id]: e.target.value }))}
@@ -3328,36 +3685,87 @@ const AdminOrders: React.FC = () => {
                                                   <button
                                                     type="button"
                                                     onClick={() => handleReassignRider(order.id)}
-                                                    disabled={actionLoadingId === order.id}
+                                                    disabled={actionLoadingId === order.id || !reassignAgentIdMap[order.id]}
                                                     style={{
-                                                      padding: "6px 14px",
+                                                      padding: "6px 12px",
                                                       borderRadius: "5px",
                                                       background: "#2563eb",
                                                       color: "#ffffff",
                                                       border: "none",
                                                       fontSize: "12px",
                                                       fontWeight: 700,
-                                                      cursor: actionLoadingId === order.id ? "wait" : "pointer",
+                                                      cursor: (actionLoadingId === order.id || !reassignAgentIdMap[order.id]) ? "not-allowed" : "pointer",
+                                                      opacity: !reassignAgentIdMap[order.id] ? 0.6 : 1,
                                                     }}
                                                   >
-                                                    {actionLoadingId === order.id ? "Reassigning..." : "Confirm Reassignment"}
+                                                    {actionLoadingId === order.id ? "Reassigning..." : "Confirm Replacement Rider"}
                                                   </button>
-                                                  <button
-                                                    type="button"
-                                                    onClick={() => setReassigningOrderIdMap((p) => ({ ...p, [order.id]: false }))}
-                                                    style={{
-                                                      padding: "6px 12px",
-                                                      borderRadius: "5px",
-                                                      background: "#ffffff",
-                                                      color: "#475569",
-                                                      border: "1px solid #cbd5e1",
-                                                      fontSize: "12px",
-                                                      fontWeight: 600,
-                                                      cursor: "pointer",
-                                                    }}
-                                                  >
-                                                    Cancel
-                                                  </button>
+                                                </div>
+
+                                                <div style={{ borderTop: "1px dashed #cbd5e1", paddingTop: "10px", marginTop: "4px" }}>
+                                                  <div style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a", marginBottom: "8px" }}>
+                                                    Option 2: Switch to Manual Courier Partner
+                                                  </div>
+                                                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                                                    <input
+                                                      value={shipmentDraft.deliveryPartnerName}
+                                                      onChange={(e) => setShipmentDraftValue(order.id, "deliveryPartnerName", e.target.value)}
+                                                      placeholder="Courier Name (e.g. BlueDart / DTDC / SpeedPost)"
+                                                      style={inputStyle}
+                                                    />
+                                                    <input
+                                                      value={shipmentDraft.deliveryPartnerPhone}
+                                                      onChange={(e) => setShipmentDraftValue(order.id, "deliveryPartnerPhone", e.target.value)}
+                                                      placeholder="Tracking Number / AWB"
+                                                      style={inputStyle}
+                                                    />
+                                                    <div style={{ display: "flex", gap: "8px" }}>
+                                                      <button
+                                                        type="button"
+                                                        onClick={async () => {
+                                                          const draft = getShipmentDraft(order);
+                                                          if (!draft.deliveryPartnerName.trim()) {
+                                                            window.alert("Please enter the courier partner name.");
+                                                            return;
+                                                          }
+                                                          await updateStatus(order.id, "shipped", {
+                                                            delivery_partner_name: draft.deliveryPartnerName,
+                                                            delivery_partner_phone: draft.deliveryPartnerPhone || null,
+                                                          });
+                                                          setReassigningOrderIdMap((p) => ({ ...p, [order.id]: false }));
+                                                        }}
+                                                        disabled={actionLoadingId === order.id}
+                                                        style={{
+                                                          padding: "6px 12px",
+                                                          borderRadius: "5px",
+                                                          background: "#0f766e",
+                                                          color: "#ffffff",
+                                                          border: "none",
+                                                          fontSize: "12px",
+                                                          fontWeight: 700,
+                                                          cursor: "pointer",
+                                                        }}
+                                                      >
+                                                        {actionLoadingId === order.id ? "Switching..." : "Switch to Manual Courier"}
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => setReassigningOrderIdMap((p) => ({ ...p, [order.id]: false }))}
+                                                        style={{
+                                                          padding: "6px 10px",
+                                                          borderRadius: "5px",
+                                                          background: "#ffffff",
+                                                          color: "#475569",
+                                                          border: "1px solid #cbd5e1",
+                                                          fontSize: "12px",
+                                                          fontWeight: 600,
+                                                          cursor: "pointer",
+                                                        }}
+                                                      >
+                                                        Cancel
+                                                      </button>
+                                                    </div>
+                                                  </div>
                                                 </div>
                                               </div>
                                             )}
@@ -3365,65 +3773,30 @@ const AdminOrders: React.FC = () => {
                                         ) : (
                                           /* If Not yet dispatched — Dispatch Controller */
                                           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                            {/* Mode Tabs */}
-                                            {storeDeliveryMode === "hybrid" && (
+                                            {/* Mode Tabs: only rendered if more than 1 delivery mode is enabled */}
+                                            {availableModes.length > 1 && (
                                               <div style={{ display: "flex", gap: "4px", padding: "3px", background: "#f1f5f9", borderRadius: "6px" }}>
-                                                <button
-                                                  type="button"
-                                                  onClick={() => setSelectedDispatchModeMap((p) => ({ ...p, [order.id]: "own_agent" }))}
-                                                  style={{
-                                                    flex: 1,
-                                                    padding: "6px 8px",
-                                                    borderRadius: "4px",
-                                                    border: "none",
-                                                    background: activeMode === "own_agent" ? "#ffffff" : "transparent",
-                                                    color: activeMode === "own_agent" ? "#2563eb" : "#64748b",
-                                                    fontWeight: 700,
-                                                    fontSize: "12px",
-                                                    cursor: "pointer",
-                                                    boxShadow: activeMode === "own_agent" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                                                  }}
-                                                >
-                                                  Own Fleet
-                                                </button>
-
-                                                <button
-                                                  type="button"
-                                                  onClick={() => setSelectedDispatchModeMap((p) => ({ ...p, [order.id]: "shiprocket" }))}
-                                                  style={{
-                                                    flex: 1,
-                                                    padding: "6px 8px",
-                                                    borderRadius: "4px",
-                                                    border: "none",
-                                                    background: activeMode === "shiprocket" ? "#ffffff" : "transparent",
-                                                    color: activeMode === "shiprocket" ? "#2563eb" : "#64748b",
-                                                    fontWeight: 700,
-                                                    fontSize: "12px",
-                                                    cursor: "pointer",
-                                                    boxShadow: activeMode === "shiprocket" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                                                  }}
-                                                >
-                                                  Shiprocket
-                                                </button>
-
-                                                <button
-                                                  type="button"
-                                                  onClick={() => setSelectedDispatchModeMap((p) => ({ ...p, [order.id]: "manual" }))}
-                                                  style={{
-                                                    flex: 1,
-                                                    padding: "6px 8px",
-                                                    borderRadius: "4px",
-                                                    border: "none",
-                                                    background: activeMode === "manual" ? "#ffffff" : "transparent",
-                                                    color: activeMode === "manual" ? "#2563eb" : "#64748b",
-                                                    fontWeight: 700,
-                                                    fontSize: "12px",
-                                                    cursor: "pointer",
-                                                    boxShadow: activeMode === "manual" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                                                  }}
-                                                >
-                                                  Manual
-                                                </button>
+                                                {availableModes.map((mode) => (
+                                                  <button
+                                                    key={mode.id}
+                                                    type="button"
+                                                    onClick={() => setSelectedDispatchModeMap((p) => ({ ...p, [order.id]: mode.id }))}
+                                                    style={{
+                                                      flex: 1,
+                                                      padding: "6px 8px",
+                                                      borderRadius: "4px",
+                                                      border: "none",
+                                                      background: activeMode === mode.id ? "#ffffff" : "transparent",
+                                                      color: activeMode === mode.id ? "#2563eb" : "#64748b",
+                                                      fontWeight: 700,
+                                                      fontSize: "12px",
+                                                      cursor: "pointer",
+                                                      boxShadow: activeMode === mode.id ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                                                    }}
+                                                  >
+                                                    {mode.label}
+                                                  </button>
+                                                ))}
                                               </div>
                                             )}
 
@@ -3560,46 +3933,24 @@ const AdminOrders: React.FC = () => {
                                                 <button
                                                   type="button"
                                                   onClick={() => handleSaveShipment(order.id)}
+                                                  disabled={actionLoadingId === order.id}
                                                   style={{
-                                                    padding: "8px 12px",
+                                                    padding: "9px 14px",
                                                     borderRadius: "6px",
-                                                    background: "#ffffff",
-                                                    border: "1px solid #cbd5e1",
-                                                    color: "#0f172a",
+                                                    background: "#2563eb",
+                                                    border: "1px solid #2563eb",
+                                                    color: "#ffffff",
                                                     fontWeight: 700,
                                                     fontSize: "13px",
-                                                    cursor: "pointer",
+                                                    cursor: actionLoadingId === order.id ? "wait" : "pointer",
                                                   }}
                                                 >
-                                                  Save Manual Partner Details
+                                                  {actionLoadingId === order.id ? "Dispatching Order..." : "Save Details & Dispatch Order"}
                                                 </button>
                                               </div>
                                             )}
                                           </div>
                                         )}
-
-                                        {/* Customer Live Tracking Link */}
-                                        <div
-                                          style={{
-                                            display: "flex",
-                                            justifyContent: "space-between",
-                                            alignItems: "center",
-                                            fontSize: "12px",
-                                            color: "#64748b",
-                                            paddingTop: "8px",
-                                            borderTop: "1px solid #f1f5f9",
-                                          }}
-                                        >
-                                          <span>Customer Live Tracking:</span>
-                                          <a
-                                            href={`/track/${siteId}/${order.id}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            style={{ color: "#2563eb", fontWeight: 600, textDecoration: "underline" }}
-                                          >
-                                            View Live Tracking ↗
-                                          </a>
-                                        </div>
                                       </div>
                                     );
                                   })()}
@@ -4445,112 +4796,361 @@ const AdminOrders: React.FC = () => {
                                 </div>
 
                                 {(() => {
-                                  const currentPickup = detail?.pickup_details || returnItem.pickup_details;
-                                  const storeDeliveryMode = deliverySettings?.delivery_mode || "own_agent";
-                                  const activeReturnMode = selectedReturnDispatchModeMap[returnItem.id] || (storeDeliveryMode === "hybrid" ? "own_agent" : storeDeliveryMode);
-                                  const isReassigningReturn = Boolean(reassigningReturnIdMap[returnItem.id]);
+                                   const currentPickup = detail?.pickup_details || returnItem.pickup_details;
+                                   const isFleetOn = deliverySettings?.enable_fleet !== undefined ? Boolean(deliverySettings.enable_fleet) : (deliverySettings?.delivery_mode === "own_agent" || deliverySettings?.delivery_mode === "hybrid");
+                                   const isShiprocketOn = deliverySettings?.enable_shiprocket !== undefined ? Boolean(deliverySettings.enable_shiprocket) : (deliverySettings?.delivery_mode === "shiprocket" || deliverySettings?.delivery_mode === "hybrid");
+                                   const isManualOn = deliverySettings?.enable_manual !== undefined ? Boolean(deliverySettings.enable_manual) : (deliverySettings?.delivery_mode === "manual");
+
+                                   const availableReturnModes: Array<{ id: "own_agent" | "shiprocket" | "manual"; label: string }> = [];
+                                   if (isFleetOn) availableReturnModes.push({ id: "own_agent", label: "In-House Rider" });
+                                   if (isShiprocketOn) availableReturnModes.push({ id: "shiprocket", label: "Shiprocket" });
+                                   if (isManualOn) availableReturnModes.push({ id: "manual", label: "Manual" });
+
+                                   if (availableReturnModes.length === 0) {
+                                     availableReturnModes.push({ id: "manual", label: "Manual" });
+                                   }
+
+                                   const activeReturnMode: "own_agent" | "shiprocket" | "manual" = (
+                                     selectedReturnDispatchModeMap[returnItem.id] && availableReturnModes.some((m) => m.id === selectedReturnDispatchModeMap[returnItem.id])
+                                       ? selectedReturnDispatchModeMap[returnItem.id]
+                                       : availableReturnModes[0].id
+                                   ) as "own_agent" | "shiprocket" | "manual";
+                                   const isReassigningReturn = Boolean(reassigningReturnIdMap[returnItem.id]);
 
                                   return (
                                     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                                       {/* If already assigned pickup */}
                                       {currentPickup?.agent_name || currentPickup?.courier_name ? (
-                                        <div style={{ padding: "12px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-                                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                                            <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                                              Assigned Reverse Partner
-                                            </div>
-                                            {currentPickup.mode === "own_agent" && (
-                                              <button
-                                                type="button"
-                                                onClick={() => setReassigningReturnIdMap((p) => ({ ...p, [returnItem.id]: !p[returnItem.id] }))}
-                                                style={{
-                                                  background: "none",
-                                                  border: "none",
-                                                  color: "#2563eb",
-                                                  fontSize: "12px",
-                                                  fontWeight: 600,
-                                                  cursor: "pointer",
-                                                  padding: "0",
-                                                  textDecoration: "underline",
-                                                }}
-                                              >
-                                                {isReassigningReturn ? "Close" : "Reassign Rider"}
-                                              </button>
-                                            )}
-                                          </div>
+                                        (() => {
+                                          const isManualReturn = currentPickup.mode === "manual" || (!currentPickup.agent_name && Boolean(currentPickup.courier_name));
+                                          const isFleetReturn = currentPickup.mode === "own_agent" || Boolean(currentPickup.agent_name);
+                                          const isShiprocketReturn = currentPickup.mode === "shiprocket";
+                                          const isEditingReturnCourier = Boolean(editingReturnCourierMap[returnItem.id]);
 
-                                          <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
-                                            {currentPickup.agent_name || currentPickup.courier_name}
-                                            {currentPickup.agent_phone && (
-                                              <div style={{ fontSize: "13px", color: "#475569", marginTop: "3px", display: "flex", alignItems: "center", gap: "5px" }}>
-                                                <PhoneIcon />
-                                                <a href={`tel:${currentPickup.agent_phone}`} style={{ color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>
-                                                  {formatPhoneDisplay(currentPickup.agent_phone)}
-                                                </a>
-                                              </div>
-                                            )}
-                                            {currentPickup.tracking_number && (
-                                              <div style={{ fontSize: "12px", color: "#64748b", marginTop: "3px" }}>
-                                                AWB / Tracking: <strong>{currentPickup.tracking_number}</strong>
-                                              </div>
-                                            )}
-                                            {/* Level 1 Doorstep Physical Inspection Result */}
-                                            {(currentPickup.inspection_result === "failed" || currentPickup.pickup_status === "doorstep_rejected") ? (
-                                              <div style={{ marginTop: "8px", fontSize: "12px", color: "#991b1b", background: "#fef2f2", padding: "8px 10px", borderRadius: "6px", border: "1px solid #fecaca", lineHeight: 1.4 }}>
-                                                <div style={{ fontWeight: 700 }}>Doorstep Inspection Failed by Rider</div>
-                                                {currentPickup.inspection_failed_reason && <div>Reason: <strong>{currentPickup.inspection_failed_reason}</strong></div>}
-                                                {currentPickup.inspection_notes && <div>Rider Note: {currentPickup.inspection_notes}</div>}
-                                              </div>
-                                            ) : (currentPickup.pickup_status === "picked_up" || currentPickup.pickup_status === "delivered_to_hub") ? (
-                                              <div style={{ marginTop: "8px", fontSize: "12px", color: "#15803d", background: "#f0fdf4", padding: "6px 8px", borderRadius: "6px", border: "1px solid #bbf7d0", fontWeight: 600 }}>
-                                                Level 1 Doorstep Physical Inspection Passed
-                                              </div>
-                                            ) : null}
-                                            {currentPickup.pickup_notes && (
-                                              <div style={{ marginTop: "6px", fontSize: "12px", color: "#92400e", background: "#fffbeb", padding: "6px 8px", borderRadius: "4px", border: "1px solid #fde68a" }}>
-                                                {currentPickup.pickup_notes}
-                                              </div>
-                                            )}
-                                          </div>
+                                          if (isManualReturn) {
+                                            return (
+                                              <div style={{ padding: "12px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                                                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                                    <span style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                                      Manual Return Courier Partner
+                                                    </span>
+                                                    <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 6px", borderRadius: "999px", background: "#e0f2fe", color: "#0369a1" }}>
+                                                      Self-Ship / Courier
+                                                    </span>
+                                                  </div>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      setEditingReturnCourierMap((p) => ({ ...p, [returnItem.id]: !p[returnItem.id] }));
+                                                      if (!returnManualCourierMap[returnItem.id]) {
+                                                        setReturnManualCourierMap((p) => ({
+                                                          ...p,
+                                                          [returnItem.id]: {
+                                                            courierName: currentPickup.courier_name || "",
+                                                            trackingNumber: currentPickup.tracking_number || "",
+                                                            notes: currentPickup.pickup_notes || "",
+                                                          },
+                                                        }));
+                                                      }
+                                                    }}
+                                                    style={{
+                                                      background: "none",
+                                                      border: "none",
+                                                      color: "#2563eb",
+                                                      fontSize: "12px",
+                                                      fontWeight: 600,
+                                                      cursor: "pointer",
+                                                      padding: "0",
+                                                      textDecoration: "underline",
+                                                    }}
+                                                  >
+                                                    {isEditingReturnCourier ? "Cancel Edit" : "Edit Courier / Tracking"}
+                                                  </button>
+                                                </div>
 
-                                          {/* Reassign Return Rider Panel */}
-                                          {isReassigningReturn && (
-                                            <div style={{ marginTop: "10px", padding: "10px", background: "#ffffff", borderRadius: "6px", border: "1px solid #cbd5e1", display: "flex", flexDirection: "column", gap: "8px" }}>
-                                              <label style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a" }}>
-                                                Select Replacement Rider
-                                              </label>
-                                              <select
-                                                value={reassignReturnAgentIdMap[returnItem.id] || ""}
-                                                onChange={(e) => setReassignReturnAgentIdMap((p) => ({ ...p, [returnItem.id]: e.target.value }))}
-                                                style={{ ...inputStyle, fontSize: "13px" }}
-                                              >
-                                                <option value="">-- Choose Rider --</option>
-                                                {deliveryAgents.filter((a) => a.is_active).map((a) => (
-                                                  <option key={a.id} value={a.id}>
-                                                    {a.name} ({formatPhoneDisplay(a.phone)}) — {a.current_order_count} active orders
-                                                  </option>
-                                                ))}
-                                              </select>
-                                              <div style={{ display: "flex", gap: "8px" }}>
-                                                <button
-                                                  type="button"
-                                                  onClick={() => handleReassignReturnRider(returnItem.id)}
-                                                  disabled={actionLoadingId === returnItem.id}
-                                                  style={{ padding: "6px 12px", borderRadius: "5px", background: "#2563eb", color: "#ffffff", border: "none", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
-                                                >
-                                                  {actionLoadingId === returnItem.id ? "Reassigning..." : "Confirm Reassign"}
-                                                </button>
-                                                <button
-                                                  type="button"
-                                                  onClick={() => setReassigningReturnIdMap((p) => ({ ...p, [returnItem.id]: false }))}
-                                                  style={{ padding: "6px 10px", borderRadius: "5px", background: "#ffffff", color: "#475569", border: "1px solid #cbd5e1", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
-                                                >
-                                                  Cancel
-                                                </button>
+                                                {isEditingReturnCourier ? (
+                                                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "4px" }}>
+                                                    <div>
+                                                      <label style={{ fontSize: "11px", fontWeight: 700, color: "#475569" }}>Return Courier Name</label>
+                                                      <input
+                                                        value={returnManualCourierMap[returnItem.id]?.courierName ?? (currentPickup.courier_name || "")}
+                                                        onChange={(e) =>
+                                                          setReturnManualCourierMap((p) => ({
+                                                            ...p,
+                                                            [returnItem.id]: {
+                                                              courierName: e.target.value,
+                                                              trackingNumber: p[returnItem.id]?.trackingNumber ?? (currentPickup.tracking_number || ""),
+                                                              notes: p[returnItem.id]?.notes ?? (currentPickup.pickup_notes || ""),
+                                                            },
+                                                          }))
+                                                        }
+                                                        placeholder="e.g. DTDC Return, BlueDart, India Post"
+                                                        style={{ ...inputStyle, fontSize: "13px" }}
+                                                      />
+                                                    </div>
+                                                    <div>
+                                                      <label style={{ fontSize: "11px", fontWeight: 700, color: "#475569" }}>Tracking / AWB Number</label>
+                                                      <input
+                                                        value={returnManualCourierMap[returnItem.id]?.trackingNumber ?? (currentPickup.tracking_number || "")}
+                                                        onChange={(e) =>
+                                                          setReturnManualCourierMap((p) => ({
+                                                            ...p,
+                                                            [returnItem.id]: {
+                                                              trackingNumber: e.target.value,
+                                                              courierName: p[returnItem.id]?.courierName ?? (currentPickup.courier_name || ""),
+                                                              notes: p[returnItem.id]?.notes ?? (currentPickup.pickup_notes || ""),
+                                                            },
+                                                          }))
+                                                        }
+                                                        placeholder="e.g. DTDC98234823"
+                                                        style={{ ...inputStyle, fontSize: "13px" }}
+                                                      />
+                                                    </div>
+                                                    <div>
+                                                      <label style={{ fontSize: "11px", fontWeight: 700, color: "#475569" }}>Pickup / Handover Notes (Optional)</label>
+                                                      <input
+                                                        value={returnManualCourierMap[returnItem.id]?.notes ?? (currentPickup.pickup_notes || "")}
+                                                        onChange={(e) =>
+                                                          setReturnManualCourierMap((p) => ({
+                                                            ...p,
+                                                            [returnItem.id]: {
+                                                              notes: e.target.value,
+                                                              courierName: p[returnItem.id]?.courierName ?? (currentPickup.courier_name || ""),
+                                                              trackingNumber: p[returnItem.id]?.trackingNumber ?? (currentPickup.tracking_number || ""),
+                                                            },
+                                                          }))
+                                                        }
+                                                        placeholder="e.g. Customer shipped via Speed Post"
+                                                        style={{ ...inputStyle, fontSize: "13px" }}
+                                                      />
+                                                    </div>
+                                                    <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleDispatchReturnPickup(returnItem.id, "manual")}
+                                                        disabled={actionLoadingId === returnItem.id}
+                                                        style={{
+                                                          padding: "7px 14px",
+                                                          borderRadius: "6px",
+                                                          background: "#2563eb",
+                                                          color: "#ffffff",
+                                                          border: "none",
+                                                          fontSize: "12px",
+                                                          fontWeight: 700,
+                                                          cursor: "pointer",
+                                                        }}
+                                                      >
+                                                        {actionLoadingId === returnItem.id ? "Saving..." : "Save Courier Details"}
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => setEditingReturnCourierMap((p) => ({ ...p, [returnItem.id]: false }))}
+                                                        style={{
+                                                          padding: "7px 12px",
+                                                          borderRadius: "6px",
+                                                          background: "#ffffff",
+                                                          color: "#475569",
+                                                          border: "1px solid #cbd5e1",
+                                                          fontSize: "12px",
+                                                          fontWeight: 600,
+                                                          cursor: "pointer",
+                                                        }}
+                                                      >
+                                                        Cancel
+                                                      </button>
+                                                    </div>
+                                                  </div>
+                                                ) : (
+                                                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                                    <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+                                                      {currentPickup.courier_name || "Manual Courier / Self Ship"}
+                                                    </div>
+                                                    {currentPickup.tracking_number ? (
+                                                      <div style={{ fontSize: "12.5px", color: "#475569" }}>
+                                                        AWB / Tracking: <strong style={{ color: "#0f172a" }}>{currentPickup.tracking_number}</strong>
+                                                      </div>
+                                                    ) : (
+                                                      <div style={{ fontSize: "12px", color: "#94a3b8", fontStyle: "italic" }}>
+                                                        No tracking number provided
+                                                      </div>
+                                                    )}
+                                                    {currentPickup.pickup_notes && (
+                                                      <div style={{ marginTop: "4px", fontSize: "12px", color: "#92400e", background: "#fffbeb", padding: "6px 8px", borderRadius: "4px", border: "1px solid #fde68a" }}>
+                                                        {currentPickup.pickup_notes}
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                )}
                                               </div>
-                                            </div>
-                                          )}
-                                        </div>
+                                            );
+                                          }
+
+                                          if (isFleetReturn) {
+                                            return (
+                                              <div style={{ padding: "12px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                                                  <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                                    Store Delivery Partner (Own Fleet)
+                                                  </div>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => setReassigningReturnIdMap((p) => ({ ...p, [returnItem.id]: !p[returnItem.id] }))}
+                                                    style={{
+                                                      background: "none",
+                                                      border: "none",
+                                                      color: "#2563eb",
+                                                      fontSize: "12px",
+                                                      fontWeight: 600,
+                                                      cursor: "pointer",
+                                                      padding: "0",
+                                                      textDecoration: "underline",
+                                                    }}
+                                                  >
+                                                    {isReassigningReturn ? "Close" : "Reassign / Switch Partner"}
+                                                  </button>
+                                                </div>
+
+                                                <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+                                                  {currentPickup.agent_name}
+                                                  {currentPickup.agent_phone && (
+                                                    <div style={{ fontSize: "13px", color: "#475569", marginTop: "3px", display: "flex", alignItems: "center", gap: "5px" }}>
+                                                      <PhoneIcon />
+                                                      <a href={`tel:${currentPickup.agent_phone}`} style={{ color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>
+                                                        {formatPhoneDisplay(currentPickup.agent_phone)}
+                                                      </a>
+                                                    </div>
+                                                  )}
+                                                  {/* Level 1 Doorstep Physical Inspection Result */}
+                                                  {(currentPickup.inspection_result === "failed" || currentPickup.pickup_status === "doorstep_rejected") ? (
+                                                    <div style={{ marginTop: "8px", fontSize: "12px", color: "#991b1b", background: "#fef2f2", padding: "8px 10px", borderRadius: "6px", border: "1px solid #fecaca", lineHeight: 1.4 }}>
+                                                      <div style={{ fontWeight: 700 }}>Doorstep Inspection Failed by Rider</div>
+                                                      {currentPickup.inspection_failed_reason && <div>Reason: <strong>{currentPickup.inspection_failed_reason}</strong></div>}
+                                                      {currentPickup.inspection_notes && <div>Rider Note: {currentPickup.inspection_notes}</div>}
+                                                    </div>
+                                                  ) : (currentPickup.pickup_status === "picked_up" || currentPickup.pickup_status === "delivered_to_hub") ? (
+                                                    <div style={{ marginTop: "8px", fontSize: "12px", color: "#15803d", background: "#f0fdf4", padding: "6px 8px", borderRadius: "6px", border: "1px solid #bbf7d0", fontWeight: 600 }}>
+                                                      Level 1 Doorstep Physical Inspection Passed
+                                                    </div>
+                                                  ) : null}
+                                                  {currentPickup.pickup_notes && (
+                                                    <div style={{ marginTop: "6px", fontSize: "12px", color: "#92400e", background: "#fffbeb", padding: "6px 8px", borderRadius: "4px", border: "1px solid #fde68a" }}>
+                                                      {currentPickup.pickup_notes}
+                                                    </div>
+                                                  )}
+                                                </div>
+
+                                                {/* Reassign Return Rider / Switch to Manual Panel */}
+                                                {isReassigningReturn && (
+                                                  <div style={{ marginTop: "12px", padding: "12px", background: "#ffffff", borderRadius: "8px", border: "1px solid #cbd5e1", display: "flex", flexDirection: "column", gap: "12px" }}>
+                                                    {/* Option 1: In-House Rider Reassignment */}
+                                                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                                                      <label style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a" }}>
+                                                        Option 1: Choose Replacement Rider
+                                                      </label>
+                                                      <select
+                                                        value={reassignReturnAgentIdMap[returnItem.id] || ""}
+                                                        onChange={(e) => setReassignReturnAgentIdMap((p) => ({ ...p, [returnItem.id]: e.target.value }))}
+                                                        style={{ ...inputStyle, fontSize: "13px" }}
+                                                      >
+                                                        <option value="">-- Choose Rider --</option>
+                                                        {deliveryAgents.filter((a) => a.is_active).map((a) => (
+                                                          <option key={a.id} value={a.id}>
+                                                            {a.name} ({formatPhoneDisplay(a.phone)}) — {a.current_order_count} active orders
+                                                          </option>
+                                                        ))}
+                                                      </select>
+                                                      <div style={{ display: "flex", gap: "8px", marginTop: "2px" }}>
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => handleReassignReturnRider(returnItem.id)}
+                                                          disabled={actionLoadingId === returnItem.id || !reassignReturnAgentIdMap[returnItem.id]}
+                                                          style={{ padding: "6px 12px", borderRadius: "5px", background: "#2563eb", color: "#ffffff", border: "none", fontSize: "12px", fontWeight: 700, cursor: "pointer", opacity: !reassignReturnAgentIdMap[returnItem.id] ? 0.6 : 1 }}
+                                                        >
+                                                          {actionLoadingId === returnItem.id ? "Reassigning..." : "Confirm Reassign"}
+                                                        </button>
+                                                      </div>
+                                                    </div>
+
+                                                    {/* Option 2: Switch to Manual Courier */}
+                                                    <div style={{ borderTop: "1px dashed #cbd5e1", paddingTop: "10px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                                                      <label style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a" }}>
+                                                        Option 2: Switch to Manual Return Courier
+                                                      </label>
+                                                      <input
+                                                        value={returnManualCourierMap[returnItem.id]?.courierName || ""}
+                                                        onChange={(e) =>
+                                                          setReturnManualCourierMap((p) => ({
+                                                            ...p,
+                                                            [returnItem.id]: {
+                                                              courierName: e.target.value,
+                                                              trackingNumber: p[returnItem.id]?.trackingNumber || "",
+                                                              notes: p[returnItem.id]?.notes || "",
+                                                            },
+                                                          }))
+                                                        }
+                                                        placeholder="Courier Name (e.g. DTDC Return, Customer Self-Ship)"
+                                                        style={{ ...inputStyle, fontSize: "13px" }}
+                                                      />
+                                                      <input
+                                                        value={returnManualCourierMap[returnItem.id]?.trackingNumber || ""}
+                                                        onChange={(e) =>
+                                                          setReturnManualCourierMap((p) => ({
+                                                            ...p,
+                                                            [returnItem.id]: {
+                                                              trackingNumber: e.target.value,
+                                                              courierName: p[returnItem.id]?.courierName || "",
+                                                              notes: p[returnItem.id]?.notes || "",
+                                                            },
+                                                          }))
+                                                        }
+                                                        placeholder="Tracking / AWB Number (Optional)"
+                                                        style={{ ...inputStyle, fontSize: "13px" }}
+                                                      />
+                                                      <div style={{ display: "flex", gap: "8px", marginTop: "2px" }}>
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => handleSwitchReturnToManual(returnItem.id)}
+                                                          disabled={actionLoadingId === returnItem.id}
+                                                          style={{ padding: "6px 12px", borderRadius: "5px", background: "#059669", color: "#ffffff", border: "none", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
+                                                        >
+                                                          {actionLoadingId === returnItem.id ? "Switching..." : "Switch to Manual Courier"}
+                                                        </button>
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => setReassigningReturnIdMap((p) => ({ ...p, [returnItem.id]: false }))}
+                                                          style={{ padding: "6px 10px", borderRadius: "5px", background: "#ffffff", color: "#475569", border: "1px solid #cbd5e1", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                                        >
+                                                          Cancel
+                                                        </button>
+                                                      </div>
+                                                    </div>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            );
+                                          }
+
+                                          if (isShiprocketReturn) {
+                                            return (
+                                              <div style={{ padding: "12px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                                                <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "4px" }}>
+                                                  Shiprocket Reverse Logistics
+                                                </div>
+                                                <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+                                                  {currentPickup.courier_name}
+                                                </div>
+                                                {currentPickup.tracking_number && (
+                                                  <div style={{ fontSize: "12.5px", color: "#475569", marginTop: "2px" }}>
+                                                    AWB: <strong>{currentPickup.tracking_number}</strong>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            );
+                                          }
+
+                                          return null;
+                                        })()
                                       ) : (returnItem.status === "rejected" || detail?.status === "rejected") ? (
                                         <div style={{ padding: "10px 12px", background: "#fef2f2", color: "#991b1b", borderRadius: "6px", fontSize: "12px", border: "1px solid #fecaca", fontWeight: 600 }}>
                                           Return request is rejected. Reverse logistics is disabled.
@@ -4558,63 +5158,30 @@ const AdminOrders: React.FC = () => {
                                       ) : (
                                         /* If Not assigned and return is approved or requested */
                                         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                          {/* Mode Tabs */}
-                                          {storeDeliveryMode === "hybrid" && (
+                                          {/* Mode Tabs: only rendered if more than 1 delivery mode is enabled */}
+                                          {availableReturnModes.length > 1 && (
                                             <div style={{ display: "flex", gap: "4px", padding: "3px", background: "#f1f5f9", borderRadius: "6px" }}>
-                                              <button
-                                                type="button"
-                                                onClick={() => setSelectedReturnDispatchModeMap((p) => ({ ...p, [returnItem.id]: "own_agent" }))}
-                                                style={{
-                                                  flex: 1,
-                                                  padding: "6px 8px",
-                                                  borderRadius: "4px",
-                                                  border: "none",
-                                                  background: activeReturnMode === "own_agent" ? "#ffffff" : "transparent",
-                                                  color: activeReturnMode === "own_agent" ? "#2563eb" : "#64748b",
-                                                  fontWeight: 700,
-                                                  fontSize: "12px",
-                                                  cursor: "pointer",
-                                                  boxShadow: activeReturnMode === "own_agent" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                                                }}
-                                              >
-                                                In-House Rider
-                                              </button>
-                                              <button
-                                                type="button"
-                                                onClick={() => setSelectedReturnDispatchModeMap((p) => ({ ...p, [returnItem.id]: "shiprocket" }))}
-                                                style={{
-                                                  flex: 1,
-                                                  padding: "6px 8px",
-                                                  borderRadius: "4px",
-                                                  border: "none",
-                                                  background: activeReturnMode === "shiprocket" ? "#ffffff" : "transparent",
-                                                  color: activeReturnMode === "shiprocket" ? "#2563eb" : "#64748b",
-                                                  fontWeight: 700,
-                                                  fontSize: "12px",
-                                                  cursor: "pointer",
-                                                  boxShadow: activeReturnMode === "shiprocket" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                                                }}
-                                              >
-                                                Shiprocket
-                                              </button>
-                                              <button
-                                                type="button"
-                                                onClick={() => setSelectedReturnDispatchModeMap((p) => ({ ...p, [returnItem.id]: "manual" }))}
-                                                style={{
-                                                  flex: 1,
-                                                  padding: "6px 8px",
-                                                  borderRadius: "4px",
-                                                  border: "none",
-                                                  background: activeReturnMode === "manual" ? "#ffffff" : "transparent",
-                                                  color: activeReturnMode === "manual" ? "#2563eb" : "#64748b",
-                                                  fontWeight: 700,
-                                                  fontSize: "12px",
-                                                  cursor: "pointer",
-                                                  boxShadow: activeReturnMode === "manual" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                                                }}
-                                              >
-                                                Manual
-                                              </button>
+                                              {availableReturnModes.map((mode) => (
+                                                <button
+                                                  key={mode.id}
+                                                  type="button"
+                                                  onClick={() => setSelectedReturnDispatchModeMap((p) => ({ ...p, [returnItem.id]: mode.id }))}
+                                                  style={{
+                                                    flex: 1,
+                                                    padding: "6px 8px",
+                                                    borderRadius: "4px",
+                                                    border: "none",
+                                                    background: activeReturnMode === mode.id ? "#ffffff" : "transparent",
+                                                    color: activeReturnMode === mode.id ? "#2563eb" : "#64748b",
+                                                    fontWeight: 700,
+                                                    fontSize: "12px",
+                                                    cursor: "pointer",
+                                                    boxShadow: activeReturnMode === mode.id ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                                                  }}
+                                                >
+                                                  {mode.label}
+                                                </button>
+                                              ))}
                                             </div>
                                           )}
 
@@ -4703,7 +5270,7 @@ const AdminOrders: React.FC = () => {
                                                       },
                                                     }))
                                                   }
-                                                  placeholder="e.g. DTDC Return / Self Ship"
+                                                  placeholder="e.g. DTDC Return, Customer Self-Ship"
                                                   style={inputStyle}
                                                 />
                                               </div>
@@ -4722,7 +5289,26 @@ const AdminOrders: React.FC = () => {
                                                       },
                                                     }))
                                                   }
-                                                  placeholder="Tracking Number"
+                                                  placeholder="e.g. DTDC98234823"
+                                                  style={inputStyle}
+                                                />
+                                              </div>
+                                              <div>
+                                                <div style={labelStyle}>Pickup / Handover Notes (Optional)</div>
+                                                <input
+                                                  value={returnManualCourierMap[returnItem.id]?.notes || ""}
+                                                  onChange={(e) =>
+                                                    setReturnManualCourierMap((p) => ({
+                                                      ...p,
+                                                      [returnItem.id]: {
+                                                        ...p[returnItem.id],
+                                                        notes: e.target.value,
+                                                        courierName: p[returnItem.id]?.courierName || "",
+                                                        trackingNumber: p[returnItem.id]?.trackingNumber || "",
+                                                      },
+                                                    }))
+                                                  }
+                                                  placeholder="e.g. Customer returned via speed post"
                                                   style={inputStyle}
                                                 />
                                               </div>
@@ -4733,9 +5319,9 @@ const AdminOrders: React.FC = () => {
                                                 style={{
                                                   padding: "8px 12px",
                                                   borderRadius: "6px",
-                                                  background: "#ffffff",
-                                                  border: "1px solid #cbd5e1",
-                                                  color: "#0f172a",
+                                                  background: "#2563eb",
+                                                  border: "1px solid #2563eb",
+                                                  color: "#ffffff",
                                                   fontWeight: 700,
                                                   fontSize: "13px",
                                                   cursor: "pointer",
@@ -4913,9 +5499,9 @@ const AdminOrders: React.FC = () => {
                               {returnItem.status === "approved" ? (
                                 (() => {
                                   const pickupInfo = detail?.pickup_details || returnItem.pickup_details;
-                                  const isAssigned = Boolean(pickupInfo?.agent_name || pickupInfo?.courier_name);
+                                  const isFleetRiderPickup = pickupInfo?.mode === "own_agent" && Boolean(pickupInfo.agent_name);
 
-                                  if (isAssigned) {
+                                  if (isFleetRiderPickup) {
                                     return (
                                       <div style={{ ...plainCardStyle, padding: "16px", background: "#f8fafc", border: "1px solid #e2e8f0" }}>
                                         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
@@ -4927,7 +5513,7 @@ const AdminOrders: React.FC = () => {
                                               Reverse Pickup In Progress
                                             </div>
                                             <div style={{ fontSize: "12px", color: "#64748b" }}>
-                                              Assigned to <strong>{pickupInfo.agent_name || pickupInfo.courier_name}</strong>.
+                                              Assigned to rider <strong>{pickupInfo.agent_name}</strong>.
                                             </div>
                                           </div>
                                         </div>
@@ -4940,11 +5526,13 @@ const AdminOrders: React.FC = () => {
 
                                   return (
                                     <div style={{ ...plainCardStyle, padding: "16px" }}>
-                                      <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "6px", color: "#0f172a" }}>
-                                        Direct In-Store Package Receipt
+                                      <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "4px", color: "#0f172a" }}>
+                                        In-Store Package Receipt & Verification
                                       </div>
                                       <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "14px" }}>
-                                        Confirm physical arrival if customer returned item directly to the store/hub without a rider.
+                                        {pickupInfo?.courier_name
+                                          ? `Package returned via ${pickupInfo.courier_name}. Verify received quantities to proceed to Quality Inspection & Restock.`
+                                          : "Confirm physical arrival if customer returned item directly to the store/hub."}
                                       </div>
 
                                       <div style={{ display: "grid", gap: "8px", marginBottom: "14px" }}>
@@ -4995,6 +5583,21 @@ const AdminOrders: React.FC = () => {
                                         })}
                                       </div>
 
+                                      <div style={{ marginBottom: "14px" }}>
+                                        <div style={labelStyle}>Admin Note (Optional)</div>
+                                        <textarea
+                                          value={receiveDraft.adminNote}
+                                          onChange={(e) =>
+                                            setReceiveDraftValue(returnItem.id, (draft) => ({
+                                              ...draft,
+                                              adminNote: e.target.value,
+                                            }))
+                                          }
+                                          placeholder="e.g. Package received at store warehouse in good condition..."
+                                          style={{ ...inputStyle, minHeight: "56px", resize: "vertical" }}
+                                        />
+                                      </div>
+
                                       <button
                                         onClick={() => handleReceiveReturn(returnItem.id)}
                                         disabled={actionLoadingId === returnItem.id}
@@ -5010,7 +5613,7 @@ const AdminOrders: React.FC = () => {
                                           cursor: actionLoadingId === returnItem.id ? "wait" : "pointer",
                                         }}
                                       >
-                                        Confirm Direct Hub Receipt
+                                        {actionLoadingId === returnItem.id ? "Receiving Package..." : "Confirm Package Received at Hub"}
                                       </button>
                                     </div>
                                   );

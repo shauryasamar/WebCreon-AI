@@ -1352,8 +1352,17 @@ def dispatch_return_pickup(
             detail="Cannot dispatch pickup for a return request with 0 approved items. Please approve at least 1 item or reject the return.",
         )
 
-    pickup_details = dict(return_request.pickup_details or {})
     mode = (payload.mode or "own_agent").strip().lower()
+    existing_pickup = return_request.pickup_details or {}
+    old_agent_id = existing_pickup.get("agent_id") if isinstance(existing_pickup, dict) else None
+    if old_agent_id and (mode != "own_agent" or str(payload.agent_id or "") != str(old_agent_id)):
+        try:
+            old_agent = session.get(DeliveryAgent, UUID(str(old_agent_id)))
+            if old_agent:
+                old_agent.current_order_count = max(0, (old_agent.current_order_count or 1) - 1)
+                session.add(old_agent)
+        except Exception as e:
+            logger.warning("Failed to decrement old return agent count: %s", e)
 
     if mode == "own_agent":
         if not payload.agent_id:
@@ -1362,7 +1371,7 @@ def dispatch_return_pickup(
         if not agent or agent.site_id != site_id or not agent.is_active:
             raise HTTPException(status_code=404, detail="Active delivery rider not found")
 
-        pickup_details.update({
+        pickup_details = {
             "mode": "own_agent",
             "agent_id": str(agent.id),
             "agent_name": agent.name,
@@ -1370,10 +1379,11 @@ def dispatch_return_pickup(
             "pickup_status": "assigned",
             "pickup_notes": payload.pickup_notes,
             "assigned_at": now.isoformat(),
-        })
+        }
         return_request.pickup_status = "assigned"
-        agent.current_order_count = (agent.current_order_count or 0) + 1
-        session.add(agent)
+        if not old_agent_id or str(old_agent_id) != str(agent.id):
+            agent.current_order_count = (agent.current_order_count or 0) + 1
+            session.add(agent)
 
         history_note = f"Assigned return pickup to rider {agent.name} ({agent.phone})"
 
@@ -1491,7 +1501,7 @@ def dispatch_return_pickup(
 
         tracking_num = awb_code or f"SR-RET-{sr_shipment_id or str(uuid4())[:8].upper()}"
 
-        pickup_details.update({
+        pickup_details = {
             "mode": "shiprocket",
             "courier_name": courier_name,
             "tracking_number": tracking_num,
@@ -1502,20 +1512,20 @@ def dispatch_return_pickup(
             "pickup_notes": payload.pickup_notes,
             "weight_grams": int(pkg_weight_kg * 1000),
             "assigned_at": now.isoformat(),
-        })
+        }
         return_request.pickup_status = "booked"
         history_note = f"Booked live reverse pickup with Shiprocket (Order ID: {sr_order_id}, AWB: {tracking_num})"
 
     elif mode == "manual":
         courier_name = payload.courier_name or "Manual Courier / Self Ship"
-        pickup_details.update({
+        pickup_details = {
             "mode": "manual",
             "courier_name": courier_name,
             "tracking_number": payload.tracking_number,
             "pickup_status": "dispatched",
             "pickup_notes": payload.pickup_notes,
             "assigned_at": now.isoformat(),
-        })
+        }
         return_request.pickup_status = "dispatched"
         history_note = f"Configured return courier/partner: {courier_name}"
         if payload.tracking_number:

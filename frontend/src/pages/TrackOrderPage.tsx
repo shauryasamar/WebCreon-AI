@@ -146,18 +146,21 @@ export default function TrackOrderPage() {
       )
     : -1;
 
-  const isOwnAgent = Boolean(
+  const isShiprocket = Boolean(
     data && (
-      data.mode === "own_agent" ||
-      (Boolean(data.agent_first_name || data.delivery_partner_name || data.agent_name) && !data.awb_number)
+      data.mode === "shiprocket" ||
+      data.delivery_mode === "shiprocket" ||
+      (Boolean(data.awb_number) && !data.agent_id) ||
+      (Boolean(data.courier_name) && !data.agent_id && data.mode !== "manual" && data.delivery_mode !== "manual")
     )
   );
 
-  const isShiprocket = Boolean(
-    data && !isOwnAgent && (
-      data.mode === "shiprocket" ||
-      Boolean(data.awb_number) ||
-      Boolean(data.courier_name)
+  const isOwnAgent = Boolean(
+    data && !isShiprocket && (
+      data.mode === "own_agent" ||
+      data.delivery_mode === "own_agent" ||
+      Boolean(data.agent_id) ||
+      Boolean(data.agent_name && !data.awb_number && data.mode !== "manual" && data.delivery_mode !== "manual")
     )
   );
 
@@ -291,8 +294,8 @@ export default function TrackOrderPage() {
               </div>
             </div>
 
-            {/* Delivery OTP Banner — only for Own Fleet / Local Handover */}
-            {data.delivery_otp && !isShiprocket && (currentStatus === "out_for_delivery" || data.order_status === "out_for_delivery" || currentStatus === "shipped") ? (
+            {/* Delivery OTP Banner — strictly only for Own Fleet */}
+            {data.delivery_otp && isOwnAgent && (currentStatus === "out_for_delivery" || data.order_status === "out_for_delivery" || currentStatus === "shipped") ? (
               <div
                 style={{
                   background: "#f0fdf4",
@@ -486,9 +489,11 @@ export default function TrackOrderPage() {
                     ];
                   } else {
                     // Manual Dispatch
-                    const partnerLine = data.delivery_partner_name || data.courier_name || data.awb_number
-                      ? `${data.delivery_partner_name || data.courier_name || "Delivery Partner"}${data.awb_number ? ` - ${data.awb_number}` : ""}`
-                      : null;
+                    const partnerName = data.delivery_partner_name || data.courier_name || "Courier Partner";
+                    const partnerTracking = data.delivery_partner_phone || data.awb_number || "";
+                    const partnerLine = partnerTracking
+                      ? `${partnerName} (Tracking / Contact: ${partnerTracking})`
+                      : partnerName;
 
                     nodes = [
                       {
@@ -514,7 +519,7 @@ export default function TrackOrderPage() {
                         date: isShipped ? shippedDate : "",
                         courier: isShipped ? partnerLine : null,
                         items: isShipped
-                          ? [{ text: "Your item has been dispatched.", sub: shippedTime }]
+                          ? [{ text: `Your item has been dispatched via ${partnerName}.`, sub: shippedTime }]
                           : [{ text: "Item yet to be shipped." }],
                       },
                       {
@@ -749,6 +754,58 @@ export default function TrackOrderPage() {
                     <span>Call Delivery Partner</span>
                   </a>
                 )}
+              </div>
+            )}
+
+            {/* Manual Courier Details Card */}
+            {!isOwnAgent && !isShiprocket && (data.delivery_partner_name || data.delivery_partner_phone) && currentStatus !== "cancelled" && (
+              <div
+                style={{
+                  background: "#ffffff",
+                  border: "1.5px solid #e2e8f0",
+                  borderRadius: "14px",
+                  padding: "16px 20px",
+                  marginTop: "20px",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: "12px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <div
+                    style={{
+                      width: "40px",
+                      height: "40px",
+                      borderRadius: "10px",
+                      background: "#2563eb",
+                      color: "#ffffff",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontWeight: 800,
+                      fontSize: "18px",
+                      flexShrink: 0,
+                    }}
+                  >
+                    🚚
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "11px", fontWeight: 800, color: "#2563eb", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Dispatched via Courier Partner
+                    </div>
+                    <div style={{ fontSize: "15px", fontWeight: 800, color: "#0f172a" }}>
+                      {data.delivery_partner_name || data.courier_name || "Courier Partner"}
+                    </div>
+                    {data.delivery_partner_phone && (
+                      <div style={{ fontSize: "12.5px", color: "#64748b", marginTop: "2px" }}>
+                        Tracking No. / Contact: <strong style={{ color: "#0f172a" }}>{data.delivery_partner_phone}</strong>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </>
