@@ -670,9 +670,11 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
       ? String((selectedProduct as any).site_id)
       : "");
 
-  const [windowWidth, setWindowWidth] = useState(
-    typeof window !== "undefined" ? window.innerWidth : 1280
-  );
+  const [screenSize, setScreenSize] = useState<{ isMobile: boolean; isTablet: boolean }>(() => {
+    if (typeof window === "undefined") return { isMobile: false, isTablet: false };
+    const w = window.innerWidth;
+    return { isMobile: w < 768, isTablet: w >= 768 && w < 1024 };
+  });
   const [reviews, setReviews] = useState<ProductReview[]>(
     Array.isArray(anyProduct?.reviews) ? (anyProduct.reviews as ProductReview[]) : []
   );
@@ -1094,9 +1096,29 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const onResize = () => setWindowWidth(window.innerWidth);
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    let timeoutId: any = null;
+    const checkBreakpoints = () => {
+      const w = window.innerWidth;
+      const nextMobile = w < 768;
+      const nextTablet = w >= 768 && w < 1024;
+      setScreenSize((prev) => {
+        if (prev.isMobile === nextMobile && prev.isTablet === nextTablet) {
+          return prev;
+        }
+        return { isMobile: nextMobile, isTablet: nextTablet };
+      });
+    };
+
+    const debouncedResize = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(checkBreakpoints, 150);
+    };
+
+    window.addEventListener("resize", debouncedResize, { passive: true });
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      window.removeEventListener("resize", debouncedResize);
+    };
   }, []);
 
   useEffect(() => {
@@ -1189,8 +1211,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     loadEligibleOrderItem();
   }, [isAuthenticated, product, siteId]);
 
-  const isMobile = windowWidth < 768;
-  const isTablet = windowWidth >= 768 && windowWidth < 1024;
+  const isMobile = screenSize.isMobile;
+  const isTablet = screenSize.isTablet;
 
   const {
     isDark,
@@ -1474,7 +1496,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     );
   }
 
-  const elevatedBg = isLight ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.06)";
+  const elevatedBg = isLight ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.08)";
   const softSectionBg = isLight ? "rgba(0,0,0,0.025)" : "rgba(255,255,255,0.04)";
   const mediaBg = isLight ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.25)";
 
@@ -1482,11 +1504,15 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     ? `1px solid ${(theme as any)?.border_color || "rgba(15,23,42,0.16)"}`
     : `1px solid ${(theme as any)?.border_color || "rgba(255,255,255,0.18)"}`;
 
-  const softShadow = isLight
+  const softShadow = isMobile
+    ? "0 2px 8px rgba(0,0,0,0.04)"
+    : isLight
     ? "0 12px 32px rgba(15,23,42,0.06)"
     : "0 16px 36px rgba(0,0,0,0.3)";
 
-  const panelShadow = isLight
+  const panelShadow = isMobile
+    ? "0 4px 14px rgba(0,0,0,0.06)"
+    : isLight
     ? "0 18px 40px rgba(15,23,42,0.08)"
     : "0 22px 48px rgba(0,0,0,0.35)";
 
@@ -1781,7 +1807,13 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   const resolvedImageFit = image_fit || "cover";
 
   return (
-    <section style={{ maxWidth: resolvedMaxWidth, margin: "0 auto", padding: pagePadding }}>
+    <section
+      style={{
+        maxWidth: resolvedMaxWidth,
+        margin: "0 auto",
+        padding: pagePadding,
+      }}
+    >
       <div
         style={{
           display: "grid",
@@ -1819,12 +1851,11 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                     zIndex: 2,
                     padding: "6px 10px",
                     borderRadius: "999px",
-                    background: isLight ? "rgba(15,23,42,0.82)" : "rgba(255,255,255,0.12)",
+                    background: isLight ? "rgba(15,23,42,0.85)" : "rgba(30,41,59,0.92)",
                     color: "#ffffff",
                     fontSize: "11px",
                     fontWeight: 700,
                     letterSpacing: "0.04em",
-                    backdropFilter: "blur(10px)",
                   }}
                 >
                   {normalizedDiscountPercent}% OFF
@@ -2520,7 +2551,6 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                           textDecoration: optionInStock ? "none" : "line-through",
                           cursor: optionInStock ? "pointer" : "not-allowed",
                           boxShadow: isSelected ? activeRing : "none",
-                          backdropFilter: "blur(10px)",
                         }}
                       >
                         {option.value}
@@ -2578,7 +2608,6 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                     border: strongerBorder,
                     background: elevatedBg,
                     overflow: "hidden",
-                    backdropFilter: "blur(10px)",
                   }}
                 >
                   <button

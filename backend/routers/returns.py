@@ -1515,13 +1515,30 @@ def dispatch_return_pickup(
         }
 
         sr_items = []
+        seen_return_skus: set[str] = set()
         if items:
             for it in items:
+                base_sku = f"RET-SKU-{str(it.product_id or it.id or return_request.id)[:8]}"
+                if it.selected_variant_value:
+                    cleaned_var = "".join(c for c in str(it.selected_variant_value) if c.isalnum() or c in "-_")
+                    if cleaned_var:
+                        base_sku += f"-{cleaned_var}"
+                unique_sku = base_sku
+                counter = 1
+                while unique_sku in seen_return_skus:
+                    unique_sku = f"{base_sku}-{counter}"
+                    counter += 1
+                seen_return_skus.add(unique_sku)
+
+                name = it.product_name or "Return Item"
+                if it.selected_variant_value:
+                    name = f"{name} ({it.selected_variant_value})"
+
                 sr_items.append({
-                    "name": it.product_name or "Return Item",
-                    "sku": str(it.product_id or "SKU")[:30],
-                    "units": int(it.quantity_requested or it.quantity_approved or 1),
-                    "selling_price": float(it.unit_price_paid or 10.0),
+                    "name": name[:50],
+                    "sku": unique_sku[:50],
+                    "units": max(1, int(it.quantity_requested or it.quantity_approved or 1)),
+                    "selling_price": max(0.0, float(it.unit_price_paid or 10.0)),
                     "discount": 0,
                     "qc_enable": False,
                 })
@@ -1530,7 +1547,7 @@ def dispatch_return_pickup(
                 "name": "Returned Goods",
                 "sku": f"RET-SKU-{str(return_request.id)[:8]}",
                 "units": 1,
-                "selling_price": float(return_request.suggested_refund_amount or 10.0),
+                "selling_price": max(0.0, float(return_request.suggested_refund_amount or 10.0)),
                 "discount": 0,
                 "qc_enable": False,
             })

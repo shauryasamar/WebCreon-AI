@@ -1269,6 +1269,13 @@ def get_admin_orders(
         for item in order_items:
             order_items_map.setdefault(item.order_id, []).append(item)
 
+        prod_ids = [item.product_id for item in order_items if item.product_id]
+        prod_weights: dict[UUID, int] = {}
+        if prod_ids:
+            from models import Product
+            prods = session.exec(select(Product.id, Product.weight_grams).where(Product.id.in_(prod_ids))).all()
+            prod_weights = {p_id: (w if w and w > 0 else 500) for p_id, w in prods}
+
     has_admin_sync = False
     for order in orders:
         if _sync_order_return_status(order, session, order_items_map.get(order.id)):
@@ -1286,6 +1293,7 @@ def get_admin_orders(
             "status": order.status,
             "payment_status": getattr(order, "payment_status", None),
             "total": float(order.total),
+            "total_weight_grams": sum(prod_weights.get(item.product_id, 500) * (item.quantity or 1) for item in order_items_map.get(order.id, [])),
             "payment_method": order.payment_method,
             "razorpay_payment_id": order.razorpay_payment_id,
             "razorpay_order_id": order.razorpay_order_id,
@@ -1314,6 +1322,7 @@ def get_admin_orders(
                     "compare_price": float(item.compare_price) if item.compare_price is not None else None,
                     "quantity": item.quantity,
                     "line_total": float(item.line_total),
+                    "weight_grams": prod_weights.get(item.product_id, 500),
                     "status": item.status,
                     "returnable_quantity": item.returnable_quantity,
                     "return_window_days": getattr(item, "return_window_days", 7),
@@ -1375,6 +1384,13 @@ def get_admin_order_detail(
         .order_by(OrderStatusHistory.id.asc())
     ).all()
 
+    detail_prod_ids = [item.product_id for item in items if item.product_id]
+    detail_prod_weights: dict[UUID, int] = {}
+    if detail_prod_ids:
+        from models import Product
+        d_prods = session.exec(select(Product.id, Product.weight_grams).where(Product.id.in_(detail_prod_ids))).all()
+        detail_prod_weights = {p_id: (w if w and w > 0 else 500) for p_id, w in d_prods}
+
     return {
         "id": str(order.id),
         "customer_id": str(order.customer_id),
@@ -1384,6 +1400,7 @@ def get_admin_order_detail(
         "status": order.status,
         "payment_status": getattr(order, "payment_status", None),
         "total": float(order.total),
+        "total_weight_grams": sum(detail_prod_weights.get(item.product_id, 500) * (item.quantity or 1) for item in items),
         "payment_method": order.payment_method,
         "razorpay_payment_id": order.razorpay_payment_id,
         "razorpay_order_id": order.razorpay_order_id,
@@ -1409,6 +1426,7 @@ def get_admin_order_detail(
                 "compare_price": float(item.compare_price) if item.compare_price is not None else None,
                 "quantity": item.quantity,
                 "line_total": float(item.line_total),
+                "weight_grams": detail_prod_weights.get(item.product_id, 500),
                 "status": item.status,
                 "returnable_quantity": item.returnable_quantity,
                 "return_window_days": getattr(item, "return_window_days", 7),

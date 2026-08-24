@@ -9,6 +9,7 @@ import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { usePublicSiteTheme, cleanSiteName } from "../hooks/usePublicSiteTheme";
 import GlassToast from "../Component/GlassToast";
+import { getRiderStorageKey } from "./RiderLoginPage";
 
 type DeliveryItem = {
   id?: string;
@@ -313,9 +314,10 @@ export default function AgentDeliveryPage() {
       return;
     }
 
-    // Otherwise load full rider portal session
-    const stored = localStorage.getItem("rider_session");
-    const storedToken = localStorage.getItem("rider_token");
+    // Otherwise load full rider portal session scoped to this store
+    const { sessionKey, tokenKey } = getRiderStorageKey(slug);
+    const stored = localStorage.getItem(sessionKey);
+    const storedToken = localStorage.getItem(tokenKey);
     if (!stored || !storedToken) {
       navigate(slug ? `/store/${slug}/rider/login` : "/rider/login");
       return;
@@ -327,6 +329,8 @@ export default function AgentDeliveryPage() {
       await Promise.all([loadTasks(storedToken), loadPool(storedToken), loadProfile(storedToken)]);
     } catch {
       setError("Session expired. Please log in again.");
+      localStorage.removeItem(sessionKey);
+      localStorage.removeItem(tokenKey);
       localStorage.removeItem("rider_session");
       localStorage.removeItem("rider_token");
       navigate(slug ? `/store/${slug}/rider/login` : "/rider/login");
@@ -421,6 +425,12 @@ export default function AgentDeliveryPage() {
     }
   };
 
+  const getRiderAuthToken = (): string | null => {
+    const targetSlug = slug || profile?.site_slug;
+    const { tokenKey } = getRiderStorageKey(targetSlug);
+    return localStorage.getItem(tokenKey) || localStorage.getItem("rider_token");
+  };
+
   const handleUpdateStatus = async (
     targetShipmentId: string,
     action: string,
@@ -437,7 +447,7 @@ export default function AgentDeliveryPage() {
     setSuccessMsg(null);
 
     try {
-      const authToken = localStorage.getItem("rider_token");
+      const authToken = getRiderAuthToken();
       let res;
       const bodyData = {
         action,
@@ -516,7 +526,7 @@ export default function AgentDeliveryPage() {
     setActionLoadingId(orderId);
     setError(null);
     try {
-      const authToken = localStorage.getItem("rider_token");
+      const authToken = getRiderAuthToken();
       if (!authToken) throw new Error("Please log in to claim orders");
 
       const res = await fetch(`${API_BASE_URL}/delivery/rider/claim/${orderId}`, {
@@ -551,9 +561,12 @@ export default function AgentDeliveryPage() {
     } catch {
       // ignore
     }
+    const targetSlug = profile?.site_slug || slug;
+    const { sessionKey, tokenKey } = getRiderStorageKey(targetSlug);
+    localStorage.removeItem(sessionKey);
+    localStorage.removeItem(tokenKey);
     localStorage.removeItem("rider_session");
     localStorage.removeItem("rider_token");
-    const targetSlug = profile?.site_slug || slug;
     navigate(targetSlug ? `/store/${targetSlug}/rider/login` : "/rider/login");
   };
 

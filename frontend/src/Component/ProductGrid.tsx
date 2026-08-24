@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { useCart, Product } from "../CartContext";
 import FilterSidebar from "./FilterSidebar";
@@ -132,6 +132,50 @@ const ProductGrid: React.FC<ProductGridProps> = ({
       ? `/store/${siteSlug}`
       : "/store"
     : `/builder/${siteId}`;
+
+  const [screenSize, setScreenSize] = useState<{ isMobile: boolean; isTablet: boolean; isLargePhone: boolean }>(() => {
+    if (typeof window === "undefined") return { isMobile: false, isTablet: false, isLargePhone: false };
+    const w = window.innerWidth;
+    return {
+      isMobile: w <= 640,
+      isLargePhone: w > 480 && w <= 640,
+      isTablet: w > 640 && w <= 1024,
+    };
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let timeoutId: any = null;
+    const checkBreakpoints = () => {
+      const w = window.innerWidth;
+      const nextMobile = w <= 640;
+      const nextLargePhone = w > 480 && w <= 640;
+      const nextTablet = w > 640 && w <= 1024;
+      setScreenSize((prev) => {
+        if (
+          prev.isMobile === nextMobile &&
+          prev.isLargePhone === nextLargePhone &&
+          prev.isTablet === nextTablet
+        ) {
+          return prev;
+        }
+        return { isMobile: nextMobile, isLargePhone: nextLargePhone, isTablet: nextTablet };
+      });
+    };
+
+    const debouncedResize = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(checkBreakpoints, 100);
+    };
+
+    window.addEventListener("resize", debouncedResize, { passive: true });
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      window.removeEventListener("resize", debouncedResize);
+    };
+  }, []);
+
+  const { isMobile, isTablet, isLargePhone } = screenSize;
 
 function isColorDarkHex(colorHex?: string): boolean {
   if (!colorHex || typeof colorHex !== "string") return false;
@@ -297,15 +341,24 @@ function isColorDarkHex(colorHex?: string): boolean {
   const resolvedMaxWidth = max_width === "full" ? "100%" : max_width ? `${max_width}px` : "1120px";
 
   const parsedGap = Number(grid_gap);
-  const resolvedGridGap =
-    grid_gap !== undefined && grid_gap !== "" && !isNaN(parsedGap) && parsedGap >= 0
-      ? `${parsedGap}px`
-      : "16px";
+  const resolvedGridGap = isMobile
+    ? isLargePhone ? "12px" : "10px"
+    : grid_gap !== undefined && grid_gap !== "" && !isNaN(parsedGap) && parsedGap >= 0
+    ? `${parsedGap}px`
+    : "16px";
 
   const resolvedColumns =
     cardStyleKey === "grocery"
-      ? "repeat(auto-fill, minmax(310px, 1fr))"
-      : "repeat(auto-fill, minmax(240px, 1fr))";
+      ? isMobile
+        ? "repeat(1, 1fr)"
+        : isTablet
+        ? "repeat(auto-fill, minmax(290px, 1fr))"
+        : "repeat(auto-fill, minmax(320px, 1fr))"
+      : isMobile
+      ? "repeat(2, minmax(0, 1fr))"
+      : isTablet
+      ? "repeat(auto-fill, minmax(190px, 1fr))"
+      : "repeat(auto-fill, minmax(230px, 1fr))";
 
   const resolvedImageFit = image_fit || "cover";
   const resolvedImageBg = image_bg || (isLight ? "#f8fafc" : "rgba(255,255,255,0.04)");
@@ -316,7 +369,7 @@ function isColorDarkHex(colorHex?: string): boolean {
       style={{
         maxWidth: resolvedMaxWidth,
         margin: "0 auto",
-        padding: "24px 16px 44px",
+        padding: isMobile ? "12px 10px 32px" : "24px 16px 44px",
         background: outer_bg_color || "transparent",
         borderRadius: outer_bg_color ? "16px" : undefined,
         transition: "all 0.2s ease",
@@ -364,14 +417,14 @@ function isColorDarkHex(colorHex?: string): boolean {
               <div
                 key={i}
                 style={{
-                  borderRadius: computedRadius,
+                  borderRadius: isMobile ? "14px" : computedRadius,
                   background: computedCardBg,
                   border: computedBorder,
                   boxShadow: computedShadow,
-                  padding: "14px",
+                  padding: isMobile ? "8px" : "14px",
                   display: "flex",
                   flexDirection: "column",
-                  gap: "12px",
+                  gap: isMobile ? "6px" : "12px",
                 }}
               >
                 <div
@@ -517,17 +570,17 @@ function isColorDarkHex(colorHex?: string): boolean {
               <div
                 style={{
                   position: "absolute",
-                  top: "10px",
-                  left: "10px",
+                  top: isMobile ? "6px" : "10px",
+                  left: isMobile ? "6px" : "10px",
                   zIndex: 2,
-                  padding: "4px 8px",
+                  padding: isMobile ? "2px 6px" : "4px 8px",
                   borderRadius: "999px",
                   background: "#166534",
                   color: "#ffffff",
-                  fontSize: "10px",
+                  fontSize: isMobile ? "9px" : "10px",
                   fontWeight: 800,
                   letterSpacing: "0.04em",
-                  boxShadow: "0 4px 12px rgba(22,101,52,0.25)",
+                  boxShadow: "0 2px 8px rgba(22,101,52,0.25)",
                 }}
               >
                 {product.normalizedDiscountPercent}% OFF
@@ -539,16 +592,16 @@ function isColorDarkHex(colorHex?: string): boolean {
             show_stock_badge ? (
               <span
                 style={{
-                  fontSize: "11px",
+                  fontSize: isMobile ? "9px" : "11px",
                   fontWeight: 700,
                   color: product.normalizedInStock ? "#16a34a" : "#dc2626",
                   background: product.normalizedInStock ? "rgba(22,163,74,0.06)" : "rgba(220,38,38,0.06)",
-                  padding: "3px 10px",
+                  padding: isMobile ? "2px 6px" : "3px 10px",
                   borderRadius: "999px",
                   border: product.normalizedInStock ? "1px solid #16a34a" : "1px solid #dc2626",
                   display: "inline-block",
                   textAlign: "center",
-                  margin: centered ? "8px auto 0" : undefined,
+                  margin: centered ? (isMobile ? "4px auto 0" : "8px auto 0") : undefined,
                   flexShrink: 0,
                 }}
               >
@@ -578,8 +631,8 @@ function isColorDarkHex(colorHex?: string): boolean {
           const cardBaseStyle: React.CSSProperties = {
             cursor: isDisabled ? "not-allowed" : targetSlug ? "pointer" : "default",
             border: computedBorder,
-            borderRadius: computedRadius,
-            padding: "10px",
+            borderRadius: isMobile ? "14px" : computedRadius,
+            padding: isMobile ? "8px" : "10px",
             background: isDisabled
               ? isLight
                 ? "linear-gradient(180deg, rgba(248,250,252,0.98) 0%, rgba(241,245,249,0.96) 100%)"
@@ -587,12 +640,15 @@ function isColorDarkHex(colorHex?: string): boolean {
               : computedCardBg,
             backdropFilter: isGlass ? "blur(18px) saturate(180%)" : undefined,
             WebkitBackdropFilter: isGlass ? "blur(18px) saturate(180%)" : undefined,
-            boxShadow: computedShadow,
+            boxShadow: isMobile
+              ? (isLight ? "0 2px 8px rgba(15,23,42,0.04)" : "0 2px 8px rgba(0,0,0,0.25)")
+              : computedShadow,
             display: "flex",
             flexDirection: "column",
-            gap: "8px",
+            gap: isMobile ? "6px" : "8px",
             minHeight: "100%",
             boxSizing: "border-box",
+            overflow: "hidden",
             opacity: isDisabled ? 0.72 : 1,
             transition: "transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease",
           };
@@ -601,10 +657,10 @@ function isColorDarkHex(colorHex?: string): boolean {
 
           const getImgContainerStyle = (defaultAspect: string): React.CSSProperties => ({
             position: "relative",
-            borderRadius: "14px",
+            borderRadius: isMobile ? "10px" : "14px",
             overflow: "hidden",
             background: resolvedImageBg,
-            aspectRatio: image_aspect_ratio || defaultAspect,
+            aspectRatio: image_aspect_ratio || (isMobile ? "1 / 1.12" : defaultAspect),
           });
 
           const imageLoadingMode: "eager" | "lazy" = cardIndex < 8 ? "eager" : "lazy";
@@ -614,31 +670,31 @@ function isColorDarkHex(colorHex?: string): boolean {
               <article key={product.id} {...commonArticleProps} style={cardBaseStyle}>
                 <div style={getImgContainerStyle("3 / 4")}>
                   {renderDiscountBadge()}
-                  {renderCollectionBadges()}
+                  {renderCollectionBadges(isMobile)}
                   {product.normalizedImage ? (
                     <img src={product.normalizedImage} alt={product.name} loading={imageLoadingMode} decoding="async" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
                   ) : (
                     <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
                   )}
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "3px", padding: "4px 2px", flex: 1 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "2px", padding: "2px", flex: 1 }}>
                   {show_brand_name && (
-                    <span style={{ fontSize: "11px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                    <span style={{ fontSize: isMobile ? "9px" : "11px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                       {brandText}
                     </span>
                   )}
-                  <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: pageText, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <h3 style={{ margin: 0, fontSize: isMobile ? "13px" : "15px", lineHeight: isMobile ? "1.25" : "1.35", fontWeight: 700, color: pageText, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", textOverflow: "ellipsis", minHeight: isMobile ? "32px" : "auto" }}>
                     {product.name}
                   </h3>
                   {show_ratings && (
-                    <div style={{ fontSize: "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "4px" }}>
+                    <div style={{ fontSize: isMobile ? "10px" : "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "3px" }}>
                       <span style={{ color: starColor }}>★</span> {ratingText} ({reviewCount})
                     </div>
                   )}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "auto", paddingTop: "6px" }}>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
-                      <span style={{ fontSize: "17px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
-                      {showOriginal && <span style={{ fontSize: "12px", color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "auto", paddingTop: "4px", flexWrap: "wrap", gap: "4px" }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: isMobile ? "4px" : "6px" }}>
+                      <span style={{ fontSize: isMobile ? "15px" : "17px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
+                      {showOriginal && <span style={{ fontSize: isMobile ? "11px" : "12px", color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
                     </div>
                     {renderInStockBadge()}
                   </div>
@@ -652,28 +708,28 @@ function isColorDarkHex(colorHex?: string): boolean {
               <article key={product.id} {...commonArticleProps} style={cardBaseStyle}>
                 <div style={getImgContainerStyle("4 / 3")}>
                   {renderDiscountBadge()}
-                  {renderCollectionBadges()}
+                  {renderCollectionBadges(isMobile)}
                   {product.normalizedImage ? (
                     <img src={product.normalizedImage} alt={product.name} loading={imageLoadingMode} decoding="async" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
                   ) : (
                     <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
                   )}
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px", padding: "6px 2px", flex: 1 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "2px", padding: "2px", flex: 1 }}>
                   {show_brand_name && (
-                    <span style={{ fontSize: "10px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                    <span style={{ fontSize: isMobile ? "9px" : "10px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                       {brandText}
                     </span>
                   )}
-                  <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 800, color: pageText }}>{product.name}</h3>
+                  <h3 style={{ margin: 0, fontSize: isMobile ? "13px" : "15px", lineHeight: isMobile ? "1.25" : "1.35", fontWeight: 800, color: pageText, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", minHeight: isMobile ? "32px" : "auto" }}>{product.name}</h3>
                   {show_ratings && (
-                    <div style={{ fontSize: "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "4px" }}>
+                    <div style={{ fontSize: isMobile ? "10px" : "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "3px" }}>
                       <span style={{ color: starColor }}>★</span> {ratingText} ({reviewCount})
                     </div>
                   )}
-                  <div style={{ display: "flex", alignItems: "baseline", gap: "6px", margin: "2px 0" }}>
-                    <span style={{ fontSize: "18px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
-                    {showOriginal && <span style={{ fontSize: "12px", color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
+                  <div style={{ display: "flex", alignItems: "baseline", gap: isMobile ? "4px" : "6px", margin: "2px 0" }}>
+                    <span style={{ fontSize: isMobile ? "15px" : "18px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
+                    {showOriginal && <span style={{ fontSize: isMobile ? "11px" : "12px", color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
                   </div>
                   <div style={{ marginTop: "auto" }}>
                     {renderInStockBadge()}
@@ -688,28 +744,28 @@ function isColorDarkHex(colorHex?: string): boolean {
               <article key={product.id} {...commonArticleProps} style={{ ...cardBaseStyle, textAlign: "center" }}>
                 <div style={getImgContainerStyle("1 / 1")}>
                   {renderDiscountBadge()}
-                  {renderCollectionBadges()}
+                  {renderCollectionBadges(isMobile)}
                   {product.normalizedImage ? (
                     <img src={product.normalizedImage} alt={product.name} loading={imageLoadingMode} decoding="async" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
                   ) : (
                     <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
                   )}
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "3px", padding: "4px 2px", flex: 1 }}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px", padding: "2px", flex: 1 }}>
                   {show_brand_name && (
-                    <span style={{ fontSize: "10px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                    <span style={{ fontSize: isMobile ? "9px" : "10px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                       {brandText}
                     </span>
                   )}
-                  <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 800, color: pageText, textAlign: "center" }}>{product.name}</h3>
+                  <h3 style={{ margin: 0, fontSize: isMobile ? "13px" : "15px", lineHeight: isMobile ? "1.25" : "1.35", fontWeight: 800, color: pageText, textAlign: "center", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", minHeight: isMobile ? "32px" : "auto" }}>{product.name}</h3>
                   {show_ratings && (
-                    <div style={{ fontSize: "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "4px" }}>
+                    <div style={{ fontSize: isMobile ? "10px" : "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "3px" }}>
                       <span style={{ color: starColor }}>★</span> {ratingText} ({reviewCount})
                     </div>
                   )}
-                  <div style={{ display: "flex", alignItems: "baseline", gap: "6px", margin: "4px 0" }}>
-                    <span style={{ fontSize: "20px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
-                    {showOriginal && <span style={{ fontSize: "11px", color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
+                  <div style={{ display: "flex", alignItems: "baseline", gap: isMobile ? "4px" : "6px", margin: "2px 0" }}>
+                    <span style={{ fontSize: isMobile ? "15px" : "20px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
+                    {showOriginal && <span style={{ fontSize: isMobile ? "10px" : "11px", color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
                   </div>
                   <div style={{ marginTop: "auto", width: "100%", display: "flex", justifyContent: "center" }}>
                     {renderInStockBadge(true)}
@@ -721,8 +777,8 @@ function isColorDarkHex(colorHex?: string): boolean {
 
           if (cardStyleKey === "grocery") {
             return (
-              <article key={product.id} {...commonArticleProps} style={{ ...cardBaseStyle, flexDirection: "row", alignItems: "center" }}>
-                <div style={{ position: "relative", width: "110px", height: "110px", borderRadius: "14px", overflow: "hidden", background: resolvedImageBg, flexShrink: 0 }}>
+              <article key={product.id} {...commonArticleProps} style={{ ...cardBaseStyle, flexDirection: "row", alignItems: "center", padding: isMobile ? "8px 10px" : "10px 12px", gap: isMobile ? "10px" : "12px", overflow: "hidden" }}>
+                <div style={{ position: "relative", width: isMobile ? "84px" : "96px", height: isMobile ? "84px" : "96px", minWidth: isMobile ? "84px" : "96px", borderRadius: isMobile ? "10px" : "12px", overflow: "hidden", background: resolvedImageBg, flexShrink: 0 }}>
                   {renderDiscountBadge()}
                   {product.normalizedImage ? (
                     <img src={product.normalizedImage} alt={product.name} loading={imageLoadingMode} decoding="async" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
@@ -730,16 +786,16 @@ function isColorDarkHex(colorHex?: string): boolean {
                     <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "12px" }}>No image</div>
                   )}
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "3px", flex: 1, minWidth: 0, paddingLeft: "6px" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "4px", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "2px", flex: "1 1 0", minWidth: 0, overflow: "hidden" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "4px", minWidth: 0 }}>
                     {show_brand_name && (
-                      <span style={{ fontSize: "10px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                      <span style={{ fontSize: isMobile ? "9px" : "10px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.08em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {brandText}
                       </span>
                     )}
                     {badgeCollections.length > 0 && (
-                      <div style={{ display: "flex", gap: "3px", flexWrap: "wrap" }}>
-                        {badgeCollections.slice(0, 2).map((col: any) => (
+                      <div style={{ display: "flex", gap: "3px", flexShrink: 0 }}>
+                        {badgeCollections.slice(0, 1).map((col: any) => (
                           <span
                             key={col.id || col.name}
                             style={{
@@ -751,6 +807,7 @@ function isColorDarkHex(colorHex?: string): boolean {
                               borderRadius: "4px",
                               background: col.badge_color || "#d97706",
                               color: "#fff",
+                              whiteSpace: "nowrap",
                             }}
                           >
                             {col.name}
@@ -759,19 +816,18 @@ function isColorDarkHex(colorHex?: string): boolean {
                       </div>
                     )}
                   </div>
-                  <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 800, color: pageText, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <h3 style={{ margin: "1px 0 0", fontSize: isMobile ? "13px" : "14px", lineHeight: "1.25", fontWeight: 700, color: pageText, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {product.name}
                   </h3>
                   {show_ratings && (
-                    <div style={{ fontSize: "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "4px" }}>
+                    <div style={{ fontSize: isMobile ? "10px" : "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "3px", margin: "1px 0" }}>
                       <span style={{ color: starColor }}>★</span> {ratingText} ({reviewCount})
                     </div>
                   )}
-                  <div style={{ borderTop: "1px solid rgba(148,163,184,0.2)", margin: "4px 0" }} />
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px" }}>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
-                      <span style={{ fontSize: "18px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
-                      {showOriginal && <span style={{ fontSize: "11px", color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", marginTop: "auto", paddingTop: "4px", minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: isMobile ? "4px" : "5px", flexShrink: 0 }}>
+                      <span style={{ fontSize: isMobile ? "15px" : "16px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
+                      {showOriginal && <span style={{ fontSize: isMobile ? "10px" : "11px", color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
                     </div>
                     {renderInStockBadge()}
                   </div>
@@ -784,28 +840,28 @@ function isColorDarkHex(colorHex?: string): boolean {
             <article key={product.id} {...commonArticleProps} style={cardBaseStyle}>
               <div style={getImgContainerStyle("1 / 1.35")}>
                 {renderDiscountBadge()}
-                {renderCollectionBadges()}
+                {renderCollectionBadges(isMobile)}
                 {product.normalizedImage ? (
                   <img src={product.normalizedImage} alt={product.name} loading={imageLoadingMode} decoding="async" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
                 ) : (
                   <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
                 )}
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "3px", padding: "6px 2px 2px", flex: 1 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "2px", padding: "2px", flex: 1 }}>
                 {show_brand_name && (
-                  <span style={{ fontSize: "10px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  <span style={{ fontSize: isMobile ? "9px" : "10px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                     {brandText}
                   </span>
                 )}
-                <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 800, color: pageText }}>{product.name}</h3>
+                <h3 style={{ margin: 0, fontSize: isMobile ? "13px" : "15px", lineHeight: isMobile ? "1.25" : "1.35", fontWeight: 800, color: pageText, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", minHeight: isMobile ? "32px" : "auto" }}>{product.name}</h3>
                 <div style={{ borderTop: "1px solid rgba(148,163,184,0.2)", margin: "4px 0" }} />
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
-                    <span style={{ fontSize: "18px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
-                    {showOriginal && <span style={{ fontSize: "11px", color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "4px" }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: isMobile ? "4px" : "6px" }}>
+                    <span style={{ fontSize: isMobile ? "15px" : "18px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
+                    {showOriginal && <span style={{ fontSize: isMobile ? "10px" : "11px", color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
                   </div>
                   {show_ratings && (
-                    <div style={{ fontSize: "11px", fontWeight: 600, color: faintText }}>
+                    <div style={{ fontSize: isMobile ? "10px" : "11px", fontWeight: 600, color: faintText }}>
                       <span style={{ color: starColor }}>★</span> {ratingText} ({reviewCount})
                     </div>
                   )}

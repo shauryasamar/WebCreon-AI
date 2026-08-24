@@ -509,7 +509,7 @@ export default function QrLinkPopup({
                   height: "100%",
                   overflow: "hidden",
                   borderRadius: "12px",
-                  background: "#f8fafc",
+                  background: "#ffffff",
                 }}
               >
                 {qrSvgUrl ? (

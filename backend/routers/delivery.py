@@ -939,37 +939,87 @@ def _dispatch_shiprocket(
         shipping_addr = order.shipping_address or {}
         db_items = session.exec(select(OrderItem).where(OrderItem.order_id == order.id)).all()
         items = []
+        seen_skus: set[str] = set()
+
         if db_items:
-            for item in db_items:
+            for it in db_items:
+                base_sku = f"SKU-{str(it.product_id or it.id or order.id)[:8]}"
+                if it.selected_variant_value:
+                    cleaned_var = "".join(c for c in str(it.selected_variant_value) if c.isalnum() or c in "-_")
+                    if cleaned_var:
+                        base_sku += f"-{cleaned_var}"
+                
+                unique_sku = base_sku
+                counter = 1
+                while unique_sku in seen_skus:
+                    unique_sku = f"{base_sku}-{counter}"
+                    counter += 1
+                seen_skus.add(unique_sku)
+
+                name = it.product_name or "Item"
+                if it.selected_variant_value:
+                    name = f"{name} ({it.selected_variant_value})"
+
                 items.append({
-                    "name": item.product_name or "Item",
-                    "sku": str(item.product_id or "SKU"),
-                    "units": int(item.quantity or 1),
-                    "selling_price": float(item.unit_price or 0),
+                    "name": name[:50],
+                    "sku": unique_sku[:50],
+                    "units": max(1, int(it.quantity or 1)),
+                    "selling_price": max(0.0, float(it.unit_price or 0)),
                 })
         elif getattr(order, "order_items_snapshot", None):
-            for item in order.order_items_snapshot:
+            for it in order.order_items_snapshot:
+                p_id = it.get("product_id") or order.id
+                var_val = it.get("selected_variant_value") or ""
+                base_sku = f"SKU-{str(p_id)[:8]}"
+                if var_val:
+                    cleaned_var = "".join(c for c in str(var_val) if c.isalnum() or c in "-_")
+                    if cleaned_var:
+                        base_sku += f"-{cleaned_var}"
+                
+                unique_sku = base_sku
+                counter = 1
+                while unique_sku in seen_skus:
+                    unique_sku = f"{base_sku}-{counter}"
+                    counter += 1
+                seen_skus.add(unique_sku)
+
+                name = it.get("product_name", "Item")
+                if var_val:
+                    name = f"{name} ({var_val})"
+
                 items.append({
-                    "name": item.get("product_name", "Item"),
-                    "sku": str(item.get("product_id", "SKU")),
-                    "units": int(item.get("quantity", 1)),
-                    "selling_price": float(item.get("unit_price", 0)),
+                    "name": name[:50],
+                    "sku": unique_sku[:50],
+                    "units": max(1, int(it.get("quantity", 1))),
+                    "selling_price": max(0.0, float(it.get("unit_price", 0))),
                 })
         else:
             items.append({
                 "name": "General Goods",
                 "sku": f"SKU-{str(order.id)[:8]}",
                 "units": 1,
-                "selling_price": float(order.total or 0),
+                "selling_price": max(0.0, float(order.total or 0)),
             })
 
         order_date = order.created_at.strftime("%Y-%m-%d %H:%M") if order.created_at else _utc_now().strftime("%Y-%m-%d %H:%M")
         total_units = sum(i["units"] for i in items) if items else 1
+
+        product_weight_sum = 0
+        if db_items:
+            p_ids = [it.product_id for it in db_items if it.product_id]
+            if p_ids:
+                from models import Product
+                p_rows = session.exec(select(Product.id, Product.weight_grams).where(Product.id.in_(p_ids))).all()
+                p_map = {p_id: (w if w and w > 0 else 500) for p_id, w in p_rows}
+                product_weight_sum = sum(p_map.get(it.product_id, 500) * int(it.quantity or 1) for it in db_items)
+
         total_weight_kg = (
             float(body.weight_kg)
             if body.weight_kg is not None and body.weight_kg > 0
             else (float(body.weight_grams) / 1000.0)
             if body.weight_grams is not None and body.weight_grams > 0
+            else (float(product_weight_sum) / 1000.0)
+            if product_weight_sum > 0
             else (settings.default_weight_grams * max(1, total_units)) / 1000.0
         )
 
@@ -1018,9 +1068,33 @@ def _dispatch_shiprocket(
             if "Wrong Pickup location" in str(create_err) or "pickup_location" in str(create_err):
                 logger.info("Retrying Shiprocket order creation with fallback pickup location 'work'...")
                 payload["pickup_location"] = "work"
-                sr_order = ShiprocketClient.create_order(token, payload)
+                try:
+                    sr_order = ShiprocketClient.create_order(token, payload)
+                except ShiprocketError as retry_err:
+                    clean_msg = str(retry_err)
+                    if "{" in clean_msg and "message" in clean_msg:
+                        try:
+                            import json
+                            json_part = clean_msg[clean_msg.find("{"):clean_msg.rfind("}")+1]
+                            parsed = json.loads(json_part)
+                            if parsed.get("message"):
+                                clean_msg = parsed["message"]
+                        except Exception:
+                            pass
+                    raise HTTPException(400, f"Shiprocket error: {clean_msg}")
             else:
-                raise
+                clean_msg = str(create_err)
+                if "{" in clean_msg and "message" in clean_msg:
+                    try:
+                        import json
+                        json_part = clean_msg[clean_msg.find("{"):clean_msg.rfind("}")+1]
+                        parsed = json.loads(json_part)
+                        if parsed.get("message"):
+                            clean_msg = parsed["message"]
+                    except Exception:
+                        pass
+                raise HTTPException(400, f"Shiprocket error: {clean_msg}")
+
 
         shipment_id_sr = sr_order.get("shipment_id")
         sr_order_id = sr_order.get("order_id")

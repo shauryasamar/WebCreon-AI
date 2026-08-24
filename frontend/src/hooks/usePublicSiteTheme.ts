@@ -103,7 +103,9 @@ export function usePublicSiteTheme(slug?: string) {
     const fetchSite = async () => {
       try {
         // 1. First attempt the ultra-fast lightweight theme endpoint (~150 bytes payload)
-        let themeRes = await fetch(`${API_BASE_URL}/public/sites/slug/${slug}/theme`);
+        let themeRes = await fetch(`${API_BASE_URL}/public/sites/slug/${slug}/theme?t=${Date.now()}`, {
+          cache: "no-cache",
+        });
         let finalSiteData: PublicSiteData | null = null;
 
         if (themeRes.ok) {
@@ -119,7 +121,9 @@ export function usePublicSiteTheme(slug?: string) {
           };
         } else {
           // 2. Fallback to full site endpoint if needed
-          const res = await fetch(`${API_BASE_URL}/public/sites/slug/${slug}`);
+          const res = await fetch(`${API_BASE_URL}/public/sites/slug/${slug}?t=${Date.now()}`, {
+            cache: "no-cache",
+          });
           if (!res.ok) throw new Error("Site not found");
           const data = await res.json();
           const def = data?.site_definition || {};

@@ -686,6 +686,7 @@ def publish_site(
     session.commit()
     session.refresh(site)
 
+    invalidate_public_site_cache(site.slug, site.id)
     return site
 
 
@@ -811,7 +812,8 @@ def get_public_site_theme_fast(
     now = time.time()
     cached = PUBLIC_SITE_CACHE.get(slug)
     if cached and cached.get("theme_payload") and cached.get("expiry", 0) > now:
-        response.headers["Cache-Control"] = "public, max-age=120, stale-while-revalidate=600"
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        response.headers["ETag"] = cached.get("etag", f'"{cached["id"]}"')
         return cached["theme_payload"]
 
     site = session.exec(
@@ -823,6 +825,7 @@ def get_public_site_theme_fast(
 
     site_id, site_slug, site_def = site
     site_def = site_def or {}
+    etag_val = f'"{site_id}-{site_def.get("theme", {}).get("footer_layout", "default")}"'
 
     theme_payload = {
         "id": str(site_id),
@@ -839,10 +842,12 @@ def get_public_site_theme_fast(
     PUBLIC_SITE_CACHE[slug] = {
         "id": str(site_id),
         "theme_payload": theme_payload,
-        "expiry": now + 120,
+        "etag": etag_val,
+        "expiry": now + 300,
     }
 
-    response.headers["Cache-Control"] = "public, max-age=120, stale-while-revalidate=600"
+    response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    response.headers["ETag"] = etag_val
     return theme_payload
 
 
@@ -855,7 +860,8 @@ def get_public_site_by_slug(
     now = time.time()
     cached = PUBLIC_SITE_CACHE.get(slug)
     if cached and cached.get("full_site") and cached.get("expiry", 0) > now:
-        response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=300"
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        response.headers["ETag"] = cached.get("etag", f'"{cached["id"]}"')
         return cached["full_site"]
 
     site = session.exec(
@@ -865,13 +871,16 @@ def get_public_site_by_slug(
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
 
+    etag_val = f'"{site.id}-{site.version}"'
     if slug not in PUBLIC_SITE_CACHE:
         PUBLIC_SITE_CACHE[slug] = {}
     PUBLIC_SITE_CACHE[slug]["id"] = str(site.id)
     PUBLIC_SITE_CACHE[slug]["full_site"] = site
-    PUBLIC_SITE_CACHE[slug]["expiry"] = now + 120
+    PUBLIC_SITE_CACHE[slug]["etag"] = etag_val
+    PUBLIC_SITE_CACHE[slug]["expiry"] = now + 300
 
-    response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=300"
+    response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    response.headers["ETag"] = etag_val
     return site
 
 

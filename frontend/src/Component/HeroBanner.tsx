@@ -136,27 +136,51 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
 }) => {
   const isDarkMode = theme?.mode === "dark";
 
-  // Window width tracking for responsive behavior
-  const [screenWidth, setScreenWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 1200);
+  const [screenSize, setScreenSize] = useState<{ isMobile: boolean; isTablet: boolean }>(() => {
+    if (typeof window === "undefined") return { isMobile: false, isTablet: false };
+    const w = window.innerWidth;
+    return { isMobile: w <= 640, isTablet: w <= 960 };
+  });
 
   useEffect(() => {
-    const handleResize = () => setScreenWidth(window.innerWidth);
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    if (typeof window === "undefined") return;
+    let timeoutId: any = null;
+    const checkBreakpoints = () => {
+      const w = window.innerWidth;
+      const nextMobile = w <= 640;
+      const nextTablet = w <= 960;
+      setScreenSize((prev) => {
+        if (prev.isMobile === nextMobile && prev.isTablet === nextTablet) {
+          return prev;
+        }
+        return { isMobile: nextMobile, isTablet: nextTablet };
+      });
+    };
+
+    const debouncedResize = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(checkBreakpoints, 150);
+    };
+
+    window.addEventListener("resize", debouncedResize, { passive: true });
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      window.removeEventListener("resize", debouncedResize);
+    };
   }, []);
 
-  const isMobile = screenWidth <= 640;
-  const isTablet = screenWidth <= 960;
+  const isMobile = screenSize.isMobile;
+  const isTablet = screenSize.isTablet;
 
   // Format Numeric Sizing
   const rawHeightNum =
     typeof banner_height === "number"
       ? banner_height
       : !isNaN(Number(banner_height)) && Number(banner_height) > 0
-      ? Number(banner_height)
-      : 380;
+        ? Number(banner_height)
+        : 380;
 
-  const responsiveHeight = isMobile ? Math.min(rawHeightNum, 460) : rawHeightNum;
+  const responsiveHeight = isMobile ? Math.min(rawHeightNum, 360) : rawHeightNum;
   const computedHeight = `${responsiveHeight}px`;
 
   // Banner Width Computation
@@ -164,8 +188,8 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
     typeof banner_width === "number"
       ? `${banner_width}px`
       : !isNaN(Number(banner_width)) && Number(banner_width) > 0
-      ? `${banner_width}px`
-      : String(banner_width || "100%");
+        ? `${banner_width}px`
+        : String(banner_width || "100%");
 
   // Height Scale Factor (hScale) relative to 380px standard height
   const hScale = Math.min(1.3, Math.max(0.42, responsiveHeight / 380));
@@ -180,19 +204,19 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
     slides && slides.length > 0
       ? slides
       : [
-          {
-            id: "default-slide",
-            variant: "standard",
-            headline,
-            subheadline,
-            primary_cta,
-            secondary_cta,
-            background_image,
-            background_color,
-            background_overlay,
-            text_color,
-          },
-        ];
+        {
+          id: "default-slide",
+          variant: "standard",
+          headline,
+          subheadline,
+          primary_cta,
+          secondary_cta,
+          background_image,
+          background_color,
+          background_overlay,
+          text_color,
+        },
+      ];
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
@@ -295,11 +319,11 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
       : "0 12px 36px rgba(15, 23, 42, 0.06)",
     ...(hasSlideBgImage
       ? {
-          backgroundImage: `url(${slideBgImage})`,
-          backgroundSize: background_size,
-          backgroundPosition: background_position,
-          backgroundRepeat: "no-repeat",
-        }
+        backgroundImage: `url(${slideBgImage})`,
+        backgroundSize: background_size,
+        backgroundPosition: background_position,
+        backgroundRepeat: "no-repeat",
+      }
       : defaultBgStyle),
   };
 

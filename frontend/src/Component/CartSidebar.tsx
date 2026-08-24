@@ -271,9 +271,11 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
 
   const [promoCode, setPromoCode] = useState("");
   const [appliedCode, setAppliedCode] = useState("");
-  const [windowWidth, setWindowWidth] = useState(
-    typeof window !== "undefined" ? window.innerWidth : 1280
-  );
+  const [screenSize, setScreenSize] = useState<{ isMobile: boolean; isTablet: boolean }>(() => {
+    if (typeof window === "undefined") return { isMobile: false, isTablet: false };
+    const w = window.innerWidth;
+    return { isMobile: w < 768, isTablet: w >= 768 && w < 1024 };
+  });
   const [checkoutSettings, setCheckoutSettings] =
     useState<CheckoutSettingsResponse | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(false);
@@ -283,10 +285,29 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const onResize = () => setWindowWidth(window.innerWidth);
-    onResize();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    let timeoutId: any = null;
+    const checkBreakpoints = () => {
+      const w = window.innerWidth;
+      const nextMobile = w < 768;
+      const nextTablet = w >= 768 && w < 1024;
+      setScreenSize((prev) => {
+        if (prev.isMobile === nextMobile && prev.isTablet === nextTablet) {
+          return prev;
+        }
+        return { isMobile: nextMobile, isTablet: nextTablet };
+      });
+    };
+
+    const debouncedResize = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(checkBreakpoints, 150);
+    };
+
+    window.addEventListener("resize", debouncedResize, { passive: true });
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      window.removeEventListener("resize", debouncedResize);
+    };
   }, []);
 
   useEffect(() => {
@@ -342,8 +363,8 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     return () => controller.abort();
   }, [siteId, slug]);
 
-  const isMobile = windowWidth < 768;
-  const isTablet = windowWidth >= 768 && windowWidth < 1024;
+  const isMobile = screenSize.isMobile;
+  const isTablet = screenSize.isTablet;
   const isCheckoutSummary = mode === "checkout_summary";
 
   const shouldShowItems = show_items && !review_mode;

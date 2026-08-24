@@ -168,7 +168,7 @@ def admin_login(
     token = create_admin_token(str(admin.id))
 
     owned_sites = session.exec(
-        select(Site)
+        select(Site.id, Site.slug, Site.version)
         .join(AdminSite, AdminSite.site_id == Site.id)
         .where(AdminSite.admin_id == admin.id)
     ).all()
@@ -178,11 +178,11 @@ def admin_login(
             "admin": serialize_admin(admin),
             "sites": [
                 {
-                    "id": str(site.id),
-                    "slug": site.slug,
-                    "version": site.version,
+                    "id": str(s[0]),
+                    "slug": s[1],
+                    "version": s[2],
                 }
-                for site in owned_sites
+                for s in owned_sites
             ],
         }
     )

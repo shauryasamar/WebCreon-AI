@@ -186,7 +186,7 @@ async function resolveSiteBySlug(
   try {
     const response = await fetch(
       `${API_BASE_URL}/public/sites/slug/${siteSlugParam}?t=${Date.now()}`,
-      { credentials: "include" }
+      { credentials: "include", cache: "no-cache" }
     );
 
     if (response.ok) {
@@ -1356,8 +1356,9 @@ function BuilderPageContent() {
         let data: SavedSite | null = null;
 
         if (siteId) {
-          const response = await fetch(`${API_BASE_URL}/sites/${siteId}`, {
+          const response = await fetch(`${API_BASE_URL}/sites/${siteId}?t=${Date.now()}`, {
             credentials: "include",
+            cache: "no-cache",
           });
 
           if (!response.ok) {

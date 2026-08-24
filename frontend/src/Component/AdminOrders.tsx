@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { API_BASE_URL as API_BASE } from "../config/api";
 import { Pagination } from "./Pagination";
+import GlassToast from "./GlassToast";
 
 type AdminMode = "orders" | "returns";
 
@@ -66,6 +67,7 @@ type OrderItem = {
   status: string;
   returnable_quantity?: number;
   pricing_snapshot?: any;
+  weight_grams?: number;
 };
 
 type Shipment = {
@@ -99,6 +101,7 @@ type AdminOrderListItem = {
   status: OrderStatus;
   payment_status?: string | null;
   total: number;
+  total_weight_grams?: number;
   payment_method: string;
   razorpay_payment_id?: string | null;
   razorpay_order_id?: string | null;
@@ -135,6 +138,7 @@ type AdminOrderDetail = {
   status: OrderStatus;
   payment_status?: string | null;
   total: number;
+  total_weight_grams?: number;
   payment_method: string;
   razorpay_payment_id?: string | null;
   razorpay_order_id?: string | null;
@@ -728,6 +732,31 @@ const AdminOrders: React.FC = () => {
   const [reassignAgentIdMap, setReassignAgentIdMap] = useState<Record<string, string>>({});
   const [packageWeightMap, setPackageWeightMap] = useState<Record<string, number>>({});
   const [editingCourierOrderIdMap, setEditingCourierOrderIdMap] = useState<Record<string, boolean>>({});
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+
+  const showToast = (message: string, type: "success" | "error" | "info" = "info") => {
+    setToast({ message, type });
+  };
+
+  const getOrderDefaultWeight = (orderItem?: AdminOrderListItem | AdminOrderDetail | null): number => {
+    if (!orderItem) return deliverySettings?.default_weight_grams || 500;
+    if (typeof orderItem.total_weight_grams === "number" && orderItem.total_weight_grams > 0) {
+      return orderItem.total_weight_grams;
+    }
+    if (Array.isArray(orderItem.items) && orderItem.items.length > 0) {
+      const sum = orderItem.items.reduce(
+        (acc, it) =>
+          acc +
+          ((it.weight_grams && it.weight_grams > 0
+            ? it.weight_grams
+            : deliverySettings?.default_weight_grams || 500) *
+            (it.quantity || 1)),
+        0
+      );
+      if (sum > 0) return sum;
+    }
+    return deliverySettings?.default_weight_grams || 500;
+  };
 
   // Return Reverse Logistics state
   const [selectedReturnAgentMap, setSelectedReturnAgentMap] = useState<Record<string, string>>({});
@@ -982,7 +1011,11 @@ const AdminOrders: React.FC = () => {
     }
   };
 
-  const handleDispatchOrder = async (orderId: string, customMode?: "own_agent" | "shiprocket" | "manual") => {
+  const handleDispatchOrder = async (
+    orderId: string,
+    customMode?: "own_agent" | "shiprocket" | "manual",
+    overrideWeight?: number
+  ) => {
     if (!siteId) return;
     setActionLoadingId(orderId);
     try {
@@ -991,7 +1024,15 @@ const AdminOrders: React.FC = () => {
       const fallbackMode = isFleet ? "own_agent" : (isSr ? "shiprocket" : "manual");
       const chosenMode = customMode || selectedDispatchModeMap[orderId] || fallbackMode;
       const agentId = selectedAgentMap[orderId] || "";
-      const customWeight = packageWeightMap[orderId] || deliverySettings?.default_weight_grams || 500;
+
+      const orderObj = orders.find((o) => o.id === orderId) || detailsMap[orderId];
+      const defaultWeight = orderObj ? getOrderDefaultWeight(orderObj) : (deliverySettings?.default_weight_grams || 500);
+      const customWeight = overrideWeight !== undefined
+        ? overrideWeight
+        : packageWeightMap[orderId] !== undefined
+        ? packageWeightMap[orderId]
+        : defaultWeight;
+
       const body: Record<string, any> = {
         mode: chosenMode,
         weight_grams: customWeight,
@@ -1009,13 +1050,15 @@ const AdminOrders: React.FC = () => {
         const errJson = await res.json().catch(() => ({ detail: "Dispatch failed" }));
         throw new Error(errJson.detail || "Dispatch failed");
       }
+      const resData = await res.json().catch(() => ({}));
+      showToast(resData.message || "Order dispatched successfully!", "success");
       await loadOrdersForSite();
       if (expandedOrderId === orderId) {
         await refreshOrderDetail(orderId);
       }
       await loadDeliveryMeta();
     } catch (e: any) {
-      alert(e.message || "Failed to dispatch order");
+      showToast(e.message || "Failed to dispatch order", "error");
     } finally {
       setActionLoadingId(null);
     }
@@ -1025,7 +1068,7 @@ const AdminOrders: React.FC = () => {
     if (!siteId) return;
     const newAgentId = reassignAgentIdMap[orderId] || "";
     if (!newAgentId) {
-      alert("Please select a new delivery agent to reassign this order.");
+      showToast("Please select a new delivery agent to reassign this order.", "error");
       return;
     }
     setActionLoadingId(orderId);
@@ -1044,6 +1087,7 @@ const AdminOrders: React.FC = () => {
         const errJson = await res.json().catch(() => ({ detail: "Reassign failed" }));
         throw new Error(errJson.detail || "Reassign failed");
       }
+      showToast("Delivery rider reassigned successfully!", "success");
       setReassigningOrderIdMap((p) => ({ ...p, [orderId]: false }));
       await loadOrdersForSite();
       if (expandedOrderId === orderId) {
@@ -1051,7 +1095,7 @@ const AdminOrders: React.FC = () => {
       }
       await loadDeliveryMeta();
     } catch (e: any) {
-      alert(e.message || "Failed to reassign delivery agent");
+      showToast(e.message || "Failed to reassign delivery agent", "error");
     } finally {
       setActionLoadingId(null);
     }
@@ -1061,6 +1105,7 @@ const AdminOrders: React.FC = () => {
     if (!link) return;
     navigator.clipboard.writeText(link);
     setCopiedLinkMap((prev) => ({ ...prev, [orderId]: true }));
+    showToast("Rider tracking link copied to clipboard!", "success");
     setTimeout(() => {
       setCopiedLinkMap((prev) => ({ ...prev, [orderId]: false }));
     }, 2500);
@@ -1089,7 +1134,7 @@ const AdminOrders: React.FC = () => {
           if (availableAgent) {
             body.agent_id = availableAgent.id;
           } else {
-            alert("Please select an active delivery rider to assign this return pickup.");
+            showToast("Please select an active delivery rider to assign this return pickup.", "error");
             setActionLoadingId(null);
             return;
           }
@@ -1120,11 +1165,12 @@ const AdminOrders: React.FC = () => {
       if (data.return_request) {
         setReturnDetailsMap((prev) => ({ ...prev, [returnId]: data.return_request }));
       }
+      showToast(data.message || "Return pickup dispatched successfully!", "success");
       setEditingReturnCourierMap((p) => ({ ...p, [returnId]: false }));
       await loadReturnsForSite();
       await loadDeliveryMeta();
     } catch (err: any) {
-      alert(err?.message || "Failed to dispatch return pickup");
+      showToast(err?.message || "Failed to dispatch return pickup", "error");
     } finally {
       setActionLoadingId(null);
     }
@@ -1134,7 +1180,7 @@ const AdminOrders: React.FC = () => {
     if (!siteId) return;
     const newAgentId = reassignReturnAgentIdMap[returnId] || "";
     if (!newAgentId) {
-      alert("Please select a new rider to reassign this return pickup.");
+      showToast("Please select a new rider to reassign this return pickup.", "error");
       return;
     }
     setActionLoadingId(returnId);
@@ -1156,11 +1202,12 @@ const AdminOrders: React.FC = () => {
       if (data.return_request) {
         setReturnDetailsMap((prev) => ({ ...prev, [returnId]: data.return_request }));
       }
+      showToast("Return rider reassigned successfully!", "success");
       setReassigningReturnIdMap((p) => ({ ...p, [returnId]: false }));
       await loadReturnsForSite();
       await loadDeliveryMeta();
     } catch (err: any) {
-      alert(err?.message || "Failed to reassign rider");
+      showToast(err?.message || "Failed to reassign rider", "error");
     } finally {
       setActionLoadingId(null);
     }
@@ -1190,15 +1237,17 @@ const AdminOrders: React.FC = () => {
       if (data.return_request) {
         setReturnDetailsMap((prev) => ({ ...prev, [returnId]: data.return_request }));
       }
+      showToast("Switched return to manual courier successfully!", "success");
       setReassigningReturnIdMap((p) => ({ ...p, [returnId]: false }));
       await loadReturnsForSite();
       await loadDeliveryMeta();
     } catch (err: any) {
-      alert(err?.message || "Failed to switch to manual return");
+      showToast(err?.message || "Failed to switch to manual return", "error");
     } finally {
       setActionLoadingId(null);
     }
   };
+
 
 
   useEffect(() => {
@@ -1683,7 +1732,7 @@ const AdminOrders: React.FC = () => {
       });
       await syncOrderAfterAction(orderId);
     } catch (err: any) {
-      window.alert(err.message || "Failed to update order");
+      showToast(err.message || "Failed to update order", "error");
     } finally {
       setActionLoadingId(null);
     }
@@ -1697,7 +1746,7 @@ const AdminOrders: React.FC = () => {
       try {
         await ensureOrderDetail(orderId);
       } catch (err: any) {
-        window.alert(err.message || "Failed to load order detail");
+        showToast(err.message || "Failed to load order detail", "error");
       }
     }
   };
@@ -1710,7 +1759,7 @@ const AdminOrders: React.FC = () => {
       try {
         await ensureReturnDetail(returnId);
       } catch (err: any) {
-        window.alert(err.message || "Failed to load return detail");
+        showToast(err.message || "Failed to load return detail", "error");
       }
     }
   };
@@ -1897,7 +1946,7 @@ const AdminOrders: React.FC = () => {
     if (draft.action === "approve") {
       const totalAppr = Object.values(draft.approvedQuantities).reduce((acc, q) => acc + Number(q || 0), 0);
       if (totalAppr <= 0) {
-        window.alert("Cannot approve return with 0 items. Please specify an approved quantity of at least 1, or select 'Reject Return' to decline the request.");
+        showToast("Cannot approve return with 0 items. Please specify an approved quantity of at least 1, or select 'Reject Return' to decline the request.", "error");
         return;
       }
     }
@@ -1919,9 +1968,10 @@ const AdminOrders: React.FC = () => {
               : [],
         }),
       });
+      showToast("Return request reviewed successfully!", "success");
       await syncReturnAfterAction(returnId);
     } catch (err: any) {
-      window.alert(err.message || "Failed to review return request");
+      showToast(err.message || "Failed to review return request", "error");
     } finally {
       setActionLoadingId(null);
     }
@@ -1948,9 +1998,10 @@ const AdminOrders: React.FC = () => {
           ),
         }),
       });
+      showToast("Return marked as received!", "success");
       await syncReturnAfterAction(returnId);
     } catch (err: any) {
-      window.alert(err.message || "Failed to mark return as received");
+      showToast(err.message || "Failed to mark return as received", "error");
     } finally {
       setActionLoadingId(null);
     }
@@ -1984,9 +2035,10 @@ const AdminOrders: React.FC = () => {
           items: itemsPayload,
         }),
       });
+      showToast("Return inspection recorded successfully!", "success");
       await syncReturnAfterAction(returnId);
     } catch (err: any) {
-      window.alert(err.message || "Failed to inspect return");
+      showToast(err.message || "Failed to inspect return", "error");
     } finally {
       setActionLoadingId(null);
     }
@@ -2011,9 +2063,10 @@ const AdminOrders: React.FC = () => {
           admin_note: draft.adminNote || null,
         }),
       });
+      showToast("Refund processed successfully!", "success");
       await syncReturnAfterAction(returnId);
     } catch (err: any) {
-      window.alert(err.message || "Failed to process refund");
+      showToast(err.message || "Failed to process refund", "error");
     } finally {
       setActionLoadingId(null);
     }
@@ -2029,9 +2082,10 @@ const AdminOrders: React.FC = () => {
       await fetchJson(`${API_BASE}/returns/admin/${siteId}/${returnId}/close`, {
         method: "PATCH",
       });
+      showToast("Return closed successfully!", "success");
       await syncReturnAfterAction(returnId);
     } catch (err: any) {
-      window.alert(err.message || "Failed to close return");
+      showToast(err.message || "Failed to close return", "error");
     } finally {
       setActionLoadingId(null);
     }
@@ -2039,7 +2093,7 @@ const AdminOrders: React.FC = () => {
 
 
   const generateBillPdf = (order: AdminOrderDetail | AdminOrderListItem) => {
-    window.alert(`Generate invoice for ${order.id}`);
+    showToast(`Generating invoice for ${order.id}...`, "info");
   };
 
 
@@ -2244,6 +2298,7 @@ const AdminOrders: React.FC = () => {
 
   return (
     <div style={{ color: "#0f172a" }}>
+      {toast && <GlassToast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       {/* Top Header Card (Segmented Mode + Search & Filter Button) */}
       <div
         style={{
@@ -3861,7 +3916,7 @@ const AdminOrders: React.FC = () => {
                                                         onClick={async () => {
                                                           const draft = getShipmentDraft(order);
                                                           if (!draft.deliveryPartnerName.trim()) {
-                                                            window.alert("Please enter the courier partner name.");
+                                                            showToast("Please enter the courier partner name.", "error");
                                                             return;
                                                           }
                                                           await updateStatus(order.id, "shipped", {
@@ -3978,66 +4033,75 @@ const AdminOrders: React.FC = () => {
                                             )}
 
                                             {/* Mode 2: Shiprocket Auto Courier */}
-                                            {activeMode === "shiprocket" && (
-                                              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                                <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>
-                                                  Auto-books courier pickup with Delhivery, BlueDart, DTDC, or Xpressbees and generates AWB tracking label.
-                                                </p>
+                                            {activeMode === "shiprocket" && (() => {
+                                               const defaultWeight = getOrderDefaultWeight(order);
+                                               const currentWeight = packageWeightMap[order.id] !== undefined ? packageWeightMap[order.id] : defaultWeight;
+                                               return (
+                                                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                                                   <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>
+                                                     Auto-books courier pickup with Delhivery, BlueDart, DTDC, or Xpressbees and generates AWB tracking label.
+                                                   </p>
 
-                                                <div>
-                                                  <label style={{ ...labelStyle, display: "flex", justifyContent: "space-between" }}>
-                                                    <span>Parcel Weight (Grams)</span>
-                                                    {packageWeightMap[order.id] ? (
-                                                      <span style={{ color: "#2563eb", fontWeight: 700 }}>
-                                                        {(packageWeightMap[order.id] / 1000).toFixed(2)} kg
-                                                      </span>
-                                                    ) : null}
-                                                  </label>
-                                                  <input
-                                                    type="number"
-                                                    min={10}
-                                                    step={50}
-                                                    placeholder="e.g. 450 (weight in grams)"
-                                                    value={packageWeightMap[order.id] || ""}
-                                                    onChange={(e) =>
-                                                      setPackageWeightMap((p) => ({
-                                                        ...p,
-                                                        [order.id]: Number(e.target.value),
-                                                      }))
-                                                    }
-                                                    style={inputStyle}
-                                                  />
-                                                  <p style={{ fontSize: "11px", color: "#64748b", margin: "4px 0 0" }}>
-                                                    Enter the weighed parcel weight in grams for courier rate and label generation.
-                                                  </p>
-                                                </div>
+                                                   <div>
+                                                     <label style={{ ...labelStyle, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                                       <span>Parcel Weight (Grams)</span>
+                                                       <span style={{ color: "#2563eb", fontWeight: 700, fontSize: "12px" }}>
+                                                         {currentWeight > 0 ? `${(currentWeight / 1000).toFixed(2)} kg (${currentWeight} g)` : "0 g"}
+                                                       </span>
+                                                     </label>
+                                                     <input
+                                                       type="number"
+                                                       min={10}
+                                                       step={50}
+                                                       placeholder="e.g. 500 (weight in grams)"
+                                                       value={currentWeight || ""}
+                                                       onChange={(e) =>
+                                                         setPackageWeightMap((p) => ({
+                                                           ...p,
+                                                           [order.id]: Math.max(0, Number(e.target.value) || 0),
+                                                         }))
+                                                       }
+                                                       style={inputStyle}
+                                                     />
+                                                     <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "5px", flexWrap: "wrap" }}>
+                                                       <span style={{ fontSize: "11px", color: "#059669", background: "rgba(16,185,129,0.1)", padding: "2px 7px", borderRadius: "4px", fontWeight: 600 }}>
+                                                         ✓ Auto-calculated from product details
+                                                       </span>
+                                                       <span style={{ fontSize: "11px", color: "#64748b" }}>
+                                                         (Editable before booking)
+                                                       </span>
+                                                     </div>
+                                                   </div>
 
-                                                <button
-                                                  type="button"
-                                                  onClick={() => {
-                                                    if (!packageWeightMap[order.id] || packageWeightMap[order.id] <= 0) {
-                                                      const entered = window.prompt("Please enter the parcel weight in grams (e.g. 500):", "500");
-                                                      if (!entered || isNaN(Number(entered)) || Number(entered) <= 0) return;
-                                                      setPackageWeightMap((p) => ({ ...p, [order.id]: Number(entered) }));
-                                                    }
-                                                    handleDispatchOrder(order.id, "shiprocket");
-                                                  }}
-                                                  disabled={actionLoadingId === order.id}
-                                                  style={{
-                                                    padding: "9px 14px",
-                                                    borderRadius: "6px",
-                                                    background: "#2563eb",
-                                                    border: "1px solid #2563eb",
-                                                    color: "#ffffff",
-                                                    fontWeight: 700,
-                                                    fontSize: "13px",
-                                                    cursor: actionLoadingId === order.id ? "wait" : "pointer",
-                                                  }}
-                                                >
-                                                  {actionLoadingId === order.id ? "Booking Courier..." : "Book Courier via Shiprocket"}
-                                                </button>
-                                              </div>
-                                            )}
+                                                   <button
+                                                     type="button"
+                                                     onClick={() => {
+                                                       const weightToSend = packageWeightMap[order.id] !== undefined && packageWeightMap[order.id] > 0
+                                                         ? packageWeightMap[order.id]
+                                                         : defaultWeight;
+                                                       if (!weightToSend || weightToSend <= 0) {
+                                                         showToast("Please enter a valid parcel weight in grams", "error");
+                                                         return;
+                                                       }
+                                                       handleDispatchOrder(order.id, "shiprocket", weightToSend);
+                                                     }}
+                                                     disabled={actionLoadingId === order.id}
+                                                     style={{
+                                                       padding: "9px 14px",
+                                                       borderRadius: "6px",
+                                                       background: "#2563eb",
+                                                       border: "1px solid #2563eb",
+                                                       color: "#ffffff",
+                                                       fontWeight: 700,
+                                                       fontSize: "13px",
+                                                       cursor: actionLoadingId === order.id ? "wait" : "pointer",
+                                                     }}
+                                                   >
+                                                     {actionLoadingId === order.id ? "Booking Courier..." : "Book Courier via Shiprocket"}
+                                                   </button>
+                                                 </div>
+                                               );
+                                             })()}
 
                                             {/* Mode 3: Manual partner entry */}
                                             {activeMode === "manual" && (
