@@ -7,6 +7,7 @@ import React, {
   useState,
 } from "react";
 import { API_BASE_URL } from "./config/api";
+import { getThumbnailUrl } from "./utils/imageOptimizer";
 
 export type ProductVariantValue = {
   value: string;
@@ -52,15 +53,37 @@ export type Product = {
   category?: string;
   category_id?: string | null;
   category_name?: string | null;
-  collections?: { id: string; name: string; slug?: string }[];
+  collections?: { id: string; name: string; slug?: string; is_badge?: boolean; badge_color?: string | null }[];
   description: string;
+  highlights?: string[];
   slug?: string;
   price: number;
   compare_price?: number | null;
   images?: string[];
   stock?: number;
   in_stock?: boolean;
+  is_active?: boolean;
+  sku?: string | null;
+  hsn_code?: string | null;
+  video_url?: string | null;
+  weight_grams?: number;
+  length_cm?: number | null;
+  width_cm?: number | null;
+  height_cm?: number | null;
   variant_option?: ProductVariantOption | null;
+  sibling_group?: string | null;
+  sibling_label?: string | null;
+  siblings?: Array<{
+    id: string;
+    name: string;
+    sibling_label?: string | null;
+    slug?: string | null;
+    price: number;
+    compare_price?: number | null;
+    in_stock: boolean;
+    cover_image?: string | null;
+    is_current?: boolean;
+  }>;
   originalPrice?: number;
   discountPercent?: number;
   discount_percent?: number;
@@ -91,6 +114,7 @@ type CartContextType = {
   cartCount: number;
   cartTotal: number;
   isCartLoading: boolean;
+  isProductsLoading?: boolean;
   addToCart: (product: Product, quantity?: number) => Promise<void>;
   removeFromCart: (
     productId: ProductId,
@@ -113,6 +137,7 @@ type CartProviderProps = {
   products?: Product[];
   siteId?: string;
   defaultReturnWindowDays?: number;
+  isProductsLoading?: boolean;
 };
 
 type BackendCartItem = {
@@ -193,12 +218,27 @@ export function CartProvider({
   products = [],
   siteId,
   defaultReturnWindowDays = 7,
+  isProductsLoading = false,
 }: CartProviderProps) {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartItemIds, setCartItemIds] = useState<Record<string, string>>({});
   const [isCartLoading, setIsCartLoading] = useState(false);
 
   const resolvedSiteId = siteId;
+
+  // Pre-load all cart item images into browser memory so cart drawer and checkout render them in 0ms
+  useEffect(() => {
+    if (Array.isArray(cartItems) && cartItems.length > 0 && typeof window !== "undefined") {
+      cartItems.forEach((item) => {
+        if (item.image) {
+          const i1 = new Image();
+          i1.src = getThumbnailUrl(item.image, 180, 180);
+          const i2 = new Image();
+          i2.src = getThumbnailUrl(item.image, 140, 140);
+        }
+      });
+    }
+  }, [cartItems]);
 
   const applyCartResponse = useCallback((data: BackendCartResponse) => {
     const mappedItems = data.items.map(mapBackendCartItemToCartItem);
@@ -514,6 +554,7 @@ export function CartProvider({
       cartCount,
       cartTotal,
       isCartLoading,
+      isProductsLoading,
       addToCart,
       removeFromCart,
       updateQuantity,
@@ -527,6 +568,7 @@ export function CartProvider({
       cartCount,
       cartTotal,
       isCartLoading,
+      isProductsLoading,
       addToCart,
       removeFromCart,
       updateQuantity,

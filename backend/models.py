@@ -175,6 +175,11 @@ class Collection(SQLModel, table=True):
     name: str = Field(max_length=255, nullable=False)
     slug: Optional[str] = Field(default=None, max_length=255)
     description: str = Field(default="")
+    is_badge: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, default=False),
+    )
+    badge_color: Optional[str] = Field(default=None, max_length=50, nullable=True)
     created_at: datetime = Field(
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False),
@@ -225,13 +230,42 @@ class Product(SQLModel, table=True):
 
     stock: int = Field(default=0, nullable=False)
     in_stock: bool = Field(default=True, nullable=False)
+    is_active: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, default=True),
+    )
+    sku: Optional[str] = Field(default=None, max_length=100, nullable=True, index=True)
+    hsn_code: Optional[str] = Field(default=None, max_length=50, nullable=True)
+    video_url: Optional[str] = Field(default=None, nullable=True)
+    video_position: Optional[int] = Field(
+        default=2,
+        sa_column=Column(Integer, nullable=True, default=2),
+    )
+    sibling_group: Optional[str] = Field(default=None, max_length=100, nullable=True, index=True)
+    sibling_label: Optional[str] = Field(default=None, max_length=100, nullable=True)
     weight_grams: int = Field(default=500, nullable=False)  # used for shipping label weight
+    length_cm: Optional[float] = Field(
+        default=None,
+        sa_column=Column(Numeric(8, 2), nullable=True),
+    )
+    width_cm: Optional[float] = Field(
+        default=None,
+        sa_column=Column(Numeric(8, 2), nullable=True),
+    )
+    height_cm: Optional[float] = Field(
+        default=None,
+        sa_column=Column(Numeric(8, 2), nullable=True),
+    )
     return_window_days: Optional[int] = Field(
         default=None,
         sa_column=Column(Integer, nullable=True),
     )
 
     images: list[str] = Field(
+        default_factory=list,
+        sa_column=Column(JSONB, nullable=False),
+    )
+    highlights: list[str] = Field(
         default_factory=list,
         sa_column=Column(JSONB, nullable=False),
     )
@@ -436,7 +470,7 @@ class OrderItem(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     order_id: UUID = Field(foreign_key="orders.id", index=True)
     site_id: UUID = Field(foreign_key="sites.id", index=True)
-    product_id: UUID = Field(foreign_key="products.id", index=True)
+    product_id: Optional[UUID] = Field(default=None, foreign_key="products.id", index=True, nullable=True)
 
     product_name: str
     product_slug: Optional[str] = Field(default=None)
@@ -682,7 +716,7 @@ class InventoryMovement(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     site_id: UUID = Field(foreign_key="sites.id", index=True)
-    product_id: UUID = Field(foreign_key="products.id", index=True)
+    product_id: Optional[UUID] = Field(default=None, foreign_key="products.id", index=True, nullable=True)
     order_id: Optional[UUID] = Field(default=None, foreign_key="orders.id")
     order_item_id: Optional[UUID] = Field(default=None, foreign_key="order_items.id")
     movement_type: str = Field(max_length=40, nullable=False)
@@ -795,7 +829,7 @@ class ReturnItem(SQLModel, table=True):
     site_id: UUID = Field(foreign_key="sites.id", index=True)
     order_id: UUID = Field(foreign_key="orders.id", index=True)
     order_item_id: UUID = Field(foreign_key="order_items.id", index=True)
-    product_id: UUID = Field(foreign_key="products.id", index=True)
+    product_id: Optional[UUID] = Field(default=None, foreign_key="products.id", index=True, nullable=True)
 
     product_name: str
     product_slug: Optional[str] = Field(default=None)

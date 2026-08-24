@@ -6,9 +6,10 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
-from sqlmodel import Session, select
+from sqlalchemy import cast, String
+from sqlmodel import Session, func, select
 
 from auth_middleware import authenticate_admin, authenticate_customer, enforce_site_ownership
 from db.database import get_session
@@ -1069,20 +1070,78 @@ def get_my_return_detail(
     )
 
 
+RETURN_TABS = [
+    "requested",
+    "approved",
+    "received",
+    "inspected",
+    "refunded",
+    "closed",
+    "rejected",
+]
+
+
 @router.get("/admin/{site_id}")
 def get_admin_returns(
     site_id: UUID,
+    page: Optional[int] = Query(None, ge=1, description="Page number"),
+    page_size: Optional[int] = Query(None, ge=1, le=100, description="Items per page"),
+    status: Optional[str] = Query(None, description="Filter by status / tab"),
+    search: Optional[str] = Query(None, description="Search by return ID, order ID, or product name"),
     admin=Depends(authenticate_admin),
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
-    return_requests = session.exec(
-        select(ReturnRequest)
-        .where(ReturnRequest.site_id == site_id)
-        .order_by(ReturnRequest.created_at.desc())
-    ).all()
+    base_query = select(ReturnRequest).where(ReturnRequest.site_id == site_id)
+
+    if status and status != "all":
+        base_query = base_query.where(ReturnRequest.status == status)
+
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        base_query = base_query.where(
+            (cast(ReturnRequest.id, String).ilike(term))
+            | (cast(ReturnRequest.order_id, String).ilike(term))
+            | (ReturnRequest.reason_text.ilike(term))
+        )
+
+    # Tab Counts
+    tab_counts = {}
+    for t_key in RETURN_TABS:
+        cnt = session.exec(
+            select(func.count()).select_from(ReturnRequest).where(
+                ReturnRequest.site_id == site_id,
+                ReturnRequest.status == t_key,
+            )
+        ).one() or 0
+        tab_counts[t_key] = cnt
+
+    total_count = session.exec(
+        select(func.count()).select_from(base_query.subquery())
+    ).one() or 0
+
+    if page is not None and page_size is not None:
+        total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
+        paginated_query = (
+            base_query.order_by(ReturnRequest.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return_requests = session.exec(paginated_query).all()
+    else:
+        return_requests = session.exec(base_query.order_by(ReturnRequest.created_at.desc())).all()
+        total_pages = 1
 
     if not return_requests:
+        if page is not None and page_size is not None:
+            return {
+                "returns": [],
+                "total": total_count,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages,
+                "tab_counts": tab_counts,
+            }
         return []
 
     return_ids = [item.id for item in return_requests]
@@ -1105,6 +1164,17 @@ def get_admin_returns(
         for req in return_requests
     ]
     session.commit()
+
+    if page is not None and page_size is not None:
+        return {
+            "returns": serialized,
+            "total": total_count,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "tab_counts": tab_counts,
+        }
+
     return serialized
 
 

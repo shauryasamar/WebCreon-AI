@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useCart } from "../CartContext";
 import { API_BASE_URL } from "../config/api";
 import { isColorDarkHex } from "../context/ThemeContext";
+import { getThumbnailUrl } from "../utils/imageOptimizer";
 
 type CartTheme = {
   name?: string;
@@ -1067,8 +1068,10 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                           }}
                         >
                           <img
-                            src={item.image}
+                            src={getThumbnailUrl(item.image, 140, 140)}
                             alt={item.name}
+                            loading="eager"
+                            decoding="async"
                             style={{
                               width: "100%",
                               height: "100%",
@@ -1384,8 +1387,10 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                       }}
                     >
                       <img
-                        src={item.image}
+                        src={getThumbnailUrl(item.image, 180, 180)}
                         alt={item.name}
+                        loading="eager"
+                        decoding="async"
                         style={{
                           width: "100%",
                           height: "100%",

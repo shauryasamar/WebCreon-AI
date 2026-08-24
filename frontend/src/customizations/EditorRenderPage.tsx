@@ -5,6 +5,7 @@ import { componentRegistry } from "../componentRegistry";
 import FilterModal, { FilterState } from "../Component/FilterModal";
 import { API_BASE_URL } from "../config/api";
 import { ThemeProvider, resolveThemeTokens } from "../context/ThemeContext";
+import { normalizeStorefrontProduct } from "../utils/productNormalizer";
 
 type Block = {
   id?: string;
@@ -286,7 +287,11 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
   const [sortBy, setSortBy] = useState("newest");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 12;
+  const [pageSize, setPageSize] = useState(24);
+  const [serverProducts, setServerProducts] = useState<Product[] | null>(null);
+  const [serverTotal, setServerTotal] = useState<number | null>(null);
+  const [serverTotalPages, setServerTotalPages] = useState<number | null>(null);
+  const [isServerLoading, setIsServerLoading] = useState<boolean>(false);
   const [isCompactCheckout, setIsCompactCheckout] = useState(false);
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
 
@@ -299,6 +304,64 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
     const q = params.get("search") || "";
     setSearchQuery(q);
   }, [location.search]);
+
+  useEffect(() => {
+    if (!siteId) return;
+
+    let cancelled = false;
+    const timeout = setTimeout(async () => {
+      try {
+        setIsServerLoading(true);
+        const params = new URLSearchParams();
+        params.set("page", String(currentPage));
+        params.set("page_size", String(pageSize));
+        if (searchQuery.trim()) {
+          params.set("search", searchQuery.trim());
+        }
+        if (sortBy) {
+          params.set("sort_by", sortBy);
+        }
+        if (filters.categoryId) {
+          params.set("category_id", filters.categoryId);
+        }
+        filters.productTypes.forEach((pt) => params.append("product_type", pt));
+        filters.collections.forEach((cid) => params.append("collection_id", cid));
+        filters.brands.forEach((b) => params.append("brand", b));
+        if (filters.minPrice > 0) {
+          params.set("min_price", String(filters.minPrice));
+        }
+        if (filters.maxPrice < 100000) {
+          params.set("max_price", String(filters.maxPrice));
+        }
+
+        const res = await fetch(
+          `${API_BASE_URL}/sites/${siteId}/products/public?${params.toString()}`
+        );
+
+        if (!cancelled && res.ok) {
+          const data = await res.json();
+          if (data && typeof data === "object" && Array.isArray(data.items || data.products)) {
+            const rawItems = data.items || data.products || [];
+            const norm = rawItems.map(normalizeStorefrontProduct);
+            setServerProducts(norm);
+            setServerTotal(typeof data.total === "number" ? data.total : norm.length);
+            setServerTotalPages(typeof data.total_pages === "number" ? data.total_pages : 1);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch public products server-side in editor", err);
+      } finally {
+        if (!cancelled) {
+          setIsServerLoading(false);
+        }
+      }
+    }, 150);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [siteId, currentPage, pageSize, searchQuery, filters, sortBy]);
 
   useEffect(() => {
     if (!siteId) return;
@@ -510,6 +573,10 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
     return filteredAndSortedProducts.slice(start, start + pageSize);
   }, [filteredAndSortedProducts, currentPage, pageSize]);
 
+  const resolvedStoreProducts = serverProducts ?? paginatedProducts;
+  const resolvedTotalCount = serverTotal ?? filteredAndSortedProducts.length;
+  const resolvedTotalPages = serverTotalPages ?? totalPages;
+
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (filters.categoryId) count++;
@@ -716,7 +783,10 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
           onFilterClick={() => setFilterModalOpen(true)}
         />
       );
-    } else if (resolvedDataSource === "product") {
+    } else if (
+      resolvedDataSource === "product" ||
+      PRODUCT_DETAIL_TYPES.has(String(block.type || "").toLowerCase())
+    ) {
       renderedNode = (
         <Component
           {...componentProps}
@@ -729,10 +799,15 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
         <Component
           {...componentProps}
           currentPage={currentPage}
-          totalPages={totalPages}
+          totalPages={resolvedTotalPages}
           onPageChange={setCurrentPage}
-          totalItems={filteredAndSortedProducts.length}
+          totalItems={resolvedTotalCount}
           pageSize={pageSize}
+          pageSizeOptions={[24, 48, 96, 100]}
+          onPageSizeChange={(newSize: number) => {
+            setPageSize(newSize);
+            setCurrentPage(1);
+          }}
           theme={theme}
         />
       );
@@ -740,19 +815,24 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
       renderedNode = (
         <Component
           {...componentProps}
-          products={paginatedProducts}
+          products={resolvedStoreProducts}
           title={dynamicTitle}
           subtitle={dynamicSubtitle}
-          itemCount={filteredAndSortedProducts.length}
+          itemCount={resolvedTotalCount}
           activeFilterCount={activeFilterCount}
           sortBy={sortBy}
           onSortChange={setSortBy}
           onFilterClick={() => setFilterModalOpen(true)}
           currentPage={currentPage}
-          totalPages={totalPages}
+          totalPages={resolvedTotalPages}
           onPageChange={setCurrentPage}
           pageSize={pageSize}
-          totalProducts={filteredAndSortedProducts.length}
+          pageSizeOptions={[24, 48, 96, 100]}
+          onPageSizeChange={(newSize: number) => {
+            setPageSize(newSize);
+            setCurrentPage(1);
+          }}
+          totalProducts={resolvedTotalCount}
         />
       );
     } else if (resolvedDataSource === "cart") {

@@ -4,6 +4,7 @@ import { useCart, Product } from "../CartContext";
 import FilterSidebar from "./FilterSidebar";
 import { Pagination } from "./Pagination";
 import { resolveThemeTokens } from "../context/ThemeContext";
+import { optimizeImageUrl } from "../utils/imageOptimizer";
 
 type ProductGridProps = {
   siteId: string;
@@ -21,6 +22,7 @@ type ProductGridProps = {
   totalPages?: number;
   onPageChange?: (page: number) => void;
   pageSize?: number;
+  onPageSizeChange?: (size: number) => void;
   totalProducts?: number;
 
   // Layout & Spacing
@@ -91,6 +93,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
   totalPages,
   onPageChange,
   pageSize,
+  onPageSizeChange,
   totalProducts,
   grid_gap,
   max_width,
@@ -119,7 +122,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
   const { slug: siteSlug } = useParams();
-  const { products: cartProducts } = useCart();
+  const { products: cartProducts, isProductsLoading = false } = useCart();
 
   const products = productsProp ?? cartProducts;
   const isStoreRoute = location.pathname.startsWith("/store/");
@@ -265,12 +268,14 @@ function isColorDarkHex(colorHex?: string): boolean {
             )
           : 0;
 
-      const normalizedImage =
+      const rawImage =
         product.image_url ||
         product.imageUrl ||
         product.image ||
         (Array.isArray(product.images) && product.images[0]) ||
         "";
+
+      const normalizedImage = optimizeImageUrl(rawImage, 600, 600);
 
       return {
         ...product,
@@ -329,15 +334,121 @@ function isColorDarkHex(colorHex?: string): boolean {
         theme={theme}
       />
 
-      <div
-        className="product-grid__items"
-        style={{
-          display: "grid",
-          gridTemplateColumns: resolvedColumns,
-          gap: resolvedGridGap,
-        }}
-      >
-        {normalizedProducts.map((product) => {
+      {isProductsLoading && normalizedProducts.length === 0 ? (
+        <div
+          className="product-grid__items product-grid__skeleton"
+          style={{
+            display: "grid",
+            gridTemplateColumns: resolvedColumns,
+            gap: resolvedGridGap,
+          }}
+        >
+          <style>{`
+            @keyframes gridShimmer {
+              0% { background-position: 200% 0; }
+              100% { background-position: -200% 0; }
+            }
+          `}</style>
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => {
+            const skeletonBg = isDark
+              ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)"
+              : "linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%)";
+            const skStyle: React.CSSProperties = {
+              backgroundImage: skeletonBg,
+              backgroundSize: "200% 100%",
+              animation: "gridShimmer 1.5s infinite linear",
+              willChange: "background-position",
+              transform: "translateZ(0)",
+            };
+            return (
+              <div
+                key={i}
+                style={{
+                  borderRadius: computedRadius,
+                  background: computedCardBg,
+                  border: computedBorder,
+                  boxShadow: computedShadow,
+                  padding: "14px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "12px",
+                }}
+              >
+                <div
+                  style={{
+                    ...skStyle,
+                    width: "100%",
+                    aspectRatio: image_aspect_ratio || "1/1",
+                    borderRadius: "12px",
+                  }}
+                />
+                <div style={{ display: "grid", gap: "8px", flex: 1 }}>
+                  <div
+                    style={{
+                      ...skStyle,
+                      width: "40%",
+                      height: "12px",
+                      borderRadius: "4px",
+                    }}
+                  />
+                  <div
+                    style={{
+                      ...skStyle,
+                      width: "85%",
+                      height: "16px",
+                      borderRadius: "6px",
+                    }}
+                  />
+                  <div
+                    style={{
+                      ...skStyle,
+                      width: "50%",
+                      height: "20px",
+                      borderRadius: "6px",
+                      marginTop: "4px",
+                    }}
+                  />
+                </div>
+                <div
+                  style={{
+                    ...skStyle,
+                    width: "100%",
+                    height: "34px",
+                    borderRadius: "10px",
+                    marginTop: "auto",
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
+      ) : normalizedProducts.length === 0 ? (
+        <div
+          style={{
+            padding: "48px 16px",
+            textAlign: "center",
+            color: mutedText,
+            borderRadius: computedRadius,
+            background: computedCardBg,
+            border: computedBorder,
+            boxShadow: computedShadow,
+            margin: "12px 0",
+          }}
+        >
+          <div style={{ fontSize: "32px", marginBottom: "8px" }}>🛍️</div>
+          <div style={{ fontSize: "16px", fontWeight: 700, color: pageText }}>No Products Found</div>
+          <div style={{ fontSize: "13px", marginTop: "4px", color: faintText }}>Try adjusting your search or filters to find what you're looking for.</div>
+        </div>
+      ) : (
+        <div
+          className="product-grid__items"
+          style={{
+            display: "grid",
+            gridTemplateColumns: resolvedColumns,
+            gap: resolvedGridGap,
+          }}
+        >
+          {normalizedProducts.map((product, cardIndex) => {
           const showOriginal =
             show_original_price &&
             typeof product.normalizedOriginalPrice === "number" &&
@@ -355,6 +466,51 @@ function isColorDarkHex(colorHex?: string): boolean {
 
           const brandText = product.brand || product.category || "Collection";
           const activePriceColor = price_color || (cardStyleKey === "beauty" ? "#dc2626" : pageText);
+
+          const badgeCollections = (product.collections || []).filter((c: any) => c && c.is_badge);
+
+          const renderCollectionBadges = (isCompact = false) => {
+            if (!badgeCollections || badgeCollections.length === 0) return null;
+
+            return (
+              <div
+                style={{
+                  position: "absolute",
+                  top: isCompact ? "6px" : "10px",
+                  right: isCompact ? "6px" : "10px",
+                  zIndex: 2,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "3px",
+                  alignItems: "flex-end",
+                  maxWidth: isCompact ? "60px" : "110px",
+                }}
+              >
+                {badgeCollections.slice(0, isCompact ? 1 : 2).map((col: any) => (
+                  <div
+                    key={col.id || col.name}
+                    style={{
+                      padding: isCompact ? "2px 5px" : "3px 8px",
+                      borderRadius: "6px",
+                      background: col.badge_color || "linear-gradient(135deg, #d97706, #b45309)",
+                      color: "#ffffff",
+                      fontSize: isCompact ? "8px" : "9px",
+                      fontWeight: 800,
+                      letterSpacing: "0.04em",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.18)",
+                      textTransform: "uppercase",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      maxWidth: "100%",
+                    }}
+                  >
+                    {col.name}
+                  </div>
+                ))}
+              </div>
+            );
+          };
 
           const renderDiscountBadge = () => (
             showDiscount ? (
@@ -413,8 +569,9 @@ function isColorDarkHex(colorHex?: string): boolean {
                 handleProductClick(product);
               }
             },
-            role: isDisabled ? "article" : "button",
-            tabIndex: isDisabled || !targetSlug ? -1 : 0,
+            role: "button",
+            tabIndex: isDisabled ? -1 : 0,
+            "aria-label": `View details for ${product.name}`,
             "aria-disabled": isDisabled,
           };
 
@@ -442,7 +599,6 @@ function isColorDarkHex(colorHex?: string): boolean {
 
           const resolvedImageBg = image_bg || (isLight ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.2)");
 
-          // Aspect ratio evaluation
           const getImgContainerStyle = (defaultAspect: string): React.CSSProperties => ({
             position: "relative",
             borderRadius: "14px",
@@ -451,36 +607,38 @@ function isColorDarkHex(colorHex?: string): boolean {
             aspectRatio: image_aspect_ratio || defaultAspect,
           });
 
-          // 1. Fashion / Apparel (Default layout)
+          const imageLoadingMode: "eager" | "lazy" = cardIndex < 8 ? "eager" : "lazy";
+
           if (cardStyleKey === "fashion") {
             return (
               <article key={product.id} {...commonArticleProps} style={cardBaseStyle}>
-                <div style={getImgContainerStyle("1 / 1.25")}>
+                <div style={getImgContainerStyle("3 / 4")}>
                   {renderDiscountBadge()}
+                  {renderCollectionBadges()}
                   {product.normalizedImage ? (
-                    <img src={product.normalizedImage} alt={product.name} loading="lazy" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
+                    <img src={product.normalizedImage} alt={product.name} loading={imageLoadingMode} decoding="async" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
                   ) : (
                     <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
                   )}
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px", padding: "4px 2px", flex: 1 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    {show_brand_name && (
-                      <span style={{ fontSize: "10px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                        {brandText}
-                      </span>
-                    )}
-                    {show_ratings && (
-                      <div style={{ fontSize: "10px", fontWeight: 600, color: faintText }}>
-                        <span style={{ color: starColor }}>★</span> {ratingText} ({reviewCount})
-                      </div>
-                    )}
-                  </div>
-                  <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: pageText }}>{product.name}</h3>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "auto", paddingTop: "4px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "3px", padding: "4px 2px", flex: 1 }}>
+                  {show_brand_name && (
+                    <span style={{ fontSize: "11px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                      {brandText}
+                    </span>
+                  )}
+                  <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: pageText, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {product.name}
+                  </h3>
+                  {show_ratings && (
+                    <div style={{ fontSize: "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "4px" }}>
+                      <span style={{ color: starColor }}>★</span> {ratingText} ({reviewCount})
+                    </div>
+                  )}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "auto", paddingTop: "6px" }}>
                     <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
-                      <span style={{ fontSize: "20px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
-                      {showOriginal && <span style={{ fontSize: "11px", color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
+                      <span style={{ fontSize: "17px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
+                      {showOriginal && <span style={{ fontSize: "12px", color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
                     </div>
                     {renderInStockBadge()}
                   </div>
@@ -489,35 +647,35 @@ function isColorDarkHex(colorHex?: string): boolean {
             );
           }
 
-          // 2. Electronics
           if (cardStyleKey === "electronics") {
             return (
               <article key={product.id} {...commonArticleProps} style={cardBaseStyle}>
-                <div style={getImgContainerStyle("1 / 0.95")}>
+                <div style={getImgContainerStyle("4 / 3")}>
                   {renderDiscountBadge()}
+                  {renderCollectionBadges()}
                   {product.normalizedImage ? (
-                    <img src={product.normalizedImage} alt={product.name} loading="lazy" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
+                    <img src={product.normalizedImage} alt={product.name} loading={imageLoadingMode} decoding="async" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
                   ) : (
                     <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
                   )}
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px", padding: "6px 2px 0", flex: 1 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px", padding: "6px 2px", flex: 1 }}>
                   {show_brand_name && (
-                    <span style={{ fontSize: "10px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                    <span style={{ fontSize: "10px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                       {brandText}
                     </span>
                   )}
                   <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 800, color: pageText }}>{product.name}</h3>
                   {show_ratings && (
-                    <div style={{ fontSize: "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "4px", marginBottom: "4px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "4px" }}>
                       <span style={{ color: starColor }}>★</span> {ratingText} ({reviewCount})
                     </div>
                   )}
-                  <div style={{ marginTop: "auto", background: isLight ? "#f4f4f6" : "rgba(255,255,255,0.05)", padding: "10px 12px", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
-                      <span style={{ fontSize: "20px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
-                      {showOriginal && <span style={{ fontSize: "11px", color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
-                    </div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "6px", margin: "2px 0" }}>
+                    <span style={{ fontSize: "18px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
+                    {showOriginal && <span style={{ fontSize: "12px", color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
+                  </div>
+                  <div style={{ marginTop: "auto" }}>
                     {renderInStockBadge()}
                   </div>
                 </div>
@@ -525,14 +683,14 @@ function isColorDarkHex(colorHex?: string): boolean {
             );
           }
 
-          // 3. Beauty & Cosmetics
           if (cardStyleKey === "beauty") {
             return (
               <article key={product.id} {...commonArticleProps} style={{ ...cardBaseStyle, textAlign: "center" }}>
                 <div style={getImgContainerStyle("1 / 1")}>
                   {renderDiscountBadge()}
+                  {renderCollectionBadges()}
                   {product.normalizedImage ? (
-                    <img src={product.normalizedImage} alt={product.name} loading="lazy" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
+                    <img src={product.normalizedImage} alt={product.name} loading={imageLoadingMode} decoding="async" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
                   ) : (
                     <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
                   )}
@@ -561,24 +719,46 @@ function isColorDarkHex(colorHex?: string): boolean {
             );
           }
 
-          // 4. Grocery
           if (cardStyleKey === "grocery") {
             return (
               <article key={product.id} {...commonArticleProps} style={{ ...cardBaseStyle, flexDirection: "row", alignItems: "center" }}>
-                <div style={{ position: "relative", width: "120px", height: "120px", borderRadius: "14px", overflow: "hidden", background: resolvedImageBg, flexShrink: 0 }}>
+                <div style={{ position: "relative", width: "110px", height: "110px", borderRadius: "14px", overflow: "hidden", background: resolvedImageBg, flexShrink: 0 }}>
                   {renderDiscountBadge()}
                   {product.normalizedImage ? (
-                    <img src={product.normalizedImage} alt={product.name} loading="lazy" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
+                    <img src={product.normalizedImage} alt={product.name} loading={imageLoadingMode} decoding="async" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
                   ) : (
                     <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "12px" }}>No image</div>
                   )}
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "3px", flex: 1, minWidth: 0, paddingLeft: "4px" }}>
-                  {show_brand_name && (
-                    <span style={{ fontSize: "10px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                      {brandText}
-                    </span>
-                  )}
+                <div style={{ display: "flex", flexDirection: "column", gap: "3px", flex: 1, minWidth: 0, paddingLeft: "6px" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "4px", flexWrap: "wrap" }}>
+                    {show_brand_name && (
+                      <span style={{ fontSize: "10px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                        {brandText}
+                      </span>
+                    )}
+                    {badgeCollections.length > 0 && (
+                      <div style={{ display: "flex", gap: "3px", flexWrap: "wrap" }}>
+                        {badgeCollections.slice(0, 2).map((col: any) => (
+                          <span
+                            key={col.id || col.name}
+                            style={{
+                              fontSize: "8px",
+                              fontWeight: 800,
+                              textTransform: "uppercase",
+                              letterSpacing: "0.04em",
+                              padding: "2px 5px",
+                              borderRadius: "4px",
+                              background: col.badge_color || "#d97706",
+                              color: "#fff",
+                            }}
+                          >
+                            {col.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 800, color: pageText, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {product.name}
                   </h3>
@@ -600,13 +780,13 @@ function isColorDarkHex(colorHex?: string): boolean {
             );
           }
 
-          // 5. Books & Stationery
           return (
             <article key={product.id} {...commonArticleProps} style={cardBaseStyle}>
               <div style={getImgContainerStyle("1 / 1.35")}>
                 {renderDiscountBadge()}
+                {renderCollectionBadges()}
                 {product.normalizedImage ? (
-                  <img src={product.normalizedImage} alt={product.name} loading="lazy" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
+                  <img src={product.normalizedImage} alt={product.name} loading={imageLoadingMode} decoding="async" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
                 ) : (
                   <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
                 )}
@@ -638,14 +818,17 @@ function isColorDarkHex(colorHex?: string): boolean {
           );
         })}
       </div>
+      )}
 
-      {totalPages && totalPages > 1 ? (
+      {Boolean((totalPages && totalPages > 1) || (totalProducts && totalProducts > 0) || onPageSizeChange) ? (
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}
           onPageChange={onPageChange}
           totalItems={totalProducts || itemCount}
-          pageSize={pageSize}
+          pageSize={pageSize || 24}
+          pageSizeOptions={[24, 48, 96, 100]}
+          onPageSizeChange={onPageSizeChange}
           showRangeText={true}
           theme={theme}
           accentColor={accentColor}

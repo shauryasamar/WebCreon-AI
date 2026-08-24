@@ -319,17 +319,29 @@ const getShortTabLabel = (label: string) => {
   return map[label] ?? label;
 };
 
+const getCachedCheckoutSettings = (id?: string): CheckoutSettingsResponse | null => {
+  if (!id || typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(`wc_admin_checkout_settings_${id}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
 const CheckoutChargesPage: React.FC = () => {
   const { siteId } = useParams<{ siteId: string }>();
 
+  const cachedSettings = getCachedCheckoutSettings(siteId);
+
   const [mode, setMode] = useState<"standard" | "tax" | "custom">("standard");
 
-  const [charges, setCharges] = useState<ChargeRule[]>(createDefaultCharges);
-  const [taxSettings, setTaxSettings] = useState<TaxSettings>(defaultTaxSettings);
-  const [initialSnapshot, setInitialSnapshot] = useState<string>("");
+  const [charges, setCharges] = useState<ChargeRule[]>(() => cachedSettings?.charges || createDefaultCharges());
+  const [taxSettings, setTaxSettings] = useState<TaxSettings>(() => cachedSettings?.taxSettings || defaultTaxSettings);
+  const [initialSnapshot, setInitialSnapshot] = useState<string>(() => cachedSettings ? JSON.stringify(cachedSettings) : "");
 
   const [toast, setToast] = useState<{ id: number; type: "success" | "error"; text: string } | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cachedSettings);
   const [saving, setSaving] = useState(false);
 
   const showToast = (type: "success" | "error", text: string) => {
@@ -340,8 +352,16 @@ const CheckoutChargesPage: React.FC = () => {
     }, 3500);
   };
 
-  const [activeStandardTab, setActiveStandardTab] = useState<string>("shipping_fee");
-  const [activeCustomTab, setActiveCustomTab] = useState<string | null>(null);
+  const [activeStandardTab, setActiveStandardTab] = useState<string>(() => {
+    const list = cachedSettings?.charges || createDefaultCharges();
+    const firstStandard = list.find((c) => c.code !== "custom");
+    return firstStandard?.id ?? "shipping_fee";
+  });
+  const [activeCustomTab, setActiveCustomTab] = useState<string | null>(() => {
+    const list = cachedSettings?.charges || createDefaultCharges();
+    const firstCustom = list.find((c) => c.code === "custom");
+    return firstCustom?.id ?? null;
+  });
 
   const standardCharges = useMemo(
     () => charges.filter((charge) => charge.code !== "custom"),
@@ -383,7 +403,9 @@ const CheckoutChargesPage: React.FC = () => {
       }
 
       try {
-        setLoading(true);
+        if (!cachedSettings) {
+          setLoading(true);
+        }
 
         const response = await fetch(
           `${API_BASE_URL}/sites/${siteId}/checkout-settings`,
@@ -402,6 +424,9 @@ const CheckoutChargesPage: React.FC = () => {
         setTaxSettings(normalized.taxSettings);
         setCharges(normalized.charges);
         setInitialSnapshot(JSON.stringify(normalized));
+        try {
+          localStorage.setItem(`wc_admin_checkout_settings_${siteId}`, JSON.stringify(normalized));
+        } catch (_) {}
 
         const firstStandard = normalized.charges.find((charge) => charge.code !== "custom");
         const firstCustom = normalized.charges.find((charge) => charge.code === "custom");

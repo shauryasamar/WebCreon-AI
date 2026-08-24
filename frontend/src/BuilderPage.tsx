@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState, Suspense } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback, Suspense } from "react";
 import {
   Link,
   Navigate,
@@ -21,21 +21,24 @@ import BuilderControlPanel from "./Component/BuilderControlPanel";
 import type { AdminNavKey } from "./Component/BuilderDrawerPanel";
 import { useAdminAuth } from "./context/AdminAuthContext";
 
-// Lazy-loaded Admin and Customizer chunks
-const AdminLayout = React.lazy(() => import("./Component/AdminLayout"));
-const AdminProducts = React.lazy(() => import("./Component/AdminProducts"));
-const AdminOrders = React.lazy(() => import("./Component/AdminOrders"));
-const CheckoutChargesPage = React.lazy(() => import("./Component/CheckoutChargesPage"));
-const TenantPaymentSettingsPage = React.lazy(() => import("./Component/TenantPaymentSettingsPage"));
-const TenantEarningsPage = React.lazy(() => import("./Component/TenantEarningsPage"));
-const DeliverySettingsPage = React.lazy(() => import("./Component/DeliverySettingsPage"));
+// Direct imports for instant, 60fps zero-jitter workspace interactions
+import AdminLayout from "./Component/AdminLayout";
+import AdminProducts from "./Component/AdminProducts";
+import AdminOrders from "./Component/AdminOrders";
+import CheckoutChargesPage from "./Component/CheckoutChargesPage";
+import TenantPaymentSettingsPage from "./Component/TenantPaymentSettingsPage";
+import TenantEarningsPage from "./Component/TenantEarningsPage";
+import DeliverySettingsPage from "./Component/DeliverySettingsPage";
+import EditorRenderPage from "./customizations/EditorRenderPage";
+import EditorSidebar from "./customizations/EditorSidebar";
+import CustomerOrdersPage from "./pages/CustomerOrdersPage";
+import QrLinkPopup from "./Component/QrLinkPopup";
+import BuilderDrawerPanel from "./Component/BuilderDrawerPanel";
+import { normalizeStorefrontProduct, slugify } from "./utils/productNormalizer";
+
+// Standalone secondary routes remain lazy
 const AgentDeliveryPage = React.lazy(() => import("./pages/AgentDeliveryPage"));
 const TrackOrderPage = React.lazy(() => import("./pages/TrackOrderPage"));
-const EditorRenderPage = React.lazy(() => import("./customizations/EditorRenderPage"));
-const EditorSidebar = React.lazy(() => import("./customizations/EditorSidebar"));
-const CustomerOrdersPage = React.lazy(() => import("./pages/CustomerOrdersPage"));
-const QrLinkPopup = React.lazy(() => import("./Component/QrLinkPopup"));
-const BuilderDrawerPanel = React.lazy(() => import("./Component/BuilderDrawerPanel"));
 
 
 type Block = {
@@ -146,165 +149,131 @@ function getNavbarEditorProps(siteDefinition: SiteDefinition) {
 }
 
 
-function slugify(value: string) {
-  return String(value || "")
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .replace(/-{2,}/g, "-");
-}
+export const siteSlugMemoryCache = new Map<string, SavedSite>();
 
 
-function normalizeStorefrontProduct(raw: any): Product {
-  const attributes = raw?.attributes ?? {};
-  const price = Number(raw?.price ?? 0);
-  const comparePrice =
-    raw?.compare_price != null
-      ? Number(raw.compare_price)
-      : raw?.comparePrice != null
-      ? Number(raw.comparePrice)
-      : raw?.original_price != null
-      ? Number(raw.original_price)
-      : raw?.originalPrice != null
-      ? Number(raw.originalPrice)
-      : null;
-  const images = Array.isArray(raw?.images)
-    ? raw.images.filter(
-        (img: unknown) => typeof img === "string" && img.trim() !== ""
-      )
-    : raw?.image
-    ? [raw.image]
-    : [];
-  const variantOption =
-    raw?.variant_option ??
-    raw?.variantOption ??
-    (Array.isArray(attributes?.sizes) || Array.isArray(raw?.sizes)
-      ? {
-          optionType: "size",
-          optionName: "Size",
-          optionValues: (
-            Array.isArray(attributes?.sizes) ? attributes.sizes : raw?.sizes || []
-          ).map((size: string) => ({
-            value: String(size),
-            inStock: true,
-            stockQty: null,
-          })),
-        }
-      : null);
-  const stock =
-    raw?.stock != null && !Number.isNaN(Number(raw.stock))
-      ? Number(raw.stock)
-      : 0;
-  const inStock =
-    typeof raw?.in_stock === "boolean"
-      ? raw.in_stock
-      : typeof raw?.inStock === "boolean"
-      ? raw.inStock
-      : stock > 0;
-  const originalPrice =
-    comparePrice != null && comparePrice > 0 ? comparePrice : price;
-  const discountPercent =
-    raw?.discountPercent != null
-      ? Number(raw.discountPercent)
-      : raw?.discount_percent != null
-      ? Number(raw.discount_percent)
-      : comparePrice != null && comparePrice > price
-      ? Math.round(((comparePrice - price) / comparePrice) * 100)
-      : 0;
-
-
-  return {
-    id: raw?.id != null ? String(raw.id) : slugify(raw?.name || ""),
-    site_id: raw?.site_id != null ? String(raw.site_id) : undefined,
-    name: raw?.name ?? "",
-    brand: raw?.brand ?? "",
-    category: raw?.category ?? "",
-    category_id: raw?.category_id != null ? String(raw.category_id) : null,
-    category_name: raw?.category_name ?? null,
-    collections: Array.isArray(raw?.collections) ? raw.collections : [],
-    description: raw?.description ?? "",
-    slug: raw?.slug || slugify(raw?.name) || String(raw?.id ?? ""),
-    price,
-    compare_price: comparePrice,
-    images,
-    stock,
-    in_stock: inStock,
-    variant_option: variantOption,
-    originalPrice,
-    discountPercent,
-    image: images[0] || "",
-    sizes: Array.isArray(attributes?.sizes)
-      ? attributes.sizes
-      : Array.isArray(raw?.sizes)
-      ? raw.sizes
-      : [],
-    inStock,
-    average_rating:
-      typeof raw?.average_rating === "number"
-        ? raw.average_rating
-        : Number(raw?.average_rating ?? 0),
-    review_count:
-      typeof raw?.review_count === "number"
-        ? raw.review_count
-        : Number(raw?.review_count ?? 0),
-    reviews: Array.isArray(raw?.reviews) ? raw.reviews : undefined,
-    return_window_days:
-      raw?.return_window_days !== undefined
-        ? raw.return_window_days != null
-          ? Number(raw.return_window_days)
-          : null
-        : undefined,
-    created_at: raw?.created_at ?? null,
-    updated_at: raw?.updated_at ?? null,
-  };
-}
-
-
-async function resolveSiteBySlug(
-  siteSlugParam: string
-): Promise<SavedSite | null> {
-  const publicCandidates = [
-    `${API_BASE_URL}/public/sites/slug/${siteSlugParam}`,
-    `${API_BASE_URL}/sites/slug/${siteSlugParam}`,
-  ];
-
-
-  for (const url of publicCandidates) {
+function getInitialCachedSite(slugOrId?: string): SavedSite | null {
+  if (!slugOrId) return null;
+  if (siteSlugMemoryCache.has(slugOrId)) {
+    return siteSlugMemoryCache.get(slugOrId)!;
+  }
+  if (typeof window !== "undefined") {
     try {
-      const response = await fetch(url, {
-        credentials: "include",
-      });
-
-
-      if (response.ok) {
-        const data = await response.json();
-        if (
-          data?.id ||
-          data?.slug ||
-          data?.site_definition ||
-          data?.draft_definition
-        ) {
-          return data as SavedSite;
+      const raw = localStorage.getItem(`wc_site_snapshot_${slugOrId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw) as SavedSite;
+        if (parsed?.id || parsed?.site_definition) {
+          siteSlugMemoryCache.set(slugOrId, parsed);
+          if (parsed.id) siteSlugMemoryCache.set(parsed.id, parsed);
+          if (parsed.slug) siteSlugMemoryCache.set(parsed.slug, parsed);
+          return parsed;
         }
       }
-    } catch (error) {
-      console.warn("Site slug lookup failed:", url, error);
-    }
+    } catch (_) {}
+  }
+  return null;
+}
+
+async function resolveSiteBySlug(
+  siteSlugParam: string,
+  preferNetwork = true
+): Promise<SavedSite | null> {
+  if (!siteSlugParam) return null;
+  if (!preferNetwork && siteSlugMemoryCache.has(siteSlugParam)) {
+    return siteSlugMemoryCache.get(siteSlugParam)!;
   }
 
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/public/sites/slug/${siteSlugParam}?t=${Date.now()}`,
+      { credentials: "include" }
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      if (
+        data?.id ||
+        data?.slug ||
+        data?.site_definition ||
+        data?.draft_definition
+      ) {
+        const res = data as SavedSite;
+        siteSlugMemoryCache.set(siteSlugParam, res);
+        if (res.id) siteSlugMemoryCache.set(res.id, res);
+        if (res.slug) siteSlugMemoryCache.set(res.slug, res);
+        const parsedDef = res.site_definition || res.draft_definition;
+        const targetSlug = res.slug || siteSlugParam;
+        if (targetSlug && typeof window !== "undefined") {
+          try {
+            const serialized = JSON.stringify(res);
+            localStorage.setItem(`wc_site_snapshot_${targetSlug}`, serialized);
+            if (res.id) {
+              localStorage.setItem(`wc_site_snapshot_${res.id}`, serialized);
+            }
+            if (parsedDef?.theme) {
+              localStorage.setItem(
+                `wc_theme_mode_${targetSlug}`,
+                parsedDef.theme.mode || "light"
+              );
+              if (parsedDef.theme.primary_bg) {
+                localStorage.setItem(
+                  `wc_theme_bg_${targetSlug}`,
+                  parsedDef.theme.primary_bg
+                );
+              }
+            }
+          } catch (_) {}
+        }
+        return res;
+      }
+    }
+  } catch (error) {
+    console.warn("Site slug lookup failed:", error);
+  }
+
+  // Fallback to cached copy if offline
+  if (siteSlugMemoryCache.has(siteSlugParam)) {
+    return siteSlugMemoryCache.get(siteSlugParam)!;
+  }
 
   try {
     const adminResponse = await fetch(`${API_BASE_URL}/auth/admin/sites`, {
       credentials: "include",
     });
 
-
     if (!adminResponse.ok) return null;
 
-
     const sites: SavedSite[] = await adminResponse.json();
-    return sites.find((site) => site.slug === siteSlugParam) ?? null;
+    const found = sites.find((site) => site.slug === siteSlugParam) ?? null;
+    if (found) {
+      siteSlugMemoryCache.set(siteSlugParam, found);
+      if (found.id) siteSlugMemoryCache.set(found.id, found);
+      if (found.slug) siteSlugMemoryCache.set(found.slug, found);
+      const parsedDef = found.draft_definition || found.site_definition;
+      const targetSlug = found.slug || siteSlugParam;
+      if (targetSlug && typeof window !== "undefined") {
+        try {
+          const serialized = JSON.stringify(found);
+          localStorage.setItem(`wc_site_snapshot_${targetSlug}`, serialized);
+          if (found.id) {
+            localStorage.setItem(`wc_site_snapshot_${found.id}`, serialized);
+          }
+          if (parsedDef?.theme) {
+            localStorage.setItem(
+              `wc_theme_mode_${targetSlug}`,
+              parsedDef.theme.mode || "light"
+            );
+            if (parsedDef.theme.primary_bg) {
+              localStorage.setItem(
+                `wc_theme_bg_${targetSlug}`,
+                parsedDef.theme.primary_bg
+              );
+            }
+          }
+        } catch (_) {}
+      }
+    }
+    return found;
   } catch (error) {
     console.warn("Admin site slug fallback failed:", error);
     return null;
@@ -587,30 +556,354 @@ function StorefrontPage({
 }
 
 
+function StorefrontSkeleton({
+  isProductDetail,
+  siteSlug,
+}: {
+  isProductDetail?: boolean;
+  siteSlug?: string;
+}) {
+  const cachedMode =
+    typeof window !== "undefined" && siteSlug
+      ? localStorage.getItem(`wc_theme_mode_${siteSlug}`)
+      : null;
+  const cachedBg =
+    typeof window !== "undefined" && siteSlug
+      ? localStorage.getItem(`wc_theme_bg_${siteSlug}`)
+      : null;
+
+  const isDarkMode = cachedMode === "dark";
+  const bg = cachedBg || (isDarkMode ? "#0f172a" : "#f8fafc");
+  const headerBg = isDarkMode
+    ? "rgba(15,23,42,0.85)"
+    : "rgba(255,255,255,0.85)";
+  const border = isDarkMode
+    ? "1px solid rgba(255,255,255,0.08)"
+    : "1px solid rgba(0,0,0,0.06)";
+  const cardBg = isDarkMode ? "rgba(255,255,255,0.02)" : "#ffffff";
+  const cardBorder = isDarkMode
+    ? "1px solid rgba(255,255,255,0.06)"
+    : "1px solid rgba(0,0,0,0.06)";
+
+  const skStyle: React.CSSProperties = {
+    backgroundImage: isDarkMode
+      ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)"
+      : "linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%)",
+    backgroundSize: "200% 100%",
+    animation: "storeShimmer 1.5s infinite linear",
+    willChange: "background-position",
+    transform: "translateZ(0)",
+  };
+
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: bg,
+        color: isDarkMode ? "#f8fafc" : "#0f172a",
+        overflow: "hidden",
+        fontFamily:
+          "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      }}
+    >
+      <style>{`
+        @keyframes storeShimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      `}</style>
+
+      {/* Navbar Skeleton */}
+      <header
+        style={{
+          height: "64px",
+          borderBottom: border,
+          padding: "0 24px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          background: headerBg,
+          backdropFilter: "blur(12px)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div
+            style={{
+              ...skStyle,
+              width: "36px",
+              height: "36px",
+              borderRadius: "10px",
+            }}
+          />
+          <div
+            style={{
+              ...skStyle,
+              width: "120px",
+              height: "18px",
+              borderRadius: "6px",
+            }}
+          />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
+          <div
+            style={{
+              ...skStyle,
+              width: "60px",
+              height: "14px",
+              borderRadius: "4px",
+            }}
+          />
+          <div
+            style={{
+              ...skStyle,
+              width: "60px",
+              height: "14px",
+              borderRadius: "4px",
+            }}
+          />
+          <div
+            style={{
+              ...skStyle,
+              width: "38px",
+              height: "38px",
+              borderRadius: "50%",
+            }}
+          />
+        </div>
+      </header>
+
+      {/* Main Body Skeleton */}
+      <main
+        style={{
+          maxWidth: "1200px",
+          margin: "0 auto",
+          padding: "32px 20px 64px",
+        }}
+      >
+        {isProductDetail ? (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+              gap: "40px",
+              alignItems: "start",
+            }}
+          >
+            <div
+              style={{
+                ...skStyle,
+                width: "100%",
+                aspectRatio: "1/1",
+                borderRadius: "24px",
+              }}
+            />
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "16px" }}
+            >
+              <div
+                style={{
+                  ...skStyle,
+                  width: "30%",
+                  height: "16px",
+                  borderRadius: "4px",
+                }}
+              />
+              <div
+                style={{
+                  ...skStyle,
+                  width: "85%",
+                  height: "32px",
+                  borderRadius: "8px",
+                }}
+              />
+              <div
+                style={{
+                  ...skStyle,
+                  width: "40%",
+                  height: "28px",
+                  borderRadius: "6px",
+                }}
+              />
+              <div
+                style={{
+                  ...skStyle,
+                  width: "100%",
+                  height: "100px",
+                  borderRadius: "12px",
+                  marginTop: "12px",
+                }}
+              />
+              <div
+                style={{
+                  ...skStyle,
+                  width: "100%",
+                  height: "48px",
+                  borderRadius: "14px",
+                  marginTop: "16px",
+                }}
+              />
+            </div>
+          </div>
+        ) : (
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: "36px" }}
+          >
+            {/* Hero Skeleton */}
+            <div
+              style={{
+                ...skStyle,
+                width: "100%",
+                height: "220px",
+                borderRadius: "24px",
+                border: cardBorder,
+              }}
+            />
+
+            {/* Section Header */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <div
+                style={{
+                  ...skStyle,
+                  width: "180px",
+                  height: "24px",
+                  borderRadius: "6px",
+                }}
+              />
+              <div
+                style={{
+                  ...skStyle,
+                  width: "100%",
+                  maxWidth: "100px",
+                  height: "20px",
+                  borderRadius: "6px",
+                }}
+              />
+            </div>
+
+            {/* Product Grid Skeleton (8 Cards) */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+                gap: "20px",
+              }}
+            >
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                <div
+                  key={i}
+                  style={{
+                    background: cardBg,
+                    border: cardBorder,
+                    borderRadius: "20px",
+                    padding: "14px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "12px",
+                  }}
+                >
+                  <div
+                    style={{
+                      ...skStyle,
+                      width: "100%",
+                      aspectRatio: "1/1",
+                      borderRadius: "14px",
+                    }}
+                  />
+                  <div
+                    style={{
+                      ...skStyle,
+                      width: "40%",
+                      height: "12px",
+                      borderRadius: "4px",
+                    }}
+                  />
+                  <div
+                    style={{
+                      ...skStyle,
+                      width: "80%",
+                      height: "16px",
+                      borderRadius: "6px",
+                    }}
+                  />
+                  <div
+                    style={{
+                      ...skStyle,
+                      width: "50%",
+                      height: "20px",
+                      borderRadius: "6px",
+                    }}
+                  />
+                  <div
+                    style={{
+                      ...skStyle,
+                      width: "100%",
+                      height: "36px",
+                      borderRadius: "10px",
+                      marginTop: "auto",
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+
 function BuilderPageContent() {
   const params = useParams();
   const siteId = params.siteId;
   const siteSlugParam = params.slug;
-  const productSlug = params.productSlug;
+  const location = useLocation();
+  const pathMatch = location.pathname.match(/\/products\/([^/?#]+)/);
+  const productSlug = params.productSlug || (pathMatch ? decodeURIComponent(pathMatch[1]) : undefined);
 
   const navigate = useNavigate();
-  const location = useLocation();
   const { products } = useCart();
   const { admin: authAdmin, logoutAdmin: authLogoutAdmin } = useAdminAuth();
 
-  const [resolvedSiteId, setResolvedSiteId] = useState("");
+  const isStoreRoute = location.pathname.startsWith("/store/");
+  const initialCachedSite =
+    getInitialCachedSite(siteSlugParam) ||
+    getInitialCachedSite(siteId) ||
+    null;
+
+  const [resolvedSiteId, setResolvedSiteId] = useState(
+    initialCachedSite?.id || siteId || ""
+  );
   const [siteDefinition, setSiteDefinition] = useState<SiteDefinition | null>(
-    null
+    initialCachedSite
+      ? initialCachedSite.draft_definition || initialCachedSite.site_definition
+      : null
   );
   const [draftSiteDefinition, setDraftSiteDefinition] =
-    useState<SiteDefinition | null>(null);
-  const [siteName, setSiteName] = useState("");
-  const [siteSlug, setSiteSlug] = useState("");
-  const [loading, setLoading] = useState(true);
+    useState<SiteDefinition | null>(
+      initialCachedSite
+        ? initialCachedSite.draft_definition || initialCachedSite.site_definition
+        : null
+    );
+  const [siteName, setSiteName] = useState(
+    initialCachedSite?.site_definition?.site?.brand_name ||
+      initialCachedSite?.slug ||
+      ""
+  );
+  const [siteSlug, setSiteSlug] = useState(initialCachedSite?.slug || "");
+  const [loading, setLoading] = useState(!initialCachedSite);
   const [publishing, setPublishing] = useState(false);
   const [publishSuccess, setPublishSuccess] = useState(false);
-  const [adminAuthChecked, setAdminAuthChecked] = useState(false);
-  const [adminAuthenticated, setAdminAuthenticated] = useState(false);
+  const [adminAuthChecked, setAdminAuthChecked] = useState(
+    isStoreRoute || !!authAdmin
+  );
+  const [adminAuthenticated, setAdminAuthenticated] = useState(!!authAdmin);
 
   const hasUnpublishedChanges = useMemo(() => {
     if (!draftSiteDefinition || !siteDefinition) return false;
@@ -645,16 +938,80 @@ function BuilderPageContent() {
       }
 
       const updatedSite = await response.json();
-      setSiteDefinition(updatedSite.site_definition || draftSiteDefinition);
-      setDraftSiteDefinition(updatedSite.draft_definition || draftSiteDefinition);
+      const finalDef = updatedSite.site_definition || draftSiteDefinition;
+      setSiteDefinition(finalDef);
+      setDraftSiteDefinition(updatedSite.draft_definition || finalDef);
       setPublishSuccess(true);
       setTimeout(() => setPublishSuccess(false), 3000);
+
+      // Invalidate memory and local caches so customer storefront immediately renders new theme
+      const currentSlug = siteSlug || updatedSite.slug || siteSlugParam;
+      if (currentSlug) {
+        siteSlugMemoryCache.set(currentSlug, updatedSite);
+        try {
+          localStorage.setItem(`wc_site_snapshot_${currentSlug}`, JSON.stringify(updatedSite));
+          if (finalDef?.theme) {
+            localStorage.setItem(`wc_theme_mode_${currentSlug}`, finalDef.theme.mode || "light");
+            if (finalDef.theme.primary_bg) {
+              localStorage.setItem(`wc_theme_bg_${currentSlug}`, finalDef.theme.primary_bg);
+            }
+          }
+        } catch (_) {}
+      }
+      if (currentSiteId) {
+        siteSlugMemoryCache.set(currentSiteId, updatedSite);
+        try {
+          localStorage.setItem(`wc_site_snapshot_${currentSiteId}`, JSON.stringify(updatedSite));
+        } catch (_) {}
+      }
     } catch (err) {
       console.error("Error publishing site:", err);
     } finally {
       setPublishing(false);
     }
   };
+
+  const handleSiteDefinitionChange = useCallback(
+    (next: SiteDefinition) => {
+      setDraftSiteDefinition(next);
+      const currentSlug = siteSlug || siteSlugParam;
+      const currentId = resolvedSiteId || siteId;
+      const existing =
+        (currentSlug ? siteSlugMemoryCache.get(currentSlug) : null) ||
+        (currentId ? siteSlugMemoryCache.get(currentId) : null);
+
+      const updatedSnapshot: SavedSite = {
+        id: currentId || existing?.id || "",
+        slug: currentSlug || existing?.slug || "",
+        draft_definition: next,
+        site_definition: siteDefinition || existing?.site_definition || next,
+        version: existing?.version ?? 1,
+        created_at: existing?.created_at ?? new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      if (currentSlug) {
+        siteSlugMemoryCache.set(currentSlug, updatedSnapshot);
+        try {
+          localStorage.setItem(`wc_site_snapshot_${currentSlug}`, JSON.stringify(updatedSnapshot));
+          if (next.theme) {
+            localStorage.setItem(`wc_theme_mode_${currentSlug}`, next.theme.mode || "light");
+            if (next.theme.primary_bg) {
+              localStorage.setItem(`wc_theme_bg_${currentSlug}`, next.theme.primary_bg);
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (currentId) {
+        siteSlugMemoryCache.set(currentId, updatedSnapshot);
+        try {
+          localStorage.setItem(`wc_site_snapshot_${currentId}`, JSON.stringify(updatedSnapshot));
+        } catch (_) {}
+      }
+    },
+    [siteSlug, siteSlugParam, resolvedSiteId, siteId, siteDefinition]
+  );
 
 
   const [editMode, setEditMode] = useState(false);
@@ -673,7 +1030,8 @@ function BuilderPageContent() {
     | null
   >(null);
   const [qrOpen, setQrOpen] = useState(false);
-  const [activeDrawer, setActiveDrawer] = useState<
+
+  const [activeDrawer, setActiveDrawerState] = useState<
     | "saved-sites"
     | "chat"
     | "customize"
@@ -682,16 +1040,67 @@ function BuilderPageContent() {
     | "settings"
     | "qr-link"
     | null
-  >(null);
-  const [savedSites, setSavedSites] = useState<SavedSite[]>([]);
+  >(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const saved = sessionStorage.getItem("wc_active_builder_drawer");
+      if (
+        saved &&
+        [
+          "saved-sites",
+          "chat",
+          "customize",
+          "admin-panel",
+          "assets",
+          "settings",
+        ].includes(saved)
+      ) {
+        return saved as any;
+      }
+    } catch {}
+    return null;
+  });
+
+  const setActiveDrawer = useCallback((
+    nextState:
+      | "saved-sites"
+      | "chat"
+      | "customize"
+      | "admin-panel"
+      | "assets"
+      | "settings"
+      | "qr-link"
+      | null
+      | ((prev: "saved-sites" | "chat" | "customize" | "admin-panel" | "assets" | "settings" | "qr-link" | null) => "saved-sites" | "chat" | "customize" | "admin-panel" | "assets" | "settings" | "qr-link" | null)
+  ) => {
+    setActiveDrawerState((prev) => {
+      const next = typeof nextState === "function" ? nextState(prev) : nextState;
+      try {
+        if (next) {
+          sessionStorage.setItem("wc_active_builder_drawer", next);
+        } else {
+          sessionStorage.removeItem("wc_active_builder_drawer");
+        }
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  const [savedSites, setSavedSites] = useState<SavedSite[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = localStorage.getItem("wc_admin_saved_sites");
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
   const [savedSitesLoading, setSavedSitesLoading] = useState(false);
   const [pendingCounts, setPendingCounts] = useState<{ new_orders: number; new_returns: number; total: number } | null>(null);
 
 
   const previewPaneRef = useRef<HTMLDivElement | null>(null);
 
-
-  const isStoreRoute = location.pathname.startsWith("/store/");
   const appBase = isStoreRoute
     ? `/store/${siteSlugParam ?? ""}`
     : `/builder/${resolvedSiteId || siteId || ""}`;
@@ -748,14 +1157,12 @@ function BuilderPageContent() {
 
         if (!response.ok) {
           setAdminAuthenticated(false);
-
-          if (isAdminRoute) {
+          if (!isStoreRoute) {
             navigate("/admin/login", {
               replace: true,
               state: { from: location.pathname },
             });
           }
-
           return;
         }
 
@@ -763,8 +1170,7 @@ function BuilderPageContent() {
       } catch (error) {
         console.error("Failed to verify admin session:", error);
         setAdminAuthenticated(false);
-
-        if (isAdminRoute) {
+        if (!isStoreRoute) {
           navigate("/admin/login", {
             replace: true,
             state: { from: location.pathname },
@@ -813,7 +1219,6 @@ function BuilderPageContent() {
   const loadSavedSites = async () => {
     if (isStoreRoute) return;
     try {
-      setSavedSitesLoading(true);
       const response = await fetch(`${API_BASE_URL}/auth/admin/sites`, {
         credentials: "include",
       });
@@ -821,12 +1226,13 @@ function BuilderPageContent() {
         throw new Error(`Failed to load admin sites: ${response.status}`);
       }
       const data = await response.json();
-      setSavedSites(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setSavedSites(list);
+      try {
+        localStorage.setItem("wc_admin_saved_sites", JSON.stringify(list));
+      } catch (_) {}
     } catch (error) {
       console.error("Error loading saved sites:", error);
-      setSavedSites([]);
-    } finally {
-      setSavedSitesLoading(false);
     }
   };
 
@@ -849,7 +1255,13 @@ function BuilderPageContent() {
         throw new Error(errData.detail || `Failed to delete site (${response.status})`);
       }
 
-      setSavedSites((prev) => prev.filter((site) => site.id !== targetSiteId));
+      setSavedSites((prev) => {
+        const next = prev.filter((site) => site.id !== targetSiteId);
+        try {
+          localStorage.setItem("wc_admin_saved_sites", JSON.stringify(next));
+        } catch (_) {}
+        return next;
+      });
 
       if (targetSiteId === (resolvedSiteId || siteId)) {
         navigate("/admin/sites", { replace: true });
@@ -861,31 +1273,75 @@ function BuilderPageContent() {
   };
 
 
-  const selectedProduct: Product | null = useMemo(() => {
-    if (!productSlug) return null;
-    if (!products.length) return null;
+  const [asyncDetailProduct, setAsyncDetailProduct] = useState<Product | null>(null);
 
+  useEffect(() => {
+    if (!productSlug) {
+      setAsyncDetailProduct(null);
+      return;
+    }
 
     const normalizedTarget = String(productSlug).trim().toLowerCase();
+    const inMem = products.find(
+      (p) =>
+        String(p.slug || "").trim().toLowerCase() === normalizedTarget ||
+        String(p.id || "").trim().toLowerCase() === normalizedTarget ||
+        slugify(String(p.name || "")) === normalizedTarget
+    );
 
+    if (inMem) {
+      setAsyncDetailProduct(inMem);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchProduct = async () => {
+      try {
+        const targetSite = resolvedSiteId || siteId;
+        if (!targetSite) return;
+
+        const res = await fetch(
+          `${API_BASE_URL}/sites/${targetSite}/products/public/by-slug/${encodeURIComponent(productSlug)}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && data && (data.id || data.name)) {
+            setAsyncDetailProduct(normalizeStorefrontProduct(data));
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load product by slug", e);
+      }
+    };
+
+    fetchProduct();
+    return () => {
+      cancelled = true;
+    };
+  }, [productSlug, products, resolvedSiteId, siteId]);
+
+  const selectedProduct: Product | null = useMemo(() => {
+    if (!productSlug) return null;
+
+    const normalizedTarget = String(productSlug).trim().toLowerCase();
 
     const bySlug = products.find(
       (p) => String(p.slug || "").trim().toLowerCase() === normalizedTarget
     );
     if (bySlug) return bySlug;
 
-
     const byId = products.find(
       (p) => String(p.id || "").trim().toLowerCase() === normalizedTarget
     );
     if (byId) return byId;
 
-
     const byNameSlug = products.find(
       (p) => slugify(String(p.name || "")) === normalizedTarget
     );
-    return byNameSlug ?? null;
-  }, [productSlug, products]);
+    if (byNameSlug) return byNameSlug;
+
+    return asyncDetailProduct ?? null;
+  }, [productSlug, products, asyncDetailProduct]);
 
 
   useEffect(() => {
@@ -909,6 +1365,21 @@ function BuilderPageContent() {
           }
 
           data = (await response.json()) as SavedSite;
+          siteSlugMemoryCache.set(siteId, data);
+          if (data.slug) siteSlugMemoryCache.set(data.slug, data);
+          try {
+            localStorage.setItem(`wc_site_snapshot_${siteId}`, JSON.stringify(data));
+            if (data.slug) {
+              localStorage.setItem(`wc_site_snapshot_${data.slug}`, JSON.stringify(data));
+              const def = data.draft_definition || data.site_definition;
+              if (def?.theme) {
+                localStorage.setItem(`wc_theme_mode_${data.slug}`, def.theme.mode || "light");
+                if (def.theme.primary_bg) {
+                  localStorage.setItem(`wc_theme_bg_${data.slug}`, def.theme.primary_bg);
+                }
+              }
+            }
+          } catch (_) {}
         } else if (siteSlugParam) {
           data = await resolveSiteBySlug(siteSlugParam);
 
@@ -921,8 +1392,9 @@ function BuilderPageContent() {
 
         if (cancelled) return;
 
-        const parsedSiteDefinition: SiteDefinition =
-          data.draft_definition || data.site_definition;
+        const parsedSiteDefinition: SiteDefinition = isStoreRoute
+          ? data.site_definition || data.draft_definition
+          : data.draft_definition || data.site_definition;
 
         setResolvedSiteId(data.id || "");
         setSiteSlug(data.slug || "");
@@ -939,6 +1411,18 @@ function BuilderPageContent() {
         setSiteName(
           parsedSiteDefinition.site?.brand_name || data.slug || "Website"
         );
+
+        if (isStoreRoute && (data.slug || siteSlugParam)) {
+          const sSlug = data.slug || siteSlugParam || "";
+          try {
+            if (parsedSiteDefinition.theme) {
+              localStorage.setItem(`wc_theme_mode_${sSlug}`, parsedSiteDefinition.theme.mode || "light");
+              if (parsedSiteDefinition.theme.primary_bg) {
+                localStorage.setItem(`wc_theme_bg_${sSlug}`, parsedSiteDefinition.theme.primary_bg);
+              }
+            }
+          } catch (_) {}
+        }
 
         const freshAppBase = isStoreRoute
           ? `/store/${siteSlugParam ?? ""}`
@@ -1098,43 +1582,55 @@ function BuilderPageContent() {
     !isAdminRoute && !isStoreRoute && adminAuthenticated;
 
 
-  if (loading || !adminAuthChecked) {
+  if (isStoreRoute && loading && !activeSiteDefinition) {
     return (
-      <div
-        style={{
-          minHeight: "100vh",
-          padding: "24px",
-          background: "#f8fafc",
-          color: "#111827",
-        }}
-      >
-        <p>Loading website...</p>
-      </div>
+      <StorefrontSkeleton
+        isProductDetail={Boolean(productSlug)}
+        siteSlug={siteSlug || siteSlugParam || ""}
+      />
     );
   }
 
-
-  if (isAdminRoute && !adminAuthenticated) {
+  if (!isStoreRoute && !adminAuthenticated && adminAuthChecked) {
     return null;
   }
 
-
-  if (!activeSiteDefinition) {
+  if (isStoreRoute && !activeSiteDefinition && !loading) {
     return (
       <div
         style={{
           minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#ffffff",
+          color: "#0f172a",
+          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
           padding: "24px",
-          background: "#f8fafc",
-          color: "#111827",
+          textAlign: "center",
         }}
       >
-        <p>Website not found.</p>
-        {!isStoreRoute && (
-          <Link to="/admin/sites" style={{ color: "#2563eb" }}>
-            Back to dashboard
-          </Link>
-        )}
+        <div
+          style={{
+            width: "56px",
+            height: "56px",
+            borderRadius: "16px",
+            background: "rgba(239, 68, 68, 0.08)",
+            border: "1px solid rgba(239, 68, 68, 0.2)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "24px",
+            marginBottom: "16px",
+          }}
+        >
+          🏪
+        </div>
+        <h2 style={{ fontSize: "20px", fontWeight: 700, margin: "0 0 8px" }}>Store Not Found</h2>
+        <p style={{ fontSize: "14px", color: "#64748b", margin: "0 0 20px", maxWidth: "380px" }}>
+          We couldn't locate this storefront. Please check the link or return to the main dashboard.
+        </p>
       </div>
     );
   }
@@ -1142,12 +1638,12 @@ function BuilderPageContent() {
 
   const pageBg = isAdminRoute
     ? "#ffffff"
-    : activeSiteDefinition.theme?.primary_bg ||
-      (activeSiteDefinition.theme?.mode === "light" ? "#f8fafc" : "#0f172a");
+    : activeSiteDefinition?.theme?.primary_bg ||
+      (activeSiteDefinition?.theme?.mode === "light" ? "#f8fafc" : "#0f172a");
   const textColor = isAdminRoute
     ? "#0f172a"
-    : activeSiteDefinition.theme?.text_color ||
-      (activeSiteDefinition.theme?.mode === "light" ? "#111827" : "#f9fafb");
+    : activeSiteDefinition?.theme?.text_color ||
+      (activeSiteDefinition?.theme?.mode === "light" ? "#111827" : "#f9fafb");
 
 
   const topBar = showAdminTopbar ? (
@@ -1170,11 +1666,19 @@ function BuilderPageContent() {
 
   const leftPanel = showAdminTopbar ? (
     <BuilderControlPanel
-      activeKey={controlPanelSelection as any}
+      activeKey={(qrOpen ? "qr-link" : editMode ? "customize" : activeDrawer) as any}
       badgeCounts={storeBadge != null ? { "admin-panel": storeBadge } : {}}
       onSelect={(key) => {
         if (!showAdminTopbar) return;
 
+        if (key === "qr-link") {
+          if (editMode) handleCloseEditMode();
+          setQrOpen((prev) => !prev);
+          return;
+        }
+
+        // Close QR popup if another tool is clicked
+        setQrOpen(false);
 
         if (key === "customize") {
           if (editMode) {
@@ -1189,7 +1693,6 @@ function BuilderPageContent() {
           return;
         }
 
-
         if (key === "saved-sites") {
           if (editMode) handleCloseEditMode();
           setControlPanelSelection(key);
@@ -1197,14 +1700,12 @@ function BuilderPageContent() {
           return;
         }
 
-
         if (key === "admin-panel") {
           if (editMode) handleCloseEditMode();
           setControlPanelSelection(key);
           setActiveDrawer((prev) => (prev === "admin-panel" ? null : "admin-panel"));
           return;
         }
-
 
         if (key === "assets") {
           if (editMode) handleCloseEditMode();
@@ -1216,7 +1717,6 @@ function BuilderPageContent() {
           return;
         }
 
-
         if (key === "chat") {
           if (editMode) handleCloseEditMode();
           if (isAdminRoute) {
@@ -1227,17 +1727,10 @@ function BuilderPageContent() {
           return;
         }
 
-
         if (key === "settings") {
           if (editMode) handleCloseEditMode();
           setControlPanelSelection(key);
           setActiveDrawer((prev) => (prev === "settings" ? null : "settings"));
-          return;
-        }
-
-
-        if (key === "qr-link") {
-          setQrOpen(true);
           return;
         }
       }}
@@ -1257,54 +1750,60 @@ function BuilderPageContent() {
               : "rgba(15,23,42,0.96)",
         }}
       >
-        <Suspense
-          fallback={
-            <div style={{ padding: "20px", color: "#94a3b8", fontSize: "13px" }}>
-              Loading customizer...
-            </div>
+        <EditorSidebar
+          siteDefinition={activeSiteDefinition}
+          selectedBlockId={selectedBlockId}
+          selectedTab={editorTab}
+          onTabChange={setEditorTab}
+          onSiteDefinitionChange={(next) =>
+            handleSiteDefinitionChange(next as SiteDefinition)
           }
-        >
-          <EditorSidebar
-            siteDefinition={activeSiteDefinition}
-            selectedBlockId={selectedBlockId}
-            selectedTab={editorTab}
-            onTabChange={setEditorTab}
-            onSiteDefinitionChange={(next) =>
-              setDraftSiteDefinition(next as SiteDefinition)
-            }
-          />
-        </Suspense>
+        />
       </div>
     ) : undefined;
 
 
   const drawerNode =
     showAdminTopbar && activeDrawer ? (
-      <Suspense fallback={null}>
-        <BuilderDrawerPanel
-          activeDrawer={activeDrawer}
-          onClose={() => setActiveDrawer(null)}
-          savedSites={savedSites}
-          selectedSiteId={resolvedSiteId || siteId || ""}
-          onSelectSite={(targetSiteId) => {
-            if (targetSiteId === (resolvedSiteId || siteId)) {
-              setActiveDrawer(null);
-              return;
-            }
-            setActiveDrawer(null);
-            navigate(`/builder/${targetSiteId}`);
-          }}
-          onDeleteSite={handleDeleteSite}
-          activeAdminNavKey={activeAdminNavKey}
-          onSelectAdminNav={(key) => {
-            navigate(`${builderBase}/admin/${key}`);
-          }}
-          siteDefinition={activeSiteDefinition}
-          onSiteDefinitionChange={(next) =>
-            setDraftSiteDefinition(next as SiteDefinition)
+      <BuilderDrawerPanel
+        activeDrawer={activeDrawer}
+        onClose={() => setActiveDrawer(null)}
+        savedSites={savedSites}
+        selectedSiteId={resolvedSiteId || siteId || ""}
+        onSelectSite={(targetSiteId) => {
+          const target = savedSites.find((s) => s.id === targetSiteId);
+          if (target) {
+            siteSlugMemoryCache.set(targetSiteId, target);
+            if (target.slug) siteSlugMemoryCache.set(target.slug, target);
+            try {
+              localStorage.setItem(
+                `wc_site_snapshot_${targetSiteId}`,
+                JSON.stringify(target)
+              );
+              if (target.slug) {
+                localStorage.setItem(
+                  `wc_site_snapshot_${target.slug}`,
+                  JSON.stringify(target)
+                );
+              }
+            } catch (_) {}
           }
-        />
-      </Suspense>
+          if (targetSiteId === (resolvedSiteId || siteId)) {
+            return;
+          }
+          // Persistent drawer: do NOT close drawer on site switch!
+          navigate(`/builder/${targetSiteId}`);
+        }}
+        onDeleteSite={handleDeleteSite}
+        activeAdminNavKey={activeAdminNavKey}
+        onSelectAdminNav={(key) => {
+          navigate(`${builderBase}/admin/${key}`);
+        }}
+        siteDefinition={activeSiteDefinition}
+        onSiteDefinitionChange={(next) =>
+          handleSiteDefinitionChange(next as SiteDefinition)
+        }
+      />
     ) : null;
 
 
@@ -1327,6 +1826,12 @@ function BuilderPageContent() {
           zIndex: 1,
         }}
       >
+        {!activeSiteDefinition && loading ? (
+          <StorefrontSkeleton
+            isProductDetail={Boolean(productSlug)}
+            siteSlug={siteSlug || siteSlugParam || ""}
+          />
+        ) : (
         <Suspense
           fallback={
             <div
@@ -1459,18 +1964,17 @@ function BuilderPageContent() {
             )}
           </Routes>
         </Suspense>
+        )}
       </div>
 
 
-      <Suspense fallback={null}>
-        <QrLinkPopup
-          open={qrOpen}
-          onClose={() => setQrOpen(false)}
-          customerUrl={
-            siteSlug ? `${window.location.origin}/store/${siteSlug}` : ""
-          }
-        />
-      </Suspense>
+      <QrLinkPopup
+        open={qrOpen}
+        onClose={() => setQrOpen(false)}
+        customerUrl={
+          siteSlug ? `${window.location.origin}/store/${siteSlug}` : ""
+        }
+      />
 
       {/* Floating Bottom-Right Corner Publish Button (Appears only when changes exist) */}
       {showAdminTopbar && !isStoreRoute && !isAdminRoute && (hasUnpublishedChanges || publishing || publishSuccess) && (
@@ -1509,11 +2013,32 @@ export default function BuilderPage() {
   const params = useParams();
   const siteId = params.siteId;
   const siteSlugParam = params.slug;
-  const [resolvedSiteId, setResolvedSiteId] = useState(siteId || "");
+
+  const initialCachedSite =
+    getInitialCachedSite(siteSlugParam) || getInitialCachedSite(siteId) || null;
+  const [resolvedSiteId, setResolvedSiteId] = useState(
+    initialCachedSite?.id || siteId || ""
+  );
   const [siteProducts, setSiteProducts] = useState<Product[]>([]);
-  const [defaultReturnWindowDays, setDefaultReturnWindowDays] = useState<number>(7);
+  const [isProductsLoading, setIsProductsLoading] = useState<boolean>(true);
+  const [defaultReturnWindowDays, setDefaultReturnWindowDays] = useState<number>(
+    initialCachedSite?.default_return_window_days != null
+      ? Number(initialCachedSite.default_return_window_days)
+      : 7
+  );
 
   useEffect(() => {
+    // Clean up any legacy cache keys from storage to keep browser memory clean
+    try {
+      if (typeof window !== "undefined" && window.sessionStorage) {
+        Object.keys(window.sessionStorage).forEach((k) => {
+          if (k.startsWith("wc_prod_cache_")) {
+            window.sessionStorage.removeItem(k);
+          }
+        });
+      }
+    } catch (_) {}
+
     let cancelled = false;
 
     const resolveAndLoadProducts = async () => {
@@ -1545,7 +2070,10 @@ export default function BuilderPage() {
         }
 
         if (!targetSiteId) {
-          if (!cancelled) setSiteProducts([]);
+          if (!cancelled) {
+            setSiteProducts([]);
+            setIsProductsLoading(false);
+          }
           return;
         }
 
@@ -1555,7 +2083,7 @@ export default function BuilderPage() {
         }
 
         const res = await fetch(
-          `${API_BASE_URL}/sites/${targetSiteId}/products/public`
+          `${API_BASE_URL}/sites/${targetSiteId}/products/public?page=1&page_size=100`
         );
 
         if (res.ok) {
@@ -1566,14 +2094,23 @@ export default function BuilderPage() {
             ? data.items
             : [];
           const normalizedProducts = rawList.map(normalizeStorefrontProduct);
-          if (!cancelled) setSiteProducts(normalizedProducts);
+          if (!cancelled) {
+            setSiteProducts(normalizedProducts);
+            setIsProductsLoading(false);
+          }
         } else {
           console.error("Failed to load products for site", res.status);
-          if (!cancelled) setSiteProducts([]);
+          if (!cancelled) {
+            setSiteProducts([]);
+            setIsProductsLoading(false);
+          }
         }
       } catch (err) {
         console.error("Error loading products for site", err);
-        if (!cancelled) setSiteProducts([]);
+        if (!cancelled) {
+          setSiteProducts([]);
+          setIsProductsLoading(false);
+        }
       }
     };
 
@@ -1594,6 +2131,7 @@ export default function BuilderPage() {
       products={siteProducts}
       siteId={resolvedSiteId || siteId || ""}
       defaultReturnWindowDays={defaultReturnWindowDays}
+      isProductsLoading={isProductsLoading}
     >
       <BuilderPageContent />
     </CartProvider>

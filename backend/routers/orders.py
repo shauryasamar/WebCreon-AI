@@ -10,6 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm.attributes import flag_modified
+from sqlalchemy import cast, String
 from sqlmodel import Session, delete, func, select
 
 from auth_middleware import authenticate_admin, authenticate_customer, enforce_site_ownership
@@ -1149,18 +1150,106 @@ def get_admin_pending_counts(
     }
 
 
+ORDER_TAB_STATUS_MAP = {
+    "new": ["placed"],
+    "yet_to_ship": ["confirmed"],
+    "yet_to_deliver": ["shipped", "out_for_delivery"],
+    "delivered": ["delivered"],
+    "cancelled": ["cancelled", "partially_cancelled"],
+}
+
+
 @router.get("/admin/{site_id}")
 def get_admin_orders(
     site_id: UUID,
+    page: Optional[int] = Query(None, ge=1, description="Page number"),
+    page_size: Optional[int] = Query(None, ge=1, le=100, description="Items per page"),
+    tab: Optional[str] = Query(None, description="Filter by tab: new, yet_to_ship, yet_to_deliver, delivered, cancelled"),
+    status: Optional[str] = Query(None, description="Direct status filter"),
+    search: Optional[str] = Query(None, description="Search by order ID, customer name, phone, email"),
+    payment_method: Optional[str] = Query(None, description="Filter by payment method: all, upi, card, cod, etc."),
+    fulfillment: Optional[str] = Query(None, description="Filter by fulfillment mode: all, own_agent, shiprocket, manual, unassigned"),
+    date_filter: Optional[str] = Query(None, description="all, today, last_7_days, last_30_days, custom"),
+    from_date: Optional[str] = Query(None),
+    to_date: Optional[str] = Query(None),
     admin=Depends(authenticate_admin),
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
-    orders = session.exec(
-        select(Order)
-        .where(Order.site_id == site_id)
-        .order_by(Order.created_at.desc())
-    ).all()
+    base_query = select(Order).where(Order.site_id == site_id)
+
+    # 1. Filter by Tab or Status
+    if tab and tab in ORDER_TAB_STATUS_MAP:
+        base_query = base_query.where(Order.status.in_(ORDER_TAB_STATUS_MAP[tab]))
+    elif status and status != "all":
+        base_query = base_query.where(Order.status == status)
+
+    # 2. Payment Method Filter
+    if payment_method and payment_method != "all":
+        base_query = base_query.where(Order.payment_method.ilike(f"%{payment_method}%"))
+
+    # 3. Search Filter
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        base_query = base_query.where(
+            (cast(Order.id, String).ilike(term))
+            | (cast(Order.shipping_address, String).ilike(term))
+            | (Order.payment_method.ilike(term))
+        )
+
+    # 4. Date Filter
+    now = datetime.now(timezone.utc)
+    if date_filter == "today":
+        start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        base_query = base_query.where(Order.created_at >= start_of_today)
+    elif date_filter == "last_7_days":
+        from datetime import timedelta
+        base_query = base_query.where(Order.created_at >= now - timedelta(days=7))
+    elif date_filter == "last_30_days":
+        from datetime import timedelta
+        base_query = base_query.where(Order.created_at >= now - timedelta(days=30))
+    elif date_filter == "custom":
+        if from_date:
+            try:
+                dt_from = datetime.fromisoformat(from_date)
+                base_query = base_query.where(Order.created_at >= dt_from)
+            except Exception:
+                pass
+        if to_date:
+            try:
+                dt_to = datetime.fromisoformat(to_date)
+                base_query = base_query.where(Order.created_at <= dt_to)
+            except Exception:
+                pass
+
+    # Compute Tab Counts directly in PostgreSQL
+    tab_counts = {}
+    for t_key, statuses in ORDER_TAB_STATUS_MAP.items():
+        cnt = session.exec(
+            select(func.count()).select_from(Order).where(
+                Order.site_id == site_id,
+                Order.status.in_(statuses),
+            )
+        ).one() or 0
+        tab_counts[t_key] = cnt
+
+    # Total Count for active query
+    total_count = session.exec(
+        select(func.count()).select_from(base_query.subquery())
+    ).one() or 0
+
+    # Paginate
+    if page is not None and page_size is not None:
+        total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
+        paginated_query = (
+            base_query.order_by(Order.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        orders = session.exec(paginated_query).all()
+    else:
+        orders = session.exec(base_query.order_by(Order.created_at.desc())).all()
+        total_pages = 1
 
     order_ids = [order.id for order in orders]
     shipment_map: dict[UUID, Shipment] = {}
@@ -1190,7 +1279,7 @@ def get_admin_orders(
         except Exception:
             session.rollback()
 
-    return [
+    serialized = [
         {
             "id": str(order.id),
             "customer_id": str(order.customer_id),
@@ -1238,6 +1327,18 @@ def get_admin_orders(
         }
         for order in orders
     ]
+
+    if page is not None and page_size is not None:
+        return {
+            "orders": serialized,
+            "total": total_count,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "tab_counts": tab_counts,
+        }
+
+    return serialized
 
 
 @router.get("/admin/{site_id}/{order_id}")
@@ -2033,10 +2134,7 @@ def get_my_orders(
                 shipment_map[sh.order_id] = sh
 
     response = []
-    has_customer_sync = False
     for order in orders:
-        if _sync_order_return_status(order, session, items_map.get(order.id)):
-            has_customer_sync = True
         serialized_items = [
             serialize_customer_order_item(item, order.status)
             for item in items_map.get(order.id, [])
@@ -2072,12 +2170,6 @@ def get_my_orders(
                 "refund_info": build_customer_refund_info(order),
             }
         )
-
-    if has_customer_sync:
-        try:
-            session.commit()
-        except Exception:
-            session.rollback()
 
     if page is not None and page_size is not None:
         return {

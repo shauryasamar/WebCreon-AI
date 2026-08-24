@@ -280,15 +280,16 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
     borderRadius: computedRadius,
     padding: containerPadding,
     height: computedHeight,
+    minHeight: computedHeight,
+    maxHeight: computedHeight,
     width: computedWidth,
     maxWidth: "100%",
     margin: "0 auto",
-    minHeight: "180px",
     display: "flex",
     flexDirection: "column",
     justifyContent: "center",
-    transition: "all 250ms ease",
     boxSizing: "border-box",
+    flexShrink: 0,
     boxShadow: isDarkMode
       ? "0 16px 40px rgba(0, 0, 0, 0.4)"
       : "0 12px 36px rgba(15, 23, 42, 0.06)",
@@ -344,13 +345,39 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
             </div>
 
             {/* Headline */}
-            <h1 style={{ fontSize: headlineFontSize, fontWeight: 800, color: slideTextColor, lineHeight: 1.12, margin: 0 }}>
+            <h1
+              style={{
+                fontSize: headlineFontSize,
+                fontWeight: 800,
+                color: slideTextColor,
+                lineHeight: 1.12,
+                margin: 0,
+                overflow: "hidden",
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical",
+                textOverflow: "ellipsis",
+              }}
+            >
               {currentSlide.headline}
             </h1>
 
             {/* Subheadline (If height permits) */}
             {showSubheadline && (
-              <p style={{ fontSize: subheadlineFontSize, color: slideTextColor, opacity: 0.88, margin: 0, lineHeight: 1.35 }}>
+              <p
+                style={{
+                  fontSize: subheadlineFontSize,
+                  color: slideTextColor,
+                  opacity: 0.88,
+                  margin: 0,
+                  lineHeight: 1.35,
+                  overflow: "hidden",
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  textOverflow: "ellipsis",
+                }}
+              >
                 {currentSlide.subheadline}
               </p>
             )}
@@ -418,11 +445,36 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                   {currentSlide.badge}
                 </span>
               )}
-              <h1 style={{ fontSize: headlineFontSize, fontWeight: 800, color: slideTextColor, lineHeight: 1.12, margin: 0 }}>
+              <h1
+                style={{
+                  fontSize: headlineFontSize,
+                  fontWeight: 800,
+                  color: slideTextColor,
+                  lineHeight: 1.12,
+                  margin: 0,
+                  overflow: "hidden",
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  textOverflow: "ellipsis",
+                }}
+              >
                 {currentSlide.headline}
               </h1>
               {showSubheadline && (
-                <p style={{ fontSize: subheadlineFontSize, color: slideTextColor, opacity: 0.85, margin: 0 }}>
+                <p
+                  style={{
+                    fontSize: subheadlineFontSize,
+                    color: slideTextColor,
+                    opacity: 0.85,
+                    margin: 0,
+                    overflow: "hidden",
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                    textOverflow: "ellipsis",
+                  }}
+                >
                   {currentSlide.subheadline}
                 </p>
               )}
@@ -484,11 +536,37 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                 {currentSlide.badge}
               </span>
             )}
-            <h1 style={{ fontSize: headlineFontSize, fontWeight: 800, color: slideTextColor, lineHeight: 1.12, margin: 0 }}>
+            <h1
+              style={{
+                fontSize: headlineFontSize,
+                fontWeight: 800,
+                color: slideTextColor,
+                lineHeight: 1.12,
+                margin: 0,
+                overflow: "hidden",
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical",
+                textOverflow: "ellipsis",
+              }}
+            >
               {currentSlide.headline}
             </h1>
             {showSubheadline && (
-              <p style={{ fontSize: subheadlineFontSize, color: slideTextColor, opacity: 0.88, margin: 0, lineHeight: 1.35 }}>
+              <p
+                style={{
+                  fontSize: subheadlineFontSize,
+                  color: slideTextColor,
+                  opacity: 0.88,
+                  margin: 0,
+                  lineHeight: 1.35,
+                  overflow: "hidden",
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  textOverflow: "ellipsis",
+                }}
+              >
                 {currentSlide.subheadline}
               </p>
             )}
@@ -563,7 +641,18 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
       )}
 
       {/* Main Slide Content */}
-      <div style={{ position: "relative", zIndex: 2, width: "100%" }}>
+      <div
+        style={{
+          position: "relative",
+          zIndex: 2,
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          overflow: "hidden",
+        }}
+      >
         {renderSlideContent()}
       </div>
 

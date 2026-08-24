@@ -19,13 +19,14 @@ import BuilderDrawerPanel from "./Component/BuilderDrawerPanel";
 import { AiWebpageGeneratingAnimation } from "./Component/AiWebpageGeneratingAnimation";
 import { AiAvatar } from "./Component/AiAvatar";
 import { UserAvatar } from "./Component/UserAvatar";
+import BuilderPage, { siteSlugMemoryCache } from "./BuilderPage";
 
-// Lazy-loaded routes for code splitting
-const BuilderPage = React.lazy(() => import("./BuilderPage"));
-const AdminLoginPage = React.lazy(() => import("./pages/AdminLoginPage"));
-const AdminSignupPage = React.lazy(() => import("./pages/AdminSignupPage"));
-const CustomerLoginPage = React.lazy(() => import("./pages/CustomerLoginPage"));
-const CustomerSignupPage = React.lazy(() => import("./pages/CustomerSignupPage"));
+import AdminLoginPage from "./pages/AdminLoginPage";
+import AdminSignupPage from "./pages/AdminSignupPage";
+import CustomerLoginPage from "./pages/CustomerLoginPage";
+import CustomerSignupPage from "./pages/CustomerSignupPage";
+
+// Lazy-loaded routes for secondary standalone pages
 const TrackOrderPage = React.lazy(() => import("./pages/TrackOrderPage"));
 const AgentDeliveryPage = React.lazy(() => import("./pages/AgentDeliveryPage"));
 const RiderLoginPage = React.lazy(() => import("./pages/RiderLoginPage"));
@@ -37,17 +38,17 @@ function RouteLoadingFallback() {
         minHeight: "100vh",
         display: "grid",
         placeItems: "center",
-        background: "#0f172a",
-        color: "#f8fafc",
-        fontFamily: "inherit",
+        background: "#ffffff",
+        color: "#0f172a",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
     >
       <div style={{ textAlign: "center" }}>
         <div
           style={{
-            width: "36px",
-            height: "36px",
-            border: "3px solid rgba(255,255,255,0.15)",
+            width: "32px",
+            height: "32px",
+            border: "2.5px solid rgba(0,0,0,0.08)",
             borderTopColor: "#3b82f6",
             borderRadius: "50%",
             animation: "spin 0.8s linear infinite",
@@ -140,46 +141,13 @@ function slugify(value: string) {
 
 function RequireAdminAuth() {
   const location = useLocation();
-  const [checkingSession, setCheckingSession] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { admin, loading } = useAdminAuth();
 
-  useEffect(() => {
-    const checkAdminSession = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/auth/admin/me`, {
-          credentials: "include",
-        });
-
-        setIsAuthenticated(response.ok);
-      } catch (error) {
-        console.error("Error checking admin session:", error);
-        setIsAuthenticated(false);
-      } finally {
-        setCheckingSession(false);
-      }
-    };
-
-    checkAdminSession();
-  }, []);
-
-  if (checkingSession) {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          display: "grid",
-          placeItems: "center",
-          background: "#0f172a",
-          color: "#f8fafc",
-          padding: "24px",
-        }}
-      >
-        <p>Checking admin session...</p>
-      </div>
-    );
+  if (loading) {
+    return <RouteLoadingFallback />;
   }
 
-  if (!isAuthenticated) {
+  if (!admin) {
     return (
       <Navigate
         to="/admin/login"
@@ -208,7 +176,15 @@ function AdminSitesPage() {
     }
     return null;
   });
-  const [savedSites, setSavedSites] = useState<SavedSite[]>([]);
+  const [savedSites, setSavedSites] = useState<SavedSite[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = localStorage.getItem("wc_admin_saved_sites");
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
   const [activeDrawer, setActiveDrawer] = useState<
     | "saved-sites"
     | "chat"
@@ -298,7 +274,61 @@ function AdminSitesPage() {
       }
 
       const data = await response.json();
-      setSavedSites(Array.isArray(data) ? data : []);
+      const sitesList: SavedSite[] = Array.isArray(data) ? data : [];
+      setSavedSites(sitesList);
+      try {
+        localStorage.setItem("wc_admin_saved_sites", JSON.stringify(sitesList));
+      } catch (_) {}
+
+      // Pre-populate memory and localStorage snapshot cache for all sites
+      sitesList.forEach((site: any) => {
+        if (site.id) {
+          siteSlugMemoryCache.set(site.id, site);
+          try {
+            localStorage.setItem(
+              `wc_site_snapshot_${site.id}`,
+              JSON.stringify(site)
+            );
+            const parsedTheme =
+              site.draft_definition?.theme || site.site_definition?.theme;
+            if (parsedTheme) {
+              localStorage.setItem(
+                `wc_theme_mode_${site.id}`,
+                parsedTheme.mode || "light"
+              );
+              if (parsedTheme.primary_bg) {
+                localStorage.setItem(
+                  `wc_theme_bg_${site.id}`,
+                  parsedTheme.primary_bg
+                );
+              }
+            }
+          } catch (_) {}
+        }
+        if (site.slug) {
+          siteSlugMemoryCache.set(site.slug, site);
+          try {
+            localStorage.setItem(
+              `wc_site_snapshot_${site.slug}`,
+              JSON.stringify(site)
+            );
+            const parsedTheme =
+              site.draft_definition?.theme || site.site_definition?.theme;
+            if (parsedTheme) {
+              localStorage.setItem(
+                `wc_theme_mode_${site.slug}`,
+                parsedTheme.mode || "light"
+              );
+              if (parsedTheme.primary_bg) {
+                localStorage.setItem(
+                  `wc_theme_bg_${site.slug}`,
+                  parsedTheme.primary_bg
+                );
+              }
+            }
+          } catch (_) {}
+        }
+      });
     } catch (error) {
       console.error("Error loading admin sites:", error);
       setSavedSites([]);
@@ -727,10 +757,17 @@ function AdminSitesPage() {
   const drawerNode = activeDrawer ? (
     <BuilderDrawerPanel
       activeDrawer={activeDrawer}
-      onClose={() => setActiveDrawer(null)}
+      onClose={() => {
+        setActiveDrawer(null);
+        try {
+          sessionStorage.removeItem("wc_active_builder_drawer");
+        } catch (_) {}
+      }}
       savedSites={savedSites}
       onSelectSite={(targetSiteId) => {
-        setActiveDrawer(null);
+        try {
+          sessionStorage.setItem("wc_active_builder_drawer", "saved-sites");
+        } catch (_) {}
         openSite(targetSiteId);
       }}
       onDeleteSite={handleDeleteSite}
@@ -1255,9 +1292,8 @@ function AppRoutes() {
 
         <Route element={<RequireAdminAuth />}>
           <Route path="/admin/sites" element={<AdminSitesPage />} />
+          <Route path="/builder/:siteId/*" element={<BuilderPage />} />
         </Route>
-
-        <Route path="/builder/:siteId/*" element={<BuilderPage />} />
       </Routes>
     </Suspense>
   );

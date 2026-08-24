@@ -685,14 +685,34 @@ type DeliverySettingsSummary = {
 
 const matchesReturnTab = (item: AdminReturnListItem, tab: ReturnTabKey) => item.status === tab;
 
+const getCachedOrders = (id?: string): AdminOrderListItem[] => {
+  if (!id || typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`wc_admin_orders_${id}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+const getCachedReturns = (id?: string): AdminReturnListItem[] => {
+  if (!id || typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`wc_admin_returns_${id}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
 
 const AdminOrders: React.FC = () => {
   const { siteId } = useParams<{ siteId: string }>();
   const [searchParams] = useSearchParams();
   const [mode, setMode] = useState<AdminMode>("orders");
 
-
-  const [orders, setOrders] = useState<AdminOrderListItem[]>([]);
+  const initialOrders = getCachedOrders(siteId);
+  const initialReturns = getCachedReturns(siteId);
+  const [orders, setOrders] = useState<AdminOrderListItem[]>(initialOrders);
   const [detailsMap, setDetailsMap] = useState<Record<string, AdminOrderDetail>>({});
   const [shipmentDrafts, setShipmentDrafts] = useState<Record<string, ShipmentDraft>>({});
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
@@ -718,7 +738,7 @@ const AdminOrders: React.FC = () => {
   const [reassigningReturnIdMap, setReassigningReturnIdMap] = useState<Record<string, boolean>>({});
   const [reassignReturnAgentIdMap, setReassignReturnAgentIdMap] = useState<Record<string, string>>({});
 
-  const [adminReturns, setAdminReturns] = useState<AdminReturnListItem[]>([]);
+  const [adminReturns, setAdminReturns] = useState<AdminReturnListItem[]>(initialReturns);
   const [returnDetailsMap, setReturnDetailsMap] = useState<Record<string, AdminReturnDetail>>({});
   const [expandedReturnId, setExpandedReturnId] = useState<string | null>(null);
   const [activeReturnTab, setActiveReturnTab] = useState<ReturnTabKey>("requested");
@@ -739,12 +759,17 @@ const AdminOrders: React.FC = () => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [serverTotalOrders, setServerTotalOrders] = useState<number>(initialOrders.length);
+  const [serverTotalPages, setServerTotalPages] = useState<number>(1);
+  const [serverTabCounts, setServerTabCounts] = useState<Record<string, number>>({});
 
+  const [serverTotalReturns, setServerTotalReturns] = useState<number>(initialReturns.length);
+  const [serverTotalReturnPages, setServerTotalReturnPages] = useState<number>(1);
+  const [serverReturnTabCounts, setServerReturnTabCounts] = useState<Record<string, number>>({});
 
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(initialOrders.length === 0);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string>("");
-
 
   const hydrateShipmentDraft = (orderId: string, detail: AdminOrderDetail) => {
     setShipmentDrafts((prev) => ({
@@ -756,7 +781,6 @@ const AdminOrders: React.FC = () => {
       },
     }));
   };
-
 
   const hydrateReturnDrafts = (returnId: string, detail: AdminReturnDetail) => {
     setReviewDrafts((prev) => ({
@@ -772,7 +796,6 @@ const AdminOrders: React.FC = () => {
         },
     }));
 
-
     setReceiveDrafts((prev) => ({
       ...prev,
       [returnId]:
@@ -783,7 +806,6 @@ const AdminOrders: React.FC = () => {
           ),
         },
     }));
-
 
     setInspectDrafts((prev) => ({
       ...prev,
@@ -801,7 +823,6 @@ const AdminOrders: React.FC = () => {
           ),
         },
     }));
-
 
     setRefundDrafts((prev) => ({
       ...prev,
@@ -825,7 +846,6 @@ const AdminOrders: React.FC = () => {
       }));
     }
   };
-
 
   const [selectedExtraChargesByReturn, setSelectedExtraChargesByReturn] = useState<Record<string, Record<string, boolean>>>({});
 
@@ -860,20 +880,84 @@ const AdminOrders: React.FC = () => {
     }));
   };
 
-
-  const loadOrdersForSite = async () => {
+  const loadOrdersForSite = async (
+    page = currentPage,
+    size = pageSize,
+    tab = activeTab,
+    search = searchQuery,
+    payment = paymentFilter,
+    date = dateFilter,
+    fromD = customFromDate,
+    toD = customToDate
+  ) => {
     if (!siteId) return;
-    const orderList = await fetchJson(`${API_BASE}/orders/admin/${siteId}`);
-    setOrders(Array.isArray(orderList) ? orderList : []);
+    try {
+      const qParams = new URLSearchParams();
+      qParams.set("page", String(page));
+      qParams.set("page_size", String(size));
+      if (tab) qParams.set("tab", tab);
+      if (search.trim()) qParams.set("search", search.trim());
+      if (payment !== "all") qParams.set("payment_method", payment);
+      if (date !== "all") qParams.set("date_filter", date);
+      if (fromD) qParams.set("from_date", fromD);
+      if (toD) qParams.set("to_date", toD);
+
+      const res = await fetchJson(`${API_BASE}/orders/admin/${siteId}?${qParams.toString()}`);
+      if (res && Array.isArray(res.orders)) {
+        setOrders(res.orders);
+        setServerTotalOrders(res.total ?? res.orders.length);
+        setServerTotalPages(res.total_pages ?? 1);
+        if (res.tab_counts) setServerTabCounts(res.tab_counts);
+        if (page === 1) {
+          try {
+            localStorage.setItem(`wc_admin_orders_${siteId}`, JSON.stringify(res.orders));
+          } catch (_) {}
+        }
+      } else if (Array.isArray(res)) {
+        setOrders(res);
+        setServerTotalOrders(res.length);
+        setServerTotalPages(Math.max(1, Math.ceil(res.length / size)));
+      }
+    } catch (err) {
+      console.error("Failed to load orders", err);
+    }
     setDetailsMap({});
     setExpandedOrderId(null);
   };
 
-
-  const loadReturnsForSite = async () => {
+  const loadReturnsForSite = async (
+    page = currentPage,
+    size = pageSize,
+    tab = activeReturnTab,
+    search = searchQuery
+  ) => {
     if (!siteId) return;
-    const returnList = await fetchJson(`${API_BASE}/returns/admin/${siteId}`);
-    setAdminReturns(Array.isArray(returnList) ? returnList : []);
+    try {
+      const qParams = new URLSearchParams();
+      qParams.set("page", String(page));
+      qParams.set("page_size", String(size));
+      if (tab) qParams.set("status", tab);
+      if (search.trim()) qParams.set("search", search.trim());
+
+      const res = await fetchJson(`${API_BASE}/returns/admin/${siteId}?${qParams.toString()}`);
+      if (res && Array.isArray(res.returns)) {
+        setAdminReturns(res.returns);
+        setServerTotalReturns(res.total ?? res.returns.length);
+        setServerTotalReturnPages(res.total_pages ?? 1);
+        if (res.tab_counts) setServerReturnTabCounts(res.tab_counts);
+        if (page === 1) {
+          try {
+            localStorage.setItem(`wc_admin_returns_${siteId}`, JSON.stringify(res.returns));
+          } catch (_) {}
+        }
+      } else if (Array.isArray(res)) {
+        setAdminReturns(res);
+        setServerTotalReturns(res.length);
+        setServerTotalReturnPages(Math.max(1, Math.ceil(res.length / size)));
+      }
+    } catch (err) {
+      console.error("Failed to load returns", err);
+    }
     setReturnDetailsMap({});
     setExpandedReturnId(null);
   };
@@ -1120,20 +1204,32 @@ const AdminOrders: React.FC = () => {
   useEffect(() => {
     if (!siteId) return;
 
-
     const loadByMode = async () => {
-      setLoading(true);
       setError("");
       try {
         if (mode === "orders") {
-          await loadOrdersForSite();
+          await loadOrdersForSite(
+            currentPage,
+            pageSize,
+            activeTab,
+            searchQuery,
+            paymentFilter,
+            dateFilter,
+            customFromDate,
+            customToDate
+          );
           try {
             await loadDeliveryMeta();
           } catch (metaErr) {
             console.warn("Delivery metadata load failed non-critically:", metaErr);
           }
         } else {
-          await loadReturnsForSite();
+          await loadReturnsForSite(
+            currentPage,
+            pageSize,
+            activeReturnTab,
+            searchQuery
+          );
         }
       } catch (err: any) {
         setError(err.message || `Failed to load ${mode}`);
@@ -1147,9 +1243,20 @@ const AdminOrders: React.FC = () => {
       }
     };
 
-
     loadByMode();
-  }, [siteId, mode]);
+  }, [
+    siteId,
+    mode,
+    activeTab,
+    activeReturnTab,
+    currentPage,
+    pageSize,
+    searchQuery,
+    paymentFilter,
+    dateFilter,
+    customFromDate,
+    customToDate,
+  ]);
 
   // Deep-linking support for direct order/return links (e.g. from Earnings/Ledger page)
   const targetOrderId = searchParams.get("orderId");
@@ -1281,6 +1388,9 @@ const AdminOrders: React.FC = () => {
   };
 
   const filteredOrders = useMemo(() => {
+    if (Object.keys(serverTabCounts).length > 0) {
+      return orders;
+    }
     return orders.filter((order) => {
       // 1. Tab match
       if (!matchesTab(order, activeTab)) return false;
@@ -1346,6 +1456,7 @@ const AdminOrders: React.FC = () => {
       return true;
     });
   }, [
+    serverTabCounts,
     orders,
     activeTab,
     searchQuery,
@@ -1356,13 +1467,17 @@ const AdminOrders: React.FC = () => {
     customToDate,
   ]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
+  const totalPages = Math.max(1, serverTotalPages || Math.ceil(filteredOrders.length / pageSize));
   const paginatedOrders = useMemo(() => {
+    if (Object.keys(serverTabCounts).length > 0) return orders;
     const start = (currentPage - 1) * pageSize;
     return filteredOrders.slice(start, start + pageSize);
-  }, [filteredOrders, currentPage, pageSize]);
+  }, [serverTabCounts, orders, filteredOrders, currentPage, pageSize]);
 
   const filteredReturns = useMemo(() => {
+    if (Object.keys(serverReturnTabCounts).length > 0) {
+      return adminReturns;
+    }
     return adminReturns.filter((item) => {
       if (!matchesReturnTab(item, activeReturnTab)) return false;
       if (searchQuery.trim()) {
@@ -1375,16 +1490,26 @@ const AdminOrders: React.FC = () => {
       if (!matchesOrderDateFilter(item.created_at)) return false;
       return true;
     });
-  }, [adminReturns, activeReturnTab, searchQuery, dateFilter, customFromDate, customToDate]);
+  }, [serverReturnTabCounts, adminReturns, activeReturnTab, searchQuery, dateFilter, customFromDate, customToDate]);
 
-  const totalReturnPages = Math.max(1, Math.ceil(filteredReturns.length / pageSize));
+  const totalReturnPages = Math.max(1, serverTotalReturnPages || Math.ceil(filteredReturns.length / pageSize));
   const paginatedReturns = useMemo(() => {
+    if (Object.keys(serverReturnTabCounts).length > 0) return adminReturns;
     const start = (currentPage - 1) * pageSize;
     return filteredReturns.slice(start, start + pageSize);
-  }, [filteredReturns, currentPage, pageSize]);
+  }, [serverReturnTabCounts, adminReturns, filteredReturns, currentPage, pageSize]);
 
 
   const counts = useMemo(() => {
+    if (Object.keys(serverTabCounts).length > 0) {
+      return {
+        new: serverTabCounts.new ?? 0,
+        yet_to_ship: serverTabCounts.yet_to_ship ?? 0,
+        yet_to_deliver: serverTabCounts.yet_to_deliver ?? 0,
+        delivered: serverTabCounts.delivered ?? 0,
+        cancelled: serverTabCounts.cancelled ?? 0,
+      };
+    }
     const matchesNonTab = (o: AdminOrderListItem) => {
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -1433,10 +1558,21 @@ const AdminOrders: React.FC = () => {
       delivered: orders.filter((o) => matchesTab(o, "delivered") && matchesNonTab(o)).length,
       cancelled: orders.filter((o) => matchesTab(o, "cancelled") && matchesNonTab(o)).length,
     };
-  }, [orders, searchQuery, paymentFilter, fulfillmentFilter, dateFilter, customFromDate, customToDate]);
+  }, [serverTabCounts, orders, searchQuery, paymentFilter, fulfillmentFilter, dateFilter, customFromDate, customToDate]);
 
 
   const returnCounts = useMemo(() => {
+    if (Object.keys(serverReturnTabCounts).length > 0) {
+      return {
+        requested: serverReturnTabCounts.requested ?? 0,
+        approved: serverReturnTabCounts.approved ?? 0,
+        received: serverReturnTabCounts.received ?? 0,
+        inspected: serverReturnTabCounts.inspected ?? 0,
+        refunded: serverReturnTabCounts.refunded ?? 0,
+        closed: serverReturnTabCounts.closed ?? 0,
+        rejected: serverReturnTabCounts.rejected ?? 0,
+      };
+    }
     const matchesNonTabReturn = (item: AdminReturnListItem) => {
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -1458,7 +1594,7 @@ const AdminOrders: React.FC = () => {
       closed: adminReturns.filter((o) => matchesReturnTab(o, "closed") && matchesNonTabReturn(o)).length,
       rejected: adminReturns.filter((o) => matchesReturnTab(o, "rejected") && matchesNonTabReturn(o)).length,
     };
-  }, [adminReturns, searchQuery, dateFilter, customFromDate, customToDate]);
+  }, [serverReturnTabCounts, adminReturns, searchQuery, dateFilter, customFromDate, customToDate]);
 
 
   const refreshOrderDetail = async (orderId: string) => {
@@ -4021,55 +4157,32 @@ const AdminOrders: React.FC = () => {
             )}
           </div>
 
-          {/* Pagination and page size controls */}
-          {filteredOrders.length > 0 && (
+          {/* Centered Pagination Controls */}
+          {orders.length > 0 && (
             <div
               style={{
                 display: "flex",
-                justifyContent: "space-between",
+                flexDirection: "column",
                 alignItems: "center",
-                flexWrap: "wrap",
-                gap: "12px",
+                justifyContent: "center",
+                gap: "10px",
                 marginTop: "16px",
                 padding: "8px 4px",
+                width: "100%",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#64748b" }}>
-                <span>Rows per page:</span>
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    const newSize = Number(e.target.value);
-                    setPageSize(newSize);
-                    setCurrentPage(1);
-                  }}
-                  style={{
-                    padding: "6px 10px",
-                    borderRadius: "6px",
-                    border: "1px solid #cbd5e1",
-                    background: "#ffffff",
-                    color: "#0f172a",
-                    fontSize: "13px",
-                    cursor: "pointer",
-                  }}
-                >
-                  <option value={10}>10</option>
-                  <option value={15}>15</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-              </div>
-
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}
                 onPageChange={(page) => {
                   setCurrentPage(page);
                 }}
-                totalItems={filteredOrders.length}
                 pageSize={pageSize}
-                showRangeText={true}
+                pageSizeOptions={[10, 15, 25, 50, 100]}
+                onPageSizeChange={(newSize) => {
+                  setPageSize(newSize);
+                  setCurrentPage(1);
+                }}
                 accentColor="#2563eb"
                 style={{ padding: 0 }}
               />
@@ -5366,7 +5479,7 @@ const AdminOrders: React.FC = () => {
                                         cursor: "pointer",
                                       }}
                                     >
-                                      ✓ Approve Return
+                                      Approve Return
                                     </button>
 
                                     <button
@@ -5389,7 +5502,7 @@ const AdminOrders: React.FC = () => {
                                         cursor: "pointer",
                                       }}
                                     >
-                                      ✕ Reject Return
+                                      Reject Return
                                     </button>
                                   </div>
 
@@ -5505,8 +5618,13 @@ const AdminOrders: React.FC = () => {
                                     return (
                                       <div style={{ ...plainCardStyle, padding: "16px", background: "#f8fafc", border: "1px solid #e2e8f0" }}>
                                         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                                          <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#eff6ff", color: "#2563eb", display: "grid", placeItems: "center", fontSize: "16px" }}>
-                                            🚚
+                                          <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#eff6ff", color: "#2563eb", display: "grid", placeItems: "center" }}>
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                              <rect x="1" y="3" width="15" height="13" />
+                                              <polygon points="16 8 20 8 23 11 23 16 16 16 8" />
+                                              <circle cx="5.5" cy="18.5" r="2.5" />
+                                              <circle cx="18.5" cy="18.5" r="2.5" />
+                                            </svg>
                                           </div>
                                           <div>
                                             <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
@@ -5687,9 +5805,8 @@ const AdminOrders: React.FC = () => {
                                                   }}
                                                   style={{ ...inputStyle, padding: "6px 8px", fontSize: "12px" }}
                                                 >
-                                                  <option value="restock">Restock (Return to Stock)</option>
+                                                  <option value="restock">Restock (Return to Inventory)</option>
                                                   <option value="discard">Discard (Damaged / Unsellable)</option>
-                                                  <option value="quarantine">Quarantine (Hold for Quality Check)</option>
                                                 </select>
                                               </div>
 
@@ -6148,54 +6265,31 @@ const AdminOrders: React.FC = () => {
           </div>
 
           {/* Pagination and page size controls */}
-          {filteredReturns.length > 0 && (
+          {adminReturns.length > 0 && (
             <div
               style={{
                 display: "flex",
-                justifyContent: "space-between",
+                flexDirection: "column",
                 alignItems: "center",
-                flexWrap: "wrap",
-                gap: "12px",
+                justifyContent: "center",
+                gap: "10px",
                 marginTop: "16px",
                 padding: "8px 4px",
+                width: "100%",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#64748b" }}>
-                <span>Rows per page:</span>
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    const newSize = Number(e.target.value);
-                    setPageSize(newSize);
-                    setCurrentPage(1);
-                  }}
-                  style={{
-                    padding: "6px 10px",
-                    borderRadius: "6px",
-                    border: "1px solid #cbd5e1",
-                    background: "#ffffff",
-                    color: "#0f172a",
-                    fontSize: "13px",
-                    cursor: "pointer",
-                  }}
-                >
-                  <option value={10}>10</option>
-                  <option value={15}>15</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-              </div>
-
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalReturnPages}
                 onPageChange={(page) => {
                   setCurrentPage(page);
                 }}
-                totalItems={filteredReturns.length}
                 pageSize={pageSize}
-                showRangeText={true}
+                pageSizeOptions={[10, 15, 25, 50, 100]}
+                onPageSizeChange={(newSize) => {
+                  setPageSize(newSize);
+                  setCurrentPage(1);
+                }}
                 accentColor="#2563eb"
                 style={{ padding: 0 }}
               />

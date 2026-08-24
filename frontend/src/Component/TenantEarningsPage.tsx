@@ -81,13 +81,23 @@ const RefreshIcon = ({ spin }: { spin?: boolean }) => (
   </svg>
 );
 
+const getCachedEarnings = (id?: string): EarningsSummaryData | null => {
+  if (!id || typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(`wc_admin_earnings_${id}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
 export default function TenantEarningsPage() {
   const { siteId } = useParams<{ siteId: string }>();
-
-  const [loading, setLoading] = useState(true);
+  const initialData = getCachedEarnings(siteId);
+  const [data, setData] = useState<EarningsSummaryData | null>(initialData);
+  const [loading, setLoading] = useState<boolean>(!initialData);
   const [refreshing, setRefreshing] = useState(false);
   const [releasingEscrow, setReleasingEscrow] = useState(false);
-  const [data, setData] = useState<EarningsSummaryData | null>(null);
   const [feedback, setFeedback] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
   // Search & Filter State
@@ -119,22 +129,25 @@ export default function TenantEarningsPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isFilterOpen]);
 
-  const fetchEarnings = async (mode: boolean | "silent" = false) => {
+  const fetchEarnings = async (mode: boolean | "silent" = false, page = currentPage, limit = pageSize) => {
     if (!siteId) return;
     try {
       if (mode === true) {
         setRefreshing(true);
-      } else if (mode !== "silent") {
+      } else if (mode !== "silent" && !data) {
         setLoading(true);
       }
       const res = await fetch(
-        `${API_BASE_URL}/admin/${siteId}/earnings?page=1&limit=100`,
+        `${API_BASE_URL}/admin/${siteId}/earnings?page=${page}&limit=${limit}`,
         { credentials: "include" }
       );
 
       if (res.ok) {
         const json: EarningsSummaryData = await res.json();
         setData(json);
+        try {
+          localStorage.setItem(`wc_admin_earnings_${siteId}`, JSON.stringify(json));
+        } catch (_) {}
       }
     } catch (err) {
       console.error("Failed to load earnings summary", err);
@@ -145,8 +158,8 @@ export default function TenantEarningsPage() {
   };
 
   useEffect(() => {
-    fetchEarnings(false);
-  }, [siteId]);
+    fetchEarnings(false, currentPage, pageSize);
+  }, [siteId, currentPage, pageSize]);
 
   const handleReleaseMatureEscrows = async () => {
     if (!siteId || releasingEscrow) return;
@@ -286,11 +299,12 @@ export default function TenantEarningsPage() {
   };
 
   // Paginated Slicing
-  const totalPages = Math.ceil(filteredEntries.length / pageSize) || 1;
+  const totalPages = data?.total_pages || Math.ceil(filteredEntries.length / pageSize) || 1;
   const paginatedEntries = useMemo(() => {
+    if (allEntries.length <= pageSize) return filteredEntries;
     const start = (currentPage - 1) * pageSize;
     return filteredEntries.slice(start, start + pageSize);
-  }, [filteredEntries, currentPage, pageSize]);
+  }, [allEntries, filteredEntries, currentPage, pageSize]);
 
   // Design Tokens
   const plainCardStyle: React.CSSProperties = {
@@ -1116,56 +1130,32 @@ export default function TenantEarningsPage() {
         )}
       </div>
 
-      {/* Pagination and page size controls (Outside the table card, matching Orders & Products page) */}
+      {/* Centered Pagination controls */}
       {filteredEntries.length > 0 && (
         <div
           style={{
             display: "flex",
-            justifyContent: "space-between",
+            flexDirection: "column",
             alignItems: "center",
-            flexWrap: "wrap",
-            gap: "12px",
+            justifyContent: "center",
+            gap: "10px",
             marginTop: "16px",
             padding: "8px 4px",
+            width: "100%",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#64748b" }}>
-            <span>Rows per page:</span>
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                const newSize = Number(e.target.value);
-                setPageSize(newSize);
-                setCurrentPage(1);
-              }}
-              style={{
-                padding: "6px 10px",
-                borderRadius: "6px",
-                border: "1px solid #cbd5e1",
-                background: "#ffffff",
-                color: "#0f172a",
-                fontSize: "13px",
-                cursor: "pointer",
-                outline: "none",
-              }}
-            >
-              <option value={10}>10</option>
-              <option value={15}>15</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-          </div>
-
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={(page) => {
               setCurrentPage(page);
             }}
-            totalItems={filteredEntries.length}
             pageSize={pageSize}
-            showRangeText={true}
+            pageSizeOptions={[10, 15, 25, 50, 100]}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize);
+              setCurrentPage(1);
+            }}
             accentColor="#2563eb"
             style={{ padding: 0 }}
           />

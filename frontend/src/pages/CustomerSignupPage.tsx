@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useCustomerAuth } from "../context/CustomerAuthContext";
 import {
@@ -109,49 +109,26 @@ export default function CustomerSignupPage() {
     }
   };
 
-  if (loadingSite && !siteData) {
-    return (
-      <div
-        style={{
-          height: "100vh",
-          width: "100vw",
-          display: "grid",
-          placeItems: "center",
-          background: "#0b0f19",
-          color: "#94a3b8",
-          fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-        }}
-      >
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "14px" }}>
-          <div
-            style={{
-              width: "38px",
-              height: "38px",
-              borderRadius: "50%",
-              border: "3px solid rgba(255, 255, 255, 0.1)",
-              borderTopColor: "#3b82f6",
-              animation: "wcSpin 0.75s linear infinite",
-            }}
-          />
-          <span style={{ fontSize: "13px", fontWeight: 600, letterSpacing: "0.02em" }}>
-            Loading store...
-          </span>
-          <style>{`@keyframes wcSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-        </div>
-      </div>
-    );
-  }
+  const [viewportWidth, setViewportWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 1200
+  );
+  const isMobile = viewportWidth <= 640;
+
+  useEffect(() => {
+    const handleResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   return (
     <div
       style={{
-        height: "100vh",
-        maxHeight: "100vh",
-        width: "100vw",
-        overflow: "hidden",
-        display: "grid",
-        placeItems: "center",
-        padding: "16px",
+        minHeight: "100dvh",
+        width: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: isMobile ? "24px 14px" : "40px 20px",
         background: primaryBg,
         color: textColor,
         boxSizing: "border-box",
@@ -161,21 +138,20 @@ export default function CustomerSignupPage() {
       <div
         style={{
           width: "100%",
-          maxWidth: "520px",
-          maxHeight: "calc(100vh - 32px)",
+          maxWidth: "480px",
+          margin: "auto",
           background: cardBg,
           color: textColor,
-          borderRadius: "20px",
-          padding: "24px 28px",
+          borderRadius: isMobile ? "18px" : "24px",
+          padding: isMobile ? "24px 18px" : "32px 32px",
           border: `1px solid ${borderColor}`,
           boxShadow: isLight
-            ? "0 16px 36px rgba(15, 23, 42, 0.08)"
-            : "0 16px 36px rgba(0, 0, 0, 0.35)",
+            ? "0 16px 40px rgba(15, 23, 42, 0.08)"
+            : "0 20px 48px rgba(0, 0, 0, 0.40)",
           boxSizing: "border-box",
           display: "flex",
           flexDirection: "column",
-          justifyContent: "space-between",
-          overflowY: "auto",
+          gap: "18px",
           transition: "background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease",
         }}
       >

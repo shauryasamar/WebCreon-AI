@@ -163,10 +163,33 @@ const ToggleSwitch = ({
   </button>
 );
 
+const getCachedDeliverySettings = (id?: string): DeliverySettingsData | null => {
+  if (!id || typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(`wc_admin_delivery_settings_${id}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const getCachedAgents = (id?: string): Agent[] => {
+  if (!id || typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`wc_admin_agents_${id}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
 export default function DeliverySettingsPage() {
   const { siteId } = useParams<{ siteId: string }>();
 
-  const [settings, setSettings] = useState<DeliverySettingsData>({
+  const cachedSettings = getCachedDeliverySettings(siteId);
+  const cachedAgents = getCachedAgents(siteId);
+
+  const [settings, setSettings] = useState<DeliverySettingsData>(() => cachedSettings || {
     delivery_mode: "manual",
     enable_fleet: true,
     enable_shiprocket: false,
@@ -187,8 +210,8 @@ export default function DeliverySettingsPage() {
   });
 
   const [srPassword, setSrPassword] = useState("");
-  const [initialSnapshot, setInitialSnapshot] = useState<string>("");
-  const [loadingSettings, setLoadingSettings] = useState(true);
+  const [initialSnapshot, setInitialSnapshot] = useState<string>(() => cachedSettings ? JSON.stringify({ settings: cachedSettings, srPassword: "" }) : "");
+  const [loadingSettings, setLoadingSettings] = useState(!cachedSettings);
   const [savingSettings, setSavingSettings] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
 
@@ -197,7 +220,7 @@ export default function DeliverySettingsPage() {
   const [activeTab, setActiveTab] = useState<DeliveryTab>("fleet");
 
   // Agents state
-  const [agents, setAgents] = useState<Agent[]>([]);
+  const [agents, setAgents] = useState<Agent[]>(cachedAgents);
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [showAgentForm, setShowAgentForm] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -275,7 +298,6 @@ export default function DeliverySettingsPage() {
   const fetchSettings = useCallback(async () => {
     if (!siteId) return;
     try {
-      setLoadingSettings(true);
       const res = await fetch(`${API_BASE_URL}/delivery/settings/${siteId}`, {
         credentials: "include",
       });
@@ -283,6 +305,9 @@ export default function DeliverySettingsPage() {
         const data = await res.json();
         setSettings(data);
         setInitialSnapshot(JSON.stringify({ settings: data, srPassword: "" }));
+        try {
+          localStorage.setItem(`wc_admin_delivery_settings_${siteId}`, JSON.stringify(data));
+        } catch (_) {}
       }
     } catch (err) {
       console.error("Failed to load delivery settings", err);
@@ -294,20 +319,24 @@ export default function DeliverySettingsPage() {
   const fetchAgents = useCallback(async (showLoader = true) => {
     if (!siteId) return;
     try {
-      if (showLoader) setLoadingAgents(true);
+      if (showLoader && agents.length === 0) setLoadingAgents(true);
       const res = await fetch(`${API_BASE_URL}/delivery/agents/${siteId}`, {
         credentials: "include",
       });
       if (res.ok) {
         const data = await res.json();
-        setAgents(Array.isArray(data) ? data : []);
+        const validAgents = Array.isArray(data) ? data : [];
+        setAgents(validAgents);
+        try {
+          localStorage.setItem(`wc_admin_agents_${siteId}`, JSON.stringify(validAgents));
+        } catch (_) {}
       }
     } catch (err) {
       console.error("Failed to load delivery agents", err);
     } finally {
-      if (showLoader) setLoadingAgents(false);
+      setLoadingAgents(false);
     }
-  }, [siteId]);
+  }, [siteId, agents.length]);
 
   useEffect(() => {
     if (!siteId) return;

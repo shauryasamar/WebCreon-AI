@@ -1007,6 +1007,13 @@ const productDetailShowReviewsSectionField = {
   target: "props" as const,
 };
 
+const productDetailShowDetailedSectionField = {
+  key: "show_detailed_section",
+  label: "Show Product Description Block",
+  type: "checkbox" as const,
+  target: "props" as const,
+};
+
 const productDetailMaxWidthField = {
   key: "max_width",
   label: "Max Container Width (px)",
@@ -1059,6 +1066,7 @@ const productDetailFields = [
   productDetailShowRatingsField,
   productDetailShowOriginalPriceField,
   productDetailShowBrandNameField,
+  productDetailShowDetailedSectionField,
   productDetailShowReviewsSectionField,
   productDetailMaxWidthField,
   productDetailImageAspectRatioField,

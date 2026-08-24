@@ -6,6 +6,8 @@ export type PaginationProps = {
   onPageChange?: (page: number) => void;
   totalItems?: number;
   pageSize?: number;
+  pageSizeOptions?: number[];
+  onPageSizeChange?: (newSize: number) => void;
   showRangeText?: boolean;
   theme?: {
     mode?: string;
@@ -57,12 +59,14 @@ export const Pagination: React.FC<PaginationProps> = ({
   onPageChange,
   totalItems,
   pageSize,
+  pageSizeOptions,
+  onPageSizeChange,
   showRangeText = false,
   theme,
   accentColor: customAccent,
   style,
 }) => {
-  if (totalPages <= 1 && (!showRangeText || !totalItems)) {
+  if (totalPages <= 1 && (!showRangeText || !totalItems) && !pageSizeOptions) {
     return null;
   }
 
@@ -98,74 +102,83 @@ export const Pagination: React.FC<PaginationProps> = ({
   const mutedText = isDarkCanvas ? "rgba(255, 255, 255, 0.85)" : "#475569";
   const disabledText = isDarkCanvas ? "rgba(255, 255, 255, 0.35)" : "#94a3b8";
 
-  const getPageNumbers = (): (number | string)[] => {
-    if (totalPages <= 7) {
-      return Array.from({ length: totalPages }, (_, i) => i + 1);
+  const [isMobile, setIsMobile] = React.useState(
+    typeof window !== "undefined" ? window.innerWidth <= 640 : false
+  );
+
+  React.useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 640);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const getPageNumbers = (): number[] => {
+    const WINDOW_SIZE = isMobile ? 3 : 10;
+    if (totalPages <= WINDOW_SIZE) {
+      return Array.from({ length: Math.max(1, totalPages) }, (_, i) => i + 1);
     }
 
-    if (currentPage <= 4) {
-      return [1, 2, 3, 4, 5, "...", totalPages];
+    let start = 1;
+    let end = WINDOW_SIZE;
+
+    if (isMobile) {
+      if (currentPage <= 2) {
+        start = 1;
+        end = 3;
+      } else if (currentPage >= totalPages - 1) {
+        start = totalPages - 2;
+        end = totalPages;
+      } else {
+        start = currentPage - 1;
+        end = currentPage + 1;
+      }
+    } else {
+      if (currentPage <= 6) {
+        start = 1;
+        end = WINDOW_SIZE;
+      } else {
+        start = currentPage - 5;
+        end = currentPage + 4;
+        if (end > totalPages) {
+          end = totalPages;
+          start = Math.max(1, totalPages - WINDOW_SIZE + 1);
+        }
+      }
     }
 
-    if (currentPage >= totalPages - 3) {
-      return [1, "...", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    const pages: number[] = [];
+    for (let p = start; p <= end; p++) {
+      pages.push(p);
     }
-
-    return [1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages];
+    return pages;
   };
 
   const pages = getPageNumbers();
 
   const handlePageClick = (page: number) => {
-    if (page < 1 || page > totalPages || page === currentPage) return;
-    onPageChange?.(page);
+    if (page >= 1 && page <= totalPages && page !== currentPage) {
+      onPageChange?.(page);
+    }
   };
-
-  const startItem = pageSize ? (currentPage - 1) * pageSize + 1 : 0;
-  const endItem = pageSize && totalItems ? Math.min(currentPage * pageSize, totalItems) : 0;
 
   return (
     <nav
+      role="navigation"
       aria-label="Pagination Navigation"
       style={{
-        padding: "1.5rem 1rem",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: "14px",
+        gap: "10px",
+        padding: "20px 0 12px",
         width: "100%",
         boxSizing: "border-box",
+        margin: "0 auto",
         ...style,
       }}
     >
-      {showRangeText && totalItems !== undefined && totalItems > 0 && pageSize && (
-        <div
-          style={{
-            fontSize: "13px",
-            color: isDarkCanvas ? "rgba(255, 255, 255, 0.90)" : "#475569",
-            fontWeight: 500,
-            padding: "6px 16px",
-            borderRadius: "20px",
-            background: isDarkCanvas ? "rgba(255, 255, 255, 0.08)" : "rgba(15, 23, 42, 0.04)",
-            border: isDarkCanvas ? "1px solid rgba(255, 255, 255, 0.16)" : "1px solid rgba(15, 23, 42, 0.08)",
-            letterSpacing: "0.01em",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "5px",
-            backdropFilter: "blur(8px)",
-          }}
-        >
-          <span>Showing</span>
-          <span style={{ color: isDarkCanvas ? "#ffffff" : "#0f172a", fontWeight: 800, fontSize: "13.5px" }}>{startItem}</span>
-          <span>–</span>
-          <span style={{ color: isDarkCanvas ? "#ffffff" : "#0f172a", fontWeight: 800, fontSize: "13.5px" }}>{endItem}</span>
-          <span>of</span>
-          <span style={{ color: isDarkCanvas ? "#ffffff" : "#0f172a", fontWeight: 800, fontSize: "13.5px" }}>{totalItems}</span>
-          <span>items</span>
-        </div>
-      )}
-
+      {/* Google-Style Centered Pagination Buttons Bar */}
       {totalPages > 1 && (
         <div
           style={{
@@ -174,6 +187,7 @@ export const Pagination: React.FC<PaginationProps> = ({
             justifyContent: "center",
             alignItems: "center",
             flexWrap: "wrap",
+            margin: "0 auto",
           }}
         >
           {/* Previous Button */}
@@ -197,7 +211,7 @@ export const Pagination: React.FC<PaginationProps> = ({
               fontSize: "13px",
               fontWeight: 600,
               transition: "all 0.15s ease",
-              opacity: currentPage <= 1 ? 0.5 : 1,
+              opacity: currentPage <= 1 ? 0.45 : 1,
               touchAction: "manipulation",
             }}
             onMouseEnter={(e) => {
@@ -216,30 +230,8 @@ export const Pagination: React.FC<PaginationProps> = ({
             ‹ Prev
           </button>
 
-          {/* Page Numbers */}
-          {pages.map((p, idx) => {
-            if (p === "...") {
-              return (
-                <span
-                  key={`ellipsis-${idx}`}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: "32px",
-                    height: "38px",
-                    color: mutedText,
-                    fontSize: "14px",
-                    fontWeight: 600,
-                    userSelect: "none",
-                  }}
-                >
-                  …
-                </span>
-              );
-            }
-
-            const pageNum = p as number;
+          {/* 10-Page Number Buttons (Sliding Window) */}
+          {pages.map((pageNum) => {
             const isActive = pageNum === currentPage;
 
             return (
@@ -259,8 +251,8 @@ export const Pagination: React.FC<PaginationProps> = ({
                   background: isActive ? resolvedAccent : btnBg,
                   color: isActive ? activeBtnTextColor : btnTextColor,
                   cursor: "pointer",
-                  fontSize: "13px",
-                  fontWeight: isActive ? 700 : 500,
+                  fontSize: "13.5px",
+                  fontWeight: isActive ? 800 : 500,
                   boxShadow: isActive ? `0 4px 12px ${resolvedAccent}33` : "none",
                   transition: "all 0.15s ease",
                   touchAction: "manipulation",
@@ -304,7 +296,7 @@ export const Pagination: React.FC<PaginationProps> = ({
               fontSize: "13px",
               fontWeight: 600,
               transition: "all 0.15s ease",
-              opacity: currentPage >= totalPages ? 0.5 : 1,
+              opacity: currentPage >= totalPages ? 0.45 : 1,
               touchAction: "manipulation",
             }}
             onMouseEnter={(e) => {
@@ -322,6 +314,34 @@ export const Pagination: React.FC<PaginationProps> = ({
           >
             Next ›
           </button>
+        </div>
+      )}
+
+      {/* Optional Page Size Selector (Centered below) */}
+      {pageSizeOptions && pageSizeOptions.length > 0 && onPageSizeChange && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", fontSize: "12.5px", color: mutedText, marginTop: "2px" }}>
+          <span>Per page:</span>
+          <select
+            value={pageSize}
+            onChange={(e) => onPageSizeChange(Number(e.target.value))}
+            style={{
+              padding: "3px 8px",
+              borderRadius: "6px",
+              border: `1px solid ${borderColor}`,
+              background: btnBg,
+              color: btnTextColor,
+              fontSize: "12px",
+              fontWeight: 600,
+              cursor: "pointer",
+              outline: "none",
+            }}
+          >
+            {pageSizeOptions.map((opt) => (
+              <option key={opt} value={opt} style={{ background: isDarkCanvas ? "#1e293b" : "#ffffff", color: isDarkCanvas ? "#ffffff" : "#0f172a" }}>
+                {opt}
+              </option>
+            ))}
+          </select>
         </div>
       )}
     </nav>

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { generateQrSvgDataUrl, generateQrCanvasDataUrl } from "../utils/qrCodeGenerator";
 
 type QrLinkPopupProps = {
   open: boolean;
@@ -284,45 +285,6 @@ return new Blob([pdfBuffer], {
 });
 }
 
-async function createQrImageDataUrl(qrUrl: string) {
-  const response = await fetch(qrUrl);
-
-  if (!response.ok) {
-    throw new Error("Unable to load QR code.");
-  }
-
-  const imageBlob = await response.blob();
-  const objectUrl = URL.createObjectURL(imageBlob);
-
-  try {
-    const image = new Image();
-    image.src = objectUrl;
-
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve();
-      image.onerror = () => reject(new Error("Unable to process QR code."));
-    });
-
-    const canvas = document.createElement("canvas");
-    canvas.width = 1000;
-    canvas.height = 1000;
-
-    const context = canvas.getContext("2d");
-
-    if (!context) {
-      throw new Error("Unable to create canvas.");
-    }
-
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-
-    return canvas.toDataURL("image/jpeg", 0.96);
-  } finally {
-    URL.revokeObjectURL(objectUrl);
-  }
-}
-
 async function copyToClipboard(value: string) {
   if (!value) return false;
 
@@ -367,12 +329,10 @@ export default function QrLinkPopup({
   const [copied, setCopied] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  const qrFallback = useMemo(() => {
+  // Instant 0.00ms local QR generation
+  const qrSvgUrl = useMemo(() => {
     if (!customerUrl) return "";
-
-    return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
-      customerUrl,
-    )}`;
+    return generateQrSvgDataUrl(customerUrl);
   }, [customerUrl]);
 
   if (!open) return null;
@@ -396,12 +356,14 @@ export default function QrLinkPopup({
   };
 
   const handleDownloadPdf = async () => {
-    if (!qrFallback || !customerUrl || isDownloading) return;
+    if (!customerUrl || isDownloading) return;
 
     try {
       setIsDownloading(true);
 
-      const qrImageDataUrl = await createQrImageDataUrl(qrFallback);
+      const qrImageDataUrl = generateQrCanvasDataUrl(customerUrl, 1000);
+      if (!qrImageDataUrl) return;
+
       const pdfBlob = createQrPdf(qrImageDataUrl, customerUrl);
       const downloadUrl = URL.createObjectURL(pdfBlob);
       const link = document.createElement("a");
@@ -415,7 +377,7 @@ export default function QrLinkPopup({
 
       URL.revokeObjectURL(downloadUrl);
     } catch {
-      // Intentionally silent for now.
+      // Intentionally silent
     } finally {
       setIsDownloading(false);
     }
@@ -550,15 +512,16 @@ export default function QrLinkPopup({
                   background: "#f8fafc",
                 }}
               >
-                {qrFallback ? (
+                {qrSvgUrl ? (
                   <img
-                    src={qrFallback}
+                    src={qrSvgUrl}
                     alt="QR code for the customer website"
                     style={{
                       width: "100%",
                       height: "100%",
                       display: "block",
-                      objectFit: "cover",
+                      objectFit: "contain",
+                      imageRendering: "pixelated",
                     }}
                   />
                 ) : (

@@ -54,6 +54,10 @@ def create_db_and_tables():
                 ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS unheld_at TIMESTAMPTZ;
                 ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS settled_at TIMESTAMPTZ;
                 ALTER TABLE products ADD COLUMN IF NOT EXISTS weight_grams INTEGER DEFAULT 500;
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS video_position INTEGER DEFAULT 2;
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS sibling_group VARCHAR(100);
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS sibling_label VARCHAR(100);
+                CREATE INDEX IF NOT EXISTS ix_products_sibling_group ON products(sibling_group);
 
                 ALTER TABLE shipments ADD COLUMN IF NOT EXISTS delivery_mode VARCHAR(30) DEFAULT 'manual';
                 ALTER TABLE shipments ADD COLUMN IF NOT EXISTS agent_id UUID;
@@ -82,9 +86,25 @@ def create_db_and_tables():
                 ALTER TABLE delivery_settings ADD COLUMN IF NOT EXISTS enable_shiprocket BOOLEAN DEFAULT FALSE;
                 ALTER TABLE delivery_settings ADD COLUMN IF NOT EXISTS enable_manual BOOLEAN DEFAULT TRUE;
 
+                ALTER TABLE collections ADD COLUMN IF NOT EXISTS is_badge BOOLEAN DEFAULT FALSE;
+                ALTER TABLE collections ADD COLUMN IF NOT EXISTS badge_color VARCHAR(50);
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS sku VARCHAR(100);
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS hsn_code VARCHAR(50);
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS video_url TEXT;
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS length_cm NUMERIC(8, 2);
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS width_cm NUMERIC(8, 2);
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS height_cm NUMERIC(8, 2);
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS highlights JSONB DEFAULT '[]'::jsonb;
+                CREATE INDEX IF NOT EXISTS ix_products_sku ON products(sku);
+
                 ALTER TABLE sites ADD COLUMN IF NOT EXISTS default_return_window_days INTEGER DEFAULT 7;
                 ALTER TABLE products ADD COLUMN IF NOT EXISTS return_window_days INTEGER;
                 ALTER TABLE order_items ADD COLUMN IF NOT EXISTS return_window_days INTEGER DEFAULT 7;
+
+                ALTER TABLE order_items ALTER COLUMN product_id DROP NOT NULL;
+                ALTER TABLE return_items ALTER COLUMN product_id DROP NOT NULL;
+                ALTER TABLE inventory_movements ALTER COLUMN product_id DROP NOT NULL;
 
                 UPDATE order_items SET return_window_days = 0, returnable_quantity = 0 WHERE order_id IN (SELECT id FROM orders WHERE id::text LIKE '2cd85585%');
                 UPDATE orders SET escrow_status = 'unheld', return_window_closes_at = delivered_at WHERE id::text LIKE '2cd85585%';

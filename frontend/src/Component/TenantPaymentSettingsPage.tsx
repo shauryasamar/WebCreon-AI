@@ -20,16 +20,27 @@ type BankSettingsData = {
   updated_at?: string | null;
 };
 
+const getCachedBankSettings = (id?: string): BankSettingsData | null => {
+  if (!id || typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(`wc_admin_bank_settings_${id}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
 export default function TenantPaymentSettingsPage() {
   const { siteId } = useParams<{ siteId: string }>();
 
-  const [loading, setLoading] = useState(true);
+  const cachedSettings = getCachedBankSettings(siteId);
+  const [loading, setLoading] = useState(!cachedSettings);
   const [saving, setSaving] = useState(false);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
-  const [settings, setSettings] = useState<BankSettingsData>({
+  const [settings, setSettings] = useState<BankSettingsData>(() => cachedSettings || {
     account_holder_name: "",
     account_number_masked: "",
     account_number_last4: "",
@@ -43,11 +54,11 @@ export default function TenantPaymentSettingsPage() {
 
   const [accountNumber, setAccountNumber] = useState("");
   const [confirmAccountNumber, setConfirmAccountNumber] = useState("");
-  const [holderName, setHolderName] = useState("");
-  const [ifscCode, setIfscCode] = useState("");
-  const [bankName, setBankName] = useState("");
-  const [panNumber, setPanNumber] = useState("");
-  const [gstNumber, setGstNumber] = useState("");
+  const [holderName, setHolderName] = useState(() => cachedSettings?.account_holder_name || "");
+  const [ifscCode, setIfscCode] = useState(() => cachedSettings?.ifsc_code || "");
+  const [bankName, setBankName] = useState(() => cachedSettings?.bank_name || "");
+  const [panNumber, setPanNumber] = useState(() => cachedSettings?.pan_number || "");
+  const [gstNumber, setGstNumber] = useState(() => cachedSettings?.gst_number || "");
 
   const [initialSnapshot, setInitialSnapshot] = useState("");
 
@@ -57,7 +68,9 @@ export default function TenantPaymentSettingsPage() {
     let isMounted = true;
     const fetchSettings = async () => {
       try {
-        setLoading(true);
+        if (!cachedSettings) {
+          setLoading(true);
+        }
         const res = await fetch(`${API_BASE_URL}/admin/${siteId}/payment-settings`, {
           credentials: "include",
         });
@@ -66,6 +79,9 @@ export default function TenantPaymentSettingsPage() {
           const data: BankSettingsData = await res.json();
           if (isMounted) {
             setSettings(data);
+            try {
+              localStorage.setItem(`wc_admin_bank_settings_${siteId}`, JSON.stringify(data));
+            } catch (_) {}
             const h = data.account_holder_name || "";
             const i = data.ifsc_code || "";
             const b = data.bank_name || "";

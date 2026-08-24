@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -786,11 +786,78 @@ def get_site_by_slug(
     return site
 
 
+# High-speed in-memory cache for public site metadata & themes
+import time
+
+PUBLIC_SITE_CACHE: dict = {}
+
+
+def invalidate_public_site_cache(slug: str = None, site_id: UUID = None):
+    if slug and slug in PUBLIC_SITE_CACHE:
+        PUBLIC_SITE_CACHE.pop(slug, None)
+    if site_id:
+        to_remove = [k for k, v in PUBLIC_SITE_CACHE.items() if v.get("id") == str(site_id)]
+        for k in to_remove:
+            PUBLIC_SITE_CACHE.pop(k, None)
+
+
+@app.get("/public/sites/slug/{slug}/theme")
+def get_public_site_theme_fast(
+    slug: str,
+    response: Response,
+    session: Session = Depends(get_session),
+):
+    """Ultra-low-latency endpoint returning only the minimal theme & branding payload (<1KB)."""
+    now = time.time()
+    cached = PUBLIC_SITE_CACHE.get(slug)
+    if cached and cached.get("theme_payload") and cached.get("expiry", 0) > now:
+        response.headers["Cache-Control"] = "public, max-age=120, stale-while-revalidate=600"
+        return cached["theme_payload"]
+
+    site = session.exec(
+        select(Site.id, Site.slug, Site.site_definition).where(Site.slug == slug)
+    ).first()
+
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    site_id, site_slug, site_def = site
+    site_def = site_def or {}
+
+    theme_payload = {
+        "id": str(site_id),
+        "slug": site_slug,
+        "site_name": site_def.get("site_name") or site_def.get("site_title") or site_def.get("title") or site_def.get("name") or "",
+        "logo": site_def.get("logo") or site_def.get("header", {}).get("logo") or site_def.get("theme", {}).get("logo"),
+        "theme": site_def.get("theme") or {},
+        "navbar": {
+            "brandName": site_def.get("navbar", {}).get("brandName") or site_def.get("header", {}).get("brandName") or site_def.get("site_name") or "",
+            "logoUrl": site_def.get("logo") or site_def.get("header", {}).get("logo") or site_def.get("theme", {}).get("logo"),
+        },
+    }
+
+    PUBLIC_SITE_CACHE[slug] = {
+        "id": str(site_id),
+        "theme_payload": theme_payload,
+        "expiry": now + 120,
+    }
+
+    response.headers["Cache-Control"] = "public, max-age=120, stale-while-revalidate=600"
+    return theme_payload
+
+
 @app.get("/public/sites/slug/{slug}")
 def get_public_site_by_slug(
     slug: str,
+    response: Response,
     session: Session = Depends(get_session),
 ):
+    now = time.time()
+    cached = PUBLIC_SITE_CACHE.get(slug)
+    if cached and cached.get("full_site") and cached.get("expiry", 0) > now:
+        response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=300"
+        return cached["full_site"]
+
     site = session.exec(
         select(Site).where(Site.slug == slug)
     ).first()
@@ -798,6 +865,13 @@ def get_public_site_by_slug(
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
 
+    if slug not in PUBLIC_SITE_CACHE:
+        PUBLIC_SITE_CACHE[slug] = {}
+    PUBLIC_SITE_CACHE[slug]["id"] = str(site.id)
+    PUBLIC_SITE_CACHE[slug]["full_site"] = site
+    PUBLIC_SITE_CACHE[slug]["expiry"] = now + 120
+
+    response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=300"
     return site
 
 
@@ -830,6 +904,7 @@ def create_site(
     session.add(admin_site)
     session.commit()
 
+    invalidate_public_site_cache(payload.slug, site.id)
     session.refresh(site)
     return site
 
@@ -860,6 +935,7 @@ def update_site(
     session.commit()
     session.refresh(site)
 
+    invalidate_public_site_cache(payload.slug, site_id)
     return site
 
 

@@ -17,9 +17,37 @@ type AdminAuthContextType = {
 
 const AdminAuthContext = createContext<AdminAuthContextType | undefined>(undefined);
 
+const ADMIN_STORAGE_KEY = "wc_admin_profile";
+
+function getCachedAdmin(): AdminUser | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(ADMIN_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed?.id || parsed?.email) {
+      return parsed as AdminUser;
+    }
+  } catch {}
+  return null;
+}
+
 export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [admin, setAdmin] = useState<AdminUser | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [admin, setAdminState] = useState<AdminUser | null>(getCachedAdmin);
+  const [loading, setLoading] = useState<boolean>(() => !getCachedAdmin());
+
+  const setAdmin = useCallback((next: AdminUser | null) => {
+    setAdminState(next);
+    try {
+      if (typeof window !== "undefined") {
+        if (next) {
+          localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify(next));
+        } else {
+          localStorage.removeItem(ADMIN_STORAGE_KEY);
+        }
+      }
+    } catch {}
+  }, []);
 
   const refreshAdmin = useCallback(async (): Promise<AdminUser | null> => {
     try {
@@ -42,7 +70,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setAdmin]);
 
   const logoutAdmin = useCallback(async () => {
     try {
@@ -55,6 +83,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } finally {
       try {
         if (typeof window !== "undefined") {
+          localStorage.removeItem(ADMIN_STORAGE_KEY);
           Object.keys(sessionStorage).forEach((key) => {
             if (key.startsWith("webnirmaan_copilot_chat_")) {
               sessionStorage.removeItem(key);
@@ -69,7 +98,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       } catch {}
       setAdmin(null);
     }
-  }, []);
+  }, [setAdmin]);
 
   useEffect(() => {
     refreshAdmin();

@@ -649,31 +649,41 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     navigate(target, { replace: true });
   };
 
+  const executeGlobalSearch = (query: string) => {
+    const trimmed = query.trim();
+    if (onSearch) {
+      onSearch(trimmed);
+    }
+    const currentSiteId = siteId || (location.pathname.startsWith("/builder/") ? location.pathname.split("/")[2] : undefined);
+    const homeBase = isBuilderContext || isBuilderAdminRoute
+      ? (currentSiteId ? `/builder/${currentSiteId}` : base)
+      : (siteSlug ? `/store/${siteSlug}` : resolvedHomePath);
+
+    if (trimmed) {
+      navigate(`${homeBase}?search=${encodeURIComponent(trimmed)}`);
+    } else {
+      navigate(homeBase);
+    }
+    setSearchActive(false);
+    setMobileSearchOpen(false);
+  };
+
+  const handleClearSearch = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setSearchQuery("");
+    executeGlobalSearch("");
+  };
+
   const handleSearchInputChange = (val: string) => {
     setSearchQuery(val);
-    if (onSearch) {
-      onSearch(val);
-    }
-    const params = new URLSearchParams(location.search);
-    if (val.trim()) {
-      params.set("search", val.trim());
-    } else {
-      params.delete("search");
-    }
-    const searchStr = params.toString();
-    const target = `${location.pathname}${searchStr ? `?${searchStr}` : ""}`;
-    navigate(target, { replace: true });
   };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchQuery.trim()) {
-      handleHomeClick();
-      return;
-    }
-    if (onSearch) {
-      onSearch(searchQuery.trim());
-    }
+    executeGlobalSearch(searchQuery);
   };
 
 
@@ -1306,9 +1316,19 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                           onChange={(e) => handleSearchInputChange(e.target.value)}
                           style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", padding: "8px 14px" }}
                         />
+                        {searchQuery && (
+                          <button
+                            type="button"
+                            onClick={handleClearSearch}
+                            style={{ width: "28px", height: "28px", border: "none", background: "transparent", color: searchTextColor, opacity: 0.7, display: "grid", placeItems: "center", cursor: "pointer", fontSize: "13px", flexShrink: 0 }}
+                            title="Clear search"
+                          >
+                            ✕
+                          </button>
+                        )}
                         <button
                           type="submit"
-                          style={{ width: "42px", height: "36px", border: "none", background: accentColor, color: "#ffffff", display: "grid", placeItems: "center", cursor: "pointer" }}
+                          style={{ width: "42px", height: "36px", border: "none", background: accentColor, color: "#ffffff", display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
                         >
                           <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: "currentColor", strokeWidth: 2.2, fill: "none" }}>
                             <circle cx="11" cy="11" r="7" />
@@ -1446,9 +1466,19 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                           onChange={(e) => handleSearchInputChange(e.target.value)}
                           style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontFamily: "serif" }}
                         />
+                        {searchQuery && (
+                          <button
+                            type="button"
+                            onClick={handleClearSearch}
+                            style={{ width: "26px", height: "26px", border: "none", background: "transparent", color: searchTextColor, opacity: 0.7, display: "grid", placeItems: "center", cursor: "pointer", fontSize: "13px", flexShrink: 0 }}
+                            title="Clear search"
+                          >
+                            ✕
+                          </button>
+                        )}
                         <button
                           type="submit"
-                          style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: "transparent", color: searchTextColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                          style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: "transparent", color: searchTextColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
                         >
                           <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
                             <circle cx="11" cy="11" r="7" />
@@ -1597,9 +1627,19 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                           onChange={(e) => handleSearchInputChange(e.target.value)}
                           style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontWeight: 500 }}
                         />
+                        {searchQuery && (
+                          <button
+                            type="button"
+                            onClick={handleClearSearch}
+                            style={{ width: "26px", height: "26px", border: "none", background: "transparent", color: searchTextColor, opacity: 0.7, display: "grid", placeItems: "center", cursor: "pointer", fontSize: "13px", flexShrink: 0 }}
+                            title="Clear search"
+                          >
+                            ✕
+                          </button>
+                        )}
                         <button
                           type="submit"
-                          style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                          style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
                         >
                           <svg viewBox="0 0 24 24" style={{ width: "15px", height: "15px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
                             <circle cx="11" cy="11" r="7" />
@@ -1734,9 +1774,19 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         onChange={(e) => handleSearchInputChange(e.target.value)}
                         style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontWeight: 500 }}
                       />
+                      {searchQuery && (
+                        <button
+                          type="button"
+                          onClick={handleClearSearch}
+                          style={{ width: "26px", height: "26px", border: "none", background: "transparent", color: searchTextColor, opacity: 0.7, display: "grid", placeItems: "center", cursor: "pointer", fontSize: "13px", flexShrink: 0 }}
+                          title="Clear search"
+                        >
+                          ✕
+                        </button>
+                      )}
                       <button
                         type="submit"
-                        style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: isSearchBgDark ? "rgba(255,255,255,0.18)" : "rgba(15,23,42,0.08)", color: searchTextColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                        style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: isSearchBgDark ? "rgba(255,255,255,0.18)" : "rgba(15,23,42,0.08)", color: searchTextColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
                       >
                         <svg viewBox="0 0 24 24" style={{ width: "15px", height: "15px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
                           <circle cx="11" cy="11" r="7" />

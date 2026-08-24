@@ -69,17 +69,17 @@ function getInitialCachedTheme(slug?: string): PublicSiteData | null {
   if (siteThemeMemoryCache.has(slug)) {
     return siteThemeMemoryCache.get(slug)!;
   }
-  try {
-    const raw = sessionStorage.getItem(`wc_site_theme_${slug}`);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed?.siteName) {
-        siteThemeMemoryCache.set(slug, parsed);
-        return parsed;
+  if (typeof window !== "undefined") {
+    try {
+      const raw = localStorage.getItem(`wc_site_theme_${slug}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          siteThemeMemoryCache.set(slug, parsed);
+          return parsed;
+        }
       }
-    }
-  } catch {
-    // ignore
+    } catch (_) {}
   }
   return null;
 }
@@ -102,50 +102,76 @@ export function usePublicSiteTheme(slug?: string) {
     let isMounted = true;
     const fetchSite = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/public/sites/slug/${slug}`);
-        if (!res.ok) throw new Error("Site not found");
-        const data = await res.json();
-        const def = data?.site_definition || {};
+        // 1. First attempt the ultra-fast lightweight theme endpoint (~150 bytes payload)
+        let themeRes = await fetch(`${API_BASE_URL}/public/sites/slug/${slug}/theme`);
+        let finalSiteData: PublicSiteData | null = null;
 
-        const rawName =
-          def.site_name ||
-          def.site_title ||
-          def.title ||
-          def.name ||
-          "";
+        if (themeRes.ok) {
+          const tData = await themeRes.json();
+          finalSiteData = {
+            siteName: cleanSiteName(tData?.site_name, slug),
+            logo: tData?.logo,
+            navbar: {
+              brandName: tData?.navbar?.brandName || cleanSiteName(tData?.site_name, slug),
+              logoUrl: tData?.logo || tData?.navbar?.logoUrl,
+            },
+            theme: tData?.theme || {},
+          };
+        } else {
+          // 2. Fallback to full site endpoint if needed
+          const res = await fetch(`${API_BASE_URL}/public/sites/slug/${slug}`);
+          if (!res.ok) throw new Error("Site not found");
+          const data = await res.json();
+          const def = data?.site_definition || {};
 
-        const formattedName = cleanSiteName(rawName, slug);
+          const rawName =
+            def.site_name ||
+            def.site_title ||
+            def.title ||
+            def.name ||
+            "";
 
-        const extractedLogo =
-          def.logo ||
-          def.header?.logo ||
-          def.theme?.logo ||
-          undefined;
+          const formattedName = cleanSiteName(rawName, slug);
 
-        const themeObj = def.theme || {};
+          const extractedLogo =
+            def.logo ||
+            def.header?.logo ||
+            def.theme?.logo ||
+            undefined;
 
-        const navbarObj = def.navbar || def.header || {};
-        const extractedBrandName = navbarObj.brandName || navbarObj.brand_name || rawName || "";
+          const themeObj = def.theme || {};
+          const navbarObj = def.navbar || def.header || {};
+          const extractedBrandName = navbarObj.brandName || navbarObj.brand_name || rawName || "";
 
-        const finalSiteData: PublicSiteData = {
-          siteName: formattedName,
-          logo: extractedLogo,
-          navbar: {
-            brandName: extractedBrandName,
-            logoUrl: extractedLogo,
-          },
-          theme: themeObj,
-        };
-
-        siteThemeMemoryCache.set(slug, finalSiteData);
-        try {
-          sessionStorage.setItem(`wc_site_theme_${slug}`, JSON.stringify(finalSiteData));
-        } catch {
-          // ignore
+          finalSiteData = {
+            siteName: formattedName,
+            logo: extractedLogo,
+            navbar: {
+              brandName: extractedBrandName,
+              logoUrl: extractedLogo,
+            },
+            theme: themeObj,
+          };
         }
 
-        if (isMounted) {
-          setSiteData(finalSiteData);
+        if (finalSiteData) {
+          siteThemeMemoryCache.set(slug, finalSiteData);
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.setItem(`wc_site_theme_${slug}`, JSON.stringify(finalSiteData));
+            } catch (_) {}
+          }
+
+          if (isMounted) {
+            setSiteData(finalSiteData);
+          }
+
+          // Background pre-warm the full site tree so post-login navigation is 0ms instant
+          if (typeof window !== "undefined" && slug) {
+            setTimeout(() => {
+              fetch(`${API_BASE_URL}/public/sites/slug/${slug}`).catch(() => {});
+            }, 100);
+          }
         }
       } catch (err) {
         console.error("Failed to load public site theme:", err);

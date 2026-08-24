@@ -161,12 +161,27 @@ const FilterModal: React.FC<FilterModalProps> = ({
       setDraft(currentFilters);
       setActiveTab("categories");
       if (!isInline) {
+        const scrollY = window.scrollY;
+        document.body.style.position = "fixed";
+        document.body.style.top = `-${scrollY}px`;
+        document.body.style.left = "0";
+        document.body.style.right = "0";
+        document.body.style.width = "100%";
         document.body.style.overflow = "hidden";
       }
     }
     return () => {
       if (!isInline) {
+        const scrollY = document.body.style.top;
+        document.body.style.position = "";
+        document.body.style.top = "";
+        document.body.style.left = "";
+        document.body.style.right = "";
+        document.body.style.width = "";
         document.body.style.overflow = "";
+        if (scrollY) {
+          window.scrollTo(0, parseInt(scrollY || "0", 10) * -1);
+        }
       }
     };
   }, [open, currentFilters, isInline]);
@@ -420,11 +435,6 @@ const FilterModal: React.FC<FilterModalProps> = ({
                     >
                       <span style={{ fontSize: "13px", fontWeight: selected ? 700 : 500, color: textPrimary }}>
                         {cat.name}
-                        {count !== null && (
-                          <span style={{ fontSize: "11px", color: textSecondary, marginLeft: "6px" }}>
-                            ({count})
-                          </span>
-                        )}
                       </span>
                       <div
                         style={{
@@ -538,11 +548,6 @@ const FilterModal: React.FC<FilterModalProps> = ({
                   >
                     <span style={{ fontSize: "13px", fontWeight: checked ? 700 : 500, color: textPrimary }}>
                       {col.name}
-                      {count !== null && (
-                        <span style={{ fontSize: "11px", color: textSecondary, marginLeft: "6px" }}>
-                          ({count})
-                        </span>
-                      )}
                     </span>
                     <input
                       type="checkbox"
@@ -601,11 +606,6 @@ const FilterModal: React.FC<FilterModalProps> = ({
                     >
                       <span style={{ fontSize: "13px", fontWeight: checked ? 700 : 500, color: textPrimary }}>
                         {pt}
-                        {count !== null && (
-                          <span style={{ fontSize: "11px", color: textSecondary, marginLeft: "6px" }}>
-                            ({count})
-                          </span>
-                        )}
                       </span>
                       <input
                         type="checkbox"
@@ -660,11 +660,6 @@ const FilterModal: React.FC<FilterModalProps> = ({
                     >
                       <span style={{ fontSize: "13px", fontWeight: checked ? 700 : 500, color: textPrimary }}>
                         {b}
-                        {count !== null && (
-                          <span style={{ fontSize: "11px", color: textSecondary, marginLeft: "6px" }}>
-                            ({count})
-                          </span>
-                        )}
                       </span>
                       <input
                         type="checkbox"
@@ -837,16 +832,21 @@ const FilterModal: React.FC<FilterModalProps> = ({
           position: ${isInline ? "absolute" : "fixed"};
           inset: 0;
           z-index: 2147483647;
+          background: rgba(0, 0, 0, 0.65);
+          backdrop-filter: blur(4px);
+          z-index: 99999;
           display: flex;
           align-items: center;
           justify-content: center;
-          background: ${isDark ? "rgba(15, 23, 42, 0.45)" : "rgba(15, 23, 42, 0.35)"};
-          padding: 16px;
-          border-radius: ${isInline ? "inherit" : "0"};
+          padding: 20px;
+          animation: filterModalFadeIn 150ms ease-out;
+          overscroll-behavior: contain;
+          touch-action: none;
         }
         .filter-modal-dialog {
-          width: min(540px, 92vw);
-          max-height: min(520px, 80vh);
+          width: 580px;
+          max-width: 96vw;
+          max-height: 80vh;
           border-radius: 16px;
           background: ${bg};
           border: 1px solid ${borderColor};
@@ -854,6 +854,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
           display: flex;
           flex-direction: column;
           overflow: hidden;
+          overscroll-behavior: contain;
         }
         .filter-modal-header {
           display: flex;
@@ -879,6 +880,9 @@ const FilterModal: React.FC<FilterModalProps> = ({
           gap: 6px;
           overflow-y: auto;
           background: ${navBg};
+          overscroll-behavior: contain;
+          -webkit-overflow-scrolling: touch;
+          touch-action: pan-y;
         }
         .filter-accordion-section {
           margin-top: 6px;
@@ -913,6 +917,9 @@ const FilterModal: React.FC<FilterModalProps> = ({
           padding: 16px 18px;
           overflow-y: auto;
           background: ${panelBg};
+          overscroll-behavior: contain;
+          -webkit-overflow-scrolling: touch;
+          touch-action: pan-y;
         }
         .filter-modal-footer {
           display: flex;

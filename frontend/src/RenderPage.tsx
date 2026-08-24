@@ -7,6 +7,8 @@ import { useCustomerAuth } from "./context/CustomerAuthContext";
 import FilterModal, { FilterState } from "./Component/FilterModal";
 import { API_BASE_URL } from "./config/api";
 import { ThemeProvider, resolveThemeTokens } from "./context/ThemeContext";
+import { normalizeStorefrontProduct } from "./utils/productNormalizer";
+import { getThumbnailUrl } from "./utils/imageOptimizer";
 
 type Block = {
   id?: string;
@@ -233,12 +235,17 @@ const RenderPage: React.FC<RenderPageProps> = ({
   const [sortBy, setSortBy] = useState("newest");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 12;
+  const [pageSize, setPageSize] = useState(24);
+  const [serverProducts, setServerProducts] = useState<Product[] | null>(null);
+  const [serverTotal, setServerTotal] = useState<number | null>(null);
+  const [serverTotalPages, setServerTotalPages] = useState<number | null>(null);
+  const [isServerLoading, setIsServerLoading] = useState<boolean>(false);
   const [isCompactCheckout, setIsCompactCheckout] = useState(false);
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setCurrentPage(1);
+    setServerProducts(null);
   }, [filters, searchQuery, sortBy]);
 
   useEffect(() => {
@@ -246,6 +253,65 @@ const RenderPage: React.FC<RenderPageProps> = ({
     const q = params.get("search") || "";
     setSearchQuery(q);
   }, [location.search]);
+
+  useEffect(() => {
+    if (!siteId) return;
+
+    let cancelled = false;
+    const fetchServerProducts = async () => {
+      try {
+        setIsServerLoading(true);
+        const params = new URLSearchParams();
+        params.set("page", String(currentPage));
+        params.set("page_size", String(pageSize));
+        if (searchQuery.trim()) {
+          params.set("search", searchQuery.trim());
+        }
+        if (sortBy) {
+          params.set("sort_by", sortBy);
+        }
+        if (filters.categoryId) {
+          params.set("category_id", filters.categoryId);
+        }
+        filters.productTypes.forEach((pt) => params.append("product_type", pt));
+        filters.collections.forEach((cid) => params.append("collection_id", cid));
+        filters.brands.forEach((b) => params.append("brand", b));
+        if (filters.minPrice > 0) {
+          params.set("min_price", String(filters.minPrice));
+        }
+        if (filters.maxPrice < 100000) {
+          params.set("max_price", String(filters.maxPrice));
+        }
+
+        const res = await fetch(
+          `${API_BASE_URL}/sites/${siteId}/products/public?${params.toString()}`
+        );
+
+        if (!cancelled && res.ok) {
+          const data = await res.json();
+          if (data && typeof data === "object" && Array.isArray(data.items || data.products)) {
+            const rawItems = data.items || data.products || [];
+            const norm = rawItems.map(normalizeStorefrontProduct);
+            setServerProducts(norm);
+            setServerTotal(typeof data.total === "number" ? data.total : norm.length);
+            setServerTotalPages(typeof data.total_pages === "number" ? data.total_pages : 1);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch public products server-side", err);
+      } finally {
+        if (!cancelled) {
+          setIsServerLoading(false);
+        }
+      }
+    };
+
+    fetchServerProducts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [siteId, currentPage, pageSize, searchQuery, filters, sortBy]);
 
   useEffect(() => {
     if (!siteId) return;
@@ -533,6 +599,10 @@ const RenderPage: React.FC<RenderPageProps> = ({
     return filteredAndSortedProducts.slice(start, start + pageSize);
   }, [filteredAndSortedProducts, currentPage, pageSize]);
 
+  const resolvedStoreProducts = serverProducts ?? paginatedProducts;
+  const resolvedTotalCount = serverTotal ?? filteredAndSortedProducts.length;
+  const resolvedTotalPages = serverTotalPages ?? totalPages;
+
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (filters.categoryId) count++;
@@ -731,7 +801,11 @@ const RenderPage: React.FC<RenderPageProps> = ({
       );
     }
 
-    if (resolvedDataSource === "product") {
+    const isProductDetailBlock =
+      resolvedDataSource === "product" ||
+      PRODUCT_DETAIL_TYPES.has(String(block.type || "").toLowerCase());
+
+    if (isProductDetailBlock) {
       return (
         <Component
           key={blockId}
@@ -752,6 +826,11 @@ const RenderPage: React.FC<RenderPageProps> = ({
           onPageChange={setCurrentPage}
           totalItems={filteredAndSortedProducts.length}
           pageSize={pageSize}
+          pageSizeOptions={[24, 48, 96, 100]}
+          onPageSizeChange={(newSize: number) => {
+            setPageSize(newSize);
+            setCurrentPage(1);
+          }}
           theme={theme}
         />
       );
@@ -762,19 +841,27 @@ const RenderPage: React.FC<RenderPageProps> = ({
         <Component
           key={blockId}
           {...componentProps}
-          products={paginatedProducts}
+          products={resolvedStoreProducts}
           title={dynamicTitle}
           subtitle={dynamicSubtitle}
-          itemCount={filteredAndSortedProducts.length}
+          itemCount={resolvedTotalCount}
           activeFilterCount={activeFilterCount}
           sortBy={sortBy}
           onSortChange={setSortBy}
           onFilterClick={() => setFilterModalOpen(true)}
           currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={setCurrentPage}
+          totalPages={resolvedTotalPages}
+          onPageChange={(newPage: number) => {
+            setCurrentPage(newPage);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
           pageSize={pageSize}
-          totalProducts={filteredAndSortedProducts.length}
+          pageSizeOptions={[24, 48, 96, 100]}
+          onPageSizeChange={(newSize: number) => {
+            setPageSize(newSize);
+            setCurrentPage(1);
+          }}
+          totalProducts={resolvedTotalCount}
         />
       );
     }
@@ -989,8 +1076,10 @@ const RenderPage: React.FC<RenderPageProps> = ({
                 }}
               >
                 <img
-                  src={item.image}
+                  src={getThumbnailUrl(item.image, 140, 140)}
                   alt={item.name}
+                  loading="eager"
+                  decoding="async"
                   style={{
                     width: "100%",
                     height: "100%",
