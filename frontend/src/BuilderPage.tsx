@@ -409,7 +409,8 @@ function StorefrontShell({
         <Navbar
           {...navbarProps}
           siteId={siteId}
-          brandName={siteDefinition.site_name || siteDefinition.name || "WebCreon Store"}
+          brandName={navbarProps.brandName || siteDefinition.site_name || siteDefinition.name || "WebCreon Store"}
+          tagline={navbarProps.tagline}
           logoUrl={siteDefinition.navbar?.logoUrl || siteDefinition.navbar?.logo_url || (navbarProps as any).logoUrl}
           theme={{
             ...siteDefinition.theme,
