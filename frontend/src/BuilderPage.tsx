@@ -310,15 +310,40 @@ function StorefrontShell({
   const navbarProps = getNavbarEditorProps(siteDefinition);
   const navbarIsSelected = selectedBlockId === NAVBAR_BLOCK_ID;
 
+  const navbarBlockRef = useRef<HTMLDivElement | null>(null);
+  const [measuredNavbarHeight, setMeasuredNavbarHeight] = useState(118);
+
+  useEffect(() => {
+    if (!navbarBlockRef.current) return;
+
+    const updateHeight = () => {
+      if (navbarBlockRef.current) {
+        const h = navbarBlockRef.current.offsetHeight;
+        if (h > 0) {
+          setMeasuredNavbarHeight(h);
+        }
+      }
+    };
+
+    updateHeight();
+
+    if (typeof ResizeObserver !== "undefined") {
+      const resizeObserver = new ResizeObserver(() => {
+        updateHeight();
+      });
+      resizeObserver.observe(navbarBlockRef.current);
+      return () => resizeObserver.disconnect();
+    }
+  }, [siteDefinition, storefrontNavbarMode]);
 
   const contentTopOffset =
-    storefrontNavbarMode === "fixed" ? FIXED_NAVBAR_CONTENT_OFFSET : 0;
-
+    (storefrontNavbarMode === "fixed" || storefrontNavbarMode === "sticky")
+      ? measuredNavbarHeight
+      : 0;
 
   const fixedNavbarTopOffset = adminTopbarVisible
     ? BUILDER_TOPBAR_HEIGHT
     : 0;
-
 
   return (
     <div
@@ -330,7 +355,9 @@ function StorefrontShell({
         overflow: "visible",
       }}
     >
+      {/* Global Navbar Block */}
       <div
+        ref={navbarBlockRef}
         data-editor-block-id={NAVBAR_BLOCK_ID}
         data-editor-block-type="navbar"
         onClick={(e) => {
@@ -348,7 +375,7 @@ function StorefrontShell({
           borderRadius: "8px",
           transition: "outline-color 0.15s ease",
           cursor: editMode ? "pointer" : "default",
-          zIndex: storefrontNavbarMode === "fixed" ? FIXED_NAVBAR_Z_INDEX : 5,
+          zIndex: (storefrontNavbarMode === "fixed" || storefrontNavbarMode === "sticky") ? FIXED_NAVBAR_Z_INDEX : 5,
           isolation: "isolate",
           overflow: "visible",
         }}
@@ -375,14 +402,15 @@ function StorefrontShell({
             transition: "all 0.15s ease",
           }}
         >
-          navbar
+          Navbar Block
         </div>
 
 
         <Navbar
-          brandName={navbarProps.brandName}
+          {...navbarProps}
+          siteId={siteId}
+          brandName={siteDefinition.site_name || siteDefinition.name || "WebCreon Store"}
           logoUrl={siteDefinition.navbar?.logoUrl || siteDefinition.navbar?.logo_url || (navbarProps as any).logoUrl}
-          tagline={navbarProps.tagline}
           theme={{
             ...siteDefinition.theme,
             navbar_position: storefrontNavbarMode,
@@ -393,7 +421,7 @@ function StorefrontShell({
           showCart={navbarProps.showCart}
           topOffset={fixedNavbarTopOffset}
           fixedBounds={
-            storefrontNavbarMode === "fixed" ? navbarFixedBounds : undefined
+            (storefrontNavbarMode === "fixed" || storefrontNavbarMode === "sticky") ? navbarFixedBounds : undefined
           }
           siteSlug={siteSlug}
           appBase={appBase}

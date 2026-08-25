@@ -271,6 +271,70 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   const variant = theme?.navbar_variant || "soft";
   const rawPosition = (props as any).navbar_position || (props as any).position || theme?.navbar_position;
   const position: NavbarPosition = (rawPosition === "static" || rawPosition === "sticky" || rawPosition === "fixed") ? rawPosition : "fixed";
+
+  const [isStickyVisible, setIsStickyVisible] = useState(true);
+  const [isScrolledPastTop, setIsScrolledPastTop] = useState(false);
+  const lastScrollYRef = useRef(0);
+
+  useEffect(() => {
+    if (position !== "sticky") {
+      setIsStickyVisible(true);
+      setIsScrolledPastTop(false);
+      return;
+    }
+
+    const findScrollContainer = (): Element | Window => {
+      const candidates = [
+        document.querySelector(".store-canvas-container"),
+        document.querySelector("[data-storefront-canvas]"),
+        document.querySelector("#builder-canvas-viewport"),
+        document.querySelector(".builder-main-viewport"),
+        document.querySelector("main"),
+      ];
+      for (const cand of candidates) {
+        if (cand && cand.scrollHeight > cand.clientHeight + 10) {
+          return cand;
+        }
+      }
+      return window;
+    };
+
+    const target = findScrollContainer();
+
+    const handleScroll = () => {
+      const currentScrollY =
+        target === window
+          ? window.scrollY || document.documentElement.scrollTop
+          : (target as Element).scrollTop;
+
+      const diff = currentScrollY - lastScrollYRef.current;
+
+      if (currentScrollY > 60) {
+        setIsScrolledPastTop(true);
+        if (diff > 4) {
+          // Scrolling DOWN -> Hide navbar
+          setIsStickyVisible(false);
+        } else if (diff < -4) {
+          // Scrolling UP -> Reveal navbar & stick to top
+          setIsStickyVisible(true);
+        }
+      } else {
+        // At or near top of page
+        setIsScrolledPastTop(false);
+        setIsStickyVisible(true);
+      }
+
+      lastScrollYRef.current = currentScrollY;
+    };
+
+    target.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
+    return () => {
+      target.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, [position]);
   const isBuilderAdminRoute =
     location.pathname.startsWith("/builder/") && location.pathname.includes("/admin");
   const isStoreRoute = location.pathname.startsWith("/store/");
@@ -802,7 +866,17 @@ const Navbar: React.FC<NavbarProps> = (props) => {
         ...(position === "fixed" || searchActive || mobileSearchOpen || Boolean(isMobile && searchQuery.trim())
           ? { position: "fixed", top: 0, left: 0, right: 0, width: "100%", zIndex: 1000 }
           : position === "sticky"
-            ? { position: "sticky", top: 0, left: 0, right: 0, width: "100%", zIndex: 1000 }
+            ? {
+                position: "fixed",
+                top: 0,
+                left: 0,
+                right: 0,
+                width: "100%",
+                zIndex: 1000,
+                transform: isStickyVisible ? "translateY(0)" : "translateY(-100%)",
+                transition: "transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease",
+                boxShadow: isScrolledPastTop ? "0 4px 20px rgba(0, 0, 0, 0.08)" : "none",
+              }
             : getNavbarPositionStyle(position, topOffset, fixedBounds)),
         padding: resolvedWrapperPadding,
         background: outerBackground,
