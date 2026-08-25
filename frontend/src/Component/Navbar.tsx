@@ -867,16 +867,16 @@ const Navbar: React.FC<NavbarProps> = (props) => {
           ? { position: "fixed", top: 0, left: 0, right: 0, width: "100%", zIndex: 1000 }
           : position === "sticky"
             ? {
-                position: "fixed",
-                top: 0,
-                left: 0,
-                right: 0,
-                width: "100%",
-                zIndex: 1000,
-                transform: isStickyVisible ? "translateY(0)" : "translateY(-100%)",
-                transition: "transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease",
-                boxShadow: isScrolledPastTop ? "0 4px 20px rgba(0, 0, 0, 0.08)" : "none",
-              }
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              width: "100%",
+              zIndex: 1000,
+              transform: isStickyVisible ? "translateY(0)" : "translateY(-100%)",
+              transition: "transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease",
+              boxShadow: isScrolledPastTop ? "0 4px 20px rgba(0, 0, 0, 0.08)" : "none",
+            }
             : getNavbarPositionStyle(position, topOffset, fixedBounds)),
         padding: resolvedWrapperPadding,
         background: outerBackground,

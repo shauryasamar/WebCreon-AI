@@ -170,7 +170,7 @@ function getInitialCachedSite(slugOrId?: string): SavedSite | null {
           return parsed;
         }
       }
-    } catch (_) {}
+    } catch (_) { }
   }
   return null;
 }
@@ -223,7 +223,7 @@ async function resolveSiteBySlug(
                 );
               }
             }
-          } catch (_) {}
+          } catch (_) { }
         }
         return res;
       }
@@ -271,7 +271,7 @@ async function resolveSiteBySlug(
               );
             }
           }
-        } catch (_) {}
+        } catch (_) { }
       }
     }
     return found;
@@ -338,7 +338,7 @@ function StorefrontShell({
 
   const contentTopOffset =
     (storefrontNavbarMode === "fixed" || storefrontNavbarMode === "sticky")
-      ? measuredNavbarHeight
+      ? FIXED_NAVBAR_CONTENT_OFFSET
       : 0;
 
   const fixedNavbarTopOffset = adminTopbarVisible
@@ -923,8 +923,8 @@ function BuilderPageContent() {
     );
   const [siteName, setSiteName] = useState(
     initialCachedSite?.site_definition?.site?.brand_name ||
-      initialCachedSite?.slug ||
-      ""
+    initialCachedSite?.slug ||
+    ""
   );
   const [siteSlug, setSiteSlug] = useState(initialCachedSite?.slug || "");
   const [loading, setLoading] = useState(!initialCachedSite);
@@ -986,13 +986,13 @@ function BuilderPageContent() {
               localStorage.setItem(`wc_theme_bg_${currentSlug}`, finalDef.theme.primary_bg);
             }
           }
-        } catch (_) {}
+        } catch (_) { }
       }
       if (currentSiteId) {
         siteSlugMemoryCache.set(currentSiteId, updatedSite);
         try {
           localStorage.setItem(`wc_site_snapshot_${currentSiteId}`, JSON.stringify(updatedSite));
-        } catch (_) {}
+        } catch (_) { }
       }
     } catch (err) {
       console.error("Error publishing site:", err);
@@ -1030,14 +1030,14 @@ function BuilderPageContent() {
               localStorage.setItem(`wc_theme_bg_${currentSlug}`, next.theme.primary_bg);
             }
           }
-        } catch (_) {}
+        } catch (_) { }
       }
 
       if (currentId) {
         siteSlugMemoryCache.set(currentId, updatedSnapshot);
         try {
           localStorage.setItem(`wc_site_snapshot_${currentId}`, JSON.stringify(updatedSnapshot));
-        } catch (_) {}
+        } catch (_) { }
       }
     },
     [siteSlug, siteSlugParam, resolvedSiteId, siteId, siteDefinition]
@@ -1087,7 +1087,7 @@ function BuilderPageContent() {
       ) {
         return saved as any;
       }
-    } catch {}
+    } catch { }
     return null;
   });
 
@@ -1111,7 +1111,7 @@ function BuilderPageContent() {
         } else {
           sessionStorage.removeItem("wc_active_builder_drawer");
         }
-      } catch {}
+      } catch { }
       return next;
     });
   }, []);
@@ -1144,14 +1144,14 @@ function BuilderPageContent() {
     ? location.pathname.includes("/payment-settings")
       ? "payment-settings"
       : location.pathname.includes("/delivery")
-      ? "delivery"
-      : location.pathname.includes("/earnings")
-      ? "earnings"
-      : location.pathname.includes("/checkout-charges")
-      ? "checkout-charges"
-      : location.pathname.includes("/orders")
-      ? "orders"
-      : "products"
+        ? "delivery"
+        : location.pathname.includes("/earnings")
+          ? "earnings"
+          : location.pathname.includes("/checkout-charges")
+            ? "checkout-charges"
+            : location.pathname.includes("/orders")
+              ? "orders"
+              : "products"
     : null;
 
 
@@ -1261,7 +1261,7 @@ function BuilderPageContent() {
       setSavedSites(list);
       try {
         localStorage.setItem("wc_admin_saved_sites", JSON.stringify(list));
-      } catch (_) {}
+      } catch (_) { }
     } catch (error) {
       console.error("Error loading saved sites:", error);
     }
@@ -1290,7 +1290,7 @@ function BuilderPageContent() {
         const next = prev.filter((site) => site.id !== targetSiteId);
         try {
           localStorage.setItem("wc_admin_saved_sites", JSON.stringify(next));
-        } catch (_) {}
+        } catch (_) { }
         return next;
       });
 
@@ -1411,7 +1411,7 @@ function BuilderPageContent() {
                 }
               }
             }
-          } catch (_) {}
+          } catch (_) { }
         } else if (siteSlugParam) {
           data = await resolveSiteBySlug(siteSlugParam);
 
@@ -1453,7 +1453,7 @@ function BuilderPageContent() {
                 localStorage.setItem(`wc_theme_bg_${sSlug}`, parsedSiteDefinition.theme.primary_bg);
               }
             }
-          } catch (_) {}
+          } catch (_) { }
         }
 
         const freshAppBase = isStoreRoute
@@ -1674,11 +1674,11 @@ function BuilderPageContent() {
   const pageBg = isAdminRoute
     ? "#ffffff"
     : activeSiteDefinition?.theme?.primary_bg ||
-      (activeSiteDefinition?.theme?.mode === "light" ? "#f8fafc" : "#0f172a");
+    (activeSiteDefinition?.theme?.mode === "light" ? "#f8fafc" : "#0f172a");
   const textColor = isAdminRoute
     ? "#0f172a"
     : activeSiteDefinition?.theme?.text_color ||
-      (activeSiteDefinition?.theme?.mode === "light" ? "#111827" : "#f9fafb");
+    (activeSiteDefinition?.theme?.mode === "light" ? "#111827" : "#f9fafb");
 
 
   const topBar = showAdminTopbar ? (
@@ -1822,7 +1822,7 @@ function BuilderPageContent() {
                   JSON.stringify(target)
                 );
               }
-            } catch (_) {}
+            } catch (_) { }
           }
           if (targetSiteId === (resolvedSiteId || siteId)) {
             return;
@@ -1872,129 +1872,55 @@ function BuilderPageContent() {
             siteSlug={siteSlug || siteSlugParam || ""}
           />
         ) : (
-        <Suspense
-          fallback={
-            <div
-              style={{
-                minHeight: "50vh",
-                display: "grid",
-                placeItems: "center",
-                color: "#64748b",
-                fontSize: "14px",
-              }}
-            >
-              Loading page...
-            </div>
-          }
-        >
-          <Routes>
-            {!isStoreRoute && (
-              <>
-                <Route path="admin" element={<AdminLayout />}>
-                  <Route index element={<Navigate to="products" replace />} />
-                  <Route path="products" element={<AdminProducts />} />
-                  <Route path="orders" element={<AdminOrders />} />
-                  <Route path="delivery" element={<DeliverySettingsPage />} />
-                  <Route path="earnings" element={<TenantEarningsPage />} />
-                  <Route path="payment-settings" element={<TenantPaymentSettingsPage />} />
-                  <Route
-                    path="checkout-charges"
-                    element={<CheckoutChargesPage />}
-                  />
-                </Route>
-                <Route path="settings" element={<AdminLayout />}>
-                  <Route index element={<Navigate to="profile" replace />} />
-                  <Route path="profile" element={<AdminProfileSettings />} />
-                </Route>
-              </>
-            )}
+          <Suspense
+            fallback={
+              <div
+                style={{
+                  minHeight: "50vh",
+                  display: "grid",
+                  placeItems: "center",
+                  color: "#64748b",
+                  fontSize: "14px",
+                }}
+              >
+                Loading page...
+              </div>
+            }
+          >
+            <Routes>
+              {!isStoreRoute && (
+                <>
+                  <Route path="admin" element={<AdminLayout />}>
+                    <Route index element={<Navigate to="products" replace />} />
+                    <Route path="products" element={<AdminProducts />} />
+                    <Route path="orders" element={<AdminOrders />} />
+                    <Route path="delivery" element={<DeliverySettingsPage />} />
+                    <Route path="earnings" element={<TenantEarningsPage />} />
+                    <Route path="payment-settings" element={<TenantPaymentSettingsPage />} />
+                    <Route
+                      path="checkout-charges"
+                      element={<CheckoutChargesPage />}
+                    />
+                  </Route>
+                  <Route path="settings" element={<AdminLayout />}>
+                    <Route index element={<Navigate to="profile" replace />} />
+                    <Route path="profile" element={<AdminProfileSettings />} />
+                  </Route>
+                </>
+              )}
 
-            {/* Agent PWA — no auth, token in URL */}
-            <Route path="agent/delivery/:shipmentId" element={<AgentDeliveryPage />} />
+              {/* Agent PWA — no auth, token in URL */}
+              <Route path="agent/delivery/:shipmentId" element={<AgentDeliveryPage />} />
 
-            {/* Customer tracking page */}
-            <Route path="track/:siteId/:orderId" element={<TrackOrderPage />} />
-
-
-            <Route
-              path="orders"
-              element={
-                <StorefrontShell
-                  siteDefinition={activeSiteDefinition}
-                  siteId={resolvedSiteId || siteId || ""}
-                  siteSlug={siteSlug}
-                  editMode={editMode}
-                  adminTopbarVisible={showAdminTopbar}
-                  selectedBlockId={selectedBlockId}
-                  onSelectBlock={handleSelectBlock}
-                  storefrontNavbarMode={storefrontNavbarMode}
-                  navbarFixedBounds={navbarFixedBounds}
-                  appBase={appBase}
-                >
-                  <CustomerOrdersPage
-                    siteId={resolvedSiteId || siteId || ""}
-                    siteSlug={siteSlug}
-                    theme={activeSiteDefinition.theme}
-                  />
-                </StorefrontShell>
-              }
-            />
+              {/* Customer tracking page */}
+              <Route path="track/:siteId/:orderId" element={<TrackOrderPage />} />
 
 
-            {activeSiteDefinition.pages
-              .filter((page) => {
-                if (page.flow === "admin") return false;
-
-
-                const sameAsResolvedProductPage =
-                  productDetailPage &&
-                  (page.id === productDetailPage.id ||
-                    isProductDetailRoute(page.route) ||
-                    page.blocks.some((block) =>
-                      isProductDetailBlockType(block.type)
-                    ));
-
-
-                return !sameAsResolvedProductPage;
-              })
-              .map((page) => {
-                const normalizedRoute = normalizeRoute(page.route);
-
-
-                return (
-                  <Route
-                    key={page.id}
-                    path={normalizedRoute}
-                    element={
-                      <StorefrontPage
-                        page={page}
-                        siteDefinition={activeSiteDefinition}
-                        siteId={resolvedSiteId || siteId || ""}
-                        siteSlug={siteSlug}
-                        selectedProduct={undefined}
-                        editMode={editMode}
-                        adminTopbarVisible={showAdminTopbar}
-                        selectedBlockId={selectedBlockId}
-                        onSelectBlock={handleSelectBlock}
-                        storefrontNavbarMode={storefrontNavbarMode}
-                        navbarFixedBounds={navbarFixedBounds}
-                        appBase={appBase}
-                      />
-                    }
-                  />
-                );
-              })}
-
-
-            {productDetailPage && (
               <Route
-                path="products/:productSlug"
+                path="orders"
                 element={
-                  <StorefrontPage
-                    key={`product-detail-${productSlug || "unknown"}`}
-                    page={productDetailPage}
+                  <StorefrontShell
                     siteDefinition={activeSiteDefinition}
-                    selectedProduct={selectedProduct}
                     siteId={resolvedSiteId || siteId || ""}
                     siteSlug={siteSlug}
                     editMode={editMode}
@@ -2004,12 +1930,86 @@ function BuilderPageContent() {
                     storefrontNavbarMode={storefrontNavbarMode}
                     navbarFixedBounds={navbarFixedBounds}
                     appBase={appBase}
-                  />
+                  >
+                    <CustomerOrdersPage
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      theme={activeSiteDefinition.theme}
+                    />
+                  </StorefrontShell>
                 }
               />
-            )}
-          </Routes>
-        </Suspense>
+
+
+              {activeSiteDefinition.pages
+                .filter((page) => {
+                  if (page.flow === "admin") return false;
+
+
+                  const sameAsResolvedProductPage =
+                    productDetailPage &&
+                    (page.id === productDetailPage.id ||
+                      isProductDetailRoute(page.route) ||
+                      page.blocks.some((block) =>
+                        isProductDetailBlockType(block.type)
+                      ));
+
+
+                  return !sameAsResolvedProductPage;
+                })
+                .map((page) => {
+                  const normalizedRoute = normalizeRoute(page.route);
+
+
+                  return (
+                    <Route
+                      key={page.id}
+                      path={normalizedRoute}
+                      element={
+                        <StorefrontPage
+                          page={page}
+                          siteDefinition={activeSiteDefinition}
+                          siteId={resolvedSiteId || siteId || ""}
+                          siteSlug={siteSlug}
+                          selectedProduct={undefined}
+                          editMode={editMode}
+                          adminTopbarVisible={showAdminTopbar}
+                          selectedBlockId={selectedBlockId}
+                          onSelectBlock={handleSelectBlock}
+                          storefrontNavbarMode={storefrontNavbarMode}
+                          navbarFixedBounds={navbarFixedBounds}
+                          appBase={appBase}
+                        />
+                      }
+                    />
+                  );
+                })}
+
+
+              {productDetailPage && (
+                <Route
+                  path="products/:productSlug"
+                  element={
+                    <StorefrontPage
+                      key={`product-detail-${productSlug || "unknown"}`}
+                      page={productDetailPage}
+                      siteDefinition={activeSiteDefinition}
+                      selectedProduct={selectedProduct}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      editMode={editMode}
+                      adminTopbarVisible={showAdminTopbar}
+                      selectedBlockId={selectedBlockId}
+                      onSelectBlock={handleSelectBlock}
+                      storefrontNavbarMode={storefrontNavbarMode}
+                      navbarFixedBounds={navbarFixedBounds}
+                      appBase={appBase}
+                    />
+                  }
+                />
+              )}
+            </Routes>
+          </Suspense>
         )}
       </div>
 
@@ -2083,7 +2083,7 @@ export default function BuilderPage() {
           }
         });
       }
-    } catch (_) {}
+    } catch (_) { }
 
     let cancelled = false;
 
@@ -2112,7 +2112,7 @@ export default function BuilderPage() {
                 defaultDays = Number(siteData.default_return_window_days);
               }
             }
-          } catch (_) {}
+          } catch (_) { }
         }
 
         if (!targetSiteId) {
@@ -2137,8 +2137,8 @@ export default function BuilderPage() {
           const rawList = Array.isArray(data)
             ? data
             : Array.isArray(data?.items)
-            ? data.items
-            : [];
+              ? data.items
+              : [];
           const normalizedProducts = rawList.map(normalizeStorefrontProduct);
           if (!cancelled) {
             setSiteProducts(normalizedProducts);
