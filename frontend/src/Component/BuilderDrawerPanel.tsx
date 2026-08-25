@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { API_BASE_URL } from "../config/api";
 import { AdminCopilotChat } from "./AdminCopilotChat";
+import AdminProfileSettings from "./AdminProfileSettings";
 import {
   COMPONENT_ASSETS,
   ComponentAsset,
@@ -46,6 +47,20 @@ const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { key: "payment-settings", label: "Payout Settings" },
 ];
 
+export type SettingsNavKey = "profile";
+
+export type SettingsNavItem = {
+  key: SettingsNavKey;
+  label: string;
+};
+
+const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
+  {
+    key: "profile",
+    label: "Profile",
+  },
+];
+
 type BuilderDrawerPanelProps = {
   activeDrawer: ControlItemKey | null;
   onClose: () => void;
@@ -55,6 +70,8 @@ type BuilderDrawerPanelProps = {
   onDeleteSite?: (siteId: string) => void;
   activeAdminNavKey?: AdminNavKey | null;
   onSelectAdminNav?: (key: AdminNavKey) => void;
+  activeSettingsNavKey?: SettingsNavKey | null;
+  onSelectSettingsNav?: (key: SettingsNavKey) => void;
   siteDefinition?: any;
   onSiteDefinitionChange?: (next: any) => void;
 };
@@ -64,13 +81,13 @@ function titleForDrawer(key: ControlItemKey | null) {
     case "saved-sites":
       return "SAVED SITES";
     case "chat":
-      return "WebCreon Co-Pilot";
+      return "WEBCREON CO-PILOT";
     case "admin-panel":
       return "STORE CONTROL";
     case "assets":
-      return "Component Assets";
+      return "COMPONENT ASSETS";
     case "settings":
-      return "Settings";
+      return "SETTINGS";
     default:
       return "";
   }
@@ -380,6 +397,64 @@ function AdminNavCard({
       }}
     >
       <AdminNavIcon navKey={item.key} isSelected={isSelected} />
+      <span
+        style={{
+          fontSize: "13px",
+          fontWeight: 600,
+          color: isSelected ? "#1d4ed8" : "#0f172a",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {item.label}
+      </span>
+    </div>
+  );
+}
+
+function SettingsNavCard({
+  item,
+  isSelected,
+  onClick,
+}: {
+  item: SettingsNavItem;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{
+        width: "100%",
+        textAlign: "left",
+        borderRadius: "10px",
+        padding: "10px 12px",
+        background: isSelected ? "#eff6ff" : isHovered ? "#f8fafc" : "transparent",
+        border: isSelected ? "1px solid rgba(59, 130, 246, 0.2)" : "1px solid transparent",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        gap: "10px",
+        transition: "all 0.12s ease",
+      }}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke={isSelected ? "#2563eb" : "#64748b"}
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ width: 18, height: 18, flexShrink: 0 }}
+      >
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
+      </svg>
       <span
         style={{
           fontSize: "13px",
@@ -791,6 +866,8 @@ export default function BuilderDrawerPanel({
   onDeleteSite,
   activeAdminNavKey,
   onSelectAdminNav,
+  activeSettingsNavKey,
+  onSelectSettingsNav,
   siteDefinition,
   onSiteDefinitionChange,
 }: BuilderDrawerPanelProps) {
@@ -981,34 +1058,16 @@ export default function BuilderDrawerPanel({
     >
       <div
         style={{
-          padding:
-            activeDrawer === "saved-sites" || activeDrawer === "admin-panel"
-              ? "14px 16px 10px"
-              : "10px 12px",
+          padding: "14px 16px 10px",
           borderBottom: "1px solid rgba(15,23,42,0.06)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          fontSize:
-            activeDrawer === "saved-sites" || activeDrawer === "admin-panel"
-              ? 11.5
-              : 13,
-          fontWeight:
-            activeDrawer === "saved-sites" || activeDrawer === "admin-panel"
-              ? 700
-              : 600,
-          letterSpacing:
-            activeDrawer === "saved-sites" || activeDrawer === "admin-panel"
-              ? "0.05em"
-              : "normal",
-          color:
-            activeDrawer === "saved-sites" || activeDrawer === "admin-panel"
-              ? "#64748b"
-              : "#111827",
-          textTransform:
-            activeDrawer === "saved-sites" || activeDrawer === "admin-panel"
-              ? "uppercase"
-              : "none",
+          fontSize: 11.5,
+          fontWeight: 700,
+          letterSpacing: "0.05em",
+          color: "#64748b",
+          textTransform: "uppercase",
           flexShrink: 0,
         }}
       >
@@ -1033,10 +1092,7 @@ export default function BuilderDrawerPanel({
 
       <div
         style={{
-          padding:
-            activeDrawer === "saved-sites" || activeDrawer === "admin-panel"
-              ? "12px"
-              : "10px 12px",
+          padding: "12px",
           fontSize: 12,
           color: "#4b5563",
           overflowY: "auto",
@@ -1094,14 +1150,16 @@ export default function BuilderDrawerPanel({
           </div>
         ) : activeDrawer === "assets" ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            {/* Category Filter Pills */}
+            {/* Clean Segmented Tab Control */}
             <div
               style={{
-                display: "flex",
-                gap: "6px",
-                overflowX: "auto",
-                paddingBottom: "4px",
-                scrollbarWidth: "none",
+                display: "grid",
+                gridTemplateColumns: "repeat(4, 1fr)",
+                gap: "2px",
+                background: "#f1f5f9",
+                padding: "3px",
+                borderRadius: "10px",
+                border: "1px solid rgba(226, 232, 240, 0.9)",
               }}
             >
               {[
@@ -1109,34 +1167,38 @@ export default function BuilderDrawerPanel({
                 { id: "banner", label: "Banner" },
                 { id: "products", label: "Products" },
                 { id: "footer", label: "Footer" },
-              ].map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() =>
-                    setSelectedAssetCategory(cat.id as ComponentAssetCategory)
-                  }
-                  style={{
-                    padding: "4px 10px",
-                    borderRadius: "999px",
-                    border:
-                      selectedAssetCategory === cat.id
-                        ? "1px solid #2563eb"
-                        : "1px solid rgba(15,23,42,0.1)",
-                    background:
-                      selectedAssetCategory === cat.id
-                        ? "rgba(37,99,235,0.08)"
-                        : "#ffffff",
-                    color: selectedAssetCategory === cat.id ? "#2563eb" : "#64748b",
-                    fontSize: 11,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {cat.label}
-                </button>
-              ))}
+              ].map((cat) => {
+                const isActive = selectedAssetCategory === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() =>
+                      setSelectedAssetCategory(cat.id as ComponentAssetCategory)
+                    }
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "7px 2px",
+                      borderRadius: "7px",
+                      border: "none",
+                      background: isActive ? "#ffffff" : "transparent",
+                      color: isActive ? "#1d4ed8" : "#64748b",
+                      boxShadow: isActive
+                        ? "0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04)"
+                        : "none",
+                      fontSize: "12px",
+                      fontWeight: isActive ? 600 : 500,
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                      userSelect: "none",
+                    }}
+                  >
+                    <span>{cat.label}</span>
+                  </button>
+                );
+              })}
             </div>
 
             {/* Active Banner Carousel Count Info Badge */}
@@ -1318,6 +1380,17 @@ export default function BuilderDrawerPanel({
             siteDefinition={siteDefinition}
             onSiteDefinitionChange={onSiteDefinitionChange}
           />
+        ) : activeDrawer === "settings" ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            {SETTINGS_NAV_ITEMS.map((item) => (
+              <SettingsNavCard
+                key={item.key}
+                item={item}
+                isSelected={activeSettingsNavKey === item.key}
+                onClick={() => onSelectSettingsNav?.(item.key)}
+              />
+            ))}
+          </div>
         ) : (
           <>
             <p style={{ margin: 0, color: "#4b5563" }}>

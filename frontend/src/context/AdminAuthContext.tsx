@@ -5,6 +5,15 @@ export type AdminUser = {
   id: string;
   email: string;
   name: string;
+  gender?: string | null;
+  phone?: string | null;
+  avatarUrl?: string | null;
+  role?: string;
+  authProvider?: string;
+  googleId?: string | null;
+  timezone?: string;
+  hasPassword?: boolean;
+  createdAt?: string | null;
 };
 
 type AdminAuthContextType = {

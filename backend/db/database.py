@@ -106,6 +106,21 @@ def create_db_and_tables():
                 ALTER TABLE return_items ALTER COLUMN product_id DROP NOT NULL;
                 ALTER TABLE inventory_movements ALTER COLUMN product_id DROP NOT NULL;
 
+                ALTER TABLE admins ADD COLUMN IF NOT EXISTS gender VARCHAR(50);
+                ALTER TABLE admins ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
+                ALTER TABLE admins ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+                ALTER TABLE admins ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'super_admin';
+                ALTER TABLE admins ADD COLUMN IF NOT EXISTS auth_provider VARCHAR(50) DEFAULT 'email';
+                ALTER TABLE admins ADD COLUMN IF NOT EXISTS google_id VARCHAR(255);
+                ALTER TABLE admins ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT TRUE;
+                ALTER TABLE admins ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+                ALTER TABLE admins ADD COLUMN IF NOT EXISTS timezone VARCHAR(100) DEFAULT 'Asia/Kolkata';
+                ALTER TABLE admins ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255);
+                ALTER TABLE admins ADD COLUMN IF NOT EXISTS reset_token_expires_at TIMESTAMPTZ;
+                ALTER TABLE admins ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
+                ALTER TABLE admins ADD COLUMN IF NOT EXISTS last_login_ip VARCHAR(100);
+                ALTER TABLE admins ALTER COLUMN password_hash DROP NOT NULL;
+
                 UPDATE order_items SET return_window_days = 0, returnable_quantity = 0 WHERE order_id IN (SELECT id FROM orders WHERE id::text LIKE '2cd85585%');
                 UPDATE orders SET escrow_status = 'unheld', return_window_closes_at = delivered_at WHERE id::text LIKE '2cd85585%';
                 UPDATE tenant_ledger_entries SET escrow_status = 'unheld', status = 'paid', settled_at = CURRENT_TIMESTAMP WHERE order_id IN (SELECT id FROM orders WHERE id::text LIKE '2cd85585%');

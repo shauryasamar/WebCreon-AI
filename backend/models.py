@@ -20,7 +20,20 @@ class Admin(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     email: str = Field(index=True, unique=True)
     name: Optional[str] = Field(default=None)
-    password_hash: str
+    gender: Optional[str] = Field(default=None)
+    phone: Optional[str] = Field(default=None)
+    avatar_url: Optional[str] = Field(default=None)
+    role: str = Field(default="super_admin")
+    auth_provider: str = Field(default="email")
+    google_id: Optional[str] = Field(default=None)
+    is_verified: bool = Field(default=True)
+    is_active: bool = Field(default=True)
+    timezone: str = Field(default="Asia/Kolkata")
+    reset_token: Optional[str] = Field(default=None)
+    reset_token_expires_at: Optional[datetime] = Field(default=None)
+    last_login_at: Optional[datetime] = Field(default=None)
+    last_login_ip: Optional[str] = Field(default=None)
+    password_hash: Optional[str] = Field(default=None)
     created_at: datetime = Field(
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False),

@@ -18,7 +18,7 @@ import { API_BASE_URL } from "./config/api";
 import BuilderShell from "./Component/BuilderShell";
 import BuilderTopControlBar from "./Component/BuilderTopControlBar";
 import BuilderControlPanel from "./Component/BuilderControlPanel";
-import type { AdminNavKey } from "./Component/BuilderDrawerPanel";
+import type { AdminNavKey, SettingsNavKey } from "./Component/BuilderDrawerPanel";
 import { useAdminAuth } from "./context/AdminAuthContext";
 
 // Direct imports for instant, 60fps zero-jitter workspace interactions
@@ -29,6 +29,7 @@ import CheckoutChargesPage from "./Component/CheckoutChargesPage";
 import TenantPaymentSettingsPage from "./Component/TenantPaymentSettingsPage";
 import TenantEarningsPage from "./Component/TenantEarningsPage";
 import DeliverySettingsPage from "./Component/DeliverySettingsPage";
+import AdminProfileSettings from "./Component/AdminProfileSettings";
 import EditorRenderPage from "./customizations/EditorRenderPage";
 import EditorSidebar from "./customizations/EditorSidebar";
 import CustomerOrdersPage from "./pages/CustomerOrdersPage";
@@ -1105,11 +1106,12 @@ function BuilderPageContent() {
     ? `/store/${siteSlugParam ?? ""}`
     : `/builder/${resolvedSiteId || siteId || ""}`;
   const builderBase = `/builder/${resolvedSiteId || siteId || ""}`;
+  const isSettingsRoute =
+    !isStoreRoute && location.pathname.startsWith(`${builderBase}/settings`);
   const isAdminRoute =
-    !isStoreRoute && location.pathname.startsWith(`${builderBase}/admin`);
+    !isStoreRoute && (location.pathname.startsWith(`${builderBase}/admin`) || isSettingsRoute);
 
-
-  const activeAdminNavKey: AdminNavKey | null = isAdminRoute
+  const activeAdminNavKey: AdminNavKey | null = (!isStoreRoute && location.pathname.startsWith(`${builderBase}/admin`))
     ? location.pathname.includes("/payment-settings")
       ? "payment-settings"
       : location.pathname.includes("/delivery")
@@ -1462,11 +1464,14 @@ function BuilderPageContent() {
             });
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error loading site:", error);
         if (!cancelled) {
           setSiteDefinition(null);
           setDraftSiteDefinition(null);
+          if (!isStoreRoute) {
+            navigate("/admin/sites", { replace: true });
+          }
         }
       } finally {
         if (!cancelled) {
@@ -1657,7 +1662,8 @@ function BuilderPageContent() {
       }}
       userName={authAdmin?.name}
       userEmail={authAdmin?.email}
-      avatarUrl={undefined}
+      avatarUrl={authAdmin?.avatarUrl}
+      gender={authAdmin?.gender}
     />
   ) : null;
 
@@ -1800,6 +1806,10 @@ function BuilderPageContent() {
         onSelectAdminNav={(key) => {
           navigate(`${builderBase}/admin/${key}`);
         }}
+        activeSettingsNavKey={location.pathname.includes("/settings/profile") ? "profile" : null}
+        onSelectSettingsNav={(key) => {
+          navigate(`${builderBase}/settings/${key}`);
+        }}
         siteDefinition={activeSiteDefinition}
         onSiteDefinitionChange={(next) =>
           handleSiteDefinitionChange(next as SiteDefinition)
@@ -1850,18 +1860,24 @@ function BuilderPageContent() {
         >
           <Routes>
             {!isStoreRoute && (
-              <Route path="admin" element={<AdminLayout />}>
-                <Route index element={<Navigate to="products" replace />} />
-                <Route path="products" element={<AdminProducts />} />
-                <Route path="orders" element={<AdminOrders />} />
-                <Route path="delivery" element={<DeliverySettingsPage />} />
-                <Route path="earnings" element={<TenantEarningsPage />} />
-                <Route path="payment-settings" element={<TenantPaymentSettingsPage />} />
-                <Route
-                  path="checkout-charges"
-                  element={<CheckoutChargesPage />}
-                />
-              </Route>
+              <>
+                <Route path="admin" element={<AdminLayout />}>
+                  <Route index element={<Navigate to="products" replace />} />
+                  <Route path="products" element={<AdminProducts />} />
+                  <Route path="orders" element={<AdminOrders />} />
+                  <Route path="delivery" element={<DeliverySettingsPage />} />
+                  <Route path="earnings" element={<TenantEarningsPage />} />
+                  <Route path="payment-settings" element={<TenantPaymentSettingsPage />} />
+                  <Route
+                    path="checkout-charges"
+                    element={<CheckoutChargesPage />}
+                  />
+                </Route>
+                <Route path="settings" element={<AdminLayout />}>
+                  <Route index element={<Navigate to="profile" replace />} />
+                  <Route path="profile" element={<AdminProfileSettings />} />
+                </Route>
+              </>
             )}
 
             {/* Agent PWA — no auth, token in URL */}

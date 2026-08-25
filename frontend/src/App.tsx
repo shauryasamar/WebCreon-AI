@@ -15,7 +15,8 @@ import { API_BASE_URL } from "./config/api";
 import BuilderShell from "./Component/BuilderShell";
 import BuilderTopControlBar from "./Component/BuilderTopControlBar";
 import BuilderControlPanel from "./Component/BuilderControlPanel";
-import BuilderDrawerPanel from "./Component/BuilderDrawerPanel";
+import BuilderDrawerPanel, { SettingsNavKey } from "./Component/BuilderDrawerPanel";
+import AdminProfileSettings from "./Component/AdminProfileSettings";
 import { AiWebpageGeneratingAnimation } from "./Component/AiWebpageGeneratingAnimation";
 import { AiAvatar } from "./Component/AiAvatar";
 import { UserAvatar } from "./Component/UserAvatar";
@@ -23,6 +24,7 @@ import BuilderPage, { siteSlugMemoryCache } from "./BuilderPage";
 
 import AdminLoginPage from "./pages/AdminLoginPage";
 import AdminSignupPage from "./pages/AdminSignupPage";
+import AdminResetPasswordPage from "./pages/AdminResetPasswordPage";
 import CustomerLoginPage from "./pages/CustomerLoginPage";
 import CustomerSignupPage from "./pages/CustomerSignupPage";
 
@@ -195,6 +197,7 @@ function AdminSitesPage() {
     | "qr-link"
     | null
   >(null);
+  const [activeSettingsNavKey, setActiveSettingsNavKey] = useState<SettingsNavKey | null>(null);
 
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     if (typeof window !== "undefined") {
@@ -739,14 +742,21 @@ function AdminSitesPage() {
       onLogout={handleLogout}
       userName={admin?.name}
       userEmail={admin?.email}
+      avatarUrl={admin?.avatarUrl}
+      gender={admin?.gender}
     />
   );
 
   const leftPanel = (
     <BuilderControlPanel
-      activeKey={activeDrawer}
-      disabledKeys={["chat", "customize", "admin-panel", "assets", "qr-link"]}
+      activeKey={activeDrawer || (activeSettingsNavKey ? "settings" : "chat")}
+      disabledKeys={["customize", "admin-panel", "assets", "qr-link"]}
       onSelect={(key) => {
+        if (key === "chat") {
+          setActiveSettingsNavKey(null);
+          setActiveDrawer(null);
+          return;
+        }
         if (key === "saved-sites" || key === "settings") {
           setActiveDrawer((prev) => (prev === key ? null : key));
         }
@@ -771,6 +781,10 @@ function AdminSitesPage() {
         openSite(targetSiteId);
       }}
       onDeleteSite={handleDeleteSite}
+      activeSettingsNavKey={activeSettingsNavKey}
+      onSelectSettingsNav={(key) => {
+        setActiveSettingsNavKey(key);
+      }}
     />
   ) : null;
 
@@ -781,6 +795,11 @@ function AdminSitesPage() {
       drawer={drawerNode}
       plainCenter={true}
     >
+      {activeSettingsNavKey === "profile" ? (
+        <div style={{ height: "100%", overflowY: "auto", background: "#ffffff", padding: "24px", boxSizing: "border-box" }}>
+          <AdminProfileSettings />
+        </div>
+      ) : (
       <div
         style={{
           height: "100%",
@@ -876,7 +895,7 @@ function AdminSitesPage() {
                       }}
                     >
                       {isUser ? (
-                        <UserAvatar size={32} />
+                        <UserAvatar size={32} avatarUrl={admin?.avatarUrl} gender={admin?.gender} />
                       ) : (
                         <AiAvatar size={32} />
                       )}
@@ -1240,6 +1259,7 @@ function AdminSitesPage() {
           </div>
         </div>
       </div>
+      )}
     </BuilderShell>
   );
 }
@@ -1276,6 +1296,7 @@ function AppRoutes() {
         <Route path="/" element={<Navigate to="/admin/login" replace />} />
         <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route path="/admin/signup" element={<AdminSignupPage />} />
+        <Route path="/admin/reset-password" element={<AdminResetPasswordPage />} />
 
         <Route path="/store/:slug/login" element={<CustomerLoginPage />} />
         <Route path="/store/:slug/signup" element={<CustomerSignupPage />} />
