@@ -239,14 +239,14 @@ export const ToggleSwitch = ({
 };
 
 const SearchIcon = ({ style }: { style?: React.CSSProperties }) => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style}>
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, ...style }}>
     <circle cx="11" cy="11" r="8" />
     <line x1="21" y1="21" x2="16.65" y2="16.65" />
   </svg>
 );
 
 const FilterIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
     <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
   </svg>
 );
@@ -443,10 +443,112 @@ function invalidateAdminProductsCache(targetSiteId?: string) {
   }
 }
 
+const plainCardStyle: React.CSSProperties = {
+  background: "#ffffff",
+  border: "1px solid #e2e8f0",
+  borderRadius: "8px",
+  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+};
+
+const labelStyle: React.CSSProperties = {
+  fontSize: "12px",
+  fontWeight: 600,
+  color: "#475569",
+};
+
+const inputStyle: React.CSSProperties = {
+  padding: "7px 10px",
+  borderRadius: "6px",
+  border: "1px solid #cbd5e1",
+  background: "#ffffff",
+  color: "#0f172a",
+  fontSize: "13px",
+  width: "100%",
+  boxSizing: "border-box",
+};
+
+const thStyle: React.CSSProperties = {
+  textAlign: "left",
+  padding: "10px 16px",
+  fontSize: "11px",
+  fontWeight: 700,
+  letterSpacing: "0.04em",
+  textTransform: "uppercase",
+  color: "#64748b",
+  borderBottom: "1px solid #e2e8f0",
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: "12px 16px",
+  borderTop: "1px solid #f1f5f9",
+  fontSize: "13px",
+  color: "#0f172a",
+  verticalAlign: "middle",
+};
+
+const ghostButtonStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  borderRadius: "6px",
+  border: "1px solid #cbd5e1",
+  background: "#ffffff",
+  color: "#0f172a",
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+const secondaryButtonStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  borderRadius: "6px",
+  border: "1px solid #cbd5e1",
+  background: "#f8fafc",
+  color: "#334155",
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+const primaryButtonStyle: React.CSSProperties = {
+  padding: "9px 14px",
+  borderRadius: "6px",
+  border: "none",
+  background: "#2563eb",
+  color: "white",
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+const dangerButtonStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  borderRadius: "6px",
+  border: "1px solid #fecaca",
+  background: "#fef2f2",
+  color: "#b91c1c",
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+const errorStyle: React.CSSProperties = {
+  color: "#b91c1c",
+  fontSize: "12px",
+};
+
 const AdminProducts = () => {
   const { siteId } = useParams();
   const initialProducts = getCachedProducts(siteId);
-  const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [products, setProducts] = useState<Product[]>(() => {
+    if (initialProducts.length > 0 && siteId) {
+      const defaultKey = `${siteId}:all:1:10::::::all:all:all:newest`;
+      if (!adminProductsQueryCache.has(defaultKey)) {
+        adminProductsQueryCache.set(defaultKey, {
+          products: initialProducts,
+          totalProducts: initialProducts.length,
+          filteredTotal: initialProducts.length,
+          totalPages: 1,
+          timestamp: Date.now(),
+        });
+      }
+    }
+    return initialProducts;
+  });
   const [categories, setCategories] = useState<Category[]>(() => getCachedCategories(siteId));
   const [collections, setCollections] = useState<Collection[]>(() => getCachedCollections(siteId));
 
@@ -988,9 +1090,11 @@ const AdminProducts = () => {
       if (cached.lowStockCount != null) setLowStockCount(cached.lowStockCount);
       if (cached.outOfStockCount != null) setOutOfStockCount(cached.outOfStockCount);
       setIsLoading(false);
-      if (Date.now() - cached.timestamp < 15000) {
+      if (Date.now() - cached.timestamp < 30000) {
         return;
       }
+    } else if (page === 1 && status === "all" && !search && !catId && products.length > 0) {
+      setIsLoading(false);
     } else {
       setProducts([]);
       setIsLoading(true);
@@ -1043,6 +1147,12 @@ const AdminProducts = () => {
           if (data.out_of_stock_count != null) setOutOfStockCount(outStk);
           if (Array.isArray(data.brands)) setStoreBrands(data.brands);
 
+          try {
+            if (page === 1 && status === "all" && !search && !catId) {
+              localStorage.setItem(`wc_admin_products_${siteId}`, JSON.stringify(norm.slice(0, 25)));
+            }
+          } catch (_) {}
+
           setAdminProductsCache(cacheKey, {
             products: norm,
             totalProducts: allCnt,
@@ -1074,6 +1184,12 @@ const AdminProducts = () => {
           setLowStockCount(lowStk);
           setOutOfStockCount(outStk);
 
+          try {
+            if (page === 1 && status === "all" && !search && !catId) {
+              localStorage.setItem(`wc_admin_products_${siteId}`, JSON.stringify(norm.slice(0, 25)));
+            }
+          } catch (_) {}
+
           setAdminProductsCache(cacheKey, {
             products: norm,
             totalProducts: norm.length,
@@ -1097,7 +1213,7 @@ const AdminProducts = () => {
 
   useEffect(() => {
     if (!siteId) return;
-    const loadMetadata = async () => {
+    const timer = setTimeout(async () => {
       try {
         const [catRes, colRes, siteRes] = await Promise.all([
           fetch(`${API_BASE_URL}/sites/${siteId}/categories`, { credentials: "include" }),
@@ -1127,9 +1243,9 @@ const AdminProducts = () => {
       } catch (err) {
         console.error("Error loading categories or collections", err);
       }
-    };
+    }, categories.length > 0 ? 120 : 0);
 
-    loadMetadata();
+    return () => clearTimeout(timer);
   }, [siteId]);
 
   useEffect(() => {
@@ -1761,167 +1877,217 @@ const AdminProducts = () => {
 
   return (
     <div style={{ width: "100%", color: "#0f172a", display: "flex", flexDirection: "column", gap: "14px" }}>
-      {/* 1. Search & Filter Bar Card */}
+      <style>{`
+        @keyframes storeShimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      `}</style>
+      {/* Top Header Card (Mode Switcher + Search & Filter Button) */}
       <div
         style={{
           background: "#ffffff",
-          borderRadius: "8px",
           border: "1px solid #e2e8f0",
-          padding: "8px 14px",
+          borderRadius: "10px",
+          padding: "10px 14px",
+          marginBottom: "16px",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
           display: "flex",
           flexDirection: "column",
-          gap: "8px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+          gap: "10px",
+          position: "relative",
         }}
       >
+        {/* Row 1: Mode Switcher + Global Search + Filter Button */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: "flex-end",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
             gap: "10px",
-            width: "100%",
           }}
         >
-          {/* Search Input with Debounce (Compact Width like Ledger/Orders) */}
-          <div style={{ position: "relative", width: "360px", maxWidth: "100%" }}>
-            <div
-              style={{
-                position: "absolute",
-                left: "11px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                color: "#94a3b8",
-                display: "grid",
-                placeItems: "center",
-              }}
-            >
-              <SearchIcon />
-            </div>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => {
-                const val = e.target.value;
-                setSearchQuery(val);
-                setCurrentPage(1);
-                if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-                searchTimerRef.current = setTimeout(() => {
-                  loadProducts({ page: 1, search: val });
-                }, 350);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-                  setCurrentPage(1);
-                  loadProducts({ page: 1, search: searchQuery });
-                }
-              }}
-              placeholder="Search products by title, SKU, brand, category..."
-              style={{
-                ...inputStyle,
-                paddingLeft: "34px",
-                paddingRight: searchQuery ? "28px" : "12px",
-                fontSize: "13px",
-                height: "36px",
-                borderRadius: "6px",
-                border: "1px solid #cbd5e1",
-                background: "#f8fafc",
-                width: "100%",
-              }}
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-                  setSearchQuery("");
-                  setCurrentPage(1);
-                  loadProducts({ page: 1, search: "" });
-                }}
-                style={{
-                  position: "absolute",
-                  right: "8px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: "#94a3b8",
-                  padding: "2px",
-                  display: "grid",
-                  placeItems: "center",
-                }}
-                title="Clear search"
-              >
-                <XMarkIcon />
-              </button>
-            )}
-          </div>
-
-          {/* Filter Popover Button */}
-          <div style={{ position: "relative" }} ref={filterPopoverRef}>
+          {/* Mode Pill (Products) */}
+          <div
+            style={{
+              display: "inline-flex",
+              background: "#f1f5f9",
+              padding: "3px",
+              borderRadius: "8px",
+              border: "1px solid #e2e8f0",
+            }}
+          >
             <button
               type="button"
-              onClick={() => setShowFilterPopover(!showFilterPopover)}
               style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                height: "36px",
-                padding: "0 14px",
                 borderRadius: "6px",
-                border: activeFilterCount > 0 ? "1px solid #93c5fd" : "1px solid #cbd5e1",
-                background: activeFilterCount > 0 ? "#eff6ff" : "#ffffff",
-                color: activeFilterCount > 0 ? "#1d4ed8" : "#334155",
+                padding: "6px 16px",
+                border: "none",
+                background: "#ffffff",
+                color: "#0f172a",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
                 fontSize: "13px",
-                fontWeight: 600,
-                cursor: "pointer",
-                whiteSpace: "nowrap",
+                fontWeight: 700,
+                cursor: "default",
+                textTransform: "capitalize",
                 transition: "all 0.15s ease",
               }}
-              title="Toggle Filters"
             >
-              <FilterIcon />
-              <span>Filters</span>
-              {activeFilterCount > 0 && (
-                <span
-                  style={{
-                    background: "#2563eb",
-                    color: "#ffffff",
-                    fontSize: "10px",
-                    fontWeight: 700,
-                    borderRadius: "999px",
-                    padding: "1px 6px",
-                    lineHeight: "1.2",
-                  }}
-                >
-                  {activeFilterCount}
-                </span>
-              )}
+              Products
             </button>
+          </div>
 
-            {/* Rich Filter Popover Dropdown */}
-            {showFilterPopover && (
+          {/* Search Bar & Filter Button Container */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              flex: "1 1 300px",
+              maxWidth: "520px",
+              position: "relative",
+            }}
+          >
+            <div style={{ position: "relative", flex: 1 }}>
               <div
                 style={{
                   position: "absolute",
-                  top: "calc(100% + 6px)",
-                  right: 0,
-                  width: "320px",
-                  background: "#ffffff",
-                  border: "1px solid #cbd5e1",
-                  borderRadius: "8px",
-                  boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08)",
-                  padding: "14px 16px",
-                  zIndex: 60,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "10px",
-                  maxHeight: "85vh",
-                  overflowY: "auto",
+                  left: "11px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  color: "#94a3b8",
+                  display: "grid",
+                  placeItems: "center",
                 }}
               >
+                <SearchIcon />
+              </div>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSearchQuery(val);
+                  setCurrentPage(1);
+                  if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                  searchTimerRef.current = setTimeout(() => {
+                    loadProducts({ page: 1, search: val });
+                  }, 350);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                    setCurrentPage(1);
+                    loadProducts({ page: 1, search: searchQuery });
+                  }
+                }}
+                placeholder="Search products by title, SKU, brand, category..."
+                style={{
+                  ...inputStyle,
+                  paddingLeft: "34px",
+                  paddingRight: searchQuery ? "28px" : "12px",
+                  fontSize: "13px",
+                  height: "36px",
+                  borderRadius: "7px",
+                  border: "1px solid #cbd5e1",
+                  background: "#f8fafc",
+                  width: "100%",
+                  boxSizing: "border-box",
+                }}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                    setSearchQuery("");
+                    setCurrentPage(1);
+                    loadProducts({ page: 1, search: "" });
+                  }}
+                  style={{
+                    position: "absolute",
+                    right: "8px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "#94a3b8",
+                    padding: "2px",
+                    display: "grid",
+                    placeItems: "center",
+                  }}
+                  title="Clear search"
+                >
+                  <XMarkIcon />
+                </button>
+              )}
+            </div>
+
+            {/* Filter Toggle Button */}
+            <div style={{ position: "relative" }} ref={filterPopoverRef}>
+              <button
+                type="button"
+                onClick={() => setShowFilterPopover(!showFilterPopover)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  height: "36px",
+                  padding: "0 12px",
+                  borderRadius: "7px",
+                  border: activeFilterCount > 0 ? "1px solid #93c5fd" : "1px solid #cbd5e1",
+                  background: activeFilterCount > 0 ? "#eff6ff" : "#ffffff",
+                  color: activeFilterCount > 0 ? "#1d4ed8" : "#334155",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  transition: "all 0.15s ease",
+                }}
+                title="Toggle Filters"
+              >
+                <FilterIcon />
+                <span>Filters</span>
+                {activeFilterCount > 0 && (
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 700,
+                      background: "#2563eb",
+                      color: "#ffffff",
+                      borderRadius: "10px",
+                      padding: "0 6px",
+                      marginLeft: "2px",
+                    }}
+                  >
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Rich Filter Popover Dropdown */}
+              {showFilterPopover && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "44px",
+                    right: 0,
+                    width: "320px",
+                    background: "#ffffff",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "10px",
+                    boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
+                    padding: "16px",
+                    zIndex: 60,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "12px",
+                    maxHeight: "85vh",
+                    overflowY: "auto",
+                  }}
+                >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #f1f5f9", paddingBottom: "8px" }}>
                   <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>Filter Products</span>
                   {activeFilterCount > 0 && (
@@ -2139,8 +2305,9 @@ const AdminProducts = () => {
             )}
           </div>
         </div>
+      </div>
 
-        {/* Active Filter Chips (if any filters active) */}
+      {/* Active Filter Chips (if any filters active) */}
         {activeFilterCount > 0 && (
           <div
             style={{
@@ -2153,8 +2320,8 @@ const AdminProducts = () => {
               borderTop: "1px solid #f1f5f9",
             }}
           >
-            <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-              Active Filters:
+            <span style={{ fontSize: "11.5px", color: "#64748b", fontWeight: 600, marginRight: "2px" }}>
+              Active:
             </span>
 
             {filterCategory && (
@@ -2163,16 +2330,16 @@ const AdminProducts = () => {
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "4px",
-                  padding: "2px 8px",
-                  borderRadius: "999px",
-                  background: "#eff6ff",
-                  border: "1px solid #bfdbfe",
-                  color: "#1d4ed8",
-                  fontSize: "11px",
+                  fontSize: "11.5px",
                   fontWeight: 600,
+                  padding: "2px 8px",
+                  borderRadius: "4px",
+                  background: "#eff6ff",
+                  color: "#1d4ed8",
+                  border: "1px solid #bfdbfe",
                 }}
               >
-                Category: {categories.find((c) => c.id === filterCategory)?.name || filterCategory}
+                <span>Category: {categories.find((c) => c.id === filterCategory)?.name || filterCategory}</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -2180,9 +2347,9 @@ const AdminProducts = () => {
                     setCurrentPage(1);
                     loadProducts({ page: 1, catId: "" });
                   }}
-                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0, fontSize: "11px", lineHeight: 1 }}
+                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0 }}
                 >
-                  ✕
+                  <XMarkIcon />
                 </button>
               </span>
             )}
@@ -2193,16 +2360,16 @@ const AdminProducts = () => {
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "4px",
-                  padding: "2px 8px",
-                  borderRadius: "999px",
-                  background: "#eff6ff",
-                  border: "1px solid #bfdbfe",
-                  color: "#1d4ed8",
-                  fontSize: "11px",
+                  fontSize: "11.5px",
                   fontWeight: 600,
+                  padding: "2px 8px",
+                  borderRadius: "4px",
+                  background: "#eff6ff",
+                  color: "#1d4ed8",
+                  border: "1px solid #bfdbfe",
                 }}
               >
-                Collection: {collections.find((c) => c.id === filterCollection)?.name || filterCollection}
+                <span>Collection: {collections.find((c) => c.id === filterCollection)?.name || filterCollection}</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -2210,9 +2377,9 @@ const AdminProducts = () => {
                     setCurrentPage(1);
                     loadProducts({ page: 1, colId: "" });
                   }}
-                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0, fontSize: "11px", lineHeight: 1 }}
+                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0 }}
                 >
-                  ✕
+                  <XMarkIcon />
                 </button>
               </span>
             )}
@@ -2223,16 +2390,16 @@ const AdminProducts = () => {
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "4px",
-                  padding: "2px 8px",
-                  borderRadius: "999px",
-                  background: "#eff6ff",
-                  border: "1px solid #bfdbfe",
-                  color: "#1d4ed8",
-                  fontSize: "11px",
+                  fontSize: "11.5px",
                   fontWeight: 600,
+                  padding: "2px 8px",
+                  borderRadius: "4px",
+                  background: "#eff6ff",
+                  color: "#1d4ed8",
+                  border: "1px solid #bfdbfe",
                 }}
               >
-                Brand: {filterBrand}
+                <span>Brand: {filterBrand}</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -2240,9 +2407,9 @@ const AdminProducts = () => {
                     setCurrentPage(1);
                     loadProducts({ page: 1, brand: "" });
                   }}
-                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0, fontSize: "11px", lineHeight: 1 }}
+                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0 }}
                 >
-                  ✕
+                  <XMarkIcon />
                 </button>
               </span>
             )}
@@ -2253,16 +2420,16 @@ const AdminProducts = () => {
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "4px",
-                  padding: "2px 8px",
-                  borderRadius: "999px",
-                  background: "#eff6ff",
-                  border: "1px solid #bfdbfe",
-                  color: "#1d4ed8",
-                  fontSize: "11px",
+                  fontSize: "11.5px",
                   fontWeight: 600,
+                  padding: "2px 8px",
+                  borderRadius: "4px",
+                  background: "#eff6ff",
+                  color: "#1d4ed8",
+                  border: "1px solid #bfdbfe",
                 }}
               >
-                Price: ₹{filterMinPrice || "0"} – ₹{filterMaxPrice || "∞"}
+                <span>Price: ₹{filterMinPrice || "0"} – ₹{filterMaxPrice || "∞"}</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -2271,9 +2438,9 @@ const AdminProducts = () => {
                     setCurrentPage(1);
                     loadProducts({ page: 1, minP: "", maxP: "" });
                   }}
-                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0, fontSize: "11px", lineHeight: 1 }}
+                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0 }}
                 >
-                  ✕
+                  <XMarkIcon />
                 </button>
               </span>
             )}
@@ -2284,16 +2451,16 @@ const AdminProducts = () => {
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "4px",
-                  padding: "2px 8px",
-                  borderRadius: "999px",
-                  background: "#eff6ff",
-                  border: "1px solid #bfdbfe",
-                  color: "#1d4ed8",
-                  fontSize: "11px",
+                  fontSize: "11.5px",
                   fontWeight: 600,
+                  padding: "2px 8px",
+                  borderRadius: "4px",
+                  background: "#eff6ff",
+                  color: "#1d4ed8",
+                  border: "1px solid #bfdbfe",
                 }}
               >
-                {filterDiscount === "discounted" ? "Discounted Only" : "Regular Price"}
+                <span>{filterDiscount === "discounted" ? "Discounted Only" : "Regular Price"}</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -2301,9 +2468,9 @@ const AdminProducts = () => {
                     setCurrentPage(1);
                     loadProducts({ page: 1, discount: "all" });
                   }}
-                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0, fontSize: "11px", lineHeight: 1 }}
+                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0 }}
                 >
-                  ✕
+                  <XMarkIcon />
                 </button>
               </span>
             )}
@@ -2314,16 +2481,16 @@ const AdminProducts = () => {
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "4px",
-                  padding: "2px 8px",
-                  borderRadius: "999px",
-                  background: "#eff6ff",
-                  border: "1px solid #bfdbfe",
-                  color: "#1d4ed8",
-                  fontSize: "11px",
+                  fontSize: "11.5px",
                   fontWeight: 600,
+                  padding: "2px 8px",
+                  borderRadius: "4px",
+                  background: "#eff6ff",
+                  color: "#1d4ed8",
+                  border: "1px solid #bfdbfe",
                 }}
               >
-                {filterReturnPolicy === "non_returnable" ? "Non-Returnable Only" : "Returnable Only"}
+                <span>{filterReturnPolicy === "non_returnable" ? "Non-Returnable Only" : "Returnable Only"}</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -2331,9 +2498,9 @@ const AdminProducts = () => {
                     setCurrentPage(1);
                     loadProducts({ page: 1, retPol: "all" });
                   }}
-                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0, fontSize: "11px", lineHeight: 1 }}
+                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0 }}
                 >
-                  ✕
+                  <XMarkIcon />
                 </button>
               </span>
             )}
@@ -2344,16 +2511,16 @@ const AdminProducts = () => {
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "4px",
-                  padding: "2px 8px",
-                  borderRadius: "999px",
-                  background: "#eff6ff",
-                  border: "1px solid #bfdbfe",
-                  color: "#1d4ed8",
-                  fontSize: "11px",
+                  fontSize: "11.5px",
                   fontWeight: 600,
+                  padding: "2px 8px",
+                  borderRadius: "4px",
+                  background: "#eff6ff",
+                  color: "#1d4ed8",
+                  border: "1px solid #bfdbfe",
                 }}
               >
-                {filterHasVideo === "with_video" ? "With Video" : "Photos Only"}
+                <span>{filterHasVideo === "with_video" ? "With Video" : "Photos Only"}</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -2361,9 +2528,9 @@ const AdminProducts = () => {
                     setCurrentPage(1);
                     loadProducts({ page: 1, hasVid: "all" });
                   }}
-                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0, fontSize: "11px", lineHeight: 1 }}
+                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0 }}
                 >
-                  ✕
+                  <XMarkIcon />
                 </button>
               </span>
             )}
@@ -2374,16 +2541,16 @@ const AdminProducts = () => {
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "4px",
-                  padding: "2px 8px",
-                  borderRadius: "999px",
-                  background: "#eff6ff",
-                  border: "1px solid #bfdbfe",
-                  color: "#1d4ed8",
-                  fontSize: "11px",
+                  fontSize: "11.5px",
                   fontWeight: 600,
+                  padding: "2px 8px",
+                  borderRadius: "4px",
+                  background: "#eff6ff",
+                  color: "#1d4ed8",
+                  border: "1px solid #bfdbfe",
                 }}
               >
-                Sort: {filterSortBy}
+                <span>Sort: {filterSortBy}</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -2391,9 +2558,9 @@ const AdminProducts = () => {
                     setCurrentPage(1);
                     loadProducts({ page: 1, sortB: "newest" });
                   }}
-                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0, fontSize: "11px", lineHeight: 1 }}
+                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0 }}
                 >
-                  ✕
+                  <XMarkIcon />
                 </button>
               </span>
             )}
@@ -2451,86 +2618,86 @@ const AdminProducts = () => {
         }}
       >
         {/* Total Products */}
-        <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden" }}>
-          <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        <div style={{ ...plainCardStyle, padding: "10px 14px", minWidth: 0, overflow: "hidden" }}>
+          <div style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             Total Products
           </div>
-          <div style={{ fontSize: "22px", fontWeight: 800, color: "#0f172a", marginTop: "3px", lineHeight: 1.1 }}>
+          <div style={{ fontSize: "18px", fontWeight: 700, color: "#0f172a", marginTop: "2px", lineHeight: 1.15 }}>
             {totalProducts}
           </div>
-          <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "3px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div style={{ fontSize: "10.5px", color: "#94a3b8", marginTop: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             Catalog inventory size
           </div>
         </div>
 
         {/* Active on Store */}
-        <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden" }}>
+        <div style={{ ...plainCardStyle, padding: "10px 14px", minWidth: 0, overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minWidth: 0 }}>
-            <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               Active on Store
             </span>
-            <span style={{ fontSize: "10px", fontWeight: 700, color: "#16a34a", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "1px 5px", borderRadius: "4px" }}>
+            <span style={{ fontSize: "9.5px", fontWeight: 700, color: "#16a34a", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "0 5px", borderRadius: "4px" }}>
               Live
             </span>
           </div>
-          <div style={{ fontSize: "22px", fontWeight: 800, color: "#0f172a", marginTop: "3px", lineHeight: 1.1 }}>
+          <div style={{ fontSize: "18px", fontWeight: 700, color: "#0f172a", marginTop: "2px", lineHeight: 1.15 }}>
             {activeCount}
           </div>
-          <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "3px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div style={{ fontSize: "10.5px", color: "#94a3b8", marginTop: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             Visible to customers
           </div>
         </div>
 
         {/* In Stock */}
-        <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden" }}>
+        <div style={{ ...plainCardStyle, padding: "10px 14px", minWidth: 0, overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minWidth: 0 }}>
-            <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               In Stock
             </span>
-            <span style={{ fontSize: "10px", fontWeight: 700, color: "#16a34a", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "1px 5px", borderRadius: "4px" }}>
+            <span style={{ fontSize: "9.5px", fontWeight: 700, color: "#16a34a", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "0 5px", borderRadius: "4px" }}>
               Ready
             </span>
           </div>
-          <div style={{ fontSize: "22px", fontWeight: 800, color: "#16a34a", marginTop: "3px", lineHeight: 1.1 }}>
+          <div style={{ fontSize: "18px", fontWeight: 700, color: "#16a34a", marginTop: "2px", lineHeight: 1.15 }}>
             {inStockCount}
           </div>
-          <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "3px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div style={{ fontSize: "10.5px", color: "#94a3b8", marginTop: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             Ready for purchase
           </div>
         </div>
 
         {/* Low Stock (≤5) */}
-        <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden" }}>
+        <div style={{ ...plainCardStyle, padding: "10px 14px", minWidth: 0, overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minWidth: 0 }}>
-            <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               Low Stock (≤5)
             </span>
-            <span style={{ fontSize: "10px", fontWeight: 700, color: "#b45309", background: "#fef3c7", border: "1px solid #fde68a", padding: "1px 5px", borderRadius: "4px" }}>
+            <span style={{ fontSize: "9.5px", fontWeight: 700, color: "#b45309", background: "#fef3c7", border: "1px solid #fde68a", padding: "0 5px", borderRadius: "4px" }}>
               Restock
             </span>
           </div>
-          <div style={{ fontSize: "22px", fontWeight: 800, color: "#d97706", marginTop: "3px", lineHeight: 1.1 }}>
+          <div style={{ fontSize: "18px", fontWeight: 700, color: "#d97706", marginTop: "2px", lineHeight: 1.15 }}>
             {lowStockCount}
           </div>
-          <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "3px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div style={{ fontSize: "10.5px", color: "#94a3b8", marginTop: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             Product or variant ≤ 5 left
           </div>
         </div>
 
         {/* Out of Stock */}
-        <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden" }}>
+        <div style={{ ...plainCardStyle, padding: "10px 14px", minWidth: 0, overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minWidth: 0 }}>
-            <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               Out of Stock
             </span>
-            <span style={{ fontSize: "10px", fontWeight: 700, color: "#dc2626", background: "#fef2f2", border: "1px solid #fecaca", padding: "1px 5px", borderRadius: "4px" }}>
+            <span style={{ fontSize: "9.5px", fontWeight: 700, color: "#dc2626", background: "#fef2f2", border: "1px solid #fecaca", padding: "0 5px", borderRadius: "4px" }}>
               Sold Out
             </span>
           </div>
-          <div style={{ fontSize: "22px", fontWeight: 800, color: "#dc2626", marginTop: "3px", lineHeight: 1.1 }}>
+          <div style={{ fontSize: "18px", fontWeight: 700, color: "#dc2626", marginTop: "2px", lineHeight: 1.15 }}>
             {outOfStockCount}
           </div>
-          <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "3px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div style={{ fontSize: "10.5px", color: "#94a3b8", marginTop: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             0 inventory available
           </div>
         </div>
@@ -4301,20 +4468,28 @@ const AdminProducts = () => {
       </div>
 
       {/* 5. Main Products Table Card */}
-      <div
-        style={{
-          border: "1px solid #cbd5e1",
-          borderRadius: "8px",
-          background: "#ffffff",
-          overflow: "hidden",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-        }}
-      >
+      <div style={{ ...plainCardStyle, overflow: "hidden", position: "relative" }}>
+        {/* Top Animated Progress Indicator Bar */}
+        {isLoading && (
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              height: "2.5px",
+              background: "linear-gradient(90deg, #3b82f6 0%, #60a5fa 50%, #2563eb 100%)",
+              backgroundSize: "200% 100%",
+              animation: "storeShimmer 1.2s infinite linear",
+              zIndex: 20,
+            }}
+          />
+        )}
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
             <thead style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-              <tr>
-                <th style={{ ...thStyle, width: "36px", textAlign: "center" }}>
+              <tr style={{ color: "#64748b" }}>
+                <th style={{ ...thStyle, width: "36px", textAlign: "center", padding: "10px 12px" }}>
                   <input
                     type="checkbox"
                     aria-label="Select All Visible Products"
@@ -4333,21 +4508,11 @@ const AdminProducts = () => {
                     style={{ cursor: "pointer", width: "15px", height: "15px" }}
                   />
                 </th>
-                <th style={{ ...thStyle, fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#475569" }}>
-                  Product
-                </th>
-                <th style={{ ...thStyle, fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#475569" }}>
-                  Price (₹)
-                </th>
-                <th style={{ ...thStyle, fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#475569" }}>
-                  Category & Tags
-                </th>
-                <th style={{ ...thStyle, fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#475569" }}>
-                  Stock & Visibility
-                </th>
-                <th style={{ ...thStyle, fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#475569", textAlign: "right" }}>
-                  Actions
-                </th>
+                <th style={thStyle}>Product</th>
+                <th style={thStyle}>Price (₹)</th>
+                <th style={thStyle}>Category & Tags</th>
+                <th style={thStyle}>Stock & Visibility</th>
+                <th style={{ ...thStyle, textAlign: "right" }}>Actions</th>
               </tr>
             </thead>
 
@@ -4534,8 +4699,8 @@ const AdminProducts = () => {
                             loading={index < 12 ? "eager" : "lazy"}
                             decoding="async"
                             style={{
-                              width: "44px",
-                              height: "52px",
+                              width: "40px",
+                              height: "48px",
                               borderRadius: "6px",
                               objectFit: "cover",
                               background: "#f8fafc",
@@ -4550,9 +4715,9 @@ const AdminProducts = () => {
                                 position: "absolute",
                                 bottom: "2px",
                                 right: "2px",
-                                background: "rgba(0,0,0,0.7)",
+                                background: "rgba(0,0,0,0.75)",
                                 color: "#fff",
-                                fontSize: "9px",
+                                fontSize: "8.5px",
                                 padding: "1px 3px",
                                 borderRadius: "3px",
                                 display: "inline-flex",
@@ -4569,7 +4734,7 @@ const AdminProducts = () => {
                               fontSize: "13px",
                               fontWeight: 600,
                               color: "#0f172a",
-                              marginBottom: "3px",
+                              marginBottom: "2px",
                               display: "flex",
                               alignItems: "center",
                               gap: "6px",
@@ -4580,7 +4745,7 @@ const AdminProducts = () => {
                             {!product.is_active && (
                               <span
                                 style={{
-                                  fontSize: "10.5px",
+                                  fontSize: "10px",
                                   padding: "1px 5px",
                                   borderRadius: "4px",
                                   background: "#f1f5f9",
@@ -4594,7 +4759,7 @@ const AdminProducts = () => {
                           </div>
                           <div
                             style={{
-                              fontSize: "11.5px",
+                              fontSize: "11px",
                               color: "#64748b",
                               display: "flex",
                               gap: "6px",
@@ -4611,7 +4776,7 @@ const AdminProducts = () => {
                             {product.sibling_group && (
                               <span
                                 style={{
-                                  fontSize: "10.5px",
+                                  fontSize: "10px",
                                   color: "#6d28d9",
                                   background: "#f5f3ff",
                                   border: "1px solid #ddd6fe",
@@ -4624,16 +4789,17 @@ const AdminProducts = () => {
                                 }}
                                 title={`Color Family: ${product.sibling_group}`}
                               >
-                                <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#7c3aed" }} />
+                                <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: "#7c3aed" }} />
                                 {product.sibling_label || product.sibling_group}
                               </span>
                             )}
                             {hasVariants && (
                               <span
                                 style={{
-                                  fontSize: "10.5px",
+                                  fontSize: "10px",
                                   color: "#2563eb",
                                   background: "#eff6ff",
+                                  border: "1px solid #bfdbfe",
                                   padding: "0 5px",
                                   borderRadius: "4px",
                                   fontWeight: 600,
@@ -4861,21 +5027,21 @@ const AdminProducts = () => {
                           </button>
                         </div>
                       ) : (
-                        <div style={{ display: "inline-flex", gap: "6px", alignItems: "center", justifyContent: "flex-end", flexWrap: "nowrap", whiteSpace: "nowrap" }}>
-                          {/* Quick Edit (Pen + Electric Spark) */}
+                        <div style={{ display: "inline-flex", gap: "4px", alignItems: "center", justifyContent: "flex-end", flexWrap: "nowrap", whiteSpace: "nowrap" }}>
+                          {/* Quick Edit */}
                           <button
                             type="button"
                             title={hasVariants ? "Quick Edit Variant Prices & Stocks" : "Quick Edit Price & Stock"}
                             style={{
-                              width: "30px",
-                              height: "30px",
+                              width: "28px",
+                              height: "28px",
                               padding: 0,
                               display: "inline-grid",
                               placeItems: "center",
                               color: "#2563eb",
                               background: "#eff6ff",
                               border: "1px solid #bfdbfe",
-                              borderRadius: "6px",
+                              borderRadius: "5px",
                               cursor: "pointer",
                               flexShrink: 0,
                               transition: "all 0.15s ease",
@@ -4898,15 +5064,15 @@ const AdminProducts = () => {
                             type="button"
                             title="Edit Product Details"
                             style={{
-                              width: "30px",
-                              height: "30px",
+                              width: "28px",
+                              height: "28px",
                               padding: 0,
                               display: "inline-grid",
                               placeItems: "center",
                               color: "#334155",
                               background: "#f8fafc",
                               border: "1px solid #cbd5e1",
-                              borderRadius: "6px",
+                              borderRadius: "5px",
                               cursor: "pointer",
                               flexShrink: 0,
                               transition: "all 0.15s ease",
@@ -4921,15 +5087,15 @@ const AdminProducts = () => {
                             type="button"
                             title="Duplicate as new Draft product"
                             style={{
-                              width: "30px",
-                              height: "30px",
+                              width: "28px",
+                              height: "28px",
                               padding: 0,
                               display: "inline-grid",
                               placeItems: "center",
                               color: "#4f46e5",
                               background: "#eef2ff",
                               border: "1px solid #c7d2fe",
-                              borderRadius: "6px",
+                              borderRadius: "5px",
                               cursor: "pointer",
                               flexShrink: 0,
                               transition: "all 0.15s ease",
@@ -4944,15 +5110,15 @@ const AdminProducts = () => {
                             type="button"
                             onClick={() => handleDelete(product.id)}
                             style={{
-                              width: "30px",
-                              height: "30px",
+                              width: "28px",
+                              height: "28px",
                               padding: 0,
                               display: "inline-grid",
                               placeItems: "center",
                               color: "#dc2626",
                               background: "#fef2f2",
                               border: "1px solid #fecaca",
-                              borderRadius: "6px",
+                              borderRadius: "5px",
                               cursor: "pointer",
                               flexShrink: 0,
                               transition: "all 0.15s ease",
@@ -4983,11 +5149,22 @@ const AdminProducts = () => {
             pageSizeOptions={[10, 20, 50, 100]}
             onPageChange={(p) => {
               setCurrentPage(p);
+              const cacheKey = `${siteId}:${statusFilter}:${p}:${pageSize}:${searchQuery}:${filterCategory}:${filterCollection}:${filterBrand}:${filterMinPrice}:${filterMaxPrice}:${filterDiscount}:${filterReturnPolicy}:${filterHasVideo}:${filterSortBy}`;
+              const cached = adminProductsQueryCache.get(cacheKey);
+              if (cached) {
+                setProducts(cached.products);
+                setIsLoading(false);
+              } else {
+                setProducts([]);
+                setIsLoading(true);
+              }
               loadProducts({ page: p });
             }}
             onPageSizeChange={(newSize) => {
               setPageSize(newSize);
               setCurrentPage(1);
+              setProducts([]);
+              setIsLoading(true);
               loadProducts({ page: 1, limit: newSize });
             }}
             showRangeText={true}
@@ -5528,92 +5705,5 @@ const StatCard = ({ label, value }: { label: string; value: string | number }) =
     </h3>
   </div>
 );
-
-const plainCardStyle: React.CSSProperties = {
-  background: "#ffffff",
-  border: "1px solid #e2e8f0",
-  borderRadius: "8px",
-  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-};
-
-const labelStyle: React.CSSProperties = {
-  fontSize: "12px",
-  fontWeight: 600,
-  color: "#475569",
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: "7px 10px",
-  borderRadius: "6px",
-  border: "1px solid #cbd5e1",
-  background: "#ffffff",
-  color: "#0f172a",
-  fontSize: "13px",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-const thStyle: React.CSSProperties = {
-  textAlign: "left",
-  padding: "13px 16px",
-  fontSize: "12px",
-  letterSpacing: "0.05em",
-  textTransform: "uppercase",
-  color: "#64748b",
-  borderBottom: "1px solid #e2e8f0",
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: "14px 16px",
-  borderTop: "1px solid #e2e8f0",
-  fontSize: "14px",
-  color: "#0f172a",
-  verticalAlign: "middle",
-};
-
-const ghostButtonStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  borderRadius: "6px",
-  border: "1px solid #cbd5e1",
-  background: "#ffffff",
-  color: "#0f172a",
-  fontWeight: 600,
-  cursor: "pointer",
-};
-
-const secondaryButtonStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  borderRadius: "6px",
-  border: "1px solid #cbd5e1",
-  background: "#f8fafc",
-  color: "#334155",
-  fontWeight: 600,
-  cursor: "pointer",
-};
-
-const primaryButtonStyle: React.CSSProperties = {
-  padding: "9px 14px",
-  borderRadius: "6px",
-  border: "none",
-  background: "#2563eb",
-  color: "white",
-  fontWeight: 600,
-  cursor: "pointer",
-};
-
-const dangerButtonStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  borderRadius: "6px",
-  border: "1px solid #fecaca",
-  background: "#fef2f2",
-  color: "#b91c1c",
-  fontWeight: 600,
-  cursor: "pointer",
-};
-
-const errorStyle: React.CSSProperties = {
-  color: "#b91c1c",
-  fontSize: "12px",
-};
 
 export default AdminProducts;

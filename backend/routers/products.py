@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlmodel import Session, delete, func, select, update
+from sqlalchemy import case
 
 from auth_middleware import authenticate_customer, enforce_site_ownership
 from db.database import get_session
@@ -808,63 +809,69 @@ def list_products(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    cache_key = f"site:{site_id}:admin_list:{page}:{page_size}:{search}:{status}:{category_id}:{collection_id}:{brand}:{min_price}:{max_price}:{has_discount}:{return_policy}:{has_video}:{sort_by}"
+    cached_data = catalog_cache.get(cache_key)
+    if cached_data is not None:
+        return cached_data
+
     get_site_or_404(session, site_id)
     
-    # 1. Build contextual filter query (applies all active search & popover filters to compute dynamic tab counts)
-    filter_query = select(
-        Product.id, Product.stock, Product.in_stock, Product.is_active, Product.variant_option, Product.brand
-    ).where(Product.site_id == site_id)
-
+    # 1. Build contextual base filter conditions
+    conditions = [Product.site_id == site_id]
     if category_id:
-        filter_query = filter_query.where(Product.category_id == category_id)
-
+        conditions.append(Product.category_id == category_id)
     if collection_id:
-        filter_query = filter_query.join(ProductCollection, ProductCollection.product_id == Product.id).where(ProductCollection.collection_id == collection_id)
-
+        product_ids_in_col = (
+            select(ProductCollection.product_id)
+            .where(ProductCollection.collection_id == collection_id)
+        )
+        conditions.append(Product.id.in_(product_ids_in_col))
     if brand and brand.strip():
-        filter_query = filter_query.where(Product.brand.ilike(f"%{brand.strip()}%"))
-
+        conditions.append(Product.brand.ilike(f"%{brand.strip()}%"))
     if min_price is not None:
-        filter_query = filter_query.where(Product.price >= min_price)
+        conditions.append(Product.price >= min_price)
     if max_price is not None:
-        filter_query = filter_query.where(Product.price <= max_price)
-
+        conditions.append(Product.price <= max_price)
     if has_discount is True:
-        filter_query = filter_query.where(Product.compare_price.isnot(None), Product.compare_price > Product.price)
+        conditions.append(Product.compare_price.isnot(None))
+        conditions.append(Product.compare_price > Product.price)
     elif has_discount is False:
-        filter_query = filter_query.where((Product.compare_price.is_(None)) | (Product.compare_price <= Product.price))
-
+        conditions.append((Product.compare_price.is_(None)) | (Product.compare_price <= Product.price))
     if return_policy == "non_returnable":
-        filter_query = filter_query.where(Product.return_window_days == 0)
+        conditions.append(Product.return_window_days == 0)
     elif return_policy == "returnable":
-        filter_query = filter_query.where((Product.return_window_days.is_(None)) | (Product.return_window_days > 0))
-
+        conditions.append((Product.return_window_days.is_(None)) | (Product.return_window_days > 0))
     if has_video is True:
-        filter_query = filter_query.where(Product.video_url.isnot(None), Product.video_url != "")
+        conditions.append(Product.video_url.isnot(None))
+        conditions.append(Product.video_url != "")
     elif has_video is False:
-        filter_query = filter_query.where((Product.video_url.is_(None)) | (Product.video_url == ""))
-
+        conditions.append((Product.video_url.is_(None)) | (Product.video_url == ""))
     if search and search.strip():
         term = f"%{search.strip()}%"
-        filter_query = filter_query.where(
+        conditions.append(
             (Product.name.ilike(term))
             | (Product.brand.ilike(term))
             | (Product.category.ilike(term))
             | (Product.sku.ilike(term))
         )
 
-    stock_rows = session.exec(filter_query).all()
+    # 2. Fast scalar query for variant-aware tab badge counts
+    stat_rows = session.exec(
+        select(
+            Product.id,
+            Product.stock,
+            Product.in_stock,
+            Product.is_active,
+            Product.variant_option,
+        ).where(*conditions)
+    ).all()
 
-    all_count = len(stock_rows)
+    all_count = len(stat_rows)
     active_count = 0
     in_stock_ids = set()
     low_stock_ids = set()
-    all_brands = set()
 
-    for pid, stock, in_stock, is_active, v_opt, brand_val in stock_rows:
-        if brand_val and str(brand_val).strip():
-            all_brands.add(str(brand_val).strip())
-
+    for pid, stock, in_stock, is_active, v_opt in stat_rows:
         if is_active:
             active_count += 1
 
@@ -889,13 +896,11 @@ def list_products(
                         elif v.get("inStock"):
                             has_variant_in_stock = True
 
-        # Flat product checks
         flat_low = bool(in_stock and stock is not None and 0 < stock <= 5)
         flat_in_stock = bool(in_stock and stock is not None and stock > 0)
 
         if flat_low or has_variant_low:
             low_stock_ids.add(pid)
-
         if flat_in_stock or has_variant_in_stock:
             in_stock_ids.add(pid)
 
@@ -904,55 +909,33 @@ def list_products(
     low_stock_count = len(low_stock_ids)
     out_of_stock_count = max(0, all_count - in_stock_count)
 
-    base_query = select(Product).where(Product.site_id == site_id)
+    # Distinct store brands for filter dropdown
+    brand_rows = session.exec(
+        select(Product.brand).where(Product.site_id == site_id, Product.brand.isnot(None)).distinct()
+    ).all()
+    all_brands = sorted([str(b).strip() for b in brand_rows if b and str(b).strip()])
+
+    # 3. Apply active status tab filter to build lean query
+    status_conditions = list(conditions)
     if status == "active":
-        base_query = base_query.where(Product.is_active == True)
+        status_conditions.append(Product.is_active == True)
+        total_count = active_count
     elif status == "draft":
-        base_query = base_query.where(Product.is_active == False)
+        status_conditions.append(Product.is_active == False)
+        total_count = draft_count
     elif status == "in_stock":
-        base_query = base_query.where(Product.id.in_(list(in_stock_ids)) if in_stock_ids else False)
+        status_conditions.append(Product.id.in_(list(in_stock_ids)) if in_stock_ids else False)
+        total_count = in_stock_count
     elif status == "low_stock":
-        base_query = base_query.where(Product.id.in_(list(low_stock_ids)) if low_stock_ids else False)
+        status_conditions.append(Product.id.in_(list(low_stock_ids)) if low_stock_ids else False)
+        total_count = low_stock_count
     elif status == "out_of_stock":
-        base_query = base_query.where(~Product.id.in_(list(in_stock_ids)) if in_stock_ids else True)
+        status_conditions.append(~Product.id.in_(list(in_stock_ids)) if in_stock_ids else True)
+        total_count = out_of_stock_count
+    else:
+        total_count = all_count
 
-    if category_id:
-        base_query = base_query.where(Product.category_id == category_id)
-
-    if collection_id:
-        base_query = base_query.join(ProductCollection, ProductCollection.product_id == Product.id).where(ProductCollection.collection_id == collection_id)
-
-    if brand and brand.strip():
-        base_query = base_query.where(Product.brand.ilike(f"%{brand.strip()}%"))
-
-    if min_price is not None:
-        base_query = base_query.where(Product.price >= min_price)
-    if max_price is not None:
-        base_query = base_query.where(Product.price <= max_price)
-
-    if has_discount is True:
-        base_query = base_query.where(Product.compare_price.isnot(None), Product.compare_price > Product.price)
-    elif has_discount is False:
-        base_query = base_query.where((Product.compare_price.is_(None)) | (Product.compare_price <= Product.price))
-
-    if return_policy == "non_returnable":
-        base_query = base_query.where(Product.return_window_days == 0)
-    elif return_policy == "returnable":
-        base_query = base_query.where((Product.return_window_days.is_(None)) | (Product.return_window_days > 0))
-
-    if has_video is True:
-        base_query = base_query.where(Product.video_url.isnot(None), Product.video_url != "")
-    elif has_video is False:
-        base_query = base_query.where((Product.video_url.is_(None)) | (Product.video_url == ""))
-
-    if search and search.strip():
-        term = f"%{search.strip()}%"
-        base_query = base_query.where(
-            (Product.name.ilike(term))
-            | (Product.brand.ilike(term))
-            | (Product.category.ilike(term))
-            | (Product.sku.ilike(term))
-        )
+    base_query = select(Product).where(*status_conditions)
 
     # Sorting
     if sort_by == "price_asc":
@@ -970,8 +953,18 @@ def list_products(
 
     # If pagination is requested
     if page is not None and page_size is not None:
-        count_query = select(func.count()).select_from(base_query.subquery())
-        total_count = session.exec(count_query).one() or 0
+        if status == "active":
+            total_count = active_count
+        elif status == "draft":
+            total_count = draft_count
+        elif status == "in_stock":
+            total_count = in_stock_count
+        elif status == "low_stock":
+            total_count = low_stock_count
+        elif status == "out_of_stock":
+            total_count = out_of_stock_count
+        else:
+            total_count = all_count
 
         paginated_query = (
             base_query.order_by(order_clause)
@@ -981,7 +974,7 @@ def list_products(
         products = session.exec(paginated_query).all()
         total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
 
-        return {
+        result = {
             "products": to_product_responses_batch(products, session, include_reviews=False, include_siblings=False),
             "total": total_count,
             "all_count": all_count,
@@ -996,10 +989,14 @@ def list_products(
             "out_of_stock_count": out_of_stock_count,
             "brands": sorted(list(all_brands)),
         }
+        catalog_cache.set(cache_key, result, ttl=30.0)
+        return result
 
     # Unpaginated fallback
     products = session.exec(base_query.order_by(order_clause)).all()
-    return to_product_responses_batch(products, session, include_reviews=False, include_siblings=False)
+    result = to_product_responses_batch(products, session, include_reviews=False, include_siblings=False)
+    catalog_cache.set(cache_key, result, ttl=30.0)
+    return result
 
 
 @router.get("/public", include_in_schema=False)
