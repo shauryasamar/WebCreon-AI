@@ -224,8 +224,19 @@ def get_product_review_summary(
 
 
 def get_product_reviews(
-    session: Session, site_id: UUID, product_id: UUID, sibling_group: Optional[str] = None
+    session: Session,
+    site_id: UUID,
+    product_id: UUID,
+    sibling_group: Optional[str] = None,
+    limit: Optional[int] = None,
+    offset: int = 0,
 ) -> list[dict[str, Any]]:
+    query = (
+        select(ProductReview, User)
+        .join(User, User.id == ProductReview.customer_id)
+        .order_by(ProductReview.created_at.desc())
+    )
+
     if sibling_group:
         sibling_ids = session.exec(
             select(Product.id).where(
@@ -235,30 +246,27 @@ def get_product_reviews(
             )
         ).all()
         if sibling_ids:
-            reviews = session.exec(
-                select(ProductReview, User)
-                .join(User, User.id == ProductReview.customer_id)
-                .where(
-                    ProductReview.site_id == site_id,
-                    ProductReview.product_id.in_(sibling_ids),
-                )
-                .order_by(ProductReview.created_at.desc())
-            ).all()
-            return [
-                serialize_review(review, customer_name=user.name or user.email or "Customer")
-                for review, user in reviews
-            ]
-
-    reviews = session.exec(
-        select(ProductReview, User)
-        .join(User, User.id == ProductReview.customer_id)
-        .where(
+            query = query.where(
+                ProductReview.site_id == site_id,
+                ProductReview.product_id.in_(sibling_ids),
+            )
+        else:
+            query = query.where(
+                ProductReview.site_id == site_id,
+                ProductReview.product_id == product_id,
+            )
+    else:
+        query = query.where(
             ProductReview.site_id == site_id,
             ProductReview.product_id == product_id,
         )
-        .order_by(ProductReview.created_at.desc())
-    ).all()
 
+    if offset > 0:
+        query = query.offset(offset)
+    if limit is not None and limit > 0:
+        query = query.limit(limit)
+
+    reviews = session.exec(query).all()
     return [
         serialize_review(review, customer_name=user.name or user.email or "Customer")
         for review, user in reviews
@@ -462,7 +470,7 @@ def to_product_responses_batch(
 
         if include_reviews:
             response["reviews"] = get_product_reviews(
-                session, product.site_id, product.id, sibling_group_val
+                session, product.site_id, product.id, sibling_group_val, limit=8, offset=0
             )
 
         results.append(response)
@@ -2230,11 +2238,37 @@ def get_product_detail(
 def list_product_reviews(
     site_id: UUID,
     product_id: UUID,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=50),
     session: Session = Depends(get_session),
 ):
     get_site_or_404(session, site_id)
     product = get_site_product_or_404(session, site_id, product_id)
-    return get_product_reviews(session, site_id, product.id)
+
+    # High-speed RAM cache lookup for reviews
+    cache_key = f"site:{str(site_id)}:product:{str(product.id)}:reviews:{page}:{page_size}"
+    cached = catalog_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    offset = (page - 1) * page_size
+    reviews = get_product_reviews(
+        session, site_id, product.id, product.sibling_group, limit=page_size, offset=offset
+    )
+    avg_rating, total_count = get_product_rating_summary(
+        session, site_id, product.id, product.sibling_group
+    )
+
+    result = {
+        "reviews": reviews,
+        "total_count": total_count,
+        "average_rating": avg_rating,
+        "page": page,
+        "page_size": page_size,
+        "has_more": (offset + len(reviews)) < total_count,
+    }
+    catalog_cache.set(cache_key, result, ttl=120.0)
+    return result
 
 
 @router.post("/upload-image", response_model=UploadImageResponse)

@@ -41,7 +41,7 @@ function cacheStoreProduct(prod: Product | null | undefined) {
     productDetailMemoryCache.set(String(prod.slug).trim().toLowerCase(), prod);
   }
   if (prod.name) {
-    const sName = slugify(String(prod.name));
+    const sName = String(prod.name).toLowerCase().trim().replace(/\s+/g, "-").replace(/[^\w-]+/g, "");
     if (sName) productDetailMemoryCache.set(sName, prod);
   }
 }
@@ -693,6 +693,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   const [eligibleOrderItem, setEligibleOrderItem] = useState<DeliveredOrderItem | null>(null);
   const [checkingEligibility, setCheckingEligibility] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [activeSlideIndex, setActiveSlideIndex] = useState(0);
+  const galleryScrollRef = React.useRef<HTMLDivElement>(null);
   const [isVideoActive, setIsVideoActive] = useState(false);
   const [openDescription, setOpenDescription] = useState(false);
   const [selectedOption, setSelectedOption] = useState("");
@@ -701,6 +703,34 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   const [fetchedSiblings, setFetchedSiblings] = useState<SiblingProduct[]>([]);
   const [copiedLink, setCopiedLink] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [visibleReviewsCount, setVisibleReviewsCount] = useState(4);
+  const [reviewPage, setReviewPage] = useState(1);
+  const [loadingMoreReviews, setLoadingMoreReviews] = useState(false);
+  const [hasMoreReviews, setHasMoreReviews] = useState(false);
+  const [reviewPreviewModalImage, setReviewPreviewModalImage] = useState<string | null>(null);
+  const inlineBuyRef = React.useRef<HTMLDivElement>(null);
+  const [showBottomSticky, setShowBottomSticky] = useState(true);
+
+  useEffect(() => {
+    if (!screenSize.isMobile) return;
+
+    const checkSticky = () => {
+      if (!inlineBuyRef.current) return;
+      const rect = inlineBuyRef.current.getBoundingClientRect();
+      const windowHeight = window.innerHeight;
+      // Show sticky when the real button position is below the bottom of the viewport
+      setShowBottomSticky(rect.top > windowHeight - 50);
+    };
+
+    window.addEventListener("scroll", checkSticky, { passive: true });
+    window.addEventListener("resize", checkSticky, { passive: true });
+    checkSticky();
+
+    return () => {
+      window.removeEventListener("scroll", checkSticky);
+      window.removeEventListener("resize", checkSticky);
+    };
+  }, [screenSize.isMobile, product?.id]);
 
   const getProductShareUrl = () => {
     if (typeof window === "undefined") return "";
@@ -1634,8 +1664,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     canAddToCart && !selectedVariantOutOfStock && !isCartLimitReached;
 
   const ratingDisplay = averageRating > 0 ? averageRating.toFixed(1) : "New";
-  const reviewCountDisplay =
-    reviewCount > 0 ? `based on ${reviewCount} ratings` : "No ratings yet";
+  const reviewCountDisplay = reviewCount > 0 ? String(reviewCount) : "";
 
   const canSubmitReview =
     isAuthenticated &&
@@ -1786,6 +1815,42 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     }
   };
 
+  const handleLoadMoreReviews = async () => {
+    if (visibleReviewsCount < reviews.length) {
+      setVisibleReviewsCount((prev) => prev + 4);
+      return;
+    }
+
+    if (siteId && product?.id && (hasMoreReviews || reviews.length < reviewCount)) {
+      setLoadingMoreReviews(true);
+      try {
+        const nextPage = reviewPage + 1;
+        const res = await fetch(
+          `${API_BASE_URL}/sites/${siteId}/products/${product.id}/reviews?page=${nextPage}&page_size=10`,
+          { credentials: "include" }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const newReviews = Array.isArray(data?.reviews) ? data.reviews : [];
+          if (newReviews.length > 0) {
+            setReviews((prev) => {
+              const existingIds = new Set(prev.map((r) => r.id));
+              const filtered = newReviews.filter((r: ProductReview) => !existingIds.has(r.id));
+              return [...prev, ...filtered];
+            });
+            setReviewPage(nextPage);
+            setVisibleReviewsCount((prev) => prev + 4);
+          }
+          setHasMoreReviews(Boolean(data?.has_more));
+        }
+      } catch (err) {
+        console.error("Failed to load more reviews", err);
+      } finally {
+        setLoadingMoreReviews(false);
+      }
+    }
+  };
+
   const gallerySlots = Array.from(
     { length: MAX_GALLERY_IMAGES },
     (_, index) => normalizedImages[index] || null
@@ -1797,9 +1862,9 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     : isTablet
     ? "minmax(0, 380px) minmax(0, 1fr)"
     : "minmax(0, 460px) minmax(0, 1fr)";
-  const buyGridColumns = isMobile ? "1fr" : "116px minmax(0, 1fr)";
+  const buyGridColumns = isMobile ? "108px minmax(0, 1fr)" : "116px minmax(0, 1fr)";
   const reviewGridColumns = isMobile ? "1fr" : "minmax(280px, 360px) minmax(0, 1fr)";
-  const supportGridColumns = isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))";
+  const supportGridColumns = isMobile ? "repeat(3, minmax(0, 1fr))" : "repeat(3, minmax(0, 1fr))";
 
   const resolvedAddToCartText = add_to_cart_label || "Add to cart";
   const resolvedMaxWidth = max_width === "full" ? "100%" : max_width ? `${max_width}px` : "1140px";
@@ -1842,12 +1907,95 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 aspectRatio: resolvedImageAspect,
               }}
             >
+              {/* Top-Right Share Icon Button */}
+              <button
+                type="button"
+                onClick={() => setShowShareModal(true)}
+                title="Share this product"
+                aria-label="Share product"
+                style={{
+                  position: "absolute",
+                  top: "10px",
+                  right: "10px",
+                  zIndex: 3,
+                  width: "36px",
+                  height: "36px",
+                  borderRadius: "50%",
+                  background: isLight ? "rgba(255,255,255,0.92)" : "rgba(15,23,42,0.85)",
+                  backdropFilter: "blur(8px)",
+                  WebkitBackdropFilter: "blur(8px)",
+                  border: subtleBorder,
+                  color: pageText,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+                  padding: 0,
+                  transition: "transform 0.15s ease",
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="18" cy="5" r="3" />
+                  <circle cx="6" cy="12" r="3" />
+                  <circle cx="18" cy="19" r="3" />
+                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                  <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                </svg>
+              </button>
+
+              {/* Bottom-Left Fixed Rating Badge (Clickable to jump to Reviews) */}
+              {show_ratings && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const el = document.getElementById("reviews-section");
+                    if (el) {
+                      el.scrollIntoView({ behavior: "smooth" });
+                    }
+                  }}
+                  title="View customer reviews"
+                  aria-label="View customer reviews"
+                  style={{
+                    position: "absolute",
+                    bottom: "10px",
+                    left: "10px",
+                    zIndex: 4,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    padding: "4px 8px",
+                    borderRadius: "6px",
+                    background: isLight ? "rgba(255,255,255,0.92)" : "rgba(15,23,42,0.85)",
+                    backdropFilter: "blur(8px)",
+                    WebkitBackdropFilter: "blur(8px)",
+                    border: subtleBorder,
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    color: pageText,
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
+                    cursor: "pointer",
+                    transition: "transform 0.15s ease",
+                  }}
+                >
+                  <span style={{ color: "#f59e0b", fontSize: "11px" }}>★</span>
+                  <span>{ratingDisplay}</span>
+                  {reviewCountDisplay && (
+                    <>
+                      <span style={{ color: mutedText, opacity: 0.5 }}>|</span>
+                      <span style={{ color: mutedText, fontWeight: 600 }}>{reviewCountDisplay}</span>
+                    </>
+                  )}
+                </button>
+              )}
+
               {show_discount_badge && showDiscount && (
                 <div
                   style={{
                     position: "absolute",
-                    top: "12px",
-                    left: "12px",
+                    top: "10px",
+                    left: "10px",
                     zIndex: 2,
                     padding: "6px 10px",
                     borderRadius: "999px",
@@ -1866,8 +2014,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 <div
                   style={{
                     position: "absolute",
-                    top: "12px",
-                    right: "12px",
+                    top: "10px",
+                    right: "52px",
                     zIndex: 2,
                     padding: "6px 10px",
                     borderRadius: "999px",
@@ -1882,53 +2030,130 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 </div>
               )}
 
-              {isVideoActive && videoInfo.src ? (
-                videoInfo.type === "youtube" || videoInfo.type === "vimeo" ? (
-                  <iframe
-                    src={videoInfo.src}
-                    title={`${product?.name || "Product"} Video`}
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                    style={{ width: "100%", height: "100%", border: "none", display: "block" }}
-                  />
+              {/* Swipeable & Scrollable Gallery Track */}
+              <div
+                ref={galleryScrollRef}
+                onScroll={(e) => {
+                  const el = e.currentTarget;
+                  if (el && el.clientWidth > 0) {
+                    const idx = Math.round(el.scrollLeft / el.clientWidth);
+                    if (idx !== activeSlideIndex && idx >= 0 && idx < mediaItems.length) {
+                      setActiveSlideIndex(idx);
+                      const item = mediaItems[idx];
+                      if (item) {
+                        if (item.type === "video") {
+                          setIsVideoActive(true);
+                        } else {
+                          setIsVideoActive(false);
+                          if (item.src) setSelectedImage(item.src);
+                        }
+                      }
+                    }
+                  }
+                }}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  display: "flex",
+                  overflowX: "auto",
+                  scrollSnapType: "x mandatory",
+                  scrollbarWidth: "none",
+                  WebkitOverflowScrolling: "touch",
+                }}
+              >
+                {mediaItems.length > 0 ? (
+                  mediaItems.map((item, idx) => (
+                    <div
+                      key={`gallery-slide-${idx}`}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        flexShrink: 0,
+                        scrollSnapAlign: "start",
+                        position: "relative",
+                      }}
+                    >
+                      {item.type === "video" ? (
+                        videoInfo.src ? (
+                          videoInfo.type === "youtube" || videoInfo.type === "vimeo" ? (
+                            <iframe
+                              src={videoInfo.src}
+                              title={`${product?.name || "Product"} Video`}
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                              style={{ width: "100%", height: "100%", border: "none", display: "block" }}
+                            />
+                          ) : (
+                            <video
+                              src={videoInfo.src}
+                              controls
+                              autoPlay
+                              style={{ width: "100%", height: "100%", objectFit: "contain", display: "block", background: "#000" }}
+                            />
+                          )
+                        ) : null
+                      ) : item.src ? (
+                        <img
+                          src={item.src}
+                          alt={`${product.name} - view ${idx + 1}`}
+                          loading={idx === 0 ? "eager" : "lazy"}
+                          decoding="async"
+                          style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, objectPosition: "top center", display: "block" }}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            display: "grid",
+                            placeItems: "center",
+                            color: mutedText,
+                            fontSize: "14px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          No image available
+                        </div>
+                      )}
+                    </div>
+                  ))
                 ) : (
-                  <video
-                    src={videoInfo.src}
-                    controls
-                    autoPlay
-                    style={{ width: "100%", height: "100%", objectFit: "contain", display: "block", background: "#000" }}
-                  />
-                )
-              ) : activeDisplayImage ? (
-                <img
-                  src={activeDisplayImage}
-                  alt={product.name}
-                  loading="eager"
-                  decoding="async"
-                  style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, objectPosition: "top center", display: "block" }}
-                />
-              ) : (
-                <div
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    display: "grid",
-                    placeItems: "center",
-                    color: mutedText,
-                    fontSize: "14px",
-                    fontWeight: 600,
-                  }}
-                >
-                  No image available
-                </div>
-              )}
+                  <div
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      display: "grid",
+                      placeItems: "center",
+                      color: mutedText,
+                      fontSize: "14px",
+                      fontWeight: 600,
+                    }}
+                  >
+                    No image available
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
           {videoInfo.src && (
             <button
               type="button"
-              onClick={() => setIsVideoActive(!isVideoActive)}
+              onClick={() => {
+                const videoIdx = mediaItems.findIndex((m) => m.type === "video");
+                if (videoIdx >= 0) {
+                  setIsVideoActive(!isVideoActive);
+                  setActiveSlideIndex(videoIdx);
+                  if (galleryScrollRef.current) {
+                    galleryScrollRef.current.scrollTo({
+                      left: videoIdx * galleryScrollRef.current.clientWidth,
+                      behavior: "smooth",
+                    });
+                  }
+                } else {
+                  setIsVideoActive(!isVideoActive);
+                }
+              }}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -1958,9 +2183,12 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
 
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: `repeat(${Math.max(mediaItems.length, 4)}, minmax(0, 1fr))`,
+              display: isMobile ? "flex" : "grid",
+              overflowX: isMobile ? "auto" : "visible",
+              gridTemplateColumns: isMobile ? undefined : `repeat(${Math.max(mediaItems.length, 4)}, minmax(0, 1fr))`,
               gap: isMobile ? "6px" : "8px",
+              scrollbarWidth: "none",
+              paddingBottom: isMobile ? "2px" : "0",
             }}
           >
             {mediaItems.map((item, index) => {
@@ -1969,9 +2197,21 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                   <button
                     key={`media-video-${index}`}
                     type="button"
-                    onClick={() => setIsVideoActive(true)}
+                    onClick={() => {
+                      setIsVideoActive(true);
+                      setActiveSlideIndex(index);
+                      if (galleryScrollRef.current) {
+                        galleryScrollRef.current.scrollTo({
+                          left: index * galleryScrollRef.current.clientWidth,
+                          behavior: "smooth",
+                        });
+                      }
+                    }}
                     style={{
                       padding: 0,
+                      width: isMobile ? "54px" : "auto",
+                      height: isMobile ? "54px" : "auto",
+                      flexShrink: 0,
                       borderRadius: isMobile ? "10px" : "12px",
                       overflow: "hidden",
                       border: isVideoActive ? `1.5px solid ${accentColor}` : subtleBorder,
@@ -1993,7 +2233,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
               }
 
               const image = item.src;
-              const isActive = !isVideoActive && image && (selectedImage ? selectedImage === image : index === 0);
+              const isActive = !isVideoActive && (activeSlideIndex === index || (image && selectedImage === image));
 
               return (
                 <button
@@ -2003,10 +2243,20 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                     if (image) {
                       setIsVideoActive(false);
                       setSelectedImage(image);
+                      setActiveSlideIndex(index);
+                      if (galleryScrollRef.current) {
+                        galleryScrollRef.current.scrollTo({
+                          left: index * galleryScrollRef.current.clientWidth,
+                          behavior: "smooth",
+                        });
+                      }
                     }
                   }}
                   style={{
                     padding: 0,
+                    width: isMobile ? "54px" : "auto",
+                    height: isMobile ? "54px" : "auto",
+                    flexShrink: 0,
                     borderRadius: isMobile ? "10px" : "12px",
                     overflow: "hidden",
                     border: isActive ? `1.5px solid ${accentColor}` : subtleBorder,
@@ -2073,79 +2323,65 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                   </span>
                 )}
 
-                {show_ratings && (
-                  <span
+
+                {!isMobile && (
+                  <button
+                    type="button"
+                    onClick={() => setShowShareModal(true)}
+                    title="Share this product"
                     style={{
+                      marginLeft: "auto",
                       display: "inline-flex",
                       alignItems: "center",
-                      gap: "5px",
+                      gap: "6px",
+                      padding: "5px 12px",
+                      borderRadius: "999px",
+                      background: copiedLink
+                        ? isLight
+                          ? "rgba(34,197,94,0.12)"
+                          : "rgba(34,197,94,0.2)"
+                        : isLight
+                        ? "rgba(15,23,42,0.06)"
+                        : "rgba(255,255,255,0.09)",
+                      border: copiedLink
+                        ? `1px solid ${isLight ? "rgba(34,197,94,0.3)" : "rgba(134,239,172,0.3)"}`
+                        : subtleBorder,
+                      color: copiedLink ? (isLight ? "#15803d" : "#4ade80") : pageText,
                       fontSize: "12px",
-                      color: mutedText,
-                      fontWeight: 600,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      transition: "all 0.16s ease",
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
                     }}
                   >
-                    <span style={{ color: "#f59e0b", letterSpacing: "0.04em" }}>★★★★☆</span>
-                    <span>{ratingDisplay}</span>
-                    <span style={{ color: subtleText }}>({reviewCountDisplay})</span>
-                  </span>
+                    {copiedLink ? (
+                      <>
+                        <span style={{ fontSize: "12px", color: "#16a34a" }}>✓</span>
+                        <span style={{ color: isLight ? "#15803d" : "#4ade80" }}>Link Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg
+                          width="13"
+                          height="13"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <circle cx="18" cy="5" r="3" />
+                          <circle cx="6" cy="12" r="3" />
+                          <circle cx="18" cy="19" r="3" />
+                          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                        </svg>
+                        <span>Share</span>
+                      </>
+                    )}
+                  </button>
                 )}
-
-                <button
-                  type="button"
-                  onClick={() => setShowShareModal(true)}
-                  title="Share this product"
-                  style={{
-                    marginLeft: "auto",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    padding: "5px 12px",
-                    borderRadius: "999px",
-                    background: copiedLink
-                      ? isLight
-                        ? "rgba(34,197,94,0.12)"
-                        : "rgba(34,197,94,0.2)"
-                      : isLight
-                      ? "rgba(15,23,42,0.06)"
-                      : "rgba(255,255,255,0.09)",
-                    border: copiedLink
-                      ? `1px solid ${isLight ? "rgba(34,197,94,0.3)" : "rgba(134,239,172,0.3)"}`
-                      : subtleBorder,
-                    color: copiedLink ? (isLight ? "#15803d" : "#4ade80") : pageText,
-                    fontSize: "12px",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    transition: "all 0.16s ease",
-                    boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
-                  }}
-                >
-                  {copiedLink ? (
-                    <>
-                      <span style={{ fontSize: "12px", color: "#16a34a" }}>✓</span>
-                      <span style={{ color: isLight ? "#15803d" : "#4ade80" }}>Link Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <circle cx="18" cy="5" r="3" />
-                        <circle cx="6" cy="12" r="3" />
-                        <circle cx="18" cy="19" r="3" />
-                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-                        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-                      </svg>
-                      <span>Share</span>
-                    </>
-                  )}
-                </button>
               </div>
 
               {badgeCollections.length > 0 && (
@@ -2231,16 +2467,16 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                     </span>
                   )}
 
-                  {show_discount_badge && showDiscount && (
+                  {showDiscount && (
                     <span
                       style={{
-                        fontSize: "11px",
+                        fontSize: "12px",
                         fontWeight: 700,
-                        color: isLight ? "#166534" : "#86efac",
-                        background: isLight ? "rgba(34,197,94,0.10)" : "rgba(34,197,94,0.14)",
+                        color: isLight ? "#16a34a" : "#4ade80",
+                        background: isLight ? "rgba(34,197,94,0.12)" : "rgba(34,197,94,0.2)",
                         border: isLight
-                          ? "1px solid rgba(34,197,94,0.16)"
-                          : "1px solid rgba(134,239,172,0.18)",
+                          ? "1px solid rgba(34,197,94,0.2)"
+                          : "1px solid rgba(134,239,172,0.2)",
                         padding: "4px 8px",
                         borderRadius: "999px",
                       }}
@@ -2249,10 +2485,6 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                     </span>
                   )}
                 </div>
-
-                <span style={{ fontSize: "12px", color: mutedText, fontWeight: 500 }}>
-                  Inclusive of all taxes
-                </span>
               </div>
 
               <div
@@ -2290,10 +2522,6 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                     : isCartLimitReached
                     ? "Already in cart"
                     : "In stock"}
-                </span>
-
-                <span style={{ fontSize: "12px", color: subtleText, fontWeight: 600 }}>
-                  Free delivery on prepaid orders
                 </span>
               </div>
             </div>
@@ -2348,9 +2576,12 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 <div
                   style={{
                     display: "flex",
-                    flexWrap: "wrap",
+                    flexWrap: isMobile ? "nowrap" : "wrap",
+                    overflowX: isMobile ? "auto" : "visible",
+                    scrollbarWidth: "none",
                     gap: isMobile ? "8px" : "10px",
                     alignItems: "center",
+                    paddingBottom: isMobile ? "4px" : "0",
                   }}
                 >
                   {resolvedSiblings.map((sib: SiblingProduct) => {
@@ -2586,6 +2817,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
             )}
 
             <div
+              ref={inlineBuyRef}
               style={{
                 display: "grid",
                 gridTemplateColumns: buyGridColumns,
@@ -2738,7 +2970,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 style={{
                   display: "grid",
                   gridTemplateColumns: supportGridColumns,
-                  gap: "10px",
+                  gap: isMobile ? "8px" : "10px",
                   paddingTop: "14px",
                   borderTop: subtleBorder,
                 }}
@@ -2746,11 +2978,11 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 {show_delivery_info && (
                   <div
                     style={{
-                      padding: "12px 10px",
+                      padding: isMobile ? "10px 8px" : "12px 10px",
                       borderRadius: "14px",
                       background: softSectionBg,
                       border: subtleBorder,
-                      textAlign: "left",
+                      textAlign: isMobile ? "center" : "left",
                     }}
                   >
                     <p style={{ margin: "0 0 5px", ...tagText }}>Delivery</p>
@@ -2762,11 +2994,11 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 {show_return_policy && (
                   <div
                     style={{
-                      padding: "12px 10px",
+                      padding: isMobile ? "10px 8px" : "12px 10px",
                       borderRadius: "14px",
                       background: softSectionBg,
                       border: subtleBorder,
-                      textAlign: "left",
+                      textAlign: isMobile ? "center" : "left",
                     }}
                   >
                     <p style={{ margin: "0 0 5px", ...tagText }}>Returns</p>
@@ -2789,11 +3021,11 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 {show_quality_guarantee && (
                   <div
                     style={{
-                      padding: "12px 10px",
+                      padding: isMobile ? "10px 8px" : "12px 10px",
                       borderRadius: "14px",
                       background: softSectionBg,
                       border: subtleBorder,
-                      textAlign: "left",
+                      textAlign: isMobile ? "center" : "left",
                     }}
                   >
                     <p style={{ margin: "0 0 5px", ...tagText }}>Quality</p>
@@ -2867,6 +3099,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
 
       {show_reviews_section && (
         <div
+          id="reviews-section"
           style={{
             ...shellCard,
             marginTop: isMobile ? "18px" : "22px",
@@ -3029,10 +3262,10 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
 
               {reviewImages.length ? (
                 <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "10px" }}>
-                  {reviewImages.map((img) => (
+                  {reviewImages.map((img, uploadIdx) => (
                     <img
-                      key={img}
-                      src={img}
+                      key={`review-upload-preview-${uploadIdx}`}
+                      src={optimizeImageUrl(img, 200, 200)}
                       alt="review upload"
                       style={{
                         width: "56px",
@@ -3089,88 +3322,247 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 No reviews yet.
               </div>
             ) : (
-              reviews.map((review, index) => (
-                <div
-                  key={review.id || `${review.customer_name || "customer"}-${index}`}
-                  style={{
-                    borderRadius: "16px",
-                    border: subtleBorder,
-                    background: reviewCardBg,
-                    padding: "14px",
-                  }}
-                >
+              <>
+                {reviews.slice(0, visibleReviewsCount).map((review, index) => (
                   <div
+                    key={review.id || `${review.customer_name || "customer"}-${index}`}
                     style={{
-                      display: "flex",
-                      alignItems: "flex-start",
-                      justifyContent: "space-between",
-                      gap: "12px",
-                      flexWrap: "wrap",
-                      marginBottom: "8px",
+                      borderRadius: "16px",
+                      border: subtleBorder,
+                      background: reviewCardBg,
+                      padding: "14px",
                     }}
                   >
-                    <div>
-                      <div
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        justifyContent: "space-between",
+                        gap: "12px",
+                        flexWrap: "wrap",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      <div>
+                        <div
+                          style={{
+                            fontSize: "13px",
+                            fontWeight: 700,
+                            color: pageText,
+                            marginBottom: "4px",
+                          }}
+                        >
+                          {review.customer_name || "Customer"}
+                        </div>
+                        <div style={{ color: "#f59e0b", fontSize: "12px", letterSpacing: "0.04em" }}>
+                          {"★".repeat(review.rating)}
+                          {"☆".repeat(5 - review.rating)}
+                        </div>
+                      </div>
+
+                      <span style={{ fontSize: "11px", color: subtleText, fontWeight: 600 }}>
+                        {review.created_at ? new Date(review.created_at).toLocaleDateString() : ""}
+                      </span>
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        color: pageText,
+                        marginBottom: "6px",
+                      }}
+                    >
+                      Review
+                    </div>
+
+                    <p style={{ margin: 0, color: mutedText, fontSize: "13px", lineHeight: 1.68 }}>
+                      {review.review_text}
+                    </p>
+
+                    {Array.isArray(review.review_images) && review.review_images.length > 0 ? (
+                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "10px" }}>
+                        {review.review_images.map((img, imgIdx) => {
+                          const resolvedImgUrl = optimizeImageUrl(img, 400, 400);
+                          return (
+                            <button
+                              key={`review-image-${imgIdx}`}
+                              type="button"
+                              onClick={() => setReviewPreviewModalImage(resolvedImgUrl)}
+                              title="Click to zoom image"
+                              style={{
+                                padding: 0,
+                                border: subtleBorder,
+                                borderRadius: "10px",
+                                overflow: "hidden",
+                                cursor: "pointer",
+                                background: "transparent",
+                                width: "64px",
+                                height: "64px",
+                                flexShrink: 0,
+                              }}
+                            >
+                              <img
+                                src={resolvedImgUrl}
+                                alt="Customer review attachment"
+                                loading="lazy"
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  objectFit: "cover",
+                                  display: "block",
+                                }}
+                              />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+
+                {(reviews.length > 4 || hasMoreReviews || reviewCount > reviews.length) && (
+                  <div style={{ display: "flex", gap: "10px", marginTop: "4px" }}>
+                    {visibleReviewsCount < reviews.length || hasMoreReviews || reviewCount > reviews.length ? (
+                      <button
+                        type="button"
+                        onClick={handleLoadMoreReviews}
+                        disabled={loadingMoreReviews}
                         style={{
+                          width: "100%",
+                          padding: "11px 18px",
+                          borderRadius: "12px",
+                          border: subtleBorder,
+                          background: isLight ? "#ffffff" : "rgba(255,255,255,0.06)",
+                          color: pageText,
                           fontSize: "13px",
                           fontWeight: 700,
-                          color: pageText,
-                          marginBottom: "4px",
+                          cursor: loadingMoreReviews ? "not-allowed" : "pointer",
+                          boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "6px",
+                          transition: "all 0.15s ease",
+                          opacity: loadingMoreReviews ? 0.7 : 1,
                         }}
                       >
-                        {review.customer_name || "Customer"}
-                      </div>
-                      <div style={{ color: "#f59e0b", fontSize: "12px", letterSpacing: "0.04em" }}>
-                        {"★".repeat(review.rating)}
-                        {"☆".repeat(5 - review.rating)}
-                      </div>
-                    </div>
-
-                    <span style={{ fontSize: "11px", color: subtleText, fontWeight: 600 }}>
-                      {review.created_at ? new Date(review.created_at).toLocaleDateString() : ""}
-                    </span>
+                        {loadingMoreReviews ? (
+                          <span>Loading reviews...</span>
+                        ) : (
+                          <>
+                            <span>
+                              View more reviews
+                              {reviewCount > visibleReviewsCount
+                                ? ` (${reviewCount - visibleReviewsCount} remaining)`
+                                : ""}
+                            </span>
+                            <span>↓</span>
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVisibleReviewsCount(4);
+                          document.getElementById("reviews-section")?.scrollIntoView({ behavior: "smooth" });
+                        }}
+                        style={{
+                          width: "100%",
+                          padding: "11px 18px",
+                          borderRadius: "12px",
+                          border: subtleBorder,
+                          background: isLight ? "#ffffff" : "rgba(255,255,255,0.06)",
+                          color: pageText,
+                          fontSize: "13px",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "6px",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        <span>Show fewer reviews</span>
+                        <span>↑</span>
+                      </button>
+                    )}
                   </div>
-
-                  <div
-                    style={{
-                      fontSize: "13px",
-                      fontWeight: 700,
-                      color: pageText,
-                      marginBottom: "6px",
-                    }}
-                  >
-                    Review
-                  </div>
-
-                  <p style={{ margin: 0, color: mutedText, fontSize: "13px", lineHeight: 1.68 }}>
-                    {review.review_text}
-                  </p>
-
-                  {Array.isArray(review.review_images) && review.review_images.length > 0 ? (
-                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "10px" }}>
-                      {review.review_images.map((img) => (
-                        <img
-                          key={img}
-                          src={img}
-                          alt="review"
-                          style={{
-                            width: "64px",
-                            height: "64px",
-                            objectFit: "cover",
-                            borderRadius: "10px",
-                            border: subtleBorder,
-                          }}
-                        />
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              ))
+                )}
+              </>
             )}
           </div>
         </div>
       </div>
     )}
+      {/* Review Image Preview Lightbox Modal */}
+      {reviewPreviewModalImage && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 999999,
+            background: "rgba(0, 0, 0, 0.85)",
+            backdropFilter: "blur(10px)",
+            WebkitBackdropFilter: "blur(10px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+          onClick={() => setReviewPreviewModalImage(null)}
+        >
+          <div
+            style={{
+              position: "relative",
+              maxWidth: "90vw",
+              maxHeight: "90vh",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setReviewPreviewModalImage(null)}
+              title="Close image"
+              style={{
+                position: "absolute",
+                top: "-42px",
+                right: "0px",
+                background: "rgba(255, 255, 255, 0.2)",
+                border: "none",
+                borderRadius: "50%",
+                width: "36px",
+                height: "36px",
+                color: "#ffffff",
+                fontSize: "18px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+              }}
+            >
+              ✕
+            </button>
+            <img
+              src={reviewPreviewModalImage}
+              alt="Review full photo"
+              style={{
+                maxWidth: "100%",
+                maxHeight: "85vh",
+                borderRadius: "16px",
+                objectFit: "contain",
+                boxShadow: "0 20px 40px rgba(0,0,0,0.5)",
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Share Product Modal - Dynamically Themed & Clean Vector Logos */}
       {showShareModal && (
@@ -3449,6 +3841,175 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
               </button>
             )}
           </div>
+        </div>
+      )}
+      {/* Attached Bottom Purchase Bar on Mobile (Zero corner radius, perfectly aligned with card buttons) */}
+      {isMobile && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            width: "100%",
+            zIndex: 9999,
+            padding: "12px 26px calc(12px + env(safe-area-inset-bottom, 0px))",
+            borderRadius: "0",
+            background: isPanelDark ? "rgba(30, 41, 59, 0.98)" : "rgba(255, 255, 255, 0.98)",
+            backdropFilter: "blur(16px)",
+            WebkitBackdropFilter: "blur(16px)",
+            borderTop: subtleBorder,
+            borderLeft: "none",
+            borderRight: "none",
+            borderBottom: "none",
+            boxShadow: isPanelDark
+              ? "0 -10px 30px rgba(0,0,0,0.55)"
+              : "0 -6px 24px rgba(15,23,42,0.09)",
+            display: "grid",
+            gridTemplateColumns: buyGridColumns,
+            gap: "12px",
+            alignItems: "center",
+            transform: showBottomSticky ? "translateY(0)" : "translateY(110%)",
+            opacity: showBottomSticky ? 1 : 0,
+            pointerEvents: showBottomSticky ? "auto" : "none",
+            transition: "transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease",
+          }}
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "40px 1fr 40px",
+              alignItems: "center",
+              minHeight: "46px",
+              borderRadius: "15px",
+              border: strongerBorder,
+              background: elevatedBg,
+              overflow: "hidden",
+            }}
+          >
+            <button
+              type="button"
+              aria-label="Decrease quantity"
+              onClick={() => setQuantity((current) => Math.max(1, current - 1))}
+              style={{
+                height: "46px",
+                border: "none",
+                borderRight: subtleBorder,
+                background: "transparent",
+                color: mutedText,
+                fontSize: "18px",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              −
+            </button>
+
+            <div style={{ textAlign: "center", fontSize: "14px", fontWeight: 700, color: pageText }}>
+              {quantity}
+            </div>
+
+            <button
+              type="button"
+              aria-label="Increase quantity"
+              onClick={() =>
+                setQuantity((current) => {
+                  if (typeof maxAllowedQty === "number") {
+                    return Math.min(maxAllowedQty, current + 1);
+                  }
+                  return current + 1;
+                })
+              }
+              disabled={
+                selectedVariantOutOfStock ||
+                isEntireProductOutOfStock ||
+                isCartLimitReached ||
+                isAtMaxQty
+              }
+              style={{
+                height: "46px",
+                border: "none",
+                borderLeft: subtleBorder,
+                background: "transparent",
+                color:
+                  selectedVariantOutOfStock ||
+                  isEntireProductOutOfStock ||
+                  isCartLimitReached ||
+                  isAtMaxQty
+                    ? subtleText
+                    : mutedText,
+                fontSize: "18px",
+                fontWeight: 700,
+                cursor:
+                  selectedVariantOutOfStock ||
+                  isEntireProductOutOfStock ||
+                  isCartLimitReached ||
+                  isAtMaxQty
+                    ? "not-allowed"
+                    : "pointer",
+                opacity:
+                  selectedVariantOutOfStock ||
+                  isEntireProductOutOfStock ||
+                  isCartLimitReached ||
+                  isAtMaxQty
+                    ? 0.5
+                    : 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              +
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleAddToCart}
+            disabled={!finalCanAddToCart}
+            style={{
+              width: "100%",
+              minHeight: "46px",
+              padding: "12px 16px",
+              borderRadius: "15px",
+              border: "none",
+              background: !finalCanAddToCart
+                ? "#94a3b8"
+                : added
+                ? "#16a34a"
+                : activeBtnBg,
+              color: activeBtnTextColor,
+              cursor: finalCanAddToCart ? "pointer" : "not-allowed",
+              fontWeight: 700,
+              fontSize: "14px",
+              letterSpacing: "0.01em",
+              boxShadow: finalCanAddToCart
+                ? added
+                  ? "0 12px 24px rgba(22,163,74,0.20)"
+                  : isLight
+                  ? "0 12px 24px rgba(37,99,235,0.20)"
+                  : "0 12px 24px rgba(37,99,235,0.24)"
+                : "none",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {!finalCanAddToCart
+              ? isEntireProductOutOfStock
+                ? "Out of stock"
+                : selectedVariantOutOfStock
+                ? `${selectedOption || optionLabel} is out of stock`
+                : isCartLimitReached
+                ? "Already added"
+                : `Select ${optionLabel}`
+              : added
+              ? "Added to cart"
+              : resolvedAddToCartText}
+          </button>
         </div>
       )}
     </section>

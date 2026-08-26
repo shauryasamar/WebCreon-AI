@@ -1,3 +1,5 @@
+import { API_BASE_URL } from "../config/api";
+
 export function optimizeImageUrl(
   url?: string | null,
   width = 600,
@@ -7,6 +9,12 @@ export function optimizeImageUrl(
   if (!url || typeof url !== "string") return "";
   const trimmed = url.trim();
   if (!trimmed) return "";
+
+  // If it's a backend relative upload URL e.g. /uploads/product-reviews/... or /uploads/products/...
+  if (trimmed.startsWith("/uploads/") || trimmed.startsWith("uploads/")) {
+    const cleanPath = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+    return `${API_BASE_URL}${cleanPath}`;
+  }
 
   // If it's an Unsplash image, inject dynamic CDN resizing and WebP conversion
   if (trimmed.includes("images.unsplash.com")) {
