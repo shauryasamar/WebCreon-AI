@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   createCheckoutAddress,
   deleteCheckoutAddress,
@@ -230,6 +230,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
   const [isDeleting, setIsDeleting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [showMapPicker, setShowMapPicker] = useState(false);
+  const deliverySectionRef = useRef<HTMLElement>(null);
   const [selectedDeliverability, setSelectedDeliverability] = useState<DeliverabilityResult | null>(null);
   const [draftDeliverability, setDraftDeliverability] = useState<DeliverabilityResult | null>(null);
   const [isCheckingDeliverability, setIsCheckingDeliverability] = useState(false);
@@ -727,6 +728,12 @@ useEffect(() => {
     if (formMode === "hidden") {
       setFormMode("add");
     }
+
+    if (isMobile) {
+      setTimeout(() => {
+        deliverySectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    }
   };
 
   const selectedAddress =
@@ -795,7 +802,24 @@ useEffect(() => {
     ? !selectedDeliverability.check_required || selectedDeliverability.deliverable
     : true;
 
-  const disableContinue = !selectedAddress || continueDisabled || !isSelectedDeliverable;
+  const disableContinue = !selectedAddress || !isSelectedDeliverable;
+
+  const handleContinueClick = () => {
+    if (!selectedAddress) {
+      setErrorMessage("Please select or add a delivery address to proceed.");
+      return;
+    }
+    if (!isSelectedDeliverable) {
+      setErrorMessage("Sorry, we currently do not deliver to this location. Please select another address.");
+      return;
+    }
+    if (continueDisabled) {
+      setErrorMessage("Please complete the required address fields (Full Name, 10-digit Phone, Street Address, City, 6-digit Pincode).");
+      return;
+    }
+    setErrorMessage("");
+    onContinue?.();
+  };
   const showAddressList = addresses.length > 0;
   const showForm = formMode !== "hidden";
   const isSplitView = showForm && !compact && !isMobile;
@@ -825,6 +849,7 @@ useEffect(() => {
 
   return (
     <section
+      ref={deliverySectionRef}
       style={{
         width: "100%",
         maxWidth: max_width ? `${max_width}px` : undefined,
@@ -931,6 +956,7 @@ useEffect(() => {
               minWidth: 0,
               display: "grid",
               gap: "12px",
+              order: isMobile && showForm ? 2 : 1,
             }}
           >
             {isAddressesLoading ? (
@@ -1167,6 +1193,7 @@ useEffect(() => {
               style={{
                 minWidth: 0,
                 overflow: "hidden",
+                order: isMobile && showForm ? 1 : 2,
               }}
             >
               <div
@@ -1648,8 +1675,8 @@ useEffect(() => {
         >
           <button
             type="button"
-            onClick={onContinue}
-            disabled={disableContinue}
+            onClick={handleContinueClick}
+            disabled={isCheckingDeliverability}
             style={{
               minHeight: "42px",
               minWidth: isMobile ? "100%" : "120px",
@@ -1663,7 +1690,7 @@ useEffect(() => {
               padding: "0 18px",
               fontSize: "13px",
               fontWeight: 700,
-              cursor: disableContinue ? "not-allowed" : "pointer",
+              cursor: isCheckingDeliverability ? "wait" : "pointer",
             }}
           >
             {isCheckingDeliverability ? "Checking..." : "Continue"}
@@ -1704,7 +1731,7 @@ useEffect(() => {
         onClose={() => setShowMapPicker(false)}
         onConfirm={handleMapConfirm}
         accentColor={resolvedAccent}
-        theme={theme}
+        theme={isDark ? "dark" : "light"}
         backgroundColor={palette.panelBg}
         inputColor={palette.inputBg}
         textColor={palette.text}

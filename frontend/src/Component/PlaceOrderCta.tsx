@@ -78,6 +78,19 @@ function isErrorResponse(data: unknown): data is ErrorResponse {
   return typeof data === "object" && data !== null && "detail" in data;
 }
 
+function extractApiErrorMessage(data: unknown, fallback: string): string {
+  if (typeof data === "string" && data.trim()) return data.trim();
+  if (data && typeof data === "object") {
+    const obj = data as Record<string, any>;
+    if (typeof obj.detail === "string" && obj.detail.trim()) return obj.detail.trim();
+    if (Array.isArray(obj.detail)) {
+      return obj.detail.map((e: any) => e.msg || e.message || JSON.stringify(e)).join(", ");
+    }
+    if (typeof obj.message === "string" && obj.message.trim()) return obj.message.trim();
+  }
+  return fallback;
+}
+
 export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
   siteId,
   buttonLabel = "Place order",
@@ -186,10 +199,7 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
         }
 
         if (!response.ok) {
-          if (isErrorResponse(data) && typeof data.detail === "string") {
-            throw new Error(data.detail);
-          }
-          throw new Error(`Failed to place COD order (${response.status})`);
+          throw new Error(extractApiErrorMessage(data, `Failed to place COD order (${response.status})`));
         }
 
         if (!isPlaceOrderApiResponse(data)) {
@@ -222,10 +232,7 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
       }
 
       if (!initResponse.ok) {
-        if (isErrorResponse(initData) && typeof initData.detail === "string") {
-          throw new Error(initData.detail);
-        }
-        throw new Error(`Failed to initialize payment (${initResponse.status})`);
+        throw new Error(extractApiErrorMessage(initData, `Failed to initialize payment (${initResponse.status})`));
       }
 
       if (!isCreatePaymentOrderApiResponse(initData)) {
@@ -233,6 +240,18 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
       }
 
       const { order_id, razorpay_order_id, amount, currency, key_id } = initData;
+
+      // Persist pending order in storage to handle mobile bank page redirects
+      const pendingOrderData = {
+        siteId,
+        order_id,
+        razorpay_order_id,
+        timestamp: Date.now(),
+      };
+      try {
+        sessionStorage.setItem("pending_checkout_order", JSON.stringify(pendingOrderData));
+        localStorage.setItem("pending_checkout_order", JSON.stringify(pendingOrderData));
+      } catch {}
 
       // Validate VPA so email addresses don't break Razorpay's UPI modal
       const rawVpa = paymentData?.upiId?.trim() || "";
@@ -247,7 +266,7 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
       const targetMethod = isCard ? "card" : isNetbanking ? "netbanking" : isWallet ? "wallet" : "upi";
       const targetName = isCard ? "Card" : isNetbanking ? "Netbanking" : isWallet ? "Wallet" : "UPI";
 
-      // Launch Razorpay Checkout locked exclusively to the chosen instrument
+      // Launch standard in-app Razorpay modal (prevents mobile browser full-page redirects)
       await openRazorpay({
         key: key_id,
         amount: amount,
@@ -256,24 +275,8 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
         description: `Order #${order_id.slice(0, 8).toUpperCase()}`,
         order_id: razorpay_order_id.startsWith("order_mock_") ? undefined : razorpay_order_id,
         prefill: {
-          contact: "+918825255108",
-          email: "customer@example.com",
-          method: targetMethod,
-          vpa: validVpa,
-        },
-        config: {
-          display: {
-            blocks: {
-              chosen_only: {
-                name: `Pay with ${targetName}`,
-                instruments: [{ method: targetMethod }],
-              },
-            },
-            sequence: ["block.chosen_only"],
-            preferences: {
-              show_default_blocks: false, // Completely hides all other options & sidebar
-            },
-          },
+          method: targetMethod || undefined,
+          vpa: validVpa || undefined,
         },
         theme: {
           color: resolvedAccent,
@@ -348,6 +351,11 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
               alert(refundMsg);
               return;
             }
+
+            try {
+              sessionStorage.removeItem("pending_checkout_order");
+              localStorage.removeItem("pending_checkout_order");
+            } catch {}
 
             onOrderPlaced?.({
               orderId: verifyData.order_id || order_id,

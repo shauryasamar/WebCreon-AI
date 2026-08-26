@@ -110,7 +110,21 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [setAdmin]);
 
   useEffect(() => {
-    refreshAdmin();
+    if (typeof window === "undefined") return;
+    const path = window.location.pathname;
+    const hasAdminSession = Boolean(localStorage.getItem(ADMIN_STORAGE_KEY));
+    const isAdminRoute =
+      path.startsWith("/admin") ||
+      path.startsWith("/builder") ||
+      path.startsWith("/dashboard") ||
+      path.startsWith("/seller");
+
+    // Only query /auth/admin/me if visiting an admin route or an admin session is stored
+    if (hasAdminSession || isAdminRoute) {
+      refreshAdmin();
+    } else {
+      setLoading(false);
+    }
   }, [refreshAdmin]);
 
   return (

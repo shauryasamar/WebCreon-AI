@@ -183,12 +183,12 @@ const initialPaymentData: PaymentData = {
 
 function isDeliveryValid(data: DeliveryData) {
   return Boolean(
-    data.fullName.trim() &&
-      data.phone.trim() &&
-      data.email.trim() &&
-      data.address.trim() &&
-      data.city.trim() &&
-      data.pincode.trim()
+    data &&
+      data.fullName?.trim() &&
+      data.phone?.trim() &&
+      data.address?.trim() &&
+      data.city?.trim() &&
+      data.pincode?.trim()
   );
 }
 
@@ -354,6 +354,63 @@ const RenderPage: React.FC<RenderPageProps> = ({
     document.body.scrollTop = 0;
   }, [page?.id, (selectedProduct as any)?.id, checkoutStep]);
 
+  const resolvedBlocks = page?.blocks ?? [];
+
+  const isCheckoutPage =
+    page?.slug === "checkout" ||
+    page?.route === "/checkout" ||
+    page?.page_type === "checkout" ||
+    page?.flow === "checkout";
+
+  // Auto-verify any pending payment from mobile redirects (Netbanking / UPI)
+  useEffect(() => {
+    if (!siteId || !isAuthenticated || !isCheckoutPage) return;
+    const pendingRaw = sessionStorage.getItem("pending_checkout_order") || localStorage.getItem("pending_checkout_order");
+    if (!pendingRaw) return;
+
+    try {
+      const pending = JSON.parse(pendingRaw);
+      if (!pending || pending.siteId !== siteId || !pending.order_id) {
+        sessionStorage.removeItem("pending_checkout_order");
+        localStorage.removeItem("pending_checkout_order");
+        return;
+      }
+
+      // If pending order is older than 30 minutes, discard
+      if (pending.timestamp && Date.now() - pending.timestamp > 30 * 60 * 1000) {
+        sessionStorage.removeItem("pending_checkout_order");
+        localStorage.removeItem("pending_checkout_order");
+        return;
+      }
+
+      fetch(`${API_BASE_URL}/orders/${siteId}/verify-payment`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          order_id: pending.order_id,
+          razorpay_order_id: pending.razorpay_order_id,
+        }),
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data && (data.status === "placed" || data.payment_status === "paid")) {
+            sessionStorage.removeItem("pending_checkout_order");
+            localStorage.removeItem("pending_checkout_order");
+            setPlacedOrder({
+              orderId: data.order_id || pending.order_id,
+              status: "placed",
+              total: data.total,
+            });
+          }
+        })
+        .catch(() => {});
+    } catch {
+      sessionStorage.removeItem("pending_checkout_order");
+      localStorage.removeItem("pending_checkout_order");
+    }
+  }, [siteId, isAuthenticated, isCheckoutPage]);
+
   useEffect(() => {
     if (!siteId) return;
     if (authLoading) return;
@@ -407,14 +464,6 @@ const RenderPage: React.FC<RenderPageProps> = ({
       cancelled = true;
     };
   }, [siteId, isAuthenticated, authLoading]);
-
-  const resolvedBlocks = page?.blocks ?? [];
-
-  const isCheckoutPage =
-    page?.slug === "checkout" ||
-    page?.route === "/checkout" ||
-    page?.page_type === "checkout" ||
-    page?.flow === "checkout";
 
   const isCartPage =
     page?.slug === "cart" ||
@@ -963,10 +1012,15 @@ const RenderPage: React.FC<RenderPageProps> = ({
   const cardDivider = `1px solid ${resolvedBorderColor}`;
 
   const selectedAddress =
-    savedAddresses.find((address) => address.id === selectedAddressId) || null;
+    savedAddresses.find((address) => address.id === selectedAddressId) ||
+    savedAddresses.find((address) => address.isDefault) ||
+    (deliveryData?.id ? deliveryData : null) ||
+    savedAddresses[0] ||
+    null;
 
   const canContinueDelivery = Boolean(
-    selectedAddress && isDeliveryValid(selectedAddress)
+    (selectedAddress && isDeliveryValid(selectedAddress)) ||
+    (deliveryData && isDeliveryValid(deliveryData))
   );
   const canContinuePayment = isPaymentValid(paymentData);
 
@@ -1483,7 +1537,13 @@ const RenderPage: React.FC<RenderPageProps> = ({
                     setDeliveryData(address);
                   },
                   onDeliveryDataChange: setDeliveryData,
-                  onContinue: () => canContinueDelivery && goToStep("payment"),
+                  onContinue: () => {
+                    const effectiveAddressId = selectedAddressId || selectedAddress?.id || deliveryData?.id || null;
+                    if (effectiveAddressId && !selectedAddressId) {
+                      setSelectedAddressId(effectiveAddressId);
+                    }
+                    goToStep("payment");
+                  },
                   continueDisabled: !canContinueDelivery,
                 })
               : null}

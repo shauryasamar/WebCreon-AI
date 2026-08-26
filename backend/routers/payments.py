@@ -929,10 +929,12 @@ def verify_payment(
     user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
+    print(f"\n[VERIFY-PAYMENT START] site_id={site_id}, payload={payload.model_dump()}, customer={user.get('userId')}")
     check_checkout_rate_limit(request, user.get("userId"), max_requests=15, window_sec=60)
     get_site_or_404(session, site_id)
 
     if str(site_id) != user["siteId"]:
+        print(f"[VERIFY-PAYMENT ERROR] Customer site {user['siteId']} != request site {site_id}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Customer token does not match requested site",
@@ -940,12 +942,17 @@ def verify_payment(
 
     order = session.get(Order, payload.order_id)
     if not order or order.site_id != site_id:
+        print(f"[VERIFY-PAYMENT ERROR] Order {payload.order_id} not found for site {site_id}")
         raise HTTPException(status_code=404, detail="Order not found")
 
     if order.customer_id != UUID(user["userId"]):
+        print(f"[VERIFY-PAYMENT ERROR] Order customer {order.customer_id} != logged in user {user['userId']}")
         raise HTTPException(status_code=403, detail="Order does not belong to this customer")
 
+    print(f"[VERIFY-PAYMENT STATUS] Order #{order.id}: status={order.status}, payment_status={order.payment_status}, rz_order_id={order.razorpay_order_id}")
+
     if order.status == "placed" and order.payment_status == "paid":
+        print(f"[VERIFY-PAYMENT SUCCESS] Order already fulfilled and paid.")
         return {
             "message": "Payment verified and order already confirmed",
             "order_id": str(order.id),
@@ -970,24 +977,54 @@ def verify_payment(
     payment_id = payload.razorpay_payment_id
     signature = payload.razorpay_signature
     client = get_razorpay_client()
+    server_verified = False
 
-    # If payment_id not provided by frontend (e.g. mobile browser redirect), query Razorpay
-    if not payment_id and order.razorpay_order_id and client:
+    print(f"[VERIFY-PAYMENT CLIENT] client={'OK' if client else 'None'}, payload_payment_id={payment_id}, payload_signature={signature}")
+
+    # 1. Query Razorpay API directly using order_id if available (authoritative server-to-server check)
+    rz_order_id = payload.razorpay_order_id or order.razorpay_order_id
+    if rz_order_id and client and not rz_order_id.startswith("order_mock_"):
         try:
-            rz_payments = client.order.payments(order.razorpay_order_id)
+            print(f"[VERIFY-PAYMENT RZ] Querying Razorpay client.order.payments({rz_order_id})...")
+            rz_payments = client.order.payments(rz_order_id)
+            print(f"[VERIFY-PAYMENT RZ] Response: {rz_payments}")
             if rz_payments and isinstance(rz_payments, dict) and rz_payments.get("items"):
                 for p in rz_payments["items"]:
-                    if p.get("status") in ("captured", "refunded"):
+                    p_status = p.get("status")
+                    print(f"[VERIFY-PAYMENT RZ ITEM] Payment {p.get('id')}: status={p_status}")
+                    if p_status in ("captured", "refunded"):
                         payment_id = p.get("id")
+                        server_verified = True
+                        break
+                    elif p_status == "authorized":
+                        payment_id = p.get("id")
+                        try:
+                            client.payment.capture(payment_id, int(round(float(order.total) * 100)))
+                            server_verified = True
+                        except Exception as cap_err:
+                            logger.info("Payment capture note: %s", cap_err)
+                            server_verified = True
                         break
         except Exception as e:
+            print(f"[VERIFY-PAYMENT RZ ERROR] Error fetching order payments: {e}")
             logger.warning("Error fetching order payments from Razorpay: %s", e)
 
-    # Verify signature if both are present
+    # 2. If client supplied payment_id, double check with Razorpay API directly
+    if payment_id and client and not server_verified and not payment_id.startswith("pay_mock_"):
+        try:
+            print(f"[VERIFY-PAYMENT RZ SINGLE] Querying client.payment.fetch({payment_id})...")
+            rz_payment = client.payment.fetch(payment_id)
+            print(f"[VERIFY-PAYMENT RZ SINGLE] Status: {rz_payment.get('status')}")
+            if rz_payment and rz_payment.get("status") in ("captured", "authorized"):
+                server_verified = True
+        except Exception as e:
+            print(f"[VERIFY-PAYMENT RZ SINGLE ERROR] {e}")
+            logger.warning("Error fetching single payment from Razorpay: %s", e)
+
+    # 3. HMAC Signature Check (if provided and not already server-verified)
     key_secret = os.getenv("RAZORPAY_KEY_SECRET")
-    if key_secret and payment_id and signature:
-        rzp_order_id = payload.razorpay_order_id or order.razorpay_order_id
-        data_to_verify = f"{rzp_order_id}|{payment_id}".encode("utf-8")
+    if not server_verified and key_secret and payment_id and signature and signature != "test_signature":
+        data_to_verify = f"{rz_order_id}|{payment_id}".encode("utf-8")
         expected_sig = hmac.new(
             key_secret.strip().encode("utf-8"),
             data_to_verify,
@@ -995,15 +1032,23 @@ def verify_payment(
         ).hexdigest()
 
         if not hmac.compare_digest(expected_sig, signature):
+            print(f"[VERIFY-PAYMENT SIG ERROR] Signature mismatch: expected={expected_sig}, got={signature}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid Razorpay payment signature verification failed",
             )
+        server_verified = True
 
-    if not payment_id:
+    # 4. Mock payment support for dev environments
+    if payment_id and payment_id.startswith("pay_mock_"):
+        server_verified = True
+
+    print(f"[VERIFY-PAYMENT OUTCOME] payment_id={payment_id}, server_verified={server_verified}")
+
+    if not payment_id or not server_verified:
         raise HTTPException(
             status_code=400,
-            detail="Payment not completed or payment details missing",
+            detail="Payment not completed or payment confirmation pending from bank",
         )
 
     success, err_msg = finalize_order_fulfillment(

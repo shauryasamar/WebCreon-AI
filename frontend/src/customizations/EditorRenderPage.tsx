@@ -178,12 +178,12 @@ const initialPaymentData: PaymentData = {
 
 function isDeliveryValid(data: DeliveryData) {
   return Boolean(
-    data.fullName.trim() &&
-      data.phone.trim() &&
-      data.email.trim() &&
-      data.address.trim() &&
-      data.city.trim() &&
-      data.pincode.trim()
+    data &&
+      data.fullName?.trim() &&
+      data.phone?.trim() &&
+      data.address?.trim() &&
+      data.city?.trim() &&
+      data.pincode?.trim()
   );
 }
 
