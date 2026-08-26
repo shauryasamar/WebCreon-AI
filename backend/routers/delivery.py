@@ -11,7 +11,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlmodel import Session, select
 
 from auth_middleware import authenticate_admin, authenticate_rider, enforce_site_ownership
@@ -208,7 +208,23 @@ class DeliverySettingsUpdate(BaseModel):
     sender_pincode: Optional[str] = None
     sender_city: Optional[str] = None
     sender_state: Optional[str] = None
+    sender_latitude: Optional[float] = None
+    sender_longitude: Optional[float] = None
+    shiprocket_delivery_radius_km: Optional[float] = None
     default_weight_grams: Optional[int] = None
+
+    @field_validator("shiprocket_email")
+    @classmethod
+    def validate_shiprocket_email(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        v = v.strip()
+        if not v:
+            return None
+        import re
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", v):
+            raise ValueError("Please provide a valid Shiprocket account email address (e.g. name@domain.com).")
+        return v
 
 
 class AgentCreate(BaseModel):
@@ -322,6 +338,9 @@ def get_delivery_settings(
         "sender_pincode": settings.sender_pincode,
         "sender_city": settings.sender_city,
         "sender_state": settings.sender_state,
+        "sender_latitude": getattr(settings, "sender_latitude", None),
+        "sender_longitude": getattr(settings, "sender_longitude", None),
+        "shiprocket_delivery_radius_km": getattr(settings, "shiprocket_delivery_radius_km", None),
         "default_weight_grams": settings.default_weight_grams,
     }
 
@@ -412,6 +431,12 @@ def update_delivery_settings(
         settings.sender_city = body.sender_city
     if body.sender_state is not None:
         settings.sender_state = body.sender_state
+    if body.sender_latitude is not None:
+        settings.sender_latitude = body.sender_latitude
+    if body.sender_longitude is not None:
+        settings.sender_longitude = body.sender_longitude
+    if body.shiprocket_delivery_radius_km is not None:
+        settings.shiprocket_delivery_radius_km = body.shiprocket_delivery_radius_km if body.shiprocket_delivery_radius_km > 0 else None
     if body.default_weight_grams is not None:
         settings.default_weight_grams = max(1, body.default_weight_grams)
 

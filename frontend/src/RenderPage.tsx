@@ -1448,6 +1448,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
           >
             {deliveryBlock
               ? renderBlock(deliveryBlock, blocksToRender.indexOf(deliveryBlock), {
+                  siteId,
                   compact: false,
                   currentStep: "delivery",
                   deliveryData,

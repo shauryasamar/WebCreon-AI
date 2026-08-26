@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { Pagination } from "./Pagination";
 import GlassToast from "./GlassToast";
+import { GoogleMapPicker, GeoPickerResult } from "./GoogleMapPicker";
 
 export type DeliveryMode = "own_agent" | "shiprocket" | "hybrid" | "manual";
 
@@ -25,6 +26,9 @@ export type DeliverySettingsData = {
   sender_pincode: string;
   sender_city: string;
   sender_state: string;
+  sender_latitude?: number | null;
+  sender_longitude?: number | null;
+  shiprocket_delivery_radius_km?: number | null;
   default_weight_grams: number;
 };
 
@@ -214,6 +218,7 @@ export default function DeliverySettingsPage() {
   const [loadingSettings, setLoadingSettings] = useState(!cachedSettings);
   const [savingSettings, setSavingSettings] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
+  const [showStoreMapPicker, setShowStoreMapPicker] = useState(false);
 
   // Top 3-Tab navigation: fleet | shiprocket | manual
   type DeliveryTab = "fleet" | "shiprocket" | "manual";
@@ -353,6 +358,15 @@ export default function DeliverySettingsPage() {
         ...(overrides || {}),
       };
 
+      if (payload.shiprocket_email && payload.shiprocket_email.trim()) {
+        const emailClean = payload.shiprocket_email.trim();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailClean)) {
+          showFeedback("Please enter a valid Shiprocket account email address (e.g. name@domain.com)", "error");
+          setSavingSettings(false);
+          return;
+        }
+      }
+
       const body: Record<string, any> = {
         delivery_mode: payload.delivery_mode,
         enable_fleet: Boolean(payload.enable_fleet),
@@ -360,7 +374,7 @@ export default function DeliverySettingsPage() {
         enable_manual: Boolean(payload.enable_manual),
         own_delivery_radius_km: Number(payload.own_delivery_radius_km) || 10,
         allow_open_pickup: payload.allow_open_pickup !== undefined ? Boolean(payload.allow_open_pickup) : true,
-        shiprocket_email: payload.shiprocket_email || "",
+        shiprocket_email: payload.shiprocket_email?.trim() || "",
         default_courier_preference: payload.default_courier_preference || "",
         auto_assign_courier: Boolean(payload.auto_assign_courier),
         sender_name: payload.sender_name || "",
@@ -369,6 +383,9 @@ export default function DeliverySettingsPage() {
         sender_pincode: payload.sender_pincode || "",
         sender_city: payload.sender_city || "",
         sender_state: payload.sender_state || "",
+        sender_latitude: payload.sender_latitude !== undefined ? payload.sender_latitude : null,
+        sender_longitude: payload.sender_longitude !== undefined ? payload.sender_longitude : null,
+        shiprocket_delivery_radius_km: payload.shiprocket_delivery_radius_km !== undefined ? (Number(payload.shiprocket_delivery_radius_km) || null) : null,
         default_weight_grams: Number(payload.default_weight_grams) || 500,
       };
 
@@ -384,8 +401,14 @@ export default function DeliverySettingsPage() {
       });
 
       if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(errText || "Failed to save settings");
+        const errData = await res.json().catch(() => null);
+        let errMsg = "Failed to save settings";
+        if (typeof errData?.detail === "string") {
+          errMsg = errData.detail;
+        } else if (Array.isArray(errData?.detail) && errData.detail[0]?.msg) {
+          errMsg = errData.detail.map((e: any) => e.msg).join(", ");
+        }
+        throw new Error(errMsg);
       }
 
       showFeedback("Delivery settings saved successfully", "success");
@@ -401,6 +424,10 @@ export default function DeliverySettingsPage() {
 
   const testShiprocket = async () => {
     if (!siteId) return;
+    if (!settings.shiprocket_email || !settings.shiprocket_email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(settings.shiprocket_email.trim())) {
+      showFeedback("Please enter and save a valid Shiprocket account email address first.", "error");
+      return;
+    }
     setTestingConnection(true);
     try {
       const res = await fetch(`${API_BASE_URL}/delivery/settings/${siteId}/test-shiprocket`, {
@@ -709,6 +736,30 @@ export default function DeliverySettingsPage() {
       : activeTab === "shiprocket"
       ? isShiprocketEnabled
       : isManualEnabled;
+
+  const handleStoreMapConfirm = async (result: GeoPickerResult) => {
+    setShowStoreMapPicker(false);
+    const updatedSettings = {
+      ...settings,
+      sender_latitude: result.lat,
+      sender_longitude: result.lng,
+      // Auto-fill all warehouse / store pickup address fields from reverse geocode
+      sender_address: result.addressLine || settings.sender_address,
+      sender_city: result.city || settings.sender_city,
+      sender_state: result.state || settings.sender_state,
+      sender_pincode: result.pincode || settings.sender_pincode,
+    };
+    setSettings(updatedSettings);
+    await saveSettings({
+      sender_latitude: result.lat,
+      sender_longitude: result.lng,
+      sender_address: updatedSettings.sender_address,
+      sender_city: updatedSettings.sender_city,
+      sender_state: updatedSettings.sender_state,
+      sender_pincode: updatedSettings.sender_pincode,
+    });
+    showFeedback("Store & Warehouse location updated from Map!", "success");
+  };
 
   if (loadingSettings) {
     return (
@@ -1225,8 +1276,8 @@ export default function DeliverySettingsPage() {
                   gap: "12px",
                 }}
               >
-                {/* Left: Compact Serviceable Radius */}
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                {/* Left: Compact Serviceable Radius + Store Location Pin */}
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                   <span style={{ fontSize: "12px", fontWeight: 600, color: "#475569", whiteSpace: "nowrap" }}>
                     Serviceable Radius:
                   </span>
@@ -1279,6 +1330,35 @@ export default function DeliverySettingsPage() {
                       KM
                     </span>
                   </div>
+
+                  {/* Store Location Pin Button */}
+                  <button
+                    type="button"
+                    onClick={() => setShowStoreMapPicker(true)}
+                    style={{
+                      height: "28px",
+                      padding: "0 10px",
+                      border: `1px solid ${settings.sender_latitude ? "#2563eb" : "#cbd5e1"}`,
+                      borderRadius: "5px",
+                      background: settings.sender_latitude ? "#eff6ff" : "#ffffff",
+                      color: settings.sender_latitude ? "#1d4ed8" : "#475569",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      whiteSpace: "nowrap",
+                    }}
+                    title="Pin your store location on the map for accurate delivery radius calculation"
+                  >
+                    📍 {settings.sender_latitude ? "Store Location Set ✓" : "Set Store Location"}
+                  </button>
+                  {settings.sender_latitude && (
+                    <span style={{ fontSize: "11px", color: "#16a34a", fontWeight: 500 }}>
+                      Orders within {settings.own_delivery_radius_km} km will be accepted
+                    </span>
+                  )}
                 </div>
 
                 {/* Right: Add Agent Button */}
@@ -1989,58 +2069,138 @@ export default function DeliverySettingsPage() {
                 </div>
               </div>
 
-              {/* Card 2: Pickup Origin & Warehouse Address */}
+              {/* Card 2: Pickup Origin Warehouse Location & Coverage Limits */}
               <div
                 style={{
                   background: "#ffffff",
                   borderRadius: "8px",
                   border: "1px solid #e2e8f0",
-                  padding: "14px 16px",
+                  padding: "12px 14px",
                   display: "flex",
                   flexDirection: "column",
                   gap: "10px",
                 }}
               >
-                <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#0f172a", marginBottom: "2px" }}>
-                  Pickup Origin Warehouse Location
+                {/* Header: Title + Map Pin Action */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+                  <div>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
+                      Pickup Origin Warehouse Location
+                    </div>
+                    <div style={{ fontSize: "11.5px", color: "#64748b" }}>
+                      Accurate dispatch coordinates for Shiprocket courier pickups & serviceability.
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowStoreMapPicker(true)}
+                    style={{
+                      padding: "5px 10px",
+                      borderRadius: "6px",
+                      border: "1px solid #cbd5e1",
+                      background: settings.sender_latitude ? "#f0fdf4" : "#eff6ff",
+                      color: settings.sender_latitude ? "#15803d" : "#1d4ed8",
+                      borderColor: settings.sender_latitude ? "#bbf7d0" : "#bfdbfe",
+                      fontSize: "11.5px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                      <circle cx="12" cy="10" r="3" />
+                    </svg>
+                    <span>{settings.sender_latitude ? "Re-pin on Map" : "Pin on Map (Required)"}</span>
+                  </button>
                 </div>
 
-                {/* Row 1: Sender Name & Phone */}
+                {/* Map Pin Locked Address Box */}
+                {settings.sender_latitude ? (
+                  <div
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: "6px",
+                      background: "#f8fafc",
+                      border: "1px solid #e2e8f0",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "8px",
+                      fontSize: "12px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", overflow: "hidden" }}>
+                      <span style={{ color: "#16a34a", fontWeight: 700, fontSize: "10.5px", background: "#dcfce7", padding: "1px 6px", borderRadius: "4px", flexShrink: 0 }}>
+                        MAP LOCKED
+                      </span>
+                      <span style={{ color: "#334155", fontWeight: 500, whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
+                        {[settings.sender_address, settings.sender_city, settings.sender_state, settings.sender_pincode].filter(Boolean).join(", ") || "Pinned Location"}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: "11px", color: "#64748b", fontFamily: "monospace", flexShrink: 0 }}>
+                      {settings.sender_latitude.toFixed(4)}, {settings.sender_longitude?.toFixed(4)}
+                    </span>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => setShowStoreMapPicker(true)}
+                    style={{
+                      padding: "10px",
+                      borderRadius: "6px",
+                      background: "#fffbeb",
+                      border: "1px dashed #fde68a",
+                      color: "#92400e",
+                      fontSize: "12px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <span>No warehouse location pinned. Click to drop a pin on Google Maps.</span>
+                    <span style={{ fontWeight: 600, textDecoration: "underline" }}>Open Map &rarr;</span>
+                  </div>
+                )}
+
+                {/* Compact Row: Sender Name, Phone, Flat/Unit Detail, Box Weight */}
                 <div
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                    gap: "10px 16px",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+                    gap: "8px 12px",
                   }}
                 >
-                  <label style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-                    <span style={labelStyle}>Store / Sender Name</span>
+                  <label style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                    <span style={labelStyle}>Sender Name</span>
                     <input
                       type="text"
-                      placeholder="e.g. Warehouse Manager"
+                      placeholder="Warehouse Manager"
                       value={settings.sender_name}
                       onChange={(e) => setSettings((p) => ({ ...p, sender_name: e.target.value }))}
-                      style={{ ...inputStyle, height: "34px" }}
+                      style={{ ...inputStyle, height: "30px", fontSize: "12px" }}
                     />
                   </label>
 
-                  <label style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-                    <span style={labelStyle}>Sender Phone (10 Digits)</span>
+                  <label style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                    <span style={labelStyle}>Sender Phone</span>
                     <div style={{ display: "flex", alignItems: "center" }}>
                       <span
                         style={{
-                          height: "34px",
+                          height: "30px",
                           display: "inline-flex",
                           alignItems: "center",
-                          padding: "0 9px",
+                          padding: "0 7px",
                           background: "#f1f5f9",
                           border: "1px solid #cbd5e1",
                           borderRight: "none",
                           borderRadius: "6px 0 0 6px",
-                          fontSize: "12px",
+                          fontSize: "11px",
                           fontWeight: 600,
                           color: "#475569",
-                          whiteSpace: "nowrap",
                           boxSizing: "border-box",
                         }}
                       >
@@ -2057,72 +2217,23 @@ export default function DeliverySettingsPage() {
                             sender_phone: e.target.value.replace(/\D/g, "").slice(0, 10),
                           }))
                         }
-                        style={{ ...inputStyle, height: "34px", borderRadius: "0 6px 6px 0" }}
+                        style={{ ...inputStyle, height: "30px", fontSize: "12px", borderRadius: "0 6px 6px 0" }}
                       />
                     </div>
                   </label>
-                </div>
 
-                {/* Row 2: Street Address */}
-                <label style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-                  <span style={labelStyle}>Pickup Street Address & Landmark</span>
-                  <input
-                    type="text"
-                    placeholder="e.g. Plot 42, Sector 5, HSR Layout"
-                    value={settings.sender_address}
-                    onChange={(e) => setSettings((p) => ({ ...p, sender_address: e.target.value }))}
-                    style={{ ...inputStyle, height: "34px" }}
-                  />
-                </label>
-
-                {/* Row 3: City, State, Pincode, Default Weight */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-                    gap: "10px 14px",
-                  }}
-                >
-                  <label style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-                    <span style={labelStyle}>City</span>
+                  <label style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                    <span style={labelStyle}>Unit / Building / Plot No.</span>
                     <input
                       type="text"
-                      placeholder="e.g. Bangalore"
-                      value={settings.sender_city}
-                      onChange={(e) => setSettings((p) => ({ ...p, sender_city: e.target.value }))}
-                      style={{ ...inputStyle, height: "34px" }}
+                      placeholder="e.g. Unit 4, Gate B"
+                      value={settings.sender_address}
+                      onChange={(e) => setSettings((p) => ({ ...p, sender_address: e.target.value }))}
+                      style={{ ...inputStyle, height: "30px", fontSize: "12px" }}
                     />
                   </label>
 
-                  <label style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-                    <span style={labelStyle}>State</span>
-                    <input
-                      type="text"
-                      placeholder="e.g. Karnataka"
-                      value={settings.sender_state}
-                      onChange={(e) => setSettings((p) => ({ ...p, sender_state: e.target.value }))}
-                      style={{ ...inputStyle, height: "34px" }}
-                    />
-                  </label>
-
-                  <label style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-                    <span style={labelStyle}>Pincode</span>
-                    <input
-                      type="text"
-                      maxLength={6}
-                      placeholder="560102"
-                      value={settings.sender_pincode}
-                      onChange={(e) =>
-                        setSettings((p) => ({
-                          ...p,
-                          sender_pincode: e.target.value.replace(/\D/g, "").slice(0, 6),
-                        }))
-                      }
-                      style={{ ...inputStyle, height: "34px" }}
-                    />
-                  </label>
-
-                  <label style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                  <label style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
                     <span style={labelStyle}>Default Box Weight</span>
                     <div style={{ display: "flex", alignItems: "center" }}>
                       <input
@@ -2137,29 +2248,95 @@ export default function DeliverySettingsPage() {
                             default_weight_grams: Number(e.target.value) || 0,
                           }))
                         }
-                        style={{ ...inputStyle, height: "34px", borderRadius: "6px 0 0 6px" }}
+                        style={{ ...inputStyle, height: "30px", fontSize: "12px", borderRadius: "6px 0 0 6px" }}
                       />
                       <span
                         style={{
-                          height: "34px",
+                          height: "30px",
                           display: "inline-flex",
                           alignItems: "center",
-                          padding: "0 9px",
+                          padding: "0 7px",
                           background: "#f1f5f9",
                           border: "1px solid #cbd5e1",
                           borderLeft: "none",
                           borderRadius: "0 6px 6px 0",
-                          fontSize: "11.5px",
+                          fontSize: "11px",
                           fontWeight: 600,
                           color: "#475569",
-                          whiteSpace: "nowrap",
                           boxSizing: "border-box",
                         }}
                       >
-                        Grams
+                        g
                       </span>
                     </div>
                   </label>
+                </div>
+
+                {/* Sleek Compact Inline Delivery Coverage */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: "8px",
+                    padding: "8px 10px",
+                    background: "#f8fafc",
+                    borderRadius: "6px",
+                    border: "1px solid #f1f5f9",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a" }}>
+                      Delivery Coverage:
+                    </span>
+                    <span style={{ fontSize: "11px", color: "#64748b" }}>
+                      {settings.shiprocket_delivery_radius_km
+                        ? `Max ${settings.shiprocket_delivery_radius_km} km radius from pinned warehouse`
+                        : "Nationwide (All serviceable pincodes across India)"}
+                    </span>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <label style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", color: "#334155", cursor: "pointer" }}>
+                      <input
+                        type="radio"
+                        name="sr_coverage_compact"
+                        checked={!settings.shiprocket_delivery_radius_km}
+                        onChange={() => setSettings((p) => ({ ...p, shiprocket_delivery_radius_km: null }))}
+                      />
+                      Nationwide
+                    </label>
+
+                    <label style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", color: "#334155", cursor: "pointer" }}>
+                      <input
+                        type="radio"
+                        name="sr_coverage_compact"
+                        checked={Boolean(settings.shiprocket_delivery_radius_km)}
+                        onChange={() => setSettings((p) => ({ ...p, shiprocket_delivery_radius_km: p.shiprocket_delivery_radius_km || 500 }))}
+                      />
+                      Limit Radius:
+                    </label>
+
+                    {Boolean(settings.shiprocket_delivery_radius_km) && (
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                        <input
+                          type="number"
+                          min={1}
+                          max={5000}
+                          value={settings.shiprocket_delivery_radius_km || 500}
+                          onChange={(e) =>
+                            setSettings((p) => ({
+                              ...p,
+                              shiprocket_delivery_radius_km: Math.max(1, Number(e.target.value) || 0),
+                            }))
+                          }
+                          style={{ ...inputStyle, width: "65px", height: "26px", fontSize: "11.5px", padding: "2px 6px" }}
+                        />
+                        <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b" }}>KM</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
         </div>
@@ -2209,6 +2386,19 @@ export default function DeliverySettingsPage() {
           </div>
         </div>
       )}
+
+      {/* Store Location Map Picker Modal */}
+      <GoogleMapPicker
+        siteId={siteId || ""}
+        isOpen={showStoreMapPicker}
+        onClose={() => setShowStoreMapPicker(false)}
+        onConfirm={handleStoreMapConfirm}
+        accentColor="#2563eb"
+        deliveryMode="own_agent"
+        mode="store"
+        initialLat={settings.sender_latitude ?? undefined}
+        initialLng={settings.sender_longitude ?? undefined}
+      />
     </div>
   );
 }

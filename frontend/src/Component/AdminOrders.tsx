@@ -95,6 +95,26 @@ type Shipment = {
   [key: string]: any;
 };
 
+export type ShippingAddress = {
+  fullName?: string;
+  full_name?: string;
+  addressLine1?: string;
+  address_line1?: string;
+  city?: string;
+  postalCode?: string;
+  postal_code?: string;
+  mobileNumber?: string;
+  mobile_number?: string;
+  email?: string;
+  addressType?: string;
+  address_type?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  geoAccuracy?: string | null;
+  geo_accuracy?: string | null;
+  [key: string]: any;
+};
+
 type AdminOrderListItem = {
   id: string;
   customer_id: string;
@@ -114,14 +134,7 @@ type AdminOrderListItem = {
   customer_name?: string | null;
   customer_phone?: string | null;
   customer_email?: string | null;
-  shipping_address?: {
-    fullName?: string;
-    addressLine1?: string;
-    city?: string;
-    postalCode?: string;
-    mobileNumber?: string;
-    email?: string;
-  } | null;
+  shipping_address?: ShippingAddress | null;
   shipment?: Shipment | null;
   items?: OrderItem[];
   item_count?: number;
@@ -142,14 +155,7 @@ type AdminOrderDetail = {
   payment_method: string;
   razorpay_payment_id?: string | null;
   razorpay_order_id?: string | null;
-  shipping_address?: {
-    fullName?: string;
-    addressLine1?: string;
-    city?: string;
-    postalCode?: string;
-    mobileNumber?: string;
-    email?: string;
-  } | null;
+  shipping_address?: ShippingAddress | null;
   pricing_snapshot?: any;
   delivery_otp?: string | null;
   created_at: string;
@@ -212,14 +218,7 @@ type AdminReturnListItem = {
   customer_name?: string | null;
   customer_phone?: string | null;
   customer_email?: string | null;
-  shipping_address?: {
-    fullName?: string;
-    addressLine1?: string;
-    city?: string;
-    postalCode?: string;
-    mobileNumber?: string;
-    email?: string;
-  } | null;
+  shipping_address?: ShippingAddress | null;
   status: ReturnStatus;
   refund_status: ReturnRefundStatus | string;
   request_note?: string | null;
@@ -329,14 +328,7 @@ type AdminReturnDetail = {
     total: number;
     created_at?: string | null;
     delivered_at?: string | null;
-    shipping_address?: {
-      fullName?: string;
-      addressLine1?: string;
-      city?: string;
-      postalCode?: string;
-      mobileNumber?: string;
-      email?: string;
-    } | null;
+    shipping_address?: ShippingAddress | null;
     pricing_snapshot?: any;
     [key: string]: any;
   };
@@ -3137,6 +3129,30 @@ const AdminOrders: React.FC = () => {
                                       <div>
                                         {[shippingAddress?.city, shippingAddress?.postalCode].filter(Boolean).join(" - ") || "—"}
                                       </div>
+                                      {(shippingAddress?.latitude && shippingAddress?.longitude) ? (
+                                        <div style={{ marginTop: "6px", paddingTop: "4px" }}>
+                                          <a
+                                            href={`https://www.google.com/maps?q=${shippingAddress.latitude},${shippingAddress.longitude}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            style={{
+                                              display: "inline-flex",
+                                              alignItems: "center",
+                                              gap: "4px",
+                                              fontSize: "12px",
+                                              fontWeight: 600,
+                                              color: "#2563eb",
+                                              textDecoration: "none",
+                                              background: "#eff6ff",
+                                              border: "1px solid #bfdbfe",
+                                              borderRadius: "4px",
+                                              padding: "2px 8px",
+                                            }}
+                                          >
+                                            📍 Open Exact Pinned Location on Maps
+                                          </a>
+                                        </div>
+                                      ) : null}
                                     </div>
 
                                     <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", fontSize: "13px", color: "#475569", marginTop: "2px" }}>
@@ -4681,6 +4697,30 @@ const AdminOrders: React.FC = () => {
                                     <div>
                                       {[detail?.order?.shipping_address?.city, detail?.order?.shipping_address?.postalCode].filter(Boolean).join(" - ") || "—"}
                                     </div>
+                                    {(detail?.order?.shipping_address?.latitude && detail?.order?.shipping_address?.longitude) ? (
+                                      <div style={{ marginTop: "6px", paddingTop: "4px" }}>
+                                        <a
+                                          href={`https://www.google.com/maps?q=${detail.order.shipping_address.latitude},${detail.order.shipping_address.longitude}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          style={{
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: "4px",
+                                            fontSize: "12px",
+                                            fontWeight: 600,
+                                            color: "#2563eb",
+                                            textDecoration: "none",
+                                            background: "#eff6ff",
+                                            border: "1px solid #bfdbfe",
+                                            borderRadius: "4px",
+                                            padding: "2px 8px",
+                                          }}
+                                        >
+                                          📍 Open Exact Pinned Location on Maps
+                                        </a>
+                                      </div>
+                                    ) : null}
                                   </div>
 
                                   <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", fontSize: "13px", color: "#475569", marginTop: "2px" }}>

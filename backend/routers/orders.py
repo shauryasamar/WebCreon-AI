@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from copy import deepcopy
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
@@ -161,6 +162,10 @@ def serialize_address_snapshot(address: UserAddress) -> dict[str, Any]:
         "email": address.email,
         "addressType": address.address_type,
         "address_type": address.address_type,
+        "latitude": getattr(address, "latitude", None),
+        "longitude": getattr(address, "longitude", None),
+        "geoAccuracy": getattr(address, "geo_accuracy", None),
+        "geo_accuracy": getattr(address, "geo_accuracy", None),
     }
 
 
@@ -1800,6 +1805,51 @@ def place_order(
     customer = get_user_for_site_or_404(session, site_id, UUID(user["userId"]))
     cart = get_cart_for_user_or_404(session, site_id, customer.id)
     address = get_address_for_user_or_404(session, site_id, customer.id, payload.address_id)
+
+    # Deliverability check for delivery radius
+    delivery_settings = session.exec(
+        select(DeliverySettings).where(DeliverySettings.site_id == site_id)
+    ).first()
+    if delivery_settings:
+        store_lat = getattr(delivery_settings, "sender_latitude", None)
+        store_lng = getattr(delivery_settings, "sender_longitude", None)
+        delivery_mode = delivery_settings.delivery_mode or "manual"
+
+        ef = getattr(delivery_settings, "enable_fleet", None)
+        es = getattr(delivery_settings, "enable_shiprocket", None)
+        is_fleet = bool(ef) if ef is not None else (delivery_mode in ("own_agent", "hybrid"))
+        is_sr = bool(es) if es is not None else (delivery_mode in ("shiprocket", "hybrid"))
+
+        fleet_radius_km = float(delivery_settings.own_delivery_radius_km or 10)
+        sr_radius_raw = getattr(delivery_settings, "shiprocket_delivery_radius_km", None)
+        sr_radius_km = float(sr_radius_raw) if (sr_radius_raw is not None and float(sr_radius_raw) > 0) else None
+
+        if store_lat is not None and store_lng is not None:
+            cust_lat = getattr(address, "latitude", None)
+            cust_lng = getattr(address, "longitude", None)
+            if cust_lat is not None and cust_lng is not None:
+                # Haversine distance in km
+                R = 6371.0
+                phi1, phi2 = math.radians(store_lat), math.radians(cust_lat)
+                dphi = math.radians(cust_lat - store_lat)
+                dlambda = math.radians(cust_lng - store_lng)
+                a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+                dist = R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+                if is_sr:
+                    if sr_radius_km is not None:
+                        effective_max = max(sr_radius_km, fleet_radius_km if is_fleet else 0.0)
+                        if dist > effective_max:
+                            raise HTTPException(
+                                status_code=400,
+                                detail="Sorry, we currently do not deliver to this address. Please choose a different delivery location.",
+                            )
+                elif is_fleet:
+                    if dist > fleet_radius_km:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Sorry, we currently do not deliver to this address. Please choose a different delivery location.",
+                        )
 
     cart_items = session.exec(
         select(CartItem).where(CartItem.cart_id == cart.id)

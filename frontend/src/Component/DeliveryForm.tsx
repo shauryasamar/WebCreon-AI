@@ -6,8 +6,11 @@ import {
   SavedAddress,
   setDefaultCheckoutAddress,
   updateCheckoutAddress,
+  checkDeliverability,
+  DeliverabilityResult,
 } from "../addressService";
 import { isColorDarkHex } from "../context/ThemeContext";
+import { GoogleMapPicker, GeoPickerResult, geocodeAddressText } from "./GoogleMapPicker";
 
 type ThemeInput =
   | "dark"
@@ -30,6 +33,9 @@ export type DeliveryFormData = {
   address: string;
   city: string;
   pincode: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  geoAccuracy?: string | null;
 };
 
 type DeliveryFormProps = {
@@ -62,6 +68,7 @@ type DeliveryFormProps = {
   onSavedAddressesChange?: (addresses: DeliveryFormData[]) => void;
   isAuthenticated?: boolean;
   isAddressesLoading?: boolean;
+  deliveryMode?: string; // 'own_agent' | 'shiprocket' | 'hybrid' | 'manual'
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -145,6 +152,9 @@ function mapSavedAddressToDeliveryData(address: SavedAddress): DeliveryFormData 
     address: address.addressLine1 || "",
     city: address.city || "",
     pincode: address.postalCode || "",
+    latitude: address.latitude ?? null,
+    longitude: address.longitude ?? null,
+    geoAccuracy: address.geoAccuracy ?? null,
   };
 }
 
@@ -158,6 +168,9 @@ function toAddressPayload(data: DeliveryFormData) {
     email: data.email.trim() || null,
     address_type: (data.label || "Home").trim(),
     is_default: Boolean(data.isDefault),
+    latitude: data.latitude ?? null,
+    longitude: data.longitude ?? null,
+    geo_accuracy: data.geoAccuracy ?? null,
   };
 }
 
@@ -171,6 +184,9 @@ const emptyDeliveryData: DeliveryFormData = {
   address: "",
   city: "",
   pincode: "",
+  latitude: null,
+  longitude: null,
+  geoAccuracy: null,
 };
 
 export const DeliveryForm: React.FC<DeliveryFormProps> = ({
@@ -203,6 +219,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
   onSavedAddressesChange,
   isAuthenticated = false,
   isAddressesLoading = false,
+  deliveryMode,
 }) => {
   const [addresses, setAddresses] = useState<DeliveryFormData[]>(savedAddresses);
   const [formMode, setFormMode] = useState<"hidden" | "add" | "edit">("hidden");
@@ -212,6 +229,10 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [showMapPicker, setShowMapPicker] = useState(false);
+  const [selectedDeliverability, setSelectedDeliverability] = useState<DeliverabilityResult | null>(null);
+  const [draftDeliverability, setDraftDeliverability] = useState<DeliverabilityResult | null>(null);
+  const [isCheckingDeliverability, setIsCheckingDeliverability] = useState(false);
 
   useEffect(() => {
     const syncViewport = () => {
@@ -429,10 +450,23 @@ useEffect(() => {
     (
       event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
     ) => {
-      const value =
+      let value: any =
         field === "isDefault"
           ? (event.target as HTMLInputElement).checked
           : event.target.value;
+
+      // Auto-sanitize inputs as the user types
+      if (field === "phone") {
+        // Digits only, max 10
+        value = (value as string).replace(/\D/g, "").slice(0, 10);
+      } else if (field === "pincode") {
+        // Digits only, max 6
+        value = (value as string).replace(/\D/g, "").slice(0, 6);
+      } else if (field === "fullName") {
+        value = (value as string).slice(0, 100);
+      } else if (field === "address") {
+        value = (value as string).slice(0, 255);
+      }
 
       const nextDraft = {
         ...draftAddress,
@@ -468,7 +502,8 @@ useEffect(() => {
     setDraftAddress(nextDraft);
     onDeliveryDataChange?.(nextDraft);
     setEditingAddressId(null);
-    setFormMode("add");
+    // Industry standard: Open map picker first when adding a new address
+    setShowMapPicker(true);
   };
 
   const handleEdit = (address: DeliveryFormData) => {
@@ -549,7 +584,61 @@ useEffect(() => {
       return;
     }
 
-    if (!isAddressValid(draftAddress)) return;
+    if (!draftAddress.latitude || !draftAddress.longitude) {
+      setErrorMessage("Please set your exact delivery location on the map.");
+      setShowMapPicker(true);
+      return;
+    }
+
+    const cleanName = (draftAddress.fullName || "").trim();
+    if (!cleanName || cleanName.length < 2) {
+      setErrorMessage("Please enter a valid receiver full name (at least 2 characters).");
+      return;
+    }
+
+    const cleanPhone = (draftAddress.phone || "").replace(/\D/g, "");
+    if (!cleanPhone || cleanPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanPhone)) {
+      setErrorMessage("Please enter a valid 10-digit mobile phone number starting with 6, 7, 8, or 9.");
+      return;
+    }
+
+    const cleanAddress = (draftAddress.address || "").trim();
+    if (!cleanAddress || cleanAddress.length < 2) {
+      setErrorMessage("Please enter your flat, house, or building number.");
+      return;
+    }
+
+    const cleanCity = (draftAddress.city || "").trim();
+    if (!cleanCity || cleanCity.length < 2) {
+      setErrorMessage("Please enter your city / locality.");
+      return;
+    }
+
+    const cleanPincode = (draftAddress.pincode || "").replace(/\D/g, "");
+    if (!cleanPincode || cleanPincode.length !== 6) {
+      setErrorMessage("Please enter a valid 6-digit postal code (pincode).");
+      return;
+    }
+
+    const cleanEmail = (draftAddress.email || "").trim();
+    if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setErrorMessage("Please enter a valid email address.");
+      return;
+    }
+
+    // Check deliverability before saving
+    if (siteId) {
+      try {
+        const checkRes = await checkDeliverability(siteId, draftAddress.latitude, draftAddress.longitude);
+        if (checkRes.check_required && !checkRes.deliverable) {
+          setErrorMessage("Sorry, we currently do not deliver to this address. Please select a different delivery location to continue.");
+          setDraftDeliverability(checkRes);
+          return;
+        }
+      } catch {
+        // network issue - allow fallback
+      }
+    }
 
     try {
       setIsSaving(true);
@@ -602,12 +691,111 @@ useEffect(() => {
     }
   };
 
+  const handleMapConfirm = async (result: GeoPickerResult) => {
+    setShowMapPicker(false);
+    
+    // Check deliverability on the confirmed pin
+    if (siteId) {
+      try {
+        const checkRes = await checkDeliverability(siteId, result.lat, result.lng);
+        setDraftDeliverability(checkRes);
+        if (checkRes.check_required && !checkRes.deliverable) {
+          setErrorMessage("Sorry, we currently do not deliver to this address. Please choose a different delivery location.");
+        } else {
+          setErrorMessage("");
+        }
+      } catch {
+        setDraftDeliverability(null);
+      }
+    }
+
+    // Pre-fill location fields from reverse geocoded pin
+    const nextDraft: DeliveryFormData = {
+      ...draftAddress,
+      latitude: result.lat,
+      longitude: result.lng,
+      geoAccuracy: result.geoAccuracy || "pinned",
+      // Pre-fill area/street if currently empty, keep user house number if already entered
+      address: draftAddress.address ? draftAddress.address : result.addressLine,
+      city: result.city || draftAddress.city,
+      pincode: result.pincode || draftAddress.pincode,
+    };
+    setDraftAddress(nextDraft);
+    onDeliveryDataChange?.(nextDraft);
+
+    // Open the details form to complete House / Flat No & receiver info
+    if (formMode === "hidden") {
+      setFormMode("add");
+    }
+  };
+
   const selectedAddress =
     addresses.find((address: DeliveryFormData) => address.id === selectedAddressId) ||
     addresses.find((address: DeliveryFormData) => address.isDefault) ||
     null;
 
-  const disableContinue = !selectedAddress || continueDisabled;
+  // Validate deliverability on selected address (including legacy addresses without lat/lng)
+  useEffect(() => {
+    if (!siteId || !selectedAddress) {
+      setSelectedDeliverability(null);
+      return;
+    }
+
+    let isMounted = true;
+
+    const checkSelected = async () => {
+      let lat = selectedAddress.latitude;
+      let lng = selectedAddress.longitude;
+
+      // If legacy saved address without coordinates, geocode text on the fly
+      if (!lat || !lng) {
+        const fullText = [selectedAddress.address, selectedAddress.city, selectedAddress.pincode]
+          .filter(Boolean)
+          .join(", ");
+        if (fullText.trim()) {
+          setIsCheckingDeliverability(true);
+          const geo = await geocodeAddressText(fullText);
+          if (geo && isMounted) {
+            lat = geo.lat;
+            lng = geo.lng;
+            selectedAddress.latitude = geo.lat;
+            selectedAddress.longitude = geo.lng;
+          }
+        }
+      }
+
+      if (lat && lng) {
+        setIsCheckingDeliverability(true);
+        try {
+          const res = await checkDeliverability(siteId, lat, lng);
+          if (isMounted) {
+            setSelectedDeliverability(res);
+          }
+        } catch {
+          if (isMounted) setSelectedDeliverability(null);
+        } finally {
+          if (isMounted) setIsCheckingDeliverability(false);
+        }
+      } else {
+        if (isMounted) {
+          setIsCheckingDeliverability(false);
+          setSelectedDeliverability(null);
+        }
+      }
+    };
+
+    checkSelected();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [siteId, selectedAddress?.id, selectedAddress?.latitude, selectedAddress?.longitude, selectedAddress?.address, selectedAddress?.city, selectedAddress?.pincode]);
+
+  const isSelectedDeliverable = selectedDeliverability
+    ? !selectedDeliverability.check_required || selectedDeliverability.deliverable
+    : true;
+
+  const disableContinue = !selectedAddress || continueDisabled || !isSelectedDeliverable;
   const showAddressList = addresses.length > 0;
   const showForm = formMode !== "hidden";
   const isSplitView = showForm && !compact && !isMobile;
@@ -860,6 +1048,29 @@ useEffect(() => {
                                 Default
                               </span>
                             ) : null}
+
+                            {address.latitude ? (
+                              <span
+                                style={{
+                                  fontSize: "10px",
+                                  fontWeight: 700,
+                                  color: "#15803d",
+                                  background: "#f0fdf4",
+                                  border: "1px solid #bbf7d0",
+                                  borderRadius: "999px",
+                                  padding: "2px 7px",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px",
+                                }}
+                              >
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                                  <circle cx="12" cy="10" r="3" />
+                                </svg>
+                                Pinned
+                              </span>
+                            ) : null}
                           </div>
 
                           <div
@@ -1029,6 +1240,68 @@ useEffect(() => {
                     gap: "12px",
                   }}
                 >
+                  {/* Pinned Location Summary Card */}
+                  <div
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      background: draftAddress.latitude ? "#f0fdf4" : "#fef2f2",
+                      border: `1px solid ${draftAddress.latitude ? "#bbf7d0" : "#fecaca"}`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "10px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                      <div
+                        style={{
+                          width: "24px",
+                          height: "24px",
+                          borderRadius: "6px",
+                          background: draftAddress.latitude ? "#dcfce7" : "#fee2e2",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: draftAddress.latitude ? "#15803d" : "#dc2626",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                          <circle cx="12" cy="10" r="3" />
+                        </svg>
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: "11px", fontWeight: 700, color: draftAddress.latitude ? "#15803d" : "#dc2626" }}>
+                          {draftAddress.latitude ? "LOCATION PINNED" : "LOCATION PIN REQUIRED"}
+                        </div>
+                        <div style={{ fontSize: "12px", color: "#334155", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {[draftAddress.city, draftAddress.pincode].filter(Boolean).join(", ") || "Tap to set location on map"}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowMapPicker(true)}
+                      style={{
+                        padding: "5px 10px",
+                        borderRadius: "6px",
+                        border: "1px solid #cbd5e1",
+                        background: "#ffffff",
+                        color: "#1e293b",
+                        fontSize: "11.5px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {draftAddress.latitude ? "Change Pin" : "Set on Map"}
+                    </button>
+                  </div>
+
                   <div
                     style={{
                       display: "grid",
@@ -1040,40 +1313,76 @@ useEffect(() => {
                   >
                     <div style={{ minWidth: 0 }}>
                       <label htmlFor="delivery-full-name" style={labelStyle}>
-                        Full Name
+                        Receiver's Full Name *
                       </label>
                       <input
                         id="delivery-full-name"
+                        type="text"
+                        maxLength={100}
                         value={draftAddress.fullName}
                         onChange={handleDraftChange("fullName")}
-                        placeholder="Full name"
+                        placeholder="e.g. Rahul Sharma"
+                        required
                         style={inputBaseStyle}
                       />
                     </div>
 
                     <div style={{ minWidth: 0 }}>
                       <label htmlFor="delivery-phone" style={labelStyle}>
-                        Mobile Number
+                        Mobile Number *
                       </label>
-                      <input
-                        id="delivery-phone"
-                        value={draftAddress.phone}
-                        onChange={handleDraftChange("phone")}
-                        placeholder="+91 98765 43210"
-                        style={inputBaseStyle}
-                      />
+                      <div style={{ display: "flex", alignItems: "center" }}>
+                        <span
+                          style={{
+                            height: "42px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            padding: "0 10px",
+                            background: "rgba(0,0,0,0.04)",
+                            border: `1px solid ${palette.border}`,
+                            borderRight: "none",
+                            borderRadius: `${resolvedFieldRadius}px 0 0 ${resolvedFieldRadius}px`,
+                            fontSize: "13px",
+                            fontWeight: 600,
+                            color: palette.textSoft,
+                            whiteSpace: "nowrap",
+                            boxSizing: "border-box",
+                          }}
+                        >
+                          +91
+                        </span>
+                        <input
+                          id="delivery-phone"
+                          type="tel"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          maxLength={10}
+                          value={draftAddress.phone}
+                          onChange={handleDraftChange("phone")}
+                          placeholder="9876543210"
+                          required
+                          style={{
+                            ...inputBaseStyle,
+                            height: "42px",
+                            borderRadius: `0 ${resolvedFieldRadius}px ${resolvedFieldRadius}px 0`,
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
 
                   <div>
                     <label htmlFor="delivery-address" style={labelStyle}>
-                      Address Line 1
+                      House / Flat / Floor / Building No. *
                     </label>
                     <input
                       id="delivery-address"
+                      type="text"
+                      maxLength={255}
                       value={draftAddress.address}
                       onChange={handleDraftChange("address")}
-                      placeholder="House no, street, area"
+                      placeholder="e.g. Flat 402, Block B, Green Heights"
+                      required
                       style={inputBaseStyle}
                     />
                   </div>
@@ -1089,26 +1398,34 @@ useEffect(() => {
                   >
                     <div style={{ minWidth: 0 }}>
                       <label htmlFor="delivery-city" style={labelStyle}>
-                        City
+                        City / Area *
                       </label>
                       <input
                         id="delivery-city"
+                        type="text"
+                        maxLength={100}
                         value={draftAddress.city}
                         onChange={handleDraftChange("city")}
-                        placeholder="City"
+                        placeholder="City / Area"
+                        required
                         style={inputBaseStyle}
                       />
                     </div>
 
                     <div style={{ minWidth: 0 }}>
                       <label htmlFor="delivery-pincode" style={labelStyle}>
-                        Postal Code
+                        Postal Code (6 Digits) *
                       </label>
                       <input
                         id="delivery-pincode"
+                        type="tel"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={6}
                         value={draftAddress.pincode}
                         onChange={handleDraftChange("pincode")}
-                        placeholder="Postal code"
+                        placeholder="e.g. 560102"
+                        required
                         style={inputBaseStyle}
                       />
                     </div>
@@ -1116,13 +1433,15 @@ useEffect(() => {
 
                   <div>
                     <label htmlFor="delivery-email" style={labelStyle}>
-                      Email Address
+                      Email Address (Optional)
                     </label>
                     <input
                       id="delivery-email"
+                      type="email"
+                      maxLength={120}
                       value={draftAddress.email}
                       onChange={handleDraftChange("email")}
-                      placeholder="Email address"
+                      placeholder="name@example.com"
                       style={inputBaseStyle}
                     />
                   </div>
@@ -1281,6 +1600,45 @@ useEffect(() => {
           ) : null}
         </div>
 
+        {/* Deliverability error banner for selected address */}
+        {!isSelectedDeliverable && selectedDeliverability && (
+          <div
+            style={{
+              marginTop: "14px",
+              padding: "10px 14px",
+              borderRadius: "8px",
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+            }}
+          >
+            <div
+              style={{
+                width: "22px",
+                height: "22px",
+                borderRadius: "50%",
+                background: "#fee2e2",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#dc2626",
+                flexShrink: 0,
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            </div>
+            <div style={{ minWidth: 0, flex: 1, fontSize: "13px", color: "#991b1b", lineHeight: 1.4, fontWeight: 500 }}>
+              Sorry, we currently do not deliver to this address. Please select a different delivery location to continue.
+            </div>
+          </div>
+        )}
+
         <div
           style={{
             display: "flex",
@@ -1308,7 +1666,7 @@ useEffect(() => {
               cursor: disableContinue ? "not-allowed" : "pointer",
             }}
           >
-            Continue
+            {isCheckingDeliverability ? "Checking..." : "Continue"}
           </button>
         </div>
       </div>
@@ -1338,6 +1696,18 @@ useEffect(() => {
           }
         `}
       </style>
+
+      {/* Google Map Picker Modal */}
+      <GoogleMapPicker
+        siteId={siteId}
+        isOpen={showMapPicker}
+        onClose={() => setShowMapPicker(false)}
+        onConfirm={handleMapConfirm}
+        accentColor={resolvedAccent}
+        deliveryMode={deliveryMode}
+        initialLat={draftAddress.latitude ?? undefined}
+        initialLng={draftAddress.longitude ?? undefined}
+      />
     </section>
   );
 };

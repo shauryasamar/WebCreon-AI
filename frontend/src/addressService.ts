@@ -12,6 +12,9 @@ export type SavedAddress = {
   email: string | null;
   addressType: string;
   isDefault: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
+  geoAccuracy?: string | null; // 'pinned' | 'geocoded'
   createdAt?: string | null;
   updatedAt?: string | null;
 };
@@ -25,17 +28,36 @@ export type SaveAddressPayload = {
   email?: string | null;
   address_type: string;
   is_default?: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
+  geo_accuracy?: string | null;
+};
+
+export type DeliverabilityResult = {
+  deliverable: boolean;
+  check_required: boolean;
+  delivery_mode?: string;
+  distance_km?: number;
+  radius_km?: number;
+  reason?: string;
 };
 
 async function parseJsonResponse<T>(response: Response): Promise<T> {
   const data = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(data?.detail || "Request failed");
+    let msg = "Request failed";
+    if (typeof data?.detail === "string") {
+      msg = data.detail;
+    } else if (Array.isArray(data?.detail) && data.detail[0]?.msg) {
+      msg = data.detail.map((e: any) => e.msg).join(", ");
+    }
+    throw new Error(msg);
   }
 
   return data as T;
 }
+
 
 export async function getCheckoutAddresses(siteId: string): Promise<SavedAddress[]> {
   const response = await fetch(`${API_BASE_URL}/checkout/addresses/${siteId}`, {
@@ -114,4 +136,25 @@ export async function setDefaultCheckoutAddress(
   );
 
   return parseJsonResponse<SavedAddress>(response);
+}
+
+export async function checkDeliverability(
+  siteId: string,
+  lat: number,
+  lng: number
+): Promise<DeliverabilityResult> {
+  const response = await fetch(
+    `${API_BASE_URL}/checkout/deliverability/${siteId}?lat=${lat}&lng=${lng}`,
+    {
+      method: "GET",
+      credentials: "include",
+    }
+  );
+
+  if (!response.ok) {
+    // On error, default to allowing — don't block checkout
+    return { deliverable: true, check_required: false };
+  }
+
+  return response.json();
 }

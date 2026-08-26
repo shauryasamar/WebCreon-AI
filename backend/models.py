@@ -158,6 +158,11 @@ class UserAddress(SQLModel, table=True):
         ),
     )
 
+    # Geo-location (pinned or geocoded)
+    latitude: Optional[float] = Field(default=None, nullable=True)
+    longitude: Optional[float] = Field(default=None, nullable=True)
+    geo_accuracy: Optional[str] = Field(default=None, max_length=30, nullable=True)  # 'pinned' | 'geocoded'
+
 
 class Category(SQLModel, table=True):
     __tablename__ = "categories"
@@ -709,6 +714,13 @@ class DeliverySettings(SQLModel, table=True):
 
     # Default product weight fallback (grams) when product.weight_grams is 0
     default_weight_grams: int = Field(default=500, nullable=False)
+
+    # Store / sender geo-location (for accurate delivery radius calculations)
+    sender_latitude: Optional[float] = Field(default=None, nullable=True)
+    sender_longitude: Optional[float] = Field(default=None, nullable=True)
+
+    # Optional Shiprocket courier max delivery distance in KM (None or 0 = nationwide unlimited)
+    shiprocket_delivery_radius_km: Optional[float] = Field(default=None, nullable=True)
 
     created_at: datetime = Field(
         default_factory=utc_now,

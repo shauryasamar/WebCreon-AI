@@ -86,6 +86,14 @@ def create_db_and_tables():
                 ALTER TABLE delivery_settings ADD COLUMN IF NOT EXISTS enable_shiprocket BOOLEAN DEFAULT FALSE;
                 ALTER TABLE delivery_settings ADD COLUMN IF NOT EXISTS enable_manual BOOLEAN DEFAULT TRUE;
 
+                ALTER TABLE user_addresses ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
+                ALTER TABLE user_addresses ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
+                ALTER TABLE user_addresses ADD COLUMN IF NOT EXISTS geo_accuracy VARCHAR(30);
+
+                ALTER TABLE delivery_settings ADD COLUMN IF NOT EXISTS sender_latitude DOUBLE PRECISION;
+                ALTER TABLE delivery_settings ADD COLUMN IF NOT EXISTS sender_longitude DOUBLE PRECISION;
+                ALTER TABLE delivery_settings ADD COLUMN IF NOT EXISTS shiprocket_delivery_radius_km DOUBLE PRECISION;
+
                 ALTER TABLE collections ADD COLUMN IF NOT EXISTS is_badge BOOLEAN DEFAULT FALSE;
                 ALTER TABLE collections ADD COLUMN IF NOT EXISTS badge_color VARCHAR(50);
                 ALTER TABLE products ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
