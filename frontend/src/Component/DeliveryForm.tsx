@@ -1704,6 +1704,12 @@ useEffect(() => {
         onClose={() => setShowMapPicker(false)}
         onConfirm={handleMapConfirm}
         accentColor={resolvedAccent}
+        theme={theme}
+        backgroundColor={palette.panelBg}
+        inputColor={palette.inputBg}
+        textColor={palette.text}
+        mutedTextColor={palette.textMuted}
+        borderColor={palette.border}
         deliveryMode={deliveryMode}
         initialLat={draftAddress.latitude ?? undefined}
         initialLng={draftAddress.longitude ?? undefined}

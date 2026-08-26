@@ -1,26 +1,5 @@
-/**
- * GoogleMapPicker.tsx
- * 
- * A modal component that lets users:
- * 1. Drag a pin to their exact delivery location
- * 2. Search via Places Autocomplete
- * 3. See a live deliverability badge (own_agent mode only)
- * 4. Reverse-geocode the pin to fill address fields
- * 
- * Returns { lat, lng, addressLine, city, pincode, geoAccuracy: 'pinned' } to the parent.
- */
-
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { checkDeliverability, DeliverabilityResult } from "../addressService";
-declare global {
-  interface Window {
-    _googleMapsLoaded?: boolean;
-    _googleMapsCallbacks?: Array<() => void>;
-    __googleMapsReady?: () => void;
-  }
-}
-
-
 
 export type GeoPickerResult = {
   lat: number;
@@ -29,15 +8,21 @@ export type GeoPickerResult = {
   city: string;
   state?: string;
   pincode: string;
-  geoAccuracy: "pinned";
+  geoAccuracy: "pinned" | "geocoded";
 };
 
-type GoogleMapPickerProps = {
+export type GoogleMapPickerProps = {
   siteId: string;
   isOpen: boolean;
   onClose: () => void;
   onConfirm: (result: GeoPickerResult) => void;
   accentColor?: string;
+  theme?: "light" | "dark";
+  backgroundColor?: string;
+  inputColor?: string;
+  textColor?: string;
+  mutedTextColor?: string;
+  borderColor?: string;
   deliveryMode?: string; // 'own_agent' | 'shiprocket' | 'hybrid' | 'manual'
   initialLat?: number;
   initialLng?: number;
@@ -45,49 +30,32 @@ type GoogleMapPickerProps = {
 };
 
 const MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
-const DEFAULT_CENTER = { lat: 20.5937, lng: 78.9629 }; // India center fallback
+const DEFAULT_CENTER = { lat: 20.5937, lng: 78.9629 }; // Geographic center of India
 
-export function loadGoogleMapsScript(): Promise<void> {
-  return new Promise((resolve) => {
-    if (typeof google !== "undefined" && google.maps) {
+function loadGoogleMapsScript(apiKey: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === "undefined") return;
+    if (window.google?.maps?.places) {
       resolve();
       return;
     }
-    if (!window._googleMapsCallbacks) {
-      window._googleMapsCallbacks = [];
+    const existing = document.getElementById("google-maps-script");
+    if (existing) {
+      existing.addEventListener("load", () => resolve());
+      existing.addEventListener("error", () =>
+        reject(new Error("Failed to load Google Maps"))
+      );
+      return;
     }
-    window._googleMapsCallbacks.push(resolve);
-
-    if (!window._googleMapsLoaded) {
-      window._googleMapsLoaded = true;
-      const script = document.createElement("script");
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_API_KEY}&libraries=places&callback=__googleMapsReady`;
-      script.async = true;
-      script.defer = true;
-      (window as Window).__googleMapsReady = () => {
-        (window._googleMapsCallbacks || []).forEach((cb) => cb());
-        window._googleMapsCallbacks = [];
-      };
-      document.head.appendChild(script);
-    }
+    const script = document.createElement("script");
+    script.id = "google-maps-script";
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load Google Maps"));
+    document.head.appendChild(script);
   });
-}
-
-export async function geocodeAddressText(addressText: string): Promise<{ lat: number; lng: number } | null> {
-  if (!addressText || !addressText.trim()) return null;
-  await loadGoogleMapsScript();
-  if (typeof google === "undefined" || !google.maps) return null;
-  const geocoder = new google.maps.Geocoder();
-  try {
-    const res = await geocoder.geocode({ address: addressText });
-    if (res.results && res.results.length > 0 && res.results[0].geometry?.location) {
-      const loc = res.results[0].geometry.location;
-      return { lat: loc.lat(), lng: loc.lng() };
-    }
-  } catch (e) {
-    console.warn("Geocoding failed for text address:", addressText, e);
-  }
-  return null;
 }
 
 function extractAddressComponents(results: google.maps.GeocoderResult[]): {
@@ -132,13 +100,40 @@ function extractAddressComponents(results: google.maps.GeocoderResult[]): {
   };
 }
 
+const DARK_MAP_STYLES: google.maps.MapTypeStyle[] = [
+  { elementType: "geometry", stylers: [{ color: "#1f242d" }] },
+  { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#8d99ae" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#1a1d24" }] },
+  { featureType: "administrative", elementType: "geometry", stylers: [{ color: "#3d4852" }] },
+  { featureType: "administrative.country", elementType: "labels.text.fill", stylers: [{ color: "#a0aec0" }] },
+  { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#cbd5e0" }] },
+  { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
+  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#182026" }] },
+  { featureType: "road", elementType: "geometry.fill", stylers: [{ color: "#2d3748" }] },
+  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#a0aec0" }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#4a5568" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#0f172a" }] },
+  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#475569" }] },
+];
+
+const LIGHT_MAP_STYLES: google.maps.MapTypeStyle[] = [
+  { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
+  { featureType: "transit", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+];
+
 export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
   siteId,
   isOpen,
   onClose,
   onConfirm,
   accentColor = "#2563eb",
-  deliveryMode,
+  theme = "light",
+  backgroundColor,
+  inputColor,
+  textColor,
+  mutedTextColor,
+  borderColor,
   initialLat,
   initialLng,
   mode = "customer",
@@ -152,8 +147,9 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
 
   const [mapsLoaded, setMapsLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
-  const [currentLat, setCurrentLat] = useState<number | null>(null);
-  const [currentLng, setCurrentLng] = useState<number | null>(null);
+  const [currentLat, setCurrentLat] = useState<number | null>(initialLat ?? null);
+  const [currentLng, setCurrentLng] = useState<number | null>(initialLng ?? null);
+  const [searchValue, setSearchValue] = useState("");
   const [reversedAddress, setReversedAddress] = useState<{
     addressLine: string;
     city: string;
@@ -161,20 +157,47 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
     pincode: string;
   }>({ addressLine: "", city: "", state: "", pincode: "" });
   const [isGeocoding, setIsGeocoding] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
   const [deliverability, setDeliverability] = useState<DeliverabilityResult | null>(null);
   const [isCheckingDeliverability, setIsCheckingDeliverability] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
-  const [isLocating, setIsLocating] = useState(false);
-  const [locationError, setLocationError] = useState<string | null>(null);
 
-  // Load Google Maps SDK
+  // Responsive mobile detector
+  const [isMobile, setIsMobile] = useState<boolean>(() =>
+    typeof window !== "undefined" ? window.innerWidth < 680 : false
+  );
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 680);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Theme resolution
+  const isDark = theme === "dark" || (backgroundColor && isColorDarkHex(backgroundColor));
+  const palette = {
+    modalBg: isDark ? backgroundColor || "#0f172a" : "#ffffff",
+    cardBg: isDark ? "rgba(30, 41, 59, 0.94)" : "rgba(255, 255, 255, 0.94)",
+    inputBg: isDark ? inputColor || "#1e293b" : "#ffffff",
+    text: isDark ? textColor || "#f8fafc" : "#0f172a",
+    textMuted: isDark ? mutedTextColor || "#94a3b8" : "#64748b",
+    border: isDark ? borderColor || "#334155" : "#e2e8f0",
+    headerBg: isDark ? "#0f172a" : "#ffffff",
+    bottomBarBg: isDark ? "#111827" : "#ffffff",
+    accent: accentColor || "#2563eb",
+  };
+
+  // Load Maps SDK
   useEffect(() => {
     if (!isOpen) return;
-    if (!MAPS_API_KEY || MAPS_API_KEY === "YOUR_GOOGLE_MAPS_API_KEY_HERE") {
+    if (!MAPS_API_KEY) {
       setLoadError(true);
       return;
     }
-    loadGoogleMapsScript()
+    loadGoogleMapsScript(MAPS_API_KEY)
       .then(() => setMapsLoaded(true))
       .catch(() => setLoadError(true));
   }, [isOpen]);
@@ -199,7 +222,7 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
   // Check deliverability
   const checkDeliverabilityForPin = useCallback(
     async (lat: number, lng: number) => {
-      if (!siteId) return;
+      if (!siteId || mode === "store") return;
       setIsCheckingDeliverability(true);
       try {
         const result = await checkDeliverability(siteId, lat, lng);
@@ -210,7 +233,7 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
         setIsCheckingDeliverability(false);
       }
     },
-    [siteId]
+    [siteId, mode]
   );
 
   // Move marker to a position and trigger geocoding + deliverability
@@ -230,9 +253,10 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
   // Trigger robust two-stage browser geolocation (high-accuracy with standard fallback)
   const locateUser = useCallback(() => {
     if (!navigator.geolocation) {
-      setLocationError("Geolocation is not supported by your browser");
+      setLocationError("Geolocation is not supported by your device/browser.");
       return;
     }
+
     setIsLocating(true);
     setLocationError(null);
 
@@ -262,7 +286,6 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
     navigator.geolocation.getCurrentPosition(
       onLocationSuccess,
       () => {
-        // If high-accuracy times out, try standard accuracy immediately
         tryLowAccuracy();
       },
       { enableHighAccuracy: true, timeout: 6000, maximumAge: 60000 }
@@ -283,31 +306,32 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
 
     const map = new google.maps.Map(mapRef.current, {
       center: startCenter,
-      zoom: initialLat ? 16 : 5,
+      zoom: initialLat ? 17 : 5,
       disableDefaultUI: false,
       zoomControl: true,
       mapTypeControl: false,
       streetViewControl: false,
       fullscreenControl: false,
       clickableIcons: false,
-      styles: [
-        { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
-      ],
+      gestureHandling: "greedy", // Smooth single-finger touch on mobile
+      styles: isDark ? DARK_MAP_STYLES : LIGHT_MAP_STYLES,
     });
     mapInstanceRef.current = map;
 
+    // SVG Pin Icon with glowing pulse base
     const marker = new google.maps.Marker({
       map,
       position: startCenter,
       draggable: true,
       animation: google.maps.Animation.DROP,
       icon: {
-        path: google.maps.SymbolPath.CIRCLE,
-        scale: 12,
-        fillColor: accentColor,
+        path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z",
+        fillColor: palette.accent,
         fillOpacity: 1,
         strokeColor: "#ffffff",
-        strokeWeight: 3,
+        strokeWeight: 2,
+        scale: 2,
+        anchor: new google.maps.Point(12, 22),
       },
     });
     markerRef.current = marker;
@@ -330,9 +354,10 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
       setCurrentLat(initialLat);
       setCurrentLng(initialLng);
       reverseGeocode(initialLat, initialLng);
-      checkDeliverabilityForPin(initialLat, initialLng);
+      if (mode !== "store") {
+        checkDeliverabilityForPin(initialLat, initialLng);
+      }
     } else {
-      // Prompt GPS geolocation immediately with high accuracy
       locateUser();
     }
 
@@ -354,9 +379,10 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
         map.setCenter({ lat, lng });
         map.setZoom(17);
         moveMarkerTo(lat, lng);
+        setSearchValue(place.formatted_address || "");
       });
     }
-  }, [mapsLoaded, isOpen, initialLat, initialLng, accentColor, moveMarkerTo, reverseGeocode, checkDeliverabilityForPin]);
+  }, [mapsLoaded, isOpen, initialLat, initialLng, palette.accent, isDark, moveMarkerTo, reverseGeocode, checkDeliverabilityForPin, mode, locateUser]);
 
   // Cleanup on close
   useEffect(() => {
@@ -367,6 +393,7 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
       autocompleteRef.current = null;
       setCurrentLat(null);
       setCurrentLng(null);
+      setSearchValue("");
       setReversedAddress({ addressLine: "", city: "", state: "", pincode: "" });
       setDeliverability(null);
       setIsConfirming(false);
@@ -395,86 +422,110 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
     (isCheckingDeliverability ||
       (deliverability && deliverability.check_required));
   const isDeliverable = deliverability?.deliverable ?? true;
-  const hasRadius = deliverability?.check_required && deliverability.radius_km;
 
   return (
     <div
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 9999,
-        background: "rgba(0,0,0,0.55)",
-        backdropFilter: "blur(4px)",
+        zIndex: 99999,
+        background: isDark ? "rgba(0,0,0,0.75)" : "rgba(15,23,42,0.6)",
+        backdropFilter: "blur(6px)",
         display: "flex",
-        alignItems: "center",
+        alignItems: isMobile ? "flex-end" : "center",
         justifyContent: "center",
-        padding: "12px",
+        padding: isMobile ? "0" : "16px",
       }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
         style={{
           width: "100%",
-          maxWidth: "680px",
-          height: "min(86vh, 640px)",
-          background: "#ffffff",
-          borderRadius: "16px",
+          maxWidth: isMobile ? "100%" : "720px",
+          height: isMobile ? "100dvh" : "min(88vh, 660px)",
+          background: palette.modalBg,
+          borderRadius: isMobile ? "0" : "16px",
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
-          boxShadow: "0 24px 60px rgba(0,0,0,0.25)",
+          boxShadow: isDark
+            ? "0 24px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08)"
+            : "0 24px 60px rgba(0,0,0,0.25)",
+          position: "relative",
         }}
       >
-        {/* Header */}
+        {/* Header Bar */}
         <div
           style={{
-            padding: "14px 18px",
-            borderBottom: "1px solid #e2e8f0",
+            padding: isMobile ? "12px 14px" : "14px 18px",
+            borderBottom: `1px solid ${palette.border}`,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: "12px",
-            background: "#ffffff",
+            gap: "10px",
+            background: palette.headerBg,
             flexShrink: 0,
+            zIndex: 10,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
             <div
               style={{
                 width: "34px",
                 height: "34px",
                 borderRadius: "8px",
-                background: "#eff6ff",
-                border: "1px solid #bfdbfe",
+                background: isDark ? "rgba(255,255,255,0.06)" : "#eff6ff",
+                border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "#bfdbfe"}`,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: accentColor,
+                color: palette.accent,
                 flexShrink: 0,
               }}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
                 <circle cx="12" cy="10" r="3" />
               </svg>
             </div>
-            <div>
-              <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
-                {mode === "store" ? "Pin Warehouse / Store Location" : "Pin Delivery Location"}
+            <div style={{ minWidth: 0 }}>
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: isMobile ? "14px" : "15px",
+                  fontWeight: 700,
+                  color: palette.text,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {mode === "store" ? "Pin Store Origin Location" : "Pin Exact Delivery Location"}
               </h3>
-              <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#64748b" }}>
+              <p
+                style={{
+                  margin: "1px 0 0",
+                  fontSize: isMobile ? "11px" : "12px",
+                  color: palette.textMuted,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
                 {mode === "store"
-                  ? "Drop pin at your store or dispatch warehouse to configure delivery routing"
-                  : "Drag the marker or tap on the map to set your exact doorstep location"}
+                  ? "Tap on the map or drag the pin to set store dispatch center"
+                  : "Drag the pin or tap anywhere on the map to set doorstep"}
               </p>
             </div>
           </div>
+
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close Map"
             style={{
               border: "none",
-              background: "#f1f5f9",
+              background: isDark ? "rgba(255,255,255,0.1)" : "#f1f5f9",
               borderRadius: "8px",
               width: "32px",
               height: "32px",
@@ -483,7 +534,7 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
               justifyContent: "center",
               cursor: "pointer",
               fontSize: "14px",
-              color: "#475569",
+              color: palette.textMuted,
               flexShrink: 0,
             }}
           >
@@ -491,23 +542,34 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
           </button>
         </div>
 
-        {/* Search bar + Current Location button */}
+        {/* Floating Search Bar + Mobile GPS Button */}
         {mapsLoaded && !loadError && (
-          <div style={{ padding: "10px 14px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0", flexShrink: 0, display: "flex", gap: "8px", alignItems: "center" }}>
-            <div style={{ position: "relative", flex: 1 }}>
+          <div
+            style={{
+              padding: isMobile ? "8px 10px" : "10px 14px",
+              background: isDark ? "rgba(15,23,42,0.92)" : "rgba(248,250,252,0.95)",
+              borderBottom: `1px solid ${palette.border}`,
+              flexShrink: 0,
+              display: "flex",
+              gap: "8px",
+              alignItems: "center",
+              zIndex: 10,
+            }}
+          >
+            <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
               <span
                 style={{
                   position: "absolute",
-                  left: "12px",
+                  left: "11px",
                   top: "50%",
                   transform: "translateY(-50%)",
                   display: "flex",
                   alignItems: "center",
                   pointerEvents: "none",
-                  color: "#94a3b8",
+                  color: palette.textMuted,
                 }}
               >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="11" cy="11" r="8" />
                   <line x1="21" y1="21" x2="16.65" y2="16.65" />
                 </svg>
@@ -515,34 +577,57 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
               <input
                 ref={searchInputRef}
                 type="text"
-                placeholder="Search for street, landmark or area..."
+                value={searchValue}
+                onChange={(e) => setSearchValue(e.target.value)}
+                placeholder={isMobile ? "Search street, landmark..." : "Search for street, apartment, landmark or area..."}
                 style={{
                   width: "100%",
                   boxSizing: "border-box",
-                  height: "38px",
-                  padding: "0 12px 0 36px",
-                  fontSize: "13px",
-                  border: "1px solid #cbd5e1",
+                  height: "40px",
+                  padding: "0 34px 0 34px",
+                  fontSize: isMobile ? "13px" : "13.5px",
+                  border: `1px solid ${palette.border}`,
                   borderRadius: "8px",
-                  background: "#ffffff",
-                  color: "#0f172a",
+                  background: palette.inputBg,
+                  color: palette.text,
                   outline: "none",
                 }}
               />
+              {searchValue && (
+                <button
+                  type="button"
+                  onClick={() => setSearchValue("")}
+                  style={{
+                    position: "absolute",
+                    right: "10px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    border: "none",
+                    background: "transparent",
+                    color: palette.textMuted,
+                    cursor: "pointer",
+                    padding: 0,
+                    fontSize: "12px",
+                  }}
+                >
+                  ✕
+                </button>
+              )}
             </div>
 
+            {/* Quick GPS button */}
             <button
               type="button"
               onClick={locateUser}
               disabled={isLocating}
-              title="Detect and jump to your current GPS location"
+              title="Use Current Location (GPS)"
               style={{
-                height: "38px",
-                padding: "0 14px",
+                height: "40px",
+                padding: isMobile ? "0 10px" : "0 14px",
                 borderRadius: "8px",
-                border: "1px solid #bfdbfe",
-                background: "#eff6ff",
-                color: "#1d4ed8",
+                border: `1px solid ${isDark ? "rgba(59,130,246,0.3)" : "#bfdbfe"}`,
+                background: isDark ? "rgba(37,99,235,0.15)" : "#eff6ff",
+                color: isDark ? "#60a5fa" : "#1d4ed8",
                 fontSize: "12.5px",
                 fontWeight: 600,
                 cursor: isLocating ? "wait" : "pointer",
@@ -557,19 +642,19 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
                 <>
                   <div
                     style={{
-                      width: "12px",
-                      height: "12px",
-                      border: "2px solid #1d4ed8",
+                      width: "14px",
+                      height: "14px",
+                      border: `2px solid ${isDark ? "#60a5fa" : "#1d4ed8"}`,
                       borderTopColor: "transparent",
                       borderRadius: "50%",
                       animation: "spin 0.8s linear infinite",
                     }}
                   />
-                  <span>Locating...</span>
+                  {!isMobile && <span>Locating...</span>}
                 </>
               ) : (
                 <>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="12" cy="12" r="10" />
                     <circle cx="12" cy="12" r="3" />
                     <line x1="12" y1="2" x2="12" y2="6" />
@@ -577,14 +662,14 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
                     <line x1="2" y1="12" x2="6" y2="12" />
                     <line x1="18" y1="12" x2="22" y2="12" />
                   </svg>
-                  <span>Use Current Location</span>
+                  <span>{isMobile ? "GPS" : "Use Current Location"}</span>
                 </>
               )}
             </button>
           </div>
         )}
 
-        {/* Map area */}
+        {/* Map Viewport */}
         <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
           {loadError ? (
             <div
@@ -597,16 +682,16 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
                 gap: "10px",
                 padding: "24px",
                 textAlign: "center",
+                background: palette.modalBg,
               }}
             >
               <span style={{ fontSize: "36px" }}>🗺️</span>
-              <p style={{ margin: 0, fontWeight: 700, color: "#0f172a", fontSize: "15px" }}>
-                Google Maps not configured
+              <p style={{ margin: 0, fontWeight: 700, color: palette.text, fontSize: "15px" }}>
+                Google Maps Configuration Needed
               </p>
-              <p style={{ margin: 0, fontSize: "12px", color: "#64748b", maxWidth: "340px" }}>
+              <p style={{ margin: 0, fontSize: "12px", color: palette.textMuted, maxWidth: "340px" }}>
                 Add your <code>VITE_GOOGLE_MAPS_API_KEY</code> in{" "}
-                <code>frontend/.env</code> with Maps JavaScript API, Places API &amp;
-                Geocoding API enabled.
+                <code>frontend/.env</code> with Maps JavaScript, Places &amp; Geocoding enabled.
               </p>
             </div>
           ) : !mapsLoaded ? (
@@ -617,15 +702,16 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
                 alignItems: "center",
                 justifyContent: "center",
                 gap: "10px",
-                color: "#64748b",
+                color: palette.textMuted,
                 fontSize: "13px",
+                background: palette.modalBg,
               }}
             >
               <div
                 style={{
-                  width: "20px",
-                  height: "20px",
-                  border: `2px solid ${accentColor}`,
+                  width: "22px",
+                  height: "22px",
+                  border: `2.5px solid ${palette.accent}`,
                   borderTopColor: "transparent",
                   borderRadius: "50%",
                   animation: "spin 0.8s linear infinite",
@@ -636,95 +722,89 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
           ) : (
             <>
               <div ref={mapRef} style={{ width: "100%", height: "100%" }} />
-              {/* Floating Locate Me GPS button */}
+
+              {/* Floating Re-center FAB on Mobile & Desktop */}
               <button
                 type="button"
                 onClick={locateUser}
                 disabled={isLocating}
-                title="Jump to my current GPS location"
+                title="Jump to my current location"
                 style={{
                   position: "absolute",
-                  bottom: "20px",
-                  right: "16px",
+                  bottom: "16px",
+                  right: "14px",
                   zIndex: 10,
-                  width: "42px",
-                  height: "42px",
-                  borderRadius: "8px",
-                  background: "#ffffff",
-                  border: "1px solid #cbd5e1",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+                  width: "44px",
+                  height: "44px",
+                  borderRadius: "50%",
+                  background: palette.cardBg,
+                  border: `1px solid ${palette.border}`,
+                  boxShadow: "0 6px 18px rgba(0,0,0,0.22)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   cursor: isLocating ? "wait" : "pointer",
-                  color: "#1d4ed8",
+                  color: palette.accent,
+                  backdropFilter: "blur(4px)",
                 }}
               >
-                {isLocating ? (
-                  <div
-                    style={{
-                      width: "14px",
-                      height: "14px",
-                      border: "2px solid #1d4ed8",
-                      borderTopColor: "transparent",
-                      borderRadius: "50%",
-                      animation: "spin 0.8s linear infinite",
-                    }}
-                  />
-                ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <circle cx="12" cy="12" r="3" />
-                    <line x1="12" y1="2" x2="12" y2="6" />
-                    <line x1="12" y1="18" x2="12" y2="22" />
-                    <line x1="2" y1="12" x2="6" y2="12" />
-                    <line x1="18" y1="12" x2="22" y2="12" />
-                  </svg>
-                )}
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="3" />
+                  <line x1="12" y1="2" x2="12" y2="6" />
+                  <line x1="12" y1="18" x2="12" y2="22" />
+                  <line x1="2" y1="12" x2="6" y2="12" />
+                  <line x1="18" y1="12" x2="22" y2="12" />
+                </svg>
               </button>
             </>
           )}
 
-          {/* Deliverability badge overlay */}
+          {/* Deliverability Badge Overlay */}
           {showDeliverabilityBadge && (
             <div
               style={{
                 position: "absolute",
-                top: "10px",
+                top: "12px",
                 left: "50%",
                 transform: "translateX(-50%)",
                 zIndex: 10,
                 background: isCheckingDeliverability
-                  ? "#f8fafc"
+                  ? isDark ? "#1e293b" : "#f8fafc"
                   : isDeliverable
-                  ? "#f0fdf4"
-                  : "#fef2f2",
+                  ? isDark ? "rgba(22, 101, 52, 0.9)" : "#f0fdf4"
+                  : isDark ? "rgba(153, 27, 27, 0.9)" : "#fef2f2",
                 border: `1px solid ${
-                  isCheckingDeliverability ? "#e2e8f0" : isDeliverable ? "#bbf7d0" : "#fecaca"
+                  isCheckingDeliverability
+                    ? palette.border
+                    : isDeliverable
+                    ? isDark ? "#16a34a" : "#bbf7d0"
+                    : isDark ? "#dc2626" : "#fecaca"
                 }`,
                 borderRadius: "999px",
                 padding: "6px 14px",
                 fontSize: "12px",
                 fontWeight: 600,
                 color: isCheckingDeliverability
-                  ? "#64748b"
+                  ? palette.textMuted
                   : isDeliverable
-                  ? "#15803d"
-                  : "#dc2626",
+                  ? isDark ? "#bbf7d0" : "#15803d"
+                  : isDark ? "#fecaca" : "#dc2626",
                 display: "flex",
                 alignItems: "center",
                 gap: "6px",
-                boxShadow: "0 2px 10px rgba(0,0,0,0.10)",
+                boxShadow: "0 4px 14px rgba(0,0,0,0.18)",
                 whiteSpace: "nowrap",
+                backdropFilter: "blur(4px)",
               }}
             >
               {isCheckingDeliverability ? (
                 <>
                   <div
                     style={{
-                      width: "10px",
-                      height: "10px",
-                      border: "1.5px solid #94a3b8",
+                      width: "11px",
+                      height: "11px",
+                      border: `1.5px solid ${palette.textMuted}`,
                       borderTopColor: "transparent",
                       borderRadius: "50%",
                       animation: "spin 0.8s linear infinite",
@@ -734,14 +814,14 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
                 </>
               ) : isDeliverable ? (
                 <>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
                   <span>Delivery available to this location</span>
                 </>
               ) : (
                 <>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="12" cy="12" r="10" />
                     <line x1="15" y1="9" x2="9" y2="15" />
                     <line x1="9" y1="9" x2="15" y2="15" />
@@ -753,13 +833,14 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
           )}
         </div>
 
-        {/* Bottom: Reversed address preview + confirm */}
+        {/* Bottom Address Card & Confirm Action */}
         <div
           style={{
-            padding: "12px 16px",
-            borderTop: "1px solid #e2e8f0",
-            background: "#f8fafc",
+            padding: isMobile ? "12px 14px 16px" : "14px 18px",
+            borderTop: `1px solid ${palette.border}`,
+            background: palette.bottomBarBg,
             flexShrink: 0,
+            zIndex: 10,
           }}
         >
           {locationError && (
@@ -767,17 +848,17 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
               style={{
                 marginBottom: "8px",
                 padding: "8px 12px",
-                borderRadius: "6px",
-                background: "#fef2f2",
-                border: "1px solid #fecaca",
-                color: "#991b1b",
+                borderRadius: "8px",
+                background: isDark ? "rgba(153,27,27,0.25)" : "#fef2f2",
+                border: `1px solid ${isDark ? "rgba(220,38,38,0.4)" : "#fecaca"}`,
+                color: isDark ? "#fca5a5" : "#991b1b",
                 fontSize: "12px",
                 display: "flex",
                 alignItems: "center",
                 gap: "6px",
               }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10" />
                 <line x1="12" y1="8" x2="12" y2="12" />
                 <line x1="12" y1="16" x2="12.01" y2="16" />
@@ -785,18 +866,46 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
               <span>{locationError}</span>
             </div>
           )}
+
           {currentLat !== null && (
-            <div style={{ marginBottom: "10px" }}>
-              <p style={{ margin: "0 0 4px", fontSize: "11px", fontWeight: 600, color: "#64748b" }}>
-                DETECTED ADDRESS
-              </p>
+            <div
+              style={{
+                marginBottom: "12px",
+                padding: "8px 12px",
+                borderRadius: "8px",
+                background: isDark ? "rgba(255,255,255,0.03)" : "#f8fafc",
+                border: `1px solid ${palette.border}`,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "3px" }}>
+                <span
+                  style={{
+                    width: "7px",
+                    height: "7px",
+                    borderRadius: "50%",
+                    background: palette.accent,
+                    display: "inline-block",
+                  }}
+                />
+                <span style={{ fontSize: "11px", fontWeight: 700, color: palette.textMuted, letterSpacing: "0.5px" }}>
+                  PINNED ADDRESS
+                </span>
+              </div>
               {isGeocoding ? (
-                <p style={{ margin: 0, fontSize: "12px", color: "#94a3b8" }}>Detecting address...</p>
+                <p style={{ margin: 0, fontSize: "12.5px", color: palette.textMuted }}>Detecting exact street &amp; area...</p>
               ) : (
-                <p style={{ margin: 0, fontSize: "13px", color: "#0f172a", fontWeight: 500, lineHeight: 1.5 }}>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: isMobile ? "12.5px" : "13.5px",
+                    color: palette.text,
+                    fontWeight: 600,
+                    lineHeight: 1.4,
+                  }}
+                >
                   {[reversedAddress.addressLine, reversedAddress.city, reversedAddress.pincode]
                     .filter(Boolean)
-                    .join(", ") || "Address detected — any missing details can be filled manually"}
+                    .join(", ") || "Location selected on map"}
                 </p>
               )}
             </div>
@@ -807,13 +916,12 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
               type="button"
               onClick={onClose}
               style={{
-                flex: "0 0 auto",
-                height: "40px",
-                padding: "0 16px",
-                border: "1px solid #cbd5e1",
+                flex: isMobile ? "0 0 38%" : "0 0 110px",
+                height: "44px",
+                border: `1px solid ${palette.border}`,
                 borderRadius: "8px",
-                background: "#ffffff",
-                color: "#475569",
+                background: isDark ? "rgba(255,255,255,0.05)" : "#ffffff",
+                color: palette.text,
                 fontSize: "13px",
                 fontWeight: 600,
                 cursor: "pointer",
@@ -827,23 +935,28 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
               disabled={!currentLat || isConfirming}
               style={{
                 flex: 1,
-                height: "40px",
+                height: "44px",
                 border: "none",
                 borderRadius: "8px",
                 background:
                   !currentLat || isConfirming
-                    ? "#cbd5e1"
-                    : accentColor,
+                    ? isDark ? "#334155" : "#cbd5e1"
+                    : palette.accent,
                 color: "#ffffff",
-                fontSize: "13px",
+                fontSize: isMobile ? "13px" : "13.5px",
                 fontWeight: 700,
                 cursor: !currentLat || isConfirming ? "not-allowed" : "pointer",
+                boxShadow: !currentLat || isConfirming ? "none" : `0 4px 14px ${palette.accent}40`,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
               }}
             >
               {isConfirming
                 ? "Confirming..."
                 : mode === "store"
-                ? "✓ Confirm Warehouse Location"
+                ? "✓ Confirm Origin"
                 : "✓ Confirm This Location"}
             </button>
           </div>
@@ -854,9 +967,47 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
+        .pac-container {
+          z-index: 100002 !important;
+          border-radius: 8px !important;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.3) !important;
+          border: 1px solid ${palette.border} !important;
+          background-color: ${palette.modalBg} !important;
+          font-family: inherit !important;
+          margin-top: 4px !important;
+        }
+        .pac-item {
+          padding: 8px 12px !important;
+          font-size: 13px !important;
+          color: ${palette.text} !important;
+          border-top: 1px solid ${palette.border} !important;
+          cursor: pointer !important;
+        }
+        .pac-item:hover, .pac-item-selected {
+          background-color: ${isDark ? "rgba(255,255,255,0.06)" : "#f1f5f9"} !important;
+        }
+        .pac-item-query {
+          font-size: 13.5px !important;
+          color: ${palette.text} !important;
+        }
+        .pac-matched {
+          font-weight: 700 !important;
+          color: ${palette.accent} !important;
+        }
       `}</style>
     </div>
   );
 };
+
+function isColorDarkHex(hexColor?: string): boolean {
+  if (!hexColor) return false;
+  const hex = hexColor.replace("#", "").trim();
+  if (hex.length !== 6 && hex.length !== 3) return false;
+  const r = parseInt(hex.length === 3 ? hex[0] + hex[0] : hex.slice(0, 2), 16);
+  const g = parseInt(hex.length === 3 ? hex[1] + hex[1] : hex.slice(2, 4), 16);
+  const b = parseInt(hex.length === 3 ? hex[2] + hex[2] : hex.slice(4, 6), 16);
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness < 128;
+}
 
 export default GoogleMapPicker;
