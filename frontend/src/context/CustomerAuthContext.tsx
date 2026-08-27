@@ -13,6 +13,11 @@ export type CustomerUser = {
   name: string;
   email: string;
   phone: string | null;
+  gender?: string | null;
+  dateOfBirth?: string | null;
+  authProvider?: string;
+  avatarUrl?: string | null;
+  hasPassword?: boolean;
   isActive: boolean;
   siteId: string;
   siteSlug: string;
@@ -31,6 +36,18 @@ type CustomerLoginPayload = {
   password: string;
 };
 
+type CustomerProfileUpdatePayload = {
+  name?: string;
+  phone?: string;
+  gender?: string;
+  date_of_birth?: string;
+};
+
+type CustomerChangePasswordPayload = {
+  current_password?: string;
+  new_password: string;
+};
+
 type CustomerAuthContextValue = {
   user: CustomerUser | null;
   loading: boolean;
@@ -44,6 +61,26 @@ type CustomerAuthContextValue = {
     websiteName: string,
     payload: CustomerLoginPayload
   ) => Promise<CustomerUser>;
+  loginWithGoogle: (
+    websiteName: string,
+    idToken: string
+  ) => Promise<CustomerUser>;
+  forgotPassword: (
+    websiteName: string,
+    email: string
+  ) => Promise<{ message: string; dev_otp?: string }>;
+  resetPassword: (
+    websiteName: string,
+    payload: { email: string; otp: string; new_password: string }
+  ) => Promise<CustomerUser>;
+  updateProfile: (
+    websiteName: string,
+    payload: CustomerProfileUpdatePayload
+  ) => Promise<CustomerUser>;
+  changePassword: (
+    websiteName: string,
+    payload: CustomerChangePasswordPayload
+  ) => Promise<{ message: string; user?: CustomerUser }>;
   logout: () => Promise<void>;
   clearUser: () => void;
 };
@@ -59,31 +96,19 @@ async function parseJsonSafely(response: Response) {
   try {
     return JSON.parse(text);
   } catch {
-    return null;
+    return { raw: text };
   }
 }
 
 function getErrorMessage(data: any, fallback: string) {
-  if (data?.detail && typeof data.detail === "string") {
-    return data.detail;
-  }
-
+  if (!data) return fallback;
+  if (typeof data === "string") return data;
+  if (typeof data.detail === "string") return data.detail;
+  if (typeof data.message === "string") return data.message;
   return fallback;
 }
 
-function extractUser(data: any): CustomerUser {
-  if (!data?.user) {
-    throw new Error("Invalid customer response");
-  }
-
-  return data.user as CustomerUser;
-}
-
-export function CustomerAuthProvider({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export function CustomerAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<CustomerUser | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -103,21 +128,26 @@ export function CustomerAuthProvider({
       const response = await fetch(
         `${API_BASE_URL}/auth/customer/me/${websiteName}`,
         {
+          method: "GET",
           credentials: "include",
         }
       );
 
-      if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
         setUser(null);
         return null;
       }
 
       const data = await parseJsonSafely(response);
-      const nextUser = extractUser(data);
-      setUser(nextUser);
-      return nextUser;
-    } catch (error) {
-      console.error("Error checking customer session:", error);
+
+      if (!response.ok || !data?.user) {
+        setUser(null);
+        return null;
+      }
+
+      setUser(data.user);
+      return data.user as CustomerUser;
+    } catch {
       setUser(null);
       return null;
     } finally {
@@ -144,15 +174,12 @@ export function CustomerAuthProvider({
 
         const data = await parseJsonSafely(response);
 
-        if (!response.ok) {
-          throw new Error(
-            getErrorMessage(data, "Customer signup failed")
-          );
+        if (!response.ok || !data?.user) {
+          throw new Error(getErrorMessage(data, "Customer signup failed"));
         }
 
-        const nextUser = extractUser(data);
-        setUser(nextUser);
-        return nextUser;
+        setUser(data.user);
+        return data.user as CustomerUser;
       } finally {
         setLoading(false);
       }
@@ -179,15 +206,189 @@ export function CustomerAuthProvider({
 
         const data = await parseJsonSafely(response);
 
+        if (!response.ok || !data?.user) {
+          throw new Error(getErrorMessage(data, "Customer login failed"));
+        }
+
+        setUser(data.user);
+        return data.user as CustomerUser;
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
+
+  const loginWithGoogle = useCallback(
+    async (websiteName: string, idToken: string) => {
+      setLoading(true);
+
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/auth/customer/google/${websiteName}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            credentials: "include",
+            body: JSON.stringify({ id_token: idToken }),
+          }
+        );
+
+        const data = await parseJsonSafely(response);
+
+        if (!response.ok || !data?.user) {
+          throw new Error(getErrorMessage(data, "Google sign-in failed"));
+        }
+
+        setUser(data.user);
+        return data.user as CustomerUser;
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
+
+  const forgotPassword = useCallback(
+    async (websiteName: string, email: string) => {
+      setLoading(true);
+
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/auth/customer/forgot-password/${websiteName}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            credentials: "include",
+            body: JSON.stringify({ email }),
+          }
+        );
+
+        const data = await parseJsonSafely(response);
+
         if (!response.ok) {
           throw new Error(
-            getErrorMessage(data, "Customer login failed")
+            getErrorMessage(data, "Failed to dispatch password reset code")
           );
         }
 
-        const nextUser = extractUser(data);
-        setUser(nextUser);
-        return nextUser;
+        return data || { message: "Verification code sent." };
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
+
+  const resetPassword = useCallback(
+    async (
+      websiteName: string,
+      payload: { email: string; otp: string; new_password: string }
+    ) => {
+      setLoading(true);
+
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/auth/customer/reset-password/${websiteName}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            credentials: "include",
+            body: JSON.stringify({
+              email: payload.email,
+              token_or_otp: payload.otp,
+              new_password: payload.new_password,
+            }),
+          }
+        );
+
+        const data = await parseJsonSafely(response);
+
+        if (!response.ok || !data?.user) {
+          throw new Error(
+            getErrorMessage(data, "Failed to reset customer password")
+          );
+        }
+
+        setUser(data.user);
+        return data.user as CustomerUser;
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
+
+  const updateProfile = useCallback(
+    async (websiteName: string, payload: CustomerProfileUpdatePayload) => {
+      setLoading(true);
+
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/auth/customer/profile/${websiteName}`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            credentials: "include",
+            body: JSON.stringify(payload),
+          }
+        );
+
+        const data = await parseJsonSafely(response);
+
+        if (!response.ok || !data?.user) {
+          throw new Error(
+            getErrorMessage(data, "Failed to update profile")
+          );
+        }
+
+        setUser(data.user);
+        return data.user as CustomerUser;
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
+
+  const changePassword = useCallback(
+    async (websiteName: string, payload: CustomerChangePasswordPayload) => {
+      setLoading(true);
+
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/auth/customer/change-password/${websiteName}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            credentials: "include",
+            body: JSON.stringify(payload),
+          }
+        );
+
+        const data = await parseJsonSafely(response);
+
+        if (!response.ok) {
+          throw new Error(
+            getErrorMessage(data, "Failed to update password")
+          );
+        }
+
+        if (data?.user) {
+          setUser(data.user);
+        }
+
+        return data || { message: "Password updated successfully" };
       } finally {
         setLoading(false);
       }
@@ -220,10 +421,28 @@ export function CustomerAuthProvider({
       refreshMe,
       signup,
       login,
+      loginWithGoogle,
+      forgotPassword,
+      resetPassword,
+      updateProfile,
+      changePassword,
       logout,
       clearUser,
     }),
-    [user, loading, refreshMe, signup, login, logout, clearUser]
+    [
+      user,
+      loading,
+      refreshMe,
+      signup,
+      login,
+      loginWithGoogle,
+      forgotPassword,
+      resetPassword,
+      updateProfile,
+      changePassword,
+      logout,
+      clearUser,
+    ]
   );
 
   return (

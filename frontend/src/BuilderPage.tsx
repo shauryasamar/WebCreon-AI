@@ -33,6 +33,7 @@ import AdminProfileSettings from "./Component/AdminProfileSettings";
 import EditorRenderPage from "./customizations/EditorRenderPage";
 import EditorSidebar from "./customizations/EditorSidebar";
 import CustomerOrdersPage from "./pages/CustomerOrdersPage";
+import CustomerProfilePage from "./pages/CustomerProfilePage";
 import QrLinkPopup from "./Component/QrLinkPopup";
 import BuilderDrawerPanel from "./Component/BuilderDrawerPanel";
 import { normalizeStorefrontProduct, slugify } from "./utils/productNormalizer";
@@ -1921,6 +1922,35 @@ function BuilderPageContent() {
                     />
                   </StorefrontShell>
                 }
+              />
+
+              <Route
+                path="profile"
+                element={
+                  <StorefrontShell
+                    siteDefinition={activeSiteDefinition}
+                    siteId={resolvedSiteId || siteId || ""}
+                    siteSlug={siteSlug}
+                    editMode={editMode}
+                    adminTopbarVisible={showAdminTopbar}
+                    selectedBlockId={selectedBlockId}
+                    onSelectBlock={handleSelectBlock}
+                    storefrontNavbarMode={storefrontNavbarMode}
+                    navbarFixedBounds={navbarFixedBounds}
+                    appBase={appBase}
+                  >
+                    <CustomerProfilePage
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      theme={activeSiteDefinition.theme}
+                    />
+                  </StorefrontShell>
+                }
+              />
+
+              <Route
+                path="account"
+                element={<Navigate to="profile" replace />}
               />
 
 

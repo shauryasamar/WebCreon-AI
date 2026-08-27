@@ -2644,38 +2644,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
               <span>Store</span>
             </span>
             <span>/</span>
-            <span style={{ color: textPrimary, fontWeight: 700 }}>My Orders</span>
-          </div>
-
-          {/* Heading & Live Count Badge */}
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: isMobile ? "22px" : "28px",
-                lineHeight: 1.15,
-                fontWeight: 800,
-                letterSpacing: "-0.02em",
-                color: textPrimary,
-              }}
-            >
-              My Orders
-            </h1>
-            {totalOrders > 0 && (
-              <span
-                style={{
-                  fontSize: "12px",
-                  fontWeight: 700,
-                  padding: "3px 10px",
-                  borderRadius: "999px",
-                  background: isLight ? `${accentColor}14` : `${accentColor}28`,
-                  color: accentColor,
-                  border: `1px solid ${accentColor}33`,
-                }}
-              >
-                {totalOrders} {totalOrders === 1 ? "order" : "orders"}
-              </span>
-            )}
+            <span style={{ color: textPrimary, fontWeight: 700 }}>Orders</span>
           </div>
         </div>
 

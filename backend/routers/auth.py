@@ -23,7 +23,10 @@ from auth_utils import (
 )
 from db.database import get_session
 from models import Admin, AdminSite, Site, User
-from services.email_service import send_admin_password_reset_email
+from services.email_service import (
+    send_admin_password_reset_email,
+    send_customer_password_reset_email,
+)
 
 
 router = APIRouter(
@@ -89,6 +92,18 @@ class CustomerLoginRequest(BaseModel):
     password: str
 
 
+class CustomerProfileUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    gender: Optional[str] = None
+    date_of_birth: Optional[str] = None
+
+
+class CustomerChangePasswordRequest(BaseModel):
+    current_password: Optional[str] = None
+    new_password: str
+
+
 def set_auth_cookie(
     response: Response,
     key: str,
@@ -152,6 +167,11 @@ def serialize_customer(user: User, site: Site) -> dict:
         "name": user.name,
         "email": user.email,
         "phone": user.phone,
+        "gender": getattr(user, "gender", None),
+        "dateOfBirth": getattr(user, "date_of_birth", None),
+        "authProvider": getattr(user, "auth_provider", "local"),
+        "avatarUrl": getattr(user, "avatar_url", None),
+        "hasPassword": bool(getattr(user, "password_hash", None)),
         "isActive": user.is_active,
         "siteId": str(site.id),
         "siteSlug": site.slug,
@@ -358,11 +378,6 @@ def admin_forgot_password(
     if not admin:
         # For security, return success even if email is not found to prevent user enumeration
         return {"message": "If an account exists with that email, a password reset link has been dispatched."}
-
-    if admin.auth_provider == "google" and not admin.password_hash:
-        return {
-            "message": "This account uses Google Sign-In and does not have a local password. Please log in using Google."
-        }
 
     raw_token, otp_code = generate_reset_token_and_otp()
     hashed_token = hash_reset_token(raw_token)
@@ -673,3 +688,264 @@ def customer_me(
 def customer_logout(response: Response):
     clear_auth_cookie(response, CUSTOMER_COOKIE_NAME)
     return {"message": "Customer logged out"}
+
+
+@router.put("/customer/profile/{website_name}")
+def customer_update_profile(
+    website_name: str,
+    payload: CustomerProfileUpdateRequest,
+    auth_user=Depends(authenticate_customer),
+    session: Session = Depends(get_session),
+):
+    site = resolve_site_by_slug_or_404(website_name, session)
+
+    if str(site.id) != auth_user["siteId"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Customer token does not match requested site",
+        )
+
+    user = session.get(User, auth_user["userId"])
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Customer not found",
+        )
+
+    if payload.name is not None:
+        user.name = payload.name.strip()
+    if payload.phone is not None:
+        user.phone = payload.phone.strip()
+    if payload.gender is not None:
+        user.gender = payload.gender.strip()
+    if payload.date_of_birth is not None:
+        user.date_of_birth = payload.date_of_birth.strip()
+
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+
+    return {
+        "message": "Profile updated successfully",
+        "user": serialize_customer(user, site),
+    }
+
+
+@router.post("/customer/change-password/{website_name}")
+def customer_change_password(
+    website_name: str,
+    payload: CustomerChangePasswordRequest,
+    auth_user=Depends(authenticate_customer),
+    session: Session = Depends(get_session),
+):
+    site = resolve_site_by_slug_or_404(website_name, session)
+
+    if str(site.id) != auth_user["siteId"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Customer token does not match requested site",
+        )
+
+    user = session.get(User, auth_user["userId"])
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Customer not found",
+        )
+
+    # If user currently has a password, verify current_password
+    if user.password_hash:
+        if not payload.current_password or not verify_password(payload.current_password, user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current password does not match",
+            )
+
+    validate_password_or_400(payload.new_password)
+    err = validate_password_strength(payload.new_password)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+
+    user.password_hash = hash_password(payload.new_password)
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+
+    return {
+        "message": "Password updated successfully",
+        "user": serialize_customer(user, site),
+    }
+
+
+@router.post("/customer/google/{website_name}")
+def customer_google_auth(
+    website_name: str,
+    payload: GoogleAuthRequest,
+    session: Session = Depends(get_session),
+):
+    google_user = verify_google_id_token(payload.id_token)
+    if not google_user or not google_user.get("email"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Google credentials or token",
+        )
+
+    site = resolve_site_by_slug_or_404(website_name, session)
+    email = google_user["email"].lower().strip()
+
+    user = session.exec(
+        select(User).where(
+            User.site_id == site.id,
+            User.email == email,
+        )
+    ).first()
+
+    if user:
+        # Update existing user profile with Google metadata
+        if not user.google_id:
+            user.google_id = google_user.get("google_id")
+        if not user.avatar_url and google_user.get("picture"):
+            user.avatar_url = google_user.get("picture")
+        if payload.phone and not user.phone:
+            user.phone = payload.phone
+        user.is_active = True
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+    else:
+        # Create new customer via Google
+        user = User(
+            site_id=site.id,
+            email=email,
+            name=google_user.get("name") or email.split("@")[0].capitalize(),
+            phone=payload.phone,
+            avatar_url=google_user.get("picture"),
+            google_id=google_user.get("google_id"),
+            auth_provider="google",
+            is_active=True,
+            password_hash=None,
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+
+    token = create_customer_token(str(user.id), str(site.id))
+
+    response = JSONResponse(
+        content={
+            "user": serialize_customer(user, site)
+        }
+    )
+    set_auth_cookie(response, CUSTOMER_COOKIE_NAME, token)
+    return response
+
+
+@router.post("/customer/forgot-password/{website_name}")
+def customer_forgot_password(
+    website_name: str,
+    payload: ForgotPasswordRequest,
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    site = resolve_site_by_slug_or_404(website_name, session)
+    email = payload.email.lower().strip()
+
+    user = session.exec(
+        select(User).where(
+            User.site_id == site.id,
+            User.email == email,
+        )
+    ).first()
+
+    if not user:
+        return {
+            "message": "If an account exists with that email, a 6-digit verification code has been dispatched."
+        }
+
+    raw_token, otp_code = generate_reset_token_and_otp()
+    hashed_token = hash_reset_token(raw_token)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+
+    user.reset_token = f"{hashed_token}:{otp_code}"
+    user.reset_token_expires_at = expires_at
+    session.add(user)
+    session.commit()
+
+    origin = request.headers.get("origin", "http://localhost:5173")
+    store_slug = site.slug or website_name
+    store_definition = getattr(site, "site_definition", None) or {}
+    store_name = store_definition.get("siteName") or store_slug.replace("-", " ").title()
+    reset_link = f"{origin}/store/{store_slug}/login?reset_email={email}&token={raw_token}"
+
+    send_customer_password_reset_email(email, store_name, reset_link, otp_code)
+
+    return {
+        "message": f"A 6-digit verification code has been dispatched to {email}.",
+        "dev_otp": otp_code,
+    }
+
+
+@router.post("/customer/reset-password/{website_name}")
+def customer_reset_password(
+    website_name: str,
+    payload: ResetPasswordRequest,
+    session: Session = Depends(get_session),
+):
+    site = resolve_site_by_slug_or_404(website_name, session)
+    email = payload.email.lower().strip()
+
+    user = session.exec(
+        select(User).where(
+            User.site_id == site.id,
+            User.email == email,
+        )
+    ).first()
+
+    if not user or not user.reset_token or not user.reset_token_expires_at:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset code",
+        )
+
+    if datetime.now(timezone.utc) > user.reset_token_expires_at:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Verification code has expired. Please request a new code.",
+        )
+
+    parts = user.reset_token.split(":")
+    stored_hash = parts[0]
+    stored_otp = parts[1] if len(parts) > 1 else ""
+
+    provided_input = payload.token_or_otp.strip()
+    is_valid_token = hash_reset_token(provided_input) == stored_hash
+    is_valid_otp = provided_input == stored_otp
+
+    if not (is_valid_token or is_valid_otp):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid 6-digit verification code",
+        )
+
+    err = validate_password_strength(payload.new_password)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+
+    user.password_hash = hash_password(payload.new_password)
+    user.reset_token = None
+    user.reset_token_expires_at = None
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+
+    # Auto log the customer in
+    token = create_customer_token(str(user.id), str(site.id))
+
+    response = JSONResponse(
+        content={
+            "message": "Password successfully updated!",
+            "user": serialize_customer(user, site),
+        }
+    )
+    set_auth_cookie(response, CUSTOMER_COOKIE_NAME, token)
+    return response

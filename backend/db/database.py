@@ -129,6 +129,15 @@ def create_db_and_tables():
                 ALTER TABLE admins ADD COLUMN IF NOT EXISTS last_login_ip VARCHAR(100);
                 ALTER TABLE admins ALTER COLUMN password_hash DROP NOT NULL;
 
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider VARCHAR(50) DEFAULT 'local';
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(255);
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS gender VARCHAR(50);
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS date_of_birth VARCHAR(50);
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255);
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires_at TIMESTAMPTZ;
+                ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
+
                 UPDATE order_items SET return_window_days = 0, returnable_quantity = 0 WHERE order_id IN (SELECT id FROM orders WHERE id::text LIKE '2cd85585%');
                 UPDATE orders SET escrow_status = 'unheld', return_window_closes_at = delivered_at WHERE id::text LIKE '2cd85585%';
                 UPDATE tenant_ledger_entries SET escrow_status = 'unheld', status = 'paid', settled_at = CURRENT_TIMESTAMP WHERE order_id IN (SELECT id FROM orders WHERE id::text LIKE '2cd85585%');

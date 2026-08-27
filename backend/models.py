@@ -97,7 +97,17 @@ class User(SQLModel, table=True):
     name: Optional[str] = Field(default=None, nullable=True)
     email: Optional[str] = Field(default=None, index=True, nullable=True)
     phone: Optional[str] = Field(default=None, nullable=True)
+    gender: Optional[str] = Field(default=None, nullable=True)
+    date_of_birth: Optional[str] = Field(default=None, nullable=True)
     password_hash: Optional[str] = Field(default=None, nullable=True)
+    auth_provider: str = Field(default="local", nullable=False)
+    google_id: Optional[str] = Field(default=None, nullable=True)
+    avatar_url: Optional[str] = Field(default=None, nullable=True)
+    reset_token: Optional[str] = Field(default=None, nullable=True)
+    reset_token_expires_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
 
     is_guest: bool = Field(default=False, nullable=False)
     is_active: bool = Field(default=True, nullable=False)

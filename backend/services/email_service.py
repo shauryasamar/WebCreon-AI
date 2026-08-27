@@ -3,6 +3,9 @@ import os
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from dotenv import load_dotenv, find_dotenv
+
+load_dotenv(find_dotenv(usecwd=True))
 
 logger = logging.getLogger(__name__)
 
@@ -94,4 +97,95 @@ def send_admin_password_reset_email(to_email: str, reset_link: str, otp_code: st
         return True
     except Exception as e:
         logger.error(f"Failed to send password reset email to {to_email}: {e}")
+        return False
+
+
+def send_customer_password_reset_email(
+    to_email: str,
+    store_name: str,
+    reset_link: str,
+    otp_code: str,
+) -> bool:
+    """
+    Sends a password reset email to a customer with a 6-digit OTP code and direct reset link.
+    """
+    smtp_host = os.getenv("SMTP_HOST", "").strip()
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER", "").strip()
+    smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
+    smtp_from = os.getenv("SMTP_FROM", smtp_user or "noreply@webcreon.ai").strip()
+
+    subject = f"{store_name} - Password Reset Verification Code"
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Password Reset Request</title>
+    </head>
+    <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc; margin: 0; padding: 40px 20px;">
+      <div style="max-width: 520px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+        <div style="background: #0f172a; padding: 24px; text-align: center; border-bottom: 2px solid #2563eb;">
+          <h2 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 0.5px;">{store_name}</h2>
+          <p style="color: #94a3b8; margin: 4px 0 0 0; font-size: 13px;">Customer Security</p>
+        </div>
+        <div style="padding: 32px; color: #334155;">
+          <h3 style="margin-top: 0; color: #0f172a;">Reset Your Password</h3>
+          <p>We received a request to reset your password for your account at <strong>{store_name}</strong> (<strong>{to_email}</strong>).</p>
+          
+          <div style="background: #f1f5f9; border-radius: 8px; padding: 16px; text-align: center; margin: 24px 0;">
+            <p style="margin: 0 0 8px 0; font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase;">Your 6-Digit Reset Code</p>
+            <div style="font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #2563eb;">{otp_code}</div>
+          </div>
+
+          <p style="text-align: center; margin: 24px 0;">
+            <a href="{reset_link}" style="background-color: #2563eb; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">Reset Password</a>
+          </p>
+          
+          <p style="font-size: 13px; color: #64748b; margin-top: 24px;">This code expires in <strong>15 minutes</strong>. If you did not request this, you can safely ignore this email.</p>
+        </div>
+        <div style="background: #f8fafc; padding: 16px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0;">
+          &copy; {store_name}. All rights reserved.
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+
+    if not smtp_host or not smtp_user or not smtp_password:
+        dev_box = f"""
+================================================================================
+ [CUSTOMER PASSWORD RESET - DEV FALLBACK]
+ TO: {to_email}
+ STORE: {store_name}
+ RESET OTP CODE: {otp_code}
+ RESET LINK: {reset_link}
+================================================================================
+"""
+        print(dev_box)
+        logger.info(f"Customer password reset code logged for {to_email}")
+        return True
+
+    try:
+        print(f"[EMAIL] Connecting to SMTP server {smtp_host}:{smtp_port} for {to_email}...")
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = smtp_from
+        msg["To"] = to_email
+        msg.attach(MIMEText(html_content, "html"))
+
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=12) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(smtp_user, smtp_password)
+            server.sendmail(smtp_from, [to_email], msg.as_string())
+
+        print(f"[EMAIL SUCCESS] Reset code {otp_code} successfully emailed to {to_email}")
+        logger.info(f"Customer password reset email dispatched to {to_email}")
+        return True
+    except Exception as e:
+        print(f"[EMAIL FAILED] Could not send via SMTP ({e}). Fallback OTP is {otp_code}")
+        logger.error(f"Failed to send customer password reset email to {to_email}: {e}")
         return False
