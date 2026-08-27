@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 from models import (
     Cart,
     CartItem,
+    Coupon,
+    CouponUsage,
     DeliveryAgent,
     DeliverySettings,
     InventoryMovement,
@@ -540,11 +542,81 @@ def calculate_charge_amount(charge: dict[str, Any], base_amount: Decimal) -> Dec
 def evaluate_promo_discount(
     subtotal: Decimal,
     promo_code: Optional[str],
-) -> tuple[Optional[str], Decimal]:
-    normalized = str(promo_code or "").strip()
-    if normalized.lower() == "save10":
-        return normalized, money(subtotal * Decimal("0.10"))
-    return normalized or None, Decimal("0.00")
+    site_id: Optional[UUID] = None,
+    session: Optional[Session] = None,
+    customer_email: Optional[str] = None,
+    delivery_fee: Decimal = Decimal("0.00"),
+) -> tuple[Optional[str], Decimal, Optional[Coupon]]:
+    normalized = str(promo_code or "").strip().upper()
+    if not normalized:
+        return None, Decimal("0.00"), None
+
+    if not site_id or not session:
+        if normalized.lower() == "save10":
+            return normalized, money(subtotal * Decimal("0.10")), None
+        return normalized or None, Decimal("0.00"), None
+
+    coupon = session.exec(
+        select(Coupon).where(
+            Coupon.site_id == site_id,
+            Coupon.code == normalized,
+            Coupon.is_active == True,
+        )
+    ).first()
+
+    if not coupon:
+        return None, Decimal("0.00"), None
+
+    now = datetime.now(timezone.utc)
+    if coupon.starts_at and now < coupon.starts_at:
+        return None, Decimal("0.00"), None
+    if coupon.expires_at and now > coupon.expires_at:
+        return None, Decimal("0.00"), None
+    if coupon.total_usage_limit is not None and coupon.times_used >= coupon.total_usage_limit:
+        return None, Decimal("0.00"), None
+    if subtotal < coupon.min_order_value:
+        return None, Decimal("0.00"), None
+
+    # Customer specific rules
+    if customer_email:
+        email_clean = customer_email.strip().lower()
+        if coupon.is_first_order_only:
+            past_order = session.exec(
+                select(Order)
+                .join(User, Order.customer_id == User.id)
+                .where(
+                    Order.site_id == site_id,
+                    User.email == email_clean,
+                    Order.status != "cancelled",
+                )
+            ).first()
+            if past_order:
+                return None, Decimal("0.00"), None
+
+        if coupon.per_customer_limit:
+            usage_count = session.exec(
+                select(func.count(CouponUsage.id)).where(
+                    CouponUsage.site_id == site_id,
+                    CouponUsage.coupon_id == coupon.id,
+                    CouponUsage.customer_email == email_clean,
+                )
+            ).one()
+            if usage_count >= coupon.per_customer_limit:
+                return None, Decimal("0.00"), None
+
+    discount_amount = Decimal("0.00")
+    if coupon.discount_type == "percentage":
+        computed = (subtotal * coupon.discount_value) / Decimal("100.00")
+        if coupon.max_discount_amount is not None and coupon.max_discount_amount > 0:
+            computed = min(computed, coupon.max_discount_amount)
+        discount_amount = min(computed, subtotal)
+    elif coupon.discount_type == "fixed_amount":
+        discount_amount = min(coupon.discount_value, subtotal)
+    elif coupon.discount_type == "free_shipping":
+        discount_amount = delivery_fee
+
+    discount_amount = money(discount_amount)
+    return coupon.code, discount_amount, coupon
 
 
 def extract_variant_details(
@@ -725,9 +797,18 @@ def evaluate_pricing(
     payment_method: str,
     selected_optional_charge_ids: list[str],
     promo_code: Optional[str],
+    site_id: Optional[UUID] = None,
+    session: Optional[Session] = None,
+    customer_email: Optional[str] = None,
 ) -> dict[str, Any]:
     subtotal = sum((item["line_total"] for item in cart_items), Decimal("0.00"))
-    applied_promo_code, promo_discount = evaluate_promo_discount(subtotal, promo_code)
+    applied_promo_code, promo_discount, coupon_obj = evaluate_promo_discount(
+        subtotal=subtotal,
+        promo_code=promo_code,
+        site_id=site_id,
+        session=session,
+        customer_email=customer_email,
+    )
     subtotal_after_discount = max(subtotal - promo_discount, Decimal("0.00"))
 
     charges = checkout_settings.get("charges") or []
@@ -816,10 +897,13 @@ def evaluate_pricing(
                 "code": "promo_code",
                 "label": applied_promo_code,
                 "amount": float(promo_discount),
+                "couponId": str(coupon_obj.id) if coupon_obj else None,
             }]
             if promo_discount > 0 and applied_promo_code
             else []
         ),
+        "couponId": str(coupon_obj.id) if coupon_obj else None,
+        "discountAmount": float(promo_discount),
         "total": float(total),
         "paymentMethod": payment_method,
     }
@@ -1918,7 +2002,13 @@ def place_order(
             payment_method=payment_method,
             selected_optional_charge_ids=payload.selected_optional_charge_ids,
             promo_code=payload.promo_code,
+            site_id=site_id,
+            session=session,
+            customer_email=customer.email,
         )
+
+        applied_coupon_code = pricing_snapshot.get("promoCode")
+        applied_discount_amount = money(Decimal(str(pricing_snapshot.get("promoDiscount", 0))))
 
         order = Order(
             site_id=site_id,
@@ -1942,12 +2032,34 @@ def place_order(
             ],
             pricing_snapshot=pricing_snapshot,
             payment_method=payment_method,
+            coupon_code=applied_coupon_code,
+            discount_amount=applied_discount_amount,
             status="placed",
             delivery_otp=f"{secrets.randbelow(9000) + 1000}",
             total=money(pricing_snapshot["total"]),
         )
         session.add(order)
         session.flush()
+
+        # Atomically record coupon usage & increment usage counter
+        if applied_coupon_code and pricing_snapshot.get("couponId"):
+            try:
+                coupon_uuid = UUID(str(pricing_snapshot["couponId"]))
+                coupon_rec = session.get(Coupon, coupon_uuid)
+                if coupon_rec:
+                    coupon_rec.times_used += 1
+                    session.add(coupon_rec)
+                    usage = CouponUsage(
+                        site_id=site_id,
+                        coupon_id=coupon_rec.id,
+                        order_id=order.id,
+                        user_id=customer.id,
+                        customer_email=customer.email or "",
+                        discount_amount=applied_discount_amount,
+                    )
+                    session.add(usage)
+            except Exception as e:
+                logger.warning(f"Failed to record coupon usage: {e}")
 
         order_subtotal = sum((item["line_total"] for item in order_line_items), Decimal("0.00"))
 

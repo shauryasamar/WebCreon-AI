@@ -1872,7 +1872,7 @@ const AdminProducts = () => {
   };
 
   return (
-    <div style={{ width: "100%", color: "#0f172a", display: "flex", flexDirection: "column", gap: "14px" }}>
+    <div style={{ width: "100%", color: "#0f172a", display: "flex", flexDirection: "column", gap: "10px", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
       <style>{`
         @keyframes storeShimmer {
           0% { background-position: 200% 0; }
@@ -1886,7 +1886,6 @@ const AdminProducts = () => {
           border: "1px solid #e2e8f0",
           borderRadius: "10px",
           padding: "10px 14px",
-          marginBottom: "16px",
           boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
           display: "flex",
           flexDirection: "column",
@@ -2220,15 +2219,15 @@ const AdminProducts = () => {
 
                 {/* Return Policy Filter */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                  <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Return Policy</label>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Returns</label>
                   <select
                     value={filterReturnPolicy}
                     onChange={(e) => setFilterReturnPolicy(e.target.value as any)}
                     style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}
                   >
-                    <option value="all">All Return Policies</option>
-                    <option value="returnable">Returnable Items Only</option>
-                    <option value="non_returnable">Non-Returnable (0-Day) Only</option>
+                    <option value="all">All</option>
+                    <option value="returnable">Returnable</option>
+                    <option value="non_returnable">Non-Returnable</option>
                   </select>
                 </div>
 
@@ -2604,97 +2603,62 @@ const AdminProducts = () => {
         )}
       </div>
 
-      {/* 2. 5 Summary KPI Stat Boxes (Shrinks smoothly without breaking into 2 rows) */}
+      {/* 2. 5 Summary KPI Stat Boxes */}
       <div
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
-          gap: "8px",
+          gap: "12px",
           width: "100%",
         }}
       >
         {/* Total Products */}
-        <div style={{ ...plainCardStyle, padding: "10px 14px", minWidth: 0, overflow: "hidden" }}>
-          <div style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            Total Products
-          </div>
-          <div style={{ fontSize: "18px", fontWeight: 700, color: "#0f172a", marginTop: "2px", lineHeight: 1.15 }}>
+        <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ fontSize: "22px", fontWeight: 600, color: "#334155", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
             {totalProducts}
           </div>
-          <div style={{ fontSize: "10.5px", color: "#94a3b8", marginTop: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            Catalog inventory size
+          <div style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+            Total Products
           </div>
         </div>
 
         {/* Active on Store */}
-        <div style={{ ...plainCardStyle, padding: "10px 14px", minWidth: 0, overflow: "hidden" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minWidth: 0 }}>
-            <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              Active on Store
-            </span>
-            <span style={{ fontSize: "9.5px", fontWeight: 700, color: "#16a34a", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "0 5px", borderRadius: "4px" }}>
-              Live
-            </span>
-          </div>
-          <div style={{ fontSize: "18px", fontWeight: 700, color: "#0f172a", marginTop: "2px", lineHeight: 1.15 }}>
+        <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ fontSize: "22px", fontWeight: 600, color: "#334155", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
             {activeCount}
           </div>
-          <div style={{ fontSize: "10.5px", color: "#94a3b8", marginTop: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            Visible to customers
+          <div style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+            Active on Store
           </div>
         </div>
 
         {/* In Stock */}
-        <div style={{ ...plainCardStyle, padding: "10px 14px", minWidth: 0, overflow: "hidden" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minWidth: 0 }}>
-            <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              In Stock
-            </span>
-            <span style={{ fontSize: "9.5px", fontWeight: 700, color: "#16a34a", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "0 5px", borderRadius: "4px" }}>
-              Ready
-            </span>
-          </div>
-          <div style={{ fontSize: "18px", fontWeight: 700, color: "#16a34a", marginTop: "2px", lineHeight: 1.15 }}>
+        <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ fontSize: "22px", fontWeight: 600, color: "#16a34a", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
             {inStockCount}
           </div>
-          <div style={{ fontSize: "10.5px", color: "#94a3b8", marginTop: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            Ready for purchase
+          <div style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+            In Stock
           </div>
         </div>
 
         {/* Low Stock (≤5) */}
-        <div style={{ ...plainCardStyle, padding: "10px 14px", minWidth: 0, overflow: "hidden" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minWidth: 0 }}>
-            <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              Low Stock (≤5)
-            </span>
-            <span style={{ fontSize: "9.5px", fontWeight: 700, color: "#b45309", background: "#fef3c7", border: "1px solid #fde68a", padding: "0 5px", borderRadius: "4px" }}>
-              Restock
-            </span>
-          </div>
-          <div style={{ fontSize: "18px", fontWeight: 700, color: "#d97706", marginTop: "2px", lineHeight: 1.15 }}>
+        <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ fontSize: "22px", fontWeight: 600, color: "#d97706", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
             {lowStockCount}
           </div>
-          <div style={{ fontSize: "10.5px", color: "#94a3b8", marginTop: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            Product or variant ≤ 5 left
+          <div style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+            Low Stock (≤5)
           </div>
         </div>
 
         {/* Out of Stock */}
-        <div style={{ ...plainCardStyle, padding: "10px 14px", minWidth: 0, overflow: "hidden" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minWidth: 0 }}>
-            <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              Out of Stock
-            </span>
-            <span style={{ fontSize: "9.5px", fontWeight: 700, color: "#dc2626", background: "#fef2f2", border: "1px solid #fecaca", padding: "0 5px", borderRadius: "4px" }}>
-              Sold Out
-            </span>
-          </div>
-          <div style={{ fontSize: "18px", fontWeight: 700, color: "#dc2626", marginTop: "2px", lineHeight: 1.15 }}>
+        <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ fontSize: "22px", fontWeight: 600, color: "#ef4444", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
             {outOfStockCount}
           </div>
-          <div style={{ fontSize: "10.5px", color: "#94a3b8", marginTop: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            0 inventory available
+          <div style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+            Out of Stock
           </div>
         </div>
       </div>
@@ -2709,7 +2673,6 @@ const AdminProducts = () => {
             right: 0,
             bottom: 0,
             background: "rgba(15, 23, 42, 0.65)",
-            backdropFilter: "blur(4px)",
             zIndex: 1000,
             overflowY: "auto",
             display: "flex",
@@ -4326,7 +4289,7 @@ const AdminProducts = () => {
                     padding: 0,
                   }}
                 >
-                  <option value={0}>0 Days (Non-Returnable)</option>
+                  <option value={0}>No Return</option>
                   <option value={2}>2 Days</option>
                   <option value={7}>7 Days</option>
                   <option value={10}>10 Days</option>
@@ -5178,7 +5141,6 @@ const AdminProducts = () => {
             right: 0,
             bottom: 0,
             background: "rgba(15, 23, 42, 0.6)",
-            backdropFilter: "blur(4px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -5345,7 +5307,6 @@ const AdminProducts = () => {
             right: 0,
             bottom: 0,
             background: "rgba(15, 23, 42, 0.65)",
-            backdropFilter: "blur(4px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",

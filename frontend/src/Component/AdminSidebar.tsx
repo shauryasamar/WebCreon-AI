@@ -23,6 +23,10 @@ const AdminSidebar = () => {
       to: `/builder/${siteId}/admin/orders`,
     },
     {
+      label: "Discounts & Promo",
+      to: `/builder/${siteId}/admin/discounts`,
+    },
+    {
       label: "Delivery & Shipping",
       to: `/builder/${siteId}/admin/delivery`,
     },

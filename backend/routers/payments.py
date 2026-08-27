@@ -40,6 +40,8 @@ from models import (
     AdminSite,
     Cart,
     CartItem,
+    Coupon,
+    CouponUsage,
     DeliverySettings,
     InventoryMovement,
     Order,
@@ -541,7 +543,13 @@ def create_payment_order(
         payment_method=payment_method,
         selected_optional_charge_ids=payload.selected_optional_charge_ids,
         promo_code=payload.promo_code,
+        site_id=site_id,
+        session=session,
+        customer_email=customer.email,
     )
+
+    applied_coupon_code = pricing_snapshot.get("promoCode")
+    applied_discount_amount = money(Decimal(str(pricing_snapshot.get("promoDiscount", 0))))
 
     gross_amount = money(pricing_snapshot["total"])
     if gross_amount <= 0:
@@ -641,6 +649,8 @@ def create_payment_order(
         pricing_snapshot=pricing_snapshot,
         payment_method=payment_method,
         payment_status="pending",
+        coupon_code=applied_coupon_code,
+        discount_amount=applied_discount_amount,
         razorpay_order_id=razorpay_order_id,
         platform_fee=platform_fee,
         tenant_share=tenant_share,
@@ -854,6 +864,35 @@ def finalize_order_fulfillment(
             changed_by_type="customer",
         )
     )
+
+    # 6.5. COUPON USAGE TRACKING
+    if order.coupon_code and isinstance(order.pricing_snapshot, dict) and order.pricing_snapshot.get("couponId"):
+        try:
+            coupon_uuid = UUID(str(order.pricing_snapshot["couponId"]))
+            coupon_rec = session.get(Coupon, coupon_uuid)
+            if coupon_rec:
+                existing_usage = session.exec(
+                    select(CouponUsage).where(
+                        CouponUsage.site_id == site_id,
+                        CouponUsage.order_id == order.id,
+                    )
+                ).first()
+                if not existing_usage:
+                    coupon_rec.times_used += 1
+                    session.add(coupon_rec)
+                    cust_user = session.get(User, order.customer_id)
+                    cust_email = cust_user.email if cust_user else ""
+                    usage = CouponUsage(
+                        site_id=site_id,
+                        coupon_id=coupon_rec.id,
+                        order_id=order.id,
+                        user_id=order.customer_id,
+                        customer_email=cust_email,
+                        discount_amount=order.discount_amount,
+                    )
+                    session.add(usage)
+        except Exception as e:
+            logger.warning(f"Failed to record coupon usage in online payment: {e}")
 
     # 7. CLEAR CUSTOMER CART
     cart = session.exec(
@@ -1341,8 +1380,13 @@ def release_mature_escrows(
     """
     released_count, total_amount_released = process_mature_escrows(session, site_id=site_id)
 
+    if released_count == 0:
+        msg = "No mature escrows to release."
+    else:
+        msg = f"Released {released_count} escrow payout(s) (₹{float(total_amount_released):,.2f})."
+
     return {
-        "message": f"Successfully released {released_count} mature escrow payout(s)",
+        "message": msg,
         "released_count": released_count,
         "total_amount_released": float(total_amount_released),
     }

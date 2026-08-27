@@ -992,13 +992,11 @@ export default function DeliverySettingsPage() {
                       />
                     </span>
                   </label>
-                  <div style={{ display: "flex", flexDirection: "column" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                     <span style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a", lineHeight: 1.2 }}>
                       Open Pickup Pool
                     </span>
-                    <span style={{ fontSize: "11px", color: "#64748b" }}>
-                      Allow active riders to claim unassigned ready orders
-                    </span>
+                    <InfoTooltip text="Allow active riders to claim unassigned ready orders" />
                   </div>
                 </div>
 
@@ -1256,8 +1254,9 @@ export default function DeliverySettingsPage() {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
-                  gap: "10px",
+                  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                  gap: "12px",
+                  width: "100%",
                 }}
               >
                 <StatCard label="Registered Riders" value={String(totalAgents)} />
@@ -1354,11 +1353,6 @@ export default function DeliverySettingsPage() {
                   >
                     📍 {settings.sender_latitude ? "Store Location Set ✓" : "Set Store Location"}
                   </button>
-                  {settings.sender_latitude && (
-                    <span style={{ fontSize: "11px", color: "#16a34a", fontWeight: 500 }}>
-                      Orders within {settings.own_delivery_radius_km} km will be accepted
-                    </span>
-                  )}
                 </div>
 
                 {/* Right: Add Agent Button */}
@@ -2406,6 +2400,67 @@ export default function DeliverySettingsPage() {
 // -----------------------------------------------------------------------------
 // Component Styles matching AdminProducts.tsx
 // -----------------------------------------------------------------------------
+function InfoTooltip({ text }: { text: string }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      style={{ position: "relative", display: "inline-flex", alignItems: "center", cursor: "help" }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ width: "13px", height: "13px", color: hovered ? "#2563eb" : "#94a3b8", transition: "color 0.15s ease" }}
+      >
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="16" x2="12" y2="12" />
+        <line x1="12" y1="8" x2="12.01" y2="8" />
+      </svg>
+      {hovered && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "calc(100% + 6px)",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "#0f172a",
+            color: "#ffffff",
+            fontSize: "11px",
+            fontWeight: 500,
+            padding: "5px 9px",
+            borderRadius: "6px",
+            whiteSpace: "nowrap",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            zIndex: 100,
+            pointerEvents: "none",
+            fontFamily: "'Inter', sans-serif",
+          }}
+        >
+          {text}
+          <div
+            style={{
+              position: "absolute",
+              top: "100%",
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: 0,
+              height: 0,
+              borderLeft: "4px solid transparent",
+              borderRight: "4px solid transparent",
+              borderTop: "4px solid #0f172a",
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 const StatCard = ({ label, value }: { label: string; value: string }) => (
   <div
     style={{
@@ -2413,29 +2468,38 @@ const StatCard = ({ label, value }: { label: string; value: string }) => (
       borderRadius: "8px",
       background: "#ffffff",
       border: "1px solid #e2e8f0",
+      display: "flex",
+      flexDirection: "column",
+      gap: "8px",
+      minWidth: 0,
+      overflow: "hidden",
+      fontFamily: "'Inter', sans-serif",
     }}
   >
-    <p
+    <div
       style={{
-        margin: "0 0 4px",
-        fontSize: "12px",
-        color: "#64748b",
-        whiteSpace: "nowrap",
-      }}
-    >
-      {label}
-    </p>
-    <h3
-      style={{
-        margin: 0,
-        fontSize: "18px",
-        fontWeight: 700,
-        color: "#0f172a",
-        whiteSpace: "nowrap",
+        fontSize: "22px",
+        fontWeight: 600,
+        color: "#334155",
+        lineHeight: 1,
+        fontFamily: "'Inter', sans-serif",
       }}
     >
       {value}
-    </h3>
+    </div>
+    <div
+      style={{
+        fontSize: "12px",
+        fontWeight: 500,
+        color: "#555555",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        fontFamily: "'Inter', sans-serif",
+      }}
+    >
+      {label}
+    </div>
   </div>
 );
 

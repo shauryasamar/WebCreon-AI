@@ -81,6 +81,152 @@ const RefreshIcon = ({ spin }: { spin?: boolean }) => (
   </svg>
 );
 
+function InfoTooltip({ text }: { text: string }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      style={{ position: "relative", display: "inline-flex", alignItems: "center", cursor: "help" }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ width: "13px", height: "13px", color: hovered ? "#2563eb" : "#94a3b8", transition: "color 0.15s ease" }}
+      >
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="16" x2="12" y2="12" />
+        <line x1="12" y1="8" x2="12.01" y2="8" />
+      </svg>
+      {hovered && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "calc(100% + 6px)",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "#0f172a",
+            color: "#ffffff",
+            fontSize: "11px",
+            fontWeight: 500,
+            padding: "5px 9px",
+            borderRadius: "6px",
+            whiteSpace: "nowrap",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            zIndex: 100,
+            pointerEvents: "none",
+            fontFamily: "'Inter', sans-serif",
+          }}
+        >
+          {text}
+          <div
+            style={{
+              position: "absolute",
+              top: "100%",
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: 0,
+              height: 0,
+              borderLeft: "4px solid transparent",
+              borderRight: "4px solid transparent",
+              borderTop: "4px solid #0f172a",
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EscrowReleaseIconButton({
+  onClick,
+  disabled,
+  active,
+  loading,
+}: {
+  onClick: () => void;
+  disabled: boolean;
+  active: boolean;
+  loading: boolean;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          width: "24px",
+          height: "24px",
+          borderRadius: "5px",
+          border: "1px solid",
+          borderColor: active ? "#fde68a" : "#e2e8f0",
+          background: active ? "#fef3c7" : "#f8fafc",
+          color: active ? "#b45309" : "#94a3b8",
+          cursor: disabled ? "default" : "pointer",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 0,
+          transition: "all 0.15s ease",
+        }}
+        title="Release mature escrows"
+      >
+        {loading ? (
+          <svg className="spin-animation" viewBox="0 0 24 24" fill="none" style={{ width: 12, height: 12 }}>
+            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" strokeDasharray="32" strokeLinecap="round" />
+          </svg>
+        ) : (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+          </svg>
+        )}
+      </button>
+      {hovered && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "calc(100% + 6px)",
+            right: 0,
+            background: "#0f172a",
+            color: "#ffffff",
+            fontSize: "11px",
+            fontWeight: 500,
+            padding: "5px 9px",
+            borderRadius: "6px",
+            whiteSpace: "nowrap",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            zIndex: 100,
+            pointerEvents: "none",
+            fontFamily: "'Inter', sans-serif",
+          }}
+        >
+          {active ? "Release mature escrows to bank" : "No mature escrows available"}
+          <div
+            style={{
+              position: "absolute",
+              top: "100%",
+              right: "8px",
+              width: 0,
+              height: 0,
+              borderLeft: "4px solid transparent",
+              borderRight: "4px solid transparent",
+              borderTop: "4px solid #0f172a",
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 const getCachedEarnings = (id?: string): EarningsSummaryData | null => {
   if (!id || typeof window === "undefined") return null;
   try {
@@ -172,7 +318,12 @@ export default function TenantEarningsPage() {
       });
       const json = await res.json();
       if (res.ok) {
-        setFeedback({ text: json.message || "Payouts processed successfully.", type: "success" });
+        setFeedback({
+          text: json.message || (json.released_count === 0 
+            ? "No mature escrows to release."
+            : `Released ${json.released_count} escrow payout(s).`),
+          type: "success",
+        });
         await fetchEarnings("silent");
       } else {
         setFeedback({ text: json.detail || "Failed to process payouts.", type: "error" });
@@ -402,7 +553,7 @@ export default function TenantEarningsPage() {
         style={{
           ...plainCardStyle,
           padding: "10px 14px",
-          marginBottom: "12px",
+          marginBottom: "10px",
           display: "flex",
           flexDirection: "column",
           gap: "8px",
@@ -417,69 +568,37 @@ export default function TenantEarningsPage() {
             gap: "10px",
           }}
         >
-          {/* Left Side: Release Mature Escrows & Refresh Action Buttons */}
+          {/* Left Side: Clean Mode Pill */}
           <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-            <button
-              type="button"
-              onClick={handleReleaseMatureEscrows}
-              disabled={releasingEscrow}
+            <div
               style={{
                 display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "6px",
-                height: "36px",
-                minWidth: "190px",
-                padding: "0 14px",
-                borderRadius: "7px",
-                border: "1px solid #0f172a",
-                background: "#0f172a",
-                color: "#ffffff",
-                fontSize: "13px",
-                fontWeight: 600,
-                cursor: releasingEscrow ? "wait" : "pointer",
-                boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
-                transition: "background 0.15s ease",
+                background: "#f1f5f9",
+                padding: "3px",
+                borderRadius: "8px",
+                border: "1px solid #e2e8f0",
               }}
             >
-              {releasingEscrow ? (
-                <>
-                  <svg className="spin-animation" viewBox="0 0 24 24" fill="none" style={{ width: 13, height: 13 }}>
-                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" strokeDasharray="32" strokeLinecap="round" />
-                  </svg>
-                  <span>Releasing Escrows...</span>
-                </>
-              ) : (
-                <span>Release Mature Escrows</span>
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => fetchEarnings(true)}
-              disabled={refreshing}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "6px",
-                height: "36px",
-                minWidth: "98px",
-                padding: "0 12px",
-                borderRadius: "7px",
-                border: "1px solid #cbd5e1",
-                background: "#f8fafc",
-                color: "#334155",
-                fontSize: "13px",
-                fontWeight: 600,
-                cursor: refreshing ? "wait" : "pointer",
-                transition: "background 0.15s ease",
-              }}
-              title="Refresh ledger records"
-            >
-              <RefreshIcon spin={refreshing} />
-              <span>{refreshing ? "Refreshing..." : "Refresh"}</span>
-            </button>
+              <button
+                type="button"
+                style={{
+                  borderRadius: "6px",
+                  padding: "5px 14px",
+                  border: "none",
+                  background: "#ffffff",
+                  color: "#0f172a",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
+                  fontSize: "12.5px",
+                  fontWeight: 700,
+                  cursor: "default",
+                  textTransform: "capitalize",
+                  transition: "all 0.15s ease",
+                  fontFamily: "'Inter', sans-serif",
+                }}
+              >
+                Earnings & Ledger
+              </button>
+            </div>
           </div>
 
           {/* Right Side: Search Bar & Filter Toggle Button */}
@@ -881,65 +1000,70 @@ export default function TenantEarningsPage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-          gap: "10px",
-          marginBottom: "14px",
+          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+          gap: "12px",
+          width: "100%",
+          marginBottom: "10px",
         }}
       >
         {/* Gross Sales */}
-        <div style={{ ...plainCardStyle, padding: "10px 14px" }}>
-          <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-            Gross Sales (GMV)
-          </div>
-          <div style={{ fontSize: "20px", fontWeight: 700, color: "#0f172a", marginTop: "2px" }}>
+        <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "visible", display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ fontSize: "22px", fontWeight: 600, color: "#334155", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
             {formatCurrency(gmv)}
           </div>
-          <div style={{ fontSize: "10.5px", color: "#94a3b8", marginTop: "2px" }}>
-            {data?.total_orders_count || 0} online orders
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "4px" }}>
+            <span style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+              Gross Sales (GMV)
+            </span>
+            <InfoTooltip text={`${data?.total_orders_count || 0} online orders recorded`} />
           </div>
         </div>
 
         {/* In Escrow Hold */}
-        <div style={{ ...plainCardStyle, padding: "10px 14px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+        <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "visible", display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ fontSize: "22px", fontWeight: 600, color: "#d97706", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
+              {formatCurrency(escrowBalance)}
+            </div>
+            {/* Contextual Release Escrow Icon Button */}
+            <EscrowReleaseIconButton
+              onClick={handleReleaseMatureEscrows}
+              disabled={releasingEscrow || escrowBalance <= 0}
+              active={escrowBalance > 0}
+              loading={releasingEscrow}
+            />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "4px" }}>
+            <span style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
               In Escrow Hold
             </span>
-            <span style={{ fontSize: "10px", fontWeight: 600, color: "#d97706" }}>
-              Pending
-            </span>
-          </div>
-          <div style={{ fontSize: "20px", fontWeight: 700, color: "#d97706", marginTop: "2px" }}>
-            {formatCurrency(escrowBalance)}
-          </div>
-          <div style={{ fontSize: "10.5px", color: "#94a3b8", marginTop: "2px" }}>
-            Clears after return window
+            <InfoTooltip text="Pending payouts that clear after the customer return window expires" />
           </div>
         </div>
 
         {/* Settled to Bank */}
-        <div style={{ ...plainCardStyle, padding: "10px 14px" }}>
-          <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-            Settled to Bank
-          </div>
-          <div style={{ fontSize: "20px", fontWeight: 700, color: "#16a34a", marginTop: "2px" }}>
+        <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "visible", display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ fontSize: "22px", fontWeight: 600, color: "#059669", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
             {formatCurrency(settledPayouts)}
           </div>
-          <div style={{ fontSize: "10.5px", color: "#94a3b8", marginTop: "2px" }}>
-            Transferred directly to bank
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "4px" }}>
+            <span style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+              Settled to Bank
+            </span>
+            <InfoTooltip text="Earnings successfully transferred directly to your bank account" />
           </div>
         </div>
 
         {/* Platform Fee */}
-        <div style={{ ...plainCardStyle, padding: "10px 14px" }}>
-          <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-            Platform Fee ({feePercent}%)
-          </div>
-          <div style={{ fontSize: "20px", fontWeight: 700, color: "#dc2626", marginTop: "2px" }}>
+        <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "visible", display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ fontSize: "22px", fontWeight: 600, color: "#ef4444", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
             -{formatCurrency(platformFees)}
           </div>
-          <div style={{ fontSize: "10.5px", color: "#94a3b8", marginTop: "2px" }}>
-            Platform software commission
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "4px" }}>
+            <span style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+              Platform Fee ({feePercent}%)
+            </span>
+            <InfoTooltip text={`WebCreon platform software commission (${feePercent}%)`} />
           </div>
         </div>
       </div>

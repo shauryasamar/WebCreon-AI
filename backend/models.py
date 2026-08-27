@@ -451,6 +451,11 @@ class Order(SQLModel, table=True):
     )
     status: str = Field(default="placed", nullable=False)
     cancel_reason: Optional[str] = Field(default=None)
+    coupon_code: Optional[str] = Field(default=None, max_length=50, nullable=True)
+    discount_amount: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(12, 2), nullable=False, default=Decimal("0.00")),
+    )
     total: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
     confirmed_at: Optional[datetime] = Field(
         default=None,
@@ -535,6 +540,103 @@ class OrderItem(SQLModel, table=True):
             nullable=False,
             onupdate=utc_now,
         ),
+    )
+
+
+class Coupon(SQLModel, table=True):
+    __tablename__ = "coupons"
+    __table_args__ = (
+        UniqueConstraint("site_id", "code", name="uq_site_coupons_code"),
+        Index("ix_coupons_site_id_code", "site_id", "code"),
+        Index("ix_coupons_site_id_is_active", "site_id", "is_active"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    site_id: UUID = Field(foreign_key="sites.id", index=True)
+
+    code: str = Field(max_length=50, nullable=False)
+    description: Optional[str] = Field(default="", nullable=True)
+
+    discount_type: str = Field(default="percentage", max_length=30, nullable=False)
+    discount_value: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False),
+    )
+    max_discount_amount: Optional[Decimal] = Field(
+        default=None,
+        sa_column=Column(Numeric(10, 2), nullable=True),
+    )
+
+    min_order_value: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False, default=Decimal("0.00")),
+    )
+    is_first_order_only: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, default=False),
+    )
+
+    total_usage_limit: Optional[int] = Field(
+        default=None,
+        sa_column=Column(Integer, nullable=True),
+    )
+    times_used: int = Field(
+        default=0,
+        sa_column=Column(Integer, nullable=False, default=0),
+    )
+    per_customer_limit: int = Field(
+        default=1,
+        sa_column=Column(Integer, nullable=False, default=1),
+    )
+
+    starts_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    expires_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+
+    is_active: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, default=True),
+    )
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            onupdate=utc_now,
+        ),
+    )
+
+
+class CouponUsage(SQLModel, table=True):
+    __tablename__ = "coupon_usages"
+    __table_args__ = (
+        Index("ix_coupon_usages_site_id_coupon_id", "site_id", "coupon_id"),
+        Index("ix_coupon_usages_customer_email", "site_id", "customer_email"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    site_id: UUID = Field(foreign_key="sites.id", index=True)
+    coupon_id: UUID = Field(foreign_key="coupons.id", index=True)
+    order_id: UUID = Field(foreign_key="orders.id", index=True)
+    user_id: Optional[UUID] = Field(default=None, foreign_key="users.id", nullable=True)
+
+    customer_email: str = Field(max_length=255, nullable=False)
+    discount_amount: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False),
+    )
+    used_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
     )
 
 

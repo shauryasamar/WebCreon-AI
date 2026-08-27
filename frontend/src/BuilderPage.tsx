@@ -25,6 +25,7 @@ import { useAdminAuth } from "./context/AdminAuthContext";
 import AdminLayout from "./Component/AdminLayout";
 import AdminProducts from "./Component/AdminProducts";
 import AdminOrders from "./Component/AdminOrders";
+import AdminCoupons from "./Component/AdminCoupons";
 import CheckoutChargesPage from "./Component/CheckoutChargesPage";
 import TenantPaymentSettingsPage from "./Component/TenantPaymentSettingsPage";
 import TenantEarningsPage from "./Component/TenantEarningsPage";
@@ -1130,11 +1131,13 @@ function BuilderPageContent() {
         ? "delivery"
         : location.pathname.includes("/earnings")
           ? "earnings"
-          : location.pathname.includes("/checkout-charges")
-            ? "checkout-charges"
-            : location.pathname.includes("/orders")
-              ? "orders"
-              : "products"
+          : location.pathname.includes("/discounts") || location.pathname.includes("/coupons")
+            ? "discounts"
+            : location.pathname.includes("/checkout-charges")
+              ? "checkout-charges"
+              : location.pathname.includes("/orders")
+                ? "orders"
+                : "products"
     : null;
 
 
@@ -1878,6 +1881,8 @@ function BuilderPageContent() {
                     <Route index element={<Navigate to="products" replace />} />
                     <Route path="products" element={<AdminProducts />} />
                     <Route path="orders" element={<AdminOrders />} />
+                    <Route path="discounts" element={<AdminCoupons />} />
+                    <Route path="coupons" element={<AdminCoupons />} />
                     <Route path="delivery" element={<DeliverySettingsPage />} />
                     <Route path="earnings" element={<TenantEarningsPage />} />
                     <Route path="payment-settings" element={<TenantPaymentSettingsPage />} />

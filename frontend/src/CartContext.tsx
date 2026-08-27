@@ -108,6 +108,15 @@ export type CartItem = Product & {
 
 type ProductId = string | number;
 
+export type ValidatedCoupon = {
+  id?: string;
+  code: string;
+  discountType: "percentage" | "fixed_amount" | "free_shipping";
+  discountValue: number;
+  discountAmount: number;
+  message?: string;
+};
+
 type CartContextType = {
   products: Product[];
   cartItems: CartItem[];
@@ -115,6 +124,9 @@ type CartContextType = {
   cartTotal: number;
   isCartLoading: boolean;
   isProductsLoading?: boolean;
+  appliedCoupon: ValidatedCoupon | null;
+  setAppliedCoupon: (coupon: ValidatedCoupon | null) => void;
+  clearAppliedCoupon: () => void;
   addToCart: (product: Product, quantity?: number) => Promise<void>;
   removeFromCart: (
     productId: ProductId,
@@ -213,6 +225,30 @@ const clearGuestCartStorage = (siteId?: string) => {
   window.localStorage.removeItem(buildGuestStorageKey(siteId));
 };
 
+const buildCouponStorageKey = (siteId?: string) =>
+  `webcreon_coupon:${siteId ?? "default"}`;
+
+const readPersistedCoupon = (siteId?: string): ValidatedCoupon | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(buildCouponStorageKey(siteId));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const writePersistedCoupon = (siteId: string | undefined, coupon: ValidatedCoupon | null) => {
+  if (typeof window === "undefined") return;
+  try {
+    if (coupon) {
+      window.sessionStorage.setItem(buildCouponStorageKey(siteId), JSON.stringify(coupon));
+    } else {
+      window.sessionStorage.removeItem(buildCouponStorageKey(siteId));
+    }
+  } catch {}
+};
+
 export function CartProvider({
   children,
   products = [],
@@ -223,8 +259,21 @@ export function CartProvider({
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartItemIds, setCartItemIds] = useState<Record<string, string>>({});
   const [isCartLoading, setIsCartLoading] = useState(false);
+  const [appliedCoupon, setAppliedCouponState] = useState<ValidatedCoupon | null>(() =>
+    readPersistedCoupon(siteId)
+  );
 
   const resolvedSiteId = siteId;
+
+  const setAppliedCoupon = useCallback((coupon: ValidatedCoupon | null) => {
+    setAppliedCouponState(coupon);
+    writePersistedCoupon(resolvedSiteId, coupon);
+  }, [resolvedSiteId]);
+
+  const clearAppliedCoupon = useCallback(() => {
+    setAppliedCouponState(null);
+    writePersistedCoupon(resolvedSiteId, null);
+  }, [resolvedSiteId]);
 
   // Pre-load all cart item images into browser memory so cart drawer and checkout render them in 0ms
   useEffect(() => {
@@ -521,6 +570,7 @@ export function CartProvider({
 
       if (res.status === 401 || res.status === 403) {
         clearGuestCartStorage(resolvedSiteId);
+        clearAppliedCoupon();
         setCartItems([]);
         setCartItemIds({});
         return;
@@ -530,12 +580,13 @@ export function CartProvider({
         throw new Error("Failed to clear cart");
       }
 
+      clearAppliedCoupon();
       const data: BackendCartResponse = await res.json();
       applyCartResponse(data);
     } catch (error) {
       console.error("Failed to clear cart", error);
     }
-  }, [applyCartResponse, resolvedSiteId]);
+  }, [applyCartResponse, clearAppliedCoupon, resolvedSiteId]);
 
   const cartCount = useMemo(
     () => cartItems.reduce((sum, item) => sum + item.quantity, 0),
@@ -555,6 +606,9 @@ export function CartProvider({
       cartTotal,
       isCartLoading,
       isProductsLoading,
+      appliedCoupon,
+      setAppliedCoupon,
+      clearAppliedCoupon,
       addToCart,
       removeFromCart,
       updateQuantity,
@@ -569,6 +623,9 @@ export function CartProvider({
       cartTotal,
       isCartLoading,
       isProductsLoading,
+      appliedCoupon,
+      setAppliedCoupon,
+      clearAppliedCoupon,
       addToCart,
       removeFromCart,
       updateQuantity,

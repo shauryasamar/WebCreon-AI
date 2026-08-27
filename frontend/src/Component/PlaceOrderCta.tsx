@@ -63,6 +63,7 @@ type PlaceOrderCtaProps = {
   reviewMode?: boolean;
   selectedAddressId?: string | null;
   paymentData?: PaymentData;
+  promoCode?: string;
   onOrderPlaced?: (payload: OrderPlacedPayload) => void;
 };
 
@@ -106,6 +107,7 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
   reviewMode = false,
   selectedAddressId,
   paymentData,
+  promoCode,
   onOrderPlaced,
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -189,6 +191,7 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
           body: JSON.stringify({
             address_id: selectedAddressId,
             payment_method: "cod",
+            promo_code: promoCode || undefined,
           }),
         });
 
@@ -222,6 +225,7 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
         body: JSON.stringify({
           address_id: selectedAddressId,
           payment_method: normalizedMethod,
+          promo_code: promoCode || undefined,
         }),
       });
 
@@ -262,11 +266,33 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
       const isCard = normalizedMethod.includes("card");
       const isNetbanking = normalizedMethod.includes("netbank") || normalizedMethod.includes("bank");
       const isWallet = normalizedMethod.includes("wallet");
+      const isUpi = normalizedMethod.includes("upi");
 
-      const targetMethod = isCard ? "card" : isNetbanking ? "netbanking" : isWallet ? "wallet" : "upi";
-      const targetName = isCard ? "Card" : isNetbanking ? "Netbanking" : isWallet ? "Wallet" : "UPI";
+      const targetMethod = isCard ? "card" : isNetbanking ? "netbanking" : isWallet ? "wallet" : isUpi ? "upi" : undefined;
+      const targetName = isCard ? "Card" : isNetbanking ? "Netbanking" : isWallet ? "Wallet" : isUpi ? "UPI" : "Payment";
 
-      // Launch standard in-app Razorpay modal (prevents mobile browser full-page redirects)
+      const methodConfig = targetMethod
+        ? {
+            display: {
+              blocks: {
+                selectedMethodBlock: {
+                  name: `Pay via ${targetName}`,
+                  instruments: [
+                    {
+                      method: targetMethod,
+                    },
+                  ],
+                },
+              },
+              sequence: ["block.selectedMethodBlock"],
+              preferences: {
+                show_default_blocks: false,
+              },
+            },
+          }
+        : undefined;
+
+      // Launch standard in-app Razorpay modal dedicated to selected method
       await openRazorpay({
         key: key_id,
         amount: amount,
@@ -274,6 +300,7 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
         name: "WebCreon Store",
         description: `Order #${order_id.slice(0, 8).toUpperCase()}`,
         order_id: razorpay_order_id.startsWith("order_mock_") ? undefined : razorpay_order_id,
+        config: methodConfig,
         prefill: {
           method: targetMethod || undefined,
           vpa: validVpa || undefined,

@@ -35,7 +35,7 @@ from models import (
     Shipment, InventoryMovement, OrderStatusHistory, User, UserAddress,
     DeliveryAgent, DeliverySettings,
 )
-from routers import auth, cart, categories, checkout, checkout_settings, collections, orders, payments, products, returns
+from routers import auth, cart, categories, checkout, checkout_settings, collections, coupons, orders, payments, products, returns
 from routers import delivery
 
 logger = logging.getLogger(__name__)
@@ -112,6 +112,7 @@ app.include_router(orders.router)
 app.include_router(payments.router)
 app.include_router(returns.router)
 app.include_router(delivery.router)
+app.include_router(coupons.router)
 
 
 class GenerateSiteRequest(BaseModel):

@@ -9,6 +9,7 @@ import { API_BASE_URL } from "./config/api";
 import { ThemeProvider, resolveThemeTokens } from "./context/ThemeContext";
 import { normalizeStorefrontProduct } from "./utils/productNormalizer";
 import { getThumbnailUrl } from "./utils/imageOptimizer";
+import { ValidatedCoupon } from "./Component/PromoCodeInput";
 
 type Block = {
   id?: string;
@@ -216,7 +217,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
   selectedProduct = null,
   theme,
 }) => {
-  const { products, cartItems } = useCart();
+  const { products, cartItems, appliedCoupon, setAppliedCoupon, clearAppliedCoupon } = useCart();
   const { isAuthenticated, loading: authLoading } = useCustomerAuth();
 
   const location = useLocation();
@@ -1557,6 +1558,9 @@ const RenderPage: React.FC<RenderPageProps> = ({
                     paymentMethod: paymentData.method,
                     show_promo: true,
                     show_summary: true,
+                    appliedCoupon,
+                    onCouponApplied: setAppliedCoupon,
+                    onCouponRemoved: () => setAppliedCoupon(null),
                   })
                 : null}
             </aside>
@@ -1777,6 +1781,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
                       show_promo: false,
                       show_gift_card: false,
                       review_mode: true,
+                      appliedCoupon,
                     })
                   : null}
 
@@ -1793,15 +1798,17 @@ const RenderPage: React.FC<RenderPageProps> = ({
                         canContinueDelivery &&
                         canContinuePayment &&
                         cartItems.length > 0 &&
-                        selectedAddressId
+                        (selectedAddressId || selectedAddress?.id || deliveryData?.id)
                       ),
-                      selectedAddressId,
+                      selectedAddressId: selectedAddressId || selectedAddress?.id || deliveryData?.id || null,
                       paymentData,
+                      promoCode: appliedCoupon?.code,
                       onOrderPlaced: (order: {
                         orderId: string;
                         status: string;
                         total?: number;
                       }) => {
+                        clearAppliedCoupon();
                         setPlacedOrder(order);
                       },
                     })

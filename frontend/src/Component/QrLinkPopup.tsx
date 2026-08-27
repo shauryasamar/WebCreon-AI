@@ -400,6 +400,7 @@ export default function QrLinkPopup({
       }}
     >
       <div
+        className="qr-popup-root"
         onClick={(event) => event.stopPropagation()}
         style={{
           width: "min(720px, calc(100vw - 32px))",
@@ -410,8 +411,23 @@ export default function QrLinkPopup({
           border: "1px solid rgba(15,23,42,0.08)",
           boxShadow: "0 28px 80px rgba(15,23,42,0.24)",
           padding: "22px",
+          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
         }}
       >
+        <style>{`
+          .qr-popup-root,
+          .qr-popup-root input,
+          .qr-popup-root button,
+          .qr-popup-root span,
+          .qr-popup-root div,
+          .qr-popup-root p,
+          .qr-popup-root h1,
+          .qr-popup-root h2,
+          .qr-popup-root h3,
+          .qr-popup-root label {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+          }
+        `}</style>
         <div
           style={{
             display: "flex",

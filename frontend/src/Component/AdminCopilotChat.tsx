@@ -335,6 +335,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
 
   return (
     <div
+      className="copilot-chat-root"
       style={{
         display: "flex",
         flexDirection: "column",
@@ -342,9 +343,23 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
         maxHeight: "calc(100vh - 110px)",
         background: chatBg,
         color: chatText,
-        fontFamily: "'Inter', sans-serif",
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
     >
+      <style>{`
+        .copilot-chat-root,
+        .copilot-chat-root input,
+        .copilot-chat-root button,
+        .copilot-chat-root textarea,
+        .copilot-chat-root span,
+        .copilot-chat-root div,
+        .copilot-chat-root p,
+        .copilot-chat-root h1,
+        .copilot-chat-root h2,
+        .copilot-chat-root h3 {
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+        }
+      `}</style>
       {/* Toast Notification Banner */}
       {toastMsg && (
         <div

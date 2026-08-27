@@ -46,6 +46,7 @@ export default function BuilderTopControlBar({
 
   return (
     <div
+      className="builder-top-control-bar-root"
       style={{
         height: "100%",
         display: "flex",
@@ -53,8 +54,18 @@ export default function BuilderTopControlBar({
         justifyContent: "space-between",
         padding: "0 20px",
         background: "#ffffff",
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
     >
+      <style>{`
+        .builder-top-control-bar-root,
+        .builder-top-control-bar-root button,
+        .builder-top-control-bar-root div,
+        .builder-top-control-bar-root span,
+        .builder-top-control-bar-root p {
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+        }
+      `}</style>
       <button
         type="button"
         onClick={onGoDashboard}

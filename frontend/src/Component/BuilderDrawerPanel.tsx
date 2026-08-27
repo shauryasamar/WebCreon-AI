@@ -28,6 +28,7 @@ type SavedSite = {
 export type AdminNavKey =
   | "products"
   | "orders"
+  | "discounts"
   | "delivery"
   | "earnings"
   | "payment-settings"
@@ -41,6 +42,7 @@ type AdminNavItem = {
 const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { key: "products", label: "Products" },
   { key: "orders", label: "Orders & Returns" },
+  { key: "discounts", label: "Discounts & Promo" },
   { key: "delivery", label: "Delivery & Shipping" },
   { key: "checkout-charges", label: "Checkout Charges" },
   { key: "earnings", label: "Earnings & Ledger" },
@@ -329,6 +331,13 @@ function AdminNavIcon({ navKey, isSelected }: { navKey: AdminNavKey; isSelected:
           <rect x="9" y="3" width="6" height="4" rx="1" />
           <path d="M9 12h6" />
           <path d="M9 16h6" />
+        </svg>
+      );
+    case "discounts":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+          <line x1="7" y1="7" x2="7.01" y2="7" />
         </svg>
       );
     case "delivery":
@@ -1049,13 +1058,31 @@ export default function BuilderDrawerPanel({
 
   return (
     <div
+      className="builder-drawer-root"
       style={{
         height: "100%",
         display: "flex",
         flexDirection: "column",
         background: "#ffffff",
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
     >
+      <style>{`
+        .builder-drawer-root,
+        .builder-drawer-root input,
+        .builder-drawer-root button,
+        .builder-drawer-root select,
+        .builder-drawer-root textarea,
+        .builder-drawer-root span,
+        .builder-drawer-root div,
+        .builder-drawer-root p,
+        .builder-drawer-root h1,
+        .builder-drawer-root h2,
+        .builder-drawer-root h3,
+        .builder-drawer-root h4 {
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+        }
+      `}</style>
       <div
         style={{
           padding: "14px 16px 10px",

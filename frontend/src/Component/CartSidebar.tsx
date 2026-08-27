@@ -4,6 +4,7 @@ import { useCart } from "../CartContext";
 import { API_BASE_URL } from "../config/api";
 import { isColorDarkHex } from "../context/ThemeContext";
 import { getThumbnailUrl } from "../utils/imageOptimizer";
+import PromoCodeInput, { ValidatedCoupon } from "./PromoCodeInput";
 
 type CartTheme = {
   name?: string;
@@ -50,6 +51,9 @@ type CartSidebarProps = {
   theme?: CartTheme;
   accentColor?: string;
   paymentMethod?: string;
+  appliedCoupon?: ValidatedCoupon | null;
+  onCouponApplied?: (coupon: ValidatedCoupon) => void;
+  onCouponRemoved?: () => void;
 };
 
 type ChargeCode =
@@ -229,6 +233,153 @@ function calculateChargeAmount(charge: ChargeRule, baseAmount: number) {
   return Math.max(0, Math.round(raw));
 }
 
+const ChargeInfoTooltip: React.FC<{
+  text: string;
+  palette: any;
+}> = ({ text, palette }) => {
+  const [hover, setHover] = useState(false);
+  if (!text) return null;
+
+  return (
+    <span
+      style={{
+        position: "relative",
+        display: "inline-flex",
+        alignItems: "center",
+        marginLeft: "5px",
+        verticalAlign: "middle",
+      }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onClick={(e) => {
+        e.stopPropagation();
+        setHover((prev) => !prev);
+      }}
+    >
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "15px",
+          height: "15px",
+          borderRadius: "50%",
+          fontSize: "9.5px",
+          fontWeight: 700,
+          background: hover ? palette.text : palette.softBg,
+          color: hover ? palette.cardBg : palette.textMuted,
+          border: `1px solid ${palette.cardBorder}`,
+          cursor: "pointer",
+          userSelect: "none",
+          transition: "all 0.15s ease",
+          lineHeight: 1,
+        }}
+      >
+        i
+      </span>
+
+      {hover && (
+        <span
+          style={{
+            position: "absolute",
+            bottom: "calc(100% + 6px)",
+            left: "0",
+            transform: "translateX(-15%)",
+            background: "#0f172a",
+            color: "#f8fafc",
+            fontSize: "11px",
+            fontWeight: 500,
+            padding: "6px 10px",
+            borderRadius: "7px",
+            whiteSpace: "normal",
+            wordBreak: "break-word",
+            boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
+            border: "1px solid rgba(255,255,255,0.15)",
+            zIndex: 1000,
+            pointerEvents: "none",
+            lineHeight: 1.35,
+            width: "max-content",
+            maxWidth: "200px",
+            textAlign: "left",
+            boxSizing: "border-box",
+          }}
+        >
+          {text}
+        </span>
+      )}
+    </span>
+  );
+};
+
+const FreeShippingProgress: React.FC<{
+  subtotal: number;
+  threshold: number;
+  remaining: number;
+  shippingWaived: boolean;
+  accentColor: string;
+  palette: any;
+}> = ({ subtotal, threshold, remaining, shippingWaived, accentColor, palette }) => {
+  if (!threshold || threshold <= 0) return null;
+  const isUnlocked = shippingWaived || remaining <= 0;
+  const progressPercent = Math.min(100, Math.max(0, Math.round((subtotal / threshold) * 100)));
+
+  return (
+    <div
+      style={{
+        padding: "12px 14px",
+        borderRadius: "12px",
+        background: isUnlocked ? palette.successBg : palette.softBg,
+        border: `1px solid ${isUnlocked ? "rgba(34, 197, 94, 0.25)" : palette.cardBorder}`,
+        marginBottom: "14px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "8px",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+        <div style={{ fontSize: "13px", fontWeight: 600 }}>
+          <span style={{ color: isUnlocked ? palette.successText : palette.text }}>
+            {isUnlocked ? (
+              "You have unlocked Free Delivery!"
+            ) : (
+              <>
+                Add <strong style={{ color: accentColor }}>₹{remaining}</strong> more for <strong>Free Delivery</strong>
+              </>
+            )}
+          </span>
+        </div>
+        <span style={{ fontSize: "11.5px", fontWeight: 700, color: isUnlocked ? palette.successText : palette.textMuted }}>
+          {progressPercent}%
+        </span>
+      </div>
+
+      {/* Progress Track */}
+      <div
+        style={{
+          width: "100%",
+          height: "6px",
+          borderRadius: "999px",
+          background: isUnlocked ? "rgba(34, 197, 94, 0.2)" : "rgba(0, 0, 0, 0.08)",
+          overflow: "hidden",
+          position: "relative",
+        }}
+      >
+        <div
+          style={{
+            height: "100%",
+            width: `${progressPercent}%`,
+            borderRadius: "999px",
+            background: isUnlocked
+              ? "linear-gradient(90deg, #22c55e, #16a34a)"
+              : `linear-gradient(90deg, ${accentColor}, ${accentColor})`,
+            transition: "width 0.35s ease",
+          }}
+        />
+      </div>
+    </div>
+  );
+};
+
 const CartSidebar: React.FC<CartSidebarProps> = ({
   mode = "cart",
   title,
@@ -265,12 +416,31 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   theme,
   accentColor,
   paymentMethod,
+  appliedCoupon: propAppliedCoupon,
+  onCouponApplied: propOnCouponApplied,
+  onCouponRemoved: propOnCouponRemoved,
 }) => {
-  const { cartItems, updateQuantity, removeFromCart, clearCart } = useCart();
+  const {
+    cartItems,
+    updateQuantity,
+    removeFromCart,
+    clearCart,
+    appliedCoupon: cartContextCoupon,
+    setAppliedCoupon: setCartContextCoupon,
+    clearAppliedCoupon,
+  } = useCart();
   const { siteId, slug } = useParams();
 
-  const [promoCode, setPromoCode] = useState("");
-  const [appliedCode, setAppliedCode] = useState("");
+  const appliedCoupon = propAppliedCoupon !== undefined ? propAppliedCoupon : cartContextCoupon;
+  const handleCouponApplied = (coupon: ValidatedCoupon) => {
+    setCartContextCoupon(coupon);
+    propOnCouponApplied?.(coupon);
+  };
+  const handleCouponRemoved = () => {
+    clearAppliedCoupon();
+    propOnCouponRemoved?.();
+  };
+
   const [screenSize, setScreenSize] = useState<{ isMobile: boolean; isTablet: boolean }>(() => {
     if (typeof window === "undefined") return { isMobile: false, isTablet: false };
     const w = window.innerWidth;
@@ -560,10 +730,8 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     0
   );
 
-  const promoDiscount =
-    appliedCode.trim().toLowerCase() === "save10"
-      ? Math.round(subtotal * 0.1)
-      : 0;
+  const isCouponFreeShipping = appliedCoupon?.discountType === "free_shipping";
+  const promoDiscount = appliedCoupon && !isCouponFreeShipping ? appliedCoupon.discountAmount : 0;
 
   const subtotalAfterDiscount = Math.max(subtotal - promoDiscount, 0);
   const normalizedPaymentMethod = normalizePaymentMethod(paymentMethod);
@@ -638,10 +806,6 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     freeShippingThreshold > 0
       ? Math.max(freeShippingThreshold - subtotalAfterDiscount, 0)
       : 0;
-
-  const handleApplyPromo = () => {
-    setAppliedCode(promoCode.trim());
-  };
 
   const toggleOptionalCharge = (chargeId: string) => {
     setSelectedOptionalChargeIds((prev) =>
@@ -789,6 +953,24 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
       </h4>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        {show_promo !== false && (
+          <div style={{ marginBottom: "6px" }}>
+            <PromoCodeInput
+              siteId={siteId || slug || ""}
+              subtotal={subtotal}
+              deliveryFee={shippingCharge}
+              appliedCoupon={appliedCoupon}
+              onCouponApplied={handleCouponApplied}
+              onCouponRemoved={handleCouponRemoved}
+              accentColor={resolvedAccentColor}
+              textColor={palette.text}
+              cardBg={palette.cardBg}
+              inputBg={palette.inputBg}
+              borderColor={palette.cardBorder}
+            />
+          </div>
+        )}
+
         <div
           style={{
             display: "flex",
@@ -810,10 +992,11 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
               gap: "12px",
               color: palette.successText,
               fontSize: "14px",
+              fontWeight: 600,
             }}
           >
-            <span>Discount</span>
-            <span>-₹{promoDiscount}</span>
+            <span>Promo Discount ({appliedCoupon?.code})</span>
+            <span>-₹{promoDiscount.toFixed(2)}</span>
           </div>
         ) : null}
 
@@ -824,57 +1007,62 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
             gap: "12px",
             color: palette.textMuted,
             fontSize: "14px",
+            alignItems: "center",
           }}
         >
-          <span>{shippingRule?.label || shippingLabel}</span>
-          <span style={{ color: palette.text }}>
+          <span style={{ display: "inline-flex", alignItems: "center" }}>
+            {shippingRule?.label || shippingLabel}
+            {shippingRule && (
+              <ChargeInfoTooltip
+                text={
+                  freeShippingThreshold > 0
+                    ? `Free delivery on orders above ₹${freeShippingThreshold}`
+                    : "Standard delivery fee"
+                }
+                palette={palette}
+              />
+            )}
+          </span>
+          <span style={{ color: shippingWaived ? palette.successText : palette.text, fontWeight: shippingWaived ? 700 : 500 }}>
             {shippingWaived ? "Free" : shippingCharge > 0 ? `₹${shippingCharge}` : "₹0"}
           </span>
         </div>
 
-        {shippingRule && shippingWaived ? (
-          <div
-            style={{
-              padding: "10px 12px",
-              borderRadius: "10px",
-              background: palette.successBg,
-              color: palette.successText,
-              fontSize: "13px",
-              lineHeight: 1.5,
-            }}
-          >
-            {shippingRule.label} waived for this order.
-          </div>
-        ) : shippingRule && freeShippingThreshold > 0 && remainingForFreeShipping > 0 ? (
-          <div
-            style={{
-              padding: "10px 12px",
-              borderRadius: "10px",
-              background: palette.softBg,
-              color: palette.textMuted,
-              fontSize: "13px",
-              lineHeight: 1.5,
-            }}
-          >
-            Add ₹{remainingForFreeShipping} more to waive {shippingRule.label.toLowerCase()}.
-          </div>
-        ) : null}
+        {nonShippingCharges.map((charge) => {
+          const tooltipParts: string[] = [];
+          if (charge.refundable === false) tooltipParts.push("Non-refundable");
+          if (charge.waiveConditionType === "subtotal_gte" && charge.waiveConditionValue) {
+            tooltipParts.push(`Waived above ₹${charge.waiveConditionValue}`);
+          }
+          if (
+            charge.description &&
+            !charge.description.toLowerCase().includes("optional checkout") &&
+            !charge.description.toLowerCase().includes("selected by customer")
+          ) {
+            tooltipParts.push(charge.description);
+          }
+          const tooltipText = tooltipParts.join(". ");
 
-        {nonShippingCharges.map((charge) => (
-          <div
-            key={charge.id}
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              gap: "12px",
-              color: palette.textMuted,
-              fontSize: "14px",
-            }}
-          >
-            <span>{charge.label}</span>
-            <span style={{ color: palette.text }}>₹{charge.calculatedAmount}</span>
-          </div>
-        ))}
+          return (
+            <div
+              key={charge.id}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: "12px",
+                color: palette.textMuted,
+                fontSize: "14px",
+                alignItems: "center",
+              }}
+            >
+              <span style={{ display: "inline-flex", alignItems: "center" }}>
+                {charge.label}
+                {tooltipText ? <ChargeInfoTooltip text={tooltipText} palette={palette} /> : null}
+              </span>
+              <span style={{ color: palette.text }}>₹{charge.calculatedAmount}</span>
+            </div>
+          );
+        })}
 
         {taxSettings?.enabled ? (
           <div
@@ -884,9 +1072,16 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
               gap: "12px",
               color: palette.textMuted,
               fontSize: "14px",
+              alignItems: "center",
             }}
           >
-            <span>{taxSettings.label || fallbackTaxLabel}</span>
+            <span style={{ display: "inline-flex", alignItems: "center" }}>
+              {taxSettings.label || fallbackTaxLabel}
+              <ChargeInfoTooltip
+                text={taxSettings.rate ? `Applied at ${taxSettings.rate}%` : "Calculated at checkout"}
+                palette={palette}
+              />
+            </span>
             <span style={{ color: palette.text }}>₹{tax}</span>
           </div>
         ) : null}
@@ -1067,6 +1262,14 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
               </div>
             ) : (
               <>
+                <FreeShippingProgress
+                  subtotal={subtotalAfterDiscount}
+                  threshold={freeShippingThreshold}
+                  remaining={remainingForFreeShipping}
+                  shippingWaived={shippingWaived}
+                  accentColor={resolvedAccentColor}
+                  palette={palette}
+                />
                 {shouldShowItems ? (
                   <div style={{ display: "grid", gap: "12px" }}>
                     {cartItems.map((item, index) => (
@@ -1164,97 +1367,6 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                 ) : null}
 
                 {shouldShowGiftCard ? optionalChargePicker : null}
-
-                {shouldShowPromo ? (
-                  <div
-                    style={{
-                      borderRadius: `${innerRadius}px`,
-                      background: palette.cardBg,
-                      border: `1px solid ${palette.cardBorder}`,
-                      boxShadow: palette.cardShadow,
-                      padding: "16px",
-                    }}
-                  >
-                    <h4
-                      style={{
-                        margin: "0 0 12px",
-                        fontSize: "15px",
-                        fontWeight: 700,
-                        color: palette.text,
-                      }}
-                    >
-                      {promoTitle}
-                    </h4>
-
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: isMobile ? "minmax(0, 1fr) 90px" : "1fr auto",
-                        gap: isMobile ? "8px" : "10px",
-                        alignItems: "center",
-                      }}
-                    >
-                      <input
-                        type="text"
-                        value={promoCode}
-                        onChange={(e) => setPromoCode(e.target.value)}
-                        placeholder={promoPlaceholder}
-                        style={{
-                          minHeight: isMobile ? "40px" : "44px",
-                          height: isMobile ? "40px" : "44px",
-                          borderRadius: isMobile ? "10px" : "12px",
-                          border: `1px solid ${palette.cardBorder}`,
-                          background: palette.inputBg,
-                          color: palette.text,
-                          padding: isMobile ? "0 12px" : "0 14px",
-                          fontSize: isMobile ? "13px" : "14px",
-                          outline: "none",
-                          width: "100%",
-                          boxSizing: "border-box",
-                        }}
-                      />
-
-                      <button
-                        type="button"
-                        onClick={handleApplyPromo}
-                        style={{
-                          minHeight: isMobile ? "40px" : "44px",
-                          height: isMobile ? "40px" : "44px",
-                          border: "none",
-                          borderRadius: isMobile ? "10px" : "12px",
-                          background: resolvedAccentColor,
-                          color: isColorDarkHex(resolvedAccentColor) ? "#ffffff" : "#0f172a",
-                          padding: isMobile ? "0 14px" : "0 16px",
-                          fontSize: isMobile ? "13px" : "14px",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          width: "auto",
-                          whiteSpace: "nowrap",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        {promoButtonLabel}
-                      </button>
-                    </div>
-
-                    {appliedCode ? (
-                      <p
-                        style={{
-                          margin: "10px 0 0",
-                          fontSize: "13px",
-                          color: palette.successText,
-                          background: palette.successBg,
-                          borderRadius: "10px",
-                          padding: "10px 12px",
-                        }}
-                      >
-                        Promo code <strong>{appliedCode}</strong> applied.
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
 
                 {show_summary ? summaryCard : null}
               </>
@@ -1359,7 +1471,21 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                 boxShadow: "none",
               }}
             >
-              <div style={{ fontSize: "42px", marginBottom: "12px" }}>🛍️</div>
+              <div style={{ marginBottom: "12px", display: "flex", justifyContent: "center", color: palette.textMuted }}>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ width: "40px", height: "40px" }}
+                >
+                  <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+                  <path d="M3 6h18" />
+                  <path d="M16 10a4 4 0 0 1-8 0" />
+                </svg>
+              </div>
               <p
                 style={{
                   margin: 0,
@@ -1398,6 +1524,14 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                   gap: "14px",
                 }}
               >
+                <FreeShippingProgress
+                  subtotal={subtotalAfterDiscount}
+                  threshold={freeShippingThreshold}
+                  remaining={remainingForFreeShipping}
+                  shippingWaived={shippingWaived}
+                  accentColor={resolvedAccentColor}
+                  palette={palette}
+                />
                 {cartItems.map((item, index) => (
                   <div
                     key={`${item.id}-${item.selectedVariantValue || "default"}-${index}`}
@@ -1626,97 +1760,6 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                 }}
               >
                 {optionalChargePicker}
-
-                {show_promo ? (
-                  <div
-                    style={{
-                      borderRadius: `${innerRadius}px`,
-                      background: palette.cardBg,
-                      border: `1px solid ${palette.cardBorder}`,
-                      boxShadow: palette.cardShadow,
-                      padding: "16px",
-                    }}
-                  >
-                    <h4
-                      style={{
-                        margin: "0 0 12px",
-                        fontSize: "15px",
-                        fontWeight: 700,
-                        color: palette.text,
-                      }}
-                    >
-                      {promoTitle}
-                    </h4>
-
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: isMobile ? "minmax(0, 1fr) 90px" : "1fr auto",
-                        gap: isMobile ? "8px" : "10px",
-                        alignItems: "center",
-                      }}
-                    >
-                      <input
-                        type="text"
-                        value={promoCode}
-                        onChange={(e) => setPromoCode(e.target.value)}
-                        placeholder={promoPlaceholder}
-                        style={{
-                          minHeight: isMobile ? "40px" : "44px",
-                          height: isMobile ? "40px" : "44px",
-                          borderRadius: isMobile ? "10px" : "12px",
-                          border: `1px solid ${palette.cardBorder}`,
-                          background: palette.inputBg,
-                          color: palette.text,
-                          padding: isMobile ? "0 12px" : "0 14px",
-                          fontSize: isMobile ? "13px" : "14px",
-                          outline: "none",
-                          width: "100%",
-                          boxSizing: "border-box",
-                        }}
-                      />
-
-                      <button
-                        type="button"
-                        onClick={handleApplyPromo}
-                        style={{
-                          minHeight: isMobile ? "40px" : "44px",
-                          height: isMobile ? "40px" : "44px",
-                          border: "none",
-                          borderRadius: isMobile ? "10px" : "12px",
-                          background: resolvedAccentColor,
-                          color: isColorDarkHex(resolvedAccentColor) ? "#ffffff" : "#0f172a",
-                          padding: isMobile ? "0 14px" : "0 16px",
-                          fontSize: isMobile ? "13px" : "14px",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          width: "auto",
-                          whiteSpace: "nowrap",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        {promoButtonLabel}
-                      </button>
-                    </div>
-
-                    {appliedCode ? (
-                      <p
-                        style={{
-                          margin: "10px 0 0",
-                          fontSize: "13px",
-                          color: palette.successText,
-                          background: palette.successBg,
-                          borderRadius: "10px",
-                          padding: "10px 12px",
-                        }}
-                      >
-                        Promo code <strong>{appliedCode}</strong> applied.
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
 
                 {show_summary ? summaryCard : null}
               </div>

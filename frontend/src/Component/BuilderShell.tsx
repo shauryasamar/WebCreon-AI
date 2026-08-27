@@ -46,6 +46,7 @@ export default function BuilderShell({
           : "auto minmax(0, 1fr) 0px",
         background: "#f8fafc",
         color: "#0f172a",
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
         overflow: "hidden",
         transition: "grid-template-columns 0.22s ease",
       }}
@@ -87,6 +88,8 @@ export default function BuilderShell({
           minWidth: 0,
           padding: "8px 0 8px 8px",
           overflow: "hidden",
+          position: "relative",
+          zIndex: 1,
         }}
       >
         <div
@@ -161,6 +164,8 @@ export default function BuilderShell({
             background: "#ffffff",
             boxShadow: "0 8px 24px rgba(15,23,42,0.06)",
             overflow: "hidden",
+            position: "relative",
+            zIndex: 10,
           }}
         >
           <main

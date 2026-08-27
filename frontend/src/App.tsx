@@ -800,6 +800,7 @@ function AdminSitesPage() {
         </div>
       ) : (
       <div
+        className="onboarding-agent-root"
         style={{
           height: "100%",
           display: "flex",
@@ -808,8 +809,23 @@ function AdminSitesPage() {
           color: "#0f172a",
           position: "relative",
           overflow: "hidden",
+          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
         }}
       >
+        <style>{`
+          .onboarding-agent-root,
+          .onboarding-agent-root input,
+          .onboarding-agent-root button,
+          .onboarding-agent-root textarea,
+          .onboarding-agent-root span,
+          .onboarding-agent-root div,
+          .onboarding-agent-root p,
+          .onboarding-agent-root h1,
+          .onboarding-agent-root h2,
+          .onboarding-agent-root h3 {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+          }
+        `}</style>
         {/* Chat Content Area */}
         <div
           style={{
