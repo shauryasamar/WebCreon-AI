@@ -496,7 +496,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "applyConditionValue": "",
                 "waiveConditionType": "none",
                 "waiveConditionValue": "",
-                "description": "Optional checkout add-on selected by customer.",
+                "description": "",
             },
         ],
     }

@@ -513,9 +513,12 @@ function isColorDarkHex(colorHex?: string): boolean {
             product.normalizedInStock;
 
           const isDisabled = !product.normalizedInStock;
-          const ratingValue = Number(product.average_rating ?? 3.0);
-          const ratingText = ratingValue > 0 ? ratingValue.toFixed(1) : "3.0";
-          const reviewCount = Number(product.review_count ?? 3);
+          const ratingValue = Number(product.average_rating ?? 0);
+          const reviewCount = Number(product.review_count ?? 0);
+          const hasReviews = reviewCount > 0 && ratingValue > 0;
+          const ratingDisplay = hasReviews
+            ? `${ratingValue.toFixed(1)} (${reviewCount})`
+            : "New";
 
           const brandText = product.brand || product.category || "Collection";
           const activePriceColor = price_color || (cardStyleKey === "beauty" ? "#dc2626" : pageText);
@@ -688,7 +691,7 @@ function isColorDarkHex(colorHex?: string): boolean {
                   </h3>
                   {show_ratings && (
                     <div style={{ fontSize: isMobile ? "10px" : "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "3px" }}>
-                      <span style={{ color: starColor }}>★</span> {ratingText} ({reviewCount})
+                      <span style={{ color: starColor }}>★</span> {ratingDisplay}
                     </div>
                   )}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "auto", paddingTop: "4px", flexWrap: "wrap", gap: "4px" }}>
@@ -724,7 +727,7 @@ function isColorDarkHex(colorHex?: string): boolean {
                   <h3 style={{ margin: 0, fontSize: isMobile ? "13px" : "15px", lineHeight: isMobile ? "1.25" : "1.35", fontWeight: 800, color: pageText, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", minHeight: isMobile ? "32px" : "auto" }}>{product.name}</h3>
                   {show_ratings && (
                     <div style={{ fontSize: isMobile ? "10px" : "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "3px" }}>
-                      <span style={{ color: starColor }}>★</span> {ratingText} ({reviewCount})
+                      <span style={{ color: starColor }}>★</span> {ratingDisplay}
                     </div>
                   )}
                   <div style={{ display: "flex", alignItems: "baseline", gap: isMobile ? "4px" : "6px", margin: "2px 0" }}>
@@ -760,7 +763,7 @@ function isColorDarkHex(colorHex?: string): boolean {
                   <h3 style={{ margin: 0, fontSize: isMobile ? "13px" : "15px", lineHeight: isMobile ? "1.25" : "1.35", fontWeight: 800, color: pageText, textAlign: "center", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", minHeight: isMobile ? "32px" : "auto" }}>{product.name}</h3>
                   {show_ratings && (
                     <div style={{ fontSize: isMobile ? "10px" : "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "3px" }}>
-                      <span style={{ color: starColor }}>★</span> {ratingText} ({reviewCount})
+                      <span style={{ color: starColor }}>★</span> {ratingDisplay}
                     </div>
                   )}
                   <div style={{ display: "flex", alignItems: "baseline", gap: isMobile ? "4px" : "6px", margin: "2px 0" }}>
@@ -821,7 +824,7 @@ function isColorDarkHex(colorHex?: string): boolean {
                   </h3>
                   {show_ratings && (
                     <div style={{ fontSize: isMobile ? "10px" : "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "3px", margin: "1px 0" }}>
-                      <span style={{ color: starColor }}>★</span> {ratingText} ({reviewCount})
+                      <span style={{ color: starColor }}>★</span> {ratingDisplay}
                     </div>
                   )}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", marginTop: "auto", paddingTop: "4px", minWidth: 0 }}>
@@ -862,7 +865,7 @@ function isColorDarkHex(colorHex?: string): boolean {
                   </div>
                   {show_ratings && (
                     <div style={{ fontSize: isMobile ? "10px" : "11px", fontWeight: 600, color: faintText }}>
-                      <span style={{ color: starColor }}>★</span> {ratingText} ({reviewCount})
+                      <span style={{ color: starColor }}>★</span> {ratingDisplay}
                     </div>
                   )}
                 </div>

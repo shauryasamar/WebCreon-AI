@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { Pagination } from "./Pagination";
-import { compressImageFile } from "../utils/imageOptimizer";
+import { optimizeImageUrl, getThumbnailUrl, compressImageFile } from "../utils/imageOptimizer";
 
 
 type VariantValue = {
@@ -129,7 +129,9 @@ const normalizeProduct = (p: any): Product => ({
   collections: Array.isArray(p.collections) ? p.collections : [],
   price: Number(p.price ?? 0),
   compare_price: p.compare_price != null ? Number(p.compare_price) : null,
-  images: Array.isArray(p.images) ? p.images.filter(Boolean) : [],
+  images: Array.isArray(p.images)
+    ? p.images.filter(Boolean).map((img: string) => optimizeImageUrl(img))
+    : [],
   description: p.description ?? "",
   highlights: Array.isArray(p.highlights) ? p.highlights : [],
   in_stock: Boolean(p.in_stock ?? Number(p.stock ?? 0) > 0),
@@ -273,13 +275,7 @@ const QuickEditIcon = () => (
 );
 
 const getOptimizedThumbnailUrl = (url?: string, width = 120, height = 140): string => {
-  if (!url) return "";
-  const trimmed = url.trim();
-  if (trimmed.includes("images.unsplash.com")) {
-    const baseUrl = trimmed.split("?")[0];
-    return `${baseUrl}?auto=format&fit=crop&w=${width}&h=${height}&q=75&fm=webp`;
-  }
-  return trimmed;
+  return getThumbnailUrl(url, width, height);
 };
 
 const RefreshIcon = ({ spin = false }: { spin?: boolean }) => (
@@ -888,7 +884,7 @@ const AdminProducts = () => {
       description: product.description ?? "",
       highlights: productHighlights,
       slug: product.slug ?? "",
-      imagesText: (product.images ?? []).join("\n"),
+      imagesText: (product.images ?? []).map((img) => optimizeImageUrl(img)).join("\n"),
       is_active: product.is_active !== false,
       sku: product.sku ?? "",
       hsn_code: product.hsn_code ?? "",
@@ -1377,7 +1373,7 @@ const AdminProducts = () => {
 
       if (res.ok) {
         const data = await res.json();
-        const newUrls = (data.urls || []).map((u: string) => `${API_BASE_URL}${u}`);
+        const newUrls = (data.urls || []).map((u: string) => optimizeImageUrl(u));
         setFormValues((prev) => {
           const existing = prev.imagesText.trim() ? prev.imagesText.trim().split("\n") : [];
           return {
@@ -1397,7 +1393,7 @@ const AdminProducts = () => {
           });
           if (singleRes.ok) {
             const data = await singleRes.json();
-            const fullUrl = `${API_BASE_URL}${data.url}`;
+            const fullUrl = optimizeImageUrl(data.url);
             setFormValues((prev) => ({
               ...prev,
               imagesText: prev.imagesText.trim() ? `${prev.imagesText}\n${fullUrl}` : fullUrl,

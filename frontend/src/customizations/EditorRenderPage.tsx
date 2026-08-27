@@ -1150,27 +1150,6 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
       >
         <div
           style={{
-            marginBottom: isCompactCheckout ? "14px" : "18px",
-          }}
-        >
-          <h1
-            style={{
-              margin: 0,
-              fontSize: isCompactCheckout
-                ? "clamp(28px, 4vw, 32px)"
-                : "clamp(34px, 4vw, 38px)",
-              lineHeight: 1.05,
-              fontWeight: 800,
-              color: textColor,
-              letterSpacing: "-0.03em",
-            }}
-          >
-            {page.title || page.name || "Checkout"}
-          </h1>
-        </div>
-
-        <div
-          style={{
             borderRadius: "18px",
             border: shellBorder,
             background: shellBg,

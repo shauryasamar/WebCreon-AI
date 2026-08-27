@@ -501,27 +501,32 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
             marginTop: "16px",
             display: "flex",
             justifyContent: "space-between",
-            gap: "12px",
-            flexDirection: isMobile ? "column-reverse" : "row",
+            gap: "10px",
+            alignItems: "center",
           }}
         >
           <button
             type="button"
             onClick={onBack}
             style={{
-              minHeight: "42px",
-              borderRadius: "8px",
+              minHeight: isMobile ? "44px" : "42px",
+              height: isMobile ? "44px" : "42px",
+              borderRadius: isMobile ? "10px" : "8px",
               border: `1px solid ${palette.backButtonBorder}`,
               background: palette.backButtonBg,
               color: palette.backButtonText,
-              padding: "0 18px",
+              padding: isMobile ? "0 14px" : "0 18px",
               fontSize: "13px",
               fontWeight: 700,
               cursor: "pointer",
-              width: isMobile ? "100%" : "auto",
+              width: "auto",
+              whiteSpace: "nowrap",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
-            Back
+            ← Back
           </button>
 
           <button
@@ -529,23 +534,28 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
             onClick={onContinue}
             disabled={continueDisabled}
             style={{
-              minHeight: "42px",
-              minWidth: isMobile ? "100%" : "160px",
-              width: isMobile ? "100%" : "auto",
+              minHeight: isMobile ? "44px" : "42px",
+              height: isMobile ? "44px" : "42px",
+              minWidth: isMobile ? "0" : "160px",
+              flex: isMobile ? 1 : "initial",
+              width: isMobile ? "auto" : "auto",
               border: "none",
-              borderRadius: "8px",
+              borderRadius: isMobile ? "10px" : "8px",
               background: continueDisabled
                 ? palette.primaryButtonDisabledBg
                 : palette.primaryButtonBg,
               color: palette.primaryButtonText,
-              padding: "0 18px",
-              fontSize: "13px",
+              padding: isMobile ? "0 16px" : "0 18px",
+              fontSize: isMobile ? "14px" : "13px",
               fontWeight: 700,
               cursor: continueDisabled ? "not-allowed" : "pointer",
-              opacity: continueDisabled ? 0.8 : 1,
+              opacity: continueDisabled ? 0.7 : 1,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
-            Review order
+            Review order →
           </button>
         </div>
       </div>
@@ -560,15 +570,6 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
           input[type="text"]:focus {
             border-color: ${resolvedAccent};
             box-shadow: ${palette.inputRing};
-          }
-
-          @media (max-width: 767px) {
-            select,
-            input,
-            textarea,
-            button {
-              font-size: 16px !important;
-            }
           }
         `}
       </style>

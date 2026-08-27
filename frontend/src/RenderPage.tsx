@@ -1104,28 +1104,29 @@ const RenderPage: React.FC<RenderPageProps> = ({
           No items in cart.
         </p>
       ) : (
-        <div style={{ display: "grid", gap: "12px" }}>
+        <div style={{ display: "grid", gap: "10px" }}>
           {cartItems.map((item, index) => (
             <div
               key={`${item.id}-${item.selectedVariantValue || "default"}-${index}`}
               style={{
                 display: "grid",
                 gridTemplateColumns: isCompactCheckout
-                  ? "56px minmax(0, 1fr)"
+                  ? "52px minmax(0, 1fr) auto"
                   : "64px minmax(0, 1fr) auto",
                 gap: "12px",
                 alignItems: "center",
-                padding: "10px 0",
+                padding: "8px 0",
                 borderBottom: index === cartItems.length - 1 ? "none" : cardDivider,
               }}
             >
               <div
                 style={{
-                  width: isCompactCheckout ? "56px" : "64px",
-                  height: isCompactCheckout ? "56px" : "64px",
+                  width: isCompactCheckout ? "52px" : "64px",
+                  height: isCompactCheckout ? "52px" : "64px",
                   borderRadius: "12px",
                   overflow: "hidden",
                   background: mutedPanel,
+                  flexShrink: 0,
                 }}
               >
                 <img
@@ -1145,11 +1146,14 @@ const RenderPage: React.FC<RenderPageProps> = ({
               <div style={{ minWidth: 0 }}>
                 <p
                   style={{
-                    margin: "0 0 4px",
-                    fontSize: "14px",
+                    margin: "0 0 3px",
+                    fontSize: isCompactCheckout ? "13px" : "14px",
                     fontWeight: 700,
                     color: reviewCardText,
                     lineHeight: 1.35,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
                   }}
                 >
                   {item.name}
@@ -1158,10 +1162,10 @@ const RenderPage: React.FC<RenderPageProps> = ({
                 {item.selectedVariantValue ? (
                   <p
                     style={{
-                      margin: "0 0 4px",
+                      margin: "0 0 3px",
                       fontSize: "12px",
                       color: reviewCardMuted,
-                      lineHeight: 1.45,
+                      lineHeight: 1.4,
                     }}
                   >
                     {item.selectedVariantLabel || "Option"}: {item.selectedVariantValue}
@@ -1175,22 +1179,21 @@ const RenderPage: React.FC<RenderPageProps> = ({
                     color: reviewCardMuted,
                   }}
                 >
-                  Qty {item.quantity} × ₹{item.price}
+                  Qty {item.quantity}
                 </p>
               </div>
 
-              {!isCompactCheckout ? (
-                <div
-                  style={{
-                    fontSize: "14px",
-                    fontWeight: 700,
-                    color: reviewCardText,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  ₹{item.quantity * item.price}
-                </div>
-              ) : null}
+              <div
+                style={{
+                  fontSize: isCompactCheckout ? "13px" : "14px",
+                  fontWeight: 700,
+                  color: reviewCardText,
+                  whiteSpace: "nowrap",
+                  textAlign: "right",
+                }}
+              >
+                ₹{item.quantity * item.price}
+              </div>
             </div>
           ))}
         </div>
@@ -1370,27 +1373,6 @@ const RenderPage: React.FC<RenderPageProps> = ({
             width: "100%",
           }}
         >
-          <div
-            style={{
-              marginBottom: isCompactCheckout ? "14px" : "18px",
-            }}
-          >
-            <h1
-              style={{
-                margin: 0,
-                fontSize: isCompactCheckout
-                  ? "clamp(28px, 4vw, 32px)"
-                  : "clamp(34px, 4vw, 38px)",
-                lineHeight: 1.05,
-                fontWeight: 800,
-                color: textColor,
-                letterSpacing: "-0.03em",
-              }}
-            >
-              {page.title || page.name || "Checkout"}
-            </h1>
-          </div>
-
           <div
             style={{
               borderRadius: "18px",

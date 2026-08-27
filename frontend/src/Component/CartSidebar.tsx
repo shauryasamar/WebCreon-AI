@@ -674,12 +674,12 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
         <h4
           style={{
             margin: "0 0 12px",
-            fontSize: "16px",
+            fontSize: "15px",
             fontWeight: 700,
             color: palette.text,
           }}
         >
-          Optional add-ons
+          Add-ons
         </h4>
 
         <div style={{ display: "grid", gap: "10px" }}>
@@ -689,6 +689,11 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
               charge,
               subtotalAfterDiscount
             );
+
+            const hasValidDescription =
+              charge.description &&
+              !charge.description.toLowerCase().includes("optional checkout") &&
+              !charge.description.toLowerCase().includes("selected by customer");
 
             return (
               <label
@@ -729,7 +734,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                     >
                       {charge.label}
                     </div>
-                    {charge.description ? (
+                    {hasValidDescription ? (
                       <div
                         style={{
                           marginTop: "4px",
@@ -1184,8 +1189,9 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: isMobile ? "1fr" : "1fr auto",
-                        gap: "10px",
+                        gridTemplateColumns: isMobile ? "minmax(0, 1fr) 90px" : "1fr auto",
+                        gap: isMobile ? "8px" : "10px",
+                        alignItems: "center",
                       }}
                     >
                       <input
@@ -1194,13 +1200,17 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                         onChange={(e) => setPromoCode(e.target.value)}
                         placeholder={promoPlaceholder}
                         style={{
-                          minHeight: "44px",
-                          borderRadius: "12px",
+                          minHeight: isMobile ? "40px" : "44px",
+                          height: isMobile ? "40px" : "44px",
+                          borderRadius: isMobile ? "10px" : "12px",
                           border: `1px solid ${palette.cardBorder}`,
                           background: palette.inputBg,
                           color: palette.text,
-                          padding: "0 14px",
+                          padding: isMobile ? "0 12px" : "0 14px",
+                          fontSize: isMobile ? "13px" : "14px",
                           outline: "none",
+                          width: "100%",
+                          boxSizing: "border-box",
                         }}
                       />
 
@@ -1208,15 +1218,21 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                         type="button"
                         onClick={handleApplyPromo}
                         style={{
-                          minHeight: "44px",
+                          minHeight: isMobile ? "40px" : "44px",
+                          height: isMobile ? "40px" : "44px",
                           border: "none",
-                          borderRadius: "12px",
+                          borderRadius: isMobile ? "10px" : "12px",
                           background: resolvedAccentColor,
                           color: isColorDarkHex(resolvedAccentColor) ? "#ffffff" : "#0f172a",
-                          padding: "0 16px",
+                          padding: isMobile ? "0 14px" : "0 16px",
+                          fontSize: isMobile ? "13px" : "14px",
                           fontWeight: 700,
                           cursor: "pointer",
-                          width: isMobile ? "100%" : "auto",
+                          width: "auto",
+                          whiteSpace: "nowrap",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
                         }}
                       >
                         {promoButtonLabel}
@@ -1270,13 +1286,13 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
       >
         <div
           style={{
-            padding: isMobile ? "18px 16px 16px" : "22px 22px 18px",
+            padding: isMobile ? "16px 14px" : "22px 22px 18px",
             borderBottom: `1px solid ${palette.shellBorder}`,
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "flex-start",
-            gap: "16px",
-            flexWrap: "wrap",
+            alignItems: isMobile ? "center" : "flex-start",
+            gap: "12px",
+            flexWrap: isMobile ? "nowrap" : "wrap",
             background: palette.headerBg,
           }}
         >
@@ -1284,7 +1300,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
             <h3
               style={{
                 margin: 0,
-                fontSize: isMobile ? "24px" : "clamp(22px, 2vw, 30px)",
+                fontSize: isMobile ? "20px" : "clamp(22px, 2vw, 30px)",
                 lineHeight: 1.05,
                 letterSpacing: "-0.03em",
                 color: palette.text,
@@ -1295,9 +1311,9 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
 
             <p
               style={{
-                margin: "8px 0 0",
+                margin: isMobile ? "4px 0 0" : "8px 0 0",
                 color: palette.textMuted,
-                fontSize: "14px",
+                fontSize: isMobile ? "12px" : "14px",
               }}
             >
               {totalItems} item{totalItems !== 1 ? "s" : ""} in your cart
@@ -1311,12 +1327,14 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                 border: `1px solid ${palette.shellBorder}`,
                 background: palette.softBg,
                 color: palette.text,
-                borderRadius: "12px",
+                borderRadius: isMobile ? "10px" : "12px",
                 cursor: "pointer",
-                padding: "10px 14px",
-                fontSize: "13px",
+                padding: isMobile ? "6px 12px" : "10px 14px",
+                fontSize: isMobile ? "12px" : "13px",
                 fontWeight: 600,
-                width: isMobile ? "100%" : "auto",
+                width: "auto",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
               }}
             >
               {clearText}
@@ -1486,9 +1504,9 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                         style={{
                           display: "flex",
                           justifyContent: "space-between",
-                          alignItems: isMobile ? "stretch" : "center",
-                          gap: "12px",
-                          flexWrap: isMobile ? "wrap" : "nowrap",
+                          alignItems: "center",
+                          gap: "10px",
+                          marginTop: isMobile ? "6px" : "0",
                         }}
                       >
                         <div
@@ -1499,7 +1517,8 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                             border: `1px solid ${palette.cardBorder}`,
                             background: palette.quantityBg,
                             overflow: "hidden",
-                            minHeight: "42px",
+                            minHeight: isMobile ? "34px" : "42px",
+                            height: isMobile ? "34px" : "42px",
                           }}
                         >
                           <button
@@ -1512,13 +1531,17 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                               )
                             }
                             style={{
-                              width: "40px",
-                              height: "42px",
+                              width: isMobile ? "32px" : "40px",
+                              height: isMobile ? "34px" : "42px",
                               border: "none",
                               background: "transparent",
                               color: palette.text,
-                              fontSize: "18px",
+                              fontSize: isMobile ? "16px" : "18px",
                               cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              padding: 0,
                             }}
                           >
                             -
@@ -1526,9 +1549,9 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
 
                           <div
                             style={{
-                              minWidth: "42px",
+                              minWidth: isMobile ? "32px" : "42px",
                               textAlign: "center",
-                              fontSize: "14px",
+                              fontSize: isMobile ? "13px" : "14px",
                               fontWeight: 700,
                               color: palette.text,
                             }}
@@ -1546,13 +1569,17 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                               )
                             }
                             style={{
-                              width: "40px",
-                              height: "42px",
+                              width: isMobile ? "32px" : "40px",
+                              height: isMobile ? "34px" : "42px",
                               border: "none",
                               background: "transparent",
                               color: palette.text,
-                              fontSize: "18px",
+                              fontSize: isMobile ? "16px" : "18px",
                               cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              padding: 0,
                             }}
                           >
                             +
@@ -1569,12 +1596,16 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                           }
                           style={{
                             border: "none",
-                            background: "transparent",
+                            background: isMobile ? palette.softBg : "transparent",
                             color: palette.danger,
                             cursor: "pointer",
-                            fontSize: "13px",
-                            fontWeight: 700,
-                            padding: 0,
+                            fontSize: isMobile ? "12px" : "13px",
+                            fontWeight: 600,
+                            padding: isMobile ? "6px 10px" : 0,
+                            borderRadius: isMobile ? "8px" : 0,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
                           }}
                         >
                           {removeText}
@@ -1620,8 +1651,9 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: isMobile ? "1fr" : "1fr auto",
-                        gap: "10px",
+                        gridTemplateColumns: isMobile ? "minmax(0, 1fr) 90px" : "1fr auto",
+                        gap: isMobile ? "8px" : "10px",
+                        alignItems: "center",
                       }}
                     >
                       <input
@@ -1630,13 +1662,17 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                         onChange={(e) => setPromoCode(e.target.value)}
                         placeholder={promoPlaceholder}
                         style={{
-                          minHeight: "44px",
-                          borderRadius: "12px",
+                          minHeight: isMobile ? "40px" : "44px",
+                          height: isMobile ? "40px" : "44px",
+                          borderRadius: isMobile ? "10px" : "12px",
                           border: `1px solid ${palette.cardBorder}`,
                           background: palette.inputBg,
                           color: palette.text,
-                          padding: "0 14px",
+                          padding: isMobile ? "0 12px" : "0 14px",
+                          fontSize: isMobile ? "13px" : "14px",
                           outline: "none",
+                          width: "100%",
+                          boxSizing: "border-box",
                         }}
                       />
 
@@ -1644,15 +1680,21 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                         type="button"
                         onClick={handleApplyPromo}
                         style={{
-                          minHeight: "44px",
+                          minHeight: isMobile ? "40px" : "44px",
+                          height: isMobile ? "40px" : "44px",
                           border: "none",
-                          borderRadius: "12px",
+                          borderRadius: isMobile ? "10px" : "12px",
                           background: resolvedAccentColor,
                           color: isColorDarkHex(resolvedAccentColor) ? "#ffffff" : "#0f172a",
-                          padding: "0 16px",
+                          padding: isMobile ? "0 14px" : "0 16px",
+                          fontSize: isMobile ? "13px" : "14px",
                           fontWeight: 700,
                           cursor: "pointer",
-                          width: isMobile ? "100%" : "auto",
+                          width: "auto",
+                          whiteSpace: "nowrap",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
                         }}
                       >
                         {promoButtonLabel}
