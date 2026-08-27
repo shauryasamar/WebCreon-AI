@@ -1,4 +1,5 @@
 import { Product } from "../CartContext";
+import { optimizeImageUrl } from "./imageOptimizer";
 
 export function slugify(value?: string | null): string {
   return String(value || "")
@@ -22,13 +23,14 @@ export function normalizeStorefrontProduct(raw: any): Product {
       : raw?.originalPrice != null
       ? Number(raw.originalPrice)
       : null;
-  const images = Array.isArray(raw?.images)
+  const rawImages = Array.isArray(raw?.images)
     ? raw.images.filter(
         (img: unknown): img is string => typeof img === "string" && img.trim() !== ""
       )
     : raw?.image
     ? [raw.image]
     : [];
+  const images = rawImages.map((img: string) => optimizeImageUrl(img));
   const variantOption =
     raw?.variant_option ??
     raw?.variantOption ??

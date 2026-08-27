@@ -90,7 +90,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
+from starlette.types import Scope
+
+class CachedStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        response = await super().get_response(path, scope)
+        if response.status_code == 200:
+            response.headers["Cache-Control"] = "public, max-age=604800, immutable"
+        return response
+
+app.mount("/uploads", CachedStaticFiles(directory=UPLOADS_DIR), name="uploads")
 
 app.include_router(auth.router)
 app.include_router(products.router)

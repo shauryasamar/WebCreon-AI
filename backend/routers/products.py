@@ -308,6 +308,12 @@ def heal_image_urls(images: list[str]) -> list[str]:
         img_str = str(img).strip()
         if not img_str:
             continue
+        # If it contains an upload path like http://localhost:8000/uploads/... or http://192.168.x.x:8000/uploads/...
+        # Normalize it to a relative /uploads/... path so all clients (desktop, mobile LAN, tunnels) resolve it against their current host!
+        upload_idx = img_str.find("/uploads/")
+        if upload_idx != -1:
+            img_str = img_str[upload_idx:]
+
         if (
             healed
             and not img_str.startswith("http://")
@@ -361,9 +367,9 @@ def to_product_responses_batch(
                 }
             )
 
-    # 3. Batch fetch Review Summary only if requested
+    # 3. Batch fetch Review Summary (always compute rating stats for all products)
     review_summary_by_product: dict[UUID, tuple[float, int]] = {}
-    if include_reviews and product_ids:
+    if product_ids:
         review_stats = session.exec(
             select(
                 ProductReview.product_id,
@@ -2229,9 +2235,16 @@ def get_product_detail(
     product_id: UUID,
     session: Session = Depends(get_session),
 ):
+    cache_key = f"site:{str(site_id)}:product:{str(product_id)}"
+    cached = catalog_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     get_site_or_404(session, site_id)
     product = get_site_product_or_404(session, site_id, product_id)
-    return to_product_response(product, session, include_reviews=True)
+    res = to_product_response(product, session, include_reviews=True)
+    catalog_cache.set(cache_key, res, ttl=60.0)
+    return res
 
 
 @router.get("/{product_id}/reviews")

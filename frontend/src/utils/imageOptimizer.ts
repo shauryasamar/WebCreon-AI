@@ -10,10 +10,14 @@ export function optimizeImageUrl(
   const trimmed = url.trim();
   if (!trimmed) return "";
 
-  // If it's a backend relative upload URL e.g. /uploads/product-reviews/... or /uploads/products/...
-  if (trimmed.startsWith("/uploads/") || trimmed.startsWith("uploads/")) {
-    const cleanPath = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  // If it's a backend upload URL (relative or containing a previous hardcoded localhost/IP)
+  const uploadIndex = trimmed.indexOf("/uploads/");
+  if (uploadIndex !== -1) {
+    const cleanPath = trimmed.substring(uploadIndex);
     return `${API_BASE_URL}${cleanPath}`;
+  }
+  if (trimmed.startsWith("uploads/")) {
+    return `${API_BASE_URL}/${trimmed}`;
   }
 
   // If it's an Unsplash image, inject dynamic CDN resizing and WebP conversion

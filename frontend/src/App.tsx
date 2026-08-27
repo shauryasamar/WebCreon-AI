@@ -40,21 +40,20 @@ function RouteLoadingFallback() {
         minHeight: "100vh",
         display: "grid",
         placeItems: "center",
-        background: "#ffffff",
-        color: "#0f172a",
+        background: "transparent",
         fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
     >
       <div style={{ textAlign: "center" }}>
         <div
           style={{
-            width: "32px",
-            height: "32px",
-            border: "2.5px solid rgba(0,0,0,0.08)",
+            width: "30px",
+            height: "30px",
+            border: "2.5px solid rgba(125,125,125,0.18)",
             borderTopColor: "#3b82f6",
             borderRadius: "50%",
             animation: "spin 0.8s linear infinite",
-            margin: "0 auto 12px",
+            margin: "0 auto",
           }}
         />
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>

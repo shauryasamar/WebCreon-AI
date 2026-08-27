@@ -882,7 +882,6 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
             minHeight: "100%",
             background: isFullGlass ? glassBackground : (theme?.primary_bg || (isThemeDark ? "#0f172a" : "#ffffff")),
             color: theme?.text_color || (isThemeDark ? "#f8fafc" : "#0f172a"),
-            transition: "background 200ms ease",
           }}
         >
           {blocksToRender.map((block, index) => renderBlock(block, index))}

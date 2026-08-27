@@ -1174,9 +1174,28 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   }, [product?.id]);
 
   useEffect(() => {
-    const loadProductReviews = async () => {
-      if (!siteId || !product?.id) return;
+    if (Array.isArray(anyProduct?.reviews)) {
+      setReviews(anyProduct.reviews as ProductReview[]);
+    }
+    if (typeof anyProduct?.average_rating === "number") {
+      setAverageRating(Number(anyProduct.average_rating));
+    }
+    if (typeof anyProduct?.review_count === "number") {
+      setReviewCount(Number(anyProduct.review_count));
+    }
+    if (Array.isArray(anyProduct?.siblings)) {
+      setFetchedSiblings(anyProduct.siblings);
+    }
+  }, [product?.id]);
 
+  useEffect(() => {
+    if (!siteId || !product?.id) return;
+    // If the parent already passed reviews and siblings, skip redundant blocking fetch
+    if (Array.isArray(anyProduct?.reviews) && Array.isArray(anyProduct?.siblings)) {
+      return;
+    }
+
+    const loadProductReviews = async () => {
       try {
         const res = await fetch(
           `${API_BASE_URL}/sites/${siteId}/products/${product.id}`,
@@ -1907,42 +1926,44 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 aspectRatio: resolvedImageAspect,
               }}
             >
-              {/* Top-Right Share Icon Button */}
-              <button
-                type="button"
-                onClick={() => setShowShareModal(true)}
-                title="Share this product"
-                aria-label="Share product"
-                style={{
-                  position: "absolute",
-                  top: "10px",
-                  right: "10px",
-                  zIndex: 3,
-                  width: "36px",
-                  height: "36px",
-                  borderRadius: "50%",
-                  background: isLight ? "rgba(255,255,255,0.92)" : "rgba(15,23,42,0.85)",
-                  backdropFilter: "blur(8px)",
-                  WebkitBackdropFilter: "blur(8px)",
-                  border: subtleBorder,
-                  color: pageText,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
-                  padding: 0,
-                  transition: "transform 0.15s ease",
-                }}
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="18" cy="5" r="3" />
-                  <circle cx="6" cy="12" r="3" />
-                  <circle cx="18" cy="19" r="3" />
-                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-                  <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-                </svg>
-              </button>
+              {/* Top-Right Share Icon Button (Mobile Only) */}
+              {isMobile && (
+                <button
+                  type="button"
+                  onClick={() => setShowShareModal(true)}
+                  title="Share this product"
+                  aria-label="Share product"
+                  style={{
+                    position: "absolute",
+                    top: "10px",
+                    right: "10px",
+                    zIndex: 3,
+                    width: "36px",
+                    height: "36px",
+                    borderRadius: "50%",
+                    background: isLight ? "rgba(255,255,255,0.92)" : "rgba(15,23,42,0.85)",
+                    backdropFilter: "blur(8px)",
+                    WebkitBackdropFilter: "blur(8px)",
+                    border: subtleBorder,
+                    color: pageText,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+                    padding: 0,
+                    transition: "transform 0.15s ease",
+                  }}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="18" cy="5" r="3" />
+                    <circle cx="6" cy="12" r="3" />
+                    <circle cx="18" cy="19" r="3" />
+                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                  </svg>
+                </button>
+              )}
 
               {/* Bottom-Left Fixed Rating Badge (Clickable to jump to Reviews) */}
               {show_ratings && (

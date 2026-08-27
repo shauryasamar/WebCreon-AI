@@ -36,6 +36,7 @@ import CustomerOrdersPage from "./pages/CustomerOrdersPage";
 import QrLinkPopup from "./Component/QrLinkPopup";
 import BuilderDrawerPanel from "./Component/BuilderDrawerPanel";
 import { normalizeStorefrontProduct, slugify } from "./utils/productNormalizer";
+import { isColorDarkHex } from "./context/ThemeContext";
 
 // Standalone secondary routes remain lazy
 const AgentDeliveryPage = React.lazy(() => import("./pages/AgentDeliveryPage"));
@@ -588,37 +589,18 @@ function StorefrontPage({
 
 function StorefrontSkeleton({
   isProductDetail,
-  siteSlug,
 }: {
   isProductDetail?: boolean;
   siteSlug?: string;
 }) {
-  const cachedMode =
-    typeof window !== "undefined" && siteSlug
-      ? localStorage.getItem(`wc_theme_mode_${siteSlug}`)
-      : null;
-  const cachedBg =
-    typeof window !== "undefined" && siteSlug
-      ? localStorage.getItem(`wc_theme_bg_${siteSlug}`)
-      : null;
-
-  const isDarkMode = cachedMode === "dark";
-  const bg = cachedBg || (isDarkMode ? "#0f172a" : "#f8fafc");
-  const headerBg = isDarkMode
-    ? "rgba(15,23,42,0.85)"
-    : "rgba(255,255,255,0.85)";
-  const border = isDarkMode
-    ? "1px solid rgba(255,255,255,0.08)"
-    : "1px solid rgba(0,0,0,0.06)";
-  const cardBg = isDarkMode ? "rgba(255,255,255,0.02)" : "#ffffff";
-  const cardBorder = isDarkMode
-    ? "1px solid rgba(255,255,255,0.06)"
-    : "1px solid rgba(0,0,0,0.06)";
+  const bg = "#f8fafc";
+  const headerBg = "rgba(255,255,255,0.9)";
+  const border = "1px solid rgba(0,0,0,0.06)";
+  const cardBg = "#ffffff";
+  const cardBorder = "1px solid rgba(0,0,0,0.06)";
 
   const skStyle: React.CSSProperties = {
-    backgroundImage: isDarkMode
-      ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)"
-      : "linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%)",
+    backgroundImage: "linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%)",
     backgroundSize: "200% 100%",
     animation: "storeShimmer 1.5s infinite linear",
     willChange: "background-position",
@@ -630,7 +612,7 @@ function StorefrontSkeleton({
       style={{
         minHeight: "100vh",
         background: bg,
-        color: isDarkMode ? "#f8fafc" : "#0f172a",
+        color: "#0f172a",
         overflow: "hidden",
         fontFamily:
           "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
@@ -1671,14 +1653,15 @@ function BuilderPageContent() {
   }
 
 
+  const isDarkSiteTheme = activeSiteDefinition?.theme?.mode === "dark" || isColorDarkHex(activeSiteDefinition?.theme?.primary_bg);
   const pageBg = isAdminRoute
     ? "#ffffff"
     : activeSiteDefinition?.theme?.primary_bg ||
-    (activeSiteDefinition?.theme?.mode === "light" ? "#f8fafc" : "#0f172a");
+    (isDarkSiteTheme ? "#0f172a" : "#f8fafc");
   const textColor = isAdminRoute
     ? "#0f172a"
     : activeSiteDefinition?.theme?.text_color ||
-    (activeSiteDefinition?.theme?.mode === "light" ? "#111827" : "#f9fafb");
+    (isDarkSiteTheme ? "#f9fafb" : "#111827");
 
 
   const topBar = showAdminTopbar ? (
@@ -2055,6 +2038,28 @@ function BuilderPageContent() {
   );
 }
 
+export const siteProductsMemoryCache = new Map<string, Product[]>();
+
+function getInitialCachedProducts(slugOrId?: string): Product[] {
+  if (!slugOrId) return [];
+  if (siteProductsMemoryCache.has(slugOrId)) {
+    return siteProductsMemoryCache.get(slugOrId)!;
+  }
+  if (typeof window !== "undefined") {
+    try {
+      const raw = localStorage.getItem(`wc_site_products_${slugOrId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          siteProductsMemoryCache.set(slugOrId, parsed);
+          return parsed;
+        }
+      }
+    } catch (_) {}
+  }
+  return [];
+}
+
 export default function BuilderPage() {
   const params = useParams();
   const siteId = params.siteId;
@@ -2065,8 +2070,21 @@ export default function BuilderPage() {
   const [resolvedSiteId, setResolvedSiteId] = useState(
     initialCachedSite?.id || siteId || ""
   );
-  const [siteProducts, setSiteProducts] = useState<Product[]>([]);
-  const [isProductsLoading, setIsProductsLoading] = useState<boolean>(true);
+
+  const initialProducts =
+    (siteSlugParam ? getInitialCachedProducts(siteSlugParam) : []) ||
+    (siteId ? getInitialCachedProducts(siteId) : []) ||
+    (initialCachedSite?.id ? getInitialCachedProducts(initialCachedSite.id) : []) ||
+    [];
+
+  const [siteProducts, setSiteProducts] = useState<Product[]>(
+    initialProducts.length > 0
+      ? initialProducts
+      : (siteSlugParam ? getInitialCachedProducts(siteSlugParam) : [])
+  );
+  const [isProductsLoading, setIsProductsLoading] = useState<boolean>(
+    siteProducts.length === 0
+  );
   const [defaultReturnWindowDays, setDefaultReturnWindowDays] = useState<number>(
     initialCachedSite?.default_return_window_days != null
       ? Number(initialCachedSite.default_return_window_days)
@@ -2074,17 +2092,6 @@ export default function BuilderPage() {
   );
 
   useEffect(() => {
-    // Clean up any legacy cache keys from storage to keep browser memory clean
-    try {
-      if (typeof window !== "undefined" && window.sessionStorage) {
-        Object.keys(window.sessionStorage).forEach((k) => {
-          if (k.startsWith("wc_prod_cache_")) {
-            window.sessionStorage.removeItem(k);
-          }
-        });
-      }
-    } catch (_) { }
-
     let cancelled = false;
 
     const resolveAndLoadProducts = async () => {
@@ -2143,18 +2150,24 @@ export default function BuilderPage() {
           if (!cancelled) {
             setSiteProducts(normalizedProducts);
             setIsProductsLoading(false);
+            siteProductsMemoryCache.set(targetSiteId, normalizedProducts);
+            if (siteSlugParam) siteProductsMemoryCache.set(siteSlugParam, normalizedProducts);
+            try {
+              localStorage.setItem(`wc_site_products_${targetSiteId}`, JSON.stringify(normalizedProducts));
+              if (siteSlugParam) {
+                localStorage.setItem(`wc_site_products_${siteSlugParam}`, JSON.stringify(normalizedProducts));
+              }
+            } catch (_) {}
           }
         } else {
           console.error("Failed to load products for site", res.status);
           if (!cancelled) {
-            setSiteProducts([]);
             setIsProductsLoading(false);
           }
         }
       } catch (err) {
         console.error("Error loading products for site", err);
         if (!cancelled) {
-          setSiteProducts([]);
           setIsProductsLoading(false);
         }
       }
