@@ -602,6 +602,10 @@ class Coupon(SQLModel, table=True):
         default=True,
         sa_column=Column(Boolean, nullable=False, default=True),
     )
+    is_public: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, default=True),
+    )
     created_at: datetime = Field(
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False),

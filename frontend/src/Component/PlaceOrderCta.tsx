@@ -442,7 +442,6 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
               gap: "8px",
             }}
           >
-            <span style={{ fontSize: "16px" }}>⚠️</span>
             <span>{errorMessage}</span>
           </div>
         ) : helperText ? (

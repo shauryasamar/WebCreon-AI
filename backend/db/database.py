@@ -88,6 +88,9 @@ def create_db_and_tables():
 
                 ALTER TABLE user_addresses ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
                 ALTER TABLE user_addresses ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
+
+                ALTER TABLE coupons ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT TRUE;
+                CREATE INDEX IF NOT EXISTS ix_coupons_site_id_is_public ON coupons(site_id, is_public);
                 ALTER TABLE user_addresses ADD COLUMN IF NOT EXISTS geo_accuracy VARCHAR(30);
 
                 ALTER TABLE delivery_settings ADD COLUMN IF NOT EXISTS sender_latitude DOUBLE PRECISION;

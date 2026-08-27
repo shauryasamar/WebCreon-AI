@@ -59,6 +59,7 @@ class CreateCouponRequest(BaseModel):
     starts_at: Optional[datetime] = None
     expires_at: Optional[datetime] = None
     is_active: bool = True
+    is_public: bool = True
 
 
 class UpdateCouponRequest(BaseModel):
@@ -73,6 +74,7 @@ class UpdateCouponRequest(BaseModel):
     starts_at: Optional[datetime] = None
     expires_at: Optional[datetime] = None
     is_active: Optional[bool] = None
+    is_public: Optional[bool] = None
 
 
 class ValidateCouponRequest(BaseModel):
@@ -99,6 +101,7 @@ def serialize_coupon(coupon: Coupon, total_savings: Decimal = Decimal("0.00")) -
         "startsAt": coupon.starts_at.isoformat() if coupon.starts_at else None,
         "expiresAt": coupon.expires_at.isoformat() if coupon.expires_at else None,
         "isActive": coupon.is_active,
+        "isPublic": getattr(coupon, "is_public", True),
         "totalSavings": float(total_savings),
         "createdAt": coupon.created_at.isoformat(),
         "updatedAt": coupon.updated_at.isoformat(),
@@ -185,6 +188,7 @@ def admin_create_coupon(
         starts_at=payload.starts_at or utc_now(),
         expires_at=payload.expires_at,
         is_active=payload.is_active,
+        is_public=payload.is_public,
     )
     session.add(coupon)
     session.commit()
@@ -232,6 +236,8 @@ def admin_update_coupon(
         coupon.expires_at = payload.expires_at
     if payload.is_active is not None:
         coupon.is_active = payload.is_active
+    if payload.is_public is not None:
+        coupon.is_public = payload.is_public
 
     coupon.updated_at = utc_now()
     session.add(coupon)
@@ -286,6 +292,51 @@ def admin_delete_coupon(
     session.commit()
 
     return {"message": f"Coupon '{coupon.code}' deleted successfully."}
+
+
+# ---------------------------------------------------------------------------
+# Storefront Public Available Coupons Endpoint
+# ---------------------------------------------------------------------------
+
+@router.get("/available/{site_id}")
+def get_available_storefront_coupons(
+    site_id: str,
+    session: Session = Depends(get_session),
+):
+    site = resolve_site(site_id, session)
+    now = utc_now()
+
+    coupons = session.exec(
+        select(Coupon)
+        .where(
+            Coupon.site_id == site.id,
+            Coupon.is_active == True,
+            Coupon.is_public == True,
+        )
+        .order_by(Coupon.created_at.desc())
+    ).all()
+
+    valid_available = []
+    for c in coupons:
+        if c.starts_at and now < c.starts_at:
+            continue
+        if c.expires_at and now > c.expires_at:
+            continue
+        if c.total_usage_limit is not None and c.times_used >= c.total_usage_limit:
+            continue
+        valid_available.append({
+            "id": str(c.id),
+            "code": c.code,
+            "description": c.description,
+            "discountType": c.discount_type,
+            "discountValue": float(c.discount_value),
+            "maxDiscountAmount": float(c.max_discount_amount) if c.max_discount_amount is not None else None,
+            "minOrderValue": float(c.min_order_value),
+            "isFirstOrderOnly": c.is_first_order_only,
+            "expiresAt": c.expires_at.isoformat() if c.expires_at else None,
+        })
+
+    return {"coupons": valid_available}
 
 
 # ---------------------------------------------------------------------------

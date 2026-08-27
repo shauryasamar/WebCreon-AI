@@ -561,7 +561,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   const fallbackTaxLabel = tax_label || "Tax";
   const subtotalLabel = subtotal_label || "Subtotal";
   const totalLabel = total_label || "Total";
-  const footerNote = note || "Final charges will be validated at checkout.";
+  const footerNote = note || (isCheckoutSummary ? "" : "Final charges will be validated at checkout.");
 
   const isDark =
     (theme?.primary_bg ? isColorDarkHex(theme.primary_bg) : false) ||
@@ -1124,16 +1124,18 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
         </div>
       </div>
 
-      <p
-        style={{
-          margin: "14px 0 16px",
-          fontSize: "13px",
-          color: palette.textMuted,
-          lineHeight: 1.5,
-        }}
-      >
-        {settingsLoading ? "Updating charges..." : footerNote}
-      </p>
+      {(footerNote || settingsLoading) && (
+        <p
+          style={{
+            margin: "14px 0 16px",
+            fontSize: "13px",
+            color: palette.textMuted,
+            lineHeight: 1.5,
+          }}
+        >
+          {settingsLoading ? "Updating charges..." : footerNote}
+        </p>
+      )}
 
       {cartItems.length > 0 ? (
         <Link

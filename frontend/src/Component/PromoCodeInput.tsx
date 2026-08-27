@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { API_BASE_URL } from "../config/api";
 
 export interface ValidatedCoupon {
@@ -8,6 +8,18 @@ export interface ValidatedCoupon {
   discountValue: number;
   discountAmount: number;
   message?: string;
+}
+
+export interface AvailableCoupon {
+  id: string;
+  code: string;
+  description?: string;
+  discountType: "percentage" | "fixed_amount" | "free_shipping";
+  discountValue: number;
+  maxDiscountAmount?: number | null;
+  minOrderValue: number;
+  isFirstOrderOnly: boolean;
+  expiresAt?: string | null;
 }
 
 interface PromoCodeInputProps {
@@ -70,6 +82,11 @@ export const PromoCodeInput: React.FC<PromoCodeInputProps> = ({
   const [successMsg, setSuccessMsg] = useState("");
   const [removeHover, setRemoveHover] = useState(false);
 
+  // Available Public Coupons State
+  const [availableCoupons, setAvailableCoupons] = useState<AvailableCoupon[]>([]);
+  const [showOffers, setShowOffers] = useState(false);
+  const [applyingCode, setApplyingCode] = useState<string | null>(null);
+
   const isDark = isColorDark(cardBg) || isColorDark(inputBg) || !isColorDark(textColor);
 
   // Dynamic Theme-Aware Palette
@@ -81,6 +98,28 @@ export const PromoCodeInput: React.FC<PromoCodeInputProps> = ({
     : isDark
     ? "rgba(255, 255, 255, 0.55)"
     : "rgba(15, 23, 42, 0.55)";
+
+  // Fetch available public coupons on mount / siteId change
+  useEffect(() => {
+    if (!siteId) return;
+    let isCancelled = false;
+
+    const fetchAvailable = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/coupons/available/${siteId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!isCancelled && Array.isArray(data.coupons)) {
+          setAvailableCoupons(data.coupons);
+        }
+      } catch {}
+    };
+
+    fetchAvailable();
+    return () => {
+      isCancelled = true;
+    };
+  }, [siteId]);
 
   const handleApply = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -123,10 +162,54 @@ export const PromoCodeInput: React.FC<PromoCodeInputProps> = ({
       onCouponApplied(validated);
       setSuccessMsg(data.message || `Code '${validated.code}' applied!`);
       setCode("");
+      setShowOffers(false);
     } catch (err: any) {
       setErrorMsg(err.message || "Failed to validate promo code");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleQuickApply = async (targetCode: string) => {
+    setApplyingCode(targetCode);
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/coupons/validate/${siteId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          code: targetCode.trim().toUpperCase(),
+          subtotal: subtotal,
+          delivery_fee: deliveryFee,
+          customer_email: customerEmail,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.valid) {
+        throw new Error(data.message || data.detail || "Ineligible promo code");
+      }
+
+      const validated: ValidatedCoupon = {
+        id: data.coupon?.id,
+        code: data.coupon?.code || targetCode.trim().toUpperCase(),
+        discountType: data.coupon?.discountType || "fixed_amount",
+        discountValue: data.coupon?.discountValue || 0,
+        discountAmount: data.discountAmount || 0,
+        message: data.message,
+      };
+
+      onCouponApplied(validated);
+      setSuccessMsg(data.message || `Code '${validated.code}' applied!`);
+      setCode("");
+      setShowOffers(false);
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to apply promo code");
+    } finally {
+      setApplyingCode(null);
     }
   };
 
@@ -316,6 +399,147 @@ export const PromoCodeInput: React.FC<PromoCodeInputProps> = ({
           {successMsg && (
             <div style={{ marginTop: "6px", fontSize: "12px", color: savingsTextColor, display: "flex", alignItems: "center", gap: "4px" }}>
               <span>{successMsg}</span>
+            </div>
+          )}
+
+          {/* View Available Public Offers Expandable List */}
+          {availableCoupons.length > 0 && (
+            <div style={{ marginTop: "8px" }}>
+              <button
+                type="button"
+                onClick={() => setShowOffers((prev) => !prev)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  padding: "4px 0",
+                  color: accentColor,
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <span>{showOffers ? "Hide Available Offers" : `View Available Offers (${availableCoupons.length})`}</span>
+                <span
+                  style={{
+                    fontSize: "9px",
+                    display: "inline-block",
+                    transition: "transform 0.2s ease",
+                    transform: showOffers ? "rotate(180deg)" : "rotate(0deg)",
+                  }}
+                >
+                  ▼
+                </span>
+              </button>
+
+              {showOffers && (
+                <div
+                  style={{
+                    marginTop: "8px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                    maxHeight: "240px",
+                    overflowY: "auto",
+                    paddingRight: "2px",
+                  }}
+                >
+                  {availableCoupons.map((coupon) => {
+                    const isMinOrderMet = subtotal >= coupon.minOrderValue;
+                    const diffToMin = Math.max(0, coupon.minOrderValue - subtotal);
+                    const isApplying = applyingCode === coupon.code;
+
+                    return (
+                      <div
+                        key={coupon.id}
+                        style={{
+                          padding: "10px 12px",
+                          borderRadius: "9px",
+                          background: cardBackground,
+                          border: `1px solid ${cardBorder}`,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "10px",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                            <span
+                              style={{
+                                fontFamily: "'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace",
+                                fontWeight: 800,
+                                fontSize: "12.5px",
+                                color: textColor,
+                                letterSpacing: "0.05em",
+                              }}
+                            >
+                              {coupon.code}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: "10.5px",
+                                fontWeight: 700,
+                                padding: "1.5px 6px",
+                                borderRadius: "4px",
+                                background: `${accentColor}18`,
+                                color: accentColor,
+                              }}
+                            >
+                              {coupon.discountType === "percentage"
+                                ? `${coupon.discountValue}% OFF`
+                                : coupon.discountType === "free_shipping"
+                                ? "Free Delivery"
+                                : `₹${coupon.discountValue} OFF`}
+                            </span>
+                          </div>
+
+                          <div style={{ fontSize: "11px", color: isDark ? "rgba(255,255,255,0.6)" : "rgba(15,23,42,0.6)", marginTop: "3px", lineHeight: 1.3 }}>
+                            {coupon.description ? coupon.description : null}
+                            {coupon.minOrderValue > 0 && (
+                              <span>
+                                {coupon.description ? " • " : ""}
+                                {isMinOrderMet
+                                  ? `Min order ₹${coupon.minOrderValue}`
+                                  : `Add ₹${diffToMin.toFixed(0)} more to unlock`}
+                              </span>
+                            )}
+                            {coupon.isFirstOrderOnly && (
+                              <span> • 1st order only</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={isApplying}
+                          onClick={() => handleQuickApply(coupon.code)}
+                          style={{
+                            height: "28px",
+                            padding: "0 12px",
+                            borderRadius: "6px",
+                            border: `1px solid ${accentColor}`,
+                            background: isMinOrderMet ? accentColor : "transparent",
+                            color: isMinOrderMet ? "#ffffff" : accentColor,
+                            fontSize: "11.5px",
+                            fontWeight: 700,
+                            cursor: isApplying ? "not-allowed" : "pointer",
+                            opacity: isApplying ? 0.6 : 1,
+                            whiteSpace: "nowrap",
+                            flexShrink: 0,
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          {isApplying ? "Applying..." : "Apply"}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </form>

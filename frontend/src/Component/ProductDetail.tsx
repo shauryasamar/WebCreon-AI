@@ -2938,10 +2938,6 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
               </div>
 
               <div style={{ display: "grid", gap: "7px" }}>
-                <p style={{ margin: 0, fontSize: "12px", fontWeight: 700, color: subtleText }}>
-                  Purchase
-                </p>
-
                 <button
                   type="button"
                   onClick={handleAddToCart}
@@ -3142,7 +3138,6 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
           }}
         >
           <div>
-            <p style={{ margin: "0 0 5px", ...tagText }}>Ratings & reviews</p>
             <h2
               style={{
                 margin: 0,

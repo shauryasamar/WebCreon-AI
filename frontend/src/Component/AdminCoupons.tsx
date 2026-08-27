@@ -19,6 +19,7 @@ interface CouponItem {
   startsAt?: string | null;
   expiresAt?: string | null;
   isActive: boolean;
+  isPublic?: boolean;
   totalSavings: number;
   createdAt: string;
 }
@@ -211,6 +212,7 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
   const [formStartsAt, setFormStartsAt] = useState<string>("");
   const [formExpiresAt, setFormExpiresAt] = useState<string>("");
   const [formIsActive, setFormIsActive] = useState(true);
+  const [formIsPublic, setFormIsPublic] = useState(true);
 
   // Validation Errors
   const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
@@ -284,6 +286,7 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
     setFormStartsAt("");
     setFormExpiresAt("");
     setFormIsActive(true);
+    setFormIsPublic(true);
     setFormErrors({});
     setIsModalOpen(true);
   };
@@ -302,6 +305,7 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
     setFormStartsAt(coupon.startsAt ? coupon.startsAt.slice(0, 16) : "");
     setFormExpiresAt(coupon.expiresAt ? coupon.expiresAt.slice(0, 16) : "");
     setFormIsActive(coupon.isActive);
+    setFormIsPublic(coupon.isPublic !== false);
     setFormErrors({});
     setIsModalOpen(true);
   };
@@ -383,6 +387,7 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
         starts_at: formStartsAt ? new Date(formStartsAt).toISOString() : null,
         expires_at: formExpiresAt ? new Date(formExpiresAt).toISOString() : null,
         is_active: formIsActive,
+        is_public: formIsPublic,
       };
 
       const url = editingCoupon
@@ -1429,6 +1434,15 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                             >
                               {coupon.code}
                             </span>
+                            {coupon.isPublic === false ? (
+                              <span style={{ fontSize: "10px", fontWeight: 700, color: "#64748b", background: "#f1f5f9", border: "1px solid #cbd5e1", padding: "1px 5px", borderRadius: "4px" }}>
+                                Secret Code
+                              </span>
+                            ) : (
+                              <span style={{ fontSize: "10px", fontWeight: 700, color: "#1d4ed8", background: "#eff6ff", border: "1px solid #bfdbfe", padding: "1px 5px", borderRadius: "4px" }}>
+                                Public
+                              </span>
+                            )}
                             <button
                               type="button"
                               onClick={() => handleCopyCode(coupon.code)}
@@ -1989,7 +2003,7 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                     </div>
 
                     {/* First Order Restriction Checkbox */}
-                    <div style={{ paddingTop: "4px" }}>
+                    <div style={{ paddingTop: "4px", display: "flex", flexDirection: "column", gap: "10px" }}>
                       <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "12.5px", fontWeight: 600, color: "#1e293b" }}>
                         <input
                           type="checkbox"
@@ -1998,6 +2012,17 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                           style={{ width: "15px", height: "15px", cursor: "pointer" }}
                         />
                         <span>First-time customers only</span>
+                      </label>
+
+                      {/* Public on Storefront Checkbox */}
+                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "12.5px", fontWeight: 600, color: "#1e293b" }}>
+                        <input
+                          type="checkbox"
+                          checked={formIsPublic}
+                          onChange={(e) => setFormIsPublic(e.target.checked)}
+                          style={{ width: "15px", height: "15px", cursor: "pointer" }}
+                        />
+                        <span>Show in Available Offers list</span>
                       </label>
                     </div>
                   </div>
