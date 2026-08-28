@@ -589,16 +589,18 @@ export function findBlockById(
 ): EditorBlock | null {
   if (!siteDefinition || !blockId) return null;
 
-  if (blockId === GLOBAL_NAVBAR_BLOCK_ID) {
+  if (blockId === GLOBAL_NAVBAR_BLOCK_ID || blockId === "navbar") {
     return buildGlobalNavbarBlock(siteDefinition);
   }
 
-  if (blockId === GLOBAL_FOOTER_BLOCK_ID) {
+  if (blockId === GLOBAL_FOOTER_BLOCK_ID || blockId === "footer") {
     return buildGlobalFooterBlock(siteDefinition);
   }
 
   for (const page of siteDefinition.pages) {
-    const match = page.blocks.find((block) => block.id === blockId);
+    const match = page.blocks.find(
+      (block) => block.id === blockId || block.type === blockId
+    );
     if (match) return match;
   }
 
@@ -652,6 +654,46 @@ export function findBlockById(
     return {
       id: blockId,
       type: targetType,
+      props: {},
+    };
+  }
+
+  if (blockId === "cart_view" || blockId.includes("cart")) {
+    return {
+      id: blockId,
+      type: "cart_view",
+      props: {},
+    };
+  }
+
+  if (blockId === "hero_banner" || blockId === "herobanner") {
+    return {
+      id: blockId,
+      type: "hero_banner",
+      props: {},
+    };
+  }
+
+  if (blockId === "product_grid" || blockId === "productgrid") {
+    return {
+      id: blockId,
+      type: "product_grid",
+      props: {},
+    };
+  }
+
+  if (blockId === "signin_form" || blockId === "login_form") {
+    return {
+      id: blockId,
+      type: "signin_form",
+      props: {},
+    };
+  }
+
+  if (blockId === "signup_form" || blockId === "register_form") {
+    return {
+      id: blockId,
+      type: "signup_form",
       props: {},
     };
   }
@@ -717,7 +759,7 @@ export function updateBlockFieldValue(
   field: EditorField,
   value: any
 ): EditorSiteDefinition {
-  if (blockId === GLOBAL_NAVBAR_BLOCK_ID) {
+  if (blockId === GLOBAL_NAVBAR_BLOCK_ID || blockId === "navbar") {
     if (field.target === "theme") {
       return {
         ...siteDefinition,
@@ -783,7 +825,7 @@ export function updateBlockFieldValue(
     return siteDefinition;
   }
 
-  if (blockId === GLOBAL_FOOTER_BLOCK_ID) {
+  if (blockId === GLOBAL_FOOTER_BLOCK_ID || blockId === "footer") {
     if (field.target === "theme") {
       return {
         ...siteDefinition,

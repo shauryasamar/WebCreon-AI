@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import {
   applyFestivalTheme,
   applyThemeMode,
@@ -17,6 +18,232 @@ import { EditorField } from "./editorTypes";
 import { API_BASE_URL } from "../config/api";
 import { optimizeImageUrl } from "../utils/imageOptimizer";
 
+function PageBlocksTreeView({
+  siteDefinition: _siteDefinition,
+  onSelectBlock,
+  onSelectPage,
+}: {
+  siteDefinition: EditorSiteDefinition;
+  onSelectBlock?: (blockId: string | null) => void;
+  onSelectPage?: (pageId: string) => void;
+  isLightMode?: boolean;
+}) {
+  const location = useLocation();
+  const currentPath = location.pathname;
+
+  const storefrontPages = [
+    {
+      id: "home",
+      name: "Home",
+      route: "/",
+      blocks: [
+        { id: "navbar", type: "navbar", name: "Navbar" },
+        { id: "hero_banner", type: "hero_banner", name: "Hero Banner" },
+        { id: "product_grid", type: "product_grid", name: "Product Grid" },
+        { id: "footer", type: "footer", name: "Footer" },
+      ],
+    },
+    {
+      id: "product_detail",
+      name: "Product Detail",
+      route: "/products/:slug",
+      blocks: [
+        { id: "product_detail", type: "product_detail", name: "Product Detail" },
+        { id: "related_products", type: "related_products", name: "Related Products" },
+      ],
+    },
+    {
+      id: "cart",
+      name: "Cart",
+      route: "/cart",
+      blocks: [
+        { id: "cart_view", type: "cart_view", name: "Cart View" },
+      ],
+    },
+    {
+      id: "checkout",
+      name: "Checkout",
+      route: "/checkout",
+      blocks: [
+        { id: "delivery_form", type: "delivery_form", name: "Delivery Form" },
+        { id: "payment_methods", type: "payment_methods", name: "Payment Methods" },
+        { id: "place_order_cta", type: "place_order_cta", name: "Place Order" },
+      ],
+    },
+    {
+      id: "profile",
+      name: "Customer Profile",
+      route: "/profile",
+      blocks: [
+        { id: "profile_details", type: "profile_details", name: "Profile Details" },
+        { id: "saved_addresses", type: "saved_addresses", name: "Saved Addresses" },
+      ],
+    },
+    {
+      id: "orders",
+      name: "Order History",
+      route: "/orders",
+      blocks: [
+        { id: "order_history_list", type: "order_history_list", name: "Order History" },
+        { id: "order_tracking", type: "order_tracking", name: "Order Tracking" },
+      ],
+    },
+    {
+      id: "login",
+      name: "Customer Sign In",
+      route: "/login",
+      blocks: [
+        { id: "signin_form", type: "signin_form", name: "Sign In Form" },
+      ],
+    },
+    {
+      id: "signup",
+      name: "Customer Sign Up",
+      route: "/signup",
+      blocks: [
+        { id: "signup_form", type: "signup_form", name: "Sign Up Form" },
+      ],
+    },
+  ];
+
+  const isRouteActive = (route: string) => {
+    if (route === "/") {
+      return (
+        !currentPath.includes("/products/") &&
+        !currentPath.includes("/cart") &&
+        !currentPath.includes("/checkout") &&
+        !currentPath.includes("/profile") &&
+        !currentPath.includes("/orders") &&
+        !currentPath.includes("/login") &&
+        !currentPath.includes("/signup")
+      );
+    }
+    if (route.includes("products")) return currentPath.includes("/products/");
+    return currentPath.endsWith(route) || currentPath.includes(route);
+  };
+
+  const [manualToggled, setManualToggled] = useState<Record<string, boolean>>({});
+
+  return (
+    <div
+      style={{
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        background: "#ffffff",
+        border: "1px solid #e2e8f0",
+        borderRadius: "4px",
+        padding: "10px 8px",
+        boxSizing: "border-box",
+        width: "100%",
+        color: "#0f172a",
+        fontSize: "11px",
+        lineHeight: "1.6",
+      }}
+    >
+      {/* Root Node */}
+      <div style={{ fontWeight: 700, color: "#0f172a", marginBottom: "6px", fontSize: "11.5px" }}>
+        Storefront Pages & Components
+      </div>
+
+      {/* Pages Section */}
+      <div style={{ display: "grid" }}>
+        {storefrontPages.map((p, pIdx) => {
+          const isLastPage = pIdx === storefrontPages.length - 1;
+          const isCurrent = isRouteActive(p.route);
+          const isOpen = manualToggled[p.id] !== undefined ? manualToggled[p.id] : isCurrent;
+
+          return (
+            <div key={p.id} style={{ display: "grid", marginBottom: "2px" }}>
+                {/* Page Line */}
+                <div
+                  onClick={() => {
+                    if (onSelectPage) onSelectPage(p.route);
+                    if (onSelectBlock) onSelectBlock(null);
+                    setManualToggled((prev) => ({
+                      ...prev,
+                      [p.id]: !isOpen,
+                    }));
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "3px 4px",
+                    borderRadius: "3px",
+                    cursor: "pointer",
+                    fontWeight: isCurrent ? 700 : 500,
+                    color: isCurrent ? "#2563eb" : "#334155",
+                    background: isCurrent ? "rgba(37,99,235,0.06)" : "transparent",
+                    transition: "all 0.1s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isCurrent) e.currentTarget.style.background = "#f1f5f9";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isCurrent) e.currentTarget.style.background = "transparent";
+                  }}
+                >
+                  <span style={{ display: "flex", alignItems: "center" }}>
+                    <span style={{ color: "#94a3b8", marginRight: "6px", fontFamily: "monospace" }}>{isLastPage ? "└──" : "├──"}</span>
+                    <span style={{ color: isOpen ? "#2563eb" : "#94a3b8", fontSize: "9px", marginRight: "4px", display: "inline-block", transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s ease" }}>▶</span>
+                    <span>{p.name}</span>
+                    <span style={{ color: "#94a3b8", fontSize: "10px", marginLeft: "4px" }}>({p.route})</span>
+                  </span>
+                  {isCurrent && (
+                    <span style={{ fontSize: "8.5px", color: "#2563eb", fontWeight: 700 }}>Active</span>
+                  )}
+                </div>
+
+                {/* Page Block Components - Accordion: only shown when page is opened */}
+                {isOpen && (
+                  <div style={{ marginLeft: "16px", borderLeft: isLastPage ? "none" : "1px solid #e2e8f0", paddingLeft: isLastPage ? "1px" : "0", display: "grid", marginTop: "1px" }}>
+                    {p.blocks.map((b, bIdx) => {
+                      const isLastBlock = bIdx === p.blocks.length - 1;
+                      return (
+                        <div
+                          key={b.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onSelectPage && !isCurrent) onSelectPage(p.route);
+                            if (onSelectBlock) onSelectBlock(b.id || b.type);
+                          }}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "2px 4px",
+                            borderRadius: "3px",
+                            cursor: "pointer",
+                            color: "#475569",
+                            fontSize: "10.5px",
+                            transition: "all 0.1s ease",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = "#f1f5f9";
+                            e.currentTarget.style.color = "#2563eb";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = "transparent";
+                            e.currentTarget.style.color = "#475569";
+                          }}
+                        >
+                          <span>
+                            <span style={{ color: "#cbd5e1", marginRight: "6px" }}>{isLastBlock ? "└──" : "├──"}</span>
+                            {b.name}
+                          </span>
+                          <span style={{ fontSize: "9px", color: "#94a3b8" }}>Edit</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
 export type EditorTab = "theme" | "block";
 
 type EditorSidebarProps = {
@@ -25,6 +252,9 @@ type EditorSidebarProps = {
   selectedTab: EditorTab;
   onTabChange: (tab: EditorTab) => void;
   onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
+  onSelectBlock?: (blockId: string | null) => void;
+  activePageId?: string;
+  onSelectPage?: (pageId: string) => void;
 };
 
 const ADMIN_BLUE = "#2563eb";
@@ -1572,6 +1802,9 @@ export default function EditorSidebar({
   selectedTab,
   onTabChange,
   onSiteDefinitionChange,
+  onSelectBlock,
+  activePageId,
+  onSelectPage,
 }: EditorSidebarProps) {
   const isLightMode = true;
 
@@ -1612,14 +1845,6 @@ export default function EditorSidebar({
     ? getEditableConfigForBlock(selectedBlock.type)
     : null;
 
-  const festivalPresets: FestivalThemeKey[] = [
-    "none",
-    "diwali",
-    "christmas",
-    "eid",
-    "holi",
-  ];
-
   const fieldGroups =
     editableConfig?.fields && editableConfig.fields.length > 0
       ? groupFields(editableConfig.fields)
@@ -1639,6 +1864,25 @@ export default function EditorSidebar({
       updateBlockFieldValue(siteDefinition, selectedBlockId, field, value)
     );
   };
+
+  const location = useLocation();
+  const currentPath = location.pathname;
+
+  const activePage =
+    (siteDefinition.pages || []).find(
+      (p) => p.id === activePageId || p.role === "home" || p.route === "/" || p.route === ""
+    ) ||
+    siteDefinition.pages?.[0] ||
+    ({ name: "Home Page", route: "/" } as any);
+
+  const activePageTitle = useMemo(() => {
+    if (currentPath.includes("/checkout")) return "CHECKOUT (/checkout)";
+    if (currentPath.includes("/cart")) return "CART (/cart)";
+    if (currentPath.includes("/profile") || currentPath.includes("/account")) return "PROFILE (/profile)";
+    if (currentPath.includes("/orders")) return "ORDERS (/orders)";
+    if (currentPath.includes("/products/")) return "PRODUCT DETAIL (/products/:slug)";
+    return `${activePage.name?.toUpperCase() || "HOME"} (${activePage.route || "/"})`;
+  }, [currentPath, activePage]);
 
   return (
     <aside
@@ -1769,7 +2013,7 @@ export default function EditorSidebar({
             <rect x="14" y="14" width="7" height="7" />
             <rect x="3" y="14" width="7" height="7" />
           </svg>
-          BLOCK
+          BLOCKS
         </button>
       </div>
 
@@ -1859,7 +2103,7 @@ export default function EditorSidebar({
                             border: "none",
                             background: ADMIN_BLUE,
                             color: "#ffffff",
-                            fontSize: "9px",
+                            fontSize: "9.5px",
                             fontWeight: 700,
                             cursor: "pointer",
                             whiteSpace: "nowrap",
@@ -1976,75 +2220,47 @@ export default function EditorSidebar({
             </div>
           </section>
 
-          {/* Festive Themes Section */}
+          {/* Festival Themes Section */}
           <section style={sectionCardStyle(isLightMode)}>
             <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
-              FESTIVE THEMES & GRAFFITI ART
+              FESTIVAL THEME (PRESET PALETTES)
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px", width: "100%", boxSizing: "border-box" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px" }}>
               {[
-                { key: "none" as FestivalThemeKey, label: "Default", colors: ["#ffffff", "#2563eb"] },
-                { key: "diwali" as FestivalThemeKey, label: "Diwali", colors: ["#f59e0b", "#78350f", "#fbbf24"] },
-                { key: "holi" as FestivalThemeKey, label: "Holi", colors: ["#ec4899", "#8b5cf6", "#06b6d4"] },
-                { key: "durga_puja" as FestivalThemeKey, label: "Durga Puja", colors: ["#e11d48", "#facc15", "#ffffff"] },
-                { key: "rakhi" as FestivalThemeKey, label: "Raksha Bandhan", colors: ["#f59e0b", "#dc2626", "#fbbf24"] },
-                { key: "christmas" as FestivalThemeKey, label: "Christmas", colors: ["#dc2626", "#059669", "#f0fdf4"] },
-                { key: "eid" as FestivalThemeKey, label: "Eid", colors: ["#0d9488", "#facc15", "#05131f"] },
+                { key: "none", label: "None / Default", icon: "⚪" },
+                { key: "diwali", label: "Diwali (Gold & Light)", icon: "🪔" },
+                { key: "christmas", label: "Christmas (Evergreen)", icon: "🎄" },
+                { key: "eid", label: "Eid (Emerald & Gold)", icon: "🌙" },
+                { key: "holi", label: "Holi (Vibrant Colors)", icon: "🎨" },
+                { key: "durga_puja", label: "Durga Puja (Crimson)", icon: "🔱" },
+                { key: "rakhi", label: "Rakhi (Saffron & Ruby)", icon: "🧵" },
               ].map((item) => {
                 const active = (siteDefinition.theme?.festival_theme || "none") === item.key;
-                const isFull = item.key === "none";
-
                 return (
                   <button
                     key={item.key}
                     type="button"
-                    onClick={() =>
-                      onSiteDefinitionChange(
-                        applyFestivalTheme(siteDefinition, item.key)
-                      )
-                    }
+                    onClick={() => onSiteDefinitionChange(applyFestivalTheme(siteDefinition, item.key as any))}
                     style={{
-                      gridColumn: isFull ? "1 / -1" : "span 1",
-                      padding: "4px 6px",
-                      borderRadius: "5px",
-                      border: active ? `1px solid ${ADMIN_BLUE}` : "1px solid #e2e8f0",
-                      cursor: "pointer",
-                      background: active ? "rgba(37,99,235,0.06)" : "#f8fafc",
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "space-between",
                       gap: "4px",
+                      padding: "4px 6px",
+                      borderRadius: "4px",
+                      border: active ? "1px solid #2563eb" : "1px solid #e2e8f0",
+                      background: active ? "#eff6ff" : "#ffffff",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      fontSize: "10px",
+                      fontWeight: active ? 700 : 500,
+                      color: active ? "#1e40af" : "#334155",
                       transition: "all 0.12s ease",
-                      boxSizing: "border-box",
+                      gridColumn: item.key === "none" ? "1 / -1" : "span 1",
                     }}
                   >
-                    <span
-                      style={{
-                        fontSize: "10.5px",
-                        fontWeight: active ? 700 : 600,
-                        color: active ? ADMIN_BLUE : "#334155",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {item.label}
-                    </span>
-                    <div style={{ display: "flex", gap: "2px", alignItems: "center", flexShrink: 0 }}>
-                      {item.colors.map((c, i) => (
-                        <div
-                          key={i}
-                          style={{
-                            width: "6.5px",
-                            height: "6.5px",
-                            borderRadius: "50%",
-                            background: c,
-                            border: "1px solid rgba(0,0,0,0.15)",
-                          }}
-                        />
-                      ))}
-                    </div>
+                    <span>{item.icon}</span>
+                    <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.label}</span>
                   </button>
                 );
               })}
@@ -2095,30 +2311,55 @@ export default function EditorSidebar({
         </div>
       ) : (
         <div style={{ display: "grid", gap: "5px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-          {/* Sleek Figma Single-Line Inspector Header */}
+          {/* Dynamic Page & Inspector Breadcrumb Header */}
           <div style={{ paddingBottom: "4px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", boxSizing: "border-box" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "4px", minWidth: 0 }}>
-              <span style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
-                INSPECTOR
-              </span>
+              {selectedBlock ? (
+                <button
+                  type="button"
+                  onClick={() => onSelectBlock && onSelectBlock(null)}
+                  style={{
+                    border: "none",
+                    background: "rgba(37,99,235,0.08)",
+                    color: ADMIN_BLUE,
+                    padding: "2px 6px",
+                    borderRadius: "3px",
+                    fontSize: "9.5px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "2px",
+                    flexShrink: 0,
+                  }}
+                  title="Back to Page Tree"
+                >
+                  ← Tree
+                </button>
+              ) : (
+                <span style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+                  PAGE
+                </span>
+              )}
               <span style={{ fontSize: "9px", color: "#cbd5e1" }}>/</span>
               <span style={{ fontSize: "11px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {selectedBlock ? (editableConfig?.displayName || selectedBlock.type.toUpperCase()) : "NO SELECTION"}
+                {selectedBlock ? (editableConfig?.displayName || selectedBlock.type.toUpperCase()) : activePageTitle}
               </span>
             </div>
             {selectedBlock && (
               <span style={{ fontSize: "8.5px", fontWeight: 800, padding: "1px 4px", borderRadius: "3px", background: "rgba(37,99,235,0.08)", color: ADMIN_BLUE, flexShrink: 0 }}>
-                ACTIVE
+                EDITING
               </span>
             )}
           </div>
 
           {!selectedBlock ? (
-            <div style={sectionCardStyle(isLightMode)}>
-              <p style={{ margin: 0, fontSize: "10.5px", color: "#64748b", lineHeight: 1.4 }}>
-                Click any block on the page canvas to inspect and edit its properties.
-              </p>
-            </div>
+            <PageBlocksTreeView
+              siteDefinition={siteDefinition}
+              onSelectBlock={onSelectBlock}
+              onSelectPage={onSelectPage}
+              isLightMode={isLightMode}
+            />
           ) : !editableConfig ? (
             <div style={sectionCardStyle(isLightMode)}>
               <div style={{ fontSize: "11px", fontWeight: 700, color: "#0f172a" }}>{selectedBlock.type}</div>

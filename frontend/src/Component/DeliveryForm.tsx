@@ -189,6 +189,8 @@ const emptyDeliveryData: DeliveryFormData = {
   geoAccuracy: null,
 };
 
+const DEFAULT_SAVED_ADDRESSES: DeliveryFormData[] = [];
+
 export const DeliveryForm: React.FC<DeliveryFormProps> = ({
   siteId,
   sectionLabel = "Delivery",
@@ -213,7 +215,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
   onDeliveryDataChange,
   onContinue,
   continueDisabled = false,
-  savedAddresses = [],
+  savedAddresses = DEFAULT_SAVED_ADDRESSES,
   selectedAddressId = null,
   onSelectAddress,
   onSavedAddressesChange,
@@ -245,49 +247,39 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
     return () => window.removeEventListener("resize", syncViewport);
   }, []);
 
-useEffect(() => {
-  setAddresses(savedAddresses);
-  
-  if (!isAuthenticated) {
-    setFormMode("hidden");
-    setEditingAddressId(null);
-    setDraftAddress(emptyDeliveryData);
-    return;
-  }
+  useEffect(() => {
+    setAddresses(savedAddresses);
 
-  if (savedAddresses.length === 0) {
-    setEditingAddressId(null);
-
-    if (formMode !== "add") {
-      setFormMode("hidden");
-      setDraftAddress(emptyDeliveryData);
+    if (!isAuthenticated) {
+      setFormMode((prev) => (prev === "hidden" ? prev : "hidden"));
+      setEditingAddressId((prev) => (prev === null ? prev : null));
+      return;
     }
 
-    return;
-  }
-
-  const selectedStillExists = savedAddresses.some(
-    (address: DeliveryFormData) => address.id === selectedAddressId
-  );
-
-  if (!selectedStillExists) {
-    const defaultAddress =
-      savedAddresses.find((address: DeliveryFormData) => address.isDefault) ||
-      savedAddresses[0];
-
-    if (defaultAddress) {
-      onSelectAddress?.(defaultAddress);
-      onDeliveryDataChange?.(defaultAddress);
+    if (savedAddresses.length === 0) {
+      setEditingAddressId((prev) => (prev === null ? prev : null));
+      setFormMode((prev) => (prev === "add" ? prev : "hidden"));
+      return;
     }
-  }
-}, [
-  savedAddresses,
-  selectedAddressId,
-  onSelectAddress,
-  onDeliveryDataChange,
-  isAuthenticated,
-  formMode,
-]);
+
+    const selectedStillExists = savedAddresses.some(
+      (address: DeliveryFormData) => address.id === selectedAddressId
+    );
+
+    if (!selectedStillExists && savedAddresses.length > 0) {
+      const defaultAddress =
+        savedAddresses.find((address: DeliveryFormData) => address.isDefault) ||
+        savedAddresses[0];
+
+      if (defaultAddress) {
+        onSelectAddress?.(defaultAddress);
+      }
+    }
+  }, [
+    savedAddresses,
+    selectedAddressId,
+    isAuthenticated,
+  ]);
 
   useEffect(() => {
     if (formMode === "edit" || formMode === "add") return;
@@ -300,13 +292,33 @@ useEffect(() => {
       deliveryData?.city ||
       deliveryData?.pincode
     ) {
-      setDraftAddress((prev) => ({
-        ...prev,
-        ...emptyDeliveryData,
-        ...deliveryData,
-      }));
+      setDraftAddress((prev) => {
+        if (
+          prev.fullName === (deliveryData.fullName || "") &&
+          prev.phone === (deliveryData.phone || "") &&
+          prev.email === (deliveryData.email || "") &&
+          prev.address === (deliveryData.address || "") &&
+          prev.city === (deliveryData.city || "") &&
+          prev.pincode === (deliveryData.pincode || "")
+        ) {
+          return prev;
+        }
+        return {
+          ...prev,
+          ...emptyDeliveryData,
+          ...deliveryData,
+        };
+      });
     }
-  }, [deliveryData, formMode]);
+  }, [
+    deliveryData?.fullName,
+    deliveryData?.phone,
+    deliveryData?.email,
+    deliveryData?.address,
+    deliveryData?.city,
+    deliveryData?.pincode,
+    formMode,
+  ]);
 
   const themeObject = typeof theme === "object" ? theme : undefined;
   const isDark =

@@ -13,14 +13,23 @@ type LocationState = {
   from?: string;
 };
 
-export default function CustomerLoginPage() {
+export default function CustomerLoginPage({
+  siteSlug: propSiteSlug,
+  siteName: propSiteName,
+  theme: propTheme,
+}: {
+  siteSlug?: string;
+  siteName?: string;
+  theme?: any;
+} = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { slug } = useParams<{ slug: string }>();
+  const { slug, siteId } = useParams<{ slug?: string; siteId?: string }>();
+  const targetSlug = propSiteSlug || slug || siteId || "";
   const { login, loginWithGoogle, forgotPassword, resetPassword, loading: authLoading } =
     useCustomerAuth();
-  const { siteData } = usePublicSiteTheme(slug);
+  const { siteData } = usePublicSiteTheme(targetSlug);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -69,7 +78,7 @@ export default function CustomerLoginPage() {
     return () => clearInterval(timer);
   }, [resendCooldown]);
 
-  const websiteName = slug || "";
+  const websiteName = propSiteSlug || slug || siteId || "";
   const from = (location.state as LocationState | null)?.from;
 
   const storeBase = useMemo(
@@ -181,8 +190,8 @@ export default function CustomerLoginPage() {
   };
 
   // Exact theme definitions inherited from site theme
-  const siteName = siteData?.siteName || cleanSiteName("", websiteName);
-  const theme = siteData?.theme || {};
+  const siteName = propSiteName || siteData?.siteName || cleanSiteName("", websiteName);
+  const theme = propTheme || siteData?.theme || {};
   const isLight = theme.mode !== "dark";
 
   const primaryBg = theme.primary_bg || (isLight ? "#f8fafc" : "#0f172a");
@@ -317,15 +326,13 @@ export default function CustomerLoginPage() {
   return (
     <div
       style={{
-        height: "100dvh",
-        maxHeight: "100dvh",
-        width: "100vw",
-        overflow: "hidden",
+        minHeight: "calc(100vh - 80px)",
+        width: "100%",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        padding: isMobile ? "16px 14px" : "32px 24px",
+        padding: isMobile ? "24px 14px" : "48px 24px",
         background: primaryBg,
         color: textColor,
         boxSizing: "border-box",
@@ -354,6 +361,31 @@ export default function CustomerLoginPage() {
           transition: "all 0.2s ease",
         }}
       >
+        {/* BACK TO STORE LINK */}
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <button
+            type="button"
+            onClick={() => navigate(storeBase || "/")}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: subtextColor,
+              fontSize: "12px",
+              fontWeight: 500,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              padding: 0,
+              transition: "color 0.15s ease",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = textColor)}
+            onMouseLeave={(e) => (e.currentTarget.style.color = subtextColor)}
+          >
+            ← Back to store
+          </button>
+        </div>
+
         {/* BRAND NAME HEADING & CLEAN SIGN IN HEADER */}
         <div style={{ textAlign: "center", marginBottom: isMobile ? "2px" : "4px" }}>
           <h1

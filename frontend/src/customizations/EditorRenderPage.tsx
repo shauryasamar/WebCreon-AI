@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Product, useCart } from "../CartContext";
 import { componentRegistry } from "../componentRegistry";
@@ -199,8 +199,24 @@ function EditorBlockWrapper({
   onSelect,
   children,
 }: EditorBlockWrapperProps) {
+  const blockRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (selected && blockRef.current) {
+      blockRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
+  }, [selected]);
+
+  const readableName = (blockType || "")
+    .replace(/[-_]/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
   return (
     <div
+      ref={blockRef}
       data-editor-block-id={blockId}
       data-editor-block-type={blockType}
       onClick={(e) => {
@@ -213,41 +229,48 @@ function EditorBlockWrapper({
         borderRadius: "12px",
         cursor: "pointer",
         minWidth: 0,
+        zIndex: selected ? 50 : 1,
+        overflow: "visible",
       }}
     >
       <div
         style={{
           position: "absolute",
-          inset: 0,
-          border: selected ? "2px solid #2563eb" : "1px dashed transparent",
-          borderRadius: "12px",
+          inset: "-2px",
+          border: selected ? "2px solid #3b82f6" : "1px dashed transparent",
+          borderRadius: "14px",
           pointerEvents: "none",
-          zIndex: 3,
+          zIndex: 20,
           transition: "all 0.15s ease",
-          boxShadow: selected ? "0 0 0 2px rgba(37,99,235,0.12)" : "none",
+          boxShadow: selected ? "0 0 0 3px rgba(59, 130, 246, 0.15)" : "none",
         }}
       />
 
       <div
         style={{
           position: "absolute",
-          top: "8px",
-          left: "12px",
-          zIndex: 4,
+          top: "-9px",
+          left: "14px",
+          zIndex: 30,
           padding: "2px 8px",
-          borderRadius: "999px",
-          background: "#2563eb",
+          borderRadius: "4px",
+          background: "#0f172a",
           color: "#ffffff",
-          fontSize: "11px",
-          fontWeight: 700,
-          letterSpacing: "0.02em",
+          fontSize: "10.5px",
+          fontWeight: 600,
+          letterSpacing: "0.01em",
           pointerEvents: "none",
           opacity: selected ? 1 : 0,
           transform: selected ? "translateY(0)" : "translateY(4px)",
           transition: "all 0.15s ease",
+          boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
+          display: "flex",
+          alignItems: "center",
+          gap: "5px",
         }}
       >
-        {blockType}
+        <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#3b82f6" }} />
+        {readableName}
       </div>
 
       <div
@@ -847,12 +870,26 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
       renderedNode = <Component {...componentProps} />;
     }
 
+    const isSelected = Boolean(
+      selectedBlockId &&
+        (selectedBlockId === blockId ||
+          selectedBlockId === block.id ||
+          selectedBlockId === block.type ||
+          (selectedBlockId === "hero_banner" && (block.type.includes("banner") || block.type.includes("hero"))) ||
+          (selectedBlockId === "product_grid" && (block.type.includes("grid") || block.type.includes("product") || isProductListingBlock)) ||
+          (selectedBlockId === "product_detail" && (PRODUCT_DETAIL_TYPES.has(block.type.toLowerCase()) || block.type.includes("detail"))) ||
+          (selectedBlockId === "delivery_form" && DELIVERY_TYPES.has(block.type.toLowerCase())) ||
+          (selectedBlockId === "payment_methods" && PAYMENT_TYPES.has(block.type.toLowerCase())) ||
+          (selectedBlockId === "place_order_cta" && PLACE_ORDER_TYPES.has(block.type.toLowerCase())) ||
+          (selectedBlockId === "cart_view" && CART_PAGE_TYPES.has(block.type.toLowerCase())))
+    );
+
     return (
       <EditorBlockWrapper
         key={blockId}
         blockId={blockId}
         blockType={block.type}
-        selected={selectedBlockId === blockId}
+        selected={isSelected}
         onSelect={() => onSelectBlock?.(blockId)}
       >
         {renderedNode}

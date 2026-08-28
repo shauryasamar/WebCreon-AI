@@ -109,10 +109,12 @@ const emptyPaymentData: PaymentData = {
   upiId: "",
 };
 
+const DEFAULT_PAYMENT_METHODS = ["COD", "UPI"];
+
 export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
   sectionLabel = "Payment",
   title = "Payment method",
-  paymentMethods = ["COD", "UPI"],
+  paymentMethods = DEFAULT_PAYMENT_METHODS,
   theme = "dark",
   accentColor,
   compact = false,

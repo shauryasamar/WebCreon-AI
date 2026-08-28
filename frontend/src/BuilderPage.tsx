@@ -35,6 +35,8 @@ import EditorRenderPage from "./customizations/EditorRenderPage";
 import EditorSidebar from "./customizations/EditorSidebar";
 import CustomerOrdersPage from "./pages/CustomerOrdersPage";
 import CustomerProfilePage from "./pages/CustomerProfilePage";
+import CustomerLoginPage from "./pages/CustomerLoginPage";
+import CustomerSignupPage from "./pages/CustomerSignupPage";
 import QrLinkPopup from "./Component/QrLinkPopup";
 import BuilderDrawerPanel from "./Component/BuilderDrawerPanel";
 import { normalizeStorefrontProduct, slugify } from "./utils/productNormalizer";
@@ -49,6 +51,7 @@ const TrackOrderPage = React.lazy(() => import("./pages/TrackOrderPage"));
 type Block = {
   id: string;
   type: string;
+  name?: string;
   props?: Record<string, any>;
   data_source?: string | null;
   datasource?: string | null;
@@ -312,10 +315,30 @@ function StorefrontShell({
   children: React.ReactNode;
 }) {
   const navbarProps = getNavbarEditorProps(siteDefinition);
-  const navbarIsSelected = selectedBlockId === NAVBAR_BLOCK_ID;
+  const navbarIsSelected = selectedBlockId === NAVBAR_BLOCK_ID || selectedBlockId === "navbar";
+  const footerIsSelected = selectedBlockId === FOOTER_BLOCK_ID || selectedBlockId === "footer";
 
   const navbarBlockRef = useRef<HTMLDivElement | null>(null);
+  const footerBlockRef = useRef<HTMLDivElement | null>(null);
   const [measuredNavbarHeight, setMeasuredNavbarHeight] = useState(118);
+
+  useEffect(() => {
+    if (navbarIsSelected && navbarBlockRef.current) {
+      navbarBlockRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
+  }, [navbarIsSelected]);
+
+  useEffect(() => {
+    if (footerIsSelected && footerBlockRef.current) {
+      footerBlockRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
+  }, [footerIsSelected]);
 
   useEffect(() => {
     if (!navbarBlockRef.current) return;
@@ -380,13 +403,6 @@ function StorefrontShell({
         }}
         style={{
           position: "relative",
-          outline:
-            editMode && navbarIsSelected
-              ? "2px solid #2563eb"
-              : "1px dashed transparent",
-          outlineOffset: "4px",
-          borderRadius: "8px",
-          transition: "outline-color 0.15s ease",
           cursor: editMode ? "pointer" : "default",
           zIndex: 1000,
           overflow: "visible",
@@ -395,26 +411,41 @@ function StorefrontShell({
         <div
           style={{
             position: "absolute",
-            top: "6px",
-            left: "12px",
-            zIndex: 40,
+            inset: "-2px",
+            border: editMode && navbarIsSelected ? "2px solid #3b82f6" : "1px dashed transparent",
+            borderRadius: "10px",
+            pointerEvents: "none",
+            zIndex: 1001,
+            transition: "all 0.15s ease",
+            boxShadow: editMode && navbarIsSelected ? "0 0 0 3px rgba(59, 130, 246, 0.15)" : "none",
+          }}
+        />
+
+        <div
+          style={{
+            position: "absolute",
+            top: "-9px",
+            left: "14px",
+            zIndex: 1002,
             padding: "2px 8px",
-            borderRadius: "999px",
-            background: "#2563eb",
+            borderRadius: "4px",
+            background: "#0f172a",
             color: "#ffffff",
-            fontSize: "11px",
-            fontWeight: 700,
-            letterSpacing: "0.02em",
+            fontSize: "10.5px",
+            fontWeight: 600,
+            letterSpacing: "0.01em",
             pointerEvents: "none",
             opacity: editMode && navbarIsSelected ? 1 : 0,
-            transform:
-              editMode && navbarIsSelected
-                ? "translateY(0)"
-                : "translateY(4px)",
+            transform: editMode && navbarIsSelected ? "translateY(0)" : "translateY(4px)",
             transition: "all 0.15s ease",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
+            display: "flex",
+            alignItems: "center",
+            gap: "5px",
           }}
         >
-          Navbar Block
+          <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#3b82f6" }} />
+          Navbar
         </div>
 
 
@@ -456,6 +487,7 @@ function StorefrontShell({
 
       {/* Global Footer Block */}
       <div
+        ref={footerBlockRef}
         data-editor-block-id={FOOTER_BLOCK_ID}
         data-editor-block-type="footer"
         onClick={(e) => {
@@ -465,15 +497,8 @@ function StorefrontShell({
         }}
         style={{
           position: "relative",
-          outline:
-            editMode && selectedBlockId === FOOTER_BLOCK_ID
-              ? "2px solid #2563eb"
-              : "1px dashed transparent",
-          outlineOffset: "4px",
-          borderRadius: "8px",
-          transition: "outline-color 0.15s ease",
           cursor: editMode ? "pointer" : "default",
-          zIndex: 5,
+          zIndex: editMode && footerIsSelected ? 50 : 5,
           isolation: "isolate",
           overflow: "visible",
         }}
@@ -481,26 +506,41 @@ function StorefrontShell({
         <div
           style={{
             position: "absolute",
-            top: "-24px",
-            left: "12px",
-            zIndex: 40,
-            padding: "2px 8px",
-            borderRadius: "999px",
-            background: "#2563eb",
-            color: "#ffffff",
-            fontSize: "11px",
-            fontWeight: 700,
-            letterSpacing: "0.02em",
+            inset: "-2px",
+            border: editMode && footerIsSelected ? "2px solid #3b82f6" : "1px dashed transparent",
+            borderRadius: "10px",
             pointerEvents: "none",
-            opacity: editMode && selectedBlockId === FOOTER_BLOCK_ID ? 1 : 0,
-            transform:
-              editMode && selectedBlockId === FOOTER_BLOCK_ID
-                ? "translateY(0)"
-                : "translateY(4px)",
+            zIndex: 40,
             transition: "all 0.15s ease",
+            boxShadow: editMode && footerIsSelected ? "0 0 0 3px rgba(59, 130, 246, 0.15)" : "none",
+          }}
+        />
+
+        <div
+          style={{
+            position: "absolute",
+            top: "-9px",
+            left: "14px",
+            zIndex: 41,
+            padding: "2px 8px",
+            borderRadius: "4px",
+            background: "#0f172a",
+            color: "#ffffff",
+            fontSize: "10.5px",
+            fontWeight: 600,
+            letterSpacing: "0.01em",
+            pointerEvents: "none",
+            opacity: editMode && footerIsSelected ? 1 : 0,
+            transform: editMode && footerIsSelected ? "translateY(0)" : "translateY(4px)",
+            transition: "all 0.15s ease",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
+            display: "flex",
+            alignItems: "center",
+            gap: "5px",
           }}
         >
-          footer
+          <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#3b82f6" }} />
+          Footer
         </div>
 
         <Footer
@@ -577,6 +617,7 @@ function StorefrontPage({
           }
         >
           <EditorRenderPage
+            key={`editor-render-${page?.id || page?.route || "page"}`}
             page={page}
             siteId={siteId}
             selectedProduct={selectedProduct ?? undefined}
@@ -587,6 +628,7 @@ function StorefrontPage({
         </Suspense>
       ) : (
         <RenderPage
+          key={`storefront-render-${page?.id || page?.route || "page"}`}
           page={page}
           siteId={siteId}
           selectedProduct={selectedProduct ?? undefined}
@@ -1466,6 +1508,11 @@ function BuilderPageContent() {
           const isDynamicProductRoute =
             currentPath.startsWith(`${freshAppBase}/products/`);
           const isOrdersRoute = currentPath === `${freshAppBase}/orders`;
+          const isProfileRoute = currentPath === `${freshAppBase}/profile` || currentPath === `${freshAppBase}/account`;
+          const isCartRoute = currentPath === `${freshAppBase}/cart`;
+          const isCheckoutRoute = currentPath === `${freshAppBase}/checkout`;
+          const isLoginRoute = currentPath === `${freshAppBase}/login`;
+          const isSignupRoute = currentPath === `${freshAppBase}/signup`;
           const isAdminPath =
             !isStoreRoute && currentPath.startsWith(`${freshBuilderBase}/admin`);
 
@@ -1473,6 +1520,11 @@ function BuilderPageContent() {
             !isKnownStaticRoute &&
             !isDynamicProductRoute &&
             !isOrdersRoute &&
+            !isProfileRoute &&
+            !isCartRoute &&
+            !isCheckoutRoute &&
+            !isLoginRoute &&
+            !isSignupRoute &&
             !isAdminPath
           ) {
             const homePage =
@@ -1556,6 +1608,42 @@ function BuilderPageContent() {
           type: "product_detail",
           data_source: "product",
         },
+      ],
+    } as Page;
+  }, [activeSiteDefinition]);
+
+  const checkoutPage = useMemo(() => {
+    if (!activeSiteDefinition) return null;
+    const exact = activeSiteDefinition.pages.find(
+      (p) => p.route === "/checkout" || p.route === "checkout" || p.role === "checkout"
+    );
+    if (exact) return exact;
+    return {
+      id: "fallback-checkout-page",
+      name: "Checkout",
+      route: "/checkout",
+      show_in_nav: false,
+      blocks: [
+        { id: "delivery_form", type: "delivery_form", props: {} },
+        { id: "payment_methods", type: "payment_methods", props: {} },
+        { id: "place_order_cta", type: "place_order_cta", props: {} },
+      ],
+    } as Page;
+  }, [activeSiteDefinition]);
+
+  const cartPage = useMemo(() => {
+    if (!activeSiteDefinition) return null;
+    const exact = activeSiteDefinition.pages.find(
+      (p) => p.route === "/cart" || p.route === "cart" || p.role === "cart"
+    );
+    if (exact) return exact;
+    return {
+      id: "fallback-cart-page",
+      name: "Cart",
+      route: "/cart",
+      show_in_nav: false,
+      blocks: [
+        { id: "cart_view", type: "cart_view", props: {} },
       ],
     } as Page;
   }, [activeSiteDefinition]);
@@ -1787,6 +1875,19 @@ function BuilderPageContent() {
           selectedBlockId={selectedBlockId}
           selectedTab={editorTab}
           onTabChange={setEditorTab}
+          onSelectBlock={setSelectedBlockId}
+          onSelectPage={(targetRouteOrId) => {
+            const targetPage = activeSiteDefinition.pages.find(
+              (p) => p.id === targetRouteOrId || p.route === targetRouteOrId
+            );
+            const route = targetPage ? targetPage.route : targetRouteOrId;
+            if (isProductDetailRoute(route)) {
+              const sampleSlug = products[0]?.slug || products[0]?.id || "sample-product";
+              navigate(toFullAppPath(appBase, `/products/${sampleSlug}`));
+            } else {
+              navigate(toFullAppPath(appBase, route));
+            }
+          }}
           onSiteDefinitionChange={(next) =>
             handleSiteDefinitionChange(next as SiteDefinition)
           }
@@ -1967,11 +2068,76 @@ function BuilderPageContent() {
                 element={<Navigate to="profile" replace />}
               />
 
+              <Route
+                path="login"
+                element={
+                  <CustomerLoginPage
+                    siteSlug={siteSlug || siteSlugParam || ""}
+                    siteName={activeSiteDefinition?.site?.brand_name || siteName || "Store"}
+                    theme={activeSiteDefinition?.theme}
+                  />
+                }
+              />
+
+              <Route
+                path="signup"
+                element={
+                  <CustomerSignupPage
+                    siteSlug={siteSlug || siteSlugParam || ""}
+                    siteName={activeSiteDefinition?.site?.brand_name || siteName || "Store"}
+                    theme={activeSiteDefinition?.theme}
+                  />
+                }
+              />
+
+              {cartPage && (
+                <Route
+                  path="cart"
+                  element={
+                    <StorefrontPage
+                      page={cartPage}
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      selectedProduct={undefined}
+                      editMode={editMode}
+                      adminTopbarVisible={showAdminTopbar}
+                      selectedBlockId={selectedBlockId}
+                      onSelectBlock={handleSelectBlock}
+                      storefrontNavbarMode={storefrontNavbarMode}
+                      navbarFixedBounds={navbarFixedBounds}
+                      appBase={appBase}
+                    />
+                  }
+                />
+              )}
+
+              {checkoutPage && (
+                <Route
+                  path="checkout"
+                  element={
+                    <StorefrontPage
+                      page={checkoutPage}
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      selectedProduct={undefined}
+                      editMode={editMode}
+                      adminTopbarVisible={showAdminTopbar}
+                      selectedBlockId={selectedBlockId}
+                      onSelectBlock={handleSelectBlock}
+                      storefrontNavbarMode={storefrontNavbarMode}
+                      navbarFixedBounds={navbarFixedBounds}
+                      appBase={appBase}
+                    />
+                  }
+                />
+              )}
+
 
               {activeSiteDefinition.pages
                 .filter((page) => {
                   if (page.flow === "admin") return false;
-
 
                   const sameAsResolvedProductPage =
                     productDetailPage &&
@@ -1981,8 +2147,22 @@ function BuilderPageContent() {
                         isProductDetailBlockType(block.type)
                       ));
 
+                  if (sameAsResolvedProductPage) return false;
 
-                  return !sameAsResolvedProductPage;
+                  const normalized = normalizeRoute(page.route);
+                  if (
+                    normalized === "checkout" ||
+                    normalized === "cart" ||
+                    normalized === "orders" ||
+                    normalized === "profile" ||
+                    normalized === "account" ||
+                    normalized === "login" ||
+                    normalized === "signup"
+                  ) {
+                    return false;
+                  }
+
+                  return true;
                 })
                 .map((page) => {
                   const normalizedRoute = normalizeRoute(page.route);
