@@ -39,6 +39,7 @@ import QrLinkPopup from "./Component/QrLinkPopup";
 import BuilderDrawerPanel from "./Component/BuilderDrawerPanel";
 import { normalizeStorefrontProduct, slugify } from "./utils/productNormalizer";
 import { isColorDarkHex } from "./context/ThemeContext";
+import FestiveBackgroundOverlay from "./Component/FestiveBackgroundOverlay";
 
 // Standalone secondary routes remain lazy
 const AgentDeliveryPage = React.lazy(() => import("./pages/AgentDeliveryPage"));
@@ -358,6 +359,15 @@ function StorefrontShell({
         overflow: "visible",
       }}
     >
+      <FestiveBackgroundOverlay
+        festivalTheme={siteDefinition.theme?.festival_theme}
+        backgroundColor={siteDefinition.theme?.primary_bg}
+        isDark={
+          siteDefinition.theme?.mode === "dark" ||
+          isColorDarkHex(siteDefinition.theme?.primary_bg)
+        }
+      />
+
       {/* Global Navbar Block */}
       <div
         ref={navbarBlockRef}
@@ -378,8 +388,7 @@ function StorefrontShell({
           borderRadius: "8px",
           transition: "outline-color 0.15s ease",
           cursor: editMode ? "pointer" : "default",
-          zIndex: (storefrontNavbarMode === "fixed" || storefrontNavbarMode === "sticky") ? FIXED_NAVBAR_Z_INDEX : 5,
-          isolation: "isolate",
+          zIndex: 1000,
           overflow: "visible",
         }}
       >

@@ -125,7 +125,9 @@ export type FestivalThemeKey =
   | "diwali"
   | "christmas"
   | "eid"
-  | "holi";
+  | "holi"
+  | "durga_puja"
+  | "rakhi";
 
 type ThemeValues = EditorSiteDefinition["theme"];
 
@@ -134,69 +136,47 @@ const GLOBAL_FOOTER_BLOCK_ID = "global-footer";
 
 const DEFAULT_LIGHT_THEME: Partial<ThemeValues> = {
   mode: "light",
-  festival_theme: "none",
-  primary_bg: "#f8fafc",
-  secondary_bg: "#ffffff",
+  primary_bg: "#ffffff",
+  secondary_bg: "#f8fafc",
   card_bg: "#ffffff",
-  card_shadow: "0 10px 28px rgba(15,23,42,0.055)",
-  card_border_color: "rgba(15,23,42,0.08)",
-  text_color: "#111827",
+  text_color: "#0f172a",
   muted_text_color: "rgba(15,23,42,0.65)",
   accent_color: "#2563eb",
   navbar_bg: "#ffffff",
-  navbar_outer_bg: "#f8fafc",
-  navbar_text_color: "#111827",
+  navbar_outer_bg: "#ffffff",
+  navbar_text_color: "#0f172a",
   navbar_muted_text_color: "rgba(15,23,42,0.65)",
   navbar_border_color: "rgba(15,23,42,0.08)",
   footer_bg: "#ffffff",
-  footer_text_color: "#111827",
-  footer_muted_color: "rgba(15,23,42,0.65)",
+  footer_text_color: "#0f172a",
   footer_border_color: "rgba(15,23,42,0.08)",
-  hero_bg: "#ffffff",
-  hero_text_color: "#111827",
+  hero_bg: "#f8fafc",
+  hero_text_color: "#0f172a",
   hero_accent: "#2563eb",
-  navbar_variant: "soft",
-  navbar_position: "fixed",
-  navbar_height: 72,
-  navbar_max_width: 1280,
-  navbar_radius: 20,
-  navbar_padding_x: 16,
-  navbar_padding_y: 14,
 };
 
 const DEFAULT_DARK_THEME: Partial<ThemeValues> = {
   mode: "dark",
-  festival_theme: "none",
   primary_bg: "#0f172a",
   secondary_bg: "#1e293b",
   card_bg: "#1e293b",
-  card_shadow: "0 12px 28px rgba(0,0,0,0.3)",
-  card_border_color: "rgba(255,255,255,0.12)",
-  text_color: "#f9fafb",
-  muted_text_color: "rgba(248,250,252,0.65)",
-  accent_color: "#60a5fa",
+  text_color: "#f8fafc",
+  muted_text_color: "rgba(248,250,252,0.7)",
+  accent_color: "#38bdf8",
   navbar_bg: "#0f172a",
   navbar_outer_bg: "#0f172a",
-  navbar_text_color: "#f9fafb",
-  navbar_muted_text_color: "rgba(248,250,252,0.65)",
+  navbar_text_color: "#f8fafc",
+  navbar_muted_text_color: "rgba(248,250,252,0.7)",
   navbar_border_color: "rgba(255,255,255,0.12)",
   footer_bg: "#0f172a",
-  footer_text_color: "#f9fafb",
-  footer_muted_color: "rgba(248,250,252,0.65)",
+  footer_text_color: "#f8fafc",
   footer_border_color: "rgba(255,255,255,0.12)",
   hero_bg: "#1e293b",
-  hero_text_color: "#f9fafb",
-  hero_accent: "#60a5fa",
-  navbar_variant: "soft",
-  navbar_position: "fixed",
-  navbar_height: 72,
-  navbar_max_width: 1280,
-  navbar_radius: 20,
-  navbar_padding_x: 16,
-  navbar_padding_y: 14,
+  hero_text_color: "#f8fafc",
+  hero_accent: "#38bdf8",
 };
 
-const FESTIVAL_THEME_PRESETS: Record<
+export const FESTIVAL_THEME_PRESETS: Record<
   FestivalThemeKey,
   Omit<Partial<ThemeValues>, "mode">
 > = {
@@ -224,6 +204,18 @@ const FESTIVAL_THEME_PRESETS: Record<
     accent_color: "#9333ea",
     brand_tone: "Playful and vibrant",
     visual_style: "Colorful festive",
+  },
+  durga_puja: {
+    festival_theme: "durga_puja",
+    accent_color: "#e11d48",
+    brand_tone: "Devotional and grand",
+    visual_style: "Royal cultural festival",
+  },
+  rakhi: {
+    festival_theme: "rakhi",
+    accent_color: "#f59e0b",
+    brand_tone: "Cherished sibling celebration",
+    visual_style: "Auspicious festive bond",
   },
 };
 
@@ -283,61 +275,61 @@ function getFestivalThemeOverrides(
       return {
         ...FESTIVAL_THEME_PRESETS.diwali,
         festival_theme: "diwali",
-        primary_bg: isDark ? "#1f172a" : "#fff7ed",
-        secondary_bg: isDark ? "#2a1f3d" : "#ffffff",
-        card_bg: isDark ? "#2a1f3d" : "#ffffff",
-        text_color: isDark ? "#fff7ed" : "#3b1d12",
+        primary_bg: isDark ? "#130f1c" : "#fffcf0",
+        secondary_bg: isDark ? "#1f1530" : "#ffffff",
+        card_bg: isDark ? "#1f1530" : "#ffffff",
+        text_color: isDark ? "#fef3c7" : "#78350f",
         muted_text_color: isDark
-          ? "rgba(255,247,237,0.74)"
-          : "rgba(59,29,18,0.68)",
-        accent_color: isDark ? "#fbbf24" : "#f59e0b",
-        navbar_bg: isDark ? "#2a1f3d" : "#ffffff",
-        navbar_outer_bg: isDark ? "#1f172a" : "#fff7ed",
-        navbar_text_color: isDark ? "#fff7ed" : "#3b1d12",
+          ? "rgba(254,243,199,0.72)"
+          : "rgba(120,53,15,0.7)",
+        accent_color: isDark ? "#fbbf24" : "#d97706",
+        navbar_bg: isDark ? "#1a1226" : "#ffffff",
+        navbar_outer_bg: isDark ? "#130f1c" : "#fffcf0",
+        navbar_text_color: isDark ? "#fef3c7" : "#78350f",
         navbar_muted_text_color: isDark
-          ? "rgba(255,247,237,0.74)"
-          : "rgba(59,29,18,0.68)",
+          ? "rgba(254,243,199,0.72)"
+          : "rgba(120,53,15,0.7)",
         navbar_border_color: isDark
-          ? "rgba(245,158,11,0.24)"
-          : "rgba(245,158,11,0.18)",
-        footer_bg: isDark ? "#1f172a" : "#fff7ed",
-        footer_text_color: isDark ? "#fff7ed" : "#3b1d12",
+          ? "rgba(251,191,36,0.3)"
+          : "rgba(217,119,6,0.22)",
+        footer_bg: isDark ? "#130f1c" : "#fef3c7",
+        footer_text_color: isDark ? "#fef3c7" : "#78350f",
         footer_border_color: isDark
-          ? "rgba(245,158,11,0.24)"
-          : "rgba(245,158,11,0.18)",
-        hero_bg: isDark ? "#2a1f3d" : "#fff7ed",
-        hero_text_color: isDark ? "#fff7ed" : "#3b1d12",
-        hero_accent: isDark ? "#fbbf24" : "#f59e0b",
+          ? "rgba(251,191,36,0.3)"
+          : "rgba(217,119,6,0.22)",
+        hero_bg: isDark ? "#241838" : "#fff7ed",
+        hero_text_color: isDark ? "#fef3c7" : "#78350f",
+        hero_accent: isDark ? "#fbbf24" : "#d97706",
       };
 
     case "christmas":
       return {
         ...FESTIVAL_THEME_PRESETS.christmas,
         festival_theme: "christmas",
-        primary_bg: isDark ? "#0f2e1f" : "#f0fdf4",
-        secondary_bg: isDark ? "#163524" : "#ffffff",
-        card_bg: isDark ? "#163524" : "#ffffff",
-        text_color: isDark ? "#f0fdf4" : "#163a2b",
+        primary_bg: isDark ? "#07150e" : "#f4fbf7",
+        secondary_bg: isDark ? "#0f231a" : "#ffffff",
+        card_bg: isDark ? "#0f231a" : "#ffffff",
+        text_color: isDark ? "#f0fdf4" : "#0f291e",
         muted_text_color: isDark
-          ? "rgba(240,253,244,0.72)"
-          : "rgba(22,58,43,0.68)",
+          ? "rgba(240,253,244,0.75)"
+          : "rgba(15,41,30,0.68)",
         accent_color: isDark ? "#ef4444" : "#dc2626",
-        navbar_bg: isDark ? "#163524" : "#ffffff",
-        navbar_outer_bg: isDark ? "#0f2e1f" : "#f0fdf4",
-        navbar_text_color: isDark ? "#f0fdf4" : "#163a2b",
+        navbar_bg: isDark ? "#0c1e15" : "#ffffff",
+        navbar_outer_bg: isDark ? "#07150e" : "#f4fbf7",
+        navbar_text_color: isDark ? "#f0fdf4" : "#0f291e",
         navbar_muted_text_color: isDark
-          ? "rgba(240,253,244,0.72)"
-          : "rgba(22,58,43,0.68)",
+          ? "rgba(240,253,244,0.75)"
+          : "rgba(15,41,30,0.68)",
         navbar_border_color: isDark
-          ? "rgba(220,38,38,0.22)"
-          : "rgba(220,38,38,0.18)",
-        footer_bg: isDark ? "#0f2e1f" : "#f0fdf4",
-        footer_text_color: isDark ? "#f0fdf4" : "#163a2b",
+          ? "rgba(239,68,68,0.28)"
+          : "rgba(220,38,38,0.2)",
+        footer_bg: isDark ? "#07150e" : "#ecfdf5",
+        footer_text_color: isDark ? "#f0fdf4" : "#0f291e",
         footer_border_color: isDark
-          ? "rgba(220,38,38,0.22)"
-          : "rgba(220,38,38,0.18)",
-        hero_bg: isDark ? "#163524" : "#f0fdf4",
-        hero_text_color: isDark ? "#f0fdf4" : "#163a2b",
+          ? "rgba(239,68,68,0.28)"
+          : "rgba(220,38,38,0.2)",
+        hero_bg: isDark ? "#10281e" : "#f0fdf4",
+        hero_text_color: isDark ? "#f0fdf4" : "#0f291e",
         hero_accent: isDark ? "#ef4444" : "#dc2626",
       };
 
@@ -345,65 +337,64 @@ function getFestivalThemeOverrides(
       return {
         ...FESTIVAL_THEME_PRESETS.eid,
         festival_theme: "eid",
-        primary_bg: isDark ? "#102a43" : "#f0fdfa",
-        secondary_bg: isDark ? "#173552" : "#ffffff",
-        card_bg: isDark ? "#173552" : "#ffffff",
-        text_color: isDark ? "#f8fafc" : "#123040",
+        primary_bg: isDark ? "#05131f" : "#f0fdfa",
+        secondary_bg: isDark ? "#0a2236" : "#ffffff",
+        card_bg: isDark ? "#0a2236" : "#ffffff",
+        text_color: isDark ? "#f0fdfa" : "#134e4a",
         muted_text_color: isDark
-          ? "rgba(248,250,252,0.74)"
-          : "rgba(18,48,64,0.68)",
-        accent_color: isDark ? "#2dd4bf" : "#14b8a6",
-        navbar_bg: isDark ? "#173552" : "#ffffff",
-        navbar_outer_bg: isDark ? "#102a43" : "#f0fdfa",
-        navbar_text_color: isDark ? "#f8fafc" : "#123040",
+          ? "rgba(240,253,250,0.75)"
+          : "rgba(19,78,74,0.7)",
+        accent_color: isDark ? "#2dd4bf" : "#0d9488",
+        navbar_bg: isDark ? "#081b2c" : "#ffffff",
+        navbar_outer_bg: isDark ? "#05131f" : "#f0fdfa",
+        navbar_text_color: isDark ? "#f0fdfa" : "#134e4a",
         navbar_muted_text_color: isDark
-          ? "rgba(248,250,252,0.74)"
-          : "rgba(18,48,64,0.68)",
+          ? "rgba(240,253,250,0.75)"
+          : "rgba(19,78,74,0.7)",
         navbar_border_color: isDark
-          ? "rgba(20,184,166,0.22)"
-          : "rgba(20,184,166,0.18)",
-        footer_bg: isDark ? "#102a43" : "#f0fdfa",
-        footer_text_color: isDark ? "#f8fafc" : "#123040",
+          ? "rgba(45,212,191,0.28)"
+          : "rgba(13,148,136,0.2)",
+        footer_bg: isDark ? "#05131f" : "#e6fffa",
+        footer_text_color: isDark ? "#f0fdfa" : "#134e4a",
         footer_border_color: isDark
-          ? "rgba(20,184,166,0.22)"
-          : "rgba(20,184,166,0.18)",
-        hero_bg: isDark ? "#173552" : "#f0fdfa",
-        hero_text_color: isDark ? "#f8fafc" : "#123040",
-        hero_accent: isDark ? "#2dd4bf" : "#14b8a6",
+          ? "rgba(45,212,191,0.28)"
+          : "rgba(13,148,136,0.2)",
+        hero_bg: isDark ? "#0b263d" : "#e6fffa",
+        hero_text_color: isDark ? "#f0fdfa" : "#134e4a",
+        hero_accent: isDark ? "#facc15" : "#0d9488",
       };
 
     case "holi":
       return {
         ...FESTIVAL_THEME_PRESETS.holi,
         festival_theme: "holi",
-        primary_bg: isDark ? "#1a1024" : "#fff1f2",
-        secondary_bg: isDark ? "#241235" : "#ffffff",
-        card_bg: isDark ? "#241235" : "#ffffff",
-        text_color: isDark ? "#fdf4ff" : "#1f2937",
+        primary_bg: isDark ? "#11071c" : "#fff5f8",
+        secondary_bg: isDark ? "#1c0e2e" : "#ffffff",
+        card_bg: isDark ? "#1c0e2e" : "#ffffff",
+        text_color: isDark ? "#fdf4ff" : "#18181b",
         muted_text_color: isDark
-          ? "rgba(253,244,255,0.74)"
-          : "rgba(31,41,55,0.72)",
-        accent_color: isDark ? "#a855f7" : "#9333ea",
-        navbar_bg: isDark ? "#241235" : "#ffffff",
-        navbar_outer_bg: isDark ? "#1a1024" : "#fff1f2",
-        navbar_text_color: isDark ? "#fdf4ff" : "#1f2937",
+          ? "rgba(253,244,255,0.75)"
+          : "rgba(24,24,27,0.7)",
+        accent_color: isDark ? "#ec4899" : "#db2777",
+        navbar_bg: isDark ? "#180c28" : "#ffffff",
+        navbar_outer_bg: isDark ? "#11071c" : "#fff5f8",
+        navbar_text_color: isDark ? "#fdf4ff" : "#18181b",
         navbar_muted_text_color: isDark
-          ? "rgba(253,244,255,0.74)"
-          : "rgba(31,41,55,0.72)",
+          ? "rgba(253,244,255,0.75)"
+          : "rgba(24,24,27,0.7)",
         navbar_border_color: isDark
-          ? "rgba(147,51,234,0.24)"
-          : "rgba(147,51,234,0.16)",
-        footer_bg: isDark ? "#1a1024" : "#fff1f2",
-        footer_text_color: isDark ? "#fdf4ff" : "#1f2937",
+          ? "rgba(236,72,153,0.3)"
+          : "rgba(219,39,119,0.22)",
+        footer_bg: isDark ? "#11071c" : "#fdf2f8",
+        footer_text_color: isDark ? "#fdf4ff" : "#18181b",
         footer_border_color: isDark
-          ? "rgba(147,51,234,0.24)"
-          : "rgba(147,51,234,0.16)",
-        hero_bg: isDark ? "#241235" : "#fff1f2",
-        hero_text_color: isDark ? "#fdf4ff" : "#1f2937",
-        hero_accent: isDark ? "#a855f7" : "#9333ea",
+          ? "rgba(236,72,153,0.3)"
+          : "rgba(219,39,119,0.22)",
+        hero_bg: isDark ? "#221138" : "#fdf2f8",
+        hero_text_color: isDark ? "#fdf4ff" : "#18181b",
+        hero_accent: isDark ? "#38bdf8" : "#db2777",
       };
 
-    case "none":
     default:
       return {};
   }
@@ -1241,21 +1232,11 @@ export function applyFestivalTheme(
   siteDefinition: EditorSiteDefinition,
   preset: FestivalThemeKey
 ): EditorSiteDefinition {
-  const mode: ThemeMode = siteDefinition.theme?.mode === "dark" ? "dark" : "light";
-  const baseDefaults = mode === "light" ? DEFAULT_LIGHT_THEME : DEFAULT_DARK_THEME;
-  const festivalOverrides = getFestivalThemeOverrides(preset, mode);
-
+  const currentTheme = siteDefinition.theme || {};
   const updatedTheme: any = {
-    ...baseDefaults,
-    ...festivalOverrides,
-    mode,
+    ...currentTheme,
     festival_theme: preset,
   };
-
-  // Purge any residual component-level overrides from prior chats/customizations
-  for (const k of ALL_COMPONENT_OVERRIDE_KEYS) {
-    delete updatedTheme[k];
-  }
 
   const nextPages = applyThemeToPages(siteDefinition.pages || [], updatedTheme);
 
@@ -1266,30 +1247,64 @@ export function applyFestivalTheme(
   };
 }
 
-export function getSavedThemeSnapshots(siteDefinition: EditorSiteDefinition): any[] {
-  const siteId = (siteDefinition as any)?.id || (siteDefinition as any)?.site_id || siteDefinition?.site?.brand_name || "";
-  let inStorage: any[] | null = null;
-
-  if (typeof window !== "undefined" && siteId) {
+export function getSiteStorageId(siteDefinition?: EditorSiteDefinition): string {
+  if (siteDefinition) {
+    const id = (siteDefinition as any)?.id || (siteDefinition as any)?.site_id;
+    if (id && typeof id === "string" && id.trim()) return id.trim();
+    const slug = (siteDefinition as any)?.slug || (siteDefinition as any)?.site?.slug;
+    if (slug && typeof slug === "string" && slug.trim()) return slug.trim();
+    const brand = siteDefinition?.site?.brand_name;
+    if (brand && typeof brand === "string" && brand.trim()) {
+      return brand.trim().toLowerCase().replace(/\s+/g, "_");
+    }
+  }
+  if (typeof window !== "undefined") {
     try {
-      const raw = localStorage.getItem(`webnirmaan_saved_themes_${siteId}`);
-      if (raw !== null) {
-        inStorage = JSON.parse(raw);
+      const path = window.location.pathname || "";
+      const match = path.match(/\/(builder|store)\/([^/?#]+)/);
+      if (match && match[2]) return match[2].trim();
+    } catch {}
+  }
+  return "default_site";
+}
+
+export function getSavedThemeSnapshots(siteDefinition: EditorSiteDefinition): any[] {
+  const siteId = getSiteStorageId(siteDefinition);
+  let inStorage: any[] = [];
+
+  if (typeof window !== "undefined") {
+    try {
+      const rawSpecific = localStorage.getItem(`webnirmaan_saved_themes_${siteId}`);
+      if (rawSpecific) {
+        const parsed = JSON.parse(rawSpecific);
+        if (Array.isArray(parsed)) {
+          inStorage = parsed;
+        }
+      }
+      if (inStorage.length === 0) {
+        const rawGlobal = localStorage.getItem("webnirmaan_saved_themes_global");
+        if (rawGlobal) {
+          const parsedGlobal = JSON.parse(rawGlobal);
+          if (Array.isArray(parsedGlobal)) {
+            inStorage = parsedGlobal;
+          }
+        }
       }
     } catch {}
   }
 
-  // If localStorage has an active record for this siteId, return it as authoritative
-  if (Array.isArray(inStorage)) {
-    return inStorage.slice(0, 30);
-  }
-
-  // Fallback to siteDefinition.saved_themes in memory
   const inMemory = Array.isArray((siteDefinition as any)?.saved_themes)
     ? (siteDefinition as any).saved_themes
     : [];
 
-  return inMemory.slice(0, 30);
+  const map = new Map<string, any>();
+  [...inMemory, ...inStorage].forEach((item) => {
+    if (item && item.id && !map.has(item.id)) {
+      map.set(item.id, item);
+    }
+  });
+
+  return Array.from(map.values()).slice(0, 30);
 }
 
 export function saveThemeSnapshot(
@@ -1356,7 +1371,7 @@ export function saveThemeSnapshot(
   }
 
   const snapshot = {
-    id: `theme_${Date.now()}`,
+    id: `theme_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     name: name.trim() || `Theme ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
     created_at: new Date().toISOString(),
     theme: { ...themeToSave },
@@ -1365,11 +1380,12 @@ export function saveThemeSnapshot(
   const currentSaved = getSavedThemeSnapshots(siteDefinition);
   const updatedList = [snapshot, ...currentSaved.filter((s: any) => s.id !== snapshot.id)].slice(0, 30);
 
-  const siteId = (siteDefinition as any)?.id || (siteDefinition as any)?.site_id || siteDefinition?.site?.brand_name || "";
-  if (typeof window !== "undefined" && siteId) {
+  const siteId = getSiteStorageId(siteDefinition);
+  if (typeof window !== "undefined") {
     try {
       localStorage.setItem(`webnirmaan_saved_themes_${siteId}`, JSON.stringify(updatedList));
-      window.dispatchEvent(new Event("webnirmaan_theme_saved"));
+      localStorage.setItem("webnirmaan_saved_themes_global", JSON.stringify(updatedList));
+      window.dispatchEvent(new CustomEvent("webnirmaan_theme_saved", { detail: { snapshots: updatedList } }));
     } catch {}
   }
 
@@ -1436,11 +1452,12 @@ export function deleteThemeSnapshot(
   const currentSaved = getSavedThemeSnapshots(siteDefinition);
   const updatedList = currentSaved.filter((s: any) => s.id !== snapshotId);
 
-  const siteId = (siteDefinition as any)?.id || (siteDefinition as any)?.site_id || siteDefinition?.site?.brand_name || "";
-  if (typeof window !== "undefined" && siteId) {
+  const siteId = getSiteStorageId(siteDefinition);
+  if (typeof window !== "undefined") {
     try {
       localStorage.setItem(`webnirmaan_saved_themes_${siteId}`, JSON.stringify(updatedList));
-      window.dispatchEvent(new Event("webnirmaan_theme_saved"));
+      localStorage.setItem("webnirmaan_saved_themes_global", JSON.stringify(updatedList));
+      window.dispatchEvent(new CustomEvent("webnirmaan_theme_saved", { detail: { snapshots: updatedList } }));
     } catch {}
   }
 

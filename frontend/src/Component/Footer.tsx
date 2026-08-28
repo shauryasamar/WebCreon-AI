@@ -1,4 +1,12 @@
 import React, { useState, useEffect } from "react";
+import {
+  DiwaliGraphics,
+  HoliGraphics,
+  DurgaGraphics,
+  RakhiGraphics,
+  ChristmasGraphics,
+  EidGraphics,
+} from "./FestiveGraphics";
 
 type FooterProps = {
   brandName?: string;
@@ -181,7 +189,45 @@ const Footer: React.FC<FooterProps> = (props) => {
     fontFamily: layout === "luxury_fashion" ? "serif" : "sans-serif",
     width: "100%",
     boxSizing: "border-box",
-    overflowX: "hidden",
+    overflow: "hidden",
+    position: "relative",
+  };
+
+  const renderFooterFestiveBackdrop = () => {
+    const festTheme = (theme as any)?.festival_theme;
+    if (!festTheme || festTheme === "none") return null;
+
+    return (
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          zIndex: 0,
+          overflow: "hidden",
+        }}
+      >
+        {festTheme === "diwali" && (
+          <DiwaliGraphics variant="footer" isDark={isFooterDark} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 1 }} />
+        )}
+        {festTheme === "holi" && (
+          <HoliGraphics variant="footer" isDark={isFooterDark} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 1 }} />
+        )}
+        {festTheme === "durga_puja" && (
+          <DurgaGraphics variant="footer" isDark={isFooterDark} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 1 }} />
+        )}
+        {festTheme === "rakhi" && (
+          <RakhiGraphics variant="footer" isDark={isFooterDark} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 1 }} />
+        )}
+        {festTheme === "christmas" && (
+          <ChristmasGraphics variant="footer" isDark={isFooterDark} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 1 }} />
+        )}
+        {festTheme === "eid" && (
+          <EidGraphics variant="footer" isDark={isFooterDark} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 1 }} />
+        )}
+      </div>
+    );
   };
 
   const handleSubscribe = (e: React.FormEvent) => {
@@ -336,7 +382,8 @@ const Footer: React.FC<FooterProps> = (props) => {
   if (layout === "apple_minimal") {
     return (
       <footer style={{ ...footerStyle, background: footerBg }}>
-        <div style={{ maxWidth: resolvedMaxWidth, margin: "0 auto", display: "flex", flexDirection: "column", gap: isMobile ? "20px" : "32px", boxSizing: "border-box" }}>
+        {renderFooterFestiveBackdrop()}
+        <div style={{ position: "relative", zIndex: 1, maxWidth: resolvedMaxWidth, margin: "0 auto", display: "flex", flexDirection: "column", gap: isMobile ? "20px" : "32px", boxSizing: "border-box" }}>
           
           {/* Top Section: Brand + Newsletter */}
           <div
@@ -450,8 +497,10 @@ const Footer: React.FC<FooterProps> = (props) => {
           WebkitBackdropFilter: "blur(16px)",
         }}
       >
+        {renderFooterFestiveBackdrop()}
         <div
           style={{
+            position: "relative", zIndex: 1,
             maxWidth: resolvedMaxWidth,
             margin: "0 auto",
             display: "flex",
@@ -527,8 +576,10 @@ const Footer: React.FC<FooterProps> = (props) => {
   if (layout === "modern_marketplace") {
     return (
       <footer style={{ ...footerStyle, background: footerBg }}>
+        {renderFooterFestiveBackdrop()}
         <div
           style={{
+            position: "relative", zIndex: 1,
             maxWidth: resolvedMaxWidth,
             margin: "0 auto",
             display: "grid",
@@ -597,6 +648,7 @@ const Footer: React.FC<FooterProps> = (props) => {
 
         <div
           style={{
+            position: "relative", zIndex: 1,
             borderTop: `1px solid ${borderColor}`,
             paddingTop: "16px",
             textAlign: isMobile ? "left" : "center",
@@ -615,8 +667,10 @@ const Footer: React.FC<FooterProps> = (props) => {
   if (layout === "luxury_fashion") {
     return (
       <footer style={{ ...footerStyle, background: footerBg, textAlign: "center" }}>
+        {renderFooterFestiveBackdrop()}
         <div
           style={{
+            position: "relative", zIndex: 1,
             maxWidth: resolvedMaxWidth,
             margin: "0 auto",
             display: "flex",
@@ -704,7 +758,8 @@ const Footer: React.FC<FooterProps> = (props) => {
         borderTop: isLight ? "1px solid rgba(166,180,200,0.2)" : "1px solid rgba(255,255,255,0.05)",
       }}
     >
-      <div style={{ maxWidth: resolvedMaxWidth, margin: "0 auto", display: "flex", flexDirection: "column", gap: isMobile ? "22px" : "28px", boxSizing: "border-box" }}>
+      {renderFooterFestiveBackdrop()}
+      <div style={{ position: "relative", zIndex: 1, maxWidth: resolvedMaxWidth, margin: "0 auto", display: "flex", flexDirection: "column", gap: isMobile ? "22px" : "28px", boxSizing: "border-box" }}>
         
         {/* Brand & 4 Carved Out Link Buttons */}
         <div
@@ -909,6 +964,41 @@ const Footer: React.FC<FooterProps> = (props) => {
             </div>
           )}
         </div>
+
+        {/* Festive Season Wish Bar */}
+        {(() => {
+          const fest = (theme as any)?.festival_theme;
+          if (!fest || fest === "none") return null;
+
+          const wishConfig = {
+            diwali: { text: "🪔 Wishing You a Joyous & Prosperous Diwali — Happy Celebrations! 🪔", color: isFooterDark ? "#fbbf24" : "#b45309", bg: isFooterDark ? "rgba(251,191,36,0.08)" : "rgba(245,158,11,0.1)" },
+            durga_puja: { text: "🔱 Shubho Sharodiya — Wishing You Grace, Joy & Blessings of Maa Durga! 🔱", color: isFooterDark ? "#fca5a5" : "#be123c", bg: isFooterDark ? "rgba(225,29,72,0.08)" : "rgba(225,29,72,0.08)" },
+            rakhi: { text: "🧵 Happy Raksha Bandhan — Celebrating the Eternal Bond of Love & Care! 🧵", color: isFooterDark ? "#fbbf24" : "#b45309", bg: isFooterDark ? "rgba(245,158,11,0.08)" : "rgba(245,158,11,0.1)" },
+            christmas: { text: "🎄 Wishing You a Warm & Merry Christmas & Wonderful Holidays! 🎄", color: isFooterDark ? "#fca5a5" : "#dc2626", bg: isFooterDark ? "rgba(239,68,68,0.08)" : "rgba(220,38,38,0.08)" },
+            eid: { text: "🌙 Eid Mubarak — May This Season Bring Peace, Prosperity & Joy! 🌙", color: isFooterDark ? "#2dd4bf" : "#0d9488", bg: isFooterDark ? "rgba(45,212,191,0.08)" : "rgba(13,148,136,0.08)" },
+            holi: { text: "🎨 Happy Holi — May Your Celebrations Be Filled with Bright Colors & Happiness! 🎨", color: isFooterDark ? "#f472b6" : "#db2777", bg: isFooterDark ? "rgba(236,72,153,0.08)" : "rgba(219,39,119,0.08)" },
+          }[fest as string];
+
+          if (!wishConfig) return null;
+
+          return (
+            <div
+              style={{
+                textAlign: "center",
+                padding: "8px 14px",
+                borderRadius: "8px",
+                background: wishConfig.bg,
+                color: wishConfig.color,
+                fontSize: "12px",
+                fontWeight: 700,
+                letterSpacing: "0.03em",
+                margin: "12px 0 6px 0",
+              }}
+            >
+              {wishConfig.text}
+            </div>
+          );
+        })()}
 
         {/* Bottom Details */}
         <div

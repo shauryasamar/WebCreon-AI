@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -42,6 +42,9 @@ logger = logging.getLogger(__name__)
 
 UPLOADS_DIR = Path("uploads")
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+ASSETS_DIR = Path("uploads/assets")
+ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 async def _mature_escrow_cron_task():
@@ -76,15 +79,10 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="AI Website Builder Backend", lifespan=lifespan)
 
 
-origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
-
+# Allow all origins during development; tighten in production.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|[\w\.-]+\.nip\.io|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?",
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -113,6 +111,64 @@ app.include_router(payments.router)
 app.include_router(returns.router)
 app.include_router(delivery.router)
 app.include_router(coupons.router)
+
+# ---------------------------------------------------------------------------
+# Asset Upload Endpoint (brand logos, etc.)
+# ---------------------------------------------------------------------------
+
+ALLOWED_LOGO_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/svg+xml"}
+
+@app.post("/assets/upload-logo")
+async def upload_brand_logo(
+    request: Request,
+    file: UploadFile = File(...),
+    admin=Depends(lambda: None),  # No auth required – only used inside the authenticated builder
+):
+    """Accepts a logo image, stores it as-is (preserving original format including transparency)
+    in uploads/assets/. Returns the absolute URL."""
+    from uuid import uuid4
+
+    content_type = (file.content_type or "").lower()
+    if content_type not in ALLOWED_LOGO_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Allowed: PNG, JPEG, WEBP, SVG.",
+        )
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty file uploaded")
+
+    suffix = Path(file.filename or "logo").suffix.lower() or ".png"
+    if suffix not in {".png", ".jpg", ".jpeg", ".webp", ".svg"}:
+        suffix = ".png"
+
+    # For raster images – optimize but PRESERVE ALPHA channel (do NOT flatten to RGB)
+    try:
+        from PIL import Image, ImageOps
+        import io as _io
+        if suffix != ".svg":
+            with Image.open(_io.BytesIO(content)) as img:
+                img = ImageOps.exif_transpose(img)
+                # Keep RGBA/LA so transparency is preserved
+                if img.mode in ("RGBA", "LA", "P"):
+                    img = img.convert("RGBA")
+                else:
+                    img = img.convert("RGB")
+                # Preserve crisp high-resolution detail (up to 1600x1600) while keeping aspect ratio
+                img.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+                buf = _io.BytesIO()
+                # Always save as PNG to preserve transparency
+                img.save(buf, "PNG", optimize=True)
+                content = buf.getvalue()
+                suffix = ".png"
+    except Exception:
+        pass  # Fall back to storing the file as-is
+
+    filename = f"{uuid4()}{suffix}"
+    (ASSETS_DIR / filename).write_bytes(content)
+
+    return {"url": f"{request.base_url}uploads/assets/{filename}", "filename": filename}
 
 
 class GenerateSiteRequest(BaseModel):

@@ -6,6 +6,7 @@ import FilterModal, { FilterState } from "../Component/FilterModal";
 import { API_BASE_URL } from "../config/api";
 import { ThemeProvider, resolveThemeTokens } from "../context/ThemeContext";
 import { normalizeStorefrontProduct } from "../utils/productNormalizer";
+import FestiveBackgroundOverlay from "../Component/FestiveBackgroundOverlay";
 
 type Block = {
   id?: string;
@@ -884,6 +885,14 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
             color: theme?.text_color || (isThemeDark ? "#f8fafc" : "#0f172a"),
           }}
         >
+          {/* Festive Background Overlay — strictly on home / catalog landing pages, never on cart, product details, or checkout pages */}
+          {!isCartPage && !isProductDetailPageContext && !isCheckoutPage && (
+            <FestiveBackgroundOverlay
+              festivalTheme={theme?.festival_theme}
+              backgroundColor={theme?.primary_bg}
+              isDark={isThemeDark}
+            />
+          )}
           {blocksToRender.map((block, index) => renderBlock(block, index))}
           <FilterModal
             open={filterModalOpen}

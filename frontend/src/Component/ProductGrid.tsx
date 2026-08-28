@@ -5,6 +5,14 @@ import FilterSidebar from "./FilterSidebar";
 import { Pagination } from "./Pagination";
 import { resolveThemeTokens } from "../context/ThemeContext";
 import { optimizeImageUrl } from "../utils/imageOptimizer";
+import {
+  DiwaliGraphics,
+  HoliGraphics,
+  DurgaGraphics,
+  RakhiGraphics,
+  ChristmasGraphics,
+  EidGraphics,
+} from "./FestiveGraphics";
 
 type ProductGridProps = {
   siteId: string;
@@ -367,6 +375,7 @@ function isColorDarkHex(colorHex?: string): boolean {
     <section
       className="product-grid"
       style={{
+        position: "relative",
         maxWidth: resolvedMaxWidth,
         margin: "0 auto",
         padding: isMobile ? "12px 10px 32px" : "24px 16px 44px",
@@ -375,6 +384,22 @@ function isColorDarkHex(colorHex?: string): boolean {
         transition: "all 0.2s ease",
       }}
     >
+      {/* Section Divider / Decorative Festive Transition — placed cleanly above the header toolbar */}
+      {(() => {
+        const festTheme = (theme as any)?.festival_theme;
+        if (!festTheme || festTheme === "none") return null;
+        return (
+          <div aria-hidden="true" style={{ position: "relative", width: "100%", height: "20px", marginBottom: "12px", overflow: "hidden", pointerEvents: "none", zIndex: 0, opacity: isLight ? 0.85 : 0.75 }}>
+            {festTheme === "diwali" && <DiwaliGraphics variant="grid" isDark={isDark} style={{ width: "100%", height: "100%" }} />}
+            {festTheme === "holi" && <HoliGraphics variant="grid" isDark={isDark} style={{ width: "100%", height: "100%" }} />}
+            {festTheme === "durga_puja" && <DurgaGraphics variant="grid" isDark={isDark} style={{ width: "100%", height: "100%" }} />}
+            {festTheme === "rakhi" && <RakhiGraphics variant="grid" isDark={isDark} style={{ width: "100%", height: "100%" }} />}
+            {festTheme === "christmas" && <ChristmasGraphics variant="grid" isDark={isDark} style={{ width: "100%", height: "100%" }} />}
+            {festTheme === "eid" && <EidGraphics variant="grid" isDark={isDark} style={{ width: "100%", height: "100%" }} />}
+          </div>
+        );
+      })()}
+
       {/* Header & Filter Toolbar */}
       <FilterSidebar
         title={title}
@@ -567,6 +592,8 @@ function isColorDarkHex(colorHex?: string): boolean {
               </div>
             );
           };
+
+          const festTheme = (theme as any)?.festival_theme;
 
           const renderDiscountBadge = () => (
             showDiscount ? (

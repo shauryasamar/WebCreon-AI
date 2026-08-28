@@ -10,7 +10,8 @@ export type EditorFieldType =
   | "color"
   | "number"
   | "checkbox"
-  | "json";
+  | "json"
+  | "image_upload";
 
 export type EditorFieldTarget = "props" | "theme";
 

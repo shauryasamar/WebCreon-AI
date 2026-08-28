@@ -1,4 +1,12 @@
 import React, { useEffect, useState } from "react";
+import {
+  DiwaliGraphics,
+  HoliGraphics,
+  DurgaGraphics,
+  RakhiGraphics,
+  ChristmasGraphics,
+  EidGraphics,
+} from "./FestiveGraphics";
 
 export type HeroSlide = {
   id?: string;
@@ -327,30 +335,109 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
       : defaultBgStyle),
   };
 
+  const festTheme = (theme as any)?.festival_theme;
+  const renderHeroFestiveBackdrop = () => {
+    if (hasSlideBgImage || !festTheme || festTheme === "none") return null;
+
+    return (
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: isMobile ? "100%" : isTablet ? "46%" : "50%",
+          height: "100%",
+          pointerEvents: "none",
+          zIndex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-end",
+          padding: isMobile ? "0px" : "16px 28px",
+          opacity: isMobile ? (isDarkMode ? 0.35 : 0.25) : 1,
+        }}
+      >
+        {festTheme === "diwali" && (
+          <DiwaliGraphics 
+            variant="hero"
+            isDark={isDarkMode} 
+            style={{ width: "100%", height: "100%", maxHeight: "100%", objectFit: "contain" }} 
+          />
+        )}
+
+        {festTheme === "holi" && (
+          <HoliGraphics 
+            variant="hero"
+            isDark={isDarkMode} 
+            style={{ width: "100%", height: "100%", maxHeight: "100%", objectFit: "contain" }} 
+          />
+        )}
+
+        {festTheme === "durga_puja" && (
+          <DurgaGraphics 
+            variant="hero"
+            isDark={isDarkMode} 
+            style={{ width: "100%", height: "100%", maxHeight: "100%", objectFit: "contain" }} 
+          />
+        )}
+
+        {festTheme === "rakhi" && (
+          <RakhiGraphics 
+            variant="hero"
+            isDark={isDarkMode} 
+            style={{ width: "100%", height: "100%", maxHeight: "100%", objectFit: "contain" }} 
+          />
+        )}
+
+        {festTheme === "christmas" && (
+          <ChristmasGraphics 
+            variant="hero"
+            isDark={isDarkMode} 
+            style={{ width: "100%", height: "100%", maxHeight: "100%", objectFit: "contain" }} 
+          />
+        )}
+
+        {festTheme === "eid" && (
+          <EidGraphics 
+            variant="hero"
+            isDark={isDarkMode} 
+            style={{ width: "100%", height: "100%", maxHeight: "100%", objectFit: "contain" }} 
+          />
+        )}
+      </div>
+    );
+  };
+
+  const isFestiveActive = Boolean(festTheme && festTheme !== "none" && !hasSlideBgImage);
+  const slideContentMaxWidth = isMobile ? "100%" : isFestiveActive ? "48%" : "640px";
+
   const renderSlideContent = () => {
     const variant = currentSlide.variant || "standard";
 
     switch (variant) {
       case "flash_sale":
         return (
-          <div style={{ display: "flex", flexDirection: "column", gap: contentGap, maxWidth: "620px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: contentGap, maxWidth: slideContentMaxWidth }}>
             {/* Badge & Coupon */}
             <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-              <span
-                style={{
-                  background: "#ef4444",
-                  color: "#ffffff",
-                  fontSize: badgeFontSize,
-                  fontWeight: 800,
-                  padding: "3px 9px",
-                  borderRadius: "999px",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                  boxShadow: "0 4px 12px rgba(239,68,68,0.3)",
-                }}
-              >
-                {currentSlide.badge || "FLASH SALE"}
-              </span>
+              {currentSlide.badge && (
+                <span
+                  style={{
+                    background: "#ef4444",
+                    color: "#ffffff",
+                    fontSize: badgeFontSize,
+                    fontWeight: 800,
+                    padding: "3px 9px",
+                    borderRadius: "999px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.06em",
+                    boxShadow: "0 4px 12px rgba(239,68,68,0.3)",
+                  }}
+                >
+                  {currentSlide.badge}
+                </span>
+              )}
               {currentSlide.coupon_code && (
                 <span
                   style={{
@@ -554,7 +641,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           : ["Free Worldwide Shipping", "30-Day Money Back", "24/7 VIP Support"];
 
         return (
-          <div style={{ display: "flex", flexDirection: "column", gap: contentGap, maxWidth: "640px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: contentGap, maxWidth: slideContentMaxWidth }}>
             {currentSlide.badge && (
               <span style={{ background: isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(15,23,42,0.08)", color: slideTextColor, fontSize: badgeFontSize, fontWeight: 800, padding: "3px 9px", borderRadius: "999px", width: "fit-content" }}>
                 {currentSlide.badge}
@@ -663,6 +750,8 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           }}
         />
       )}
+
+      {renderHeroFestiveBackdrop()}
 
       {/* Main Slide Content */}
       <div

@@ -2,7 +2,15 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useCart } from "../CartContext";
 import { useCustomerAuth } from "../context/CustomerAuthContext";
-
+import { optimizeImageUrl } from "../utils/imageOptimizer";
+import {
+  DiwaliGraphics,
+  HoliGraphics,
+  DurgaGraphics,
+  RakhiGraphics,
+  ChristmasGraphics,
+  EidGraphics,
+} from "./FestiveGraphics";
 
 export type NavbarTheme = {
   name?: string;
@@ -157,7 +165,7 @@ const getNavbarPositionStyle = (
   fixedBounds?: NavbarFixedBounds
 ): React.CSSProperties => {
   if (position === "static") {
-    return { position: "relative", zIndex: 20 };
+    return { position: "relative", zIndex: 1000 };
   }
 
   if (position === "fixed") {
@@ -168,7 +176,7 @@ const getNavbarPositionStyle = (
         left: 0,
         right: 0,
         width: "100%",
-        zIndex: 500,
+        zIndex: 1000,
       };
     }
 
@@ -178,11 +186,11 @@ const getNavbarPositionStyle = (
       left: 0,
       width: "100%",
       right: "auto",
-      zIndex: 500,
+      zIndex: 1000,
     };
   }
 
-  return { position: "sticky", top: `${topOffset}px`, zIndex: 500 };
+  return { position: "sticky", top: `${topOffset}px`, zIndex: 1000 };
 };
 
 
@@ -355,6 +363,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
   const logoHeightStyle = theme?.logo_height ? `${theme.logo_height}px` : "32px";
   const logoFitStyle = (theme?.logo_fit as any) || "contain";
+  const logoBlendMode: React.CSSProperties["mixBlendMode"] = undefined;
 
   const customBorderColor = (props as any).navbar_border_color || theme?.navbar_border_color;
   const defaultOuterBorder = customBorderColor
@@ -376,7 +385,14 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   const navbarPaddingY = theme?.navbar_padding_y;
 
 
-  const resolvedLogoUrl = props.logoUrl || props.logo_url || (props as any).logo;
+  const rawLogoUrl =
+    props.logoUrl ||
+    props.logo_url ||
+    (props as any).logo ||
+    theme?.logoUrl ||
+    theme?.logo_url;
+
+  const resolvedLogoUrl = rawLogoUrl ? optimizeImageUrl(rawLogoUrl) : "";
 
   const outerBgFromPropsOrTheme =
     props.navbar_outer_bg ||
@@ -794,7 +810,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
       : "0 20px 45px rgba(0,0,0,0.45)",
     backdropFilter: "blur(16px)",
     WebkitBackdropFilter: "blur(16px)",
-    zIndex: 400,
+    zIndex: 99999,
   };
 
   const menuRowIconStyle: React.CSSProperties = {
@@ -855,6 +871,56 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     maxWidth: isMobile ? "100%" : "min(100%, 440px)",
   };
 
+  {/* Festive motif inside search box — positioned towards the right side, auto-disappears when user is typing */}
+  const renderSearchFestiveGraphic = () => {
+    const festTheme = (theme as any)?.festival_theme;
+    if (!festTheme || festTheme === "none" || (searchQuery && searchQuery.trim().length > 0)) {
+      return null;
+    }
+
+    return (
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          right: "36px",
+          top: 0,
+          bottom: 0,
+          height: "100%",
+          width: "160px",
+          maxWidth: "45%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-end",
+          pointerEvents: "none",
+          zIndex: 1,
+          opacity: light ? 0.85 : 0.95,
+          transition: "opacity 0.2s ease",
+          overflow: "hidden",
+        }}
+      >
+        {festTheme === "diwali" && (
+          <DiwaliGraphics variant="navbar" isDark={!light} style={{ height: "90%", width: "auto" }} />
+        )}
+        {festTheme === "holi" && (
+          <HoliGraphics variant="navbar" isDark={!light} style={{ height: "90%", width: "auto" }} />
+        )}
+        {festTheme === "durga_puja" && (
+          <DurgaGraphics variant="navbar" isDark={!light} style={{ height: "90%", width: "auto" }} />
+        )}
+        {festTheme === "rakhi" && (
+          <RakhiGraphics variant="navbar" isDark={!light} style={{ height: "90%", width: "auto" }} />
+        )}
+        {festTheme === "christmas" && (
+          <ChristmasGraphics variant="navbar" isDark={!light} style={{ height: "90%", width: "auto" }} />
+        )}
+        {festTheme === "eid" && (
+          <EidGraphics variant="navbar" isDark={!light} style={{ height: "90%", width: "auto" }} />
+        )}
+      </div>
+    );
+  };
+
 
 
   return (
@@ -885,6 +951,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
+        zIndex: accountMenuOpen || mobileMenuOpen ? 99999 : 1000,
       }}
     >
       <div
@@ -896,10 +963,12 @@ const Navbar: React.FC<NavbarProps> = (props) => {
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
+          overflow: "visible",
         }}
       >
         <div
           style={{
+            position: "relative",
             padding: resolvedShellPadding,
             borderRadius: shellRadius,
             background: shellBg,
@@ -909,6 +978,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
             width: "100%",
             boxSizing: "border-box",
             minWidth: 0,
+            overflow: "visible",
           }}
         >
           {(() => {
@@ -928,6 +998,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     background: searchPillBg,
                     border: searchPillBorder,
                     boxSizing: "border-box",
+                    position: "relative",
                   }}
                 >
                   <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: searchTextColor, strokeWidth: 2, fill: "none", flexShrink: 0 }}>
@@ -949,8 +1020,10 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                       fontSize: "13px",
                       fontWeight: 500,
                       minWidth: 0,
+                      paddingRight: searchQuery ? "28px" : "64px",
                     }}
                   />
+                  {renderSearchFestiveGraphic()}
                   <button
                     type="button"
                     onClick={closeSearch}
@@ -1095,7 +1168,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                       <img
                         src={resolvedLogoUrl}
                         alt={brandName || "Logo"}
-                        style={{ maxHeight: logoHeightStyle, height: logoHeightStyle, maxWidth: "160px", objectFit: logoFitStyle, flexShrink: 0 }}
+                        style={{ maxHeight: logoHeightStyle, height: logoHeightStyle, maxWidth: "160px", objectFit: logoFitStyle, flexShrink: 0, mixBlendMode: logoBlendMode }}
                       />
                     ) : (
                       <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: light ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.12)", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800, flexShrink: 0 }}>
@@ -1120,6 +1193,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         background: searchPillBg,
                         backdropFilter: "blur(10px)",
                         border: searchPillBorder,
+                        position: "relative",
                       }}
                     >
                       <input
@@ -1127,8 +1201,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         placeholder="Search products..."
                         value={searchQuery}
                         onChange={(e) => handleSearchInputChange(e.target.value)}
-                        style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontWeight: 500 }}
+                        style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontWeight: 500, paddingRight: searchQuery ? "28px" : "64px" }}
                       />
+                      {renderSearchFestiveGraphic()}
                       <button
                         type="submit"
                         style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: light ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.2)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
@@ -1230,7 +1305,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                       <img
                         src={resolvedLogoUrl}
                         alt={brandName || "Logo"}
-                        style={{ maxHeight: logoHeightStyle, height: logoHeightStyle, maxWidth: "160px", objectFit: logoFitStyle, flexShrink: 0 }}
+                        style={{ maxHeight: logoHeightStyle, height: logoHeightStyle, maxWidth: "160px", objectFit: logoFitStyle, flexShrink: 0, mixBlendMode: logoBlendMode }}
                       />
                     ) : (
                       <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: light ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)", border: softBorder, color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800, flexShrink: 0 }}>
@@ -1253,6 +1328,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         border: searchPillBorder,
                         background: searchPillBg,
                         overflow: "hidden",
+                        position: "relative",
                       }}
                     >
                       <input
@@ -1260,8 +1336,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         placeholder="Search products..."
                         value={searchQuery}
                         onChange={(e) => handleSearchInputChange(e.target.value)}
-                        style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", padding: "8px 14px" }}
+                        style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", padding: "8px 14px", paddingRight: searchQuery ? "30px" : "70px" }}
                       />
+                      {renderSearchFestiveGraphic()}
                       {searchQuery && (
                         <button
                           type="button"
@@ -1373,7 +1450,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                       <img
                         src={resolvedLogoUrl}
                         alt={brandName || "Logo"}
-                        style={{ maxHeight: logoHeightStyle, height: logoHeightStyle, maxWidth: "160px", objectFit: logoFitStyle, flexShrink: 0 }}
+                        style={{ maxHeight: logoHeightStyle, height: logoHeightStyle, maxWidth: "160px", objectFit: logoFitStyle, flexShrink: 0, mixBlendMode: logoBlendMode }}
                       />
                     ) : (
                       <span style={{ fontFamily: "'Playfair Display', 'Didot', 'Georgia', serif", fontSize: isMobile ? "16px" : "20px", fontWeight: 700, color: textColor, flexShrink: 0 }}>
@@ -1400,6 +1477,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         borderRadius: "999px",
                         background: searchPillBg,
                         border: searchPillBorder,
+                        position: "relative",
                       }}
                     >
                       <input
@@ -1407,8 +1485,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         placeholder="Search products..."
                         value={searchQuery}
                         onChange={(e) => handleSearchInputChange(e.target.value)}
-                        style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontFamily: "serif" }}
+                        style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontFamily: "serif", paddingRight: searchQuery ? "28px" : "64px" }}
                       />
+                      {renderSearchFestiveGraphic()}
                       {searchQuery && (
                         <button
                           type="button"
@@ -1534,7 +1613,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                       <img
                         src={resolvedLogoUrl}
                         alt={brandName || "Logo"}
-                        style={{ maxHeight: logoHeightStyle, height: logoHeightStyle, maxWidth: "160px", objectFit: logoFitStyle, flexShrink: 0 }}
+                        style={{ maxHeight: logoHeightStyle, height: logoHeightStyle, maxWidth: "160px", objectFit: logoFitStyle, flexShrink: 0, mixBlendMode: logoBlendMode }}
                       />
                     ) : (
                       <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800, flexShrink: 0 }}>
@@ -1558,6 +1637,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         borderRadius: "999px",
                         background: neoBg,
                         boxShadow: insetShadow,
+                        position: "relative",
                       }}
                     >
                       <input
@@ -1565,8 +1645,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         placeholder="Search products..."
                         value={searchQuery}
                         onChange={(e) => handleSearchInputChange(e.target.value)}
-                        style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontWeight: 500 }}
+                        style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontWeight: 500, paddingRight: searchQuery ? "28px" : "64px" }}
                       />
+                      {renderSearchFestiveGraphic()}
                       {searchQuery && (
                         <button
                           type="button"
@@ -1678,7 +1759,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     <img
                       src={resolvedLogoUrl}
                       alt={brandName || "Logo"}
-                      style={{ maxHeight: logoHeightStyle, height: logoHeightStyle, maxWidth: "160px", objectFit: logoFitStyle, flexShrink: 0 }}
+                      style={{ maxHeight: logoHeightStyle, height: logoHeightStyle, maxWidth: "160px", objectFit: logoFitStyle, flexShrink: 0, mixBlendMode: logoBlendMode }}
                     />
                   ) : (
                     <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: light ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)", border: softBorder, color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800, flexShrink: 0 }}>
@@ -1702,6 +1783,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                       borderRadius: "999px",
                       background: searchPillBg,
                       border: searchPillBorder,
+                      position: "relative",
                     }}
                   >
                     <input
@@ -1709,8 +1791,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                       placeholder="Search products..."
                       value={searchQuery}
                       onChange={(e) => handleSearchInputChange(e.target.value)}
-                      style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontWeight: 500 }}
+                      style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontWeight: 500, paddingRight: searchQuery ? "28px" : "64px" }}
                     />
+                    {renderSearchFestiveGraphic()}
                     {searchQuery && (
                       <button
                         type="button"

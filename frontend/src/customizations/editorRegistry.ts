@@ -87,11 +87,10 @@ const navbarBrandNameField = {
 
 const navbarLogoUrlField = {
   key: "logoUrl",
-  label: "Brand logo image URL",
-  type: "text" as const,
+  label: "Brand Logo",
+  type: "image_upload" as const,
   target: "props" as const,
-  placeholder: "https://example.com/logo.png",
-  helpText: "Transparent PNG or SVG images work best on all dark & light background colors.",
+  helpText: "Upload a PNG or SVG. For best results use a logo with a transparent background.",
 };
 
 const navbarShowSearchField = {

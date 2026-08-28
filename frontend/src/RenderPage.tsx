@@ -10,6 +10,7 @@ import { ThemeProvider, resolveThemeTokens } from "./context/ThemeContext";
 import { normalizeStorefrontProduct } from "./utils/productNormalizer";
 import { getThumbnailUrl } from "./utils/imageOptimizer";
 import { ValidatedCoupon } from "./Component/PromoCodeInput";
+import FestiveBackgroundOverlay from "./Component/FestiveBackgroundOverlay";
 
 type Block = {
   id?: string;
@@ -956,6 +957,14 @@ const RenderPage: React.FC<RenderPageProps> = ({
             color: theme?.text_color || (isThemeDark ? "#f8fafc" : "#0f172a"),
           }}
         >
+          {/* Festive Background Overlay — strictly on home / catalog landing pages, never on cart, product details, or checkout pages */}
+          {!isCartPage && !isProductDetailPageContext && !isCheckoutPage && (
+            <FestiveBackgroundOverlay
+              festivalTheme={theme?.festival_theme}
+              backgroundColor={theme?.primary_bg}
+              isDark={isThemeDark}
+            />
+          )}
           {blocksToRender.map((block, index) => renderBlock(block, index))}
           <FilterModal
             open={filterModalOpen}
@@ -1362,6 +1371,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
     <ThemeProvider theme={theme as any}>
       <div
         style={{
+          position: "relative",
           minHeight: "100vh",
           padding: isCompactCheckout ? "16px 12px 28px" : "20px 16px 36px",
           background: pageBg,

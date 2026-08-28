@@ -18,6 +18,8 @@ type BuilderShellProps = {
   plainCenter?: boolean;
 };
 
+const SIDE_PANEL_WIDTH = 300;
+
 export default function BuilderShell({
   topBar,
   leftPanel,
@@ -42,7 +44,7 @@ export default function BuilderShell({
         display: "grid",
         gridTemplateRows: "64px minmax(0, 1fr)",
         gridTemplateColumns: hasRightPanel
-          ? "auto minmax(0, 1fr) 20vw"
+          ? `auto minmax(0, 1fr) ${SIDE_PANEL_WIDTH}px`
           : "auto minmax(0, 1fr) 0px",
         background: "#f8fafc",
         color: "#0f172a",
@@ -116,7 +118,7 @@ export default function BuilderShell({
             display: "flex",
             alignItems: "stretch",
             transition: "width 0.22s ease, opacity 0.22s ease",
-            width: drawer ? "300px" : "0px",
+            width: drawer ? `${SIDE_PANEL_WIDTH}px` : "0px",
             opacity: drawer ? 1 : 0,
             overflow: "hidden",
             flexShrink: 0,
@@ -135,7 +137,7 @@ export default function BuilderShell({
 
               <div
                 style={{
-                  width: 299,
+                  width: SIDE_PANEL_WIDTH - 1,
                   height: "100%",
                   borderRadius: "0 6px 6px 0",
                   background: "#ffffff",
@@ -231,8 +233,8 @@ export default function BuilderShell({
         style={{
           gridRow: "2 / 3",
           gridColumn: "3 / 4",
-          width: hasRightPanel ? "20vw" : "0px",
-          maxWidth: hasRightPanel ? "20vw" : "0px",
+          width: hasRightPanel ? `${SIDE_PANEL_WIDTH}px` : "0px",
+          maxWidth: hasRightPanel ? `${SIDE_PANEL_WIDTH}px` : "0px",
           height: "100%",
           overflow: "hidden",
           minWidth: 0,
