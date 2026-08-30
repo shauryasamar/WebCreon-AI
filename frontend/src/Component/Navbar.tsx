@@ -659,13 +659,14 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
   useEffect(() => {
     if (!siteSlug) return;
-    if (isBuilderAdminRoute) {
+    // In builder workspace (any /builder/ route) or admin panel, the user is
+    // an admin previewing/editing. Customer auth should never run here.
+    if (!isStoreRoute) {
       clearUser();
       return;
     }
-    if (!isStoreRoute && !location.pathname.startsWith("/builder/")) return;
     refreshMe(siteSlug);
-  }, [siteSlug, location.pathname, refreshMe, isBuilderAdminRoute, isStoreRoute, clearUser]);
+  }, [siteSlug, isStoreRoute, refreshMe, clearUser]);
 
 
   useEffect(() => {

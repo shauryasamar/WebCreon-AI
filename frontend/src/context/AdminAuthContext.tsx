@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { API_BASE_URL } from "../config/api";
+import { clearSavedSitesMemoryCache } from "../utils/savedSitesCache";
 
 export type AdminUser = {
   id: string;
@@ -103,6 +104,8 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               localStorage.removeItem(key);
             }
           });
+          localStorage.removeItem("wc_admin_saved_sites");
+          clearSavedSitesMemoryCache();
         }
       } catch {}
       setAdmin(null);

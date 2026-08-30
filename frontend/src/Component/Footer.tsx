@@ -965,41 +965,6 @@ const Footer: React.FC<FooterProps> = (props) => {
           )}
         </div>
 
-        {/* Festive Season Wish Bar */}
-        {(() => {
-          const fest = (theme as any)?.festival_theme;
-          if (!fest || fest === "none") return null;
-
-          const wishConfig = {
-            diwali: { text: "🪔 Wishing You a Joyous & Prosperous Diwali — Happy Celebrations! 🪔", color: isFooterDark ? "#fbbf24" : "#b45309", bg: isFooterDark ? "rgba(251,191,36,0.08)" : "rgba(245,158,11,0.1)" },
-            durga_puja: { text: "🔱 Shubho Sharodiya — Wishing You Grace, Joy & Blessings of Maa Durga! 🔱", color: isFooterDark ? "#fca5a5" : "#be123c", bg: isFooterDark ? "rgba(225,29,72,0.08)" : "rgba(225,29,72,0.08)" },
-            rakhi: { text: "🧵 Happy Raksha Bandhan — Celebrating the Eternal Bond of Love & Care! 🧵", color: isFooterDark ? "#fbbf24" : "#b45309", bg: isFooterDark ? "rgba(245,158,11,0.08)" : "rgba(245,158,11,0.1)" },
-            christmas: { text: "🎄 Wishing You a Warm & Merry Christmas & Wonderful Holidays! 🎄", color: isFooterDark ? "#fca5a5" : "#dc2626", bg: isFooterDark ? "rgba(239,68,68,0.08)" : "rgba(220,38,38,0.08)" },
-            eid: { text: "🌙 Eid Mubarak — May This Season Bring Peace, Prosperity & Joy! 🌙", color: isFooterDark ? "#2dd4bf" : "#0d9488", bg: isFooterDark ? "rgba(45,212,191,0.08)" : "rgba(13,148,136,0.08)" },
-            holi: { text: "🎨 Happy Holi — May Your Celebrations Be Filled with Bright Colors & Happiness! 🎨", color: isFooterDark ? "#f472b6" : "#db2777", bg: isFooterDark ? "rgba(236,72,153,0.08)" : "rgba(219,39,119,0.08)" },
-          }[fest as string];
-
-          if (!wishConfig) return null;
-
-          return (
-            <div
-              style={{
-                textAlign: "center",
-                padding: "8px 14px",
-                borderRadius: "8px",
-                background: wishConfig.bg,
-                color: wishConfig.color,
-                fontSize: "12px",
-                fontWeight: 700,
-                letterSpacing: "0.03em",
-                margin: "12px 0 6px 0",
-              }}
-            >
-              {wishConfig.text}
-            </div>
-          );
-        })()}
-
         {/* Bottom Details */}
         <div
           style={{

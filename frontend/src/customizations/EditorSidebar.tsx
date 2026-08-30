@@ -10,6 +10,7 @@ import {
   findBlockById,
   getEditableConfigForBlock,
   getSavedThemeSnapshots,
+  getSiteStorageId,
   saveThemeSnapshot,
   updateBlockFieldValue,
   updateThemeValues,
@@ -2718,19 +2719,68 @@ export default function EditorSidebar({
     [siteDefinition, refreshCounter]
   );
 
-  const handleSaveSnapshot = () => {
+  const handleSaveSnapshot = async () => {
     const next = saveThemeSnapshot(siteDefinition, snapshotName);
     onSiteDefinitionChange(next);
     setSnapshotName("");
     setSnapshotFeedback("Saved!");
     setRefreshCounter((c) => c + 1);
+
+    const sId = (siteDefinition as any)?.id || (siteDefinition as any)?.site_id || getSiteStorageId(siteDefinition);
+    if (sId && sId !== "default_site") {
+      try {
+        await fetch(`${API_BASE_URL}/sites/${sId}/draft`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ draft_definition: next }),
+        });
+      } catch (err) {
+        console.error("Failed to persist theme snapshot to server:", err);
+      }
+    }
+
     setTimeout(() => setSnapshotFeedback(null), 2000);
   };
 
-  const handleDeleteSnapshot = (id: string) => {
+  const handleDeleteSnapshot = async (id: string) => {
     const next = deleteThemeSnapshot(siteDefinition, id);
     onSiteDefinitionChange(next);
     setRefreshCounter((c) => c + 1);
+
+    const sId = (siteDefinition as any)?.id || (siteDefinition as any)?.site_id || getSiteStorageId(siteDefinition);
+    if (sId && sId !== "default_site") {
+      try {
+        await fetch(`${API_BASE_URL}/sites/${sId}/draft`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ draft_definition: next }),
+        });
+      } catch (err) {
+        console.error("Failed to delete theme snapshot on server:", err);
+      }
+    }
+  };
+
+  const handleApplySnapshot = async (id: string) => {
+    const next = applyThemeSnapshot(siteDefinition, id);
+    onSiteDefinitionChange(next);
+    setRefreshCounter((c) => c + 1);
+
+    const sId = (siteDefinition as any)?.id || (siteDefinition as any)?.site_id || getSiteStorageId(siteDefinition);
+    if (sId && sId !== "default_site") {
+      try {
+        await fetch(`${API_BASE_URL}/sites/${sId}/draft`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ draft_definition: next }),
+        });
+      } catch (err) {
+        console.error("Failed to persist applied theme snapshot on server:", err);
+      }
+    }
   };
 
   const textColor = "#0f172a";
@@ -3048,7 +3098,7 @@ export default function EditorSidebar({
                       <div style={{ display: "flex", gap: "3px", flexShrink: 0 }}>
                         <button
                           type="button"
-                          onClick={() => onSiteDefinitionChange(applyThemeSnapshot(siteDefinition, snap.id))}
+                          onClick={() => handleApplySnapshot(snap.id)}
                           style={{
                             padding: "2px 6px",
                             borderRadius: "3px",
@@ -3150,11 +3200,11 @@ export default function EditorSidebar({
                   cursor: "pointer",
                   background:
                     siteDefinition.theme?.mode === "dark"
-                      ? "#0f172a"
+                      ? "#000000"
                       : "transparent",
                   color:
                     siteDefinition.theme?.mode === "dark" ? "#ffffff" : "#64748b",
-                  boxShadow: siteDefinition.theme?.mode === "dark" ? "0 1px 2px rgba(0,0,0,0.15)" : "none",
+                  boxShadow: siteDefinition.theme?.mode === "dark" ? "0 1px 2px rgba(0,0,0,0.25)" : "none",
                   fontSize: "10.5px",
                   fontWeight: 700,
                   display: "flex",
@@ -3175,18 +3225,84 @@ export default function EditorSidebar({
           {/* Festival Themes Section */}
           <section style={sectionCardStyle(isLightMode)}>
             <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
-              FESTIVAL THEME (PRESET PALETTES)
+              FESTIVAL THEME
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px" }}>
               {[
-                { key: "none", label: "None / Default", icon: "⚪" },
-                { key: "diwali", label: "Diwali (Gold & Light)", icon: "🪔" },
-                { key: "christmas", label: "Christmas (Evergreen)", icon: "🎄" },
-                { key: "eid", label: "Eid (Emerald & Gold)", icon: "🌙" },
-                { key: "holi", label: "Holi (Vibrant Colors)", icon: "🎨" },
-                { key: "durga_puja", label: "Durga Puja (Crimson)", icon: "🔱" },
-                { key: "rakhi", label: "Rakhi (Saffron & Ruby)", icon: "🧵" },
+                {
+                  key: "none",
+                  label: "Default",
+                  icon: (
+                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="9" />
+                      <line x1="5.6" y1="5.6" x2="18.4" y2="18.4" />
+                    </svg>
+                  ),
+                },
+                {
+                  key: "diwali",
+                  label: "Diwali",
+                  icon: (
+                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2c0 4.5-4 7-4 11a6 6 0 0 0 12 0c0-4-4-6.5-4-11z" />
+                      <circle cx="12" cy="15" r="1.5" fill="currentColor" />
+                    </svg>
+                  ),
+                },
+                {
+                  key: "holi",
+                  label: "Holi",
+                  icon: (
+                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="9" />
+                      <circle cx="9" cy="9.5" r="1.5" fill="currentColor" />
+                      <circle cx="15" cy="9.5" r="1.5" fill="currentColor" />
+                      <circle cx="12" cy="15" r="1.5" fill="currentColor" />
+                    </svg>
+                  ),
+                },
+                {
+                  key: "durga_puja",
+                  label: "Durga Puja",
+                  icon: (
+                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2v20M12 2l-3.5 4v4.5a3.5 3.5 0 0 0 7 0V6L12 2zM5 8c0 2.5 2.5 4.5 7 4.5s7-2 7-4.5" />
+                    </svg>
+                  ),
+                },
+                {
+                  key: "rakhi",
+                  label: "Rakhi",
+                  icon: (
+                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="5" />
+                      <line x1="2" y1="12" x2="7" y2="12" />
+                      <line x1="17" y1="12" x2="22" y2="12" />
+                      <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+                    </svg>
+                  ),
+                },
+                {
+                  key: "eid",
+                  label: "Eid",
+                  icon: (
+                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                      <circle cx="15.5" cy="7.5" r="1.2" fill="currentColor" />
+                    </svg>
+                  ),
+                },
+                {
+                  key: "christmas",
+                  label: "Christmas",
+                  icon: (
+                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2l3.5 5h-2l3.5 5.5h-2.5l4 6.5H4.5l4-6.5h-2.5l3.5-5.5h-2l3.5-5z" />
+                      <line x1="12" y1="19" x2="12" y2="22" />
+                    </svg>
+                  ),
+                },
               ].map((item) => {
                 const active = (siteDefinition.theme?.festival_theme || "none") === item.key;
                 return (
@@ -3197,21 +3313,29 @@ export default function EditorSidebar({
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      gap: "4px",
-                      padding: "4px 6px",
-                      borderRadius: "4px",
-                      border: active ? "1px solid #2563eb" : "1px solid #e2e8f0",
-                      background: active ? "#eff6ff" : "#ffffff",
+                      gap: "6px",
+                      padding: "5px 8px",
+                      borderRadius: "6px",
+                      border: active
+                        ? "1px solid #2563eb"
+                        : isLightMode ? "1px solid #e2e8f0" : "1px solid rgba(255,255,255,0.08)",
+                      background: active
+                        ? (isLightMode ? "#eff6ff" : "rgba(37,99,235,0.18)")
+                        : (isLightMode ? "#ffffff" : "rgba(255,255,255,0.03)"),
                       cursor: "pointer",
                       textAlign: "left",
-                      fontSize: "10px",
+                      fontSize: "10.5px",
                       fontWeight: active ? 700 : 500,
-                      color: active ? "#1e40af" : "#334155",
+                      color: active
+                        ? (isLightMode ? "#1e40af" : "#93c5fd")
+                        : (isLightMode ? "#334155" : "#cbd5e1"),
                       transition: "all 0.12s ease",
                       gridColumn: item.key === "none" ? "1 / -1" : "span 1",
                     }}
                   >
-                    <span>{item.icon}</span>
+                    <span style={{ display: "flex", alignItems: "center", flexShrink: 0, opacity: active ? 1 : 0.75 }}>
+                      {item.icon}
+                    </span>
                     <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.label}</span>
                   </button>
                 );
@@ -3241,7 +3365,7 @@ export default function EditorSidebar({
                 <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Background Color</label>
                 {renderFieldControl(
                   { key: "primary_bg", label: "Primary Background", type: "color", target: "theme" },
-                  siteDefinition.theme?.primary_bg || "#0f172a",
+                  siteDefinition.theme?.primary_bg || (siteDefinition.theme?.mode === "dark" ? "#121316" : "#ffffff"),
                   textColor,
                   isLightMode,
                   (val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { primary_bg: val }))
@@ -3252,7 +3376,7 @@ export default function EditorSidebar({
                 <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Text Color</label>
                 {renderFieldControl(
                   { key: "text_color", label: "Text Color", type: "color", target: "theme" },
-                  siteDefinition.theme?.text_color || "#f9fafb",
+                  siteDefinition.theme?.text_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a"),
                   textColor,
                   isLightMode,
                   (val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { text_color: val }))

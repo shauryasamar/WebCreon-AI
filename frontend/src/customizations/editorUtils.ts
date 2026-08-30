@@ -157,23 +157,23 @@ const DEFAULT_LIGHT_THEME: Partial<ThemeValues> = {
 
 const DEFAULT_DARK_THEME: Partial<ThemeValues> = {
   mode: "dark",
-  primary_bg: "#0f172a",
-  secondary_bg: "#1e293b",
-  card_bg: "#1e293b",
+  primary_bg: "#121316",
+  secondary_bg: "#1a1c21",
+  card_bg: "#22252b",
   text_color: "#f8fafc",
-  muted_text_color: "rgba(248,250,252,0.7)",
-  accent_color: "#38bdf8",
-  navbar_bg: "#0f172a",
-  navbar_outer_bg: "#0f172a",
+  muted_text_color: "rgba(248, 250, 252, 0.72)",
+  accent_color: "#3b82f6",
+  navbar_bg: "#121316",
+  navbar_outer_bg: "#121316",
   navbar_text_color: "#f8fafc",
-  navbar_muted_text_color: "rgba(248,250,252,0.7)",
-  navbar_border_color: "rgba(255,255,255,0.12)",
-  footer_bg: "#0f172a",
+  navbar_muted_text_color: "rgba(248, 250, 252, 0.72)",
+  navbar_border_color: "rgba(255, 255, 255, 0.1)",
+  footer_bg: "#0e0f12",
   footer_text_color: "#f8fafc",
-  footer_border_color: "rgba(255,255,255,0.12)",
-  hero_bg: "#1e293b",
+  footer_border_color: "rgba(255, 255, 255, 0.1)",
+  hero_bg: "#1a1c21",
   hero_text_color: "#f8fafc",
-  hero_accent: "#38bdf8",
+  hero_accent: "#60a5fa",
 };
 
 export const FESTIVAL_THEME_PRESETS: Record<
@@ -1219,28 +1219,10 @@ export function updateThemeValues(
     ...nextPatch,
   };
 
-  // If this is a global theme update (e.g. palette change, primary_bg / secondary_bg update),
-  // purge all residual component-level overrides so the new theme takes effect 100% across all components!
-  const isGlobal =
-    isGlobalPatch ||
-    ("primary_bg" in nextPatch && "secondary_bg" in nextPatch) ||
-    ("primary_bg" in nextPatch && "text_color" in nextPatch) ||
-    ("festival_theme" in nextPatch);
-
-  if (isGlobal) {
-    for (const k of ALL_COMPONENT_OVERRIDE_KEYS) {
-      if (!(k in nextPatch)) {
-        delete (updatedTheme as any)[k];
-      }
-    }
-  }
-
-  const nextPages = applyThemeToPages(siteDefinition.pages || [], updatedTheme);
-
   return {
     ...siteDefinition,
     theme: updatedTheme,
-    pages: nextPages,
+    pages: siteDefinition.pages,
   };
 }
 
@@ -1248,25 +1230,28 @@ export function applyThemeMode(
   siteDefinition: EditorSiteDefinition,
   mode: ThemeMode
 ): EditorSiteDefinition {
-  const baseDefaults = mode === "light" ? DEFAULT_LIGHT_THEME : DEFAULT_DARK_THEME;
+  const currentTheme = siteDefinition.theme || {};
+  const baseDefaults = mode === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
 
   const updatedTheme: any = {
+    ...currentTheme,
     ...baseDefaults,
+    // Preserve custom branding, logos, layout configs, fonts, etc.
+    logo_url: currentTheme.logo_url || currentTheme.logoUrl,
+    logoUrl: currentTheme.logoUrl || currentTheme.logo_url,
+    brand_tone: currentTheme.brand_tone,
+    font_family: currentTheme.font_family,
+    navbar_position: currentTheme.navbar_position,
+    navbar_height: currentTheme.navbar_height,
     mode,
-    festival_theme: "none",
+    festival_theme: currentTheme.festival_theme || "none",
   };
-
-  // Purge any residual component-level overrides from prior chats/customizations
-  for (const k of ALL_COMPONENT_OVERRIDE_KEYS) {
-    delete updatedTheme[k];
-  }
-
-  const nextPages = applyThemeToPages(siteDefinition.pages || [], updatedTheme);
 
   return {
     ...siteDefinition,
     theme: updatedTheme,
-    pages: nextPages,
+    // Do NOT wipe out pages, layout positions, custom slides, or photos!
+    pages: siteDefinition.pages,
   };
 }
 
@@ -1275,21 +1260,28 @@ export function applyFestivalTheme(
   preset: FestivalThemeKey
 ): EditorSiteDefinition {
   const currentTheme = siteDefinition.theme || {};
+  const presetConfig = FESTIVAL_THEME_PRESETS[preset] || {};
   const updatedTheme: any = {
     ...currentTheme,
+    ...presetConfig,
     festival_theme: preset,
   };
-
-  const nextPages = applyThemeToPages(siteDefinition.pages || [], updatedTheme);
 
   return {
     ...siteDefinition,
     theme: updatedTheme,
-    pages: nextPages,
+    pages: siteDefinition.pages,
   };
 }
 
 export function getSiteStorageId(siteDefinition?: EditorSiteDefinition): string {
+  if (typeof window !== "undefined") {
+    try {
+      const path = window.location.pathname || "";
+      const match = path.match(/\/(builder|store)\/([^/?#]+)/);
+      if (match && match[2]) return match[2].trim();
+    } catch { }
+  }
   if (siteDefinition) {
     const id = (siteDefinition as any)?.id || (siteDefinition as any)?.site_id;
     if (id && typeof id === "string" && id.trim()) return id.trim();
@@ -1299,13 +1291,6 @@ export function getSiteStorageId(siteDefinition?: EditorSiteDefinition): string 
     if (brand && typeof brand === "string" && brand.trim()) {
       return brand.trim().toLowerCase().replace(/\s+/g, "_");
     }
-  }
-  if (typeof window !== "undefined") {
-    try {
-      const path = window.location.pathname || "";
-      const match = path.match(/\/(builder|store)\/([^/?#]+)/);
-      if (match && match[2]) return match[2].trim();
-    } catch { }
   }
   return "default_site";
 }
@@ -1430,20 +1415,18 @@ export function saveThemeSnapshot(
       window.dispatchEvent(new CustomEvent("webnirmaan_theme_saved", { detail: { snapshots: updatedList } }));
     } catch { }
   }
-
-  const finalTheme: Record<string, any> = {
+  const finalTheme: Record<string, any> = {
     ...siteDefinition.theme,
     ...themeToSave,
   };
   if (finalTheme.navbar_bg && !finalTheme.navbar_outer_bg) {
     finalTheme.navbar_outer_bg = finalTheme.navbar_bg;
   }
-  const nextPages = applyThemeToPages(siteDefinition.pages || [], finalTheme);
 
   return {
     ...siteDefinition,
     theme: finalTheme,
-    pages: nextPages,
+    pages: siteDefinition.pages,
     saved_themes: updatedList,
   } as any;
 }
@@ -1458,7 +1441,7 @@ export function applyThemeSnapshot(
 
   const patchProps = found.theme;
   const mode: ThemeMode = patchProps.mode === "dark" ? "dark" : "light";
-  const baseDefaults = mode === "light" ? DEFAULT_LIGHT_THEME : DEFAULT_DARK_THEME;
+  const baseDefaults = mode === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
 
   const cleanPatchProps: Record<string, any> = {};
   Object.keys(patchProps).forEach((k) => {
@@ -1506,5 +1489,6 @@ export function deleteThemeSnapshot(
   return {
     ...siteDefinition,
     saved_themes: updatedList,
+    pages: siteDefinition.pages,
   } as any;
 }

@@ -69,6 +69,7 @@ type BuilderDrawerPanelProps = {
   activeDrawer: ControlItemKey | null;
   onClose: () => void;
   savedSites?: SavedSite[];
+  savedSitesLoading?: boolean;
   selectedSiteId?: string | null;
   onSelectSite?: (siteId: string) => void;
   onDeleteSite?: (siteId: string) => void;
@@ -880,6 +881,7 @@ export default function BuilderDrawerPanel({
   activeDrawer,
   onClose,
   savedSites = [],
+  savedSitesLoading = false,
   selectedSiteId,
   onSelectSite,
   onDeleteSite,
@@ -1138,7 +1140,29 @@ export default function BuilderDrawerPanel({
         }}
       >
         {activeDrawer === "saved-sites" ? (
-          savedSites.length === 0 ? (
+          savedSitesLoading ? (
+            // Skeleton cards while the site list is being fetched from the server
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  style={{
+                    height: "54px",
+                    borderRadius: "10px",
+                    background: "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)",
+                    backgroundSize: "200% 100%",
+                    animation: "drawerSkeletonShimmer 1.4s infinite linear",
+                  }}
+                />
+              ))}
+              <style>{`
+                @keyframes drawerSkeletonShimmer {
+                  0% { background-position: 200% 0; }
+                  100% { background-position: -200% 0; }
+                }
+              `}</style>
+            </div>
+          ) : savedSites.length === 0 ? (
             <div
               style={{
                 padding: "12px",

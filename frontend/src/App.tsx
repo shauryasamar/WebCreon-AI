@@ -177,15 +177,9 @@ function AdminSitesPage() {
     }
     return null;
   });
-  const [savedSites, setSavedSites] = useState<SavedSite[]>(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = localStorage.getItem("wc_admin_saved_sites");
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  });
+  // Never seed saved-sites from localStorage: a stale entry from a previously-logged-in
+  // admin account would momentarily expose their sites to the current admin (security gap).
+  const [savedSites, setSavedSites] = useState<SavedSite[]>([]);
   const [activeDrawer, setActiveDrawer] = useState<
     | "saved-sites"
     | "chat"
@@ -278,9 +272,6 @@ function AdminSitesPage() {
       const data = await response.json();
       const sitesList: SavedSite[] = Array.isArray(data) ? data : [];
       setSavedSites(sitesList);
-      try {
-        localStorage.setItem("wc_admin_saved_sites", JSON.stringify(sitesList));
-      } catch (_) {}
 
       // Pre-populate memory and localStorage snapshot cache for all sites
       sitesList.forEach((site: any) => {

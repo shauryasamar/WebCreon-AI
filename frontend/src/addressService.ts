@@ -60,13 +60,21 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
 
 
 export async function getCheckoutAddresses(siteId: string): Promise<SavedAddress[]> {
-  const response = await fetch(`${API_BASE_URL}/checkout/addresses/${siteId}`, {
-    method: "GET",
-    credentials: "include",
-  });
+  try {
+    const response = await fetch(`${API_BASE_URL}/checkout/addresses/${siteId}`, {
+      method: "GET",
+      credentials: "include",
+    });
 
-  const data = await parseJsonResponse<{ addresses: SavedAddress[] }>(response);
-  return data.addresses || [];
+    if (response.status === 401 || response.status === 403) {
+      return [];
+    }
+
+    const data = await parseJsonResponse<{ addresses: SavedAddress[] }>(response);
+    return data?.addresses || [];
+  } catch {
+    return [];
+  }
 }
 
 export async function createCheckoutAddress(

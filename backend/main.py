@@ -756,6 +756,57 @@ def publish_site(
     return site
 
 
+@app.patch("/sites/{site_identifier}/draft")
+def save_site_draft(
+    site_identifier: str,
+    payload: PublishSiteRequest,
+    admin=Depends(authenticate_admin),
+    session: Session = Depends(get_session),
+):
+    admin_id = UUID(admin["adminId"])
+
+    site = None
+    try:
+        site_uuid = UUID(site_identifier)
+        site = session.get(Site, site_uuid)
+    except (ValueError, TypeError):
+        pass
+
+    if not site:
+        site = session.exec(select(Site).where(Site.slug == site_identifier)).first()
+
+    if not site:
+        # Check prefix match for timestamp-suffixed slugs (e.g. greenharvest -> greenharvest-1786...)
+        site = session.exec(
+            select(Site)
+            .join(AdminSite, AdminSite.site_id == Site.id)
+            .where(
+                AdminSite.admin_id == admin_id,
+                Site.slug.startswith(site_identifier),
+            )
+            .order_by(Site.created_at.desc())
+        ).first()
+
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    ownership = session.exec(
+        select(AdminSite).where(
+            AdminSite.admin_id == admin_id,
+            AdminSite.site_id == site.id,
+        )
+    ).first()
+
+    if not ownership:
+        raise HTTPException(status_code=403, detail="Admin does not have access to this site")
+
+    site.draft_definition = payload.draft_definition
+    session.add(site)
+    session.commit()
+    session.refresh(site)
+    return site
+
+
 @app.get("/auth/admin/me")
 def admin_me(
     admin=Depends(authenticate_admin),

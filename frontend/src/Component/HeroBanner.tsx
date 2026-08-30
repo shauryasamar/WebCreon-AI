@@ -266,31 +266,43 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   const slideBgOverlay = currentSlide.background_overlay || background_overlay;
 
   // Custom slide background color (supports manual block editing & global themes)
+  const festTheme = (theme as any)?.festival_theme;
+  const isFestive = Boolean(festTheme && festTheme !== "none");
   const directBlockBg = hero_bg || background_color;
-  const slideCustomBgColor =
-    currentSlide.background_color ||
-    currentSlide.hero_bg ||
-    directBlockBg ||
-    theme?.hero_bg ||
-    theme?.secondary_bg ||
-    theme?.primary_bg ||
-    (isDarkMode ? "#0f172a" : "#f8fafc");
+
+  let slideCustomBgColor = isDarkMode ? (theme?.hero_bg || theme?.secondary_bg || "#1a1c21") : (theme?.hero_bg || "#f8fafc");
+  if (isDarkMode) {
+    slideCustomBgColor =
+      theme?.hero_bg ||
+      theme?.secondary_bg ||
+      (currentSlide.hero_bg && currentSlide.hero_bg !== "#f8fafc" && currentSlide.hero_bg !== "#ffffff" ? currentSlide.hero_bg : "#1a1c21");
+  } else if (theme?.hero_bg) {
+    slideCustomBgColor = theme.hero_bg;
+  } else if (isFestive && theme?.secondary_bg) {
+    slideCustomBgColor = theme.secondary_bg;
+  } else if (currentSlide.background_color || currentSlide.hero_bg || directBlockBg) {
+    slideCustomBgColor = currentSlide.background_color || currentSlide.hero_bg || directBlockBg || "#f8fafc";
+  } else if (theme?.secondary_bg || theme?.primary_bg) {
+    slideCustomBgColor = theme.secondary_bg || theme.primary_bg || "#f8fafc";
+  }
 
   const defaultBgStyle: React.CSSProperties = {
     background: slideCustomBgColor,
   };
 
   // Theme-adaptive text color
-  const defaultTextColor = isDarkMode ? "#ffffff" : "#0f172a";
+  const defaultTextColor = isDarkMode ? "#f8fafc" : "#0f172a";
   const directTextColor = hero_text_color || text_color;
   const slideTextColor =
-    currentSlide.hero_text_color ||
-    currentSlide.text_color ||
-    directTextColor ||
-    theme?.hero_text_color ||
-    theme?.text_color ||
-    (hasSlideBgImage ? "#ffffff" : defaultTextColor);
-  const accentColor = currentSlide.accent_color || theme?.hero_accent || theme?.accent_color || "#2563eb";
+    isDarkMode
+      ? (theme?.hero_text_color || theme?.text_color || "#f8fafc")
+      : (theme?.hero_text_color ||
+         currentSlide.hero_text_color ||
+         currentSlide.text_color ||
+         directTextColor ||
+         theme?.text_color ||
+         (hasSlideBgImage ? "#ffffff" : defaultTextColor));
+  const accentColor = theme?.hero_accent || currentSlide.accent_color || theme?.accent_color || (isDarkMode ? "#60a5fa" : "#2563eb");
 
   // Dynamic Scale-based Sizing
   const containerPadding = `${Math.round(Math.max(14, 28 * hScale))}px ${Math.round(isMobile ? 16 : 32 * hScale)}px`;
@@ -335,7 +347,6 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
       : defaultBgStyle),
   };
 
-  const festTheme = (theme as any)?.festival_theme;
   const renderHeroFestiveBackdrop = () => {
     if (hasSlideBgImage || !festTheme || festTheme === "none") return null;
 

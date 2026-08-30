@@ -152,6 +152,10 @@ type CartProviderProps = {
   siteId?: string;
   defaultReturnWindowDays?: number;
   isProductsLoading?: boolean;
+  /** When true the cart provider is running inside the admin builder preview.
+   *  Skip the authenticated /cart fetch (which would 403 with a cross-site
+   *  customer cookie) and operate in guest-cart mode instead. */
+  isAdminMode?: boolean;
 };
 
 type BackendCartItem = {
@@ -257,6 +261,7 @@ export function CartProvider({
   siteId,
   defaultReturnWindowDays = 7,
   isProductsLoading = false,
+  isAdminMode = false,
 }: CartProviderProps) {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartItemIds, setCartItemIds] = useState<Record<string, string>>({});
@@ -317,6 +322,14 @@ export function CartProvider({
       return;
     }
 
+    // In admin/builder preview mode there is no customer session for this site.
+    // Skip the authenticated fetch entirely (prevents a guaranteed cross-site 403)
+    // and operate from the local guest-cart instead.
+    if (isAdminMode) {
+      loadGuestCartIntoState();
+      return;
+    }
+
     setIsCartLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/cart/${resolvedSiteId}`, {
@@ -341,7 +354,7 @@ export function CartProvider({
     } finally {
       setIsCartLoading(false);
     }
-  }, [applyCartResponse, loadGuestCartIntoState, resolvedSiteId]);
+  }, [applyCartResponse, isAdminMode, loadGuestCartIntoState, resolvedSiteId]);
 
   useEffect(() => {
     refreshCart();

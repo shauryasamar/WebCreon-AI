@@ -163,6 +163,13 @@ function getNavbarEditorProps(siteDefinition: SiteDefinition) {
 
 export const siteSlugMemoryCache = new Map<string, SavedSite>();
 
+import {
+  getSavedSitesMemoryCache,
+  setSavedSitesMemoryCache,
+  clearSavedSitesMemoryCache,
+} from "./utils/savedSitesCache";
+export { clearSavedSitesMemoryCache };
+
 
 function getInitialCachedSite(slugOrId?: string): SavedSite | null {
   if (!slugOrId) return null;
@@ -422,7 +429,7 @@ function StorefrontShell({
           siteId={siteId}
           brandName={navbarProps.brandName || siteDefinition.site_name || siteDefinition.name || "WebCreon Store"}
           tagline={navbarProps.tagline}
-          logoUrl={siteDefinition.navbar?.logoUrl || siteDefinition.navbar?.logo_url || (navbarProps as any).logoUrl}
+          logoUrl={siteDefinition.theme?.logoUrl || siteDefinition.theme?.logo_url || ""}
           theme={{
             ...siteDefinition.theme,
             navbar_position: storefrontNavbarMode,
@@ -990,10 +997,18 @@ function BuilderPageContent() {
   const { admin: authAdmin, logoutAdmin: authLogoutAdmin } = useAdminAuth();
 
   const isStoreRoute = location.pathname.startsWith("/store/");
-  const initialCachedSite =
-    getInitialCachedSite(siteSlugParam) ||
-    getInitialCachedSite(siteId) ||
-    null;
+  // Only use the cache when its slug/id exactly matches the current URL param.
+  // A mismatch means a *different* site's data is cached (cross-site bleed or stale).
+  const initialCachedSite = (() => {
+    const raw =
+      getInitialCachedSite(siteSlugParam) ||
+      getInitialCachedSite(siteId) ||
+      null;
+    if (!raw) return null;
+    if (siteSlugParam && raw.slug !== siteSlugParam && raw.id !== siteSlugParam) return null;
+    if (siteId && raw.id !== siteId) return null;
+    return raw;
+  })();
 
   const [resolvedSiteId, setResolvedSiteId] = useState(
     initialCachedSite?.id || siteId || ""
@@ -1217,15 +1232,10 @@ function BuilderPageContent() {
     });
   }, []);
 
-  const [savedSites, setSavedSites] = useState<SavedSite[]>(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = localStorage.getItem("wc_admin_saved_sites");
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  });
+  // Seed from the in-memory tab-session cache (no localStorage, no cross-user bleed).
+  // On first admin login this is [], populated quickly by loadSavedSites().
+  // On intra-session site switches the cache is already warm — no flash.
+  const [savedSites, setSavedSites] = useState<SavedSite[]>(getSavedSitesMemoryCache);
   const [savedSitesLoading, setSavedSitesLoading] = useState(false);
   const [pendingCounts, setPendingCounts] = useState<{ new_orders: number; new_returns: number; total: number } | null>(null);
 
@@ -1354,6 +1364,10 @@ function BuilderPageContent() {
 
   const loadSavedSites = async () => {
     if (isStoreRoute) return;
+    // Only show skeleton if we have no sites loaded in RAM yet
+    if (getSavedSitesMemoryCache().length === 0) {
+      setSavedSitesLoading(true);
+    }
     try {
       const response = await fetch(`${API_BASE_URL}/auth/admin/sites`, {
         credentials: "include",
@@ -1363,12 +1377,12 @@ function BuilderPageContent() {
       }
       const data = await response.json();
       const list = Array.isArray(data) ? data : [];
+      setSavedSitesMemoryCache(list); // warm the tab-session RAM cache
       setSavedSites(list);
-      try {
-        localStorage.setItem("wc_admin_saved_sites", JSON.stringify(list));
-      } catch (_) { }
     } catch (error) {
       console.error("Error loading saved sites:", error);
+    } finally {
+      setSavedSitesLoading(false);
     }
   };
 
@@ -1393,9 +1407,7 @@ function BuilderPageContent() {
 
       setSavedSites((prev) => {
         const next = prev.filter((site) => site.id !== targetSiteId);
-        try {
-          localStorage.setItem("wc_admin_saved_sites", JSON.stringify(next));
-        } catch (_) { }
+        setSavedSitesMemoryCache(next);
         return next;
       });
 
@@ -1970,6 +1982,7 @@ function BuilderPageContent() {
         activeDrawer={activeDrawer}
         onClose={() => setActiveDrawer(null)}
         savedSites={savedSites}
+        savedSitesLoading={savedSitesLoading}
         selectedSiteId={resolvedSiteId || siteId || ""}
         onSelectSite={(targetSiteId) => {
           const target = savedSites.find((s) => s.id === targetSiteId);
@@ -2357,12 +2370,19 @@ export default function BuilderPage() {
   const params = useParams();
   const siteId = params.siteId;
   const siteSlugParam = params.slug;
+  const location = useLocation();
+  const isStoreRoute = location.pathname.startsWith("/store/");
 
-  const initialCachedSite =
-    getInitialCachedSite(siteSlugParam) || getInitialCachedSite(siteId) || null;
-  const [resolvedSiteId, setResolvedSiteId] = useState(
-    initialCachedSite?.id || siteId || ""
-  );
+  const currentIdentifier = siteSlugParam || siteId || "";
+  const [prevIdentifier, setPrevIdentifier] = useState(currentIdentifier);
+
+  const initialCachedSite = (() => {
+    const raw = getInitialCachedSite(siteSlugParam) || getInitialCachedSite(siteId) || null;
+    if (!raw) return null;
+    if (siteSlugParam && raw.slug !== siteSlugParam && raw.id !== siteSlugParam) return null;
+    if (siteId && raw.id !== siteId) return null;
+    return raw;
+  })();
 
   const initialProducts =
     (siteSlugParam ? getInitialCachedProducts(siteSlugParam) : []) ||
@@ -2370,19 +2390,32 @@ export default function BuilderPage() {
     (initialCachedSite?.id ? getInitialCachedProducts(initialCachedSite.id) : []) ||
     [];
 
-  const [siteProducts, setSiteProducts] = useState<Product[]>(
-    initialProducts.length > 0
-      ? initialProducts
-      : (siteSlugParam ? getInitialCachedProducts(siteSlugParam) : [])
+  const [resolvedSiteId, setResolvedSiteId] = useState(
+    initialCachedSite?.id || siteId || ""
   );
+  const [siteProducts, setSiteProducts] = useState<Product[]>(initialProducts);
   const [isProductsLoading, setIsProductsLoading] = useState<boolean>(
-    siteProducts.length === 0
+    initialProducts.length === 0
   );
   const [defaultReturnWindowDays, setDefaultReturnWindowDays] = useState<number>(
     initialCachedSite?.default_return_window_days != null
       ? Number(initialCachedSite.default_return_window_days)
       : 7
   );
+
+  // Synchronously reset products and loading state when switching sites,
+  // preventing stale products from the previous site from ever flashing!
+  if (currentIdentifier !== prevIdentifier) {
+    setPrevIdentifier(currentIdentifier);
+    setResolvedSiteId(initialCachedSite?.id || siteId || "");
+    setSiteProducts(initialProducts);
+    setIsProductsLoading(initialProducts.length === 0);
+    setDefaultReturnWindowDays(
+      initialCachedSite?.default_return_window_days != null
+        ? Number(initialCachedSite.default_return_window_days)
+        : 7
+    );
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -2484,6 +2517,7 @@ export default function BuilderPage() {
       siteId={resolvedSiteId || siteId || ""}
       defaultReturnWindowDays={defaultReturnWindowDays}
       isProductsLoading={isProductsLoading}
+      isAdminMode={!isStoreRoute}
     >
       <BuilderPageContent />
     </CartProvider>
