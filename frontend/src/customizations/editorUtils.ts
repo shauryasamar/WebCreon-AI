@@ -646,10 +646,10 @@ export function findBlockById(
     const targetType = blockId.includes("delivery")
       ? "delivery_form"
       : blockId.includes("payment")
-      ? "payment_methods"
-      : blockId.includes("place") || blockId.includes("cta")
-      ? "place_order_cta"
-      : "order_summary";
+        ? "payment_methods"
+        : blockId.includes("place") || blockId.includes("cta")
+          ? "place_order_cta"
+          : "order_summary";
 
     return {
       id: blockId,
@@ -938,10 +938,10 @@ export function updateBlockFieldValue(
     const targetType = blockId.includes("delivery")
       ? "delivery_form"
       : blockId.includes("payment")
-      ? "payment_methods"
-      : blockId.includes("place") || blockId.includes("cta")
-      ? "place_order_cta"
-      : "order_summary";
+        ? "payment_methods"
+        : blockId.includes("place") || blockId.includes("cta")
+          ? "place_order_cta"
+          : "order_summary";
 
     if (checkoutPageIndex !== -1) {
       const targetPage = siteDefinition.pages[checkoutPageIndex];
@@ -1305,7 +1305,7 @@ export function getSiteStorageId(siteDefinition?: EditorSiteDefinition): string 
       const path = window.location.pathname || "";
       const match = path.match(/\/(builder|store)\/([^/?#]+)/);
       if (match && match[2]) return match[2].trim();
-    } catch {}
+    } catch { }
   }
   return "default_site";
 }
@@ -1332,7 +1332,7 @@ export function getSavedThemeSnapshots(siteDefinition: EditorSiteDefinition): an
           }
         }
       }
-    } catch {}
+    } catch { }
   }
 
   const inMemory = Array.isArray((siteDefinition as any)?.saved_themes)
@@ -1428,7 +1428,7 @@ export function saveThemeSnapshot(
       localStorage.setItem(`webnirmaan_saved_themes_${siteId}`, JSON.stringify(updatedList));
       localStorage.setItem("webnirmaan_saved_themes_global", JSON.stringify(updatedList));
       window.dispatchEvent(new CustomEvent("webnirmaan_theme_saved", { detail: { snapshots: updatedList } }));
-    } catch {}
+    } catch { }
   }
 
   const finalTheme: Record<string, any> = {
@@ -1500,7 +1500,7 @@ export function deleteThemeSnapshot(
       localStorage.setItem(`webnirmaan_saved_themes_${siteId}`, JSON.stringify(updatedList));
       localStorage.setItem("webnirmaan_saved_themes_global", JSON.stringify(updatedList));
       window.dispatchEvent(new CustomEvent("webnirmaan_theme_saved", { detail: { snapshots: updatedList } }));
-    } catch {}
+    } catch { }
   }
 
   return {

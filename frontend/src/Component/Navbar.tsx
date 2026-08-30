@@ -89,6 +89,9 @@ export type NavbarProps = {
   navbar_border_color?: string;
   onOpenCart?: () => void;
   onSearch?: (query: string) => void;
+  editMode?: boolean;
+  isSelected?: boolean;
+  onSelect?: () => void;
   [key: string]: any;
 };
 
@@ -235,6 +238,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     appBase,
     onOpenCart,
     onSearch,
+    editMode = false,
+    isSelected = false,
+    onSelect,
   } = props;
   const { cartCount = 0 } = useCart();
   const navigate = useNavigate();
@@ -929,6 +935,12 @@ const Navbar: React.FC<NavbarProps> = (props) => {
       id="storefront-navbar"
       className={`storefront-navbar storefront-navbar--${position}`}
       data-navbar-position={position}
+      onClick={(e) => {
+        if (editMode && onSelect) {
+          e.stopPropagation();
+          onSelect();
+        }
+      }}
       style={{
         ...(position === "fixed" || searchActive || mobileSearchOpen || Boolean(isMobile && searchQuery.trim())
           ? { position: "fixed", top: 0, left: 0, right: 0, width: "100%", zIndex: 1000 }
@@ -953,8 +965,129 @@ const Navbar: React.FC<NavbarProps> = (props) => {
         justifyContent: "center",
         alignItems: "center",
         zIndex: accountMenuOpen || mobileMenuOpen ? 99999 : 1000,
+        cursor: editMode ? "pointer" : undefined,
+        overflow: "visible",
       }}
     >
+      {/* Editor Selection Indicator for Non-Floating Navbars */}
+      {editMode && variant !== "floating" && (
+        <>
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              border: isSelected ? "2px solid #2563eb" : "1.5px dashed transparent",
+              pointerEvents: "none",
+              zIndex: 100001,
+              transition: "all 0.15s ease",
+              boxShadow: isSelected
+                ? "inset 0 0 0 1px rgba(255, 255, 255, 0.9), 0 0 0 3.5px rgba(37, 99, 235, 0.22)"
+                : "none",
+            }}
+          />
+          {isSelected && (
+            <>
+              <div
+                style={{
+                  position: "absolute",
+                  top: "-4px",
+                  left: "-4px",
+                  width: "7px",
+                  height: "7px",
+                  background: "#ffffff",
+                  border: "1.5px solid #2563eb",
+                  borderRadius: "2px",
+                  zIndex: 100003,
+                  pointerEvents: "none",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  top: "-4px",
+                  right: "-4px",
+                  width: "7px",
+                  height: "7px",
+                  background: "#ffffff",
+                  border: "1.5px solid #2563eb",
+                  borderRadius: "2px",
+                  zIndex: 100003,
+                  pointerEvents: "none",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "-4px",
+                  left: "-4px",
+                  width: "7px",
+                  height: "7px",
+                  background: "#ffffff",
+                  border: "1.5px solid #2563eb",
+                  borderRadius: "2px",
+                  zIndex: 100003,
+                  pointerEvents: "none",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "-4px",
+                  right: "-4px",
+                  width: "7px",
+                  height: "7px",
+                  background: "#ffffff",
+                  border: "1.5px solid #2563eb",
+                  borderRadius: "2px",
+                  zIndex: 100003,
+                  pointerEvents: "none",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                }}
+              />
+            </>
+          )}
+          <div
+            style={{
+              position: "absolute",
+              top: "8px",
+              left: "14px",
+              zIndex: 100002,
+              padding: "3px 10px 3px 8px",
+              borderRadius: "6px",
+              background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
+              border: "1px solid rgba(255, 255, 255, 0.12)",
+              color: "#f8fafc",
+              fontSize: "11px",
+              fontWeight: 600,
+              letterSpacing: "0.02em",
+              pointerEvents: "none",
+              opacity: isSelected ? 1 : 0,
+              transform: isSelected ? "translateY(0)" : "translateY(4px)",
+              transition: "all 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
+              boxShadow: "0 4px 14px rgba(15, 23, 42, 0.22), 0 1px 3px rgba(0,0,0,0.12)",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            <span
+              style={{
+                width: "5.5px",
+                height: "5.5px",
+                borderRadius: "50%",
+                background: "#38bdf8",
+                boxShadow: "0 0 6px rgba(56, 189, 248, 0.7)",
+                flexShrink: 0,
+              }}
+            />
+            Navbar
+          </div>
+        </>
+      )}
+
       <div
         style={{
           width: "100%",
@@ -982,6 +1115,125 @@ const Navbar: React.FC<NavbarProps> = (props) => {
             overflow: "visible",
           }}
         >
+          {/* Editor Selection Indicator for Floating Navbars */}
+          {editMode && variant === "floating" && (
+            <>
+              <div
+                style={{
+                  position: "absolute",
+                  inset: "-2px",
+                  border: isSelected ? "2px solid #2563eb" : "1.5px dashed transparent",
+                  borderRadius: `calc(${shellRadius} + 2px)`,
+                  pointerEvents: "none",
+                  zIndex: 100001,
+                  transition: "all 0.15s ease",
+                  boxShadow: isSelected
+                    ? "0 0 0 1px rgba(255, 255, 255, 0.9), 0 0 0 3.5px rgba(37, 99, 235, 0.22)"
+                    : "none",
+                }}
+              />
+              {isSelected && (
+                <>
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "-5px",
+                      left: "-5px",
+                      width: "7px",
+                      height: "7px",
+                      background: "#ffffff",
+                      border: "1.5px solid #2563eb",
+                      borderRadius: "2px",
+                      zIndex: 100003,
+                      pointerEvents: "none",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                    }}
+                  />
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "-5px",
+                      right: "-5px",
+                      width: "7px",
+                      height: "7px",
+                      background: "#ffffff",
+                      border: "1.5px solid #2563eb",
+                      borderRadius: "2px",
+                      zIndex: 100003,
+                      pointerEvents: "none",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                    }}
+                  />
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: "-5px",
+                      left: "-5px",
+                      width: "7px",
+                      height: "7px",
+                      background: "#ffffff",
+                      border: "1.5px solid #2563eb",
+                      borderRadius: "2px",
+                      zIndex: 100003,
+                      pointerEvents: "none",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                    }}
+                  />
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: "-5px",
+                      right: "-5px",
+                      width: "7px",
+                      height: "7px",
+                      background: "#ffffff",
+                      border: "1.5px solid #2563eb",
+                      borderRadius: "2px",
+                      zIndex: 100003,
+                      pointerEvents: "none",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                    }}
+                  />
+                </>
+              )}
+              <div
+                style={{
+                  position: "absolute",
+                  top: "8px",
+                  left: "14px",
+                  zIndex: 100002,
+                  padding: "3px 10px 3px 8px",
+                  borderRadius: "6px",
+                  background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
+                  border: "1px solid rgba(255, 255, 255, 0.12)",
+                  color: "#f8fafc",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  letterSpacing: "0.02em",
+                  pointerEvents: "none",
+                  opacity: isSelected ? 1 : 0,
+                  transform: isSelected ? "translateY(0)" : "translateY(-4px)",
+                  transition: "all 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
+                  boxShadow: "0 4px 14px rgba(15, 23, 42, 0.22), 0 1px 3px rgba(0,0,0,0.12)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                <span
+                  style={{
+                    width: "5.5px",
+                    height: "5.5px",
+                    borderRadius: "50%",
+                    background: "#38bdf8",
+                    boxShadow: "0 0 6px rgba(56, 189, 248, 0.7)",
+                    flexShrink: 0,
+                  }}
+                />
+                Navbar
+              </div>
+            </>
+          )}
           {(() => {
             const layoutType = theme?.navbar_layout || "apple_minimal";
 

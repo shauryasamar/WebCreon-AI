@@ -345,11 +345,12 @@ function StorefrontShell({
   }, [footerIsSelected]);
 
   useEffect(() => {
-    if (!navbarBlockRef.current) return;
-
     const updateHeight = () => {
-      if (navbarBlockRef.current) {
-        const h = navbarBlockRef.current.offsetHeight;
+      const headerEl =
+        document.getElementById("storefront-navbar") ||
+        (navbarBlockRef.current ? navbarBlockRef.current.querySelector("header") : null);
+      if (headerEl) {
+        const h = headerEl.offsetHeight;
         if (h > 0) {
           setMeasuredNavbarHeight(h);
         }
@@ -358,18 +359,28 @@ function StorefrontShell({
 
     updateHeight();
 
-    if (typeof ResizeObserver !== "undefined") {
+    const targetEl =
+      document.getElementById("storefront-navbar") ||
+      (navbarBlockRef.current ? navbarBlockRef.current.querySelector("header") : null) ||
+      navbarBlockRef.current;
+
+    if (typeof ResizeObserver !== "undefined" && targetEl) {
       const resizeObserver = new ResizeObserver(() => {
         updateHeight();
       });
-      resizeObserver.observe(navbarBlockRef.current);
+      resizeObserver.observe(targetEl);
       return () => resizeObserver.disconnect();
     }
   }, [siteDefinition, storefrontNavbarMode]);
 
+  const resolvedNavbarHeight =
+    measuredNavbarHeight > 0
+      ? measuredNavbarHeight
+      : Number(siteDefinition.theme?.navbar_height || 72);
+
   const contentTopOffset =
     (storefrontNavbarMode === "fixed" || storefrontNavbarMode === "sticky")
-      ? FIXED_NAVBAR_CONTENT_OFFSET
+      ? resolvedNavbarHeight
       : 0;
 
   const fixedNavbarTopOffset = adminTopbarVisible
@@ -400,59 +411,12 @@ function StorefrontShell({
         ref={navbarBlockRef}
         data-editor-block-id={NAVBAR_BLOCK_ID}
         data-editor-block-type="navbar"
-        onClick={(e) => {
-          if (!editMode) return;
-          e.stopPropagation();
-          onSelectBlock(NAVBAR_BLOCK_ID);
-        }}
         style={{
-          position: "relative",
-          cursor: editMode ? "pointer" : "default",
+          position: (storefrontNavbarMode === "fixed" || storefrontNavbarMode === "sticky") ? "static" : "relative",
           zIndex: 1000,
           overflow: "visible",
         }}
       >
-        <div
-          style={{
-            position: "absolute",
-            inset: "-2px",
-            border: editMode && navbarIsSelected ? "2px solid #3b82f6" : "1px dashed transparent",
-            borderRadius: "10px",
-            pointerEvents: "none",
-            zIndex: 1001,
-            transition: "all 0.15s ease",
-            boxShadow: editMode && navbarIsSelected ? "0 0 0 3px rgba(59, 130, 246, 0.15)" : "none",
-          }}
-        />
-
-        <div
-          style={{
-            position: "absolute",
-            top: "-9px",
-            left: "14px",
-            zIndex: 1002,
-            padding: "2px 8px",
-            borderRadius: "4px",
-            background: "#0f172a",
-            color: "#ffffff",
-            fontSize: "10.5px",
-            fontWeight: 600,
-            letterSpacing: "0.01em",
-            pointerEvents: "none",
-            opacity: editMode && navbarIsSelected ? 1 : 0,
-            transform: editMode && navbarIsSelected ? "translateY(0)" : "translateY(4px)",
-            transition: "all 0.15s ease",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
-            display: "flex",
-            alignItems: "center",
-            gap: "5px",
-          }}
-        >
-          <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#3b82f6" }} />
-          Navbar
-        </div>
-
-
         <Navbar
           {...navbarProps}
           siteId={siteId}
@@ -473,6 +437,13 @@ function StorefrontShell({
           }
           siteSlug={siteSlug}
           appBase={appBase}
+          editMode={editMode}
+          isSelected={editMode && navbarIsSelected}
+          onSelect={() => {
+            if (editMode) {
+              onSelectBlock(NAVBAR_BLOCK_ID);
+            }
+          }}
         />
       </div>
 
@@ -511,39 +482,116 @@ function StorefrontShell({
           style={{
             position: "absolute",
             inset: "-2px",
-            border: editMode && footerIsSelected ? "2px solid #3b82f6" : "1px dashed transparent",
+            border: editMode && footerIsSelected ? "2px solid #2563eb" : "1.5px dashed transparent",
             borderRadius: "10px",
             pointerEvents: "none",
             zIndex: 40,
             transition: "all 0.15s ease",
-            boxShadow: editMode && footerIsSelected ? "0 0 0 3px rgba(59, 130, 246, 0.15)" : "none",
+            boxShadow: editMode && footerIsSelected
+              ? "0 0 0 1px rgba(255, 255, 255, 0.9), 0 0 0 3.5px rgba(37, 99, 235, 0.22)"
+              : "none",
           }}
         />
+
+        {editMode && footerIsSelected && (
+          <>
+            <div
+              style={{
+                position: "absolute",
+                top: "-5px",
+                left: "-5px",
+                width: "7px",
+                height: "7px",
+                background: "#ffffff",
+                border: "1.5px solid #2563eb",
+                borderRadius: "2px",
+                zIndex: 42,
+                pointerEvents: "none",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                top: "-5px",
+                right: "-5px",
+                width: "7px",
+                height: "7px",
+                background: "#ffffff",
+                border: "1.5px solid #2563eb",
+                borderRadius: "2px",
+                zIndex: 42,
+                pointerEvents: "none",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                bottom: "-5px",
+                left: "-5px",
+                width: "7px",
+                height: "7px",
+                background: "#ffffff",
+                border: "1.5px solid #2563eb",
+                borderRadius: "2px",
+                zIndex: 42,
+                pointerEvents: "none",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                bottom: "-5px",
+                right: "-5px",
+                width: "7px",
+                height: "7px",
+                background: "#ffffff",
+                border: "1.5px solid #2563eb",
+                borderRadius: "2px",
+                zIndex: 42,
+                pointerEvents: "none",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+              }}
+            />
+          </>
+        )}
 
         <div
           style={{
             position: "absolute",
-            top: "-9px",
+            top: "10px",
             left: "14px",
             zIndex: 41,
-            padding: "2px 8px",
-            borderRadius: "4px",
-            background: "#0f172a",
-            color: "#ffffff",
-            fontSize: "10.5px",
+            padding: "3px 10px 3px 8px",
+            borderRadius: "6px",
+            background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
+            border: "1px solid rgba(255, 255, 255, 0.12)",
+            color: "#f8fafc",
+            fontSize: "11px",
             fontWeight: 600,
-            letterSpacing: "0.01em",
+            letterSpacing: "0.02em",
             pointerEvents: "none",
             opacity: editMode && footerIsSelected ? 1 : 0,
-            transform: editMode && footerIsSelected ? "translateY(0)" : "translateY(4px)",
-            transition: "all 0.15s ease",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
+            transform: editMode && footerIsSelected ? "translateY(0)" : "translateY(-4px)",
+            transition: "all 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
+            boxShadow: "0 4px 14px rgba(15, 23, 42, 0.22), 0 1px 3px rgba(0,0,0,0.12)",
             display: "flex",
             alignItems: "center",
-            gap: "5px",
+            gap: "6px",
           }}
         >
-          <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#3b82f6" }} />
+          <span
+            style={{
+              width: "5.5px",
+              height: "5.5px",
+              borderRadius: "50%",
+              background: "#38bdf8",
+              boxShadow: "0 0 6px rgba(56, 189, 248, 0.7)",
+              flexShrink: 0,
+            }}
+          />
           Footer
         </div>
 
@@ -2300,7 +2348,7 @@ function getInitialCachedProducts(slugOrId?: string): Product[] {
           return parsed;
         }
       }
-    } catch (_) {}
+    } catch (_) { }
   }
   return [];
 }
@@ -2402,7 +2450,7 @@ export default function BuilderPage() {
               if (siteSlugParam) {
                 localStorage.setItem(`wc_site_products_${siteSlugParam}`, JSON.stringify(normalizedProducts));
               }
-            } catch (_) {}
+            } catch (_) { }
           }
         } else {
           console.error("Failed to load products for site", res.status);
