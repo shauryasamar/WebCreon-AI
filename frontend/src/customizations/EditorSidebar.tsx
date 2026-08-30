@@ -3345,43 +3345,34 @@ export default function EditorSidebar({
 
           {/* Brand Palette Section */}
           <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b", marginBottom: "4px" }}>
               BRAND PALETTE
             </div>
 
-            <div style={{ display: "grid", gap: "4px" }}>
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Accent Color</label>
-                {renderFieldControl(
-                  { key: "accent_color", label: "Accent Color", type: "color", target: "theme" },
-                  siteDefinition.theme?.accent_color || "#2563eb",
-                  textColor,
-                  isLightMode,
-                  (val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { accent_color: val }))
-                )}
-              </div>
+            <div style={{ display: "grid", gap: "8px", width: "100%", boxSizing: "border-box" }}>
+              <ModernColorPicker
+                label="Accent Color"
+                value={siteDefinition.theme?.accent_color || "#2563eb"}
+                onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { accent_color: val }))}
+              />
 
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Background Color</label>
-                {renderFieldControl(
-                  { key: "primary_bg", label: "Primary Background", type: "color", target: "theme" },
-                  siteDefinition.theme?.primary_bg || (siteDefinition.theme?.mode === "dark" ? "#121316" : "#ffffff"),
-                  textColor,
-                  isLightMode,
-                  (val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { primary_bg: val }))
-                )}
-              </div>
+              <ModernColorPicker
+                label="Primary Background"
+                value={siteDefinition.theme?.primary_bg || (siteDefinition.theme?.mode === "dark" ? "#121316" : "#ffffff")}
+                onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { primary_bg: val }))}
+              />
 
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Text Color</label>
-                {renderFieldControl(
-                  { key: "text_color", label: "Text Color", type: "color", target: "theme" },
-                  siteDefinition.theme?.text_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a"),
-                  textColor,
-                  isLightMode,
-                  (val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { text_color: val }))
-                )}
-              </div>
+              <ModernColorPicker
+                label="Secondary Background"
+                value={siteDefinition.theme?.secondary_bg || (siteDefinition.theme?.mode === "dark" ? "#1a1c21" : "#f8fafc")}
+                onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { secondary_bg: val }))}
+              />
+
+              <ModernColorPicker
+                label="Text Color"
+                value={siteDefinition.theme?.text_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { text_color: val }))}
+              />
             </div>
           </section>
         </div>
