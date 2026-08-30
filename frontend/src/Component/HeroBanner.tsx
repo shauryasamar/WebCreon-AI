@@ -278,8 +278,6 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
       (currentSlide.hero_bg && currentSlide.hero_bg !== "#f8fafc" && currentSlide.hero_bg !== "#ffffff" ? currentSlide.hero_bg : "#1a1c21");
   } else if (theme?.hero_bg) {
     slideCustomBgColor = theme.hero_bg;
-  } else if (isFestive && theme?.secondary_bg) {
-    slideCustomBgColor = theme.secondary_bg;
   } else if (currentSlide.background_color || currentSlide.hero_bg || directBlockBg) {
     slideCustomBgColor = currentSlide.background_color || currentSlide.hero_bg || directBlockBg || "#f8fafc";
   } else if (theme?.secondary_bg || theme?.primary_bg) {

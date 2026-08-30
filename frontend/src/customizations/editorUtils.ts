@@ -178,45 +178,15 @@ const DEFAULT_DARK_THEME: Partial<ThemeValues> = {
 
 export const FESTIVAL_THEME_PRESETS: Record<
   FestivalThemeKey,
-  Omit<Partial<ThemeValues>, "mode">
+  { festival_theme: FestivalThemeKey }
 > = {
-  none: {},
-  diwali: {
-    festival_theme: "diwali",
-    accent_color: "#f59e0b",
-    brand_tone: "Warm and festive",
-    visual_style: "Elegant celebration",
-  },
-  christmas: {
-    festival_theme: "christmas",
-    accent_color: "#dc2626",
-    brand_tone: "Cozy and joyful",
-    visual_style: "Classic festive",
-  },
-  eid: {
-    festival_theme: "eid",
-    accent_color: "#14b8a6",
-    brand_tone: "Refined and celebratory",
-    visual_style: "Modern festive",
-  },
-  holi: {
-    festival_theme: "holi",
-    accent_color: "#9333ea",
-    brand_tone: "Playful and vibrant",
-    visual_style: "Colorful festive",
-  },
-  durga_puja: {
-    festival_theme: "durga_puja",
-    accent_color: "#e11d48",
-    brand_tone: "Devotional and grand",
-    visual_style: "Royal cultural festival",
-  },
-  rakhi: {
-    festival_theme: "rakhi",
-    accent_color: "#f59e0b",
-    brand_tone: "Cherished sibling celebration",
-    visual_style: "Auspicious festive bond",
-  },
+  none: { festival_theme: "none" },
+  diwali: { festival_theme: "diwali" },
+  christmas: { festival_theme: "christmas" },
+  eid: { festival_theme: "eid" },
+  holi: { festival_theme: "holi" },
+  durga_puja: { festival_theme: "durga_puja" },
+  rakhi: { festival_theme: "rakhi" },
 };
 
 function buildGlobalNavbarBlock(siteDefinition: EditorSiteDefinition): EditorBlock {
