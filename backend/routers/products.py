@@ -15,7 +15,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from sqlmodel import Session, delete, func, select, update
+from sqlmodel import Session, delete, func, or_, select, update
 from sqlalchemy import case
 
 from auth_middleware import authenticate_customer, enforce_site_ownership
@@ -1018,11 +1018,11 @@ def list_products_public(
     site_id: UUID,
     response: Response,
     page: Optional[int] = Query(None, ge=1, description="Page number"),
-    page_size: Optional[int] = Query(None, ge=1, le=100, description="Items per page"),
+    page_size: Optional[int] = Query(None, ge=1, le=1000, description="Items per page"),
     search: Optional[str] = Query(None, description="Search across name, brand, product type"),
-    category_id: Optional[UUID] = Query(None, description="Filter by category ID"),
+    category_id: Optional[str] = Query(None, description="Filter by category ID or name"),
     product_type: Optional[list[str]] = Query(None, description="Filter by product type(s)"),
-    collection_id: Optional[list[UUID]] = Query(None, description="Filter by collection ID(s)"),
+    collection_id: Optional[list[str]] = Query(None, description="Filter by collection ID(s) or name(s)"),
     brand: Optional[list[str]] = Query(None, description="Filter by brand(s)"),
     min_price: Optional[Decimal] = Query(None, description="Minimum price"),
     max_price: Optional[Decimal] = Query(None, description="Maximum price"),
@@ -1058,9 +1058,17 @@ def list_products_public(
             | (Product.category.ilike(term))
         )
 
-    # --- Category filter (broad category) ---
-    if category_id:
-        query = query.where(Product.category_id == category_id)
+    # --- Category filter (broad category or category name) ---
+    if category_id and category_id.strip():
+        cat_str = category_id.strip()
+        try:
+            cat_uuid = UUID(cat_str)
+            query = query.where(Product.category_id == cat_uuid)
+        except ValueError:
+            query = query.where(
+                (Product.category.ilike(f"%{cat_str}%"))
+                | (Product.category_name.ilike(f"%{cat_str}%"))
+            )
 
     # --- Product type filter (the existing category column) ---
     if product_type:
@@ -1072,12 +1080,30 @@ def list_products_public(
 
     # --- Collection filter (multi-select) ---
     if collection_id:
-        product_ids_in_collections = (
-            select(ProductCollection.product_id)
-            .where(ProductCollection.collection_id.in_(collection_id))
-            .distinct()
-        )
-        query = query.where(Product.id.in_(product_ids_in_collections))
+        col_uuids = []
+        col_names = []
+        for cid in collection_id:
+            try:
+                col_uuids.append(UUID(str(cid).strip()))
+            except ValueError:
+                col_names.append(str(cid).strip())
+
+        col_conditions = []
+        if col_uuids:
+            product_ids_in_collections = (
+                select(ProductCollection.product_id)
+                .where(ProductCollection.collection_id.in_(col_uuids))
+                .distinct()
+            )
+            col_conditions.append(Product.id.in_(product_ids_in_collections))
+        if col_names:
+            for cn in col_names:
+                col_conditions.append(
+                    (Product.category.ilike(f"%{cn}%"))
+                    | (Product.category_name.ilike(f"%{cn}%"))
+                )
+        if col_conditions:
+            query = query.where(or_(*col_conditions))
 
     # --- Price range ---
     if min_price is not None:
@@ -1124,7 +1150,7 @@ def list_products_public(
         query = query.order_by(Product.created_at.desc())
 
     effective_page = page if page is not None and page >= 1 else 1
-    effective_page_size = min(page_size if page_size is not None and page_size >= 1 else 24, 100)
+    effective_page_size = min(page_size if page_size is not None and page_size >= 1 else 24, 1000)
 
     count_query = select(func.count()).select_from(query.subquery())
     total_count = session.exec(count_query).one() or 0

@@ -19,6 +19,10 @@ const AdminSidebar = () => {
       to: `/builder/${siteId}/admin/products`,
     },
     {
+      label: "Home Sections",
+      to: `/builder/${siteId}/admin/home-sections`,
+    },
+    {
       label: "Orders & Returns",
       to: `/builder/${siteId}/admin/orders`,
     },

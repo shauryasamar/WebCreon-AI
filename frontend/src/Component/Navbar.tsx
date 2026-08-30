@@ -726,7 +726,8 @@ const Navbar: React.FC<NavbarProps> = (props) => {
       ? (currentSiteId ? `/builder/${currentSiteId}` : base)
       : (siteSlug ? `/store/${siteSlug}` : resolvedHomePath);
 
-    navigate(target, { replace: true });
+    navigate(target);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const executeGlobalSearch = (query: string) => {

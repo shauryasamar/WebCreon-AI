@@ -19,6 +19,9 @@ type Block = {
   data_source?: string | null;
   datasource?: string | null;
   actions?: Record<string, any>;
+  isActive?: boolean;
+  hidden?: boolean;
+  [key: string]: any;
 };
 
 type Theme = {
@@ -222,20 +225,31 @@ const RenderPage: React.FC<RenderPageProps> = ({
   const { isAuthenticated, loading: authLoading } = useCustomerAuth();
 
   const location = useLocation();
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+
+  const initialSearchQuery = searchParams.get("search") || "";
+  const initialSortBy = searchParams.get("sort_by") || searchParams.get("sort") || "newest";
+  const initialCatParam = searchParams.get("category") || searchParams.get("category_id");
+  const initialBrandParams = searchParams.getAll("brand");
+  const initialColParams = searchParams.getAll("collection").concat(searchParams.getAll("collection_id"));
+  const initialProdTypeParams = searchParams.getAll("product_type");
+  const initialMinP = searchParams.get("min_price");
+  const initialMaxP = searchParams.get("max_price");
+
   const [filterModalOpen, setFilterModalOpen] = useState(false);
   const [categories, setCategories] = useState<{ id: string; name: string; slug?: string }[]>([]);
   const [collections, setCollections] = useState<{ id: string; name: string; slug?: string }[]>([]);
 
   const [filters, setFilters] = useState<FilterState>({
-    categoryId: null,
-    productTypes: [],
-    collections: [],
-    brands: [],
-    minPrice: 0,
-    maxPrice: 100000,
+    categoryId: initialCatParam || null,
+    productTypes: initialCatParam ? Array.from(new Set([...initialProdTypeParams, initialCatParam])) : initialProdTypeParams,
+    brands: initialBrandParams,
+    collections: initialColParams,
+    minPrice: initialMinP ? Number(initialMinP) : 0,
+    maxPrice: initialMaxP ? Number(initialMaxP) : 100000,
   });
-  const [sortBy, setSortBy] = useState("newest");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState(initialSortBy);
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(24);
   const [serverProducts, setServerProducts] = useState<Product[] | null>(null);
@@ -251,9 +265,31 @@ const RenderPage: React.FC<RenderPageProps> = ({
   }, [filters, searchQuery, sortBy]);
 
   useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
     const params = new URLSearchParams(location.search);
     const q = params.get("search") || "";
     setSearchQuery(q);
+
+    const sortParam = params.get("sort_by") || params.get("sort");
+    if (sortParam) {
+      setSortBy(sortParam);
+    }
+
+    const catParam = params.get("category") || params.get("category_id");
+    const brandParams = params.getAll("brand");
+    const colParams = params.getAll("collection").concat(params.getAll("collection_id"));
+    const prodTypeParams = params.getAll("product_type");
+    const minP = params.get("min_price");
+    const maxP = params.get("max_price");
+
+    setFilters({
+      categoryId: catParam || null,
+      productTypes: catParam ? Array.from(new Set([...prodTypeParams, catParam])) : prodTypeParams,
+      brands: brandParams,
+      collections: colParams,
+      minPrice: minP ? Number(minP) : 0,
+      maxPrice: maxP ? Number(maxP) : 100000,
+    });
   }, [location.search]);
 
   useEffect(() => {
@@ -483,28 +519,110 @@ const RenderPage: React.FC<RenderPageProps> = ({
       PRODUCT_DETAIL_TYPES.has(String(block.type || "").toLowerCase())
     );
 
+  const sectionTitleParam = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get("section_title") || params.get("section");
+  }, [location.search]);
+
+  const currentSectionIdParam = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get("section_id") || params.get("section");
+  }, [location.search]);
+
+  const activeSectionBlock = useMemo(() => {
+    if (!sectionTitleParam && !currentSectionIdParam) return null;
+    const cleanTitle = (sectionTitleParam || "").trim().toLowerCase();
+    const cleanId = (currentSectionIdParam || "").trim().toLowerCase();
+    const blocks = Array.isArray(resolvedBlocks) ? resolvedBlocks : Array.isArray(page?.blocks) ? page.blocks : [];
+    return (
+      blocks.find(
+        (b) =>
+          (b.type === "product_carousel" || b.type === "brand_store_grid") &&
+          (String(b.id || "").toLowerCase() === cleanId ||
+           String(b.id || "").toLowerCase() === cleanTitle ||
+           String((b as any).name || "").toLowerCase() === cleanTitle ||
+           String(b.props?.title || "").toLowerCase() === cleanTitle)
+      ) || null
+    );
+  }, [sectionTitleParam, currentSectionIdParam, resolvedBlocks, page]);
+
+  const isDedicatedSectionOrSearchView = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return Boolean(
+      searchQuery.trim() ||
+      sectionTitleParam ||
+      currentSectionIdParam ||
+      params.get("collection") ||
+      params.get("category") ||
+      params.get("brand") ||
+      params.get("product_type") ||
+      params.get("product_ids")
+    );
+  }, [searchQuery, sectionTitleParam, currentSectionIdParam, location.search]);
+
+  const sectionBaseProducts = useMemo(() => {
+    if (!activeSectionBlock) return products;
+    const rules = activeSectionBlock.props?.rules || {
+      category: activeSectionBlock.props?.categoryName,
+      collection_id: activeSectionBlock.props?.collectionId,
+      brand: activeSectionBlock.props?.brandName,
+      sort_by: activeSectionBlock.props?.sortBy,
+    };
+    let list = [...products];
+    const cat = rules.category || (rules.categories && rules.categories[0]);
+    if (cat) {
+      const targetCat = cat.toLowerCase();
+      list = list.filter((p) => (p.category && p.category.toLowerCase() === targetCat) || (p.category_name && p.category_name.toLowerCase() === targetCat));
+    }
+    const br = rules.brand || (rules.brands && rules.brands[0]);
+    if (br) {
+      const targetBrand = br.toLowerCase();
+      list = list.filter((p) => p.brand && p.brand.toLowerCase() === targetBrand);
+    }
+    const col = rules.collection_id || (rules.collection_ids && rules.collection_ids[0]);
+    if (col) {
+      const targetCol = String(col).toLowerCase();
+      list = list.filter((p: any) => (p.collections || []).some((c: any) => (c.id && String(c.id).toLowerCase() === targetCol) || (c.collection_id && String(c.collection_id).toLowerCase() === targetCol) || (c.name && c.name.toLowerCase() === targetCol)));
+    }
+    if (rules.min_price !== undefined && rules.min_price !== null) {
+      list = list.filter((p) => Number(p.price) >= rules.min_price);
+    }
+    if (rules.max_price !== undefined && rules.max_price !== null) {
+      list = list.filter((p) => Number(p.price) <= rules.max_price);
+    }
+    if (rules.in_stock_only) {
+      list = list.filter((p) => p.in_stock !== false);
+    }
+    if (rules.selected_product_ids && rules.selected_product_ids.length > 0) {
+      list = list.filter((p) => rules.selected_product_ids.includes(String(p.id)));
+    }
+    return list;
+  }, [activeSectionBlock, products]);
+
+  const sourceProductsForFilters = activeSectionBlock ? sectionBaseProducts : products;
+
   const availableProductTypes = useMemo(() => {
     return Array.from(
       new Set(
-        products
+        sourceProductsForFilters
           .map((product) => product.category)
           .filter((category): category is string => Boolean(category))
       )
     ).sort();
-  }, [products]);
+  }, [sourceProductsForFilters]);
 
   const availableBrands = useMemo(() => {
     return Array.from(
       new Set(
-        products
+        sourceProductsForFilters
           .map((product) => product.brand)
           .filter((brand): brand is string => Boolean(brand))
       )
     ).sort();
-  }, [products]);
+  }, [sourceProductsForFilters]);
 
   const filteredAndSortedProducts = useMemo(() => {
-    let list = [...products];
+    let list = [...sourceProductsForFilters];
 
     // Search filter across name, brand, product type
     if (searchQuery.trim()) {
@@ -642,7 +760,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
     }
 
     return list;
-  }, [products, searchQuery, filters, sortBy]);
+  }, [sourceProductsForFilters, searchQuery, filters, sortBy]);
 
   const totalPages = Math.ceil(filteredAndSortedProducts.length / pageSize) || 1;
   const paginatedProducts = useMemo(() => {
@@ -650,9 +768,10 @@ const RenderPage: React.FC<RenderPageProps> = ({
     return filteredAndSortedProducts.slice(start, start + pageSize);
   }, [filteredAndSortedProducts, currentPage, pageSize]);
 
-  const resolvedStoreProducts = serverProducts ?? paginatedProducts;
-  const resolvedTotalCount = serverTotal ?? filteredAndSortedProducts.length;
-  const resolvedTotalPages = serverTotalPages ?? totalPages;
+  const isSectionFocused = Boolean(sectionTitleParam || currentSectionIdParam);
+  const resolvedStoreProducts = isSectionFocused ? paginatedProducts : (serverProducts ?? paginatedProducts);
+  const resolvedTotalCount = isSectionFocused ? filteredAndSortedProducts.length : (serverTotal ?? filteredAndSortedProducts.length);
+  const resolvedTotalPages = isSectionFocused ? totalPages : (serverTotalPages ?? totalPages);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -666,26 +785,34 @@ const RenderPage: React.FC<RenderPageProps> = ({
   }, [filters]);
 
   const dynamicTitle = useMemo(() => {
+    if (sectionTitleParam) return sectionTitleParam;
+    if (activeSectionBlock) return activeSectionBlock.props?.title || (activeSectionBlock as any).name || "Collection";
     if (searchQuery.trim()) return `Search Results for "${searchQuery.trim()}"`;
     if (filters.categoryId) {
-      const cat = categories.find((c) => c.id === filters.categoryId);
+      const cat = categories.find((c) => c.id === filters.categoryId || c.name === filters.categoryId);
       if (cat) return cat.name;
+      return filters.categoryId;
     }
     if (filters.collections.length > 0) {
       const matched = collections
-        .filter((c) => filters.collections.includes(c.id))
+        .filter((c) => filters.collections.includes(c.id) || filters.collections.includes(c.name))
         .map((c) => c.name);
       if (matched.length > 0) return matched.join(", ");
     }
-    return "New Arrivals";
-  }, [searchQuery, filters, categories, collections]);
+    if (filters.brands.length > 0) {
+      return filters.brands.join(", ");
+    }
+    return "All Products";
+  }, [sectionTitleParam, activeSectionBlock, searchQuery, filters, categories, collections]);
 
   const dynamicSubtitle = useMemo(() => {
-    if (searchQuery.trim()) return "Search";
+    if (sectionTitleParam) return `${resolvedTotalCount.toLocaleString()} Items`;
+    if (activeSectionBlock) return activeSectionBlock.props?.subtitle || `${resolvedTotalCount.toLocaleString()} Items`;
+    if (searchQuery.trim()) return "Search Results";
     if (filters.categoryId) return "Category";
     if (filters.collections.length > 0) return "Collection";
     return "Browse Products";
-  }, [searchQuery, filters]);
+  }, [sectionTitleParam, activeSectionBlock, searchQuery, filters, resolvedTotalCount]);
 
   const detailRelevantBlocks = useMemo(() => {
     if (!isProductDetailPageContext) return resolvedBlocks;
@@ -754,26 +881,67 @@ const RenderPage: React.FC<RenderPageProps> = ({
 
     let blocks = detailRelevantBlocks;
 
-    // Filter out hero banners on subpages (cart, checkout, product detail, catalog)
-    const isLandingHome = page?.role === "home" || page?.id === "home" || page?.page_type === "landing" || page?.route === "/";
-    if (!isLandingHome) {
-      blocks = blocks.filter((b) => {
-        const type = String(b.type || "").toLowerCase();
-        return !type.includes("banner") && !type.includes("hero");
-      });
-    }
+    // Filter out navbar and footer as they are rendered globally by StorefrontShell
+    blocks = blocks.filter((b) => {
+      const type = String(b.type || "").toLowerCase();
+      return type !== "navbar" && type !== "footer";
+    });
 
-    if (searchQuery.trim()) {
+    // If searching OR viewing an expanded section (via "View All >" or Banner Link):
+    // HIDE ALL other hero banners, carousels, category grids, brand grids!
+    // ONLY show filter sidebar, product grid, and pagination.
+    if (isDedicatedSectionOrSearchView) {
       blocks = blocks.filter((b) => {
         const type = String(b.type || "").toLowerCase();
-        return !type.includes("banner") && !type.includes("hero");
+        return (
+          type === "filter_sidebar" ||
+          type === "filtersidebar" ||
+          type === "product_grid" ||
+          type === "productgrid" ||
+          type === "pagination"
+        );
       });
+      // Guarantee product_grid block exists
+      const hasGrid = blocks.some((b) => {
+        const type = String(b.type || "").toLowerCase();
+        return type === "product_grid" || type === "productgrid";
+      });
+      if (!hasGrid) {
+        blocks = [
+          {
+            id: "auto-section-product-grid",
+            type: "product_grid",
+            data_source: "products",
+            props: {},
+          },
+          ...blocks,
+        ];
+      }
+    } else {
+      // Filter out hero banners on subpages (cart, checkout, product detail, catalog)
+      const isLandingHome = page?.role === "home" || page?.id === "home" || page?.page_type === "landing" || page?.route === "/";
+      if (!isLandingHome) {
+        blocks = blocks.filter((b) => {
+          const type = String(b.type || "").toLowerCase();
+          return !type.includes("banner") && !type.includes("hero");
+        });
+      }
     }
 
     let hasRenderedPrimaryCartBlock = false;
     let hasRenderedPrimaryProductDetailBlock = false;
 
     return blocks.filter((block) => {
+      // Respect admin visibility toggle (hide if inactive or hidden)
+      if (
+        block.props?.isActive === false ||
+        (block as any).isActive === false ||
+        block.hidden === true ||
+        block.props?.hidden === true
+      ) {
+        return false;
+      }
+
       const type = String(block.type || "").toLowerCase();
       const dataSource = block.data_source ?? block.datasource ?? undefined;
 
@@ -794,7 +962,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
 
       return true;
     });
-  }, [detailRelevantBlocks, isCheckoutPage, isCartPage, isProductDetailPageContext, searchQuery, page]);
+  }, [detailRelevantBlocks, isCheckoutPage, isCartPage, isProductDetailPageContext, isDedicatedSectionOrSearchView, page]);
 
   const renderBlock = (
     block: Block,
@@ -843,11 +1011,12 @@ const RenderPage: React.FC<RenderPageProps> = ({
           {...componentProps}
           title={dynamicTitle}
           subtitle={dynamicSubtitle}
-          itemCount={filteredAndSortedProducts.length}
+          itemCount={resolvedTotalCount}
           activeFilterCount={activeFilterCount}
           sortBy={sortBy}
           onSortChange={setSortBy}
           onFilterClick={() => setFilterModalOpen(true)}
+          showFilterButton={!isDedicatedSectionOrSearchView}
         />
       );
     }
@@ -900,6 +1069,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
           sortBy={sortBy}
           onSortChange={setSortBy}
           onFilterClick={() => setFilterModalOpen(true)}
+          showFilterButton={!isDedicatedSectionOrSearchView}
           currentPage={currentPage}
           totalPages={resolvedTotalPages}
           onPageChange={(newPage: number) => {
@@ -965,6 +1135,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
               isDark={isThemeDark}
             />
           )}
+
           {blocksToRender.map((block, index) => renderBlock(block, index))}
           <FilterModal
             open={filterModalOpen}
@@ -975,7 +1146,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
             collections={collections}
             productTypes={availableProductTypes}
             brands={availableBrands}
-            products={products}
+            products={sourceProductsForFilters}
             priceRange={{ min: 0, max: 100000 }}
             theme={theme}
             container={isInAdminSpace ? containerEl : undefined}

@@ -31,17 +31,30 @@ function PageBlocksTreeView({
   const location = useLocation();
   const currentPath = location.pathname;
 
+  const homeBlocks = useMemo(() => {
+    const customHome = _siteDefinition?.pages?.find((p: any) => p.id === "home" || p.route === "/");
+    if (customHome && Array.isArray(customHome.blocks) && customHome.blocks.length > 0) {
+      return customHome.blocks.map((b: any) => ({
+        id: b.id || b.type,
+        type: b.type,
+        name: b.props?.title || b.name || b.type,
+      }));
+    }
+    return [
+      { id: "navbar", type: "navbar", name: "Navbar" },
+      { id: "hero_banner", type: "hero_banner", name: "Hero Banner" },
+      { id: "product_carousel", type: "product_carousel", name: "Bestsellers Row" },
+      { id: "product_grid", type: "product_grid", name: "Product Grid" },
+      { id: "footer", type: "footer", name: "Footer" },
+    ];
+  }, [_siteDefinition]);
+
   const storefrontPages = [
     {
       id: "home",
       name: "Home",
       route: "/",
-      blocks: [
-        { id: "navbar", type: "navbar", name: "Navbar" },
-        { id: "hero_banner", type: "hero_banner", name: "Hero Banner" },
-        { id: "product_grid", type: "product_grid", name: "Product Grid" },
-        { id: "footer", type: "footer", name: "Footer" },
-      ],
+      blocks: homeBlocks,
     },
     {
       id: "product_detail",

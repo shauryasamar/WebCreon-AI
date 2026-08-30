@@ -61,6 +61,9 @@ type ProductGridProps = {
   show_stock_badge?: boolean;
   show_ratings?: boolean;
   show_original_price?: boolean;
+  show_filter_button?: boolean;
+  showFilterButton?: boolean;
+  hideFilterButton?: boolean;
   card_style?: string;
   cardStyle?: string;
   show_brand_name?: boolean;
@@ -124,6 +127,9 @@ const ProductGrid: React.FC<ProductGridProps> = ({
   show_stock_badge = true,
   show_ratings = true,
   show_original_price = true,
+  show_filter_button,
+  showFilterButton,
+  hideFilterButton,
   show_brand_name = true,
   theme,
 }) => {
@@ -131,6 +137,29 @@ const ProductGrid: React.FC<ProductGridProps> = ({
   const location = useLocation();
   const { slug: siteSlug } = useParams();
   const { products: cartProducts, isProductsLoading = false } = useCart();
+
+  const isDedicatedFilteredView = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return Boolean(
+      params.get("section_title") ||
+      params.get("section") ||
+      params.get("section_id") ||
+      params.get("collection") ||
+      params.get("category") ||
+      params.get("brand") ||
+      params.get("product_type") ||
+      params.get("product_ids")
+    );
+  }, [location.search]);
+
+  const effectiveShowFilterButton =
+    showFilterButton !== undefined
+      ? showFilterButton
+      : show_filter_button !== undefined
+      ? show_filter_button
+      : hideFilterButton !== undefined
+      ? !hideFilterButton
+      : !isDedicatedFilteredView;
 
   const products = productsProp ?? cartProducts;
   const isStoreRoute = location.pathname.startsWith("/store/");
@@ -409,6 +438,7 @@ function isColorDarkHex(colorHex?: string): boolean {
         sortBy={sortBy}
         onSortChange={onSortChange}
         onFilterClick={onFilterClick}
+        showFilterButton={effectiveShowFilterButton}
         theme={theme}
       />
 

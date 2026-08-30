@@ -12,6 +12,10 @@ import { DeliveryForm } from "./Component/DeliveryForm";
 import { PaymentMethods } from "./Component/PaymentMethods";
 import { PlaceOrderCta } from "./Component/PlaceOrderCta";
 import { HeroBanner } from "./Component/HeroBanner";
+import { ProductCarousel } from "./Component/ProductCarousel";
+import { BrandStoreGrid } from "./Component/BrandStoreGrid";
+import { CategoryGrid } from "./Component/CategoryGrid";
+import { SectionGroupCarousel } from "./Component/SectionGroupCarousel";
 
 export type ComponentRegistry = Record<string, React.ComponentType<any>>;
 
@@ -21,6 +25,19 @@ export const componentRegistry: ComponentRegistry = {
 
   product_grid: ProductGrid,
   productgrid: ProductGrid,
+
+  product_carousel: ProductCarousel,
+  productcarousel: ProductCarousel,
+
+  section_group_carousel: SectionGroupCarousel,
+  sectiongroupcarousel: SectionGroupCarousel,
+  category_story_carousel: SectionGroupCarousel,
+
+  brand_store_grid: BrandStoreGrid,
+  brandstoregrid: BrandStoreGrid,
+
+  category_grid: CategoryGrid,
+  categorygrid: CategoryGrid,
 
   product_detail: ProductDetail,
   productdetail: ProductDetail,

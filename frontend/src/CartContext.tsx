@@ -96,6 +96,8 @@ export type Product = {
   selectedVariantLabel?: string | null;
   average_rating?: number;
   review_count?: number;
+  sales_count?: number | null;
+  salesCount?: number | null;
   return_window_days?: number | null;
   created_at?: string | Date | null;
   updated_at?: string | Date | null;

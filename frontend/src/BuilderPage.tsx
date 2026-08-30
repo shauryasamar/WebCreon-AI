@@ -24,6 +24,7 @@ import { useAdminAuth } from "./context/AdminAuthContext";
 // Direct imports for instant, 60fps zero-jitter workspace interactions
 import AdminLayout from "./Component/AdminLayout";
 import AdminProducts from "./Component/AdminProducts";
+import AdminHomeSections from "./Component/AdminHomeSections";
 import AdminOrders from "./Component/AdminOrders";
 import AdminCoupons from "./Component/AdminCoupons";
 import CheckoutChargesPage from "./Component/CheckoutChargesPage";
@@ -56,6 +57,9 @@ type Block = {
   data_source?: string | null;
   datasource?: string | null;
   actions?: Record<string, any>;
+  isActive?: boolean;
+  hidden?: boolean;
+  [key: string]: any;
 };
 
 type Page = {
@@ -588,6 +592,7 @@ function StorefrontPage({
   navbarFixedBounds?: NavbarFixedBounds;
   appBase: string;
 }) {
+  const location = useLocation();
   return (
     <StorefrontShell
       siteDefinition={siteDefinition}
@@ -617,7 +622,7 @@ function StorefrontPage({
           }
         >
           <EditorRenderPage
-            key={`editor-render-${page?.id || page?.route || "page"}`}
+            key={`editor-render-${page?.id || page?.route || "page"}-${location.search}`}
             page={page}
             siteId={siteId}
             selectedProduct={selectedProduct ?? undefined}
@@ -628,7 +633,7 @@ function StorefrontPage({
         </Suspense>
       ) : (
         <RenderPage
-          key={`storefront-render-${page?.id || page?.route || "page"}`}
+          key={`storefront-render-${page?.id || page?.route || "page"}-${location.search}`}
           page={page}
           siteId={siteId}
           selectedProduct={selectedProduct ?? undefined}
@@ -1078,6 +1083,19 @@ function BuilderPageContent() {
     [siteSlug, siteSlugParam, resolvedSiteId, siteId, siteDefinition]
   );
 
+  // Real-time synchronization when Admin sections are modified
+  useEffect(() => {
+    const handleSync = (e: any) => {
+      const updatedDef = e.detail?.siteDefinition;
+      if (updatedDef) {
+        setDraftSiteDefinition(updatedDef);
+        setSiteDefinition(updatedDef);
+      }
+    };
+    window.addEventListener("wc_site_definition_updated", handleSync);
+    return () => window.removeEventListener("wc_site_definition_updated", handleSync);
+  }, []);
+
 
   const [editMode, setEditMode] = useState(false);
   const [editorTab, setEditorTab] = useState<EditorTab>("theme");
@@ -1188,7 +1206,9 @@ function BuilderPageContent() {
               ? "checkout-charges"
               : location.pathname.includes("/orders")
                 ? "orders"
-                : "products"
+                : location.pathname.includes("/home-sections")
+                  ? "home-sections"
+                  : "products"
     : null;
 
 
@@ -1990,6 +2010,7 @@ function BuilderPageContent() {
                   <Route path="admin" element={<AdminLayout />}>
                     <Route index element={<Navigate to="products" replace />} />
                     <Route path="products" element={<AdminProducts />} />
+                    <Route path="home-sections" element={<AdminHomeSections />} />
                     <Route path="orders" element={<AdminOrders />} />
                     <Route path="discounts" element={<AdminCoupons />} />
                     <Route path="coupons" element={<AdminCoupons />} />
@@ -2360,7 +2381,7 @@ export default function BuilderPage() {
         }
 
         const res = await fetch(
-          `${API_BASE_URL}/sites/${targetSiteId}/products/public?page=1&page_size=100`
+          `${API_BASE_URL}/sites/${targetSiteId}/products/public?page=1&page_size=1000`
         );
 
         if (res.ok) {
