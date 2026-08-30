@@ -41,9 +41,27 @@ export type NavbarTheme = {
   navbar_max_width?: number | string;
   navbar_radius?: number;
   navbar_padding_x?: number;
-  navbar_padding_y?: number;
+  brand_display_mode?: "both" | "logo_only" | "name_only";
+  brand_alignment?: "left" | "center";
+  brand_layout_direction?: "row" | "column";
+  brand_font_family?: string;
+  brand_font_weight?: string;
+  brand_font_style?: string;
+  brand_font_size?: number | string;
+  brand_text_color?: string;
+  logo_size?: number | string;
+  logo_zoom?: number | string;
   logo_height?: number | string;
-  logo_fit?: "contain" | "cover";
+  logo_max_width?: number | string;
+  logo_fit?: "contain" | "cover" | "fill" | "scale-down";
+  search_display_mode?: "bar" | "icon";
+  search_placement?: "left" | "center" | "right";
+  search_max_width?: number | string;
+  search_height?: number | string;
+  search_text_color?: string;
+  search_muted_text_color?: string;
+  search_bg_color?: string;
+  search_border_color?: string;
   [key: string]: any;
 };
 
@@ -222,7 +240,7 @@ const useViewportMode = (): ViewportMode => {
 
 const Navbar: React.FC<NavbarProps> = (props) => {
   const {
-    brandName = "Storefront",
+    brandName: propBrandName,
     logoUrl,
     logo_url,
     theme,
@@ -282,7 +300,8 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
 
   const light = isLightTheme(theme);
-  const variant = theme?.navbar_variant || "soft";
+  const rawVariant = (props as any).navbar_variant || theme?.navbar_variant || "glassmorphism";
+  const variant = rawVariant;
   const rawPosition = (props as any).navbar_position || (props as any).position || theme?.navbar_position;
   const position: NavbarPosition = (rawPosition === "static" || rawPosition === "sticky" || rawPosition === "fixed") ? rawPosition : "fixed";
 
@@ -300,55 +319,61 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     const findScrollContainer = (): Element | Window => {
       const candidates = [
         document.querySelector(".store-canvas-container"),
-        document.querySelector("[data-storefront-canvas]"),
-        document.querySelector("#builder-canvas-viewport"),
-        document.querySelector(".builder-main-viewport"),
+        document.querySelector(".storefront-viewport"),
         document.querySelector("main"),
+        window,
       ];
-      for (const cand of candidates) {
-        if (cand && cand.scrollHeight > cand.clientHeight + 10) {
-          return cand;
+      for (const el of candidates) {
+        if (!el) continue;
+        if (el === window) return window;
+        const style = window.getComputedStyle(el as Element);
+        if (style.overflowY === "auto" || style.overflowY === "scroll") {
+          return el;
         }
       }
       return window;
     };
 
-    const target = findScrollContainer();
+    const container = findScrollContainer();
+    const getScrollY = () =>
+      container === window
+        ? window.scrollY
+        : (container as Element).scrollTop;
 
     const handleScroll = () => {
-      const currentScrollY =
-        target === window
-          ? window.scrollY || document.documentElement.scrollTop
-          : (target as Element).scrollTop;
+      const currentY = getScrollY();
+      setIsScrolledPastTop(currentY > 10);
 
-      const diff = currentScrollY - lastScrollYRef.current;
-
-      if (currentScrollY > 60) {
-        setIsScrolledPastTop(true);
-        if (diff > 4) {
-          // Scrolling DOWN -> Hide navbar
-          setIsStickyVisible(false);
-        } else if (diff < -4) {
-          // Scrolling UP -> Reveal navbar & stick to top
-          setIsStickyVisible(true);
-        }
-      } else {
-        // At or near top of page
-        setIsScrolledPastTop(false);
+      if (currentY <= 40) {
         setIsStickyVisible(true);
+        lastScrollYRef.current = currentY;
+        return;
       }
 
-      lastScrollYRef.current = currentScrollY;
+      if (currentY > lastScrollYRef.current + 8) {
+        setIsStickyVisible(false);
+      } else if (currentY < lastScrollYRef.current - 4) {
+        setIsStickyVisible(true);
+      }
+      lastScrollYRef.current = currentY;
     };
 
+    const target: EventTarget = container === window ? window : container;
     target.addEventListener("scroll", handleScroll, { passive: true });
-    window.addEventListener("scroll", handleScroll, { passive: true });
-
-    return () => {
-      target.removeEventListener("scroll", handleScroll);
-      window.removeEventListener("scroll", handleScroll);
-    };
+    return () => target.removeEventListener("scroll", handleScroll);
   }, [position]);
+
+  const rawBrandName =
+    props.brandName ||
+    (props as any).brand_name ||
+    (props as any).name ||
+    (props as any).title ||
+    theme?.brandName ||
+    theme?.brand_name ||
+    theme?.store_name ||
+    "GreenHarvest";
+  const brandName = rawBrandName;
+
   const isBuilderAdminRoute =
     location.pathname.startsWith("/builder/") && location.pathname.includes("/admin");
   const isStoreRoute = location.pathname.startsWith("/store/");
@@ -367,29 +392,79 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   const defaultMutedText = light ? "rgba(15,23,42,0.64)" : "rgba(255,255,255,0.68)";
   const mutedText = (props as any).navbar_muted_text_color || theme?.navbar_muted_text_color || defaultMutedText;
 
-  const logoHeightStyle = theme?.logo_height ? `${theme.logo_height}px` : "32px";
-  const logoFitStyle = (theme?.logo_fit as any) || "contain";
-  const logoBlendMode: React.CSSProperties["mixBlendMode"] = undefined;
-
-  const customBorderColor = (props as any).navbar_border_color || theme?.navbar_border_color;
-  const defaultOuterBorder = customBorderColor
-    ? `1px solid ${customBorderColor}`
-    : light
-      ? "1px solid rgba(15,23,42,0.06)"
-      : "1px solid rgba(255,255,255,0.05)";
-  const defaultShellBorder = customBorderColor
-    ? `1px solid ${customBorderColor}`
-    : light
-      ? "1px solid rgba(15,23,42,0.08)"
-      : "1px solid rgba(255,255,255,0.08)";
-
-
   const navbarHeight = theme?.navbar_height ?? 72;
-  const navbarMaxWidth = String(theme?.navbar_max_width) === "full" ? "100%" : `${theme?.navbar_max_width ?? 1280}px`;
+  const navbarHeightNum = Number(navbarHeight) || 72;
+  const rawMaxWidth = (props as any).navbar_max_width || theme?.navbar_max_width || "1280px";
+  const navbarMaxWidth =
+    String(rawMaxWidth) === "100%" || String(rawMaxWidth) === "full"
+      ? "100%"
+      : typeof rawMaxWidth === "number"
+      ? `${rawMaxWidth}px`
+      : String(rawMaxWidth).endsWith("px") || String(rawMaxWidth).endsWith("%") || String(rawMaxWidth).endsWith("vw")
+      ? String(rawMaxWidth)
+      : `${rawMaxWidth}px`;
   const navbarRadius = theme?.navbar_radius;
   const navbarPaddingX = theme?.navbar_padding_x;
   const navbarPaddingY = theme?.navbar_padding_y;
 
+  const brandDisplayMode = (props as any).brand_display_mode || theme?.brand_display_mode || "both";
+  const brandAlignment = (props as any).brand_alignment || theme?.brand_alignment || "left";
+  const brandLayoutDirection = (props as any).brand_layout_direction || theme?.brand_layout_direction || "row";
+  const brandFontFamily = (props as any).brand_font_family || theme?.brand_font_family || "modern_sans";
+  const brandFontWeight = (props as any).brand_font_weight || theme?.brand_font_weight || "700";
+  const brandFontStyle = (props as any).brand_font_style || theme?.brand_font_style || "normal";
+  const brandFontSizeNum = Number((props as any).brand_font_size || theme?.brand_font_size || 15);
+  const brandCustomTextColor = (props as any).brand_text_color || theme?.brand_text_color;
+  const brandTextColor = brandCustomTextColor || textColor;
+
+  const logoSizeNum = Number(
+    (props as any).logo_size ||
+    (props as any).logo_height ||
+    theme?.logo_size ||
+    theme?.logo_height ||
+    36
+  );
+  // Allow the brand logo to scale up to full navbar height with minimal buffer
+  const maxInnerLogoHeight = Math.max(16, navbarHeightNum - 4);
+  const effectiveLogoSize = Math.max(16, Math.min(logoSizeNum, maxInnerLogoHeight));
+  const logoFitStyle: React.CSSProperties["objectFit"] = ((props as any).logo_fit || theme?.logo_fit || "contain") as any;
+  const logoZoomNum = Math.max(50, Math.min(300, Number((props as any).logo_zoom || theme?.logo_zoom || 100)));
+  const logoBlendMode: React.CSSProperties["mixBlendMode"] = undefined;
+  const effectiveLogoMaxHeight = effectiveLogoSize;
+  const logoHeightStyle = `${effectiveLogoSize}px`;
+
+  const getBrandFontFamilyStyle = (fontKey: string) => {
+    switch (fontKey) {
+      case "playfair_serif":
+      case "elegant_serif":
+        return "'Playfair Display', 'Didot', 'Georgia', serif";
+      case "cinzel_display":
+      case "bold_display":
+        return "'Cinzel', 'Trajan Pro', 'Didot', serif";
+      case "cormorant_serif":
+        return "'Cormorant Garamond', 'Garamond', 'Baskerville', serif";
+      case "outfit_geometric":
+      case "geometric":
+        return "'Outfit', 'Poppins', 'Montserrat', sans-serif";
+      case "jakarta_sans":
+        return "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      case "montserrat_bold":
+        return "'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      case "dancing_script":
+      case "stylish_script":
+        return "'Dancing Script', 'Brush Script MT', cursive";
+      case "great_vibes":
+        return "'Great Vibes', 'Allura', cursive";
+      case "abril_fatface":
+        return "'Abril Fatface', 'Playfair Display', 'Georgia', serif";
+      case "monospace":
+        return "'Fira Code', 'JetBrains Mono', 'Courier New', monospace";
+      case "modern_sans":
+      default:
+        return "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    }
+  };
+  const resolvedBrandFontFamily = getBrandFontFamilyStyle(brandFontFamily);
 
   const rawLogoUrl =
     props.logoUrl ||
@@ -474,6 +549,29 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     shellBg = light ? lightShellSurface : darkShellSurface;
   }
 
+  if (variant === "glassmorphism") {
+    outerBackground = "transparent";
+    shellBg = light ? "rgba(255, 255, 255, 0.72)" : "rgba(15, 23, 42, 0.72)";
+    shellBoxShadow = light
+      ? "0 10px 30px rgba(31, 38, 135, 0.08)"
+      : "0 12px 32px rgba(0, 0, 0, 0.40)";
+    shellRadius = navbarRadius !== undefined ? `${navbarRadius}px` : "20px";
+    wrapperPadding = "12px 16px";
+    shellPadding = "10px 14px";
+  }
+
+
+  const customBorderColor = (props as any).navbar_border_color || theme?.navbar_border_color;
+  const defaultOuterBorder = customBorderColor
+    ? `1px solid ${customBorderColor}`
+    : light
+      ? "1px solid rgba(15,23,42,0.06)"
+      : "1px solid rgba(255,255,255,0.05)";
+  const defaultShellBorder = customBorderColor
+    ? `1px solid ${customBorderColor}`
+    : light
+      ? "1px solid rgba(15,23,42,0.08)"
+      : "1px solid rgba(255,255,255,0.08)";
 
   const outerBorder = hasCustomNavbarBorder
     ? `1px solid ${theme!.navbar_border_color!}`
@@ -499,13 +597,29 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   const effectiveShellBg = shellBg && shellBg !== "transparent" ? shellBg : (outerBackground && outerBackground !== "transparent" ? outerBackground : (light ? "#ffffff" : "#0f172a"));
   const isSearchBgDark = isColorDarkHex(effectiveShellBg);
 
-  const searchPillBg = isSearchBgDark
+  const searchDisplayMode = (props as any).search_display_mode || theme?.search_display_mode || "bar";
+  const searchPlacement = (props as any).search_placement || theme?.search_placement || "center";
+  const searchMaxWidthNum = (props as any).search_max_width || theme?.search_max_width || 460;
+  const searchHeightNum = Math.max(26, Math.min(68, Number((props as any).search_height || theme?.search_height || 38)));
+  const searchButtonSize = Math.max(22, searchHeightNum - 6);
+  const searchClearSize = Math.max(18, searchHeightNum - 12);
+  const searchIconSize = Math.max(13, Math.min(18, Math.round(searchHeightNum * 0.38)));
+  const searchCustomTextColor = (props as any).search_text_color || theme?.search_text_color;
+  const searchCustomMutedColor = (props as any).search_muted_text_color || theme?.search_muted_text_color;
+  const searchCustomBg = (props as any).search_bg_color || theme?.search_bg_color;
+  const searchCustomBorder = (props as any).search_border_color || theme?.search_border_color;
+
+  const searchPillBg = searchCustomBg || (isSearchBgDark
     ? "rgba(255, 255, 255, 0.12)"
-    : "rgba(15, 23, 42, 0.06)";
-  const searchPillBorder = isSearchBgDark
-    ? "1px solid rgba(255, 255, 255, 0.18)"
-    : "1px solid rgba(15, 23, 42, 0.12)";
-  const searchTextColor = isSearchBgDark ? "#ffffff" : "#0f172a";
+    : "rgba(15, 23, 42, 0.06)");
+  const searchPillBorder = searchCustomBorder
+    ? `1px solid ${searchCustomBorder}`
+    : (isSearchBgDark
+      ? "1px solid rgba(255, 255, 255, 0.18)"
+      : "1px solid rgba(15, 23, 42, 0.12)");
+  const searchTextColor = searchCustomTextColor || (isSearchBgDark ? "#ffffff" : "#0f172a");
+  const searchPlaceholderColor = searchCustomMutedColor || (isSearchBgDark ? "rgba(255, 255, 255, 0.55)" : "rgba(15, 23, 42, 0.45)");
+  const effectiveShowSearch = Boolean(showSearch);
 
 
   const resolvedWrapperPadding =
@@ -516,7 +630,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
   const resolvedShellPadding =
     navbarPaddingY !== undefined || navbarPaddingX !== undefined
-      ? `${Math.max(8, navbarPaddingY ?? 12)}px ${Math.max(10, navbarPaddingX ?? 14)}px`
+      ? `${navbarPaddingY ?? 12}px ${navbarPaddingX ?? 16}px`
       : shellPadding;
 
 
@@ -666,7 +780,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     window.console.log("Notification clicked");
   };
 
-  const openMobileSearch = () => {
+  const openSearch = () => {
     setAccountMenuOpen(false);
     setMobileMenuOpen(false);
     setMobileSearchOpen(true);
@@ -675,6 +789,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
       mobileSearchInputRef.current?.focus();
     }, 50);
   };
+  const openMobileSearch = openSearch;
 
   const closeSearch = () => {
     setSearchQuery("");
@@ -878,10 +993,10 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     maxWidth: isMobile ? "100%" : "min(100%, 440px)",
   };
 
-  {/* Festive motif inside search box — positioned towards the right side, auto-disappears when user is typing */}
+  {/* Festive motif inside search box — positioned towards the right side, auto-disappears when user is typing or search is narrow */}
   const renderSearchFestiveGraphic = () => {
     const festTheme = (theme as any)?.festival_theme;
-    if (!festTheme || festTheme === "none" || (searchQuery && searchQuery.trim().length > 0)) {
+    if (!festTheme || festTheme === "none" || (searchQuery && searchQuery.trim().length > 0) || Number(searchMaxWidthNum) < 280) {
       return null;
     }
 
@@ -961,6 +1076,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
         background: outerBackground,
         borderBottom: variant === "floating" ? "none" : outerBorder,
         boxSizing: "border-box",
+        minHeight: `${navbarHeightNum}px`,
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
@@ -969,6 +1085,12 @@ const Navbar: React.FC<NavbarProps> = (props) => {
         overflow: "visible",
       }}
     >
+      <style>{`
+        #storefront-navbar input::placeholder {
+          color: ${searchPlaceholderColor} !important;
+          opacity: 0.85 !important;
+        }
+      `}</style>
       {/* Editor Selection Indicator for Non-Floating Navbars */}
       {editMode && variant !== "floating" && (
         <>
@@ -1093,11 +1215,13 @@ const Navbar: React.FC<NavbarProps> = (props) => {
           width: "100%",
           minWidth: 0,
           maxWidth: navbarMaxWidth,
+          minHeight: `${navbarHeightNum}px`,
           margin: "0 auto",
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
           overflow: "visible",
+          boxSizing: "border-box",
         }}
       >
         <div
@@ -1108,8 +1232,10 @@ const Navbar: React.FC<NavbarProps> = (props) => {
             background: shellBg,
             border: variant === "transparent" || variant === "solid" ? "none" : shellBorder,
             boxShadow: shellBoxShadow,
-            minHeight: `${navbarHeight}px`,
+            minHeight: `${navbarHeightNum}px`,
             width: "100%",
+            display: "flex",
+            alignItems: "center",
             boxSizing: "border-box",
             minWidth: 0,
             overflow: "visible",
@@ -1235,7 +1361,8 @@ const Navbar: React.FC<NavbarProps> = (props) => {
             </>
           )}
           {(() => {
-            const layoutType = theme?.navbar_layout || "apple_minimal";
+            const rawLayout = (props as any).navbar_layout || theme?.navbar_layout;
+            const layoutType = rawLayout || (variant === "glassmorphism" ? "glassmorphism_premium" : variant === "floating" ? "neo_modern" : variant === "solid" ? "modern_marketplace" : "apple_minimal");
 
             if (searchActive || mobileSearchOpen) {
               return (
@@ -1408,432 +1535,800 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                 </div>
               ) : null;
 
-            if (layoutType === "glassmorphism_premium") {
+            const renderBrandLogo = (customFallback?: React.ReactNode) => {
+              const showLogo = brandDisplayMode === "both" || brandDisplayMode === "logo_only";
+              if (!showLogo) return null;
+
+              if (resolvedLogoUrl) {
+                return (
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      height: `${effectiveLogoSize}px`,
+                      maxHeight: `${effectiveLogoSize}px`,
+                      width: "auto",
+                      maxWidth: "100%",
+                      overflow: "hidden",
+                      flexShrink: 0,
+                      margin: 0,
+                      padding: 0,
+                      lineHeight: 1,
+                    }}
+                  >
+                    <img
+                      src={resolvedLogoUrl}
+                      alt={brandName || "Logo"}
+                      style={{
+                        height: `${effectiveLogoSize}px`,
+                        maxHeight: `${effectiveLogoSize}px`,
+                        maxWidth: "100%",
+                        width: "auto",
+                        objectFit: logoFitStyle || "contain",
+                        transform: `scale(${logoZoomNum / 100})`,
+                        transformOrigin: "center center",
+                        transition: "transform 0.15s cubic-bezier(0.16, 1, 0.3, 1)",
+                        display: "block",
+                        flexShrink: 0,
+                        mixBlendMode: logoBlendMode,
+                      }}
+                    />
+                  </div>
+                );
+              }
+
+              return customFallback || (
+                <div
+                  style={{
+                    width: `${Math.min(36, effectiveLogoSize)}px`,
+                    height: `${Math.min(36, effectiveLogoSize)}px`,
+                    borderRadius: "10px",
+                    background: light ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)",
+                    border: softBorder,
+                    color: brandTextColor,
+                    display: "grid",
+                    placeItems: "center",
+                    fontSize: "12px",
+                    fontWeight: 800,
+                    flexShrink: 0,
+                    margin: 0,
+                  }}
+                >
+                  {getInitials(brandName)}
+                </div>
+              );
+            };
+
+            const renderBrandText = (extraStyle?: React.CSSProperties) => {
+              const showText = brandDisplayMode === "both" || brandDisplayMode === "name_only";
+              if (!showText) return null;
+
+              const isCinzel = brandFontFamily === "cinzel_display" || brandFontFamily === "bold_display";
+              const isSerif = brandFontFamily === "playfair_serif" || brandFontFamily === "elegant_serif" || brandFontFamily === "cormorant_serif" || brandFontFamily === "abril_fatface";
+
               return (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: isMobile ? "8px" : "16px", padding: "6px 14px", background: light ? "rgba(255, 255, 255, 0.65)" : "rgba(15, 23, 42, 0.65)", backdropFilter: "blur(20px)", borderRadius: "20px", border: light ? "1px solid rgba(255, 255, 255, 0.4)" : "1px solid rgba(255, 255, 255, 0.12)", boxShadow: light ? "0 8px 32px rgba(31, 38, 135, 0.08)" : "0 8px 32px rgba(0, 0, 0, 0.4)", boxSizing: "border-box" }}>
-                  {/* Brand */}
+                <span
+                  style={{
+                    fontFamily: resolvedBrandFontFamily,
+                    fontSize: isMobile ? `${Math.max(12, Math.round(brandFontSizeNum * 0.85))}px` : `${brandFontSizeNum}px`,
+                    fontWeight: Number(brandFontWeight) || brandFontWeight || 700,
+                    fontStyle: brandFontStyle === "italic" ? "italic" : "normal",
+                    letterSpacing: isCinzel ? "0.08em" : (isSerif ? "0.04em" : "normal"),
+                    textTransform: isCinzel ? "uppercase" : "none",
+                    color: brandTextColor,
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                    lineHeight: 1.2,
+                    ...extraStyle,
+                  }}
+                >
+                  {brandName}
+                </span>
+              );
+            };
+
+            if (layoutType === "glassmorphism_premium") {
+              const renderGlassBrand = () => {
+                const showLogo = brandDisplayMode === "both" || brandDisplayMode === "logo_only";
+                const showText = brandDisplayMode === "both" || brandDisplayMode === "name_only";
+                const isColumn = brandLayoutDirection === "column" && showLogo && showText;
+
+                return (
                   <button
                     type="button"
                     onClick={handleHomeClick}
-                    style={{ display: "flex", alignItems: "center", gap: "10px", background: "transparent", border: "none", cursor: "pointer", minWidth: 0 }}
+                    style={{
+                      display: "inline-flex",
+                      flexDirection: isColumn ? "column" : "row",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: isColumn ? "2px" : "8px",
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      flexShrink: 0,
+                      flex: "0 0 auto",
+                      minWidth: "max-content",
+                      padding: 0,
+                      margin: 0,
+                      textDecoration: "none",
+                      lineHeight: 1,
+                    }}
                   >
-                    {resolvedLogoUrl ? (
-                      <img
-                        src={resolvedLogoUrl}
-                        alt={brandName || "Logo"}
-                        style={{ maxHeight: logoHeightStyle, height: logoHeightStyle, maxWidth: "160px", objectFit: logoFitStyle, flexShrink: 0, mixBlendMode: logoBlendMode }}
-                      />
-                    ) : (
-                      <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: light ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.12)", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800, flexShrink: 0 }}>
-                        {getInitials(brandName)}
-                      </div>
-                    )}
-                    <span style={{ fontSize: isMobile ? "14px" : "15px", fontWeight: 700, color: textColor, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{brandName}</span>
+                    {renderBrandLogo()}
+                    {renderBrandText()}
                   </button>
+                );
+              };
 
-                  {/* Glass Pill Search */}
-                  {showSearch && !isMobile && (
-                    <form
-                      onSubmit={handleSearchSubmit}
-                      style={{
-                        flex: "1 1 240px",
-                        maxWidth: "460px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        padding: "4px 4px 4px 16px",
-                        borderRadius: "999px",
-                        background: searchPillBg,
-                        backdropFilter: "blur(10px)",
-                        border: searchPillBorder,
-                        position: "relative",
-                      }}
+              const renderGlassSearch = () => (
+                <form
+                  onSubmit={handleSearchSubmit}
+                  style={{
+                    flex: `0 1 ${searchMaxWidthNum}px`,
+                    width: "100%",
+                    maxWidth: `${searchMaxWidthNum}px`,
+                    height: `${searchHeightNum}px`,
+                    minWidth: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "0 4px 0 14px",
+                    borderRadius: "999px",
+                    background: searchPillBg,
+                    backdropFilter: "blur(10px)",
+                    border: searchPillBorder,
+                    position: "relative",
+                    boxSizing: "border-box",
+                    overflow: "hidden",
+                  }}
+                >
+                  <input
+                    type="text"
+                    placeholder="Search products..."
+                    value={searchQuery}
+                    onChange={(e) => handleSearchInputChange(e.target.value)}
+                    style={{ flex: 1, minWidth: 0, width: "100%", height: "100%", border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontWeight: 500, paddingRight: searchQuery ? "4px" : "8px", boxSizing: "border-box" }}
+                  />
+                  {renderSearchFestiveGraphic()}
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={handleClearSearch}
+                      style={{ width: `${searchClearSize}px`, height: `${searchClearSize}px`, border: "none", background: "transparent", color: searchPlaceholderColor, opacity: 0.8, display: "grid", placeItems: "center", cursor: "pointer", fontSize: `${Math.max(11, searchClearSize - 10)}px`, flexShrink: 0 }}
+                      title="Clear search"
                     >
-                      <input
-                        type="text"
-                        placeholder="Search products..."
-                        value={searchQuery}
-                        onChange={(e) => handleSearchInputChange(e.target.value)}
-                        style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontWeight: 500, paddingRight: searchQuery ? "28px" : "64px" }}
-                      />
-                      {renderSearchFestiveGraphic()}
-                      <button
-                        type="submit"
-                        style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: light ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.2)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
-                      >
-                        <svg viewBox="0 0 24 24" style={{ width: "15px", height: "15px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
-                          <circle cx="11" cy="11" r="7" />
-                          <path d="M20 20L16.65 16.65" />
-                        </svg>
-                      </button>
-                    </form>
+                      ✕
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    style={{ width: `${searchButtonSize}px`, height: `${searchButtonSize}px`, borderRadius: "999px", border: "none", background: light ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.2)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                  >
+                    <svg viewBox="0 0 24 24" style={{ width: `${searchIconSize}px`, height: `${searchIconSize}px`, stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="M20 20L16.65 16.65" />
+                    </svg>
+                  </button>
+                </form>
+              );
+
+              const renderGlassActions = () => (
+                <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "10px", flexShrink: 0 }}>
+                  {effectiveShowSearch && (isMobile || searchDisplayMode === "icon") && (
+                    <button
+                      type="button"
+                      aria-label="Open search"
+                      onClick={openSearch}
+                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                    >
+                      <svg viewBox="0 0 24 24" style={iconStyle}>
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="M20 20L16.65 16.65" />
+                      </svg>
+                    </button>
+                  )}
+                  {showCart && (
+                    <button
+                      type="button"
+                      onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
+                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative", flexShrink: 0 }}
+                    >
+                      <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
+                        <circle cx="9" cy="20" r="1.5" />
+                        <circle cx="17" cy="20" r="1.5" />
+                        <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
+                      </svg>
+                      {cartCount > 0 && (
+                        <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
+                          {cartCount}
+                        </span>
+                      )}
+                    </button>
                   )}
 
-                  {/* Glass Action Icons */}
-                  <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "10px" }}>
-                    {showSearch && isMobile && (
+                  {!isMobile && (
+                    <button
+                      type="button"
+                      onClick={handleDummyNotification}
+                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                    >
+                      <svg viewBox="0 0 24 24" style={iconStyle}>
+                        <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
+                        <path d="M10 17a2 2 0 0 0 4 0" />
+                      </svg>
+                    </button>
+                  )}
+
+                  {showAccount && !isMobile && (
+                    <div ref={accountMenuRef} style={{ position: "relative", flexShrink: 0 }}>
                       <button
+                        ref={accountButtonRef}
                         type="button"
-                        aria-label="Open search"
-                        onClick={openMobileSearch}
+                        onClick={handleAccountClick}
                         style={{ width: "38px", height: "38px", borderRadius: "999px", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
                       >
                         <svg viewBox="0 0 24 24" style={iconStyle}>
-                          <circle cx="11" cy="11" r="7" />
-                          <path d="M20 20L16.65 16.65" />
+                          <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
+                          <circle cx="12" cy="8" r="4" />
                         </svg>
                       </button>
-                    )}
-                    {showCart && (
-                      <button
-                        type="button"
-                        onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
-                        style={{ width: "38px", height: "38px", borderRadius: "999px", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative" }}
-                      >
-                        <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
-                          <circle cx="9" cy="20" r="1.5" />
-                          <circle cx="17" cy="20" r="1.5" />
-                          <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
-                        </svg>
-                        {cartCount > 0 && (
-                          <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
-                            {cartCount}
-                          </span>
-                        )}
-                      </button>
-                    )}
+                      {accountMenuOpen && (
+                        <div role="menu" style={dropdownPanelStyle}>
+                          <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
+                          <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
+                          {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-                    {!isMobile && (
-                      <button
-                        type="button"
-                        onClick={handleDummyNotification}
-                        style={{ width: "38px", height: "38px", borderRadius: "999px", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
-                      >
-                        <svg viewBox="0 0 24 24" style={iconStyle}>
-                          <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
-                          <path d="M10 17a2 2 0 0 0 4 0" />
-                        </svg>
-                      </button>
-                    )}
+                  {renderMobileToggleBtn()}
+                </div>
+              );
 
-                    {showAccount && !isMobile && (
-                      <div ref={accountMenuRef} style={{ position: "relative" }}>
-                        <button
-                          ref={accountButtonRef}
-                          type="button"
-                          onClick={handleAccountClick}
-                          style={{ width: "38px", height: "38px", borderRadius: "999px", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
-                        >
-                          <svg viewBox="0 0 24 24" style={iconStyle}>
-                            <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
-                            <circle cx="12" cy="8" r="4" />
-                          </svg>
-                        </button>
-                        {accountMenuOpen && (
-                          <div role="menu" style={dropdownPanelStyle}>
-                            <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
-                            <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
-                            {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
-                          </div>
-                        )}
-                      </div>
-                    )}
+              const glassContainerStyle: React.CSSProperties = {
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                width: "100%",
+                minHeight: `${Math.max(48, navbarHeightNum - 20)}px`,
+                gap: isMobile ? "8px" : "16px",
+                padding: "8px 16px",
+                background: light ? "rgba(255, 255, 255, 0.65)" : "rgba(15, 23, 42, 0.65)",
+                backdropFilter: "blur(20px)",
+                borderRadius: "20px",
+                border: light ? "1px solid rgba(255, 255, 255, 0.4)" : "1px solid rgba(255, 255, 255, 0.12)",
+                boxShadow: light ? "0 8px 32px rgba(31, 38, 135, 0.08)" : "0 8px 32px rgba(0, 0, 0, 0.4)",
+                boxSizing: "border-box",
+              };
 
-                    {renderMobileToggleBtn()}
+              const isBrandCentered = brandAlignment === "center" && !isMobile;
+
+              if (isBrandCentered) {
+                return (
+                  <div style={glassContainerStyle}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", flex: 1, minWidth: 0 }}>
+                      {effectiveShowSearch && searchDisplayMode === "bar" && searchPlacement === "left" && renderGlassSearch()}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto", minWidth: 0 }}>
+                      {renderGlassBrand()}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1, minWidth: 0, gap: "10px" }}>
+                      {effectiveShowSearch && searchDisplayMode === "bar" && searchPlacement !== "left" && renderGlassSearch()}
+                      {renderGlassActions()}
+                    </div>
+                  </div>
+                );
+              }
+
+              if (searchPlacement === "left") {
+                return (
+                  <div style={glassContainerStyle}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: 1, minWidth: 0 }}>
+                      {renderGlassBrand()}
+                      {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderGlassSearch()}
+                    </div>
+                    {renderGlassActions()}
+                  </div>
+                );
+              }
+
+              if (searchPlacement === "right") {
+                return (
+                  <div style={glassContainerStyle}>
+                    {renderGlassBrand()}
+                    <div style={{ display: "flex", alignItems: "center", gap: "16px", justifyContent: "flex-end", flex: 1, minWidth: 0 }}>
+                      {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderGlassSearch()}
+                      {renderGlassActions()}
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div style={glassContainerStyle}>
+                  <div style={{ display: "flex", alignItems: "center", flex: 1, justifyContent: "flex-start", minWidth: 0 }}>
+                    {renderGlassBrand()}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: `0 1 ${searchMaxWidthNum}px`, width: "100%", maxWidth: `${searchMaxWidthNum}px`, minWidth: 0 }}>
+                    {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderGlassSearch()}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1, minWidth: 0 }}>
+                    {renderGlassActions()}
                   </div>
                 </div>
               );
             }
 
             if (layoutType === "modern_marketplace") {
-              return (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: isMobile ? "8px" : "16px", padding: "6px 12px", boxSizing: "border-box" }}>
-                  {/* Brand */}
+              const renderMarketplaceBrand = () => {
+                const showLogo = brandDisplayMode === "both" || brandDisplayMode === "logo_only";
+                const showText = brandDisplayMode === "both" || brandDisplayMode === "name_only";
+                const isColumn = brandLayoutDirection === "column" && showLogo && showText;
+
+                return (
                   <button
                     type="button"
                     onClick={handleHomeClick}
-                    style={{ display: "flex", alignItems: "center", gap: "10px", background: "transparent", border: "none", cursor: "pointer", minWidth: 0 }}
+                    style={{
+                      display: "inline-flex",
+                      flexDirection: isColumn ? "column" : "row",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: isColumn ? "2px" : "8px",
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      flexShrink: 0,
+                      flex: "0 0 auto",
+                      minWidth: "max-content",
+                      padding: 0,
+                      margin: 0,
+                      textDecoration: "none",
+                      lineHeight: 1,
+                    }}
                   >
-                    {resolvedLogoUrl ? (
-                      <img
-                        src={resolvedLogoUrl}
-                        alt={brandName || "Logo"}
-                        style={{ maxHeight: logoHeightStyle, height: logoHeightStyle, maxWidth: "160px", objectFit: logoFitStyle, flexShrink: 0, mixBlendMode: logoBlendMode }}
-                      />
-                    ) : (
-                      <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: light ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)", border: softBorder, color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800, flexShrink: 0 }}>
-                        {getInitials(brandName)}
-                      </div>
-                    )}
-                    <span style={{ fontSize: isMobile ? "14px" : "15px", fontWeight: 700, color: textColor, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{brandName}</span>
+                    {renderBrandLogo()}
+                    {renderBrandText()}
                   </button>
+                );
+              };
 
-                  {/* Marketplace Search */}
-                  {showSearch && !isMobile && (
-                    <form
-                      onSubmit={handleSearchSubmit}
-                      style={{
-                        flex: "1 1 240px",
-                        maxWidth: "480px",
-                        display: "flex",
-                        alignItems: "center",
-                        borderRadius: "8px",
-                        border: searchPillBorder,
-                        background: searchPillBg,
-                        overflow: "hidden",
-                        position: "relative",
-                      }}
+              const renderMarketplaceSearch = () => (
+                <form
+                  onSubmit={handleSearchSubmit}
+                  style={{
+                    flex: `0 1 ${searchMaxWidthNum}px`,
+                    width: "100%",
+                    maxWidth: `${searchMaxWidthNum}px`,
+                    height: `${searchHeightNum}px`,
+                    minWidth: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    borderRadius: "8px",
+                    border: searchPillBorder,
+                    background: searchPillBg,
+                    overflow: "hidden",
+                    position: "relative",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <input
+                    type="text"
+                    placeholder="Search products..."
+                    value={searchQuery}
+                    onChange={(e) => handleSearchInputChange(e.target.value)}
+                    style={{ flex: 1, minWidth: 0, width: "100%", height: "100%", border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", padding: "0 12px", paddingRight: searchQuery ? "4px" : "8px", boxSizing: "border-box" }}
+                  />
+                  {renderSearchFestiveGraphic()}
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={handleClearSearch}
+                      style={{ width: `${searchClearSize}px`, height: `${searchClearSize}px`, border: "none", background: "transparent", color: searchPlaceholderColor, opacity: 0.8, display: "grid", placeItems: "center", cursor: "pointer", fontSize: `${Math.max(11, searchClearSize - 10)}px`, flexShrink: 0 }}
+                      title="Clear search"
                     >
-                      <input
-                        type="text"
-                        placeholder="Search products..."
-                        value={searchQuery}
-                        onChange={(e) => handleSearchInputChange(e.target.value)}
-                        style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", padding: "8px 14px", paddingRight: searchQuery ? "30px" : "70px" }}
-                      />
-                      {renderSearchFestiveGraphic()}
-                      {searchQuery && (
-                        <button
-                          type="button"
-                          onClick={handleClearSearch}
-                          style={{ width: "28px", height: "28px", border: "none", background: "transparent", color: searchTextColor, opacity: 0.7, display: "grid", placeItems: "center", cursor: "pointer", fontSize: "13px", flexShrink: 0 }}
-                          title="Clear search"
-                        >
-                          ✕
-                        </button>
+                      ✕
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    style={{ width: `${Math.max(34, searchHeightNum + 4)}px`, height: `${searchHeightNum}px`, border: "none", background: accentColor, color: "#ffffff", display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                  >
+                    <svg viewBox="0 0 24 24" style={{ width: `${searchIconSize}px`, height: `${searchIconSize}px`, stroke: "currentColor", strokeWidth: 2.2, fill: "none" }}>
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="M20 20L16.65 16.65" />
+                    </svg>
+                  </button>
+                </form>
+              );
+
+              const renderMarketplaceActions = () => (
+                <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "10px", flexShrink: 0 }}>
+                  {effectiveShowSearch && (isMobile || searchDisplayMode === "icon") && (
+                    <button
+                      type="button"
+                      aria-label="Open search"
+                      onClick={openSearch}
+                      style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                    >
+                      <svg viewBox="0 0 24 24" style={iconStyle}>
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="M20 20L16.65 16.65" />
+                      </svg>
+                    </button>
+                  )}
+                  {showCart && (
+                    <button
+                      type="button"
+                      onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
+                      style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative", flexShrink: 0 }}
+                    >
+                      <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
+                        <circle cx="9" cy="20" r="1.5" />
+                        <circle cx="17" cy="20" r="1.5" />
+                        <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
+                      </svg>
+                      {cartCount > 0 && (
+                        <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
+                          {cartCount}
+                        </span>
                       )}
-                      <button
-                        type="submit"
-                        style={{ width: "42px", height: "36px", border: "none", background: accentColor, color: "#ffffff", display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
-                      >
-                        <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: "currentColor", strokeWidth: 2.2, fill: "none" }}>
-                          <circle cx="11" cy="11" r="7" />
-                          <path d="M20 20L16.65 16.65" />
-                        </svg>
-                      </button>
-                    </form>
+                    </button>
                   )}
 
-                  {/* Action Buttons */}
-                  <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "10px" }}>
-                    {showSearch && isMobile && (
+                  {!isMobile && (
+                    <button
+                      type="button"
+                      onClick={handleDummyNotification}
+                      style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                    >
+                      <svg viewBox="0 0 24 24" style={iconStyle}>
+                        <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
+                        <path d="M10 17a2 2 0 0 0 4 0" />
+                      </svg>
+                    </button>
+                  )}
+
+                  {showAccount && !isMobile && (
+                    <div ref={accountMenuRef} style={{ position: "relative", flexShrink: 0 }}>
                       <button
+                        ref={accountButtonRef}
                         type="button"
-                        aria-label="Open search"
-                        onClick={openMobileSearch}
+                        onClick={handleAccountClick}
                         style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
                       >
                         <svg viewBox="0 0 24 24" style={iconStyle}>
-                          <circle cx="11" cy="11" r="7" />
-                          <path d="M20 20L16.65 16.65" />
+                          <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
+                          <circle cx="12" cy="8" r="4" />
                         </svg>
                       </button>
-                    )}
-                    {showCart && (
-                      <button
-                        type="button"
-                        onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
-                        style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative" }}
-                      >
-                        <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
-                          <circle cx="9" cy="20" r="1.5" />
-                          <circle cx="17" cy="20" r="1.5" />
-                          <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
-                        </svg>
-                        {cartCount > 0 && (
-                          <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
-                            {cartCount}
-                          </span>
-                        )}
-                      </button>
-                    )}
+                      {accountMenuOpen && (
+                        <div role="menu" style={dropdownPanelStyle}>
+                          <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
+                          <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
+                          {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-                    {!isMobile && (
-                      <button
-                        type="button"
-                        onClick={handleDummyNotification}
-                        style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
-                      >
-                        <svg viewBox="0 0 24 24" style={iconStyle}>
-                          <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
-                          <path d="M10 17a2 2 0 0 0 4 0" />
-                        </svg>
-                      </button>
-                    )}
+                  {renderMobileToggleBtn()}
+                </div>
+              );
 
-                    {showAccount && !isMobile && (
-                      <div ref={accountMenuRef} style={{ position: "relative" }}>
-                        <button
-                          ref={accountButtonRef}
-                          type="button"
-                          onClick={handleAccountClick}
-                          style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
-                        >
-                          <svg viewBox="0 0 24 24" style={iconStyle}>
-                            <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
-                            <circle cx="12" cy="8" r="4" />
-                          </svg>
-                        </button>
-                        {accountMenuOpen && (
-                          <div role="menu" style={dropdownPanelStyle}>
-                            <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
-                            <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
-                            {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
-                          </div>
-                        )}
-                      </div>
-                    )}
+              const marketplaceContainerStyle: React.CSSProperties = {
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                width: "100%",
+                minHeight: `${Math.max(48, navbarHeightNum - 20)}px`,
+                gap: isMobile ? "8px" : "16px",
+                padding: "8px 14px",
+                boxSizing: "border-box",
+              };
 
-                    {renderMobileToggleBtn()}
+              const isBrandCentered = brandAlignment === "center" && !isMobile;
+
+              if (isBrandCentered) {
+                return (
+                  <div style={marketplaceContainerStyle}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", flex: 1, minWidth: 0 }}>
+                      {effectiveShowSearch && searchDisplayMode === "bar" && searchPlacement === "left" && renderMarketplaceSearch()}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto", minWidth: 0 }}>
+                      {renderMarketplaceBrand()}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1, minWidth: 0, gap: "10px" }}>
+                      {effectiveShowSearch && searchDisplayMode === "bar" && searchPlacement !== "left" && renderMarketplaceSearch()}
+                      {renderMarketplaceActions()}
+                    </div>
+                  </div>
+                );
+              }
+
+              if (searchPlacement === "left") {
+                return (
+                  <div style={marketplaceContainerStyle}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: 1, minWidth: 0 }}>
+                      {renderMarketplaceBrand()}
+                      {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderMarketplaceSearch()}
+                    </div>
+                    {renderMarketplaceActions()}
+                  </div>
+                );
+              }
+
+              if (searchPlacement === "right") {
+                return (
+                  <div style={marketplaceContainerStyle}>
+                    {renderMarketplaceBrand()}
+                    <div style={{ display: "flex", alignItems: "center", gap: "16px", justifyContent: "flex-end", flex: 1, minWidth: 0 }}>
+                      {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderMarketplaceSearch()}
+                      {renderMarketplaceActions()}
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div style={marketplaceContainerStyle}>
+                  <div style={{ display: "flex", alignItems: "center", flex: 1, justifyContent: "flex-start", minWidth: 0 }}>
+                    {renderMarketplaceBrand()}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: `0 1 ${searchMaxWidthNum}px`, width: "100%", maxWidth: `${searchMaxWidthNum}px`, minWidth: 0 }}>
+                    {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderMarketplaceSearch()}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1, minWidth: 0 }}>
+                    {renderMarketplaceActions()}
                   </div>
                 </div>
               );
             }
 
             if (layoutType === "luxury_fashion") {
-              return (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: isMobile ? "8px" : "16px", padding: "8px 16px", boxSizing: "border-box" }}>
-                  {/* Serif Logo */}
+              const renderLuxuryBrand = () => {
+                const showLogo = brandDisplayMode === "both" || brandDisplayMode === "logo_only";
+                const showText = brandDisplayMode === "both" || brandDisplayMode === "name_only";
+                const isColumn = brandLayoutDirection === "column" && showLogo && showText;
+
+                return (
                   <button
                     type="button"
                     onClick={handleHomeClick}
-                    style={{ display: "flex", alignItems: "center", gap: isMobile ? "8px" : "16px", background: "transparent", border: "none", cursor: "pointer", minWidth: 0 }}
+                    style={{
+                      display: "inline-flex",
+                      flexDirection: isColumn ? "column" : "row",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: isColumn ? "2px" : isMobile ? "8px" : "12px",
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      flexShrink: 0,
+                      flex: "0 0 auto",
+                      minWidth: "max-content",
+                      padding: 0,
+                      margin: 0,
+                      textDecoration: "none",
+                      lineHeight: 1,
+                    }}
                   >
-                    {resolvedLogoUrl ? (
-                      <img
-                        src={resolvedLogoUrl}
-                        alt={brandName || "Logo"}
-                        style={{ maxHeight: logoHeightStyle, height: logoHeightStyle, maxWidth: "160px", objectFit: logoFitStyle, flexShrink: 0, mixBlendMode: logoBlendMode }}
-                      />
-                    ) : (
-                      <span style={{ fontFamily: "'Playfair Display', 'Didot', 'Georgia', serif", fontSize: isMobile ? "16px" : "20px", fontWeight: 700, color: textColor, flexShrink: 0 }}>
+                    {renderBrandLogo(
+                      <span
+                        style={{
+                          fontFamily: resolvedBrandFontFamily,
+                          fontSize: isMobile ? "16px" : "20px",
+                          fontWeight: 700,
+                          color: brandTextColor,
+                          flexShrink: 0,
+                        }}
+                      >
                         {getInitials(brandName)}
                       </span>
                     )}
-                    <span style={{ width: "1px", height: "18px", background: light ? "rgba(15,23,42,0.15)" : "rgba(255,255,255,0.2)" }} />
-                    <span style={{ fontFamily: "'Playfair Display', 'Didot', 'Georgia', serif", fontSize: isMobile ? "12px" : "15px", fontWeight: 600, color: textColor, letterSpacing: "0.12em", textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {brandName}
-                    </span>
+                    {showLogo && showText && !isColumn && (
+                      <span style={{ width: "1px", height: "18px", background: light ? "rgba(15,23,42,0.15)" : "rgba(255,255,255,0.2)" }} />
+                    )}
+                    {renderBrandText({
+                      letterSpacing: brandFontFamily === "modern_sans" ? "0.06em" : "0.12em",
+                      textTransform: "uppercase",
+                    })}
                   </button>
+                );
+              };
 
-                  {/* Minimal Fashion Search Pill */}
-                  {showSearch && !isMobile && (
-                    <form
-                      onSubmit={handleSearchSubmit}
-                      style={{
-                        flex: "1 1 240px",
-                        maxWidth: "440px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        padding: "4px 4px 4px 16px",
-                        borderRadius: "999px",
-                        background: searchPillBg,
-                        border: searchPillBorder,
-                        position: "relative",
-                      }}
+              const renderLuxurySearch = () => (
+                <form
+                  onSubmit={handleSearchSubmit}
+                  style={{
+                    flex: `0 1 ${searchMaxWidthNum}px`,
+                    width: "100%",
+                    maxWidth: `${searchMaxWidthNum}px`,
+                    height: `${searchHeightNum}px`,
+                    minWidth: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "0 4px 0 14px",
+                    borderRadius: "999px",
+                    background: searchPillBg,
+                    border: searchPillBorder,
+                    position: "relative",
+                    boxSizing: "border-box",
+                    overflow: "hidden",
+                  }}
+                >
+                  <input
+                    type="text"
+                    placeholder="Search products..."
+                    value={searchQuery}
+                    onChange={(e) => handleSearchInputChange(e.target.value)}
+                    style={{ flex: 1, minWidth: 0, width: "100%", height: "100%", border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontFamily: "serif", paddingRight: searchQuery ? "4px" : "8px", boxSizing: "border-box" }}
+                  />
+                  {renderSearchFestiveGraphic()}
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={handleClearSearch}
+                      style={{ width: `${searchClearSize}px`, height: `${searchClearSize}px`, border: "none", background: "transparent", color: searchPlaceholderColor, opacity: 0.8, display: "grid", placeItems: "center", cursor: "pointer", fontSize: `${Math.max(11, searchClearSize - 10)}px`, flexShrink: 0 }}
+                      title="Clear search"
                     >
-                      <input
-                        type="text"
-                        placeholder="Search products..."
-                        value={searchQuery}
-                        onChange={(e) => handleSearchInputChange(e.target.value)}
-                        style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontFamily: "serif", paddingRight: searchQuery ? "28px" : "64px" }}
-                      />
-                      {renderSearchFestiveGraphic()}
-                      {searchQuery && (
-                        <button
-                          type="button"
-                          onClick={handleClearSearch}
-                          style={{ width: "26px", height: "26px", border: "none", background: "transparent", color: searchTextColor, opacity: 0.7, display: "grid", placeItems: "center", cursor: "pointer", fontSize: "13px", flexShrink: 0 }}
-                          title="Clear search"
-                        >
-                          ✕
-                        </button>
+                      ✕
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    style={{ width: `${searchButtonSize}px`, height: `${searchButtonSize}px`, borderRadius: "999px", border: "none", background: "transparent", color: searchTextColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                  >
+                    <svg viewBox="0 0 24 24" style={{ width: `${searchIconSize}px`, height: `${searchIconSize}px`, stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="M20 20L16.65 16.65" />
+                    </svg>
+                  </button>
+                </form>
+              );
+
+              const renderLuxuryActions = () => (
+                <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "8px" : "14px", flexShrink: 0 }}>
+                  {effectiveShowSearch && (isMobile || searchDisplayMode === "icon") && (
+                    <button
+                      type="button"
+                      aria-label="Open search"
+                      onClick={openSearch}
+                      style={{ background: "transparent", border: "none", color: textColor, cursor: "pointer", padding: "4px", flexShrink: 0 }}
+                    >
+                      <svg viewBox="0 0 24 24" style={{ width: "19px", height: "19px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="M20 20L16.65 16.65" />
+                      </svg>
+                    </button>
+                  )}
+                  {showCart && (
+                    <button
+                      type="button"
+                      onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
+                      style={{ background: "transparent", border: "none", color: textColor, cursor: "pointer", position: "relative", padding: "4px", flexShrink: 0 }}
+                    >
+                      <svg viewBox="0 0 24 24" style={{ width: "19px", height: "19px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
+                        <circle cx="9" cy="20" r="1.5" />
+                        <circle cx="17" cy="20" r="1.5" />
+                        <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
+                      </svg>
+                      {cartCount > 0 && (
+                        <span style={{ position: "absolute", top: "-2px", right: "-4px", width: "16px", height: "16px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "9px", fontWeight: 800, display: "grid", placeItems: "center" }}>
+                          {cartCount}
+                        </span>
                       )}
-                      <button
-                        type="submit"
-                        style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: "transparent", color: searchTextColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
-                      >
-                        <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
-                          <circle cx="11" cy="11" r="7" />
-                          <path d="M20 20L16.65 16.65" />
-                        </svg>
-                      </button>
-                    </form>
+                    </button>
                   )}
 
-                  {/* Luxury Minimal Icons */}
-                  <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "8px" : "14px" }}>
-                    {showSearch && isMobile && (
+                  {!isMobile && (
+                    <button
+                      type="button"
+                      onClick={handleDummyNotification}
+                      style={{ background: "transparent", border: "none", color: textColor, cursor: "pointer", padding: "4px", flexShrink: 0 }}
+                    >
+                      <svg viewBox="0 0 24 24" style={{ width: "19px", height: "19px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
+                        <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
+                        <path d="M10 17a2 2 0 0 0 4 0" />
+                      </svg>
+                    </button>
+                  )}
+
+                  {showAccount && !isMobile && (
+                    <div ref={accountMenuRef} style={{ position: "relative", flexShrink: 0 }}>
                       <button
+                        ref={accountButtonRef}
                         type="button"
-                        aria-label="Open search"
-                        onClick={openMobileSearch}
+                        onClick={handleAccountClick}
                         style={{ background: "transparent", border: "none", color: textColor, cursor: "pointer", padding: "4px" }}
                       >
                         <svg viewBox="0 0 24 24" style={{ width: "19px", height: "19px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
-                          <circle cx="11" cy="11" r="7" />
-                          <path d="M20 20L16.65 16.65" />
+                          <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
+                          <circle cx="12" cy="8" r="4" />
                         </svg>
                       </button>
-                    )}
-                    {showCart && (
-                      <button
-                        type="button"
-                        onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
-                        style={{ background: "transparent", border: "none", color: textColor, cursor: "pointer", position: "relative", padding: "4px" }}
-                      >
-                        <svg viewBox="0 0 24 24" style={{ width: "19px", height: "19px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
-                          <circle cx="9" cy="20" r="1.5" />
-                          <circle cx="17" cy="20" r="1.5" />
-                          <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
-                        </svg>
-                        {cartCount > 0 && (
-                          <span style={{ position: "absolute", top: "-2px", right: "-4px", width: "16px", height: "16px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "9px", fontWeight: 800, display: "grid", placeItems: "center" }}>
-                            {cartCount}
-                          </span>
-                        )}
-                      </button>
-                    )}
+                      {accountMenuOpen && (
+                        <div role="menu" style={dropdownPanelStyle}>
+                          <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
+                          <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
+                          {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-                    {!isMobile && (
-                      <button
-                        type="button"
-                        onClick={handleDummyNotification}
-                        style={{ background: "transparent", border: "none", color: textColor, cursor: "pointer", padding: "4px" }}
-                      >
-                        <svg viewBox="0 0 24 24" style={{ width: "19px", height: "19px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
-                          <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
-                          <path d="M10 17a2 2 0 0 0 4 0" />
-                        </svg>
-                      </button>
-                    )}
+                  {renderMobileToggleBtn()}
+                </div>
+              );
 
-                    {showAccount && !isMobile && (
-                      <div ref={accountMenuRef} style={{ position: "relative" }}>
-                        <button
-                          ref={accountButtonRef}
-                          type="button"
-                          onClick={handleAccountClick}
-                          style={{ background: "transparent", border: "none", color: textColor, cursor: "pointer", padding: "4px" }}
-                        >
-                          <svg viewBox="0 0 24 24" style={{ width: "19px", height: "19px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
-                            <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
-                            <circle cx="12" cy="8" r="4" />
-                          </svg>
-                        </button>
-                        {accountMenuOpen && (
-                          <div role="menu" style={dropdownPanelStyle}>
-                            <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
-                            <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
-                            {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
-                          </div>
-                        )}
-                      </div>
-                    )}
+              const luxuryContainerStyle: React.CSSProperties = {
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                width: "100%",
+                minHeight: `${Math.max(48, navbarHeightNum - 20)}px`,
+                gap: isMobile ? "8px" : "16px",
+                padding: "8px 18px",
+                boxSizing: "border-box",
+              };
 
-                    {renderMobileToggleBtn()}
+              const isBrandCentered = brandAlignment === "center" && !isMobile;
+
+              if (isBrandCentered) {
+                return (
+                  <div style={luxuryContainerStyle}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", flex: 1, minWidth: 0 }}>
+                      {effectiveShowSearch && searchDisplayMode === "bar" && searchPlacement === "left" && renderLuxurySearch()}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto", minWidth: 0 }}>
+                      {renderLuxuryBrand()}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1, minWidth: 0, gap: "10px" }}>
+                      {effectiveShowSearch && searchDisplayMode === "bar" && searchPlacement !== "left" && renderLuxurySearch()}
+                      {renderLuxuryActions()}
+                    </div>
+                  </div>
+                );
+              }
+
+              if (searchPlacement === "left") {
+                return (
+                  <div style={luxuryContainerStyle}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: 1, minWidth: 0 }}>
+                      {renderLuxuryBrand()}
+                      {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderLuxurySearch()}
+                    </div>
+                    {renderLuxuryActions()}
+                  </div>
+                );
+              }
+
+              if (searchPlacement === "right") {
+                return (
+                  <div style={luxuryContainerStyle}>
+                    {renderLuxuryBrand()}
+                    <div style={{ display: "flex", alignItems: "center", gap: "16px", justifyContent: "flex-end", flex: 1, minWidth: 0 }}>
+                      {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderLuxurySearch()}
+                      {renderLuxuryActions()}
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div style={luxuryContainerStyle}>
+                  <div style={{ display: "flex", alignItems: "center", flex: 1, justifyContent: "flex-start", minWidth: 0 }}>
+                    {renderLuxuryBrand()}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: `0 1 ${searchMaxWidthNum}px`, width: "100%", maxWidth: `${searchMaxWidthNum}px`, minWidth: 0 }}>
+                    {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderLuxurySearch()}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1, minWidth: 0 }}>
+                    {renderLuxuryActions()}
                   </div>
                 </div>
               );
@@ -1854,229 +2349,119 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                 ? "3px 3px 6px rgba(166,180,200,0.4), -3px -3px 6px rgba(255,255,255,0.9)"
                 : "3px 3px 6px rgba(0,0,0,0.4), -3px -3px 6px rgba(255,255,255,0.05)";
 
-              return (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: isMobile ? "8px" : "16px", padding: "8px 16px", background: neoBg, borderRadius: "999px", boxShadow: outerShadow, boxSizing: "border-box" }}>
-                  {/* Brand */}
+              const renderNeoBrand = () => {
+                const showLogo = brandDisplayMode === "both" || brandDisplayMode === "logo_only";
+                const showText = brandDisplayMode === "both" || brandDisplayMode === "name_only";
+                const isColumn = brandLayoutDirection === "column" && showLogo && showText;
+
+                return (
                   <button
                     type="button"
                     onClick={handleHomeClick}
-                    style={{ display: "flex", alignItems: "center", gap: "10px", background: "transparent", border: "none", cursor: "pointer", minWidth: 0 }}
+                    style={{
+                      display: "inline-flex",
+                      flexDirection: isColumn ? "column" : "row",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: isColumn ? "2px" : "8px",
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      flexShrink: 0,
+                      flex: "0 0 auto",
+                      minWidth: "max-content",
+                      padding: 0,
+                      margin: 0,
+                      textDecoration: "none",
+                      lineHeight: 1,
+                    }}
                   >
-                    {resolvedLogoUrl ? (
-                      <img
-                        src={resolvedLogoUrl}
-                        alt={brandName || "Logo"}
-                        style={{ maxHeight: logoHeightStyle, height: logoHeightStyle, maxWidth: "160px", objectFit: logoFitStyle, flexShrink: 0, mixBlendMode: logoBlendMode }}
-                      />
-                    ) : (
-                      <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800, flexShrink: 0 }}>
+                    {renderBrandLogo(
+                      <div
+                        style={{
+                          width: `${Math.min(36, effectiveLogoSize)}px`,
+                          height: `${Math.min(36, effectiveLogoSize)}px`,
+                          borderRadius: "10px",
+                          background: neoBg,
+                          boxShadow: buttonShadow,
+                          color: brandCustomTextColor || neoTextColor,
+                          display: "grid",
+                          placeItems: "center",
+                          fontSize: "12px",
+                          fontWeight: 800,
+                          flexShrink: 0,
+                        }}
+                      >
                         {getInitials(brandName)}
                       </div>
                     )}
-                    <span style={{ fontSize: isMobile ? "14px" : "15px", fontWeight: 700, color: neoTextColor, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{brandName}</span>
+                    {renderBrandText({
+                      color: brandCustomTextColor || neoTextColor,
+                    })}
                   </button>
+                );
+              };
 
-                  {/* Inset Neumorphic Search Bar */}
-                  {showSearch && !isMobile && (
-                    <form
-                      onSubmit={handleSearchSubmit}
-                      style={{
-                        flex: "1 1 240px",
-                        maxWidth: "460px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        padding: "4px 4px 4px 16px",
-                        borderRadius: "999px",
-                        background: neoBg,
-                        boxShadow: insetShadow,
-                        position: "relative",
-                      }}
-                    >
-                      <input
-                        type="text"
-                        placeholder="Search products..."
-                        value={searchQuery}
-                        onChange={(e) => handleSearchInputChange(e.target.value)}
-                        style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontWeight: 500, paddingRight: searchQuery ? "28px" : "64px" }}
-                      />
-                      {renderSearchFestiveGraphic()}
-                      {searchQuery && (
-                        <button
-                          type="button"
-                          onClick={handleClearSearch}
-                          style={{ width: "26px", height: "26px", border: "none", background: "transparent", color: searchTextColor, opacity: 0.7, display: "grid", placeItems: "center", cursor: "pointer", fontSize: "13px", flexShrink: 0 }}
-                          title="Clear search"
-                        >
-                          ✕
-                        </button>
-                      )}
-                      <button
-                        type="submit"
-                        style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
-                      >
-                        <svg viewBox="0 0 24 24" style={{ width: "15px", height: "15px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
-                          <circle cx="11" cy="11" r="7" />
-                          <path d="M20 20L16.65 16.65" />
-                        </svg>
-                      </button>
-                    </form>
-                  )}
-
-                  {/* Circular Neumorphic Action Controls */}
-                  <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "12px" }}>
-                    {showSearch && isMobile && (
-                      <button
-                        type="button"
-                        aria-label="Open search"
-                        onClick={openMobileSearch}
-                        style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", cursor: "pointer" }}
-                      >
-                        <svg viewBox="0 0 24 24" style={iconStyle}>
-                          <circle cx="11" cy="11" r="7" />
-                          <path d="M20 20L16.65 16.65" />
-                        </svg>
-                      </button>
-                    )}
-                    {showCart && (
-                      <button
-                        type="button"
-                        onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
-                        style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative" }}
-                      >
-                        <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
-                          <circle cx="9" cy="20" r="1.5" />
-                          <circle cx="17" cy="20" r="1.5" />
-                          <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
-                        </svg>
-                        {cartCount > 0 && (
-                          <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
-                            {cartCount}
-                          </span>
-                        )}
-                      </button>
-                    )}
-
-                    {!isMobile && (
-                      <button
-                        type="button"
-                        onClick={handleDummyNotification}
-                        style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", cursor: "pointer" }}
-                      >
-                        <svg viewBox="0 0 24 24" style={iconStyle}>
-                          <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
-                          <path d="M10 17a2 2 0 0 0 4 0" />
-                        </svg>
-                      </button>
-                    )}
-
-                    {showAccount && !isMobile && (
-                      <div ref={accountMenuRef} style={{ position: "relative" }}>
-                        <button
-                          ref={accountButtonRef}
-                          type="button"
-                          onClick={handleAccountClick}
-                          style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", cursor: "pointer" }}
-                        >
-                          <svg viewBox="0 0 24 24" style={iconStyle}>
-                            <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
-                            <circle cx="12" cy="8" r="4" />
-                          </svg>
-                        </button>
-                        {accountMenuOpen && (
-                          <div role="menu" style={dropdownPanelStyle}>
-                            <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
-                            <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
-                            {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {renderMobileToggleBtn()}
-                  </div>
-                </div>
-              );
-            }
-
-            // Apple Minimal & Default Standard Layout
-            return (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: isMobile ? "8px" : "16px", padding: "6px 12px", boxSizing: "border-box" }}>
-                {/* Brand */}
-                <button
-                  type="button"
-                  onClick={handleHomeClick}
-                  style={{ display: "flex", alignItems: "center", gap: "10px", background: "transparent", border: "none", cursor: "pointer", minWidth: 0 }}
+              const renderNeoSearch = () => (
+                <form
+                  onSubmit={handleSearchSubmit}
+                  style={{
+                    flex: `0 1 ${searchMaxWidthNum}px`,
+                    width: "100%",
+                    maxWidth: `${searchMaxWidthNum}px`,
+                    height: `${searchHeightNum}px`,
+                    minWidth: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "0 4px 0 14px",
+                    borderRadius: "999px",
+                    background: searchCustomBg || neoBg,
+                    boxShadow: insetShadow,
+                    border: searchCustomBorder ? `1px solid ${searchCustomBorder}` : "none",
+                    position: "relative",
+                    boxSizing: "border-box",
+                    overflow: "hidden",
+                  }}
                 >
-                  {resolvedLogoUrl ? (
-                    <img
-                      src={resolvedLogoUrl}
-                      alt={brandName || "Logo"}
-                      style={{ maxHeight: logoHeightStyle, height: logoHeightStyle, maxWidth: "160px", objectFit: logoFitStyle, flexShrink: 0, mixBlendMode: logoBlendMode }}
-                    />
-                  ) : (
-                    <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: light ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)", border: softBorder, color: textColor, display: "grid", placeItems: "center", fontSize: "12px", fontWeight: 800, flexShrink: 0 }}>
-                      {getInitials(brandName)}
-                    </div>
-                  )}
-                  <span style={{ fontSize: isMobile ? "14px" : "15px", fontWeight: 700, color: textColor, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{brandName}</span>
-                </button>
-
-                {/* Pill Search with enclosed button icon */}
-                {showSearch && !isMobile && (
-                  <form
-                    onSubmit={handleSearchSubmit}
-                    style={{
-                      flex: "1 1 240px",
-                      maxWidth: "460px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      padding: "4px 4px 4px 16px",
-                      borderRadius: "999px",
-                      background: searchPillBg,
-                      border: searchPillBorder,
-                      position: "relative",
-                    }}
-                  >
-                    <input
-                      type="text"
-                      placeholder="Search products..."
-                      value={searchQuery}
-                      onChange={(e) => handleSearchInputChange(e.target.value)}
-                      style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontWeight: 500, paddingRight: searchQuery ? "28px" : "64px" }}
-                    />
-                    {renderSearchFestiveGraphic()}
-                    {searchQuery && (
-                      <button
-                        type="button"
-                        onClick={handleClearSearch}
-                        style={{ width: "26px", height: "26px", border: "none", background: "transparent", color: searchTextColor, opacity: 0.7, display: "grid", placeItems: "center", cursor: "pointer", fontSize: "13px", flexShrink: 0 }}
-                        title="Clear search"
-                      >
-                        ✕
-                      </button>
-                    )}
+                  <input
+                    type="text"
+                    placeholder="Search products..."
+                    value={searchQuery}
+                    onChange={(e) => handleSearchInputChange(e.target.value)}
+                    style={{ flex: 1, minWidth: 0, width: "100%", height: "100%", border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontWeight: 500, paddingRight: searchQuery ? "4px" : "8px", boxSizing: "border-box" }}
+                  />
+                  {renderSearchFestiveGraphic()}
+                  {searchQuery && (
                     <button
-                      type="submit"
-                      style={{ width: "32px", height: "32px", borderRadius: "999px", border: "none", background: isSearchBgDark ? "rgba(255,255,255,0.18)" : "rgba(15,23,42,0.08)", color: searchTextColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                      type="button"
+                      onClick={handleClearSearch}
+                      style={{ width: `${searchClearSize}px`, height: `${searchClearSize}px`, border: "none", background: "transparent", color: searchPlaceholderColor, opacity: 0.8, display: "grid", placeItems: "center", cursor: "pointer", fontSize: `${Math.max(11, searchClearSize - 10)}px`, flexShrink: 0 }}
+                      title="Clear search"
                     >
-                      <svg viewBox="0 0 24 24" style={{ width: "15px", height: "15px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
-                        <circle cx="11" cy="11" r="7" />
-                        <path d="M20 20L16.65 16.65" />
-                      </svg>
+                      ✕
                     </button>
-                  </form>
-                )}
+                  )}
+                  <button
+                    type="submit"
+                    style={{ width: `${searchButtonSize}px`, height: `${searchButtonSize}px`, borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                  >
+                    <svg viewBox="0 0 24 24" style={{ width: `${searchIconSize}px`, height: `${searchIconSize}px`, stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="M20 20L16.65 16.65" />
+                    </svg>
+                  </button>
+                </form>
+              );
 
-                {/* Actions */}
-                <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "10px" }}>
-                  {showSearch && isMobile && (
+              const renderNeoActions = () => (
+                <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "12px", flexShrink: 0 }}>
+                  {effectiveShowSearch && (isMobile || searchDisplayMode === "icon") && (
                     <button
                       type="button"
                       aria-label="Open search"
-                      onClick={openMobileSearch}
-                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                      onClick={openSearch}
+                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
                     >
                       <svg viewBox="0 0 24 24" style={iconStyle}>
                         <circle cx="11" cy="11" r="7" />
@@ -2088,7 +2473,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     <button
                       type="button"
                       onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
-                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative" }}
+                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative", flexShrink: 0 }}
                     >
                       <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
                         <circle cx="9" cy="20" r="1.5" />
@@ -2107,7 +2492,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     <button
                       type="button"
                       onClick={handleDummyNotification}
-                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
                     >
                       <svg viewBox="0 0 24 24" style={iconStyle}>
                         <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
@@ -2117,12 +2502,12 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                   )}
 
                   {showAccount && !isMobile && (
-                    <div ref={accountMenuRef} style={{ position: "relative" }}>
+                    <div ref={accountMenuRef} style={{ position: "relative", flexShrink: 0 }}>
                       <button
                         ref={accountButtonRef}
                         type="button"
                         onClick={handleAccountClick}
-                        style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                        style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", cursor: "pointer" }}
                       >
                         <svg viewBox="0 0 24 24" style={iconStyle}>
                           <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
@@ -2140,6 +2525,304 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                   )}
 
                   {renderMobileToggleBtn()}
+                </div>
+              );
+
+              const neoContainerStyle: React.CSSProperties = {
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                width: "100%",
+                minHeight: `${Math.max(48, navbarHeightNum - 20)}px`,
+                gap: isMobile ? "8px" : "16px",
+                padding: "8px 18px",
+                background: neoBg,
+                borderRadius: "999px",
+                boxShadow: outerShadow,
+                boxSizing: "border-box",
+              };
+
+              const isBrandCentered = brandAlignment === "center" && !isMobile;
+
+              if (isBrandCentered) {
+                return (
+                  <div style={neoContainerStyle}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", flex: 1, minWidth: 0 }}>
+                      {effectiveShowSearch && searchDisplayMode === "bar" && searchPlacement === "left" && renderNeoSearch()}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto", minWidth: 0 }}>
+                      {renderNeoBrand()}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1, minWidth: 0, gap: "10px" }}>
+                      {effectiveShowSearch && searchDisplayMode === "bar" && searchPlacement !== "left" && renderNeoSearch()}
+                      {renderNeoActions()}
+                    </div>
+                  </div>
+                );
+              }
+
+              if (searchPlacement === "left") {
+                return (
+                  <div style={neoContainerStyle}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: 1, minWidth: 0 }}>
+                      {renderNeoBrand()}
+                      {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderNeoSearch()}
+                    </div>
+                    {renderNeoActions()}
+                  </div>
+                );
+              }
+
+              if (searchPlacement === "right") {
+                return (
+                  <div style={neoContainerStyle}>
+                    {renderNeoBrand()}
+                    <div style={{ display: "flex", alignItems: "center", gap: "16px", justifyContent: "flex-end", flex: 1, minWidth: 0 }}>
+                      {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderNeoSearch()}
+                      {renderNeoActions()}
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div style={neoContainerStyle}>
+                  <div style={{ display: "flex", alignItems: "center", flex: 1, justifyContent: "flex-start", minWidth: 0 }}>
+                    {renderNeoBrand()}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: `0 1 ${searchMaxWidthNum}px`, width: "100%", maxWidth: `${searchMaxWidthNum}px`, minWidth: 0 }}>
+                    {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderNeoSearch()}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1, minWidth: 0 }}>
+                    {renderNeoActions()}
+                  </div>
+                </div>
+              );
+            }
+
+            // Apple Minimal & Default Standard Layout
+            const renderDefaultBrand = () => {
+              const showLogo = brandDisplayMode === "both" || brandDisplayMode === "logo_only";
+              const showText = brandDisplayMode === "both" || brandDisplayMode === "name_only";
+              const isColumn = brandLayoutDirection === "column" && showLogo && showText;
+
+              return (
+                <button
+                  type="button"
+                  onClick={handleHomeClick}
+                  style={{
+                    display: "inline-flex",
+                    flexDirection: isColumn ? "column" : "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: isColumn ? "2px" : "8px",
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    flexShrink: 0,
+                    flex: "0 0 auto",
+                    minWidth: "max-content",
+                    padding: 0,
+                    margin: 0,
+                    textDecoration: "none",
+                    lineHeight: 1,
+                  }}
+                >
+                  {renderBrandLogo()}
+                  {renderBrandText()}
+                </button>
+              );
+            };
+
+            const renderDefaultSearch = () => (
+              <form
+                onSubmit={handleSearchSubmit}
+                style={{
+                  flex: `0 1 ${searchMaxWidthNum}px`,
+                  width: "100%",
+                  maxWidth: `${searchMaxWidthNum}px`,
+                  height: `${searchHeightNum}px`,
+                  minWidth: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "0 4px 0 14px",
+                  borderRadius: "999px",
+                  background: searchPillBg,
+                  border: searchPillBorder,
+                  position: "relative",
+                  boxSizing: "border-box",
+                  overflow: "hidden",
+                }}
+              >
+                <input
+                  type="text"
+                  placeholder="Search products..."
+                  value={searchQuery}
+                  onChange={(e) => handleSearchInputChange(e.target.value)}
+                  style={{ flex: 1, minWidth: 0, width: "100%", height: "100%", border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontWeight: 500, paddingRight: searchQuery ? "4px" : "8px", boxSizing: "border-box" }}
+                />
+                {renderSearchFestiveGraphic()}
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={handleClearSearch}
+                    style={{ width: `${searchClearSize}px`, height: `${searchClearSize}px`, border: "none", background: "transparent", color: searchPlaceholderColor, opacity: 0.8, display: "grid", placeItems: "center", cursor: "pointer", fontSize: `${Math.max(11, searchClearSize - 10)}px`, flexShrink: 0 }}
+                    title="Clear search"
+                  >
+                    ✕
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  style={{ width: `${searchButtonSize}px`, height: `${searchButtonSize}px`, borderRadius: "999px", border: "none", background: isSearchBgDark ? "rgba(255,255,255,0.18)" : "rgba(15,23,42,0.08)", color: searchTextColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                >
+                  <svg viewBox="0 0 24 24" style={{ width: `${searchIconSize}px`, height: `${searchIconSize}px`, stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
+                    <circle cx="11" cy="11" r="7" />
+                    <path d="M20 20L16.65 16.65" />
+                  </svg>
+                </button>
+              </form>
+            );
+
+            const renderDefaultActions = () => (
+              <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "10px", flexShrink: 0 }}>
+                {effectiveShowSearch && (isMobile || searchDisplayMode === "icon") && (
+                  <button
+                    type="button"
+                    aria-label="Open search"
+                    onClick={openSearch}
+                    style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                  >
+                    <svg viewBox="0 0 24 24" style={iconStyle}>
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="M20 20L16.65 16.65" />
+                    </svg>
+                  </button>
+                )}
+                {showCart && (
+                  <button
+                    type="button"
+                    onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
+                    style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative", flexShrink: 0 }}
+                  >
+                    <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
+                      <circle cx="9" cy="20" r="1.5" />
+                      <circle cx="17" cy="20" r="1.5" />
+                      <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
+                    </svg>
+                    {cartCount > 0 && (
+                      <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
+                        {cartCount}
+                      </span>
+                    )}
+                  </button>
+                )}
+
+                {!isMobile && (
+                  <button
+                    type="button"
+                    onClick={handleDummyNotification}
+                    style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                  >
+                    <svg viewBox="0 0 24 24" style={iconStyle}>
+                      <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
+                      <path d="M10 17a2 2 0 0 0 4 0" />
+                    </svg>
+                  </button>
+                )}
+
+                {showAccount && !isMobile && (
+                  <div ref={accountMenuRef} style={{ position: "relative", flexShrink: 0 }}>
+                    <button
+                      ref={accountButtonRef}
+                      type="button"
+                      onClick={handleAccountClick}
+                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                    >
+                      <svg viewBox="0 0 24 24" style={iconStyle}>
+                        <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
+                        <circle cx="12" cy="8" r="4" />
+                      </svg>
+                    </button>
+                    {accountMenuOpen && (
+                      <div role="menu" style={dropdownPanelStyle}>
+                        <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
+                        <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
+                        {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {renderMobileToggleBtn()}
+              </div>
+            );
+
+            const defaultContainerStyle: React.CSSProperties = {
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              width: "100%",
+              minHeight: `${Math.max(48, navbarHeightNum - 20)}px`,
+              gap: isMobile ? "8px" : "16px",
+              padding: "8px 14px",
+              boxSizing: "border-box",
+            };
+
+            const isBrandCentered = brandAlignment === "center" && !isMobile;
+
+            if (isBrandCentered) {
+              return (
+                <div style={defaultContainerStyle}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", flex: 1, minWidth: 0 }}>
+                    {effectiveShowSearch && searchDisplayMode === "bar" && searchPlacement === "left" && renderDefaultSearch()}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto", minWidth: 0 }}>
+                    {renderDefaultBrand()}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1, minWidth: 0, gap: "10px" }}>
+                    {effectiveShowSearch && searchDisplayMode === "bar" && searchPlacement !== "left" && renderDefaultSearch()}
+                    {renderDefaultActions()}
+                  </div>
+                </div>
+              );
+            }
+
+            if (searchPlacement === "left") {
+              return (
+                <div style={defaultContainerStyle}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: 1, minWidth: 0 }}>
+                    {renderDefaultBrand()}
+                    {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderDefaultSearch()}
+                  </div>
+                  {renderDefaultActions()}
+                </div>
+              );
+            }
+
+            if (searchPlacement === "right") {
+              return (
+                <div style={defaultContainerStyle}>
+                  {renderDefaultBrand()}
+                  <div style={{ display: "flex", alignItems: "center", gap: "16px", justifyContent: "flex-end", flex: 1, minWidth: 0 }}>
+                    {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderDefaultSearch()}
+                    {renderDefaultActions()}
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div style={defaultContainerStyle}>
+                <div style={{ display: "flex", alignItems: "center", flex: 1, justifyContent: "flex-start", minWidth: 0 }}>
+                  {renderDefaultBrand()}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: `0 1 ${searchMaxWidthNum}px`, width: "100%", maxWidth: `${searchMaxWidthNum}px`, minWidth: 0 }}>
+                  {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderDefaultSearch()}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1, minWidth: 0 }}>
+                  {renderDefaultActions()}
                 </div>
               </div>
             );

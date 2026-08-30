@@ -79,7 +79,7 @@ const heroBackgroundSizeField = {
 
 const navbarBrandNameField = {
   key: "brandName",
-  label: "Brand name",
+  label: "Brand Name",
   type: "text" as const,
   target: "props" as const,
   placeholder: "Storefront",
@@ -87,31 +87,229 @@ const navbarBrandNameField = {
 
 const navbarLogoUrlField = {
   key: "logoUrl",
-  label: "Brand Logo",
+  label: "Brand Logo Image",
   type: "image_upload" as const,
   target: "props" as const,
-  helpText: "Upload a PNG or SVG. For best results use a logo with a transparent background.",
+  helpText: "Upload a PNG, SVG, or WEBP logo.",
 };
 
-const navbarShowSearchField = {
-  key: "showSearch",
-  label: "Show search",
-  type: "checkbox" as const,
-  target: "props" as const,
+const navbarBrandDisplayModeField = {
+  key: "brand_display_mode",
+  label: "Brand Display Mode",
+  type: "select" as const,
+  target: "theme" as const,
+  defaultValue: "both",
+  options: [
+    { label: "Logo & Brand Name", value: "both" },
+    { label: "Logo Only", value: "logo_only" },
+    { label: "Brand Name Only", value: "name_only" },
+  ],
+  helpText: "Choose whether to display both logo and brand name, logo only, or brand name only.",
 };
 
-const navbarShowAccountField = {
-  key: "showAccount",
-  label: "Show account",
-  type: "checkbox" as const,
-  target: "props" as const,
+const navbarBrandAlignmentField = {
+  key: "brand_alignment",
+  label: "Brand Placement",
+  type: "select" as const,
+  target: "theme" as const,
+  defaultValue: "left",
+  options: [
+    { label: "Left Aligned", value: "left" },
+    { label: "Center Aligned", value: "center" },
+  ],
+  helpText: "Position the brand identity on the left or centered in the navbar.",
 };
 
-const navbarShowCartField = {
-  key: "showCart",
-  label: "Show cart",
-  type: "checkbox" as const,
-  target: "props" as const,
+const navbarBrandLayoutDirectionField = {
+  key: "brand_layout_direction",
+  label: "Brand & Logo Layout",
+  type: "select" as const,
+  target: "theme" as const,
+  defaultValue: "row",
+  options: [
+    { label: "Side by Side (Row)", value: "row" },
+    { label: "Stacked (Column)", value: "column" },
+  ],
+  helpText: "Arrange the logo and brand name horizontally or vertically.",
+};
+
+const navbarBrandFontFamilyField = {
+  key: "brand_font_family",
+  label: "Brand Font Style",
+  type: "select" as const,
+  target: "theme" as const,
+  defaultValue: "modern_sans",
+  options: [
+    { label: "Modern Clean (Inter)", value: "modern_sans" },
+    { label: "Luxury Editorial Serif (Playfair)", value: "playfair_serif" },
+    { label: "Royal Roman Display (Cinzel)", value: "cinzel_display" },
+    { label: "Literary Fine Serif (Cormorant)", value: "cormorant_serif" },
+    { label: "Contemporary Geometric (Outfit)", value: "outfit_geometric" },
+    { label: "Neo-Grotesque Tech (Jakarta)", value: "jakarta_sans" },
+    { label: "Modern Bold Sans (Montserrat)", value: "montserrat_bold" },
+    { label: "Flowing Signature (Dancing Script)", value: "dancing_script" },
+    { label: "Elegant Calligraphy (Great Vibes)", value: "great_vibes" },
+    { label: "Vintage Editorial Display (Abril)", value: "abril_fatface" },
+    { label: "Developer Monospace (Fira Code)", value: "monospace" },
+  ],
+  helpText: "Choose a curated typography family for the brand name.",
+};
+
+const navbarBrandFontWeightField = {
+  key: "brand_font_weight",
+  label: "Brand Font Weight",
+  type: "select" as const,
+  target: "theme" as const,
+  defaultValue: "700",
+  options: [
+    { label: "Light (300)", value: "300" },
+    { label: "Regular (400)", value: "400" },
+    { label: "Medium (500)", value: "500" },
+    { label: "Semi-Bold (600)", value: "600" },
+    { label: "Bold (700)", value: "700" },
+    { label: "Extra Bold (800)", value: "800" },
+    { label: "Black / Heavy (900)", value: "900" },
+  ],
+  helpText: "Stroke thickness and weight for the brand name text.",
+};
+
+const navbarBrandFontStyleField = {
+  key: "brand_font_style",
+  label: "Brand Font Style (Italic)",
+  type: "select" as const,
+  target: "theme" as const,
+  defaultValue: "normal",
+  options: [
+    { label: "Normal (Upright)", value: "normal" },
+    { label: "Italic (Slanted)", value: "italic" },
+  ],
+  helpText: "Choose between upright or italicized slanted text.",
+};
+
+const navbarBrandFontSizeField = {
+  key: "brand_font_size",
+  label: "Brand Font Size (px)",
+  type: "number" as const,
+  target: "theme" as const,
+  defaultValue: 16,
+  min: 12,
+  max: 36,
+  step: 1,
+  helpText: "Font size for the brand name text.",
+};
+
+const navbarBrandTextColorField = {
+  key: "brand_text_color",
+  label: "Brand Name Text Color",
+  type: "color" as const,
+  target: "theme" as const,
+  helpText: "Custom text color specifically for the brand name.",
+};
+
+const navbarLogoSizeField = {
+  key: "logo_size",
+  label: "Logo Size (px)",
+  type: "number" as const,
+  target: "theme" as const,
+  defaultValue: 36,
+  min: 16,
+  max: 120,
+  step: 2,
+  helpText: "Overall size of the brand logo in pixels (automatically fits inside navbar height).",
+};
+
+const navbarLogoFitField = {
+  key: "logo_fit",
+  label: "Logo Image Fit",
+  type: "select" as const,
+  target: "theme" as const,
+  defaultValue: "contain",
+  options: [
+    { label: "Contain (Preserve Aspect)", value: "contain" },
+    { label: "Cover (Fill Frame Box)", value: "cover" },
+    { label: "Fill / Stretch (Exact Box)", value: "fill" },
+    { label: "Scale Down (Compact Fit)", value: "scale-down" },
+  ],
+  helpText: "How the logo scales and fits within its boundary box.",
+};
+
+const navbarLogoZoomField = {
+  key: "logo_zoom",
+  label: "Logo Zoom / Scale (%)",
+  type: "number" as const,
+  target: "theme" as const,
+  defaultValue: 100,
+  min: 60,
+  max: 300,
+  step: 5,
+  helpText: "Zoom into the logo image to make emblems and artwork larger and clearer in less space.",
+};
+
+const navbarSearchDisplayModeField = {
+  key: "search_display_mode",
+  label: "Search Display Style",
+  type: "select" as const,
+  target: "theme" as const,
+  defaultValue: "bar",
+  options: [
+    { label: "Full Search Bar", value: "bar" },
+    { label: "Icon Button Only", value: "icon" },
+  ],
+  helpText: "Choose between an always-visible search bar or a compact icon that expands when clicked.",
+};
+
+const navbarSearchPlacementField = {
+  key: "search_placement",
+  label: "Search Bar Placement",
+  type: "select" as const,
+  target: "theme" as const,
+  defaultValue: "center",
+  options: [
+    { label: "Center (Balanced)", value: "center" },
+    { label: "Left (Next to Brand)", value: "left" },
+    { label: "Right (Next to Actions)", value: "right" },
+  ],
+  helpText: "Controls where the search bar sits across the navbar layout on desktop screens.",
+};
+
+const navbarSearchMaxWidthField = {
+  key: "search_max_width",
+  label: "Search Bar Width (px)",
+  type: "number" as const,
+  target: "theme" as const,
+  defaultValue: 460,
+  min: 160,
+  max: 800,
+  step: 10,
+  helpText: "Maximum pixel width for the search input capsule.",
+};
+
+const navbarSearchHeightField = {
+  key: "search_height",
+  label: "Search Bar Height (px)",
+  type: "number" as const,
+  target: "theme" as const,
+  defaultValue: 38,
+  min: 28,
+  max: 64,
+  step: 2,
+  helpText: "Height of the search bar capsule.",
+};
+
+const navbarSearchTextColorField = {
+  key: "search_text_color",
+  label: "Search Input Text Color",
+  type: "color" as const,
+  target: "theme" as const,
+  helpText: "Color of the text typed into the search bar.",
+};
+
+const navbarSearchMutedTextColorField = {
+  key: "search_muted_text_color",
+  label: "Search Placeholder & Muted Color",
+  type: "color" as const,
+  target: "theme" as const,
+  helpText: "Color of the placeholder hint and clear icon in the search bar.",
 };
 
 const navbarVariantField = {
@@ -231,30 +429,6 @@ const navbarPaddingYField = {
   max: 32,
   step: 1,
   helpText: "Controls top and bottom spacing inside the navbar.",
-};
-
-const navbarLogoHeightField = {
-  key: "logo_height",
-  label: "Logo Height",
-  type: "select" as const,
-  target: "theme" as const,
-  options: [
-    { label: "Compact (28px)", value: "28" },
-    { label: "Standard (36px)", value: "36" },
-    { label: "Large (44px)", value: "44" },
-    { label: "Extra Large (52px)", value: "52" },
-  ],
-};
-
-const navbarLogoFitField = {
-  key: "logo_fit",
-  label: "Logo Image Fit",
-  type: "select" as const,
-  target: "theme" as const,
-  options: [
-    { label: "Contain (Fit Inside)", value: "contain" },
-    { label: "Cover (Fill)", value: "cover" },
-  ],
 };
 
 
@@ -1214,10 +1388,25 @@ export const editorRegistry: EditorRegistry = {
   navbar: {
     displayName: "Navbar",
     fields: [
+      navbarBrandDisplayModeField,
+      navbarBrandAlignmentField,
       navbarBrandNameField,
       navbarLogoUrlField,
-      navbarLogoHeightField,
+      navbarBrandLayoutDirectionField,
+      navbarBrandFontFamilyField,
+      navbarBrandFontWeightField,
+      navbarBrandFontStyleField,
+      navbarBrandFontSizeField,
+      navbarBrandTextColorField,
+      navbarLogoSizeField,
       navbarLogoFitField,
+      navbarLogoZoomField,
+      navbarSearchDisplayModeField,
+      navbarSearchPlacementField,
+      navbarSearchMaxWidthField,
+      navbarSearchHeightField,
+      navbarSearchTextColorField,
+      navbarSearchMutedTextColorField,
       navbarVariantField,
       navbarPositionField,
       navbarHeightField,
@@ -1229,9 +1418,6 @@ export const editorRegistry: EditorRegistry = {
       navbarBackgroundColorField,
       navbarTextColorField,
       navbarBorderColorField,
-      navbarShowSearchField,
-      navbarShowAccountField,
-      navbarShowCartField,
     ],
   },
 

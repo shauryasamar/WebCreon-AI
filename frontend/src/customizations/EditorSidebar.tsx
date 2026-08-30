@@ -305,24 +305,30 @@ function sharedInputStyle(): React.CSSProperties {
   };
 }
 
-function CustomSelectDropdown({
-  value,
-  options,
-  placeholder = "Select...",
-  onChange,
-}: {
+interface CustomSelectDropdownProps {
   value: string;
+  defaultValue?: string;
   options: { label: string; value: string }[];
   placeholder?: string;
-  accentColor?: string;
-  onChange: (val: string) => void;
-}) {
+  onChange: (value: string) => void;
+}
+
+const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
+  value,
+  defaultValue,
+  options,
+  placeholder = "Select an option",
+  onChange,
+}) => {
   const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
         setOpen(false);
       }
     };
@@ -334,7 +340,10 @@ function CustomSelectDropdown({
     };
   }, [open]);
 
-  const selectedOption = options.find((o) => o.value === value);
+  const selectedOption =
+    options.find((o) => o.value === value) ||
+    options.find((o) => o.value === defaultValue) ||
+    (options.length > 0 ? options[0] : undefined);
 
   return (
     <div ref={containerRef} style={{ position: "relative", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
@@ -486,7 +495,7 @@ function sectionCardStyle(_isLightMode: boolean): React.CSSProperties {
     boxSizing: "border-box",
     maxWidth: "100%",
     minWidth: 0,
-    overflow: "hidden",
+    overflow: "visible",
   };
 }
 
@@ -499,7 +508,7 @@ function blockFieldCardStyle(_isLightMode: boolean): React.CSSProperties {
     boxSizing: "border-box",
     maxWidth: "100%",
     minWidth: 0,
-    overflow: "hidden",
+    overflow: "visible",
   };
 }
 
@@ -527,6 +536,10 @@ function getFieldGroupTitle(field: EditorField) {
     return "BRAND & IDENTITY";
   }
 
+  if (key.includes("search") || label.includes("search")) {
+    return "SEARCH BAR";
+  }
+
   if (
     [
       "variant",
@@ -548,7 +561,6 @@ function getFieldGroupTitle(field: EditorField) {
 
   if (
     [
-      "showsearch",
       "showaccount",
       "showcart",
       "button",
@@ -736,11 +748,10 @@ function LogoUploadControl({ currentValue, isLightMode, onChange }: LogoUploadCo
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const border = isLightMode ? "1.5px dashed rgba(17,24,39,0.2)" : "1.5px dashed rgba(255,255,255,0.2)";
-  const activeBorder = "1.5px dashed #6366f1";
+  const activeBorder = "1.5px dashed #2563eb";
   const textMuted = isLightMode ? "rgba(17,24,39,0.5)" : "rgba(255,255,255,0.5)";
-  const cardBg = isLightMode ? "rgba(0,0,0,0.025)" : "rgba(255,255,255,0.04)";
+  const cardBg = isLightMode ? "#f8fafc" : "rgba(255,255,255,0.03)";
 
-  // Derive the absolute URL for the preview dynamically
   const previewUrl = currentValue ? optimizeImageUrl(currentValue) : "";
 
   const uploadFile = useCallback(async (file: File) => {
@@ -786,153 +797,7 @@ function LogoUploadControl({ currentValue, isLightMode, onChange }: LogoUploadCo
   };
 
   return (
-    <div style={{ display: "grid", gap: "8px", width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
-      {previewUrl ? (
-        <div
-          style={{
-            width: "100%",
-            maxWidth: "100%",
-            boxSizing: "border-box",
-            borderRadius: "10px",
-            border: isLightMode ? "1px solid rgba(17,24,39,0.12)" : "1px solid rgba(255,255,255,0.12)",
-            background: isLightMode ? "#ffffff" : "rgba(255,255,255,0.03)",
-            overflow: "hidden",
-            boxShadow: isLightMode ? "0 1px 3px rgba(0,0,0,0.05)" : "0 1px 4px rgba(0,0,0,0.2)",
-          }}
-        >
-          {/* High-Clarity Preview Viewport */}
-          <div
-            style={{
-              width: "100%",
-              height: "80px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "10px 14px",
-              boxSizing: "border-box",
-              background: isLightMode
-                ? "repeating-conic-gradient(#f1f5f9 0% 25%, #ffffff 0% 50%) 50% / 14px 14px"
-                : "repeating-conic-gradient(#0f172a 0% 25%, #1e293b 0% 50%) 50% / 14px 14px",
-              position: "relative",
-              overflow: "hidden",
-            }}
-          >
-            <img
-              src={previewUrl}
-              alt="Logo preview"
-              style={{
-                maxHeight: "64px",
-                maxWidth: "100%",
-                width: "auto",
-                height: "auto",
-                objectFit: "contain",
-                display: "block",
-                imageRendering: "auto",
-                filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.08))",
-              }}
-            />
-          </div>
-
-          {/* Action Bar */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "7px 10px",
-              borderTop: isLightMode ? "1px solid rgba(17,24,39,0.08)" : "1px solid rgba(255,255,255,0.08)",
-              background: isLightMode ? "#f8fafc" : "rgba(255,255,255,0.02)",
-              gap: "8px",
-              minWidth: 0,
-              boxSizing: "border-box",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "5px", minWidth: 0, flex: 1 }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: "12px", height: "12px", color: textMuted, flexShrink: 0 }}>
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <polyline points="21 15 16 10 5 21" />
-              </svg>
-              <span
-                style={{
-                  fontSize: "11px",
-                  color: textMuted,
-                  fontWeight: 500,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                  minWidth: 0,
-                }}
-              >
-                {currentValue.split("/").pop() || "Brand logo"}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onChange("");
-              }}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "3px",
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                color: "#ef4444",
-                fontSize: "11px",
-                fontWeight: 600,
-                padding: "2px 6px",
-                borderRadius: "4px",
-                flexShrink: 0,
-                transition: "background 0.15s ease",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = isLightMode ? "rgba(239,68,68,0.1)" : "rgba(239,68,68,0.2)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-            >
-              Remove
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      <div
-        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-        onDragLeave={() => setIsDragging(false)}
-        onDrop={handleDrop}
-        onClick={() => !uploading && fileInputRef.current?.click()}
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: "5px",
-          padding: "14px 12px",
-          borderRadius: "8px",
-          border: isDragging ? activeBorder : border,
-          background: isDragging ? (isLightMode ? "rgba(99,102,241,0.05)" : "rgba(99,102,241,0.08)") : cardBg,
-          cursor: uploading ? "wait" : "pointer",
-          transition: "all 0.15s ease",
-          textAlign: "center",
-          userSelect: "none",
-          width: "100%",
-          maxWidth: "100%",
-          boxSizing: "border-box",
-          overflow: "hidden",
-        }}
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: "20px", height: "20px", color: isDragging ? "#6366f1" : textMuted }}>
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-          <polyline points="17 8 12 3 7 8" />
-          <line x1="12" y1="3" x2="12" y2="15" />
-        </svg>
-        <span style={{ fontSize: "11px", color: isDragging ? "#6366f1" : textMuted, fontWeight: 500 }}>
-          {uploading ? "Uploading..." : previewUrl ? "Replace logo image" : "Upload logo image"}
-        </span>
-        <span style={{ fontSize: "10px", color: textMuted, opacity: 0.7 }}>PNG, SVG, WEBP • Max 2MB</span>
-      </div>
-
+    <div style={{ width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
       <input
         ref={fileInputRef}
         type="file"
@@ -941,13 +806,259 @@ function LogoUploadControl({ currentValue, isLightMode, onChange }: LogoUploadCo
         style={{ display: "none" }}
       />
 
+      {previewUrl ? (
+        /* SINGLE UNIFIED PREVIEW CARD WITH REPLACE & REMOVE */
+        <div
+          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={handleDrop}
+          style={{
+            width: "100%",
+            borderRadius: "8px",
+            border: isDragging ? activeBorder : (isLightMode ? "1px solid #e2e8f0" : "1px solid rgba(255,255,255,0.12)"),
+            background: isLightMode ? "#ffffff" : "rgba(15,23,42,0.6)",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+            overflow: "hidden",
+            transition: "all 0.15s ease",
+          }}
+        >
+          {/* Logo Viewport */}
+          <div
+            style={{
+              width: "100%",
+              height: "64px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "8px 12px",
+              boxSizing: "border-box",
+              background: isLightMode
+                ? "repeating-conic-gradient(#f8fafc 0% 25%, #ffffff 0% 50%) 50% / 12px 12px"
+                : "repeating-conic-gradient(#0f172a 0% 25%, #1e293b 0% 50%) 50% / 12px 12px",
+            }}
+          >
+            <img
+              src={previewUrl}
+              alt="Logo"
+              style={{
+                maxHeight: "48px",
+                maxWidth: "100%",
+                width: "auto",
+                height: "auto",
+                objectFit: "contain",
+                display: "block",
+              }}
+            />
+          </div>
+
+          {/* Action Row */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "5px 8px",
+              background: isLightMode ? "#f8fafc" : "rgba(255,255,255,0.02)",
+              borderTop: isLightMode ? "1px solid #f1f5f9" : "1px solid rgba(255,255,255,0.06)",
+              gap: "6px",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => !uploading && fileInputRef.current?.click()}
+              style={{
+                padding: "3px 8px",
+                fontSize: "10px",
+                fontWeight: 600,
+                color: "#2563eb",
+                background: "transparent",
+                border: "1px solid rgba(37,99,235,0.2)",
+                borderRadius: "4px",
+                cursor: "pointer",
+                lineHeight: 1.2,
+              }}
+            >
+              {uploading ? "Uploading..." : "Replace Logo"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onChange("")}
+              style={{
+                padding: "3px 8px",
+                fontSize: "10px",
+                fontWeight: 600,
+                color: "#ef4444",
+                background: "transparent",
+                border: "1px solid rgba(239,68,68,0.2)",
+                borderRadius: "4px",
+                cursor: "pointer",
+                lineHeight: 1.2,
+              }}
+            >
+              Remove
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* SINGLE UNIFIED EMPTY DROPZONE */
+        <div
+          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={handleDrop}
+          onClick={() => !uploading && fileInputRef.current?.click()}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "4px",
+            padding: "16px 12px",
+            borderRadius: "8px",
+            border: isDragging ? activeBorder : border,
+            background: isDragging ? (isLightMode ? "rgba(37,99,235,0.04)" : "rgba(37,99,235,0.1)") : cardBg,
+            cursor: uploading ? "wait" : "pointer",
+            transition: "all 0.15s ease",
+            textAlign: "center",
+            userSelect: "none",
+            width: "100%",
+            boxSizing: "border-box",
+          }}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: "20px", height: "20px", color: isDragging ? "#2563eb" : textMuted }}>
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="17 8 12 3 7 8" />
+            <line x1="12" y1="3" x2="12" y2="15" />
+          </svg>
+          <span style={{ fontSize: "11px", color: isDragging ? "#2563eb" : (isLightMode ? "#334155" : "#f1f5f9"), fontWeight: 600 }}>
+            {uploading ? "Uploading..." : "Click or drag logo to upload"}
+          </span>
+          <span style={{ fontSize: "9.5px", color: textMuted }}>PNG, SVG, JPG, WEBP (Max 2MB)</span>
+        </div>
+      )}
+
       {error && (
-        <div style={{ fontSize: "11px", color: "#ef4444", lineHeight: 1.4 }}>{error}</div>
+        <div style={{ fontSize: "10px", color: "#ef4444", marginTop: "3px" }}>{error}</div>
       )}
     </div>
   );
 }
 
+
+function ModernColorPicker({
+  value,
+  onChange,
+  label,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  label?: string;
+}) {
+  const hexVal = typeof value === "string" && value ? value : "#2563eb";
+  const isValidHex = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(hexVal);
+
+  return (
+    <div style={{ display: "grid", gap: "3px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
+      {label && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", boxSizing: "border-box" }}>
+          <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            {label}
+          </label>
+          <span style={{ fontSize: "9px", fontFamily: "'Inter', monospace", fontWeight: 800, color: "#475569", background: "rgba(100,116,139,0.08)", padding: "1px 5px", borderRadius: "3px" }}>
+            {hexVal.toUpperCase()}
+          </span>
+        </div>
+      )}
+
+      {/* Modern Sleek Color Input */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          width: "100%",
+          height: "28px",
+          padding: "2px 6px",
+          borderRadius: "5px",
+          border: "1px solid #cbd5e1",
+          background: "#ffffff",
+          boxSizing: "border-box",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+        }}
+      >
+        {/* Interactive Swatch & Native Spectrum Trigger */}
+        <label
+          style={{
+            position: "relative",
+            width: "20px",
+            height: "20px",
+            borderRadius: "4px",
+            background: hexVal,
+            border: "1px solid rgba(0,0,0,0.18)",
+            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.25)",
+            cursor: "pointer",
+            flexShrink: 0,
+            overflow: "hidden",
+            display: "grid",
+            placeItems: "center",
+          }}
+          title="Click to choose color"
+        >
+          <input
+            type="color"
+            value={isValidHex && hexVal.startsWith("#") ? hexVal : "#2563eb"}
+            onChange={(e) => onChange(e.target.value)}
+            style={{
+              position: "absolute",
+              top: "-50%",
+              left: "-50%",
+              width: "200%",
+              height: "200%",
+              opacity: 0,
+              cursor: "pointer",
+            }}
+          />
+        </label>
+
+        {/* Clean Uppercase HEX Input */}
+        <input
+          type="text"
+          value={hexVal.toUpperCase()}
+          placeholder="#000000"
+          onChange={(e) => {
+            const raw = e.target.value.trim();
+            onChange(raw.startsWith("#") || raw === "" ? raw : `#${raw}`);
+          }}
+          style={{
+            flex: 1,
+            border: "none",
+            background: "transparent",
+            outline: "none",
+            fontFamily: "'Inter', monospace",
+            fontSize: "11px",
+            fontWeight: 700,
+            color: "#0f172a",
+            padding: 0,
+            minWidth: 0,
+            letterSpacing: "0.02em",
+          }}
+        />
+
+        <span
+          style={{
+            fontSize: "8.5px",
+            fontWeight: 800,
+            color: "#94a3b8",
+            letterSpacing: "0.05em",
+            userSelect: "none",
+          }}
+        >
+          HEX
+        </span>
+      </div>
+    </div>
+  );
+}
 
 function renderFieldControl(
   field: EditorField,
@@ -990,13 +1101,67 @@ function renderFieldControl(
   }
 
   if (field.type === "select") {
+    const rawVal =
+      currentValue !== undefined && currentValue !== null && currentValue !== ""
+        ? String(currentValue)
+        : field.defaultValue !== undefined
+        ? String(field.defaultValue)
+        : "";
+
     return (
-      <CustomSelectDropdown
-        value={typeof currentValue === "string" ? currentValue : ""}
-        options={(field.options || []).map((opt) => ({ label: opt.label, value: opt.value }))}
-        placeholder={`Select ${field.label}...`}
-        onChange={(val) => onChange(val)}
-      />
+      <div style={{ position: "relative", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
+        <select
+          value={rawVal}
+          onChange={(e) => onChange(e.target.value)}
+          style={{
+            ...inputStyle,
+            paddingRight: "22px",
+            appearance: "none",
+            WebkitAppearance: "none",
+            MozAppearance: "none",
+            cursor: "pointer",
+            background: "#ffffff",
+            color: "#0f172a",
+            fontWeight: 500,
+            fontSize: "11px",
+          }}
+        >
+          {!rawVal && !field.defaultValue && (
+            <option value="" disabled>
+              Select {field.label}...
+            </option>
+          )}
+          {(field.options || []).map((opt) => (
+            <option
+              key={String(opt.value)}
+              value={String(opt.value)}
+              style={{ color: "#0f172a", background: "#ffffff", fontSize: "11px" }}
+            >
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{
+            position: "absolute",
+            right: "7px",
+            top: "50%",
+            transform: "translateY(-50%)",
+            width: "11px",
+            height: "11px",
+            color: "#64748b",
+            pointerEvents: "none",
+          }}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </div>
     );
   }
 
@@ -1070,70 +1235,11 @@ function renderFieldControl(
   }
 
   if (field.type === "color") {
-    const valHex = typeof currentValue === "string" && currentValue ? currentValue : "#2563eb";
     return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "5px",
-          width: "100%",
-          height: "26px",
-          padding: "2px 4px",
-          borderRadius: "4px",
-          border: "1px solid #cbd5e1",
-          background: "#ffffff",
-          boxSizing: "border-box",
-        }}
-      >
-        <div
-          style={{
-            position: "relative",
-            width: "18px",
-            height: "18px",
-            borderRadius: "3px",
-            overflow: "hidden",
-            border: "1px solid rgba(0,0,0,0.15)",
-            flexShrink: 0,
-          }}
-        >
-          <input
-            type="color"
-            value={valHex.startsWith("#") ? valHex : "#2563eb"}
-            onChange={(e) => onChange(e.target.value)}
-            style={{
-              position: "absolute",
-              top: "-50%",
-              left: "-50%",
-              width: "200%",
-              height: "200%",
-              cursor: "pointer",
-              border: "none",
-              padding: 0,
-              margin: 0,
-            }}
-          />
-        </div>
-        <input
-          type="text"
-          value={valHex.toUpperCase()}
-          placeholder="#000000"
-          onChange={(e) => onChange(e.target.value)}
-          style={{
-            flex: 1,
-            border: "none",
-            background: "transparent",
-            outline: "none",
-            fontFamily: "'Inter', monospace",
-            fontSize: "10.5px",
-            fontWeight: 600,
-            color: "#0f172a",
-            padding: "0 2px",
-            minWidth: 0,
-          }}
-        />
-        <span style={{ fontSize: "8.5px", color: "#94a3b8", fontWeight: 700, paddingRight: "2px" }}>HEX</span>
-      </div>
+      <ModernColorPicker
+        value={typeof currentValue === "string" ? currentValue : ""}
+        onChange={onChange}
+      />
     );
   }
 
@@ -1809,6 +1915,782 @@ function HeroSlidesEditor({
   );
 }
 
+function NavbarEditor({
+  selectedBlock,
+  isLightMode,
+  textColor,
+  accentColor,
+  onSiteDefinitionChange,
+  siteDefinition,
+}: {
+  selectedBlock: any;
+  isLightMode: boolean;
+  textColor: string;
+  accentColor: string;
+  onSiteDefinitionChange: (next: any) => void;
+  siteDefinition: any;
+}) {
+  const [activeTab, setActiveTab] = useState<"brand" | "search" | "layout" | "colors">("brand");
+
+  const theme = siteDefinition.theme || {};
+  const props = selectedBlock?.props || {};
+
+  const getVal = (key: string, defaultVal: any) => {
+    if (theme[key] !== undefined && theme[key] !== null) return theme[key];
+    if (props[key] !== undefined && props[key] !== null) return props[key];
+    return defaultVal;
+  };
+
+  const updateField = (key: string, value: any) => {
+    onSiteDefinitionChange(updateThemeValues(siteDefinition, { [key]: value }));
+  };
+
+  // Values
+  const brandDisplayMode = getVal("brand_display_mode", "both");
+  const brandAlignment = getVal("brand_alignment", "left");
+  const brandLayoutDirection = getVal("brand_layout_direction", "row");
+  const brandName = getVal("brandName", "GreenHarvest");
+  const logoUrl = getVal("logoUrl", "");
+  const logoSize = Number(getVal("logo_size", 34));
+  const logoZoom = Number(getVal("logo_zoom", 100));
+  const brandFontFamily = getVal("brand_font_family", "sans_modern");
+  const brandFontWeight = String(getVal("brand_font_weight", "700"));
+  const brandFontStyle = getVal("brand_font_style", "normal");
+  const brandFontSize = Number(getVal("brand_font_size", 18));
+  const brandTextColor = getVal("brand_text_color", "#15803d");
+
+  const searchDisplayMode = getVal("search_display_mode", "bar");
+  const searchPlacement = getVal("search_placement", "center");
+  const searchMaxWidth = Number(getVal("search_max_width", 420));
+  const searchHeight = Number(getVal("search_height", 38));
+  const searchTextColor = getVal("search_text_color", "#0f172a");
+  const searchMutedTextColor = getVal("search_muted_text_color", "#64748b");
+
+  const navbarVariant = getVal("navbar_variant", "glassmorphism");
+  const navbarPosition = getVal("navbar_position", "sticky");
+  const navbarHeight = Number(getVal("navbar_height", 72));
+  const rawMaxWidth = String(getVal("navbar_max_width", "1280px"));
+  const navbarMaxWidth = rawMaxWidth === "full" ? "100%" : rawMaxWidth;
+  const navbarRadius = Number(getVal("navbar_radius", 16));
+  const navbarPaddingX = Number(getVal("navbar_padding_x", 16));
+  const navbarPaddingY = Number(getVal("navbar_padding_y", 12));
+
+  const navbarBg = getVal("navbar_bg", "rgba(255, 255, 255, 0.85)");
+  const navbarOuterBg = getVal("navbar_outer_bg", "transparent");
+  const navbarTextColorVal = getVal("navbar_text_color", "#0f172a");
+  const navbarBorderColor = getVal("navbar_border_color", "rgba(226, 232, 240, 0.8)");
+
+  const SegmentedRow = ({
+    options,
+    value,
+    onChange,
+  }: {
+    options: { label: string; value: string }[];
+    value: string;
+    onChange: (val: string) => void;
+  }) => (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: `repeat(${options.length}, 1fr)`,
+        background: "#f1f5f9",
+        padding: "2px",
+        borderRadius: "5px",
+        gap: "2px",
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        minWidth: 0,
+      }}
+    >
+      {options.map((opt) => {
+        const active = opt.value === value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            style={{
+              padding: "4px 3px",
+              fontSize: "10px",
+              fontWeight: active ? 700 : 500,
+              borderRadius: "4px",
+              border: "none",
+              background: active ? "#ffffff" : "transparent",
+              color: active ? "#0f172a" : "#64748b",
+              boxShadow: active ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+              cursor: "pointer",
+              textAlign: "center",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              transition: "all 0.12s ease",
+              minWidth: 0,
+            }}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const NumberStepperField = ({
+    label,
+    value,
+    min,
+    max,
+    step = 1,
+    unit = "px",
+    onChange,
+  }: {
+    label: string;
+    value: number;
+    min: number;
+    max: number;
+    step?: number;
+    unit?: string;
+    onChange: (val: number) => void;
+  }) => {
+    const valueRef = useRef(value);
+    valueRef.current = value;
+    const onChangeRef = useRef(onChange);
+    onChangeRef.current = onChange;
+    const stepRef = useRef(step);
+    stepRef.current = step;
+    const minRef = useRef(min);
+    minRef.current = min;
+    const maxRef = useRef(max);
+    maxRef.current = max;
+
+    const clamp = (val: number) => Math.max(minRef.current, Math.min(maxRef.current, val));
+
+    const attachWheel = useCallback((node: HTMLElement | null) => {
+      if (!node) return;
+
+      const handleWheel = (e: WheelEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const delta = e.deltaY < 0 ? stepRef.current : -stepRef.current;
+        const nextVal = Math.max(
+          minRef.current,
+          Math.min(maxRef.current, Number((valueRef.current + delta).toFixed(2)))
+        );
+        onChangeRef.current(nextVal);
+      };
+
+      node.addEventListener("wheel", handleWheel, { passive: false });
+    }, []);
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        onChange(clamp(Number((value + step).toFixed(2))));
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        onChange(clamp(Number((value - step).toFixed(2))));
+      }
+    };
+
+    return (
+      <div
+        ref={attachWheel}
+        style={{
+          display: "grid",
+          gap: "3px",
+          width: "100%",
+          maxWidth: "100%",
+          minWidth: 0,
+          boxSizing: "border-box",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", boxSizing: "border-box" }}>
+          <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            {label}
+          </label>
+          <span
+            style={{
+              fontSize: "9px",
+              fontWeight: 800,
+              color: ADMIN_BLUE,
+              background: "rgba(37,99,235,0.08)",
+              padding: "1px 5px",
+              borderRadius: "3px",
+              fontVariantNumeric: "tabular-nums",
+              textAlign: "right",
+              minWidth: "32px",
+              display: "inline-block",
+            }}
+          >
+            {value}{unit}
+          </span>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "3px", width: "100%", boxSizing: "border-box" }}>
+          <button
+            type="button"
+            onClick={() => onChange(clamp(Number((value - step).toFixed(2))))}
+            title={`Decrease (${step}${unit})`}
+            style={{
+              width: "28px",
+              height: "26px",
+              borderRadius: "4px",
+              border: "1px solid #cbd5e1",
+              background: "#f8fafc",
+              color: "#0f172a",
+              fontWeight: 800,
+              fontSize: "13px",
+              cursor: "pointer",
+              display: "grid",
+              placeItems: "center",
+              flexShrink: 0,
+              lineHeight: 1,
+            }}
+          >
+            −
+          </button>
+
+          <input
+            ref={attachWheel}
+            type="number"
+            min={min}
+            max={max}
+            step={step}
+            value={value}
+            onKeyDown={handleKeyDown}
+            onChange={(e) => {
+              const parsed = parseFloat(e.target.value);
+              if (!isNaN(parsed)) {
+                onChange(clamp(parsed));
+              }
+            }}
+            style={{
+              ...sharedInputStyle(),
+              flex: 1,
+              textAlign: "center",
+              fontWeight: 700,
+              fontSize: "11px",
+              padding: "2px 4px",
+              height: "26px",
+              minWidth: 0,
+            }}
+          />
+
+          <button
+            type="button"
+            onClick={() => onChange(clamp(Number((value + step).toFixed(2))))}
+            title={`Increase (${step}${unit})`}
+            style={{
+              width: "28px",
+              height: "26px",
+              borderRadius: "4px",
+              border: "1px solid #cbd5e1",
+              background: "#f8fafc",
+              color: "#0f172a",
+              fontWeight: 800,
+              fontSize: "13px",
+              cursor: "pointer",
+              display: "grid",
+              placeItems: "center",
+              flexShrink: 0,
+              lineHeight: 1,
+            }}
+          >
+            +
+          </button>
+        </div>
+
+        {/* Smooth micro-slider for continuous sliding or 2-finger wheel */}
+        <input
+          ref={attachWheel}
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={(e) => onChange(clamp(Number(e.target.value)))}
+          style={{
+            width: "100%",
+            maxWidth: "100%",
+            accentColor: ADMIN_BLUE,
+            cursor: "pointer",
+            height: "3px",
+            margin: "1px 0 0 0",
+            boxSizing: "border-box",
+          }}
+        />
+      </div>
+    );
+  };
+
+  const SectionDivider = ({ title }: { title: string }) => (
+    <div style={{ paddingTop: "6px", marginTop: "2px", borderTop: "1px solid #f1f5f9", display: "grid", gap: "4px", width: "100%", boxSizing: "border-box" }}>
+      <span style={{ fontSize: "8.5px", fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+        {title}
+      </span>
+    </div>
+  );
+
+  return (
+    <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
+      {/* 4 Clean Navigation Tabs */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, 1fr)",
+          gap: "2px",
+          background: "#f1f5f9",
+          padding: "2px",
+          borderRadius: "6px",
+          width: "100%",
+          maxWidth: "100%",
+          boxSizing: "border-box",
+          minWidth: 0,
+        }}
+      >
+        {[
+          { id: "brand", label: "Brand" },
+          { id: "search", label: "Search" },
+          { id: "layout", label: "Layout" },
+          { id: "colors", label: "Colors" },
+        ].map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as any)}
+              style={{
+                padding: "5px 2px",
+                border: "none",
+                borderRadius: "4px",
+                background: isActive ? "#ffffff" : "transparent",
+                color: isActive ? ADMIN_BLUE : "#64748b",
+                fontWeight: isActive ? 800 : 600,
+                fontSize: "10px",
+                cursor: "pointer",
+                textAlign: "center",
+                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                transition: "all 0.12s ease",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                minWidth: 0,
+              }}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* TAB 1: BRAND & LOGO */}
+      {activeTab === "brand" && (
+        <section style={sectionCardStyle(isLightMode)}>
+          <div style={{ display: "grid", gap: "6px", width: "100%", boxSizing: "border-box" }}>
+            {/* Display Mode */}
+            <div style={{ display: "grid", gap: "2px" }}>
+              <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                Display
+              </label>
+              <SegmentedRow
+                value={brandDisplayMode}
+                onChange={(val) => updateField("brand_display_mode", val)}
+                options={[
+                  { label: "Both", value: "both" },
+                  { label: "Logo", value: "logo_only" },
+                  { label: "Name", value: "name_only" },
+                ]}
+              />
+            </div>
+
+            {/* Position & Direction in 2-Column Row */}
+            <div style={{ display: "grid", gridTemplateColumns: brandDisplayMode === "both" ? "1fr 1fr" : "1fr", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Position
+                </label>
+                <SegmentedRow
+                  value={brandAlignment}
+                  onChange={(val) => updateField("brand_alignment", val)}
+                  options={[
+                    { label: "Left", value: "left" },
+                    { label: "Center", value: "center" },
+                  ]}
+                />
+              </div>
+
+              {brandDisplayMode === "both" && (
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                    Direction
+                  </label>
+                  <SegmentedRow
+                    value={brandLayoutDirection}
+                    onChange={(val) => updateField("brand_layout_direction", val)}
+                    options={[
+                      { label: "Row", value: "row" },
+                      { label: "Column", value: "column" },
+                    ]}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Logo Settings */}
+            {brandDisplayMode !== "name_only" && (
+              <>
+                <SectionDivider title="Brand Logo" />
+
+                <LogoUploadControl
+                  currentValue={logoUrl}
+                  isLightMode={isLightMode}
+                  onChange={(val) => updateField("logoUrl", val)}
+                />
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                  <NumberStepperField
+                    label="Box Size"
+                    value={logoSize}
+                    min={16}
+                    max={100}
+                    step={2}
+                    unit="px"
+                    onChange={(val) => updateField("logo_size", val)}
+                  />
+
+                  <NumberStepperField
+                    label="Zoom / Scale"
+                    value={logoZoom}
+                    min={60}
+                    max={300}
+                    step={5}
+                    unit="%"
+                    onChange={(val) => updateField("logo_zoom", val)}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Brand Typography */}
+            {brandDisplayMode !== "logo_only" && (
+              <>
+                <SectionDivider title="Typography" />
+
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                    Brand Name
+                  </label>
+                  <input
+                    type="text"
+                    value={brandName}
+                    placeholder="Enter brand name..."
+                    onChange={(e) => updateField("brandName", e.target.value)}
+                    style={sharedInputStyle()}
+                  />
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: "6px" }}>
+                  <div style={{ display: "grid", gap: "2px" }}>
+                    <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                      Font
+                    </label>
+                    <CustomSelectDropdown
+                      value={brandFontFamily}
+                      placeholder="Select Font"
+                      options={[
+                        { label: "Inter (Sans)", value: "sans_modern" },
+                        { label: "Roboto (Sans)", value: "roboto_sans" },
+                        { label: "Outfit (Tech)", value: "outfit_tech" },
+                        { label: "Plus Jakarta", value: "plus_jakarta" },
+                        { label: "Space Grotesk", value: "space_grotesk" },
+                        { label: "Playfair (Serif)", value: "playfair_serif" },
+                        { label: "Cinzel (Serif)", value: "cinzel_display" },
+                        { label: "Cormorant", value: "cormorant_serif" },
+                        { label: "Montserrat", value: "montserrat_bold" },
+                        { label: "Poppins", value: "poppins_rounded" },
+                        { label: "Abril Fatface", value: "abril_fatface" },
+                      ]}
+                      onChange={(val) => updateField("brand_font_family", val)}
+                    />
+                  </div>
+
+                  <div style={{ display: "grid", gap: "2px" }}>
+                    <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                      Weight
+                    </label>
+                    <CustomSelectDropdown
+                      value={brandFontWeight}
+                      placeholder="Weight"
+                      options={[
+                        { label: "300 Light", value: "300" },
+                        { label: "400 Regular", value: "400" },
+                        { label: "500 Medium", value: "500" },
+                        { label: "600 Semi", value: "600" },
+                        { label: "700 Bold", value: "700" },
+                        { label: "800 Extra", value: "800" },
+                        { label: "900 Black", value: "900" },
+                      ]}
+                      onChange={(val) => updateField("brand_font_weight", val)}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                  <div style={{ display: "grid", gap: "2px" }}>
+                    <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                      Style
+                    </label>
+                    <SegmentedRow
+                      value={brandFontStyle}
+                      onChange={(val) => updateField("brand_font_style", val)}
+                      options={[
+                        { label: "Normal", value: "normal" },
+                        { label: "Italic", value: "italic" },
+                      ]}
+                    />
+                  </div>
+
+                  <NumberStepperField
+                    label="Font Size"
+                    value={brandFontSize}
+                    min={12}
+                    max={36}
+                    step={1}
+                    unit="px"
+                    onChange={(val) => updateField("brand_font_size", val)}
+                  />
+                </div>
+
+                <ModernColorPicker
+                  label="Brand Color"
+                  value={brandTextColor}
+                  onChange={(val) => updateField("brand_text_color", val)}
+                />
+              </>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* TAB 2: SEARCH BAR */}
+      {activeTab === "search" && (
+        <section style={sectionCardStyle(isLightMode)}>
+          <div style={{ display: "grid", gap: "6px", width: "100%", boxSizing: "border-box" }}>
+            {/* Search Display Style */}
+            <div style={{ display: "grid", gap: "2px" }}>
+              <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                Display Mode
+              </label>
+              <SegmentedRow
+                value={searchDisplayMode}
+                onChange={(val) => updateField("search_display_mode", val)}
+                options={[
+                  { label: "Search Bar", value: "bar" },
+                  { label: "Icon Only", value: "icon" },
+                ]}
+              />
+            </div>
+
+            {searchDisplayMode === "bar" && (
+              <>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                    Placement
+                  </label>
+                  <SegmentedRow
+                    value={searchPlacement}
+                    onChange={(val) => updateField("search_placement", val)}
+                    options={[
+                      { label: "Left", value: "left" },
+                      { label: "Center", value: "center" },
+                      { label: "Right", value: "right" },
+                    ]}
+                  />
+                </div>
+
+                <SectionDivider title="Dimensions" />
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                  <NumberStepperField
+                    label="Width"
+                    value={searchMaxWidth}
+                    min={160}
+                    max={650}
+                    step={10}
+                    unit="px"
+                    onChange={(val) => updateField("search_max_width", val)}
+                  />
+
+                  <NumberStepperField
+                    label="Height"
+                    value={searchHeight}
+                    min={28}
+                    max={54}
+                    step={2}
+                    unit="px"
+                    onChange={(val) => updateField("search_height", val)}
+                  />
+                </div>
+
+                <SectionDivider title="Colors" />
+
+                <ModernColorPicker
+                  label="Input Text Color"
+                  value={searchTextColor}
+                  onChange={(val) => updateField("search_text_color", val)}
+                />
+
+                <ModernColorPicker
+                  label="Placeholder / Icon Color"
+                  value={searchMutedTextColor}
+                  onChange={(val) => updateField("search_muted_text_color", val)}
+                />
+              </>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* TAB 3: LAYOUT & STRUCTURE */}
+      {activeTab === "layout" && (
+        <section style={sectionCardStyle(isLightMode)}>
+          <div style={{ display: "grid", gap: "6px", width: "100%", boxSizing: "border-box" }}>
+            {/* Style Variant */}
+            <div style={{ display: "grid", gap: "2px" }}>
+              <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                Style Preset
+              </label>
+              <CustomSelectDropdown
+                value={navbarVariant}
+                placeholder="Select Navbar Style"
+                options={[
+                  { label: "Soft (Subtle Tint)", value: "soft" },
+                  { label: "Solid (Full Color)", value: "solid" },
+                  { label: "Floating (Island)", value: "floating" },
+                  { label: "Glassmorphism (Frosted)", value: "glassmorphism" },
+                ]}
+                onChange={(val) => updateField("navbar_variant", val)}
+              />
+            </div>
+
+            {/* Scroll Position */}
+            <div style={{ display: "grid", gap: "2px" }}>
+              <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                Scroll Position
+              </label>
+              <SegmentedRow
+                value={navbarPosition}
+                onChange={(val) => updateField("navbar_position", val)}
+                options={[
+                  { label: "Sticky", value: "sticky" },
+                  { label: "Fixed", value: "fixed" },
+                  { label: "Static", value: "static" },
+                ]}
+              />
+            </div>
+
+            <SectionDivider title="Dimensions & Radius" />
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+              <NumberStepperField
+                label="Navbar Height"
+                value={navbarHeight}
+                min={48}
+                max={100}
+                step={2}
+                unit="px"
+                onChange={(val) => updateField("navbar_height", val)}
+              />
+
+              <NumberStepperField
+                label="Border Radius"
+                value={navbarRadius}
+                min={0}
+                max={36}
+                step={2}
+                unit="px"
+                onChange={(val) => updateField("navbar_radius", val)}
+              />
+            </div>
+
+            <SectionDivider title="Padding & Max Width" />
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+              <NumberStepperField
+                label="Sides (X)"
+                value={navbarPaddingX}
+                min={8}
+                max={36}
+                step={2}
+                unit="px"
+                onChange={(val) => updateField("navbar_padding_x", val)}
+              />
+
+              <NumberStepperField
+                label="Top / Bottom (Y)"
+                value={navbarPaddingY}
+                min={4}
+                max={28}
+                step={2}
+                unit="px"
+                onChange={(val) => updateField("navbar_padding_y", val)}
+              />
+            </div>
+
+            <div style={{ display: "grid", gap: "2px" }}>
+              <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                Max Width Constraint
+              </label>
+              <SegmentedRow
+                value={navbarMaxWidth}
+                onChange={(val) => updateField("navbar_max_width", val)}
+                options={[
+                  { label: "1100px", value: "1100px" },
+                  { label: "1280px", value: "1280px" },
+                  { label: "1440px", value: "1440px" },
+                  { label: "100%", value: "100%" },
+                ]}
+              />
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* TAB 4: COLORS & THEME */}
+      {activeTab === "colors" && (
+        <section style={sectionCardStyle(isLightMode)}>
+          <div style={{ display: "grid", gap: "8px", width: "100%", boxSizing: "border-box" }}>
+            <ModernColorPicker
+              label="Navbar Background"
+              value={navbarBg}
+              onChange={(val) => updateField("navbar_bg", val)}
+            />
+
+            <ModernColorPicker
+              label="Outer Background (Floating Mode)"
+              value={navbarOuterBg}
+              onChange={(val) => updateField("navbar_outer_bg", val)}
+            />
+
+            <ModernColorPicker
+              label="Navbar Text & Icons Color"
+              value={navbarTextColorVal}
+              onChange={(val) => updateField("navbar_text_color", val)}
+            />
+
+            <ModernColorPicker
+              label="Navbar Border Color"
+              value={navbarBorderColor}
+              onChange={(val) => updateField("navbar_border_color", val)}
+            />
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
 export default function EditorSidebar({
   siteDefinition,
   selectedBlockId,
@@ -1857,11 +2739,68 @@ export default function EditorSidebar({
   const editableConfig = selectedBlock
     ? getEditableConfigForBlock(selectedBlock.type)
     : null;
+  const currentSearchDisplayMode = siteDefinition.theme?.search_display_mode || "bar";
+  const currentBrandDisplayMode = siteDefinition.theme?.brand_display_mode || "both";
 
-  const fieldGroups =
-    editableConfig?.fields && editableConfig.fields.length > 0
-      ? groupFields(editableConfig.fields)
-      : [];
+  const visibleFields = useMemo(() => {
+    if (!editableConfig?.fields || editableConfig.fields.length === 0) return [];
+    return editableConfig.fields.filter((field) => {
+      if (selectedBlock?.type === "navbar" || selectedBlock?.type === "header") {
+        // When search display mode is "icon", hide options that only apply to the full search bar
+        if (currentSearchDisplayMode === "icon") {
+          const searchBarOnlyKeys = [
+            "search_placement",
+            "search_max_width",
+            "search_height",
+            "search_text_color",
+            "search_muted_text_color",
+            "search_bg_color",
+            "search_border_color",
+          ];
+          if (searchBarOnlyKeys.includes(field.key)) {
+            return false;
+          }
+        }
+
+        // When brand display mode is "logo_only", hide text-specific options
+        if (currentBrandDisplayMode === "logo_only") {
+          const brandTextOnlyKeys = [
+            "brandName",
+            "brand_font_family",
+            "brand_font_weight",
+            "brand_font_style",
+            "brand_font_size",
+            "brand_text_color",
+            "brand_layout_direction",
+          ];
+          if (brandTextOnlyKeys.includes(field.key)) {
+            return false;
+          }
+        }
+
+        // When brand display mode is "name_only", hide logo-specific options
+        if (currentBrandDisplayMode === "name_only") {
+          const brandLogoOnlyKeys = [
+            "logoUrl",
+            "logo_size",
+            "logo_zoom",
+            "logo_height",
+            "logo_max_width",
+            "logo_fit",
+            "brand_layout_direction",
+          ];
+          if (brandLogoOnlyKeys.includes(field.key)) {
+            return false;
+          }
+        }
+      }
+      return true;
+    });
+  }, [editableConfig, selectedBlock?.type, currentSearchDisplayMode, currentBrandDisplayMode]);
+
+  const fieldGroups = useMemo(() => {
+    return visibleFields.length > 0 ? groupFields(visibleFields) : [];
+  }, [visibleFields]);
 
   const handleFieldChange = (field: EditorField, value: any) => {
     if (field.target === "theme") {
@@ -2384,6 +3323,15 @@ export default function EditorSidebar({
             <>
               {selectedBlock.type === "hero_banner" || selectedBlock.type === "herobanner" ? (
                 <HeroSlidesEditor
+                  selectedBlock={selectedBlock}
+                  isLightMode={isLightMode}
+                  textColor={textColor}
+                  accentColor={accentColor}
+                  onSiteDefinitionChange={onSiteDefinitionChange}
+                  siteDefinition={siteDefinition}
+                />
+              ) : selectedBlock.type === "navbar" || selectedBlock.type === "header" ? (
+                <NavbarEditor
                   selectedBlock={selectedBlock}
                   isLightMode={isLightMode}
                   textColor={textColor}

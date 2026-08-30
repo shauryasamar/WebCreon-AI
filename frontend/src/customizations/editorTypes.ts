@@ -26,6 +26,7 @@ export type EditorField = {
   step?: number;
   placeholder?: string;
   helpText?: string;
+  defaultValue?: any;
 };
 
 export type EditableBlockConfig = {
