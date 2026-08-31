@@ -220,7 +220,7 @@ async function resolveSiteBySlug(
         siteSlugMemoryCache.set(siteSlugParam, res);
         if (res.id) siteSlugMemoryCache.set(res.id, res);
         if (res.slug) siteSlugMemoryCache.set(res.slug, res);
-        const parsedDef = res.site_definition || res.draft_definition;
+        const parsedDef = res.site_definition;
         const targetSlug = res.slug || siteSlugParam;
         if (targetSlug && typeof window !== "undefined") {
           try {
@@ -268,7 +268,7 @@ async function resolveSiteBySlug(
       siteSlugMemoryCache.set(siteSlugParam, found);
       if (found.id) siteSlugMemoryCache.set(found.id, found);
       if (found.slug) siteSlugMemoryCache.set(found.slug, found);
-      const parsedDef = found.draft_definition || found.site_definition;
+      const parsedDef = found.site_definition;
       const targetSlug = found.slug || siteSlugParam;
       if (targetSlug && typeof window !== "undefined") {
         try {
@@ -1015,13 +1015,17 @@ function BuilderPageContent() {
   );
   const [siteDefinition, setSiteDefinition] = useState<SiteDefinition | null>(
     initialCachedSite
-      ? initialCachedSite.draft_definition || initialCachedSite.site_definition
+      ? (isStoreRoute
+          ? (initialCachedSite.site_definition || null)
+          : (initialCachedSite.draft_definition || initialCachedSite.site_definition))
       : null
   );
   const [draftSiteDefinition, setDraftSiteDefinition] =
     useState<SiteDefinition | null>(
       initialCachedSite
-        ? initialCachedSite.draft_definition || initialCachedSite.site_definition
+        ? (isStoreRoute
+            ? (initialCachedSite.site_definition || null)
+            : (initialCachedSite.draft_definition || initialCachedSite.site_definition))
         : null
     );
   const [siteName, setSiteName] = useState(
@@ -1127,12 +1131,6 @@ function BuilderPageContent() {
         siteSlugMemoryCache.set(currentSlug, updatedSnapshot);
         try {
           localStorage.setItem(`wc_site_snapshot_${currentSlug}`, JSON.stringify(updatedSnapshot));
-          if (next.theme) {
-            localStorage.setItem(`wc_theme_mode_${currentSlug}`, next.theme.mode || "light");
-            if (next.theme.primary_bg) {
-              localStorage.setItem(`wc_theme_bg_${currentSlug}`, next.theme.primary_bg);
-            }
-          }
         } catch (_) { }
       }
 
@@ -1520,7 +1518,7 @@ function BuilderPageContent() {
             localStorage.setItem(`wc_site_snapshot_${siteId}`, JSON.stringify(data));
             if (data.slug) {
               localStorage.setItem(`wc_site_snapshot_${data.slug}`, JSON.stringify(data));
-              const def = data.draft_definition || data.site_definition;
+              const def = data.site_definition;
               if (def?.theme) {
                 localStorage.setItem(`wc_theme_mode_${data.slug}`, def.theme.mode || "light");
                 if (def.theme.primary_bg) {
@@ -1542,8 +1540,8 @@ function BuilderPageContent() {
         if (cancelled) return;
 
         const parsedSiteDefinition: SiteDefinition = isStoreRoute
-          ? data.site_definition || data.draft_definition
-          : data.draft_definition || data.site_definition;
+          ? (data.site_definition || data.draft_definition)
+          : (data.draft_definition || data.site_definition);
 
         setResolvedSiteId(data.id || "");
         setSiteSlug(data.slug || "");
@@ -1564,10 +1562,11 @@ function BuilderPageContent() {
         if (isStoreRoute && (data.slug || siteSlugParam)) {
           const sSlug = data.slug || siteSlugParam || "";
           try {
-            if (parsedSiteDefinition.theme) {
-              localStorage.setItem(`wc_theme_mode_${sSlug}`, parsedSiteDefinition.theme.mode || "light");
-              if (parsedSiteDefinition.theme.primary_bg) {
-                localStorage.setItem(`wc_theme_bg_${sSlug}`, parsedSiteDefinition.theme.primary_bg);
+            const pubTheme = data.site_definition?.theme || parsedSiteDefinition.theme;
+            if (pubTheme) {
+              localStorage.setItem(`wc_theme_mode_${sSlug}`, pubTheme.mode || "light");
+              if (pubTheme.primary_bg) {
+                localStorage.setItem(`wc_theme_bg_${sSlug}`, pubTheme.primary_bg);
               }
             }
           } catch (_) { }

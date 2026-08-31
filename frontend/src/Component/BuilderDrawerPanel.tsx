@@ -692,6 +692,17 @@ function renderAssetPreview(assetId: string) {
           </div>
         </div>
       );
+    case "hero-standard":
+      return (
+        <div style={{ padding: "8px 10px", borderRadius: "8px", background: "linear-gradient(135deg, #1e3a8a, #0f172a)", color: "#ffffff", display: "flex", flexDirection: "column", gap: "4px" }}>
+          <span style={{ background: "#2563eb", fontSize: "7px", fontWeight: 800, padding: "1px 5px", borderRadius: "4px", width: "fit-content" }}>TRENDING NOW</span>
+          <div style={{ fontSize: "11px", fontWeight: 800, lineHeight: 1.2 }}>Elevate Your Lifestyle</div>
+          <div style={{ display: "flex", gap: "4px", marginTop: "2px" }}>
+            <span style={{ background: "#ffffff", color: "#0f172a", fontSize: "7px", fontWeight: 700, padding: "2px 6px", borderRadius: "4px" }}>Shop Best Sellers</span>
+            <span style={{ border: "1px solid rgba(255,255,255,0.4)", color: "#ffffff", fontSize: "7px", fontWeight: 700, padding: "2px 6px", borderRadius: "4px" }}>Explore</span>
+          </div>
+        </div>
+      );
     case "hero-flash-sale":
       return (
         <div style={{ padding: "8px 10px", borderRadius: "8px", background: "linear-gradient(135deg, #1e293b, #0f172a)", color: "#ffffff", display: "flex", flexDirection: "column", gap: "4px" }}>

@@ -17,7 +17,7 @@ import {
 } from "./editorUtils";
 import { EditorField } from "./editorTypes";
 import { API_BASE_URL } from "../config/api";
-import { optimizeImageUrl } from "../utils/imageOptimizer";
+import { optimizeImageUrl, compressImageFile } from "../utils/imageOptimizer";
 
 function PageBlocksTreeView({
   siteDefinition: _siteDefinition,
@@ -764,8 +764,9 @@ function LogoUploadControl({ currentValue, isLightMode, onChange }: LogoUploadCo
     setUploading(true);
     setError("");
     try {
+      const fileToUpload = await compressImageFile(file, 1920, 1080, 0.85);
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", fileToUpload);
       const res = await fetch(`${API_BASE_URL}/assets/upload-logo`, {
         method: "POST",
         credentials: "include",
@@ -943,6 +944,76 @@ function LogoUploadControl({ currentValue, isLightMode, onChange }: LogoUploadCo
       )}
     </div>
   );
+}
+
+export function exportCanvasTemplate({
+  width = 1920,
+  height = 450,
+  borderRadius = 0,
+  backgroundColor = "#0f172a",
+  title = "Hero Banner Template",
+  filename = "banner-canvas-template.png",
+}: {
+  width?: number;
+  height?: number;
+  borderRadius?: number;
+  backgroundColor?: string;
+  title?: string;
+  filename?: string;
+}) {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  ctx.clearRect(0, 0, width, height);
+
+  const bg = backgroundColor || "#0f172a";
+  if (bg.includes("gradient")) {
+    const colorMatches = bg.match(/#[0-9a-fA-F]{3,8}|rgba?\([^)]+\)/g);
+    if (colorMatches && colorMatches.length >= 2) {
+      const grad = ctx.createLinearGradient(0, 0, width, height);
+      colorMatches.forEach((col, idx) => {
+        grad.addColorStop(idx / (colorMatches.length - 1), col);
+      });
+      ctx.fillStyle = grad;
+    } else {
+      ctx.fillStyle = "#0f172a";
+    }
+  } else {
+    try {
+      ctx.fillStyle = bg;
+    } catch {
+      ctx.fillStyle = "#0f172a";
+    }
+  }
+
+  if (borderRadius > 0) {
+    const r = Math.min(borderRadius, height / 2, width / 2);
+    ctx.beginPath();
+    ctx.moveTo(r, 0);
+    ctx.lineTo(width - r, 0);
+    ctx.quadraticCurveTo(width, 0, width, r);
+    ctx.lineTo(width, height - r);
+    ctx.quadraticCurveTo(width, height, width - r, height);
+    ctx.lineTo(r, height);
+    ctx.quadraticCurveTo(0, height, 0, height - r);
+    ctx.lineTo(0, r);
+    ctx.quadraticCurveTo(0, 0, r, 0);
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    ctx.fillRect(0, 0, width, height);
+  }
+
+  const dataUrl = canvas.toDataURL("image/png");
+  const link = document.createElement("a");
+  link.download = filename;
+  link.href = dataUrl;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 
@@ -1269,6 +1340,256 @@ function renderFieldControl(
   return null;
 }
 
+const SegmentedRow = ({
+  options,
+  value,
+  onChange,
+}: {
+  options: { label: string; value: string }[];
+  value: string;
+  onChange: (val: string) => void;
+}) => (
+  <div
+    style={{
+      display: "grid",
+      gridTemplateColumns: `repeat(${options.length}, 1fr)`,
+      background: "#f1f5f9",
+      padding: "2px",
+      borderRadius: "5px",
+      gap: "2px",
+      width: "100%",
+      maxWidth: "100%",
+      boxSizing: "border-box",
+      minWidth: 0,
+    }}
+  >
+    {options.map((opt) => {
+      const active = opt.value === value;
+      return (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => onChange(opt.value)}
+          style={{
+            padding: "4px 4px",
+            fontSize: "10.5px",
+            lineHeight: 1.2,
+            fontWeight: active ? 700 : 500,
+            borderRadius: "4px",
+            border: "none",
+            background: active ? "#ffffff" : "transparent",
+            color: active ? "#0f172a" : "#64748b",
+            boxShadow: active ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
+            cursor: "pointer",
+            textAlign: "center",
+            whiteSpace: "nowrap",
+            transition: "all 0.12s ease",
+            minWidth: 0,
+          }}
+        >
+          {opt.label}
+        </button>
+      );
+    })}
+  </div>
+);
+
+const NumberStepperField = ({
+  label,
+  value,
+  min,
+  max,
+  step = 1,
+  unit = "px",
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  unit?: string;
+  onChange: (val: number) => void;
+}) => {
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const stepRef = useRef(step);
+  stepRef.current = step;
+  const minRef = useRef(min);
+  minRef.current = min;
+  const maxRef = useRef(max);
+  maxRef.current = max;
+
+  const clamp = (val: number) => Math.max(minRef.current, Math.min(maxRef.current, val));
+
+  const attachWheel = useCallback((node: HTMLElement | null) => {
+    if (!node) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const delta = e.deltaY < 0 ? stepRef.current : -stepRef.current;
+      const nextVal = Math.max(
+        minRef.current,
+        Math.min(maxRef.current, Number((valueRef.current + delta).toFixed(2)))
+      );
+      onChangeRef.current(nextVal);
+    };
+
+    node.addEventListener("wheel", handleWheel, { passive: false });
+  }, []);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      onChange(clamp(Number((value + step).toFixed(2))));
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      onChange(clamp(Number((value - step).toFixed(2))));
+    }
+  };
+
+  return (
+    <div
+      ref={attachWheel}
+      style={{
+        display: "grid",
+        gap: "3px",
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
+        boxSizing: "border-box",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", boxSizing: "border-box" }}>
+        <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+          {label}
+        </label>
+        <span
+          style={{
+            fontSize: "9px",
+            fontWeight: 800,
+            color: ADMIN_BLUE,
+            background: "rgba(37,99,235,0.08)",
+            padding: "1px 5px",
+            borderRadius: "3px",
+            fontVariantNumeric: "tabular-nums",
+            textAlign: "right",
+            minWidth: "32px",
+            display: "inline-block",
+          }}
+        >
+          {value}{unit}
+        </span>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: "3px", width: "100%", boxSizing: "border-box" }}>
+        <button
+          type="button"
+          onClick={() => onChange(clamp(Number((value - step).toFixed(2))))}
+          title={`Decrease (${step}${unit})`}
+          style={{
+            width: "28px",
+            height: "26px",
+            borderRadius: "4px",
+            border: "1px solid #cbd5e1",
+            background: "#f8fafc",
+            color: "#0f172a",
+            fontWeight: 800,
+            fontSize: "13px",
+            cursor: "pointer",
+            display: "grid",
+            placeItems: "center",
+            flexShrink: 0,
+            lineHeight: 1,
+          }}
+        >
+          −
+        </button>
+
+        <input
+          ref={attachWheel}
+          type="number"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onKeyDown={handleKeyDown}
+          onChange={(e) => {
+            const parsed = parseFloat(e.target.value);
+            if (!isNaN(parsed)) {
+              onChange(clamp(parsed));
+            }
+          }}
+          style={{
+            ...sharedInputStyle(),
+            flex: 1,
+            textAlign: "center",
+            fontWeight: 700,
+            fontSize: "11px",
+            padding: "2px 4px",
+            height: "26px",
+            minWidth: 0,
+          }}
+        />
+
+        <button
+          type="button"
+          onClick={() => onChange(clamp(Number((value + step).toFixed(2))))}
+          title={`Increase (${step}${unit})`}
+          style={{
+            width: "28px",
+            height: "26px",
+            borderRadius: "4px",
+            border: "1px solid #cbd5e1",
+            background: "#f8fafc",
+            color: "#0f172a",
+            fontWeight: 800,
+            fontSize: "13px",
+            cursor: "pointer",
+            display: "grid",
+            placeItems: "center",
+            flexShrink: 0,
+            lineHeight: 1,
+          }}
+        >
+          +
+        </button>
+      </div>
+
+      {/* Smooth micro-slider for continuous sliding */}
+      <input
+        ref={attachWheel}
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(clamp(Number(e.target.value)))}
+        style={{
+          width: "100%",
+          maxWidth: "100%",
+          accentColor: ADMIN_BLUE,
+          cursor: "pointer",
+          height: "3px",
+          margin: "1px 0 0 0",
+          boxSizing: "border-box",
+        }}
+      />
+    </div>
+  );
+};
+
+const SectionDivider = ({ title }: { title: string }) => (
+  <div style={{ paddingTop: "6px", marginTop: "2px", borderTop: "1px solid #f1f5f9", display: "grid", gap: "4px", width: "100%", boxSizing: "border-box" }}>
+    <span style={{ fontSize: "8.5px", fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+      {title}
+    </span>
+  </div>
+);
+
 function HeroSlidesEditor({
   selectedBlock,
   isLightMode,
@@ -1286,7 +1607,7 @@ function HeroSlidesEditor({
 }) {
   const currentProps = selectedBlock.props ?? {};
 
-  const autoPlayInterval = currentProps.auto_play_interval ?? 3;
+  const autoPlayInterval = typeof currentProps.auto_play_interval === "number" ? currentProps.auto_play_interval : 3;
   const autoPlay = currentProps.auto_play ?? true;
 
   // Numeric Height, Width & Radius
@@ -1323,7 +1644,8 @@ function HeroSlidesEditor({
     ];
   }
 
-  const [expandedSlideIndex, setExpandedSlideIndex] = useState<number | null>(0);
+  const [expandedSlideIndex, setExpandedSlideIndex] = useState<number | null>(null);
+  const [slideSubTabs, setSlideSubTabs] = useState<Record<number, "content" | "design" | "media">>({});
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
 
   const updateBlockProps = (newSlides: any[], extraProps: Record<string, any> = {}) => {
@@ -1432,114 +1754,150 @@ function HeroSlidesEditor({
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-      {/* 1. Global Sizing Controls */}
+      {/* 1. Global Sizing & Carousel Controls */}
       <section style={sectionCardStyle(isLightMode)}>
         <div style={{ fontSize: "9.5px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
           LAYOUT & DIMENSIONS
         </div>
 
-        {/* 2-Column Grid */}
+        {/* Height & Radius Steppers (2-Column Grid) */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-          {/* Banner Height */}
-          <div style={{ display: "grid", gap: "2px" }}>
-            <label style={{ fontSize: "9.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Height (px)</label>
-            <input
-              type="number"
-              min="160"
-              max="800"
-              step="10"
-              value={bannerHeightNum}
-              onChange={(e) => updateBlockProps(slides, { banner_height: Number(e.target.value) || 380 })}
-              style={sharedInputStyle()}
-            />
-          </div>
+          <NumberStepperField
+            label="Banner Height"
+            value={bannerHeightNum}
+            min={180}
+            max={850}
+            step={10}
+            unit="px"
+            onChange={(val) => updateBlockProps(slides, { banner_height: val })}
+          />
 
-          {/* Banner Width */}
-          <div style={{ display: "grid", gap: "2px" }}>
-            <label style={{ fontSize: "9.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Width (% or px)</label>
-            <input
-              type="text"
-              placeholder="100% or 1200px"
-              value={bannerWidthVal}
-              onChange={(e) => updateBlockProps(slides, { banner_width: e.target.value })}
-              style={sharedInputStyle()}
-            />
-          </div>
-
-          {/* Border Radius */}
-          <div style={{ display: "grid", gap: "2px" }}>
-            <label style={{ fontSize: "9.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Radius (px)</label>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              step="2"
-              value={borderRadiusNum}
-              onChange={(e) => updateBlockProps(slides, { border_radius: Number(e.target.value) || 0 })}
-              style={sharedInputStyle()}
-            />
-          </div>
-
-          {/* Rotation Speed */}
-          <div style={{ display: "grid", gap: "2px" }}>
-            <label style={{ fontSize: "9.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Speed (sec)</label>
-            <input
-              type="number"
-              min="1"
-              max="30"
-              value={autoPlayInterval}
-              onChange={(e) => updateBlockProps(slides, { auto_play_interval: Number(e.target.value) || 3 })}
-              style={sharedInputStyle()}
-            />
-          </div>
+          <NumberStepperField
+            label="Border Radius"
+            value={borderRadiusNum}
+            min={0}
+            max={48}
+            step={2}
+            unit="px"
+            onChange={(val) => updateBlockProps(slides, { border_radius: val })}
+          />
         </div>
 
-        {/* Auto-play Checkbox Toggle */}
-        <div
-          onClick={() => updateBlockProps(slides, { auto_play: !autoPlay })}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "6px",
-            padding: "4px 6px",
-            borderRadius: "4px",
-            border: "1px solid #e2e8f0",
-            background: autoPlay ? "rgba(37,99,235,0.04)" : "#ffffff",
-            cursor: "pointer",
-            userSelect: "none",
-            transition: "all 0.12s ease",
-            boxSizing: "border-box",
-            width: "100%",
-            marginTop: "1px",
-          }}
-        >
-          <span style={{ fontSize: "10.5px", fontWeight: 500, color: autoPlay ? "#0f172a" : "#475569" }}>
-            Auto-rotate banner slides
-          </span>
+        {/* Width Constraint */}
+        <div style={{ display: "grid", gap: "2px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
+          <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+            Width Constraint
+          </label>
+          <SegmentedRow
+            value={bannerWidthVal === "100%" || bannerWidthVal === "full" ? "100%" : bannerWidthVal}
+            onChange={(val) => updateBlockProps(slides, { banner_width: val })}
+            options={[
+              { label: "1100px", value: "1100px" },
+              { label: "1280px", value: "1280px" },
+              { label: "1440px", value: "1440px" },
+              { label: "100% Full", value: "100%" },
+            ]}
+          />
+        </div>
+
+        <SectionDivider title="Carousel Rotation" />
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", width: "100%", minWidth: 0, boxSizing: "border-box", alignItems: "start" }}>
+          {/* Left: Auto-rotate Toggle with matched label & height */}
+          <div style={{ display: "grid", gap: "2px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: "14px" }}>
+              <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                Auto-Rotate
+              </label>
+              <span
+                style={{
+                  fontSize: "8.5px",
+                  fontWeight: 700,
+                  padding: "0 4px",
+                  borderRadius: "3px",
+                  background: autoPlay ? "rgba(37,99,235,0.12)" : "#f1f5f9",
+                  color: autoPlay ? ADMIN_BLUE : "#94a3b8",
+                  letterSpacing: "0.02em",
+                }}
+              >
+                {autoPlay ? "ON" : "OFF"}
+              </span>
+            </div>
+
+            <div
+              onClick={() => updateBlockProps(slides, { auto_play: !autoPlay })}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "6px",
+                padding: "0 8px",
+                height: "26px",
+                borderRadius: "4px",
+                border: "1px solid #cbd5e1",
+                background: autoPlay ? "rgba(37,99,235,0.06)" : "#f8fafc",
+                cursor: "pointer",
+                userSelect: "none",
+                transition: "all 0.12s ease",
+                boxSizing: "border-box",
+                width: "100%",
+              }}
+            >
+              <span style={{ fontSize: "10.5px", fontWeight: 600, color: autoPlay ? "#0f172a" : "#64748b" }}>
+                {autoPlay ? "Enabled" : "Disabled"}
+              </span>
+              <div
+                style={{
+                  position: "relative",
+                  width: "22px",
+                  height: "13px",
+                  borderRadius: "999px",
+                  background: autoPlay ? ADMIN_BLUE : "#cbd5e1",
+                  transition: "background 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
+                  flexShrink: 0,
+                }}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "2px",
+                    left: autoPlay ? "11px" : "2px",
+                    width: "9px",
+                    height: "9px",
+                    borderRadius: "999px",
+                    background: "#ffffff",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
+                    transition: "left 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Placeholder spacer matching NumberStepperField micro-slider bar */}
+            <div style={{ height: "3px", width: "100%" }} />
+          </div>
+
+          {/* Right: Rotation Speed (always 50% width, dimmed/blurred when auto-rotate is off) */}
           <div
             style={{
-              position: "relative",
-              width: "24px",
-              height: "14px",
-              borderRadius: "999px",
-              background: autoPlay ? ADMIN_BLUE : "#cbd5e1",
-              transition: "background 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
-              flexShrink: 0,
+              opacity: autoPlay ? 1 : 0.38,
+              filter: autoPlay ? "none" : "grayscale(1)",
+              pointerEvents: autoPlay ? "auto" : "none",
+              transition: "all 0.15s ease",
+              userSelect: "none",
+              width: "100%",
+              minWidth: 0,
+              boxSizing: "border-box",
             }}
           >
-            <div
-              style={{
-                position: "absolute",
-                top: "2px",
-                left: autoPlay ? "12px" : "2px",
-                width: "10px",
-                height: "10px",
-                borderRadius: "999px",
-                background: "#ffffff",
-                boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
-                transition: "left 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
-              }}
+            <NumberStepperField
+              label="Rotation Speed"
+              value={autoPlayInterval}
+              min={1}
+              max={20}
+              step={1}
+              unit="s"
+              onChange={(val) => updateBlockProps(slides, { auto_play_interval: val })}
             />
           </div>
         </div>
@@ -1549,27 +1907,19 @@ function HeroSlidesEditor({
       <section style={sectionCardStyle(isLightMode)}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ fontSize: "9.5px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
-            SLIDES ({slides.length})
+            ACTIVE BANNERS ({slides.length})
           </div>
-          <span style={{ fontSize: "9.5px", color: "#94a3b8", fontWeight: 500 }}>⋮⋮ Drag to reorder</span>
+          <span style={{ fontSize: "9px", color: "#94a3b8", fontWeight: 500 }}>⋮⋮ Drag to reorder</span>
         </div>
 
         <div style={{ display: "grid", gap: "4px", marginTop: "1px" }}>
           {slides.map((slide, idx) => {
             const isExpanded = expandedSlideIndex === idx;
-            const slideVariant = slide.variant || "standard";
-            const variantLabel =
-              slideVariant === "flash_sale"
-                ? "Flash Sale"
-                : slideVariant === "product_launch"
-                ? "Product Launch"
-                : slideVariant === "minimal_brand"
-                ? "Minimal Brand"
-                : "Standard";
-
-            const trustBadgesList = Array.isArray(slide.trust_badges)
-              ? slide.trust_badges
-              : ["Free Worldwide Shipping", "30-Day Money Back", "24/7 VIP Support"];
+            const showPrimary = (slide.show_primary_cta !== false && slide.primary_cta?.show !== false);
+            const showSecondary = (slide.show_secondary_cta !== false && slide.secondary_cta?.show !== false);
+            const primaryStyle = slide.primary_cta?.style || "solid";
+            const textAlign = slide.text_alignment || "left";
+            const overlayOpacity = typeof slide.background_overlay_opacity === "number" ? Math.round(slide.background_overlay_opacity * 100) : 35;
 
             return (
               <div
@@ -1612,10 +1962,10 @@ function HeroSlidesEditor({
                       ⋮⋮
                     </span>
                     <span style={{ fontSize: "9px", fontWeight: 700, padding: "1px 4px", borderRadius: "3px", background: "#e2e8f0", color: "#334155", flexShrink: 0 }}>
-                      {variantLabel}
+                      #{idx + 1}
                     </span>
                     <span style={{ fontSize: "11px", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: ADMIN_TEXT, minWidth: 0 }}>
-                      {idx + 1}. {slide.headline || "Untitled Banner"}
+                      {slide.headline || `Banner Slide ${idx + 1}`}
                     </span>
                   </div>
 
@@ -1645,266 +1995,596 @@ function HeroSlidesEditor({
                 {/* Accordion Body */}
                 {isExpanded && (
                   <div style={{ padding: "6px 8px", borderTop: "1px solid #e2e8f0", display: "grid", gap: "6px", width: "100%", minWidth: 0, boxSizing: "border-box", background: "#ffffff" }}>
-                    {/* Variant Selector */}
-                    <div style={{ display: "grid", gap: "2px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-                      <label style={{ fontSize: "9.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>Variant</label>
-                      <CustomSelectDropdown
-                        value={slideVariant}
-                        options={[
-                          { label: "Standard Banner", value: "standard" },
-                          { label: "Flash Sale Offer", value: "flash_sale" },
-                          { label: "Product Showcase", value: "product_launch" },
-                          { label: "Minimal Trust Badges", value: "minimal_brand" },
-                        ]}
-                        onChange={(val) => handleSlideChange(idx, "variant", val)}
-                      />
-                    </div>
-
-                    {/* Headline */}
-                    <div style={{ display: "grid", gap: "2px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-                      <label style={{ fontSize: "9.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Headline</label>
-                      <input
-                        type="text"
-                        value={slide.headline || ""}
-                        onChange={(e) => handleSlideChange(idx, "headline", e.target.value)}
-                        style={sharedInputStyle()}
-                      />
-                    </div>
-
-                    {/* Subheadline */}
-                    <div style={{ display: "grid", gap: "2px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-                      <label style={{ fontSize: "9.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Subheadline</label>
-                      <textarea
-                        rows={2}
-                        value={slide.subheadline || ""}
-                        onChange={(e) => handleSlideChange(idx, "subheadline", e.target.value)}
-                        style={{ ...sharedInputStyle(), height: "auto", minHeight: "46px", resize: "vertical", lineHeight: 1.4, padding: "3px 6px" }}
-                      />
-                    </div>
-
-                    {/* Tag Pill */}
-                    <div style={{ display: "grid", gap: "2px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-                      <label style={{ fontSize: "9.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Badge Tag Pill</label>
-                      <input
-                        type="text"
-                        value={slide.badge || ""}
-                        onChange={(e) => handleSlideChange(idx, "badge", e.target.value)}
-                        placeholder="FLASH SALE..."
-                        style={sharedInputStyle()}
-                      />
-                    </div>
-
-                    {/* Background Color & Gradient Picker */}
-                    <div style={{ display: "grid", gap: "2px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-                      <label style={{ fontSize: "9.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Slide Background Color</label>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "5px",
-                          width: "100%",
-                          height: "26px",
-                          padding: "2px 4px",
-                          borderRadius: "4px",
-                          border: "1px solid #cbd5e1",
-                          background: "#ffffff",
-                          boxSizing: "border-box",
-                        }}
-                      >
-                        <div
-                          style={{
-                            position: "relative",
-                            width: "18px",
-                            height: "18px",
-                            borderRadius: "3px",
-                            overflow: "hidden",
-                            border: "1px solid rgba(0,0,0,0.15)",
-                            flexShrink: 0,
-                          }}
-                        >
-                          <input
-                            type="color"
-                            value={slide.background_color?.startsWith("#") ? slide.background_color : "#0f766e"}
-                            onChange={(e) => handleSlideChange(idx, "background_color", e.target.value)}
-                            style={{
-                              position: "absolute",
-                              top: "-50%",
-                              left: "-50%",
-                              width: "200%",
-                              height: "200%",
-                              cursor: "pointer",
-                              border: "none",
-                              padding: 0,
-                              margin: 0,
-                            }}
-                          />
-                        </div>
-                        <input
-                          type="text"
-                          placeholder="e.g. #0f766e"
-                          value={slide.background_color || ""}
-                          onChange={(e) => handleSlideChange(idx, "background_color", e.target.value)}
-                          style={{
-                            flex: 1,
-                            border: "none",
-                            background: "transparent",
-                            outline: "none",
-                            fontFamily: "'Inter', monospace",
-                            fontSize: "10.5px",
-                            fontWeight: 600,
-                            color: "#0f172a",
-                            padding: "0 2px",
-                            minWidth: 0,
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Variant Specific Fields */}
-                    {slideVariant === "flash_sale" && (
-                      <div style={{ display: "grid", gap: "4px", padding: "6px", background: "rgba(239,68,68,0.03)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: "5px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-                        <div style={{ fontSize: "9.5px", fontWeight: 800, color: "#ef4444", textTransform: "uppercase" }}>Flash Sale Details</div>
-                        <input
-                          type="text"
-                          value={slide.coupon_code || ""}
-                          onChange={(e) => handleSlideChange(idx, "coupon_code", e.target.value)}
-                          placeholder="Coupon Code (e.g. SAVE50)"
-                          style={sharedInputStyle()}
-                        />
-                        <input
-                          type="datetime-local"
-                          value={slide.sale_end_time || ""}
-                          onChange={(e) => handleSlideChange(idx, "sale_end_time", e.target.value)}
-                          style={sharedInputStyle()}
-                        />
-                      </div>
-                    )}
-
-                    {slideVariant === "product_launch" && (
-                      <div style={{ display: "grid", gap: "4px", padding: "6px", background: "rgba(37,99,235,0.04)", border: "1px solid rgba(37,99,235,0.2)", borderRadius: "5px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-                        <div style={{ fontSize: "9.5px", fontWeight: 800, color: ADMIN_BLUE, textTransform: "uppercase" }}>Featured Product Card</div>
-                        <input
-                          type="text"
-                          placeholder="Product Title"
-                          value={slide.product_card?.title || ""}
-                          onChange={(e) => handleSlideChange(idx, "product_card.title", e.target.value)}
-                          style={sharedInputStyle()}
-                        />
-                        <div style={{ display: "flex", gap: "4px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-                          <input
-                            type="text"
-                            placeholder="Price ($249)"
-                            value={slide.product_card?.price || ""}
-                            onChange={(e) => handleSlideChange(idx, "product_card.price", e.target.value)}
-                            style={{ ...sharedInputStyle(), flex: 1 }}
-                          />
-                          <input
-                            type="text"
-                            placeholder="Original ($349)"
-                            value={slide.product_card?.original_price || ""}
-                            onChange={(e) => handleSlideChange(idx, "product_card.original_price", e.target.value)}
-                            style={{ ...sharedInputStyle(), flex: 1 }}
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Dynamic Trust Badges Array Editor */}
-                    {(slideVariant === "minimal_brand" || slideVariant === "standard") && (
-                      <div style={{ display: "grid", gap: "4px", padding: "6px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "5px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                          <label style={{ fontSize: "9.5px", fontWeight: 800, color: "#475569", textTransform: "uppercase" }}>
-                            TRUST BADGES ({trustBadgesList.length})
-                          </label>
+                    {/* Compact Sub-tabs */}
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(3, 1fr)",
+                        gap: "2px",
+                        background: "#f1f5f9",
+                        padding: "2px",
+                        borderRadius: "5px",
+                        width: "100%",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      {[
+                        { id: "content", label: "Content" },
+                        { id: "design", label: "Style" },
+                        { id: "media", label: "Media & CTA" },
+                      ].map((t) => {
+                        const active = (slideSubTabs[idx] || "content") === t.id;
+                        return (
                           <button
+                            key={t.id}
                             type="button"
-                            onClick={() => {
-                              const updatedBadges = [...trustBadgesList, "New Trust Feature"];
-                              handleSlideChange(idx, "trust_badges", updatedBadges);
+                            onClick={() => setSlideSubTabs((prev) => ({ ...prev, [idx]: t.id as any }))}
+                            style={{
+                              padding: "4px 2px",
+                              border: "none",
+                              borderRadius: "4px",
+                              background: active ? "#ffffff" : "transparent",
+                              color: active ? ADMIN_BLUE : "#64748b",
+                              fontWeight: active ? 800 : 600,
+                              fontSize: "9.5px",
+                              cursor: "pointer",
+                              textAlign: "center",
+                              boxShadow: active ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                              transition: "all 0.12s ease",
                             }}
-                            style={{ padding: "1px 5px", borderRadius: "3px", border: `1px solid ${ADMIN_BLUE}`, background: "rgba(37,99,235,0.08)", color: ADMIN_BLUE, fontSize: "9.5px", fontWeight: 700, cursor: "pointer" }}
                           >
-                            + Add
+                            {t.label}
                           </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* TAB 1: CONTENT */}
+                    {(slideSubTabs[idx] || "content") === "content" && (
+                      <div style={{ display: "grid", gap: "5px" }}>
+                        <div style={{ display: "grid", gap: "2px" }}>
+                          <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Headline</label>
+                          <input
+                            type="text"
+                            value={slide.headline || ""}
+                            onChange={(e) => handleSlideChange(idx, "headline", e.target.value)}
+                            placeholder="Headline..."
+                            style={sharedInputStyle()}
+                          />
                         </div>
-                        {trustBadgesList.map((badgeText: string, bIdx: number) => (
-                          <div key={bIdx} style={{ display: "flex", gap: "3px", alignItems: "center", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
+
+                        <div style={{ display: "grid", gap: "2px" }}>
+                          <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Subheadline</label>
+                          <textarea
+                            rows={2}
+                            value={slide.subheadline || ""}
+                            onChange={(e) => handleSlideChange(idx, "subheadline", e.target.value)}
+                            placeholder="Supporting text..."
+                            style={{ ...sharedInputStyle(), height: "auto", minHeight: "36px", resize: "vertical", lineHeight: 1.3, padding: "4px 6px" }}
+                          />
+                        </div>
+
+                        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "5px" }}>
+                          <div style={{ display: "grid", gap: "2px" }}>
+                            <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Badge Tag</label>
                             <input
                               type="text"
-                              value={badgeText}
-                              onChange={(e) => {
-                                const updatedBadges = [...trustBadgesList];
-                                updatedBadges[bIdx] = e.target.value;
-                                handleSlideChange(idx, "trust_badges", updatedBadges);
-                              }}
-                              style={{ ...sharedInputStyle(), height: "24px", fontSize: "10.5px", flex: 1 }}
+                              value={slide.badge || ""}
+                              onChange={(e) => handleSlideChange(idx, "badge", e.target.value)}
+                              placeholder="NEW, 50% OFF..."
+                              style={sharedInputStyle()}
                             />
+                          </div>
+
+                          <div style={{ display: "grid", gap: "2px" }}>
+                            <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Align</label>
+                            <SegmentedRow
+                              value={textAlign === "right" ? "left" : textAlign}
+                              onChange={(val) => handleSlideChange(idx, "text_alignment", val)}
+                              options={[
+                                { label: "Left", value: "left" },
+                                { label: "Center", value: "center" },
+                              ]}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Flash Sale Countdown */}
+                        {slide.variant === "flash_sale" && (
+                          <div style={{ display: "grid", gap: "4px", padding: "5px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "5px" }}>
+                            <div style={{ display: "grid", gap: "2px" }}>
+                              <label style={{ fontSize: "8.5px", color: "#64748b", fontWeight: 700, textTransform: "uppercase" }}>Mode</label>
+                              <SegmentedRow
+                                value={slide.sale_countdown_type || (slide.sale_start_time ? "starts_in" : "ends_in")}
+                                onChange={(val) => handleSlideChange(idx, "sale_countdown_type", val)}
+                                options={[
+                                  { label: "Ends In", value: "ends_in" },
+                                  { label: "Starts In", value: "starts_in" },
+                                ]}
+                              />
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "4px" }}>
+                              <div style={{ display: "grid", gap: "2px" }}>
+                                <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                                  {(slide.sale_countdown_type === "starts_in" || (!slide.sale_countdown_type && slide.sale_start_time)) ? "Start Time" : "End Time"}
+                                </label>
+                                <input
+                                  type="datetime-local"
+                                  value={(slide.sale_countdown_type === "starts_in" || (!slide.sale_countdown_type && slide.sale_start_time)) ? (slide.sale_start_time || "") : (slide.sale_end_time || "")}
+                                  onChange={(e) => {
+                                    if (slide.sale_countdown_type === "starts_in" || (!slide.sale_countdown_type && slide.sale_start_time)) {
+                                      handleSlideChange(idx, "sale_start_time", e.target.value);
+                                    } else {
+                                      handleSlideChange(idx, "sale_end_time", e.target.value);
+                                    }
+                                  }}
+                                  style={sharedInputStyle()}
+                                />
+                              </div>
+                              <div style={{ display: "grid", gap: "2px" }}>
+                                <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Coupon</label>
+                                <input
+                                  type="text"
+                                  value={slide.coupon_code || ""}
+                                  onChange={(e) => handleSlideChange(idx, "coupon_code", e.target.value)}
+                                  placeholder="CODE"
+                                  style={sharedInputStyle()}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Product Launch Card */}
+                        {slide.variant === "product_launch" && (
+                          <div style={{ display: "grid", gap: "4px", padding: "5px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "5px" }}>
+                            <input
+                              type="text"
+                              placeholder="Product Title"
+                              value={slide.product_card?.title || ""}
+                              onChange={(e) => handleSlideChange(idx, "product_card.title", e.target.value)}
+                              style={sharedInputStyle()}
+                            />
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px" }}>
+                              <input
+                                type="text"
+                                placeholder="Price ($199)"
+                                value={slide.product_card?.price || ""}
+                                onChange={(e) => handleSlideChange(idx, "product_card.price", e.target.value)}
+                                style={sharedInputStyle()}
+                              />
+                              <input
+                                type="text"
+                                placeholder="Original ($299)"
+                                value={slide.product_card?.original_price || ""}
+                                onChange={(e) => handleSlideChange(idx, "product_card.original_price", e.target.value)}
+                                style={sharedInputStyle()}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Trust Badges Editor (For Minimal Brand & Default/Standard banners) */}
+                        {(slide.variant !== "flash_sale" && slide.variant !== "product_launch") && (
+                          (Array.isArray(slide.trust_badges) ? slide.trust_badges.length > 0 : slide.variant === "minimal_brand") ? (
+                            <div style={{ display: "grid", gap: "4px", padding: "5px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "5px" }}>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Trust Badges</label>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const currentBadges = Array.isArray(slide.trust_badges) ? slide.trust_badges : ["Free Shipping", "30-Day Money Back", "24/7 VIP Support"];
+                                    handleSlideChange(idx, "trust_badges", [...currentBadges, "Secure Checkout"]);
+                                  }}
+                                  style={{
+                                    fontSize: "8.5px",
+                                    fontWeight: 700,
+                                    color: ADMIN_BLUE,
+                                    background: "none",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    padding: 0,
+                                  }}
+                                >
+                                  + Add Badge
+                                </button>
+                              </div>
+
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: "3px" }}>
+                                {(Array.isArray(slide.trust_badges) ? slide.trust_badges : ["Free Shipping", "30-Day Money Back", "24/7 VIP Support"]).map((badge: string, bIdx: number) => (
+                                  <div
+                                    key={bIdx}
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "3px",
+                                      background: "#ffffff",
+                                      border: "1px solid #cbd5e1",
+                                      borderRadius: "4px",
+                                      padding: "1px 5px",
+                                      fontSize: "9.5px",
+                                      color: "#334155",
+                                    }}
+                                  >
+                                    <input
+                                      type="text"
+                                      value={badge}
+                                      onChange={(e) => {
+                                        const base = Array.isArray(slide.trust_badges) ? slide.trust_badges : ["Free Shipping", "30-Day Money Back", "24/7 VIP Support"];
+                                        const next = [...base];
+                                        next[bIdx] = e.target.value;
+                                        handleSlideChange(idx, "trust_badges", next);
+                                      }}
+                                      style={{
+                                        border: "none",
+                                        outline: "none",
+                                        background: "transparent",
+                                        fontSize: "9.5px",
+                                        fontWeight: 600,
+                                        color: "#334155",
+                                        width: `${Math.max(45, badge.length * 6.5)}px`,
+                                        padding: 0,
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const base = Array.isArray(slide.trust_badges) ? slide.trust_badges : ["Free Shipping", "30-Day Money Back", "24/7 VIP Support"];
+                                        const next = base.filter((_: any, i: number) => i !== bIdx);
+                                        handleSlideChange(idx, "trust_badges", next);
+                                      }}
+                                      style={{
+                                        border: "none",
+                                        background: "none",
+                                        color: "#ef4444",
+                                        cursor: "pointer",
+                                        fontSize: "11px",
+                                        padding: "0 1px",
+                                        lineHeight: 1,
+                                        fontWeight: 800,
+                                      }}
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                              <button
+                                type="button"
+                                onClick={() => handleSlideChange(idx, "trust_badges", ["Free Shipping", "30-Day Money Back", "24/7 VIP Support"])}
+                                style={{
+                                  fontSize: "8.5px",
+                                  fontWeight: 700,
+                                  color: ADMIN_BLUE,
+                                  background: "none",
+                                  border: "none",
+                                  cursor: "pointer",
+                                  padding: "2px 0",
+                                }}
+                              >
+                                + Add Trust Badges
+                              </button>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    )}
+
+                    {/* TAB 2: STYLE (Typography & Colors) */}
+                    {(slideSubTabs[idx] || "content") === "design" && (
+                      <div style={{ display: "grid", gap: "5px" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: "5px" }}>
+                          <div style={{ display: "grid", gap: "2px" }}>
+                            <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                              Font
+                            </label>
+                            <CustomSelectDropdown
+                              value={slide.headline_font_family || "sans_modern"}
+                              placeholder="Font"
+                              options={[
+                                { label: "Inter (Sans)", value: "sans_modern" },
+                                { label: "Roboto (Sans)", value: "roboto_sans" },
+                                { label: "Outfit (Tech)", value: "outfit_tech" },
+                                { label: "Plus Jakarta", value: "plus_jakarta" },
+                                { label: "Space Grotesk", value: "space_grotesk" },
+                                { label: "Playfair (Serif)", value: "playfair_serif" },
+                                { label: "Cinzel (Serif)", value: "cinzel_display" },
+                                { label: "Cormorant", value: "cormorant_serif" },
+                                { label: "Montserrat", value: "montserrat_bold" },
+                                { label: "Poppins", value: "poppins_rounded" },
+                                { label: "Abril Fatface", value: "abril_fatface" },
+                                { label: "Dancing Script", value: "dancing_script" },
+                              ]}
+                              onChange={(val) => handleSlideChange(idx, "headline_font_family", val)}
+                            />
+                          </div>
+
+                          <div style={{ display: "grid", gap: "2px" }}>
+                            <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                              Weight
+                            </label>
+                            <CustomSelectDropdown
+                              value={String(slide.headline_font_weight || "800")}
+                              placeholder="Weight"
+                              options={[
+                                { label: "300 Light", value: "300" },
+                                { label: "400 Regular", value: "400" },
+                                { label: "500 Medium", value: "500" },
+                                { label: "600 Semi", value: "600" },
+                                { label: "700 Bold", value: "700" },
+                                { label: "800 Extra", value: "800" },
+                                { label: "900 Black", value: "900" },
+                              ]}
+                              onChange={(val) => handleSlideChange(idx, "headline_font_weight", val)}
+                            />
+                          </div>
+                        </div>
+
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px" }}>
+                          <div style={{ display: "grid", gap: "2px" }}>
+                            <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                              Style
+                            </label>
+                            <SegmentedRow
+                              value={slide.headline_font_style || "normal"}
+                              onChange={(val) => handleSlideChange(idx, "headline_font_style", val)}
+                              options={[
+                                { label: "Normal", value: "normal" },
+                                { label: "Italic", value: "italic" },
+                              ]}
+                            />
+                          </div>
+
+                          <NumberStepperField
+                            label="Headline Size"
+                            value={Number(slide.headline_font_size || 28)}
+                            min={16}
+                            max={64}
+                            step={2}
+                            unit="px"
+                            onChange={(val) => handleSlideChange(idx, "headline_font_size", val)}
+                          />
+                        </div>
+
+                        <NumberStepperField
+                          label="Subheadline Size"
+                          value={Number(slide.subheadline_font_size || 14)}
+                          min={10}
+                          max={28}
+                          step={1}
+                          unit="px"
+                          onChange={(val) => handleSlideChange(idx, "subheadline_font_size", val)}
+                        />
+
+                        <SectionDivider title="Colors" />
+
+                        <ModernColorPicker
+                          label="Background Color"
+                          value={slide.background_color || slide.hero_bg || ""}
+                          onChange={(val) => handleSlideChange(idx, "background_color", val)}
+                        />
+
+                        <ModernColorPicker
+                          label="Text Color"
+                          value={slide.hero_text_color || slide.text_color || ""}
+                          onChange={(val) => handleSlideChange(idx, "hero_text_color", val)}
+                        />
+
+                        <ModernColorPicker
+                          label="Accent / CTA Color"
+                          value={slide.hero_accent || slide.accent_color || ""}
+                          onChange={(val) => handleSlideChange(idx, "hero_accent", val)}
+                        />
+                      </div>
+                    )}
+
+                    {/* TAB 3: MEDIA & CTA */}
+                    {(slideSubTabs[idx] || "content") === "media" && (
+                      <div style={{ display: "grid", gap: "5px" }}>
+                        {/* Background Image Upload & Download Template */}
+                        <div style={{ display: "grid", gap: "3px" }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "4px" }}>
+                            <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Background Image</label>
                             <button
                               type="button"
                               onClick={() => {
-                                const updatedBadges = trustBadgesList.filter((_: any, i: number) => i !== bIdx);
-                                handleSlideChange(idx, "trust_badges", updatedBadges);
+                                const bannerH = Number(bannerHeightNum || 400);
+                                const slideBg = slide.background_color || slide.hero_bg || (siteDefinition?.theme?.hero_bg || "#0f172a");
+                                exportCanvasTemplate({
+                                  width: 1280,
+                                  height: bannerH,
+                                  borderRadius: 0,
+                                  backgroundColor: slideBg,
+                                  title: `${slide.headline || "Slide"} Template`,
+                                  filename: `banner-canvas-1280x${bannerH}.png`,
+                                });
                               }}
-                              style={{ padding: "2px 4px", borderRadius: "3px", border: "none", background: "rgba(239,68,68,0.08)", color: "#ef4444", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                              style={{
+                                fontSize: "8.5px",
+                                fontWeight: 700,
+                                color: ADMIN_BLUE,
+                                background: "#eff6ff",
+                                border: "1px solid rgba(37,99,235,0.25)",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                padding: "2px 7px",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "3px",
+                              }}
+                              title="Download exact canvas PNG matching your hero banner size to design in Canva"
                             >
-                              <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                              </svg>
+                              📥 Download Canvas (1280×{bannerHeightNum || 400}px)
                             </button>
                           </div>
-                        ))}
+                          <LogoUploadControl
+                            currentValue={slide.background_image || ""}
+                            isLightMode={isLightMode}
+                            onChange={(val) => handleSlideChange(idx, "background_image", val)}
+                          />
+                        </div>
+
+                        {slide.background_image && (
+                          <div style={{ display: "grid", gap: "5px" }}>
+                            {/* Image Fit Row */}
+                            <div style={{ display: "grid", gap: "2px" }}>
+                              <label style={{ fontSize: "8.5px", color: "#64748b", fontWeight: 700, textTransform: "uppercase" }}>Image Fit</label>
+                              <SegmentedRow
+                                value={slide.image_fit || "cover"}
+                                onChange={(val) => handleSlideChange(idx, "image_fit", val)}
+                                options={[
+                                  { label: "Cover", value: "cover" },
+                                  { label: "Contain", value: "contain" },
+                                  { label: "Fill", value: "fill" },
+                                ]}
+                              />
+                            </div>
+
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px" }}>
+                              <NumberStepperField
+                                label="Zoom"
+                                value={typeof slide.image_zoom === "number" ? slide.image_zoom : 100}
+                                min={50}
+                                max={250}
+                                step={5}
+                                unit="%"
+                                onChange={(val) => handleSlideChange(idx, "image_zoom", val)}
+                              />
+
+                              <NumberStepperField
+                                label="Dark Tint"
+                                value={typeof slide.background_overlay_opacity === "number" ? Math.round(slide.background_overlay_opacity * 100) : 0}
+                                min={0}
+                                max={85}
+                                step={5}
+                                unit="%"
+                                onChange={(val) => handleSlideChange(idx, "background_overlay_opacity", Number((val / 100).toFixed(2)))}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        <SectionDivider title="Action Buttons" />
+
+                        {/* Primary Button */}
+                        <div style={{ display: "grid", gap: "4px", padding: "5px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "5px" }}>
+                          <div
+                            onClick={() => handleSlideChange(idx, "show_primary_cta", !showPrimary)}
+                            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
+                          >
+                            <span style={{ fontSize: "8.5px", fontWeight: 700, color: "#475569", textTransform: "uppercase" }}>Primary Button</span>
+                            <div
+                              style={{
+                                position: "relative",
+                                width: "20px",
+                                height: "12px",
+                                borderRadius: "999px",
+                                background: showPrimary ? ADMIN_BLUE : "#cbd5e1",
+                                transition: "background 0.15s ease",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  position: "absolute",
+                                  top: "2px",
+                                  left: showPrimary ? "10px" : "2px",
+                                  width: "8px",
+                                  height: "8px",
+                                  borderRadius: "999px",
+                                  background: "#ffffff",
+                                  transition: "left 0.15s ease",
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          {showPrimary && (
+                            <div style={{ display: "grid", gap: "3px", marginTop: "2px" }}>
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px" }}>
+                                <input
+                                  type="text"
+                                  placeholder="Label"
+                                  value={slide.primary_cta?.label || ""}
+                                  onChange={(e) => handleSlideChange(idx, "primary_cta.label", e.target.value)}
+                                  style={sharedInputStyle()}
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="URL (/products)"
+                                  value={slide.primary_cta?.href || ""}
+                                  onChange={(e) => handleSlideChange(idx, "primary_cta.href", e.target.value)}
+                                  style={sharedInputStyle()}
+                                />
+                              </div>
+                              <SegmentedRow
+                                value={primaryStyle}
+                                onChange={(val) => handleSlideChange(idx, "primary_cta.style", val)}
+                                options={[
+                                  { label: "Solid", value: "solid" },
+                                  { label: "Outline", value: "outline" },
+                                  { label: "Glass", value: "glass" },
+                                ]}
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Secondary Button */}
+                        <div style={{ display: "grid", gap: "4px", padding: "5px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "5px" }}>
+                          <div
+                            onClick={() => handleSlideChange(idx, "show_secondary_cta", !showSecondary)}
+                            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
+                          >
+                            <span style={{ fontSize: "8.5px", fontWeight: 700, color: "#475569", textTransform: "uppercase" }}>Secondary Button</span>
+                            <div
+                              style={{
+                                position: "relative",
+                                width: "20px",
+                                height: "12px",
+                                borderRadius: "999px",
+                                background: showSecondary ? ADMIN_BLUE : "#cbd5e1",
+                                transition: "background 0.15s ease",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  position: "absolute",
+                                  top: "2px",
+                                  left: showSecondary ? "10px" : "2px",
+                                  width: "8px",
+                                  height: "8px",
+                                  borderRadius: "999px",
+                                  background: "#ffffff",
+                                  transition: "left 0.15s ease",
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          {showSecondary && (
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px", marginTop: "2px" }}>
+                              <input
+                                type="text"
+                                placeholder="Label"
+                                value={slide.secondary_cta?.label || ""}
+                                onChange={(e) => handleSlideChange(idx, "secondary_cta.label", e.target.value)}
+                                style={sharedInputStyle()}
+                              />
+                              <input
+                                type="text"
+                                placeholder="URL (/categories)"
+                                value={slide.secondary_cta?.href || ""}
+                                onChange={(e) => handleSlideChange(idx, "secondary_cta.href", e.target.value)}
+                                style={sharedInputStyle()}
+                              />
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
-
-                    {/* Primary Button Card */}
-                    <div style={{ display: "grid", gap: "3px", padding: "6px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "5px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-                      <label style={{ fontSize: "9.5px", fontWeight: 800, color: "#475569", textTransform: "uppercase" }}>PRIMARY BUTTON</label>
-                      <input
-                        type="text"
-                        placeholder="Label (Shop Now)"
-                        value={slide.primary_cta?.label || ""}
-                        onChange={(e) => handleSlideChange(idx, "primary_cta.label", e.target.value)}
-                        style={sharedInputStyle()}
-                      />
-                      <input
-                        type="text"
-                        placeholder="Link URL (/products)"
-                        value={slide.primary_cta?.href || ""}
-                        onChange={(e) => handleSlideChange(idx, "primary_cta.href", e.target.value)}
-                        style={sharedInputStyle()}
-                      />
-                    </div>
-
-                    {/* Secondary Button Card */}
-                    <div style={{ display: "grid", gap: "3px", padding: "6px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "5px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-                      <label style={{ fontSize: "9.5px", fontWeight: 800, color: "#475569", textTransform: "uppercase" }}>SECONDARY BUTTON</label>
-                      <input
-                        type="text"
-                        placeholder="Label (Explore)"
-                        value={slide.secondary_cta?.label || ""}
-                        onChange={(e) => handleSlideChange(idx, "secondary_cta.label", e.target.value)}
-                        style={sharedInputStyle()}
-                      />
-                      <input
-                        type="text"
-                        placeholder="Link URL (/categories)"
-                        value={slide.secondary_cta?.href || ""}
-                        onChange={(e) => handleSlideChange(idx, "secondary_cta.href", e.target.value)}
-                        style={sharedInputStyle()}
-                      />
-                    </div>
-
-                    {/* Background Image Card */}
-                    <div style={{ display: "grid", gap: "3px", padding: "6px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "5px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-                      <label style={{ fontSize: "9.5px", fontWeight: 800, color: "#475569", textTransform: "uppercase" }}>BACKGROUND IMAGE URL</label>
-                      <input
-                        type="text"
-                        placeholder="https://..."
-                        value={slide.background_image || ""}
-                        onChange={(e) => handleSlideChange(idx, "background_image", e.target.value)}
-                        style={sharedInputStyle()}
-                      />
-                    </div>
                   </div>
                 )}
               </div>
@@ -1954,6 +2634,7 @@ function NavbarEditor({
   const logoUrl = getVal("logoUrl", "");
   const logoSize = Number(getVal("logo_size", 34));
   const logoZoom = Number(getVal("logo_zoom", 100));
+  const logoFit = getVal("logo_fit", "contain");
   const brandFontFamily = getVal("brand_font_family", "sans_modern");
   const brandFontWeight = String(getVal("brand_font_weight", "700"));
   const brandFontStyle = getVal("brand_font_style", "normal");
@@ -1980,257 +2661,6 @@ function NavbarEditor({
   const navbarOuterBg = getVal("navbar_outer_bg", "transparent");
   const navbarTextColorVal = getVal("navbar_text_color", "#0f172a");
   const navbarBorderColor = getVal("navbar_border_color", "rgba(226, 232, 240, 0.8)");
-
-  const SegmentedRow = ({
-    options,
-    value,
-    onChange,
-  }: {
-    options: { label: string; value: string }[];
-    value: string;
-    onChange: (val: string) => void;
-  }) => (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: `repeat(${options.length}, 1fr)`,
-        background: "#f1f5f9",
-        padding: "2px",
-        borderRadius: "5px",
-        gap: "2px",
-        width: "100%",
-        maxWidth: "100%",
-        boxSizing: "border-box",
-        minWidth: 0,
-      }}
-    >
-      {options.map((opt) => {
-        const active = opt.value === value;
-        return (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => onChange(opt.value)}
-            style={{
-              padding: "4px 3px",
-              fontSize: "10px",
-              fontWeight: active ? 700 : 500,
-              borderRadius: "4px",
-              border: "none",
-              background: active ? "#ffffff" : "transparent",
-              color: active ? "#0f172a" : "#64748b",
-              boxShadow: active ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-              cursor: "pointer",
-              textAlign: "center",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              transition: "all 0.12s ease",
-              minWidth: 0,
-            }}
-          >
-            {opt.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-
-  const NumberStepperField = ({
-    label,
-    value,
-    min,
-    max,
-    step = 1,
-    unit = "px",
-    onChange,
-  }: {
-    label: string;
-    value: number;
-    min: number;
-    max: number;
-    step?: number;
-    unit?: string;
-    onChange: (val: number) => void;
-  }) => {
-    const valueRef = useRef(value);
-    valueRef.current = value;
-    const onChangeRef = useRef(onChange);
-    onChangeRef.current = onChange;
-    const stepRef = useRef(step);
-    stepRef.current = step;
-    const minRef = useRef(min);
-    minRef.current = min;
-    const maxRef = useRef(max);
-    maxRef.current = max;
-
-    const clamp = (val: number) => Math.max(minRef.current, Math.min(maxRef.current, val));
-
-    const attachWheel = useCallback((node: HTMLElement | null) => {
-      if (!node) return;
-
-      const handleWheel = (e: WheelEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const delta = e.deltaY < 0 ? stepRef.current : -stepRef.current;
-        const nextVal = Math.max(
-          minRef.current,
-          Math.min(maxRef.current, Number((valueRef.current + delta).toFixed(2)))
-        );
-        onChangeRef.current(nextVal);
-      };
-
-      node.addEventListener("wheel", handleWheel, { passive: false });
-    }, []);
-
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        onChange(clamp(Number((value + step).toFixed(2))));
-      } else if (e.key === "ArrowDown") {
-        e.preventDefault();
-        onChange(clamp(Number((value - step).toFixed(2))));
-      }
-    };
-
-    return (
-      <div
-        ref={attachWheel}
-        style={{
-          display: "grid",
-          gap: "3px",
-          width: "100%",
-          maxWidth: "100%",
-          minWidth: 0,
-          boxSizing: "border-box",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", boxSizing: "border-box" }}>
-          <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-            {label}
-          </label>
-          <span
-            style={{
-              fontSize: "9px",
-              fontWeight: 800,
-              color: ADMIN_BLUE,
-              background: "rgba(37,99,235,0.08)",
-              padding: "1px 5px",
-              borderRadius: "3px",
-              fontVariantNumeric: "tabular-nums",
-              textAlign: "right",
-              minWidth: "32px",
-              display: "inline-block",
-            }}
-          >
-            {value}{unit}
-          </span>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: "3px", width: "100%", boxSizing: "border-box" }}>
-          <button
-            type="button"
-            onClick={() => onChange(clamp(Number((value - step).toFixed(2))))}
-            title={`Decrease (${step}${unit})`}
-            style={{
-              width: "28px",
-              height: "26px",
-              borderRadius: "4px",
-              border: "1px solid #cbd5e1",
-              background: "#f8fafc",
-              color: "#0f172a",
-              fontWeight: 800,
-              fontSize: "13px",
-              cursor: "pointer",
-              display: "grid",
-              placeItems: "center",
-              flexShrink: 0,
-              lineHeight: 1,
-            }}
-          >
-            −
-          </button>
-
-          <input
-            ref={attachWheel}
-            type="number"
-            min={min}
-            max={max}
-            step={step}
-            value={value}
-            onKeyDown={handleKeyDown}
-            onChange={(e) => {
-              const parsed = parseFloat(e.target.value);
-              if (!isNaN(parsed)) {
-                onChange(clamp(parsed));
-              }
-            }}
-            style={{
-              ...sharedInputStyle(),
-              flex: 1,
-              textAlign: "center",
-              fontWeight: 700,
-              fontSize: "11px",
-              padding: "2px 4px",
-              height: "26px",
-              minWidth: 0,
-            }}
-          />
-
-          <button
-            type="button"
-            onClick={() => onChange(clamp(Number((value + step).toFixed(2))))}
-            title={`Increase (${step}${unit})`}
-            style={{
-              width: "28px",
-              height: "26px",
-              borderRadius: "4px",
-              border: "1px solid #cbd5e1",
-              background: "#f8fafc",
-              color: "#0f172a",
-              fontWeight: 800,
-              fontSize: "13px",
-              cursor: "pointer",
-              display: "grid",
-              placeItems: "center",
-              flexShrink: 0,
-              lineHeight: 1,
-            }}
-          >
-            +
-          </button>
-        </div>
-
-        {/* Smooth micro-slider for continuous sliding or 2-finger wheel */}
-        <input
-          ref={attachWheel}
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          onChange={(e) => onChange(clamp(Number(e.target.value)))}
-          style={{
-            width: "100%",
-            maxWidth: "100%",
-            accentColor: ADMIN_BLUE,
-            cursor: "pointer",
-            height: "3px",
-            margin: "1px 0 0 0",
-            boxSizing: "border-box",
-          }}
-        />
-      </div>
-    );
-  };
-
-  const SectionDivider = ({ title }: { title: string }) => (
-    <div style={{ paddingTop: "6px", marginTop: "2px", borderTop: "1px solid #f1f5f9", display: "grid", gap: "4px", width: "100%", boxSizing: "border-box" }}>
-      <span style={{ fontSize: "8.5px", fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-        {title}
-      </span>
-    </div>
-  );
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
@@ -2348,6 +2778,21 @@ function NavbarEditor({
                   isLightMode={isLightMode}
                   onChange={(val) => updateField("logoUrl", val)}
                 />
+
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                    Logo Fit
+                  </label>
+                  <SegmentedRow
+                    value={logoFit}
+                    onChange={(val) => updateField("logo_fit", val)}
+                    options={[
+                      { label: "Contain", value: "contain" },
+                      { label: "Cover", value: "cover" },
+                      { label: "Fill", value: "fill" },
+                    ]}
+                  />
+                </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
                   <NumberStepperField
@@ -2685,6 +3130,41 @@ function NavbarEditor({
               value={navbarBorderColor}
               onChange={(val) => updateField("navbar_border_color", val)}
             />
+
+            <button
+              type="button"
+              onClick={() => {
+                const navH = Number(navbarHeight || 72);
+                const navR = Number(navbarRadius || 0);
+                exportCanvasTemplate({
+                  width: 1920,
+                  height: navH,
+                  borderRadius: navR,
+                  backgroundColor: navbarBg,
+                  title: "Navbar Template",
+                  filename: `navbar-canvas-1920x${navH}.png`,
+                });
+              }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                padding: "6px 12px",
+                background: "#f1f5f9",
+                border: "1px solid #cbd5e1",
+                borderRadius: "6px",
+                color: "#1e293b",
+                fontSize: "10.5px",
+                fontWeight: 600,
+                cursor: "pointer",
+                marginTop: "4px",
+                transition: "background 0.12s ease",
+              }}
+              title="Download exact-size canvas PNG with navbar background to edit in Canva or Photoshop"
+            >
+              📥 Download Navbar Canvas (1920 × {navbarHeight || 72}px)
+            </button>
           </div>
         </section>
       )}
@@ -3436,7 +3916,7 @@ export default function EditorSidebar({
             </div>
           ) : (
             <>
-              {selectedBlock.type === "hero_banner" || selectedBlock.type === "herobanner" ? (
+              {selectedBlock.type === "hero_banner" || selectedBlock.type === "herobanner" || selectedBlock.type === "hero" || selectedBlock.type === "banner" ? (
                 <HeroSlidesEditor
                   selectedBlock={selectedBlock}
                   isLightMode={isLightMode}

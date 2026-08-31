@@ -282,8 +282,7 @@ function AdminSitesPage() {
               `wc_site_snapshot_${site.id}`,
               JSON.stringify(site)
             );
-            const parsedTheme =
-              site.draft_definition?.theme || site.site_definition?.theme;
+            const parsedTheme = site.site_definition?.theme;
             if (parsedTheme) {
               localStorage.setItem(
                 `wc_theme_mode_${site.id}`,
@@ -305,8 +304,7 @@ function AdminSitesPage() {
               `wc_site_snapshot_${site.slug}`,
               JSON.stringify(site)
             );
-            const parsedTheme =
-              site.draft_definition?.theme || site.site_definition?.theme;
+            const parsedTheme = site.site_definition?.theme;
             if (parsedTheme) {
               localStorage.setItem(
                 `wc_theme_mode_${site.slug}`,

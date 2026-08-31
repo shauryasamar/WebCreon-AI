@@ -34,6 +34,8 @@ type TrackingData = {
   notes?: string | null;
   order_status: string | null;
   delivery_otp?: string | null;
+  delivery_mode?: string | null;
+  agent_id?: string | null;
   scans?: TrackingScan[];
 };
 

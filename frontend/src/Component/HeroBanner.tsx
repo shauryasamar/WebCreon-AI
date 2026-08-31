@@ -7,6 +7,7 @@ import {
   ChristmasGraphics,
   EidGraphics,
 } from "./FestiveGraphics";
+import { optimizeImageUrl } from "../utils/imageOptimizer";
 
 export type HeroSlide = {
   id?: string;
@@ -15,14 +16,19 @@ export type HeroSlide = {
   subheadline?: string;
   badge?: string;
   coupon_code?: string;
+  sale_countdown_type?: "ends_in" | "starts_in";
+  sale_start_time?: string;
   sale_end_time?: string;
   primary_cta?: {
     label: string;
     href: string;
+    show?: boolean;
+    style?: "solid" | "outline" | "glass";
   };
   secondary_cta?: {
     label: string;
     href: string;
+    show?: boolean;
   };
   product_card?: {
     title: string;
@@ -37,6 +43,10 @@ export type HeroSlide = {
   background_color?: string; // Custom background color / gradient per slide
   hero_bg?: string;
   background_overlay?: string;
+  background_overlay_opacity?: number;
+  text_alignment?: "left" | "center" | "right";
+  show_primary_cta?: boolean;
+  show_secondary_cta?: boolean;
   text_color?: string;
   hero_text_color?: string;
   accent_color?: string;
@@ -50,10 +60,13 @@ export type HeroBannerProps = {
   primary_cta?: {
     label: string;
     href: string;
+    show?: boolean;
+    style?: "solid" | "outline" | "glass";
   };
   secondary_cta?: {
     label: string;
     href: string;
+    show?: boolean;
   };
   background_image?: string;
   background_color?: string;
@@ -85,40 +98,80 @@ export type HeroBannerProps = {
   auto_play?: boolean;
 };
 
-// Countdown Timer Helper Hook
-function useCountdown(targetDateTime?: string) {
-  const [timeLeft, setTimeLeft] = useState<{ hours: string; minutes: string; seconds: string }>({
+// Countdown Timer Helper Hook supporting both Starts In & Ends In
+function useCountdown(
+  startDateTime?: string,
+  endDateTime?: string,
+  explicitMode?: "starts_in" | "ends_in"
+) {
+  const [state, setState] = useState<{
+    hours: string;
+    minutes: string;
+    seconds: string;
+    label: "STARTS IN:" | "ENDS IN:";
+    isExpired: boolean;
+  }>({
     hours: "04h",
     minutes: "22m",
     seconds: "15s",
+    label: explicitMode === "starts_in" ? "STARTS IN:" : "ENDS IN:",
+    isExpired: false,
   });
 
   useEffect(() => {
-    if (!targetDateTime) return;
-    const target = new Date(targetDateTime).getTime();
-    if (isNaN(target)) return;
-
     const updateTimer = () => {
       const now = new Date().getTime();
-      const diff = Math.max(0, target - now);
+      const startTime = startDateTime ? new Date(startDateTime).getTime() : NaN;
+      const endTime = endDateTime ? new Date(endDateTime).getTime() : NaN;
 
+      let targetTime = NaN;
+      let currentLabel: "STARTS IN:" | "ENDS IN:" = "ENDS IN:";
+
+      if (explicitMode === "starts_in" && !isNaN(startTime)) {
+        targetTime = startTime;
+        currentLabel = "STARTS IN:";
+      } else if (explicitMode === "ends_in" && !isNaN(endTime)) {
+        targetTime = endTime;
+        currentLabel = "ENDS IN:";
+      } else {
+        // Auto-detect based on dates
+        if (!isNaN(startTime) && startTime > now) {
+          targetTime = startTime;
+          currentLabel = "STARTS IN:";
+        } else if (!isNaN(endTime)) {
+          targetTime = endTime;
+          currentLabel = "ENDS IN:";
+        } else if (!isNaN(startTime)) {
+          targetTime = startTime;
+          currentLabel = "STARTS IN:";
+        }
+      }
+
+      if (isNaN(targetTime)) {
+        setState((prev) => ({ ...prev, label: currentLabel }));
+        return;
+      }
+
+      const diff = Math.max(0, targetTime - now);
       const hours = Math.floor(diff / (1000 * 60 * 60));
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
       const seconds = Math.floor((diff % (1000 * 60)) / 1000);
 
-      setTimeLeft({
+      setState({
         hours: `${String(hours).padStart(2, "0")}h`,
         minutes: `${String(minutes).padStart(2, "0")}m`,
         seconds: `${String(seconds).padStart(2, "0")}s`,
+        label: currentLabel,
+        isExpired: diff <= 0,
       });
     };
 
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [targetDateTime]);
+  }, [startDateTime, endDateTime, explicitMode]);
 
-  return timeLeft;
+  return state;
 }
 
 export const HeroBanner: React.FC<HeroBannerProps> = ({
@@ -141,6 +194,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   slides,
   auto_play_interval = 3,
   auto_play = true,
+  ...restProps
 }) => {
   const isDarkMode = theme?.mode === "dark";
 
@@ -258,12 +312,34 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
     setCurrentIndex((prev) => (prev + 1) % activeSlides.length);
   };
 
-  const liveCountdown = useCountdown(currentSlide.sale_end_time);
+  const liveCountdown = useCountdown(
+    currentSlide.sale_start_time,
+    currentSlide.sale_end_time,
+    currentSlide.sale_countdown_type
+  );
 
   // Slide background image & color handling
   const slideBgImage = currentSlide.background_image;
   const hasSlideBgImage = Boolean(slideBgImage);
-  const slideBgOverlay = currentSlide.background_overlay || background_overlay;
+  const overlayOpacity =
+    typeof currentSlide.background_overlay_opacity === "number"
+      ? currentSlide.background_overlay_opacity
+      : 0;
+  const slideBgOverlay =
+    currentSlide.background_overlay ||
+    (overlayOpacity > 0 ? `rgba(0, 0, 0, ${overlayOpacity})` : "transparent");
+
+  const slideImageFit = currentSlide.image_fit || currentSlide.background_size || background_size || "cover";
+  const slideImagePosition = currentSlide.image_position || currentSlide.background_position || background_position || "center";
+  const slideImageZoom = typeof currentSlide.image_zoom === "number" ? currentSlide.image_zoom : 100;
+
+  const resolvedBgSize = slideImageZoom !== 100 
+    ? `${slideImageZoom}%` 
+    : slideImageFit === "contain" 
+    ? "contain" 
+    : slideImageFit === "fill" 
+    ? "100% 100%" 
+    : "cover";
 
   // Custom slide background color (supports manual block editing & global themes)
   const festTheme = (theme as any)?.festival_theme;
@@ -273,13 +349,17 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   let slideCustomBgColor = isDarkMode ? (theme?.hero_bg || theme?.secondary_bg || "#1a1c21") : (theme?.hero_bg || "#f8fafc");
   if (isDarkMode) {
     slideCustomBgColor =
+      currentSlide.background_color ||
+      currentSlide.hero_bg ||
       theme?.hero_bg ||
       theme?.secondary_bg ||
-      (currentSlide.hero_bg && currentSlide.hero_bg !== "#f8fafc" && currentSlide.hero_bg !== "#ffffff" ? currentSlide.hero_bg : "#1a1c21");
+      "#1a1c21";
+  } else if (currentSlide.background_color || currentSlide.hero_bg) {
+    slideCustomBgColor = currentSlide.background_color || currentSlide.hero_bg;
   } else if (theme?.hero_bg) {
     slideCustomBgColor = theme.hero_bg;
-  } else if (currentSlide.background_color || currentSlide.hero_bg || directBlockBg) {
-    slideCustomBgColor = currentSlide.background_color || currentSlide.hero_bg || directBlockBg || "#f8fafc";
+  } else if (directBlockBg) {
+    slideCustomBgColor = directBlockBg;
   } else if (theme?.secondary_bg || theme?.primary_bg) {
     slideCustomBgColor = theme.secondary_bg || theme.primary_bg || "#f8fafc";
   }
@@ -292,15 +372,15 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   const defaultTextColor = isDarkMode ? "#f8fafc" : "#0f172a";
   const directTextColor = hero_text_color || text_color;
   const slideTextColor =
-    isDarkMode
+    currentSlide.hero_text_color ||
+    currentSlide.text_color ||
+    (isDarkMode
       ? (theme?.hero_text_color || theme?.text_color || "#f8fafc")
       : (theme?.hero_text_color ||
-         currentSlide.hero_text_color ||
-         currentSlide.text_color ||
          directTextColor ||
          theme?.text_color ||
-         (hasSlideBgImage ? "#ffffff" : defaultTextColor));
-  const accentColor = theme?.hero_accent || currentSlide.accent_color || theme?.accent_color || (isDarkMode ? "#60a5fa" : "#2563eb");
+         (hasSlideBgImage ? "#ffffff" : defaultTextColor)));
+  const accentColor = currentSlide.hero_accent || currentSlide.accent_color || theme?.hero_accent || theme?.accent_color || (isDarkMode ? "#60a5fa" : "#2563eb");
 
   // Dynamic Scale-based Sizing
   const containerPadding = `${Math.round(Math.max(14, 28 * hScale))}px ${Math.round(isMobile ? 16 : 32 * hScale)}px`;
@@ -309,6 +389,73 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   const headlineFontSize = `${(Math.max(0.9, Math.min(2.3, 1.8 * hScale))).toFixed(2)}rem`;
   const subheadlineFontSize = `${(Math.max(0.72, Math.min(1.05, 0.95 * hScale))).toFixed(2)}rem`;
   const badgeFontSize = `${Math.max(9, Math.round(11 * hScale))}px`;
+
+  const getHeroFontFamilyStyle = (fontKey?: string) => {
+    switch (fontKey) {
+      case "playfair_serif":
+      case "elegant_serif":
+        return "'Playfair Display', 'Didot', 'Georgia', serif";
+      case "cinzel_display":
+      case "bold_display":
+        return "'Cinzel', 'Trajan Pro', 'Didot', serif";
+      case "cormorant_serif":
+        return "'Cormorant Garamond', 'Garamond', 'Baskerville', serif";
+      case "outfit_tech":
+      case "outfit_geometric":
+      case "geometric":
+        return "'Outfit', 'Poppins', 'Montserrat', sans-serif";
+      case "plus_jakarta":
+      case "jakarta_sans":
+        return "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      case "roboto_sans":
+        return "'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      case "space_grotesk":
+        return "'Space Grotesk', -apple-system, sans-serif";
+      case "poppins_rounded":
+        return "'Poppins', -apple-system, sans-serif";
+      case "montserrat_bold":
+        return "'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      case "dancing_script":
+      case "stylish_script":
+        return "'Dancing Script', 'Brush Script MT', cursive";
+      case "great_vibes":
+        return "'Great Vibes', 'Allura', cursive";
+      case "abril_fatface":
+        return "'Abril Fatface', 'Playfair Display', 'Georgia', serif";
+      case "monospace":
+        return "'Fira Code', 'JetBrains Mono', 'Courier New', monospace";
+      case "sans_modern":
+      case "modern_sans":
+      default:
+        return "inherit";
+    }
+  };
+
+  const headlineFontFamily = getHeroFontFamilyStyle(
+    currentSlide.headline_font_family ||
+    currentSlide.font_family ||
+    (restProps as any).headline_font_family ||
+    (restProps as any).font_family ||
+    theme?.brand_font_family
+  );
+  const headlineFontWeight = String(
+    currentSlide.headline_font_weight ||
+    currentSlide.font_weight ||
+    (restProps as any).headline_font_weight ||
+    "800"
+  );
+  const headlineFontStyle = (
+    currentSlide.headline_font_style ||
+    currentSlide.font_style ||
+    (restProps as any).headline_font_style ||
+    "normal"
+  ) as any;
+
+  const customHeadlineFontSize = currentSlide.headline_font_size || (restProps as any).headline_font_size;
+  const resolvedHeadlineFontSize = customHeadlineFontSize ? `${customHeadlineFontSize}px` : headlineFontSize;
+
+  const customSubheadlineFontSize = currentSlide.subheadline_font_size || (restProps as any).subheadline_font_size;
+  const resolvedSubheadlineFontSize = customSubheadlineFontSize ? `${customSubheadlineFontSize}px` : subheadlineFontSize;
 
   const ctaPadding = `${Math.round(Math.max(6, 10 * hScale))}px ${Math.round(Math.max(12, 20 * hScale))}px`;
   const ctaFontSize = `${(Math.max(0.75, Math.min(0.95, 0.88 * hScale))).toFixed(2)}rem`;
@@ -332,17 +479,10 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
     justifyContent: "center",
     boxSizing: "border-box",
     flexShrink: 0,
+    background: slideCustomBgColor,
     boxShadow: isDarkMode
       ? "0 16px 40px rgba(0, 0, 0, 0.4)"
       : "0 12px 36px rgba(15, 23, 42, 0.06)",
-    ...(hasSlideBgImage
-      ? {
-        backgroundImage: `url(${slideBgImage})`,
-        backgroundSize: background_size,
-        backgroundPosition: background_position,
-        backgroundRepeat: "no-repeat",
-      }
-      : defaultBgStyle),
   };
 
   const renderHeroFestiveBackdrop = () => {
@@ -418,8 +558,101 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
     );
   };
 
-  const isFestiveActive = Boolean(festTheme && festTheme !== "none" && !hasSlideBgImage);
-  const slideContentMaxWidth = isMobile ? "100%" : isFestiveActive ? "48%" : "640px";
+  const slideAlign = currentSlide.text_alignment || "left";
+  const slideAlignItems = slideAlign === "center" ? "center" : slideAlign === "right" ? "flex-end" : "flex-start";
+  const slideContentMaxWidth = slideAlign === "center" ? "760px" : "620px";
+  const slideTextAlign = slideAlign === "center" ? "center" : slideAlign === "right" ? "right" : "left";
+  const slideMargin = slideAlign === "center" ? "0 auto" : slideAlign === "right" ? "0 0 0 auto" : "0";
+
+  // Per-slide CTA Button Visibility & Independent Links
+  const showPrimaryCta = (currentSlide.show_primary_cta !== false && currentSlide.primary_cta?.show !== false) && Boolean(currentSlide.primary_cta?.label);
+  const showSecondaryCta = (currentSlide.show_secondary_cta !== false && currentSlide.secondary_cta?.show !== false) && Boolean(currentSlide.secondary_cta?.label) && (responsiveHeight >= 260 || isMobile);
+  const primaryBtnStyle = currentSlide.primary_cta?.style || "solid";
+
+  const getPrimaryButtonStyle = (): React.CSSProperties => {
+    if (primaryBtnStyle === "outline") {
+      return {
+        padding: ctaPadding,
+        borderRadius: "999px",
+        background: "transparent",
+        border: `1.5px solid ${accentColor}`,
+        color: accentColor,
+        fontSize: ctaFontSize,
+        fontWeight: 700,
+        textDecoration: "none",
+        transition: "all 0.15s ease",
+      };
+    }
+    if (primaryBtnStyle === "glass") {
+      return {
+        padding: ctaPadding,
+        borderRadius: "999px",
+        background: isDarkMode ? "rgba(255,255,255,0.16)" : "rgba(15,23,42,0.08)",
+        backdropFilter: "blur(12px)",
+        border: isDarkMode ? "1px solid rgba(255,255,255,0.25)" : "1px solid rgba(15,23,42,0.15)",
+        color: slideTextColor,
+        fontSize: ctaFontSize,
+        fontWeight: 700,
+        textDecoration: "none",
+        transition: "all 0.15s ease",
+      };
+    }
+    return {
+      padding: ctaPadding,
+      borderRadius: "999px",
+      background: accentColor,
+      color: "#ffffff",
+      fontSize: ctaFontSize,
+      fontWeight: 700,
+      textDecoration: "none",
+      boxShadow: "0 4px 14px rgba(37,99,235,0.3)",
+      transition: "all 0.15s ease",
+    };
+  };
+
+  const renderButtonsRow = () => {
+    if (!showPrimaryCta && !showSecondaryCta) return null;
+
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          flexWrap: "wrap",
+          marginTop: "4px",
+          justifyContent: slideAlign === "center" ? "center" : slideAlign === "right" ? "flex-end" : "flex-start",
+        }}
+      >
+        {showPrimaryCta && currentSlide.primary_cta && (
+          <a
+            href={currentSlide.primary_cta.href || "/products"}
+            style={getPrimaryButtonStyle()}
+          >
+            {currentSlide.primary_cta.label}
+          </a>
+        )}
+        {showSecondaryCta && currentSlide.secondary_cta && (
+          <a
+            href={currentSlide.secondary_cta.href || "/categories"}
+            style={{
+              padding: ctaPadding,
+              borderRadius: "999px",
+              border: isDarkMode ? "1px solid rgba(255,255,255,0.25)" : "1px solid rgba(15,23,42,0.15)",
+              background: "transparent",
+              color: slideTextColor,
+              fontSize: ctaFontSize,
+              fontWeight: 600,
+              textDecoration: "none",
+              transition: "all 0.15s ease",
+            }}
+          >
+            {currentSlide.secondary_cta.label}
+          </a>
+        )}
+      </div>
+    );
+  };
 
   const renderSlideContent = () => {
     const variant = currentSlide.variant || "standard";
@@ -427,9 +660,19 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
     switch (variant) {
       case "flash_sale":
         return (
-          <div style={{ display: "flex", flexDirection: "column", gap: contentGap, maxWidth: slideContentMaxWidth }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: contentGap,
+              maxWidth: slideContentMaxWidth,
+              alignItems: slideAlignItems,
+              textAlign: slideTextAlign as any,
+              margin: slideMargin,
+            }}
+          >
             {/* Badge & Coupon */}
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", justifyContent: slideAlign === "center" ? "center" : slideAlign === "right" ? "flex-end" : "flex-start" }}>
               {currentSlide.badge && (
                 <span
                   style={{
@@ -467,35 +710,31 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
             {/* Headline */}
             <h1
               style={{
-                fontSize: headlineFontSize,
-                fontWeight: 800,
+                fontSize: resolvedHeadlineFontSize,
+                fontWeight: headlineFontWeight as any,
+                fontFamily: headlineFontFamily,
+                fontStyle: headlineFontStyle,
                 color: slideTextColor,
-                lineHeight: 1.12,
+                lineHeight: 1.15,
                 margin: 0,
-                overflow: "hidden",
-                display: "-webkit-box",
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: "vertical",
-                textOverflow: "ellipsis",
+                wordBreak: "break-word",
+                overflowWrap: "break-word",
               }}
             >
               {currentSlide.headline}
             </h1>
 
-            {/* Subheadline (If height permits) */}
+            {/* Subheadline */}
             {showSubheadline && (
               <p
                 style={{
-                  fontSize: subheadlineFontSize,
+                  fontSize: resolvedSubheadlineFontSize,
                   color: slideTextColor,
-                  opacity: 0.88,
+                  opacity: 0.92,
                   margin: 0,
-                  lineHeight: 1.35,
-                  overflow: "hidden",
-                  display: "-webkit-box",
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: "vertical",
-                  textOverflow: "ellipsis",
+                  lineHeight: 1.4,
+                  wordBreak: "break-word",
+                  overflowWrap: "break-word",
                 }}
               >
                 {currentSlide.subheadline}
@@ -503,8 +742,8 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
             )}
 
             {/* Live Countdown Bar */}
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <span style={{ fontSize: badgeFontSize, fontWeight: 700, color: slideTextColor, opacity: 0.8 }}>ENDS IN:</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", justifyContent: slideAlign === "center" ? "center" : slideAlign === "right" ? "flex-end" : "flex-start" }}>
+              <span style={{ fontSize: badgeFontSize, fontWeight: 700, color: slideTextColor, opacity: 0.8 }}>{liveCountdown.label}</span>
               <div style={{ display: "flex", gap: "4px" }}>
                 {[liveCountdown.hours, liveCountdown.minutes, liveCountdown.seconds].map((unit, idx) => (
                   <span
@@ -526,25 +765,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
             </div>
 
             {/* CTAs */}
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginTop: "2px" }}>
-              {currentSlide.primary_cta && (
-                <a
-                  href={currentSlide.primary_cta.href || "/sale"}
-                  style={{
-                    padding: ctaPadding,
-                    borderRadius: "999px",
-                    background: accentColor,
-                    color: "#ffffff",
-                    fontSize: ctaFontSize,
-                    fontWeight: 700,
-                    textDecoration: "none",
-                    boxShadow: "0 4px 14px rgba(37,99,235,0.3)",
-                  }}
-                >
-                  {currentSlide.primary_cta.label}
-                </a>
-              )}
-            </div>
+            {renderButtonsRow()}
           </div>
         );
 
@@ -559,7 +780,16 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
         return (
           <div style={{ display: "grid", gridTemplateColumns: isMobile || responsiveHeight < 300 ? "1fr" : "repeat(auto-fit, minmax(220px, 1fr))", gap: contentGap, alignItems: "center", width: "100%" }}>
             {/* Left Content */}
-            <div style={{ display: "flex", flexDirection: "column", gap: contentGap }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: contentGap,
+                alignItems: slideAlignItems,
+                textAlign: slideTextAlign as any,
+                margin: slideMargin,
+              }}
+            >
               {currentSlide.badge && (
                 <span style={{ background: "rgba(37,99,235,0.15)", color: accentColor, fontSize: badgeFontSize, fontWeight: 800, padding: "3px 9px", borderRadius: "999px", width: "fit-content", textTransform: "uppercase" }}>
                   {currentSlide.badge}
@@ -567,16 +797,15 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
               )}
               <h1
                 style={{
-                  fontSize: headlineFontSize,
-                  fontWeight: 800,
+                  fontSize: resolvedHeadlineFontSize,
+                  fontWeight: headlineFontWeight as any,
+                  fontFamily: headlineFontFamily,
+                  fontStyle: headlineFontStyle,
                   color: slideTextColor,
-                  lineHeight: 1.12,
+                  lineHeight: 1.15,
                   margin: 0,
-                  overflow: "hidden",
-                  display: "-webkit-box",
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: "vertical",
-                  textOverflow: "ellipsis",
+                  wordBreak: "break-word",
+                  overflowWrap: "break-word",
                 }}
               >
                 {currentSlide.headline}
@@ -584,15 +813,13 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
               {showSubheadline && (
                 <p
                   style={{
-                    fontSize: subheadlineFontSize,
+                    fontSize: resolvedSubheadlineFontSize,
                     color: slideTextColor,
-                    opacity: 0.85,
+                    opacity: 0.9,
                     margin: 0,
-                    overflow: "hidden",
-                    display: "-webkit-box",
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: "vertical",
-                    textOverflow: "ellipsis",
+                    lineHeight: 1.4,
+                    wordBreak: "break-word",
+                    overflowWrap: "break-word",
                   }}
                 >
                   {currentSlide.subheadline}
@@ -600,16 +827,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
               )}
 
               {/* CTAs */}
-              <div style={{ display: "flex", gap: "8px" }}>
-                {currentSlide.primary_cta && (
-                  <a
-                    href={currentSlide.primary_cta.href || "/products"}
-                    style={{ padding: ctaPadding, borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: ctaFontSize, fontWeight: 700, textDecoration: "none", boxShadow: "0 4px 14px rgba(37,99,235,0.3)" }}
-                  >
-                    {currentSlide.primary_cta.label}
-                  </a>
-                )}
-              </div>
+              {renderButtonsRow()}
             </div>
 
             {/* Right Showcase Card */}
@@ -625,7 +843,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                   border: isDarkMode ? "1px solid rgba(255,255,255,0.15)" : "1px solid rgba(15,23,42,0.1)",
                   boxShadow: "0 10px 24px rgba(0,0,0,0.12)",
                   maxWidth: "260px",
-                  justifySelf: "end",
+                  justifySelf: slideAlign === "right" ? "start" : "end",
                   display: "block",
                 }}
               >
@@ -645,46 +863,67 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
       case "minimal_brand":
       case "standard":
       default:
-        const trustBadgesList = currentSlide.trust_badges && currentSlide.trust_badges.length > 0
+        const trustBadgesList = Array.isArray(currentSlide.trust_badges)
           ? currentSlide.trust_badges
-          : ["Free Worldwide Shipping", "30-Day Money Back", "24/7 VIP Support"];
+          : (variant === "minimal_brand" ? ["Free Shipping", "30-Day Money Back", "24/7 VIP Support"] : []);
 
         return (
-          <div style={{ display: "flex", flexDirection: "column", gap: contentGap, maxWidth: slideContentMaxWidth }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: contentGap,
+              maxWidth: slideContentMaxWidth,
+              alignItems: slideAlignItems,
+              textAlign: slideTextAlign as any,
+              margin: slideMargin,
+            }}
+          >
             {currentSlide.badge && (
-              <span style={{ background: isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(15,23,42,0.08)", color: slideTextColor, fontSize: badgeFontSize, fontWeight: 800, padding: "3px 9px", borderRadius: "999px", width: "fit-content" }}>
+              <span
+                style={{
+                  background: isDarkMode ? "rgba(255,255,255,0.14)" : "rgba(15,23,42,0.08)",
+                  color: slideTextColor,
+                  fontSize: badgeFontSize,
+                  fontWeight: 800,
+                  padding: "3px 10px",
+                  borderRadius: "999px",
+                  width: "fit-content",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.04em",
+                  border: isDarkMode ? "1px solid rgba(255,255,255,0.18)" : "1px solid rgba(15,23,42,0.1)",
+                }}
+              >
                 {currentSlide.badge}
               </span>
             )}
+
             <h1
               style={{
-                fontSize: headlineFontSize,
-                fontWeight: 800,
+                fontSize: resolvedHeadlineFontSize,
+                fontWeight: headlineFontWeight as any,
+                fontFamily: headlineFontFamily,
+                fontStyle: headlineFontStyle,
                 color: slideTextColor,
-                lineHeight: 1.12,
+                lineHeight: 1.15,
                 margin: 0,
-                overflow: "hidden",
-                display: "-webkit-box",
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: "vertical",
-                textOverflow: "ellipsis",
+                wordBreak: "break-word",
+                overflowWrap: "break-word",
               }}
             >
               {currentSlide.headline}
             </h1>
+
             {showSubheadline && (
               <p
                 style={{
-                  fontSize: subheadlineFontSize,
+                  fontSize: resolvedSubheadlineFontSize,
                   color: slideTextColor,
-                  opacity: 0.88,
+                  opacity: 0.92,
                   margin: 0,
-                  lineHeight: 1.35,
-                  overflow: "hidden",
-                  display: "-webkit-box",
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: "vertical",
-                  textOverflow: "ellipsis",
+                  lineHeight: 1.4,
+                  wordBreak: "break-word",
+                  overflowWrap: "break-word",
                 }}
               >
                 {currentSlide.subheadline}
@@ -693,7 +932,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
 
             {/* Trust Badges */}
             {trustBadgesList.length > 0 && responsiveHeight >= 250 && (
-              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", fontSize: badgeFontSize, fontWeight: 600, color: slideTextColor, opacity: 0.8 }}>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", fontSize: badgeFontSize, fontWeight: 600, color: slideTextColor, opacity: 0.8, justifyContent: slideAlign === "center" ? "center" : slideAlign === "right" ? "flex-end" : "flex-start" }}>
                 {trustBadgesList.map((tb, idx) => (
                   <span key={idx}>✓ {tb}</span>
                 ))}
@@ -701,42 +940,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
             )}
 
             {/* CTAs */}
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginTop: "2px" }}>
-              {currentSlide.primary_cta && (
-                <a
-                  href={currentSlide.primary_cta.href || "/products"}
-                  style={{
-                    padding: ctaPadding,
-                    borderRadius: "999px",
-                    background: accentColor,
-                    color: "#ffffff",
-                    fontSize: ctaFontSize,
-                    fontWeight: 700,
-                    textDecoration: "none",
-                    boxShadow: "0 4px 14px rgba(37,99,235,0.3)",
-                  }}
-                >
-                  {currentSlide.primary_cta.label}
-                </a>
-              )}
-              {currentSlide.secondary_cta && responsiveHeight >= 280 && (
-                <a
-                  href={currentSlide.secondary_cta.href || "/categories"}
-                  style={{
-                    padding: ctaPadding,
-                    borderRadius: "999px",
-                    border: isDarkMode ? "1px solid rgba(255,255,255,0.25)" : "1px solid rgba(15,23,42,0.15)",
-                    background: "transparent",
-                    color: slideTextColor,
-                    fontSize: ctaFontSize,
-                    fontWeight: 600,
-                    textDecoration: "none",
-                  }}
-                >
-                  {currentSlide.secondary_cta.label}
-                </a>
-              )}
-            </div>
+            {renderButtonsRow()}
           </div>
         );
     }
@@ -748,14 +952,51 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Background Overlay */}
+      {/* Absolute Background Image layer with exact object-fit, position, and zoom */}
       {hasSlideBgImage && (
         <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            overflow: "hidden",
+            zIndex: 0,
+            pointerEvents: "none",
+          }}
+        >
+          <img
+            src={optimizeImageUrl(slideBgImage, 1920, 1080)}
+            alt=""
+            loading={currentIndex === 0 ? "eager" : "lazy"}
+            fetchPriority={currentIndex === 0 ? "high" : "auto"}
+            decoding="async"
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: (slideImageFit === "fill" ? "fill" : slideImageFit === "contain" ? "contain" : "cover") as any,
+              objectPosition: slideImagePosition,
+              transform: slideImageZoom !== 100 ? `scale(${slideImageZoom / 100})` : undefined,
+              transformOrigin: slideImagePosition,
+              display: "block",
+              transition: "transform 0.15s ease, object-fit 0.15s ease",
+            }}
+          />
+        </div>
+      )}
+
+      {/* Dark Readability Overlay on top of image */}
+      {hasSlideBgImage && overlayOpacity > 0 && (
+        <div
+          aria-hidden="true"
           style={{
             position: "absolute",
             inset: 0,
             background: slideBgOverlay,
+            zIndex: 1,
             pointerEvents: "none",
+            transition: "background 0.15s ease",
           }}
         />
       )}
@@ -772,7 +1013,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           display: "flex",
           flexDirection: "column",
           justifyContent: "center",
-          overflow: "hidden",
+          boxSizing: "border-box",
         }}
       >
         {renderSlideContent()}

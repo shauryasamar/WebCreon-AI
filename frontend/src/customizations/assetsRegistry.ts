@@ -89,6 +89,24 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
 
   // Hero Banner Asset Variants
   {
+    id: "hero-standard",
+    category: "banner",
+    title: "Classic Brand Hero",
+    description: "The default clean hero banner with bold headline, descriptive subtitle, trending badge, and dual CTA buttons.",
+    tag: "Default / Standard",
+    targetType: "hero_banner",
+    patch: {
+      blockPatch: {
+        variant: "standard",
+        headline: "Elevate Your Lifestyle With Premium Essentials",
+        subheadline: "Curated collections with exceptional craftsmanship, designed for modern everyday living.",
+        badge: "TRENDING NOW",
+        primary_cta: { label: "Shop Best Sellers", href: "/products" },
+        secondary_cta: { label: "Explore Collections", href: "/categories" },
+      },
+    },
+  },
+  {
     id: "hero-flash-sale",
     category: "banner",
     title: "Flash Sale Banner",
