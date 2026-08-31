@@ -333,13 +333,13 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   const slideImagePosition = currentSlide.image_position || currentSlide.background_position || background_position || "center";
   const slideImageZoom = typeof currentSlide.image_zoom === "number" ? currentSlide.image_zoom : 100;
 
-  const resolvedBgSize = slideImageZoom !== 100 
-    ? `${slideImageZoom}%` 
-    : slideImageFit === "contain" 
-    ? "contain" 
-    : slideImageFit === "fill" 
-    ? "100% 100%" 
-    : "cover";
+  const resolvedBgSize = slideImageZoom !== 100
+    ? `${slideImageZoom}%`
+    : slideImageFit === "contain"
+      ? "contain"
+      : slideImageFit === "fill"
+        ? "100% 100%"
+        : "cover";
 
   // Custom slide background color (supports manual block editing & global themes)
   const festTheme = (theme as any)?.festival_theme;
@@ -377,9 +377,9 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
     (isDarkMode
       ? (theme?.hero_text_color || theme?.text_color || "#f8fafc")
       : (theme?.hero_text_color ||
-         directTextColor ||
-         theme?.text_color ||
-         (hasSlideBgImage ? "#ffffff" : defaultTextColor)));
+        directTextColor ||
+        theme?.text_color ||
+        (hasSlideBgImage ? "#ffffff" : defaultTextColor)));
   const accentColor = currentSlide.hero_accent || currentSlide.accent_color || theme?.hero_accent || theme?.accent_color || (isDarkMode ? "#60a5fa" : "#2563eb");
 
   // Dynamic Scale-based Sizing
@@ -508,50 +508,50 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
         }}
       >
         {festTheme === "diwali" && (
-          <DiwaliGraphics 
+          <DiwaliGraphics
             variant="hero"
-            isDark={isDarkMode} 
-            style={{ width: "100%", height: "100%", maxHeight: "100%", objectFit: "contain" }} 
+            isDark={isDarkMode}
+            style={{ width: "100%", height: "100%", maxHeight: "100%", objectFit: "contain" }}
           />
         )}
 
         {festTheme === "holi" && (
-          <HoliGraphics 
+          <HoliGraphics
             variant="hero"
-            isDark={isDarkMode} 
-            style={{ width: "100%", height: "100%", maxHeight: "100%", objectFit: "contain" }} 
+            isDark={isDarkMode}
+            style={{ width: "100%", height: "100%", maxHeight: "100%", objectFit: "contain" }}
           />
         )}
 
         {festTheme === "durga_puja" && (
-          <DurgaGraphics 
+          <DurgaGraphics
             variant="hero"
-            isDark={isDarkMode} 
-            style={{ width: "100%", height: "100%", maxHeight: "100%", objectFit: "contain" }} 
+            isDark={isDarkMode}
+            style={{ width: "100%", height: "100%", maxHeight: "100%", objectFit: "contain" }}
           />
         )}
 
         {festTheme === "rakhi" && (
-          <RakhiGraphics 
+          <RakhiGraphics
             variant="hero"
-            isDark={isDarkMode} 
-            style={{ width: "100%", height: "100%", maxHeight: "100%", objectFit: "contain" }} 
+            isDark={isDarkMode}
+            style={{ width: "100%", height: "100%", maxHeight: "100%", objectFit: "contain" }}
           />
         )}
 
         {festTheme === "christmas" && (
-          <ChristmasGraphics 
+          <ChristmasGraphics
             variant="hero"
-            isDark={isDarkMode} 
-            style={{ width: "100%", height: "100%", maxHeight: "100%", objectFit: "contain" }} 
+            isDark={isDarkMode}
+            style={{ width: "100%", height: "100%", maxHeight: "100%", objectFit: "contain" }}
           />
         )}
 
         {festTheme === "eid" && (
-          <EidGraphics 
+          <EidGraphics
             variant="hero"
-            isDark={isDarkMode} 
-            style={{ width: "100%", height: "100%", maxHeight: "100%", objectFit: "contain" }} 
+            isDark={isDarkMode}
+            style={{ width: "100%", height: "100%", maxHeight: "100%", objectFit: "contain" }}
           />
         )}
       </div>

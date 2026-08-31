@@ -24,9 +24,9 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
   {
     id: "navbar-apple-minimal",
     category: "navbar",
-    title: "Apple / Vercel Minimal",
-    description: "Ultra minimal with clean spacing, pill search, and soft floating depth.",
-    tag: "Minimal Pill",
+    title: "Minimal Pill",
+    description: "Floating pill design with clean rounded search and quick action icons.",
+    tag: "Floating Pill",
     targetType: "navbar",
     patch: {
       themePatch: {
@@ -37,8 +37,8 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
   {
     id: "navbar-glassmorphism",
     category: "navbar",
-    title: "Glassmorphism Premium",
-    description: "Frosted glass effect with blur, transparency, and elegant glass depth.",
+    title: "Glassmorphic",
+    description: "Frosted translucent glass with backdrop blur and modern lighting.",
     tag: "Frosted Glass",
     targetType: "navbar",
     patch: {
@@ -50,9 +50,9 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
   {
     id: "navbar-modern-marketplace",
     category: "navbar",
-    title: "Modern Marketplace (Amazon/Shopify)",
-    description: "Clean, compact layout inspired by top marketplaces with solid dark search button.",
-    tag: "Marketplace",
+    title: "Marketplace",
+    description: "High-conversion commerce header with prominent search and category links.",
+    tag: "Commerce",
     targetType: "navbar",
     patch: {
       themePatch: {
@@ -63,9 +63,9 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
   {
     id: "navbar-luxury-fashion",
     category: "navbar",
-    title: "Luxury Fashion Store",
-    description: "Elegant, spacious serif typography, vertical dividers, and minimal layout.",
-    tag: "Luxury Serif",
+    title: "Luxury Serif",
+    description: "Editorial serif typography, refined dividers, and boutique minimalism.",
+    tag: "Boutique",
     targetType: "navbar",
     patch: {
       themePatch: {
@@ -76,9 +76,9 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
   {
     id: "navbar-neo-modern",
     category: "navbar",
-    title: "Neo Modern 2026 SaaS",
-    description: "Soft Neumorphic UI with layered depth, pill search, and rounded controls.",
-    tag: "Neumorphic 2026",
+    title: "Neo Modern",
+    description: "Tactile soft neumorphic curves and layered 2026 controls.",
+    tag: "Neumorphic",
     targetType: "navbar",
     patch: {
       themePatch: {
@@ -91,9 +91,9 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
   {
     id: "hero-standard",
     category: "banner",
-    title: "Classic Brand Hero",
-    description: "The default clean hero banner with bold headline, descriptive subtitle, trending badge, and dual CTA buttons.",
-    tag: "Default / Standard",
+    title: "Classic Brand Banner",
+    description: "Bold headline, subtitle, trending tag, and dual call-to-action buttons.",
+    tag: "Standard",
     targetType: "hero_banner",
     patch: {
       blockPatch: {
@@ -110,8 +110,8 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
     id: "hero-flash-sale",
     category: "banner",
     title: "Flash Sale Banner",
-    description: "High conversion banner with countdown timer, coupon code pill, and dual action buttons.",
-    tag: "Flash Sale",
+    description: "Urgent deal showcase with countdown timer, coupon code, and sale CTAs.",
+    tag: "Countdown Sale",
     targetType: "hero_banner",
     patch: {
       blockPatch: {
@@ -129,8 +129,8 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
     id: "hero-product-launch",
     category: "banner",
     title: "Product Launch Banner",
-    description: "Highlight flagship releases with a floating product showcase card and rating badge.",
-    tag: "Product Launch",
+    description: "Spotlight flagship products with live price tag and star rating card.",
+    tag: "Product Spotlight",
     targetType: "hero_banner",
     patch: {
       blockPatch: {
@@ -151,9 +151,9 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
   {
     id: "hero-minimal-brand",
     category: "banner",
-    title: "Minimal Brand Hero",
-    description: "Clean aesthetic with trust badges row for free shipping, money-back guarantee, and support.",
-    tag: "Minimal Brand",
+    title: "Minimal Trust Banner",
+    description: "Minimalist brand statement paired with trust badges and guarantees.",
+    tag: "Trust Badges",
     targetType: "hero_banner",
     patch: {
       blockPatch: {
@@ -172,9 +172,9 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
   {
     id: "product-fashion-apparel",
     category: "products",
-    title: "Fashion / Apparel Card",
-    description: "Large image focus with minimal details for a premium fashion feel.",
-    tag: "Fashion",
+    title: "Fashion & Apparel",
+    description: "Large editorial image focus with clean brand and pricing labels.",
+    tag: "Editorial",
     targetType: "product_grid",
     patch: {
       themePatch: {
@@ -188,9 +188,9 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
   {
     id: "product-electronics",
     category: "products",
-    title: "Electronics Card",
-    description: "Structured layout with image on top and information & price box emphasis.",
-    tag: "Electronics",
+    title: "Electronics & Tech",
+    description: "Structured card with spec emphasis and stock availability pill.",
+    tag: "Tech Specs",
     targetType: "product_grid",
     patch: {
       themePatch: {
@@ -204,9 +204,9 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
   {
     id: "product-beauty-cosmetics",
     category: "products",
-    title: "Beauty & Cosmetics Card",
-    description: "Centered composition with soft blush pastel spacing for beauty products.",
-    tag: "Beauty",
+    title: "Beauty & Skincare",
+    description: "Soft pastel spacing with centered product focus and rating.",
+    tag: "Pastel Clean",
     targetType: "product_grid",
     patch: {
       themePatch: {
@@ -220,9 +220,9 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
   {
     id: "product-grocery",
     category: "products",
-    title: "Grocery Card",
-    description: "Horizontal layout for quick scanning and compact grocery browsing.",
-    tag: "Grocery",
+    title: "Grocery & Daily Needs",
+    description: "Horizontal quick-scan layout designed for fast shopping carts.",
+    tag: "Quick Scan",
     targetType: "product_grid",
     patch: {
       themePatch: {
@@ -236,9 +236,9 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
   {
     id: "product-books-stationery",
     category: "products",
-    title: "Books & Stationery Card",
-    description: "Image-first portrait approach perfect for book covers and stationery items.",
-    tag: "Books",
+    title: "Books & Stationery",
+    description: "Portrait book-cover aspect ratio with author and review details.",
+    tag: "Book Cover",
     targetType: "product_grid",
     patch: {
       themePatch: {
@@ -250,13 +250,13 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
     },
   },
 
-  // Footer Layout Assets (5 Themes)
+  // Footer Layout Assets
   {
     id: "footer-apple-minimal",
     category: "footer",
-    title: "Apple / Vercel Minimal Footer",
-    description: "Clean multi-column link layout with subtle copyright, theme toggle, and legal links.",
-    tag: "Minimal Pill",
+    title: "Minimal Pill Footer",
+    description: "Clean link columns with subtle legal lines and copyright.",
+    tag: "Floating Pill",
     targetType: "footer",
     patch: {
       themePatch: {
@@ -267,8 +267,8 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
   {
     id: "footer-glassmorphism",
     category: "footer",
-    title: "Glassmorphism Premium Footer",
-    description: "Frosted glass bottom bar with backdrop blur, glass newsletter input, and social links.",
+    title: "Glassmorphic Footer",
+    description: "Translucent frosted bottom bar with backdrop blur and newsletter field.",
     tag: "Frosted Glass",
     targetType: "footer",
     patch: {
@@ -280,9 +280,9 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
   {
     id: "footer-modern-marketplace",
     category: "footer",
-    title: "Modern Marketplace Footer",
-    description: "Comprehensive footer with newsletter subscription, payment icon badges, and help links.",
-    tag: "Marketplace",
+    title: "Marketplace Footer",
+    description: "Comprehensive multi-column footer with payment badges and help links.",
+    tag: "Commerce",
     targetType: "footer",
     patch: {
       themePatch: {
@@ -293,9 +293,9 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
   {
     id: "footer-luxury-fashion",
     category: "footer",
-    title: "Luxury Fashion Serif Footer",
-    description: "Centered serif typography, elegant brand mark, and minimal social icons.",
-    tag: "Luxury Serif",
+    title: "Luxury Serif Footer",
+    description: "Boutique centered serif typography and minimalist brand crest.",
+    tag: "Boutique",
     targetType: "footer",
     patch: {
       themePatch: {
@@ -306,9 +306,9 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
   {
     id: "footer-neo-modern",
     category: "footer",
-    title: "Neo Modern 2026 Footer",
-    description: "Neumorphic soft depth footer with rounded pill subscription bar and sleek 2026 UI.",
-    tag: "Neumorphic 2026",
+    title: "Neo Modern Footer",
+    description: "Soft tactile neumorphic footer with rounded subscription bar.",
+    tag: "Neumorphic",
     targetType: "footer",
     patch: {
       themePatch: {

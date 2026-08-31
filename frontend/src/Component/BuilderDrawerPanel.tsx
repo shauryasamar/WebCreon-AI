@@ -564,26 +564,27 @@ function PlainCard({
 
 function renderAssetPreview(assetId: string) {
   switch (assetId) {
+    // 1. NAVBAR PREVIEWS
     case "navbar-apple-minimal":
       return (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", background: "#ffffff", borderRadius: "999px", padding: "6px 10px", boxShadow: "0 3px 10px rgba(0,0,0,0.05)", border: "1px solid rgba(15,23,42,0.08)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <div style={{ width: "20px", height: "20px", borderRadius: "6px", background: "#f1f5f9", fontSize: "9px", fontWeight: 800, display: "grid", placeItems: "center", color: "#0f172a" }}>YB</div>
-            <span style={{ fontSize: "11px", fontWeight: 700, color: "#0f172a" }}>Your Brand</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "5px", flexShrink: 0 }}>
+            <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", flexShrink: 0 }}>
+              <rect width="24" height="24" rx="5" fill="#2563eb" />
+              <path d="M6 8L9.5 16L12 10.5L14.5 16L18 8" stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            </svg>
+            <span style={{ fontSize: "10.5px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap" }}>WebCreon</span>
           </div>
           <div style={{ flex: 1, maxWidth: "110px", height: "18px", borderRadius: "999px", background: "#f8fafc", border: "1px solid rgba(15,23,42,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px 0 8px" }}>
-            <span style={{ fontSize: "8px", color: "#94a3b8" }}>Search...</span>
+            <span style={{ fontSize: "8px", color: "#94a3b8", whiteSpace: "nowrap" }}>Search store...</span>
             <div style={{ width: "12px", height: "12px", borderRadius: "999px", background: "#e2e8f0", display: "grid", placeItems: "center" }}>
               <svg viewBox="0 0 24 24" style={{ width: "7px", height: "7px", stroke: "#475569", strokeWidth: 2.5, fill: "none" }}><circle cx="11" cy="11" r="7" /><path d="M20 20L16.65 16.65" /></svg>
             </div>
           </div>
-          <div style={{ display: "flex", gap: "4px" }}>
+          <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
             <div style={{ width: "18px", height: "18px", borderRadius: "999px", background: "#f8fafc", border: "1px solid rgba(15,23,42,0.08)", display: "grid", placeItems: "center", position: "relative" }}>
               <svg viewBox="0 0 24 24" style={{ width: "9px", height: "9px", stroke: "#334155", strokeWidth: 2, fill: "none" }}><circle cx="9" cy="20" r="1.5" /><circle cx="17" cy="20" r="1.5" /><path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" /></svg>
-              <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "8px", height: "8px", borderRadius: "999px", background: "#0066ff", color: "#fff", fontSize: "5px", fontWeight: 900, display: "grid", placeItems: "center" }}>1</span>
-            </div>
-            <div style={{ width: "18px", height: "18px", borderRadius: "999px", background: "#f8fafc", border: "1px solid rgba(15,23,42,0.08)", display: "grid", placeItems: "center" }}>
-              <svg viewBox="0 0 24 24" style={{ width: "9px", height: "9px", stroke: "#334155", strokeWidth: 2, fill: "none" }}><path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" /><path d="M10 17a2 2 0 0 0 4 0" /></svg>
+              <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "8px", height: "8px", borderRadius: "999px", background: "#2563eb", color: "#fff", fontSize: "5px", fontWeight: 900, display: "grid", placeItems: "center" }}>1</span>
             </div>
             <div style={{ width: "18px", height: "18px", borderRadius: "999px", background: "#f8fafc", border: "1px solid rgba(15,23,42,0.08)", display: "grid", placeItems: "center" }}>
               <svg viewBox="0 0 24 24" style={{ width: "9px", height: "9px", stroke: "#334155", strokeWidth: 2, fill: "none" }}><path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" /><circle cx="12" cy="8" r="4" /></svg>
@@ -594,23 +595,23 @@ function renderAssetPreview(assetId: string) {
     case "navbar-glassmorphism":
       return (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", background: "linear-gradient(135deg, rgba(255,255,255,0.9), rgba(240,244,248,0.75))", borderRadius: "10px", padding: "6px 10px", border: "1px solid rgba(255,255,255,0.9)", boxShadow: "0 4px 12px rgba(31,38,135,0.07)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <div style={{ width: "18px", height: "18px", borderRadius: "5px", background: "rgba(255,255,255,0.8)", border: "1px solid rgba(255,255,255,0.6)", fontSize: "8px", fontWeight: 800, display: "grid", placeItems: "center", color: "#0f172a" }}>YB</div>
-            <span style={{ fontSize: "11px", fontWeight: 700, color: "#0f172a" }}>Your Brand</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "5px", flexShrink: 0 }}>
+            <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", flexShrink: 0 }}>
+              <rect width="24" height="24" rx="5" fill="#3b82f6" />
+              <path d="M6 8L9.5 16L12 10.5L14.5 16L18 8" stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            </svg>
+            <span style={{ fontSize: "10.5px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap" }}>WebCreon</span>
           </div>
           <div style={{ flex: 1, maxWidth: "110px", height: "18px", borderRadius: "999px", background: "rgba(255,255,255,0.5)", border: "1px solid rgba(255,255,255,0.8)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px 0 8px" }}>
-            <span style={{ fontSize: "8px", color: "#94a3b8" }}>Search...</span>
+            <span style={{ fontSize: "8px", color: "#94a3b8", whiteSpace: "nowrap" }}>Search store...</span>
             <div style={{ width: "12px", height: "12px", borderRadius: "999px", background: "rgba(255,255,255,0.8)", display: "grid", placeItems: "center" }}>
               <svg viewBox="0 0 24 24" style={{ width: "7px", height: "7px", stroke: "#475569", strokeWidth: 2.5, fill: "none" }}><circle cx="11" cy="11" r="7" /><path d="M20 20L16.65 16.65" /></svg>
             </div>
           </div>
-          <div style={{ display: "flex", gap: "4px" }}>
+          <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
             <div style={{ width: "18px", height: "18px", borderRadius: "999px", background: "rgba(255,255,255,0.6)", border: "1px solid rgba(255,255,255,0.8)", display: "grid", placeItems: "center", position: "relative" }}>
               <svg viewBox="0 0 24 24" style={{ width: "9px", height: "9px", stroke: "#334155", strokeWidth: 2, fill: "none" }}><circle cx="9" cy="20" r="1.5" /><circle cx="17" cy="20" r="1.5" /><path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" /></svg>
-              <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "8px", height: "8px", borderRadius: "999px", background: "#0066ff", color: "#fff", fontSize: "5px", fontWeight: 900, display: "grid", placeItems: "center" }}>1</span>
-            </div>
-            <div style={{ width: "18px", height: "18px", borderRadius: "999px", background: "rgba(255,255,255,0.6)", border: "1px solid rgba(255,255,255,0.8)", display: "grid", placeItems: "center" }}>
-              <svg viewBox="0 0 24 24" style={{ width: "9px", height: "9px", stroke: "#334155", strokeWidth: 2, fill: "none" }}><path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" /><path d="M10 17a2 2 0 0 0 4 0" /></svg>
+              <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "8px", height: "8px", borderRadius: "999px", background: "#2563eb", color: "#fff", fontSize: "5px", fontWeight: 900, display: "grid", placeItems: "center" }}>1</span>
             </div>
             <div style={{ width: "18px", height: "18px", borderRadius: "999px", background: "rgba(255,255,255,0.6)", border: "1px solid rgba(255,255,255,0.8)", display: "grid", placeItems: "center" }}>
               <svg viewBox="0 0 24 24" style={{ width: "9px", height: "9px", stroke: "#334155", strokeWidth: 2, fill: "none" }}><path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" /><circle cx="12" cy="8" r="4" /></svg>
@@ -621,23 +622,23 @@ function renderAssetPreview(assetId: string) {
     case "navbar-modern-marketplace":
       return (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", background: "#ffffff", borderRadius: "6px", padding: "6px 8px", border: "1px solid rgba(15,23,42,0.12)", boxShadow: "0 2px 6px rgba(0,0,0,0.03)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-            <div style={{ width: "18px", height: "18px", borderRadius: "4px", background: "#f1f5f9", border: "1px solid rgba(15,23,42,0.1)", fontSize: "8px", fontWeight: 800, display: "grid", placeItems: "center", color: "#0f172a" }}>YB</div>
-            <span style={{ fontSize: "11px", fontWeight: 700, color: "#0f172a" }}>Your Brand</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "5px", flexShrink: 0 }}>
+            <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", flexShrink: 0 }}>
+              <rect width="24" height="24" rx="4" fill="#0f172a" />
+              <path d="M6 8L9.5 16L12 10.5L14.5 16L18 8" stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            </svg>
+            <span style={{ fontSize: "10.5px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap" }}>WebCreon</span>
           </div>
           <div style={{ flex: 1, maxWidth: "110px", height: "18px", borderRadius: "4px", border: "1px solid rgba(15,23,42,0.2)", display: "flex", alignItems: "center", justifyContent: "space-between", overflow: "hidden", background: "#ffffff" }}>
-            <span style={{ fontSize: "8px", color: "#94a3b8", paddingLeft: "4px" }}>Search...</span>
-            <div style={{ width: "18px", height: "100%", background: "#374151", display: "grid", placeItems: "center" }}>
+            <span style={{ fontSize: "8px", color: "#94a3b8", paddingLeft: "4px", whiteSpace: "nowrap" }}>Search catalog...</span>
+            <div style={{ width: "18px", height: "100%", background: "#0f172a", display: "grid", placeItems: "center" }}>
               <svg viewBox="0 0 24 24" style={{ width: "8px", height: "8px", stroke: "#ffffff", strokeWidth: 2.5, fill: "none" }}><circle cx="11" cy="11" r="7" /><path d="M20 20L16.65 16.65" /></svg>
             </div>
           </div>
-          <div style={{ display: "flex", gap: "4px" }}>
+          <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
             <div style={{ width: "18px", height: "18px", borderRadius: "4px", border: "1px solid rgba(15,23,42,0.12)", display: "grid", placeItems: "center", position: "relative" }}>
               <svg viewBox="0 0 24 24" style={{ width: "9px", height: "9px", stroke: "#334155", strokeWidth: 2, fill: "none" }}><circle cx="9" cy="20" r="1.5" /><circle cx="17" cy="20" r="1.5" /><path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" /></svg>
-              <span style={{ position: "absolute", top: "-3px", right: "-3px", width: "7px", height: "7px", borderRadius: "999px", background: "#0066ff", color: "#fff", fontSize: "5px", fontWeight: 900, display: "grid", placeItems: "center" }}>1</span>
-            </div>
-            <div style={{ width: "18px", height: "18px", borderRadius: "4px", border: "1px solid rgba(15,23,42,0.12)", display: "grid", placeItems: "center" }}>
-              <svg viewBox="0 0 24 24" style={{ width: "9px", height: "9px", stroke: "#334155", strokeWidth: 2, fill: "none" }}><path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" /><path d="M10 17a2 2 0 0 0 4 0" /></svg>
+              <span style={{ position: "absolute", top: "-3px", right: "-3px", width: "7px", height: "7px", borderRadius: "999px", background: "#2563eb", color: "#fff", fontSize: "5px", fontWeight: 900, display: "grid", placeItems: "center" }}>1</span>
             </div>
             <div style={{ width: "18px", height: "18px", borderRadius: "4px", border: "1px solid rgba(15,23,42,0.12)", display: "grid", placeItems: "center" }}>
               <svg viewBox="0 0 24 24" style={{ width: "9px", height: "9px", stroke: "#334155", strokeWidth: 2, fill: "none" }}><path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" /><circle cx="12" cy="8" r="4" /></svg>
@@ -648,21 +649,20 @@ function renderAssetPreview(assetId: string) {
     case "navbar-luxury-fashion":
       return (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", background: "#ffffff", borderRadius: "999px", padding: "6px 10px", border: "1px solid rgba(15,23,42,0.12)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-            <span style={{ fontFamily: "serif", fontSize: "11px", fontWeight: 800, color: "#0f172a" }}>YB</span>
-            <span style={{ width: "1px", height: "10px", background: "rgba(15,23,42,0.2)" }} />
-            <span style={{ fontFamily: "serif", fontSize: "9px", fontWeight: 600, color: "#0f172a", letterSpacing: "0.1em" }}>Your Brand</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "5px", flexShrink: 0 }}>
+            <span style={{ fontFamily: "serif", fontSize: "11px", fontWeight: 900, letterSpacing: "0.05em", color: "#0f172a" }}>W</span>
+            <span style={{ width: "1px", height: "9px", background: "rgba(15,23,42,0.2)" }} />
+            <span style={{ fontFamily: "serif", fontSize: "9px", fontWeight: 700, letterSpacing: "0.1em", color: "#0f172a", whiteSpace: "nowrap" }}>WEBCREON</span>
           </div>
           <div style={{ flex: 1, maxWidth: "100px", height: "16px", borderRadius: "999px", border: "1px solid rgba(15,23,42,0.15)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 6px" }}>
-            <span style={{ fontSize: "7px", color: "#94a3b8", fontFamily: "serif" }}>Search...</span>
+            <span style={{ fontSize: "7.5px", color: "#94a3b8", fontFamily: "serif", whiteSpace: "nowrap" }}>Search boutique...</span>
             <svg viewBox="0 0 24 24" style={{ width: "7px", height: "7px", stroke: "#0f172a", strokeWidth: 2, fill: "none" }}><circle cx="11" cy="11" r="7" /><path d="M20 20L16.65 16.65" /></svg>
           </div>
-          <div style={{ display: "flex", gap: "5px" }}>
+          <div style={{ display: "flex", gap: "5px", flexShrink: 0 }}>
             <div style={{ position: "relative" }}>
               <svg viewBox="0 0 24 24" style={{ width: "10px", height: "10px", stroke: "#0f172a", strokeWidth: 1.8, fill: "none" }}><circle cx="9" cy="20" r="1.5" /><circle cx="17" cy="20" r="1.5" /><path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" /></svg>
               <span style={{ position: "absolute", top: "-2px", right: "-3px", width: "6px", height: "6px", borderRadius: "999px", background: "#000", color: "#fff", fontSize: "4px", fontWeight: 900, display: "grid", placeItems: "center" }}>1</span>
             </div>
-            <svg viewBox="0 0 24 24" style={{ width: "10px", height: "10px", stroke: "#0f172a", strokeWidth: 1.8, fill: "none" }}><path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" /><path d="M10 17a2 2 0 0 0 4 0" /></svg>
             <svg viewBox="0 0 24 24" style={{ width: "10px", height: "10px", stroke: "#0f172a", strokeWidth: 1.8, fill: "none" }}><path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" /><circle cx="12" cy="8" r="4" /></svg>
           </div>
         </div>
@@ -670,21 +670,18 @@ function renderAssetPreview(assetId: string) {
     case "navbar-neo-modern":
       return (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", background: "#f0f4f9", borderRadius: "999px", padding: "6px 10px", boxShadow: "3px 3px 6px rgba(166,180,200,0.4), -3px -3px 6px rgba(255,255,255,0.9)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-            <div style={{ width: "18px", height: "18px", borderRadius: "5px", background: "#f0f4f9", boxShadow: "2px 2px 4px rgba(166,180,200,0.4), -2px -2px 4px rgba(255,255,255,0.9)", fontSize: "8px", fontWeight: 800, display: "grid", placeItems: "center", color: "#0f172a" }}>YB</div>
-            <span style={{ fontSize: "11px", fontWeight: 700, color: "#0f172a" }}>Your Brand</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "5px", flexShrink: 0 }}>
+            <div style={{ width: "18px", height: "18px", borderRadius: "5px", background: "#f0f4f9", boxShadow: "2px 2px 4px rgba(166,180,200,0.4), -2px -2px 4px rgba(255,255,255,0.9)", fontSize: "8px", fontWeight: 800, display: "grid", placeItems: "center", color: "#0f172a" }}>WC</div>
+            <span style={{ fontSize: "10.5px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap" }}>WebCreon</span>
           </div>
           <div style={{ flex: 1, maxWidth: "110px", height: "18px", borderRadius: "999px", background: "#f0f4f9", boxShadow: "inset 2px 2px 4px rgba(166,180,200,0.4), inset -2px -2px 4px rgba(255,255,255,0.9)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 6px" }}>
-            <span style={{ fontSize: "8px", color: "#94a3b8" }}>Search...</span>
+            <span style={{ fontSize: "8px", color: "#94a3b8", whiteSpace: "nowrap" }}>Search store...</span>
             <svg viewBox="0 0 24 24" style={{ width: "7px", height: "7px", stroke: "#475569", strokeWidth: 2.5, fill: "none" }}><circle cx="11" cy="11" r="7" /><path d="M20 20L16.65 16.65" /></svg>
           </div>
-          <div style={{ display: "flex", gap: "4px" }}>
+          <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
             <div style={{ width: "18px", height: "18px", borderRadius: "999px", background: "#f0f4f9", boxShadow: "2px 2px 4px rgba(166,180,200,0.4), -2px -2px 4px rgba(255,255,255,0.9)", display: "grid", placeItems: "center", position: "relative" }}>
               <svg viewBox="0 0 24 24" style={{ width: "9px", height: "9px", stroke: "#334155", strokeWidth: 2, fill: "none" }}><circle cx="9" cy="20" r="1.5" /><circle cx="17" cy="20" r="1.5" /><path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" /></svg>
-              <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "7px", height: "7px", borderRadius: "999px", background: "#0066ff", color: "#fff", fontSize: "5px", fontWeight: 900, display: "grid", placeItems: "center" }}>1</span>
-            </div>
-            <div style={{ width: "18px", height: "18px", borderRadius: "999px", background: "#f0f4f9", boxShadow: "2px 2px 4px rgba(166,180,200,0.4), -2px -2px 4px rgba(255,255,255,0.9)", display: "grid", placeItems: "center" }}>
-              <svg viewBox="0 0 24 24" style={{ width: "9px", height: "9px", stroke: "#334155", strokeWidth: 2, fill: "none" }}><path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" /><path d="M10 17a2 2 0 0 0 4 0" /></svg>
+              <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "7px", height: "7px", borderRadius: "999px", background: "#2563eb", color: "#fff", fontSize: "5px", fontWeight: 900, display: "grid", placeItems: "center" }}>1</span>
             </div>
             <div style={{ width: "18px", height: "18px", borderRadius: "999px", background: "#f0f4f9", boxShadow: "2px 2px 4px rgba(166,180,200,0.4), -2px -2px 4px rgba(255,255,255,0.9)", display: "grid", placeItems: "center" }}>
               <svg viewBox="0 0 24 24" style={{ width: "9px", height: "9px", stroke: "#334155", strokeWidth: 2, fill: "none" }}><path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" /><circle cx="12" cy="8" r="4" /></svg>
@@ -692,193 +689,212 @@ function renderAssetPreview(assetId: string) {
           </div>
         </div>
       );
+
+    // 2. HERO BANNER PREVIEWS (Accurately matches on-page hero banner structures)
     case "hero-standard":
       return (
-        <div style={{ padding: "8px 10px", borderRadius: "8px", background: "linear-gradient(135deg, #1e3a8a, #0f172a)", color: "#ffffff", display: "flex", flexDirection: "column", gap: "4px" }}>
-          <span style={{ background: "#2563eb", fontSize: "7px", fontWeight: 800, padding: "1px 5px", borderRadius: "4px", width: "fit-content" }}>TRENDING NOW</span>
-          <div style={{ fontSize: "11px", fontWeight: 800, lineHeight: 1.2 }}>Elevate Your Lifestyle</div>
-          <div style={{ display: "flex", gap: "4px", marginTop: "2px" }}>
-            <span style={{ background: "#ffffff", color: "#0f172a", fontSize: "7px", fontWeight: 700, padding: "2px 6px", borderRadius: "4px" }}>Shop Best Sellers</span>
-            <span style={{ border: "1px solid rgba(255,255,255,0.4)", color: "#ffffff", fontSize: "7px", fontWeight: 700, padding: "2px 6px", borderRadius: "4px" }}>Explore</span>
+        <div style={{ padding: "10px 12px", borderRadius: "8px", background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)", color: "#ffffff", display: "flex", flexDirection: "column", gap: "4px", border: "1px solid rgba(255,255,255,0.08)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{ background: "rgba(37,99,235,0.25)", border: "1px solid #3b82f6", color: "#93c5fd", fontSize: "6.5px", fontWeight: 800, padding: "2px 6px", borderRadius: "999px" }}>★ TRENDING NOW</span>
+          </div>
+          <div style={{ fontSize: "11px", fontWeight: 800, lineHeight: 1.2, color: "#ffffff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            Elevate Your Lifestyle With Premium Essentials
+          </div>
+          <div style={{ fontSize: "7.5px", color: "#94a3b8", lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            Curated collections designed for modern everyday living.
+          </div>
+          <div style={{ display: "flex", gap: "5px", marginTop: "2px" }}>
+            <span style={{ background: "#ffffff", color: "#0f172a", fontSize: "7.5px", fontWeight: 800, padding: "3px 8px", borderRadius: "4px" }}>Shop Best Sellers</span>
+            <span style={{ border: "1px solid rgba(255,255,255,0.3)", color: "#ffffff", fontSize: "7.5px", fontWeight: 700, padding: "3px 8px", borderRadius: "4px" }}>Explore</span>
           </div>
         </div>
       );
     case "hero-flash-sale":
       return (
-        <div style={{ padding: "8px 10px", borderRadius: "8px", background: "linear-gradient(135deg, #1e293b, #0f172a)", color: "#ffffff", display: "flex", flexDirection: "column", gap: "4px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <span style={{ background: "#ef4444", fontSize: "7px", fontWeight: 800, padding: "1px 5px", borderRadius: "4px" }}>FLASH SALE</span>
-            <span style={{ fontSize: "7px", color: "#94a3b8" }}>CODE: SAVE50</span>
+        <div style={{ padding: "10px 12px", borderRadius: "8px", background: "linear-gradient(135deg, #1f0b0b 0%, #0f172a 100%)", color: "#ffffff", display: "flex", flexDirection: "column", gap: "5px", border: "1px solid rgba(239,68,68,0.2)" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px" }}>
+            <span style={{ background: "#ef4444", fontSize: "6.5px", fontWeight: 800, padding: "2px 6px", borderRadius: "999px", color: "#ffffff" }}>🔥 FLASH SALE</span>
+            <span style={{ background: "rgba(255,255,255,0.1)", border: "1px dashed rgba(255,255,255,0.4)", fontSize: "6.5px", color: "#fca5a5", fontWeight: 800, padding: "1px 5px", borderRadius: "4px" }}>CODE: SAVE50</span>
           </div>
-          <div style={{ fontSize: "11px", fontWeight: 800, lineHeight: 1.2 }}>Festive Flash Sale - 50% OFF</div>
-          <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "7px", color: "#cbd5e1" }}>
-            <span>ENDS IN:</span>
-            <span style={{ background: "rgba(255,255,255,0.15)", padding: "1px 4px", borderRadius: "3px", fontWeight: 800 }}>04h:22m</span>
+          <div style={{ fontSize: "11px", fontWeight: 800, lineHeight: 1.2, color: "#ffffff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            Festive Flash Sale — Up to 50% OFF
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+              <span style={{ fontSize: "6.5px", color: "#94a3b8", fontWeight: 700 }}>ENDS IN:</span>
+              <div style={{ display: "flex", gap: "2px" }}>
+                {["04h", "22m", "15s"].map((t, i) => (
+                  <span key={i} style={{ background: "rgba(255,255,255,0.15)", padding: "1px 3px", borderRadius: "3px", fontSize: "6.5px", fontWeight: 800, color: "#ffffff" }}>{t}</span>
+                ))}
+              </div>
+            </div>
+            <span style={{ background: "#ef4444", color: "#ffffff", fontSize: "7.5px", fontWeight: 800, padding: "3px 8px", borderRadius: "4px" }}>Shop Sale →</span>
           </div>
         </div>
       );
     case "hero-product-launch":
       return (
-        <div style={{ padding: "8px 10px", borderRadius: "8px", background: "linear-gradient(135deg, #eff6ff, #dbeafe)", color: "#0f172a", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-            <span style={{ background: "#2563eb", color: "#fff", fontSize: "6px", fontWeight: 800, padding: "1px 4px", borderRadius: "3px", width: "fit-content" }}>NEW LAUNCH</span>
-            <div style={{ fontSize: "10px", fontWeight: 800 }}>Future Of Sound</div>
+        <div style={{ padding: "10px 12px", borderRadius: "8px", background: "linear-gradient(135deg, #0b192c 0%, #1e3a8a 100%)", color: "#ffffff", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", alignItems: "center", border: "1px solid rgba(59,130,246,0.3)" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "3px", minWidth: 0 }}>
+            <span style={{ background: "#3b82f6", color: "#ffffff", fontSize: "6px", fontWeight: 800, padding: "1px 5px", borderRadius: "999px", width: "fit-content" }}>NEW LAUNCH</span>
+            <div style={{ fontSize: "10.5px", fontWeight: 800, lineHeight: 1.2, color: "#ffffff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Future Of Sound</div>
+            <span style={{ background: "#ffffff", color: "#0f172a", fontSize: "6.5px", fontWeight: 800, padding: "2px 6px", borderRadius: "4px", width: "fit-content", marginTop: "1px" }}>Pre-Order</span>
           </div>
-          <div style={{ background: "#ffffff", padding: "4px 6px", borderRadius: "6px", border: "1px solid rgba(37,99,235,0.2)", fontSize: "8px", fontWeight: 800, color: "#2563eb" }}>
-            $249 • 4.9 ⭐
-          </div>
-        </div>
-      );
-    case "hero-lead-magnet":
-      return (
-        <div style={{ padding: "8px 10px", borderRadius: "8px", background: "linear-gradient(135deg, #ecfdf5, #d1fae5)", color: "#0f172a", display: "flex", flexDirection: "column", gap: "4px" }}>
-          <span style={{ background: "#10b981", color: "#fff", fontSize: "6px", fontWeight: 800, padding: "1px 4px", borderRadius: "3px", width: "fit-content" }}>VIP DISCOUNT</span>
-          <div style={{ fontSize: "10px", fontWeight: 800 }}>Get 15% OFF Your First Order</div>
-          <div style={{ display: "flex", gap: "4px", marginTop: "2px" }}>
-            <div style={{ flex: 1, height: "12px", borderRadius: "999px", background: "#ffffff", border: "1px solid rgba(16,185,129,0.3)" }} />
-            <div style={{ width: "24px", height: "12px", borderRadius: "999px", background: "#10b981" }} />
+          <div style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.22)", borderRadius: "6px", padding: "4px 6px", display: "flex", flexDirection: "column", gap: "1px", position: "relative" }}>
+            <span style={{ fontSize: "7.5px", fontWeight: 800, color: "#ffffff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Headphones Max</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+              <span style={{ fontSize: "8.5px", fontWeight: 900, color: "#60a5fa" }}>$249</span>
+              <span style={{ fontSize: "6.5px", textDecoration: "line-through", color: "#94a3b8" }}>$349</span>
+            </div>
+            <span style={{ fontSize: "6px", color: "#fde047" }}>★★★★★ 4.9</span>
           </div>
         </div>
       );
     case "hero-minimal-brand":
       return (
-        <div style={{ padding: "8px 10px", borderRadius: "8px", background: "linear-gradient(135deg, #f8fafc, #f1f5f9)", border: "1px solid rgba(15,23,42,0.08)", color: "#0f172a", display: "flex", flexDirection: "column", gap: "4px" }}>
-          <span style={{ fontSize: "6px", fontWeight: 800, color: "#64748b" }}>NEW COLLECTION</span>
-          <div style={{ fontSize: "10px", fontWeight: 800 }}>Crafted For Everyday Elegance</div>
-          <div style={{ fontSize: "7px", color: "#64748b" }}>✓ Free Delivery • ✓ 30-Day Guarantee</div>
+        <div style={{ padding: "10px 12px", borderRadius: "8px", background: "linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)", color: "#0f172a", display: "flex", flexDirection: "column", gap: "3px", border: "1px solid rgba(15,23,42,0.08)" }}>
+          <span style={{ fontSize: "6.5px", fontWeight: 800, color: "#2563eb", letterSpacing: "0.05em" }}>NEW COLLECTION</span>
+          <div style={{ fontSize: "10.5px", fontWeight: 800, lineHeight: 1.2, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            Crafted For Everyday Comfort
+          </div>
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", fontSize: "6.5px", fontWeight: 600, color: "#475569", marginTop: "1px" }}>
+            <span>✓ Free Shipping</span>
+            <span>✓ 30-Day Guarantee</span>
+            <span>✓ 24/7 Support</span>
+          </div>
         </div>
       );
 
-    // Product Card Preview Mockups
+    // 3. PRODUCT CARD PREVIEWS
     case "product-fashion-apparel":
       return (
-        <div style={{ display: "flex", gap: "6px", background: "#ffffff", borderRadius: "10px", padding: "6px", border: "1px solid rgba(15,23,42,0.06)", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+        <div style={{ display: "flex", gap: "6px", background: "#ffffff", borderRadius: "8px", padding: "6px", border: "1px solid rgba(15,23,42,0.06)", boxShadow: "0 2px 6px rgba(0,0,0,0.03)" }}>
           <div style={{ width: "35px", height: "45px", borderRadius: "6px", background: "linear-gradient(180deg, #3b82f6 0%, #1e40af 100%)", flexShrink: 0, position: "relative", display: "grid", placeItems: "center" }}>
-            <span style={{ position: "absolute", top: "2px", left: "2px", fontSize: "5px", background: "#166534", color: "#fff", padding: "1px 3px", borderRadius: "4px", scale: "0.8" }}>96%</span>
+            <span style={{ position: "absolute", top: "2px", left: "2px", fontSize: "5.5px", background: "#166534", color: "#fff", padding: "1px 3px", borderRadius: "3px", fontWeight: 800 }}>-40%</span>
             <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: "#ffffff", strokeWidth: 2, fill: "none" }}>
               <path d="M20.37 4.91L17.26 3.5a2.12 2.12 0 0 0-1.81 0l-3.1 1.41a.84.84 0 0 1-.7 0l-3.1-1.41a2.12 2.12 0 0 0-1.81 0L3.63 4.91a1 1 0 0 0-.58.91v2.5a2 2 0 0 0 .73 1.54L6 11.5v7a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-7l2.22-1.65A2 2 0 0 0 21 8.32V5.82a1 1 0 0 0-.63-.91z" />
             </svg>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: "2px", flex: 1 }}>
-            <span style={{ fontSize: "8px", color: "#94a3b8", fontWeight: 700 }}>VOGUE</span>
-            <span style={{ fontSize: "10px", fontWeight: 800, color: "#1e293b", lineHeight: 1 }}>Shirts</span>
-            <span style={{ fontSize: "8px", color: "#d97706" }}>★ 3.0</span>
-            <span style={{ fontSize: "9px", fontWeight: 800, color: "#1e293b" }}>₹220</span>
+          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: "1px", flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: "7.5px", color: "#94a3b8", fontWeight: 700, whiteSpace: "nowrap" }}>WEBCREON STUDIO</span>
+            <span style={{ fontSize: "9.5px", fontWeight: 800, color: "#1e293b", lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Linen Overshirt</span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "2px" }}>
+              <span style={{ fontSize: "9px", fontWeight: 800, color: "#1e293b" }}>₹1,899</span>
+              <span style={{ fontSize: "7.5px", color: "#d97706", fontWeight: 700 }}>★ 4.9</span>
+            </div>
           </div>
         </div>
       );
     case "product-electronics":
       return (
-        <div style={{ display: "flex", flexDirection: "column", gap: "4px", background: "#ffffff", borderRadius: "10px", padding: "6px", border: "1px solid rgba(15,23,42,0.06)", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "3px", background: "#ffffff", borderRadius: "8px", padding: "6px", border: "1px solid rgba(15,23,42,0.06)", boxShadow: "0 2px 6px rgba(0,0,0,0.03)" }}>
           <div style={{ width: "100%", height: "35px", borderRadius: "6px", background: "#f8fafc", position: "relative", display: "grid", placeItems: "center" }}>
-            <span style={{ position: "absolute", top: "2px", left: "2px", fontSize: "5px", background: "#166534", color: "#fff", padding: "1px 3px", borderRadius: "4px", scale: "0.8" }}>96%</span>
+            <span style={{ position: "absolute", top: "2px", left: "2px", fontSize: "5.5px", background: "#2563eb", color: "#fff", padding: "1px 3px", borderRadius: "3px", fontWeight: 800 }}>ANC</span>
             <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: "#2563eb", strokeWidth: 2, fill: "none" }}>
               <path d="M3 14c0-4.97 4.03-9 9-9s9 4.03 9 9" />
               <path d="M19 12h2v4h-2zM3 12h2v4H3z" />
             </svg>
           </div>
-          <span style={{ fontSize: "7px", color: "#94a3b8", fontWeight: 700 }}>SONIC</span>
-          <span style={{ fontSize: "9px", fontWeight: 800, color: "#1e293b", lineHeight: 1 }}>AirPods Pro</span>
-          <div style={{ background: "#f4f4f6", padding: "3px 6px", borderRadius: "6px", display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "2px" }}>
-            <span style={{ fontSize: "8px", fontWeight: 800, color: "#1e293b" }}>₹220</span>
-            <span style={{ fontSize: "6px", background: "rgba(22,163,74,0.1)", color: "#16a34a", padding: "1px 3px", borderRadius: "999px" }}>In Stock</span>
+          <span style={{ fontSize: "7.5px", color: "#94a3b8", fontWeight: 700 }}>WEBCREON TECH</span>
+          <span style={{ fontSize: "9.5px", fontWeight: 800, color: "#1e293b", lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Sonic Headphones Max</span>
+          <div style={{ background: "#f8fafc", padding: "2px 5px", borderRadius: "5px", display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1px" }}>
+            <span style={{ fontSize: "8.5px", fontWeight: 800, color: "#1e293b" }}>₹4,499</span>
+            <span style={{ fontSize: "6.5px", background: "rgba(22,163,74,0.1)", color: "#16a34a", padding: "1px 3px", borderRadius: "999px", fontWeight: 700 }}>In Stock</span>
           </div>
         </div>
       );
     case "product-beauty-cosmetics":
       return (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "3px", background: "#ffffff", borderRadius: "10px", padding: "6px", border: "1px solid rgba(15,23,42,0.06)", boxShadow: "0 2px 8px rgba(0,0,0,0.04)", textAlign: "center" }}>
-          <div style={{ width: "32px", height: "32px", borderRadius: "999px", background: "#fff1f2", display: "grid", placeItems: "center", position: "relative" }}>
-            <span style={{ position: "absolute", top: "-2px", left: "-2px", fontSize: "5px", background: "#166534", color: "#fff", padding: "1px 3px", borderRadius: "4px", scale: "0.7" }}>96%</span>
-            <svg viewBox="0 0 24 24" style={{ width: "14px", height: "14px", stroke: "#e11d48", strokeWidth: 2, fill: "none" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px", background: "#ffffff", borderRadius: "8px", padding: "6px", border: "1px solid rgba(15,23,42,0.06)", boxShadow: "0 2px 6px rgba(0,0,0,0.03)", textAlign: "center" }}>
+          <div style={{ width: "30px", height: "30px", borderRadius: "999px", background: "#fff1f2", display: "grid", placeItems: "center", position: "relative" }}>
+            <svg viewBox="0 0 24 24" style={{ width: "13px", height: "13px", stroke: "#e11d48", strokeWidth: 2, fill: "none" }}>
               <path d="M9 22h6V10H9v12zM12 2v8M10 5h4" />
             </svg>
           </div>
-          <span style={{ fontSize: "7px", color: "#94a3b8", fontWeight: 700 }}>GLOW</span>
-          <span style={{ fontSize: "9px", fontWeight: 800, color: "#1e293b", lineHeight: 1 }}>Face Wash</span>
-          <span style={{ fontSize: "8px", color: "#dc2626", fontWeight: 800 }}>₹220</span>
-          <span style={{ fontSize: "6px", background: "rgba(22,163,74,0.1)", color: "#16a34a", padding: "1px 4px", borderRadius: "999px" }}>In Stock</span>
+          <span style={{ fontSize: "7px", color: "#94a3b8", fontWeight: 700 }}>WEBCREON GLOW</span>
+          <span style={{ fontSize: "9px", fontWeight: 800, color: "#1e293b", lineHeight: 1, whiteSpace: "nowrap" }}>Hydra Serum</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "1px" }}>
+            <span style={{ fontSize: "8px", color: "#dc2626", fontWeight: 800 }}>₹899</span>
+            <span style={{ fontSize: "6px", background: "rgba(22,163,74,0.1)", color: "#16a34a", padding: "1px 3px", borderRadius: "999px", fontWeight: 700 }}>In Stock</span>
+          </div>
         </div>
       );
     case "product-grocery":
       return (
-        <div style={{ display: "flex", gap: "6px", background: "#ffffff", borderRadius: "10px", padding: "6px", border: "1px solid rgba(15,23,42,0.06)", boxShadow: "0 2px 8px rgba(0,0,0,0.04)", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "6px", background: "#ffffff", borderRadius: "8px", padding: "6px", border: "1px solid rgba(15,23,42,0.06)", boxShadow: "0 2px 6px rgba(0,0,0,0.03)", alignItems: "center" }}>
           <div style={{ width: "35px", height: "35px", borderRadius: "6px", background: "#f0fdf4", flexShrink: 0, position: "relative", display: "grid", placeItems: "center" }}>
-            <span style={{ position: "absolute", top: "2px", left: "2px", fontSize: "5px", background: "#166534", color: "#fff", padding: "1px 3px", borderRadius: "4px", scale: "0.7" }}>96%</span>
             <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: "#16a34a", strokeWidth: 2, fill: "none" }}>
               <path d="M12 22a8 8 0 1 0 0-16 8 8 0 0 0 0 16z" />
               <path d="M12 2v4M12 6c-2 0-3-1-3-3" />
             </svg>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "1px", flex: 1, minWidth: 0 }}>
-            <span style={{ fontSize: "7px", color: "#94a3b8", fontWeight: 700 }}>FRESH</span>
-            <span style={{ fontSize: "9px", fontWeight: 800, color: "#1e293b", lineHeight: 1 }}>Red Apples</span>
-            <div style={{ borderTop: "1px solid #e2e8f0", margin: "2px 0" }} />
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: "8px", fontWeight: 800 }}>₹220</span>
-              <span style={{ fontSize: "5px", background: "rgba(22,163,74,0.1)", color: "#16a34a", padding: "1px 3px", borderRadius: "999px" }}>In Stock</span>
+            <span style={{ fontSize: "7px", color: "#94a3b8", fontWeight: 700, whiteSpace: "nowrap" }}>WEBCREON FRESH</span>
+            <span style={{ fontSize: "9px", fontWeight: 800, color: "#1e293b", lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Organic Farm Basket</span>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1px" }}>
+              <span style={{ fontSize: "8px", fontWeight: 800 }}>₹499</span>
+              <span style={{ fontSize: "5.5px", background: "rgba(22,163,74,0.1)", color: "#16a34a", padding: "1px 3px", borderRadius: "999px", fontWeight: 700 }}>Fresh</span>
             </div>
           </div>
         </div>
       );
     case "product-books-stationery":
       return (
-        <div style={{ display: "flex", flexDirection: "column", gap: "3px", background: "#ffffff", borderRadius: "10px", padding: "6px", border: "1px solid rgba(15,23,42,0.06)", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
-          <div style={{ width: "100%", height: "45px", borderRadius: "4px", background: "linear-gradient(135deg, #312e81 0%, #4338ca 100%)", position: "relative", display: "grid", placeItems: "center" }}>
-            <span style={{ position: "absolute", top: "2px", left: "2px", fontSize: "5px", background: "#166534", color: "#fff", padding: "1px 3px", borderRadius: "4px", scale: "0.8" }}>96%</span>
-            <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: "#ffffff", strokeWidth: 2, fill: "none" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "2px", background: "#ffffff", borderRadius: "8px", padding: "6px", border: "1px solid rgba(15,23,42,0.06)", boxShadow: "0 2px 6px rgba(0,0,0,0.03)" }}>
+          <div style={{ width: "100%", height: "35px", borderRadius: "4px", background: "linear-gradient(135deg, #312e81 0%, #4338ca 100%)", position: "relative", display: "grid", placeItems: "center" }}>
+            <svg viewBox="0 0 24 24" style={{ width: "15px", height: "15px", stroke: "#ffffff", strokeWidth: 2, fill: "none" }}>
               <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5v-15z" />
             </svg>
           </div>
-          <span style={{ fontSize: "7px", color: "#94a3b8", fontWeight: 700 }}>PENGUIN</span>
-          <span style={{ fontSize: "9px", fontWeight: 800, color: "#1e293b", lineHeight: 1 }}>Atomic Habits</span>
-          <div style={{ borderTop: "1px solid #e2e8f0", margin: "2px 0" }} />
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "8px", fontWeight: 800 }}>₹220</span>
-            <span style={{ fontSize: "7px", color: "#d97706" }}>★ 3.0</span>
+          <span style={{ fontSize: "7px", color: "#94a3b8", fontWeight: 700 }}>WEBCREON PRESS</span>
+          <span style={{ fontSize: "9px", fontWeight: 800, color: "#1e293b", lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Design Systems 2026</span>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1px" }}>
+            <span style={{ fontSize: "8px", fontWeight: 800 }}>₹799</span>
+            <span style={{ fontSize: "6.5px", color: "#d97706", fontWeight: 700 }}>★ 4.8</span>
           </div>
         </div>
       );
 
-    // Footer Preview Mockups
+    // 4. FOOTER PREVIEWS
     case "footer-apple-minimal":
       return (
-        <div style={{ display: "flex", flexDirection: "column", gap: "2px", padding: "4px 8px", background: "#ffffff", borderRadius: "6px", border: "1px solid rgba(15,23,42,0.06)", fontSize: "8px", color: "#64748b" }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span>© 2026 Brand.</span>
-            <span>Terms • Privacy</span>
+        <div style={{ display: "flex", flexDirection: "column", gap: "2px", padding: "5px 8px", background: "#ffffff", borderRadius: "6px", border: "1px solid rgba(15,23,42,0.06)", fontSize: "8px", color: "#64748b" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", whiteSpace: "nowrap" }}>
+            <span style={{ fontWeight: 700, color: "#0f172a" }}>© 2026 WebCreon</span>
+            <span>Terms • Privacy • Help</span>
           </div>
         </div>
       );
     case "footer-glassmorphism":
       return (
-        <div style={{ padding: "6px 8px", background: "rgba(255, 255, 255, 0.7)", backdropFilter: "blur(8px)", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.8)", fontSize: "8px", color: "#0f172a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span>Frosted Glass Footer</span>
-          <div style={{ width: "40px", height: "10px", borderRadius: "4px", background: "rgba(255,255,255,0.6)", border: "1px solid rgba(0,0,0,0.08)" }} />
+        <div style={{ padding: "5px 8px", background: "rgba(240, 244, 250, 0.95)", borderRadius: "6px", border: "1px solid rgba(226, 232, 240, 0.9)", fontSize: "8px", color: "#0f172a", display: "flex", justifyContent: "space-between", alignItems: "center", whiteSpace: "nowrap" }}>
+          <span style={{ fontWeight: 700 }}>WebCreon Studio</span>
+          <div style={{ width: "40px", height: "10px", borderRadius: "4px", background: "rgba(255,255,255,0.9)", border: "1px solid rgba(0,0,0,0.08)" }} />
         </div>
       );
+
     case "footer-modern-marketplace":
       return (
-        <div style={{ padding: "6px 8px", background: "#f8fafc", borderRadius: "6px", border: "1px solid rgba(0,0,0,0.06)", fontSize: "8px", display: "flex", flexDirection: "column", gap: "4px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span style={{ fontWeight: 800 }}>Shopify Market</span>
-            <span>Payments accepted</span>
+        <div style={{ padding: "5px 8px", background: "#f8fafc", borderRadius: "6px", border: "1px solid rgba(0,0,0,0.06)", fontSize: "8px", display: "flex", flexDirection: "column", gap: "2px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", whiteSpace: "nowrap" }}>
+            <span style={{ fontWeight: 800, color: "#0f172a" }}>WebCreon Market</span>
+            <span style={{ fontSize: "7px", color: "#64748b" }}>Secure Checkout</span>
           </div>
           <div style={{ width: "100%", height: "1px", background: "#e2e8f0" }} />
-          <span>© 2026 Shopify Market. All rights reserved.</span>
+          <span style={{ fontSize: "7px", color: "#94a3b8", whiteSpace: "nowrap" }}>© 2026 WebCreon Inc. All rights reserved.</span>
         </div>
       );
     case "footer-luxury-fashion":
       return (
-        <div style={{ padding: "6px 8px", background: "#fafafa", borderRadius: "6px", border: "1px solid rgba(0,0,0,0.04)", textAlign: "center", fontSize: "8px", fontFamily: "serif" }}>
-          <div style={{ fontWeight: 800, fontSize: "10px", marginBottom: "2px" }}>YB</div>
-          <span>CURATED LUXURY EDIT</span>
+        <div style={{ padding: "5px 8px", background: "#fafafa", borderRadius: "6px", border: "1px solid rgba(0,0,0,0.04)", textAlign: "center", fontSize: "7.5px", fontFamily: "serif" }}>
+          <div style={{ fontWeight: 800, fontSize: "9.5px", color: "#0f172a" }}>WEBCREON</div>
+          <span style={{ letterSpacing: "0.1em", color: "#64748b" }}>CURATED LUXURY & CRAFT</span>
         </div>
       );
     case "footer-neo-modern":
       return (
-        <div style={{ padding: "6px 8px", background: "#f0f4f9", borderRadius: "6px", boxShadow: "3px 3px 6px rgba(166,180,200,0.3)", fontSize: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontWeight: 800 }}>Neo Footer</span>
+        <div style={{ padding: "5px 8px", background: "#f0f4f9", borderRadius: "6px", boxShadow: "3px 3px 6px rgba(166,180,200,0.3)", fontSize: "8px", display: "flex", justifyContent: "space-between", alignItems: "center", whiteSpace: "nowrap" }}>
+          <span style={{ fontWeight: 800, color: "#0f172a" }}>WebCreon Neo</span>
           <div style={{ width: "30px", height: "8px", borderRadius: "999px", background: "#f0f4f9", boxShadow: "inset 1px 1px 2px rgba(0,0,0,0.1)" }} />
         </div>
       );
@@ -1148,6 +1164,8 @@ export default function BuilderDrawerPanel({
           overflowY: "auto",
           flex: 1,
           minHeight: 0,
+          WebkitOverflowScrolling: "touch",
+          contain: "content",
         }}
       >
         {activeDrawer === "saved-sites" ? (
@@ -1310,94 +1328,125 @@ export default function BuilderDrawerPanel({
             )}
 
             {/* Component Assets List */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              {filteredAssets.map((asset) => {
-                const isJustApplied = appliedAssetId === asset.id;
-                const isCurrentlyActive =
-                  siteDefinition?.theme?.navbar_layout ===
-                    asset.patch.themePatch?.navbar_layout ||
-                  (asset.id === "navbar-apple-minimal" &&
-                    !siteDefinition?.theme?.navbar_layout);
+            {(() => {
+              const heroBlock = (siteDefinition?.pages?.[0]?.blocks ?? []).find((b: any) => String(b.type || "").toLowerCase().includes("hero"));
+              const activeSlidesList = Array.isArray(heroBlock?.props?.slides) ? heroBlock.props.slides : [];
 
-                const heroBlock = (siteDefinition?.pages?.[0]?.blocks ?? []).find((b: any) => String(b.type || "").toLowerCase().includes("hero"));
-                const activeSlidesList = Array.isArray(heroBlock?.props?.slides) ? heroBlock.props.slides : [];
-                const appliedCount = asset.category === "banner"
-                  ? activeSlidesList.filter((s: any) => (s.variant || "standard") === (asset.patch.blockPatch?.variant || "standard")).length
-                  : 0;
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {filteredAssets.map((asset) => {
+                    const isJustApplied = appliedAssetId === asset.id;
+                    const isCurrentlyActive =
+                      asset.category === "navbar"
+                        ? siteDefinition?.theme?.navbar_layout === asset.patch.themePatch?.navbar_layout || (asset.id === "navbar-apple-minimal" && !siteDefinition?.theme?.navbar_layout)
+                        : asset.category === "products"
+                          ? siteDefinition?.theme?.card_style === asset.patch.themePatch?.card_style || (asset.id === "product-fashion-apparel" && !siteDefinition?.theme?.card_style)
+                          : asset.category === "footer"
+                            ? siteDefinition?.theme?.footer_layout === asset.patch.themePatch?.footer_layout || (asset.id === "footer-apple-minimal" && !siteDefinition?.theme?.footer_layout)
+                            : false;
 
-                return (
-                  <div
-                    key={asset.id}
-                    style={{
-                      padding: "12px",
-                      borderRadius: "12px",
-                      border: isCurrentlyActive
-                        ? "1.5px solid #2563eb"
-                        : "1px solid rgba(15,23,42,0.08)",
-                      background: isCurrentlyActive
-                        ? "rgba(37,99,235,0.02)"
-                        : "#ffffff",
-                      boxShadow: "0 2px 6px rgba(15,23,42,0.03)",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "10px",
-                    }}
-                  >
-                    {/* Header: Title & Tag */}
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: "8px",
-                      }}
-                    >
+                    const appliedCount = asset.category === "banner"
+                      ? activeSlidesList.filter((s: any) => (s.variant || "standard") === (asset.patch.blockPatch?.variant || "standard")).length
+                      : 0;
+
+                    return (
                       <div
+                        key={asset.id}
                         style={{
-                          fontSize: 13,
-                          fontWeight: 700,
-                          color: "#0f172a",
+                          padding: "10px 12px",
+                          borderRadius: "10px",
+                          border: isCurrentlyActive
+                            ? "1.5px solid #2563eb"
+                            : "1px solid rgba(15,23,42,0.08)",
+                          background: isCurrentlyActive
+                            ? "rgba(37,99,235,0.02)"
+                            : "#ffffff",
+                          boxShadow: isCurrentlyActive
+                            ? "0 2px 8px rgba(37,99,235,0.08)"
+                            : "0 1px 3px rgba(15,23,42,0.03)",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "8px",
+                          contain: "paint",
+                          transition: "border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease",
                         }}
                       >
-                        {asset.title}
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        {asset.category === "banner" && (
-                          <span
-                            style={{
-                              fontSize: 10,
-                              fontWeight: 800,
-                              padding: "2px 6px",
-                              borderRadius: "999px",
-                              background: appliedCount > 0 ? "#2563eb" : "rgba(15,23,42,0.06)",
-                              color: appliedCount > 0 ? "#ffffff" : "#64748b",
-                            }}
-                          >
-                            {appliedCount} Applied
-                          </span>
-                        )}
-                        <span
+
+                    {/* Header: Title + Status Badge Row (top) & Full-width Description (bottom) */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "8px",
+                        }}
+                      >
+                        <div
                           style={{
-                            fontSize: 10,
+                            fontSize: "12.5px",
                             fontWeight: 700,
-                            padding: "2px 6px",
-                            borderRadius: "4px",
-                            background: isCurrentlyActive
-                              ? "#2563eb"
-                              : "rgba(37,99,235,0.08)",
-                            color: isCurrentlyActive ? "#ffffff" : "#2563eb",
+                            color: isCurrentlyActive ? "#1d4ed8" : "#0f172a",
+                            lineHeight: 1.2,
                           }}
                         >
-                          {isCurrentlyActive ? "Active" : asset.tag}
-                        </span>
+                          {asset.title}
+                        </div>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
+                          {asset.category === "banner" && appliedCount > 0 && (
+                            <span
+                              style={{
+                                fontSize: "9.5px",
+                                fontWeight: 700,
+                                padding: "2px 7px",
+                                borderRadius: "999px",
+                                background: "#eff6ff",
+                                color: "#2563eb",
+                                border: "1px solid #bfdbfe",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {appliedCount} in Carousel
+                            </span>
+                          )}
+                          {isCurrentlyActive && (
+                            <span
+                              style={{
+                                fontSize: "9.5px",
+                                fontWeight: 700,
+                                padding: "2px 7px",
+                                borderRadius: "999px",
+                                background: "#ecfdf5",
+                                color: "#059669",
+                                border: "1px solid #a7f3d0",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              ✓ Active
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: "10.5px",
+                          color: "#64748b",
+                          lineHeight: 1.35,
+                          width: "100%",
+                        }}
+                      >
+                        {asset.description}
                       </div>
                     </div>
 
-                    {/* Visual Mini Navbar Preview */}
+
+                    {/* Visual Mini Preview */}
                     <div
                       style={{
-                        padding: "6px",
-                        borderRadius: "10px",
+                        padding: "5px",
+                        borderRadius: "8px",
                         background: "#f8fafc",
                         border: "1px solid rgba(15,23,42,0.06)",
                         overflow: "hidden",
@@ -1406,45 +1455,50 @@ export default function BuilderDrawerPanel({
                       {renderAssetPreview(asset.id)}
                     </div>
 
-                    {/* Apply Button */}
+                    {/* Apply / Add Button */}
                     <button
                       type="button"
                       onClick={() => handleApplyAsset(asset)}
                       disabled={!siteDefinition || !onSiteDefinitionChange}
                       style={{
-                        marginTop: "2px",
-                        padding: "7px 12px",
-                        borderRadius: "8px",
-                        border: "none",
+                        padding: "6px 10px",
+                        borderRadius: "6px",
+                        border: isCurrentlyActive ? "1px solid #e2e8f0" : "none",
                         background: isJustApplied
                           ? "#16a34a"
                           : isCurrentlyActive
-                          ? "#059669"
-                          : "#2563eb",
-                        color: "#ffffff",
-                        fontSize: "12px",
-                        fontWeight: 600,
+                            ? "#f8fafc"
+                            : "#2563eb",
+                        color: isCurrentlyActive ? "#475569" : "#ffffff",
+                        fontSize: "11px",
+                        fontWeight: 700,
                         cursor:
                           !siteDefinition || !onSiteDefinitionChange
                             ? "not-allowed"
                             : "pointer",
                         opacity:
                           !siteDefinition || !onSiteDefinitionChange ? 0.5 : 1,
-                        transition: "background 0.2s ease",
+                        transition: "all 0.15s ease",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "4px",
                       }}
                     >
                       {isJustApplied
-                        ? asset.category === "banner" ? "✓ Banner Added" : "✓ Layout Applied"
+                        ? asset.category === "banner" ? "✓ Banner Added!" : "✓ Layout Applied!"
                         : asset.category === "banner"
-                        ? "+ Add Banner to Carousel"
-                        : isCurrentlyActive
-                        ? "Active Layout"
-                        : "Apply Layout"}
+                          ? "+ Add Banner to Carousel"
+                          : isCurrentlyActive
+                            ? "✓ Current Layout"
+                            : "Apply Layout"}
                     </button>
                   </div>
                 );
               })}
             </div>
+            );
+          })()}
           </div>
         ) : activeDrawer === "chat" ? (
           <AdminCopilotChat
