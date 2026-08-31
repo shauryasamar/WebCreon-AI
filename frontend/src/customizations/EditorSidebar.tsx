@@ -1017,6 +1017,101 @@ export function exportCanvasTemplate({
 }
 
 
+function CompactColorRow({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (val: string) => void;
+}) {
+  const hexVal = typeof value === "string" && value ? value : "#2563eb";
+  const isValidHex = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(hexVal);
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "3.5px 7px",
+        minHeight: "29px",
+        background: "#f8fafc",
+        borderRadius: "4px",
+        border: "1px solid #e2e8f0",
+        boxSizing: "border-box",
+        width: "100%",
+        gap: "6px",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: "7px", minWidth: 0, flex: 1 }}>
+        <label
+          style={{
+            position: "relative",
+            width: "18px",
+            height: "18px",
+            borderRadius: "4px",
+            background: hexVal,
+            border: "1px solid rgba(0,0,0,0.18)",
+            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.25)",
+            cursor: "pointer",
+            flexShrink: 0,
+            overflow: "hidden",
+            display: "grid",
+            placeItems: "center",
+          }}
+          title={`Choose ${label}`}
+        >
+          <input
+            type="color"
+            value={isValidHex && hexVal.startsWith("#") ? hexVal : "#2563eb"}
+            onChange={(e) => onChange(e.target.value)}
+            style={{
+              position: "absolute",
+              top: "-50%",
+              left: "-50%",
+              width: "200%",
+              height: "200%",
+              opacity: 0,
+              cursor: "pointer",
+            }}
+          />
+        </label>
+        <span style={{ fontSize: "11px", fontWeight: 600, color: "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {label}
+        </span>
+      </div>
+
+      <input
+        type="text"
+        value={hexVal.toUpperCase()}
+        placeholder="#000000"
+        onChange={(e) => {
+          const raw = e.target.value.trim();
+          onChange(raw.startsWith("#") || raw === "" ? raw : `#${raw}`);
+        }}
+        style={{
+          width: "68px",
+          height: "22px",
+          textAlign: "center",
+          fontFamily: "'Inter', monospace",
+          fontSize: "10.5px",
+          fontWeight: 700,
+          color: "#0f172a",
+          borderRadius: "4px",
+          border: "1px solid #cbd5e1",
+          background: "#ffffff",
+          outline: "none",
+          padding: "0 2px",
+          boxSizing: "border-box",
+          flexShrink: 0,
+        }}
+      />
+    </div>
+  );
+}
+
 function ModernColorPicker({
   value,
   onChange,
@@ -1308,7 +1403,8 @@ function renderFieldControl(
 
   if (field.type === "color") {
     return (
-      <ModernColorPicker
+      <CompactColorRow
+        label={field.label || "Color"}
         value={typeof currentValue === "string" ? currentValue : ""}
         onChange={onChange}
       />
@@ -1422,12 +1518,16 @@ const NumberStepperField = ({
   const maxRef = useRef(max);
   maxRef.current = max;
 
+  const isFocusedRef = useRef(false);
+
   const clamp = (val: number) => Math.max(minRef.current, Math.min(maxRef.current, val));
 
-  const attachWheel = useCallback((node: HTMLElement | null) => {
+  const attachWheel = useCallback((node: HTMLInputElement | null) => {
     if (!node) return;
 
     const handleWheel = (e: WheelEvent) => {
+      // ONLY change number if the input is currently clicked / focused!
+      if (!isFocusedRef.current) return;
       e.preventDefault();
       e.stopPropagation();
       const delta = e.deltaY < 0 ? stepRef.current : -stepRef.current;
@@ -1439,6 +1539,9 @@ const NumberStepperField = ({
     };
 
     node.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      node.removeEventListener("wheel", handleWheel);
+    };
   }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -1453,7 +1556,6 @@ const NumberStepperField = ({
 
   return (
     <div
-      ref={attachWheel}
       style={{
         display: "grid",
         gap: "3px",
@@ -1516,6 +1618,12 @@ const NumberStepperField = ({
           max={max}
           step={step}
           value={value}
+          onFocus={() => {
+            isFocusedRef.current = true;
+          }}
+          onBlur={() => {
+            isFocusedRef.current = false;
+          }}
           onKeyDown={handleKeyDown}
           onChange={(e) => {
             const parsed = parseFloat(e.target.value);
@@ -1561,7 +1669,6 @@ const NumberStepperField = ({
 
       {/* Smooth micro-slider for continuous sliding */}
       <input
-        ref={attachWheel}
         type="range"
         min={min}
         max={max}
@@ -2361,23 +2468,53 @@ function HeroSlidesEditor({
 
                         <SectionDivider title="Colors" />
 
-                        <ModernColorPicker
+                        <CompactColorRow
                           label="Background Color"
-                          value={slide.background_color || slide.hero_bg || ""}
+                          value={slide.background_color || slide.hero_bg || siteDefinition.theme?.hero_bg || siteDefinition.theme?.primary_bg || (siteDefinition.theme?.mode === "dark" ? "#0f172a" : "#ffffff")}
                           onChange={(val) => handleSlideChange(idx, "background_color", val)}
                         />
 
-                        <ModernColorPicker
+                        <CompactColorRow
                           label="Text Color"
-                          value={slide.hero_text_color || slide.text_color || ""}
+                          value={slide.hero_text_color || slide.text_color || siteDefinition.theme?.text_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
                           onChange={(val) => handleSlideChange(idx, "hero_text_color", val)}
                         />
 
-                        <ModernColorPicker
+                        <CompactColorRow
                           label="Accent / CTA Color"
-                          value={slide.hero_accent || slide.accent_color || ""}
+                          value={slide.hero_accent || slide.accent_color || siteDefinition.theme?.accent_color || "#2563eb"}
                           onChange={(val) => handleSlideChange(idx, "hero_accent", val)}
                         />
+
+                        {/* Festive Motif Position & Opacity (when festival theme is enabled) */}
+                        {(siteDefinition.theme?.festival_theme && siteDefinition.theme.festival_theme !== "none") && (
+                          <div style={{ display: "grid", gap: "5px", marginTop: "2px", padding: "5px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "5px" }}>
+                            <div style={{ display: "grid", gap: "2px" }}>
+                              <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                                Festive Motif Position
+                              </label>
+                              <SegmentedRow
+                                value={slide.festive_position || siteDefinition.theme?.hero_festive_position || "right"}
+                                onChange={(val) => handleSlideChange(idx, "festive_position", val)}
+                                options={[
+                                  { label: "Left", value: "left" },
+                                  { label: "Center", value: "center" },
+                                  { label: "Right", value: "right" },
+                                ]}
+                              />
+                            </div>
+
+                            <NumberStepperField
+                              label="Motif Opacity"
+                              value={slide.festive_opacity !== undefined ? slide.festive_opacity : (siteDefinition.theme?.hero_festive_opacity !== undefined ? siteDefinition.theme.hero_festive_opacity : (siteDefinition.theme?.festive_opacity !== undefined ? siteDefinition.theme.festive_opacity : 100))}
+                              min={0}
+                              max={100}
+                              step={5}
+                              unit="%"
+                              onChange={(val) => handleSlideChange(idx, "festive_opacity", val)}
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -2626,27 +2763,30 @@ function NavbarEditor({
     onSiteDefinitionChange(updateThemeValues(siteDefinition, { [key]: value }));
   };
 
+  const isDark = theme?.mode === "dark";
+  const defaultBrandName = siteDefinition.brand_name || siteDefinition.site_name || siteDefinition.name || "My Store";
+
   // Values
   const brandDisplayMode = getVal("brand_display_mode", "both");
   const brandAlignment = getVal("brand_alignment", "left");
   const brandLayoutDirection = getVal("brand_layout_direction", "row");
-  const brandName = getVal("brandName", "GreenHarvest");
-  const logoUrl = getVal("logoUrl", "");
-  const logoSize = Number(getVal("logo_size", 34));
-  const logoZoom = Number(getVal("logo_zoom", 100));
-  const logoFit = getVal("logo_fit", "contain");
-  const brandFontFamily = getVal("brand_font_family", "sans_modern");
+  const brandName = getVal("brandName", defaultBrandName);
+  const logoUrl = getVal("logoUrl", theme.logoUrl || theme.logo_url || "");
+  const logoSize = Number(getVal("logo_size", theme.logo_size || 34));
+  const logoZoom = Number(getVal("logo_zoom", theme.logo_zoom || 100));
+  const logoFit = getVal("logo_fit", theme.logo_fit || "contain");
+  const brandFontFamily = getVal("brand_font_family", theme.font_family || "sans_modern");
   const brandFontWeight = String(getVal("brand_font_weight", "700"));
   const brandFontStyle = getVal("brand_font_style", "normal");
   const brandFontSize = Number(getVal("brand_font_size", 18));
-  const brandTextColor = getVal("brand_text_color", "#15803d");
+  const brandTextColor = getVal("brand_text_color", theme.accent_color || (isDark ? "#f8fafc" : "#15803d"));
 
   const searchDisplayMode = getVal("search_display_mode", "bar");
   const searchPlacement = getVal("search_placement", "center");
   const searchMaxWidth = Number(getVal("search_max_width", 420));
   const searchHeight = Number(getVal("search_height", 38));
-  const searchTextColor = getVal("search_text_color", "#0f172a");
-  const searchMutedTextColor = getVal("search_muted_text_color", "#64748b");
+  const searchTextColor = getVal("search_text_color", theme.text_color || (isDark ? "#f8fafc" : "#0f172a"));
+  const searchMutedTextColor = getVal("search_muted_text_color", isDark ? "#94a3b8" : "#64748b");
 
   const navbarVariant = getVal("navbar_variant", "glassmorphism");
   const navbarPosition = getVal("navbar_position", "sticky");
@@ -2657,10 +2797,11 @@ function NavbarEditor({
   const navbarPaddingX = Number(getVal("navbar_padding_x", 16));
   const navbarPaddingY = Number(getVal("navbar_padding_y", 12));
 
-  const navbarBg = getVal("navbar_bg", "rgba(255, 255, 255, 0.85)");
-  const navbarOuterBg = getVal("navbar_outer_bg", "transparent");
-  const navbarTextColorVal = getVal("navbar_text_color", "#0f172a");
-  const navbarBorderColor = getVal("navbar_border_color", "rgba(226, 232, 240, 0.8)");
+  const defaultNavbarBg = theme.navbar_bg || theme.primary_bg || (isDark ? "#0f172a" : "rgba(255, 255, 255, 0.85)");
+  const navbarBg = getVal("navbar_bg", defaultNavbarBg);
+  const navbarOuterBg = getVal("navbar_outer_bg", theme.navbar_outer_bg || "transparent");
+  const navbarTextColorVal = getVal("navbar_text_color", theme.navbar_text_color || theme.text_color || (isDark ? "#f8fafc" : "#0f172a"));
+  const navbarBorderColor = getVal("navbar_border_color", isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(226, 232, 240, 0.8)");
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
@@ -2907,12 +3048,6 @@ function NavbarEditor({
                     onChange={(val) => updateField("brand_font_size", val)}
                   />
                 </div>
-
-                <ModernColorPicker
-                  label="Brand Color"
-                  value={brandTextColor}
-                  onChange={(val) => updateField("brand_text_color", val)}
-                />
               </>
             )}
           </div>
@@ -2978,20 +3113,6 @@ function NavbarEditor({
                     onChange={(val) => updateField("search_height", val)}
                   />
                 </div>
-
-                <SectionDivider title="Colors" />
-
-                <ModernColorPicker
-                  label="Input Text Color"
-                  value={searchTextColor}
-                  onChange={(val) => updateField("search_text_color", val)}
-                />
-
-                <ModernColorPicker
-                  label="Placeholder / Icon Color"
-                  value={searchMutedTextColor}
-                  onChange={(val) => updateField("search_muted_text_color", val)}
-                />
               </>
             )}
           </div>
@@ -3106,65 +3227,57 @@ function NavbarEditor({
       {/* TAB 4: COLORS & THEME */}
       {activeTab === "colors" && (
         <section style={sectionCardStyle(isLightMode)}>
-          <div style={{ display: "grid", gap: "8px", width: "100%", boxSizing: "border-box" }}>
-            <ModernColorPicker
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px", width: "100%", boxSizing: "border-box" }}>
+            <span style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              Navbar & Background
+            </span>
+            <CompactColorRow
               label="Navbar Background"
               value={navbarBg}
               onChange={(val) => updateField("navbar_bg", val)}
             />
 
-            <ModernColorPicker
-              label="Outer Background (Floating Mode)"
+            <CompactColorRow
+              label="Outer Background (Floating)"
               value={navbarOuterBg}
               onChange={(val) => updateField("navbar_outer_bg", val)}
             />
 
-            <ModernColorPicker
-              label="Navbar Text & Icons Color"
-              value={navbarTextColorVal}
-              onChange={(val) => updateField("navbar_text_color", val)}
-            />
-
-            <ModernColorPicker
-              label="Navbar Border Color"
+            <CompactColorRow
+              label="Border Color"
               value={navbarBorderColor}
               onChange={(val) => updateField("navbar_border_color", val)}
             />
 
-            <button
-              type="button"
-              onClick={() => {
-                const navH = Number(navbarHeight || 72);
-                const navR = Number(navbarRadius || 0);
-                exportCanvasTemplate({
-                  width: 1920,
-                  height: navH,
-                  borderRadius: navR,
-                  backgroundColor: navbarBg,
-                  title: "Navbar Template",
-                  filename: `navbar-canvas-1920x${navH}.png`,
-                });
-              }}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "6px",
-                padding: "6px 12px",
-                background: "#f1f5f9",
-                border: "1px solid #cbd5e1",
-                borderRadius: "6px",
-                color: "#1e293b",
-                fontSize: "10.5px",
-                fontWeight: 600,
-                cursor: "pointer",
-                marginTop: "4px",
-                transition: "background 0.12s ease",
-              }}
-              title="Download exact-size canvas PNG with navbar background to edit in Canva or Photoshop"
-            >
-              📥 Download Navbar Canvas (1920 × {navbarHeight || 72}px)
-            </button>
+            <span style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: "4px" }}>
+              Brand & Text
+            </span>
+            <CompactColorRow
+              label="Brand Name Color"
+              value={brandTextColor}
+              onChange={(val) => updateField("brand_text_color", val)}
+            />
+
+            <CompactColorRow
+              label="Text & Icons Color"
+              value={navbarTextColorVal}
+              onChange={(val) => updateField("navbar_text_color", val)}
+            />
+
+            <span style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: "4px" }}>
+              Search Colors
+            </span>
+            <CompactColorRow
+              label="Search Input Text"
+              value={searchTextColor}
+              onChange={(val) => updateField("search_text_color", val)}
+            />
+
+            <CompactColorRow
+              label="Search Placeholder / Icon"
+              value={searchMutedTextColor}
+              onChange={(val) => updateField("search_muted_text_color", val)}
+            />
           </div>
         </section>
       )}
@@ -3186,6 +3299,7 @@ export default function EditorSidebar({
 
   const [snapshotName, setSnapshotName] = useState("");
   const [snapshotFeedback, setSnapshotFeedback] = useState<string | null>(null);
+  const [showAllSnapshots, setShowAllSnapshots] = useState(false);
   const [refreshCounter, setRefreshCounter] = useState(0);
 
   useEffect(() => {
@@ -3501,10 +3615,10 @@ export default function EditorSidebar({
 
       {selectedTab === "theme" ? (
         <div style={{ display: "grid", gap: "5px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-          {/* Saved Themes Section */}
-          <section style={{ ...sectionCardStyle(isLightMode), boxSizing: "border-box", overflow: "hidden" }}>
+          {/* Saved Snapshots Section */}
+          <section style={{ ...sectionCardStyle(isLightMode), boxSizing: "border-box", overflow: "visible" }}>
             <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
-              SAVED THEMES SNAPSHOTS
+              SAVED SNAPSHOTS
             </div>
             
             <div style={{ display: "flex", gap: "4px", width: "100%", boxSizing: "border-box" }}>
@@ -3519,23 +3633,26 @@ export default function EditorSidebar({
                     handleSaveSnapshot();
                   }
                 }}
-                style={{ ...sharedInputStyle(), flex: 1, minWidth: 0, height: "24px", fontSize: "10.5px" }}
+                style={{ ...sharedInputStyle(), flex: 1, minWidth: 0, height: "26px", fontSize: "11px" }}
               />
               <button
                 type="button"
                 onClick={handleSaveSnapshot}
                 style={{
-                  padding: "0 8px",
-                  height: "24px",
+                  padding: "0 10px",
+                  height: "26px",
                   borderRadius: "4px",
                   border: "none",
                   background: snapshotFeedback ? "#10b981" : ADMIN_BLUE,
                   color: "#ffffff",
-                  fontSize: "10.5px",
+                  fontSize: "11px",
                   fontWeight: 600,
                   cursor: "pointer",
                   flexShrink: 0,
                   transition: "all 0.15s ease",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
                 {snapshotFeedback || "+ Save"}
@@ -3543,79 +3660,133 @@ export default function EditorSidebar({
             </div>
 
             {savedSnapshots.length === 0 ? (
-              <div style={{ fontSize: "10px", color: "#94a3b8", textAlign: "center", padding: "4px 0" }}>
+              <div style={{ fontSize: "10.5px", color: "#94a3b8", textAlign: "center", padding: "6px 0" }}>
                 No snapshots yet. Enter a name & click + Save.
               </div>
             ) : (
-              <div style={{ display: "grid", gap: "3px", marginTop: "1px", width: "100%", boxSizing: "border-box" }}>
-                {savedSnapshots.map((snap: any) => {
-                  const th = snap.theme || {};
-                  return (
-                    <div
-                      key={snap.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "3px 5px",
-                        borderRadius: "4px",
-                        background: "#f8fafc",
-                        border: "1px solid #e2e8f0",
-                        gap: "4px",
-                        width: "100%",
-                        boxSizing: "border-box",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: "4px", flex: 1, minWidth: 0, overflow: "hidden" }}>
-                        <div style={{ display: "flex", gap: "2px", alignItems: "center", flexShrink: 0 }}>
-                          <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: th.primary_bg || "#ffffff", border: "1px solid #cbd5e1" }} title={`Primary: ${th.primary_bg || '#ffffff'}`} />
-                          <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: th.accent_color || "#2563eb", border: "1px solid #cbd5e1" }} title={`Accent: ${th.accent_color || '#2563eb'}`} />
-                          <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: th.navbar_bg || "#0f172a", border: "1px solid #cbd5e1" }} title={`Navbar: ${th.navbar_bg || '#0f172a'}`} />
+              <>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "3.5px",
+                    marginTop: "3px",
+                    width: "100%",
+                    boxSizing: "border-box",
+                    maxHeight: showAllSnapshots ? "250px" : "none",
+                    overflowY: showAllSnapshots ? "auto" : "visible",
+                    paddingRight: showAllSnapshots ? "2px" : "0",
+                  }}
+                >
+                  {(showAllSnapshots ? savedSnapshots : savedSnapshots.slice(0, 3)).map((snap: any) => {
+                    const th = snap.theme || {};
+                    return (
+                      <div
+                        key={snap.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "4px 6px",
+                          minHeight: "29px",
+                          borderRadius: "4px",
+                          background: "#f8fafc",
+                          border: "1px solid #e2e8f0",
+                          gap: "6px",
+                          width: "100%",
+                          boxSizing: "border-box",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "5px", flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", gap: "2px", alignItems: "center", flexShrink: 0 }}>
+                            <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: th.primary_bg || "#ffffff", border: "1px solid #cbd5e1" }} title={`Primary: ${th.primary_bg || '#ffffff'}`} />
+                            <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: th.accent_color || "#2563eb", border: "1px solid #cbd5e1" }} title={`Accent: ${th.accent_color || '#2563eb'}`} />
+                            <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: th.navbar_bg || "#0f172a", border: "1px solid #cbd5e1" }} title={`Navbar: ${th.navbar_bg || '#0f172a'}`} />
+                          </div>
+                          <span style={{ fontSize: "10.5px", fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 }}>
+                            {snap.name}
+                          </span>
                         </div>
-                        <span style={{ fontSize: "10.5px", fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 }}>{snap.name}</span>
+                        <div style={{ display: "flex", gap: "3px", alignItems: "center", flexShrink: 0 }}>
+                          <button
+                            type="button"
+                            onClick={() => handleApplySnapshot(snap.id)}
+                            style={{
+                              padding: "2px 7px",
+                              height: "20px",
+                              borderRadius: "3px",
+                              border: "none",
+                              background: ADMIN_BLUE,
+                              color: "#ffffff",
+                              fontSize: "9.5px",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              whiteSpace: "nowrap",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            Apply
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSnapshot(snap.id)}
+                            style={{
+                              width: "20px",
+                              height: "20px",
+                              borderRadius: "3px",
+                              border: "none",
+                              background: "rgba(239,68,68,0.1)",
+                              color: "#ef4444",
+                              fontSize: "12px",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              padding: 0,
+                            }}
+                            title="Delete Snapshot"
+                          >
+                            ×
+                          </button>
+                        </div>
                       </div>
-                      <div style={{ display: "flex", gap: "3px", flexShrink: 0 }}>
-                        <button
-                          type="button"
-                          onClick={() => handleApplySnapshot(snap.id)}
-                          style={{
-                            padding: "2px 6px",
-                            borderRadius: "3px",
-                            border: "none",
-                            background: ADMIN_BLUE,
-                            color: "#ffffff",
-                            fontSize: "9.5px",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          Apply
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteSnapshot(snap.id)}
-                          style={{
-                            padding: "2px 4px",
-                            borderRadius: "3px",
-                            border: "none",
-                            background: "rgba(239,68,68,0.1)",
-                            color: "#ef4444",
-                            fontSize: "9px",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                            whiteSpace: "nowrap",
-                          }}
-                          title="Delete Theme Snapshot"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+
+                {savedSnapshots.length > 3 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllSnapshots(!showAllSnapshots)}
+                    style={{
+                      width: "100%",
+                      padding: "4px 6px",
+                      borderRadius: "4px",
+                      border: "1px dashed #cbd5e1",
+                      background: "#ffffff",
+                      color: ADMIN_BLUE,
+                      fontSize: "10px",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      textAlign: "center",
+                      marginTop: "3px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "4px",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    {showAllSnapshots
+                      ? `▲ Show less (3 of ${savedSnapshots.length})`
+                      : `▼ View all snapshots (${savedSnapshots.length})`}
+                  </button>
+                )}
+              </>
             )}
           </section>
 
@@ -3821,6 +3992,39 @@ export default function EditorSidebar({
                 );
               })}
             </div>
+
+            {/* Festive Motif Position (For Hero Banner) */}
+            {(siteDefinition.theme?.festival_theme && siteDefinition.theme.festival_theme !== "none") && (
+              <>
+                <div style={{ marginTop: "8px", display: "grid", gap: "3px" }}>
+                  <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                    Hero Banner Motif Position
+                  </label>
+                  <SegmentedRow
+                    value={siteDefinition.theme?.hero_festive_position || siteDefinition.theme?.festive_position || "right"}
+                    onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { hero_festive_position: val, festive_position: val }))}
+                    options={[
+                      { label: "Left", value: "left" },
+                      { label: "Center", value: "center" },
+                      { label: "Right", value: "right" },
+                    ]}
+                  />
+                </div>
+
+                {/* Hero Banner Motif Opacity */}
+                <div style={{ marginTop: "6px" }}>
+                  <NumberStepperField
+                    label="Hero Motif Opacity"
+                    value={siteDefinition.theme?.hero_festive_opacity !== undefined ? siteDefinition.theme.hero_festive_opacity : (siteDefinition.theme?.festive_opacity !== undefined ? siteDefinition.theme.festive_opacity : 100)}
+                    min={0}
+                    max={100}
+                    step={5}
+                    unit="%"
+                    onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { hero_festive_opacity: val, festive_opacity: val }))}
+                  />
+                </div>
+              </>
+            )}
           </section>
 
           {/* Brand Palette Section */}
@@ -3829,29 +4033,29 @@ export default function EditorSidebar({
               BRAND PALETTE
             </div>
 
-            <div style={{ display: "grid", gap: "8px", width: "100%", boxSizing: "border-box" }}>
-              <ModernColorPicker
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px", width: "100%", boxSizing: "border-box" }}>
+              <CompactColorRow
                 label="Accent Color"
                 value={siteDefinition.theme?.accent_color || "#2563eb"}
                 onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { accent_color: val }))}
               />
 
-              <ModernColorPicker
+              <CompactColorRow
+                label="Text Color"
+                value={siteDefinition.theme?.text_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { text_color: val }))}
+              />
+
+              <CompactColorRow
                 label="Primary Background"
                 value={siteDefinition.theme?.primary_bg || (siteDefinition.theme?.mode === "dark" ? "#121316" : "#ffffff")}
                 onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { primary_bg: val }))}
               />
 
-              <ModernColorPicker
+              <CompactColorRow
                 label="Secondary Background"
                 value={siteDefinition.theme?.secondary_bg || (siteDefinition.theme?.mode === "dark" ? "#1a1c21" : "#f8fafc")}
                 onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { secondary_bg: val }))}
-              />
-
-              <ModernColorPicker
-                label="Text Color"
-                value={siteDefinition.theme?.text_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
-                onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { text_color: val }))}
               />
             </div>
           </section>

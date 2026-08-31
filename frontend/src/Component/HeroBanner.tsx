@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   DiwaliGraphics,
   HoliGraphics,
@@ -283,9 +283,91 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
 
+  // Gesture & Swipe Tracking (Mobile Touch + Laptop Mouse Drag + Trackpad Wheel)
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchStartY, setTouchStartY] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartX, setDragStartX] = useState<number | null>(null);
+  const [dragOffset, setDragOffset] = useState<number>(0);
+  const wheelLockRef = useRef(false);
+
+  const handlePrev = () => {
+    setCurrentIndex((prev) => (prev === 0 ? activeSlides.length - 1 : prev - 1));
+  };
+
+  const handleNext = () => {
+    setCurrentIndex((prev) => (prev + 1) % activeSlides.length);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (activeSlides.length <= 1) return;
+    setTouchStartX(e.touches[0].clientX);
+    setTouchStartY(e.touches[0].clientY);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX === null || touchStartY === null || activeSlides.length <= 1) return;
+    const diffX = touchStartX - e.changedTouches[0].clientX;
+    const diffY = touchStartY - e.changedTouches[0].clientY;
+
+    // Trigger slide change on clear horizontal swipe (> 30px)
+    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 30) {
+      if (diffX > 0) {
+        handleNext();
+      } else {
+        handlePrev();
+      }
+    }
+    setTouchStartX(null);
+    setTouchStartY(null);
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (activeSlides.length <= 1) return;
+    // Don't intercept button or link clicks
+    if ((e.target as HTMLElement).closest("button, a, input, select")) return;
+    setIsDragging(true);
+    setDragStartX(e.clientX);
+    setDragOffset(0);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || dragStartX === null) return;
+    const offset = e.clientX - dragStartX;
+    setDragOffset(offset);
+  };
+
+  const handleMouseUp = () => {
+    if (isDragging && dragStartX !== null) {
+      if (dragOffset < -35) {
+        handleNext();
+      } else if (dragOffset > 35) {
+        handlePrev();
+      }
+    }
+    setIsDragging(false);
+    setDragStartX(null);
+    setDragOffset(0);
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (activeSlides.length <= 1) return;
+    if (Math.abs(e.deltaX) > 35 && !wheelLockRef.current) {
+      wheelLockRef.current = true;
+      if (e.deltaX > 0) {
+        handleNext();
+      } else {
+        handlePrev();
+      }
+      setTimeout(() => {
+        wheelLockRef.current = false;
+      }, 400);
+    }
+  };
+
   // Auto-scroll Timer
   useEffect(() => {
-    if (!auto_play || isHovered || activeSlides.length <= 1) return;
+    if (!auto_play || isHovered || isDragging || activeSlides.length <= 1) return;
 
     const intervalMs = Math.max(1, auto_play_interval) * 1000;
     const timer = setInterval(() => {
@@ -293,7 +375,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
     }, intervalMs);
 
     return () => clearInterval(timer);
-  }, [auto_play, auto_play_interval, isHovered, activeSlides.length]);
+  }, [auto_play, auto_play_interval, isHovered, isDragging, activeSlides.length]);
 
   // Keep index within bounds
   useEffect(() => {
@@ -303,14 +385,6 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   }, [activeSlides.length, currentIndex]);
 
   const currentSlide = activeSlides[currentIndex] || activeSlides[0];
-
-  const handlePrev = () => {
-    setCurrentIndex((prev) => (prev === 0 ? activeSlides.length - 1 : prev - 1));
-  };
-
-  const handleNext = () => {
-    setCurrentIndex((prev) => (prev + 1) % activeSlides.length);
-  };
 
   const liveCountdown = useCountdown(
     currentSlide.sale_start_time,
@@ -383,7 +457,10 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   const accentColor = currentSlide.hero_accent || currentSlide.accent_color || theme?.hero_accent || theme?.accent_color || (isDarkMode ? "#60a5fa" : "#2563eb");
 
   // Dynamic Scale-based Sizing
-  const containerPadding = `${Math.round(Math.max(14, 28 * hScale))}px ${Math.round(isMobile ? 16 : 32 * hScale)}px`;
+  const horizontalPadding = isMobile
+    ? 18
+    : Math.round(Math.max(28, 36 * hScale));
+  const containerPadding = `${Math.round(Math.max(14, 28 * hScale))}px ${horizontalPadding}px`;
   const contentGap = `${Math.round(Math.max(6, 12 * hScale))}px`;
 
   const headlineFontSize = `${(Math.max(0.9, Math.min(2.3, 1.8 * hScale))).toFixed(2)}rem`;
@@ -480,32 +557,73 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
     boxSizing: "border-box",
     flexShrink: 0,
     background: slideCustomBgColor,
+    cursor: activeSlides.length > 1 ? (isDragging ? "grabbing" : "grab") : "default",
+    userSelect: isDragging ? "none" : "auto",
+    touchAction: "pan-y",
     boxShadow: isDarkMode
       ? "0 16px 40px rgba(0, 0, 0, 0.4)"
       : "0 12px 36px rgba(15, 23, 42, 0.06)",
   };
 
+  const festivePosition = (
+    currentSlide.festive_position ||
+    (restProps as any).festive_position ||
+    (theme as any)?.hero_festive_position ||
+    (theme as any)?.festive_position ||
+    "right"
+  ) as "left" | "center" | "right";
+
+  const rawFestiveOpacity = currentSlide.festive_opacity !== undefined
+    ? currentSlide.festive_opacity
+    : (restProps as any).festive_opacity !== undefined
+    ? (restProps as any).festive_opacity
+    : (theme as any)?.hero_festive_opacity !== undefined
+    ? (theme as any)?.hero_festive_opacity
+    : (theme as any)?.festive_opacity;
+
   const renderHeroFestiveBackdrop = () => {
     if (hasSlideBgImage || !festTheme || festTheme === "none") return null;
+
+    const isCenter = festivePosition === "center";
+    const isLeft = festivePosition === "left";
+
+    const customOpacityScale = rawFestiveOpacity !== undefined
+      ? Math.max(0, Math.min(100, Number(rawFestiveOpacity) > 1 ? Number(rawFestiveOpacity) : Number(rawFestiveOpacity) * 100)) / 100
+      : undefined;
+
+    const baseOpacity = isMobile
+      ? (isDarkMode ? 0.35 : 0.25)
+      : isCenter
+        ? (isDarkMode ? 0.55 : 0.40)
+        : 1;
+
+    const resolvedOpacity = customOpacityScale !== undefined ? customOpacityScale : baseOpacity;
+
+    const backdropStyle: React.CSSProperties = {
+      position: "absolute",
+      top: 0,
+      bottom: 0,
+      left: isCenter ? "50%" : isLeft ? 0 : "auto",
+      right: isCenter ? "auto" : isLeft ? "auto" : 0,
+      transform: isCenter ? "translateX(-50%)" : "none",
+      width: isCenter
+        ? (isMobile ? "90%" : "60%")
+        : (isMobile ? "100%" : isTablet ? "46%" : "50%"),
+      height: "100%",
+      pointerEvents: "none",
+      zIndex: 1,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: isCenter ? "center" : isLeft ? "flex-start" : "flex-end",
+      padding: isMobile ? "0px" : isCenter ? "10px" : "16px 28px",
+      opacity: resolvedOpacity,
+      transition: "opacity 0.2s ease, left 0.2s ease, right 0.2s ease, transform 0.2s ease",
+    };
 
     return (
       <div
         aria-hidden="true"
-        style={{
-          position: "absolute",
-          top: 0,
-          right: 0,
-          bottom: 0,
-          width: isMobile ? "100%" : isTablet ? "46%" : "50%",
-          height: "100%",
-          pointerEvents: "none",
-          zIndex: 1,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "flex-end",
-          padding: isMobile ? "0px" : "16px 28px",
-          opacity: isMobile ? (isDarkMode ? 0.35 : 0.25) : 1,
-        }}
+        style={backdropStyle}
       >
         {festTheme === "diwali" && (
           <DiwaliGraphics
@@ -950,7 +1068,16 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
     <section
       style={containerStyle}
       onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseLeave={() => {
+        setIsHovered(false);
+        if (isDragging) handleMouseUp();
+      }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onWheel={handleWheel}
     >
       {/* Absolute Background Image layer with exact object-fit, position, and zoom */}
       {hasSlideBgImage && (
@@ -1014,109 +1141,146 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           flexDirection: "column",
           justifyContent: "center",
           boxSizing: "border-box",
+          pointerEvents: isDragging ? "none" : "auto",
         }}
       >
         {renderSlideContent()}
       </div>
 
-      {/* Carousel Navigation Controls (Invisible by default, APPEARS ONLY ON HOVER) */}
+      {/* Carousel Navigation Controls at Bottom (Side of Dots, No Pill Container) */}
       {activeSlides.length > 1 && (
-        <>
-          {/* Left Arrow (Only visible on hover) */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: "12px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            zIndex: 30,
+            pointerEvents: "auto",
+          }}
+        >
+          {/* Left Arrow Button */}
           <button
             type="button"
-            onClick={handlePrev}
-            aria-label="Previous Banner"
-            style={{
-              position: "absolute",
-              left: isMobile ? "8px" : "16px",
-              top: "50%",
-              transform: "translateY(-50%)",
-              width: "36px",
-              height: "36px",
-              borderRadius: "50%",
-              border: "1px solid rgba(255,255,255,0.3)",
-              background: "rgba(15,23,42,0.5)",
-              backdropFilter: "blur(8px)",
-              color: "#ffffff",
-              display: "grid",
-              placeItems: "center",
-              cursor: "pointer",
-              zIndex: 20,
-              boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
-              fontSize: "18px",
-              fontWeight: 700,
-              opacity: isHovered ? 1 : 0,
-              pointerEvents: isHovered ? "auto" : "none",
-              transition: "opacity 200ms ease, transform 200ms ease",
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handlePrev();
             }}
-          >
-            ‹
-          </button>
-
-          {/* Right Arrow (Only visible on hover) */}
-          <button
-            type="button"
-            onClick={handleNext}
-            aria-label="Next Banner"
+            aria-label="Previous Slide"
             style={{
-              position: "absolute",
-              right: isMobile ? "8px" : "16px",
-              top: "50%",
-              transform: "translateY(-50%)",
-              width: "36px",
-              height: "36px",
+              width: "22px",
+              height: "22px",
               borderRadius: "50%",
-              border: "1px solid rgba(255,255,255,0.3)",
-              background: "rgba(15,23,42,0.5)",
-              backdropFilter: "blur(8px)",
-              color: "#ffffff",
-              display: "grid",
-              placeItems: "center",
-              cursor: "pointer",
-              zIndex: 20,
-              boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
-              fontSize: "18px",
-              fontWeight: 700,
-              opacity: isHovered ? 1 : 0,
-              pointerEvents: isHovered ? "auto" : "none",
-              transition: "opacity 200ms ease, transform 200ms ease",
-            }}
-          >
-            ›
-          </button>
-
-          {/* Sleek Dots Indicator */}
-          <div
-            style={{
-              position: "absolute",
-              bottom: "10px",
-              left: "50%",
-              transform: "translateX(-50%)",
+              border: "none",
+              background: isDarkMode ? "rgba(255,255,255,0.18)" : "rgba(15,23,42,0.12)",
+              color: isDarkMode ? "#ffffff" : "#0f172a",
               display: "flex",
-              gap: "6px",
-              zIndex: 10,
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              transition: "background 150ms ease, transform 150ms ease",
+              padding: 0,
+              outline: "none",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.background = isDarkMode ? "rgba(255,255,255,0.3)" : "rgba(15,23,42,0.22)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background = isDarkMode ? "rgba(255,255,255,0.18)" : "rgba(15,23,42,0.12)";
             }}
           >
+            <svg
+              viewBox="0 0 24 24"
+              width="11"
+              height="11"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ display: "block" }}
+            >
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+
+          {/* Dots Indicator */}
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             {activeSlides.map((_, idx) => (
               <button
                 key={idx}
                 type="button"
-                onClick={() => setCurrentIndex(idx)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setCurrentIndex(idx);
+                }}
                 aria-label={`Go to slide ${idx + 1}`}
                 style={{
                   width: currentIndex === idx ? "20px" : "6px",
                   height: "6px",
                   borderRadius: "999px",
                   border: "none",
-                  background: currentIndex === idx ? accentColor : "rgba(255,255,255,0.45)",
+                  padding: 0,
+                  background: currentIndex === idx ? accentColor : (isDarkMode ? "rgba(255,255,255,0.45)" : "rgba(15,23,42,0.3)"),
                   cursor: "pointer",
                   transition: "all 200ms ease",
+                  outline: "none",
                 }}
               />
             ))}
           </div>
-        </>
+
+          {/* Right Arrow Button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleNext();
+            }}
+            aria-label="Next Slide"
+            style={{
+              width: "22px",
+              height: "22px",
+              borderRadius: "50%",
+              border: "none",
+              background: isDarkMode ? "rgba(255,255,255,0.18)" : "rgba(15,23,42,0.12)",
+              color: isDarkMode ? "#ffffff" : "#0f172a",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              transition: "background 150ms ease, transform 150ms ease",
+              padding: 0,
+              outline: "none",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.background = isDarkMode ? "rgba(255,255,255,0.3)" : "rgba(15,23,42,0.22)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background = isDarkMode ? "rgba(255,255,255,0.18)" : "rgba(15,23,42,0.12)";
+            }}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="11"
+              height="11"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ display: "block" }}
+            >
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </button>
+        </div>
       )}
     </section>
   );
