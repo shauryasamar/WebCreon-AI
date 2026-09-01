@@ -1069,7 +1069,225 @@ const productGridShowBrandNameField = {
   target: "props" as const,
 };
 
+// --- Section Group Carousel / Category Story Carousel Fields ---
+const sectionGroupTitleField = {
+  key: "title",
+  label: "Section Title",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Shop By Category",
+};
 
+const sectionGroupSubtitleField = {
+  key: "subtitle",
+  label: "Section Subtitle",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Explore curated collections and popular categories",
+};
+
+const sectionGroupTitleAlignmentField = {
+  key: "title_alignment",
+  label: "Title Alignment",
+  type: "select" as const,
+  target: "props" as const,
+  options: [
+    { label: "Left Aligned", value: "left" },
+    { label: "Centered", value: "center" },
+  ],
+};
+
+const sectionGroupCardShapeField = {
+  key: "cardShape",
+  label: "Card Shape & Style",
+  type: "select" as const,
+  target: "props" as const,
+  options: [
+    { label: "Portrait (Tall Card)", value: "portrait" },
+    { label: "Square (1:1 Ratio)", value: "square" },
+    { label: "Horizontal (Wide Card)", value: "horizontal" },
+    { label: "Circle (Story Avatar)", value: "circle" },
+    { label: "Pill (Compact)", value: "pill" },
+  ],
+};
+
+const sectionGroupCardWidthField = {
+  key: "card_width",
+  label: "Card Width (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 70,
+  max: 480,
+  step: 5,
+};
+
+const sectionGroupCardHeightField = {
+  key: "card_height",
+  label: "Card Height (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 60,
+  max: 480,
+  step: 5,
+};
+
+const sectionGroupImageFitField = {
+  key: "image_fit",
+  label: "Image Fit",
+  type: "select" as const,
+  target: "props" as const,
+  options: [
+    { label: "Cover (Fill Space)", value: "cover" },
+    { label: "Contain (Fit Inside)", value: "contain" },
+  ],
+};
+
+const sectionGroupLayoutField = {
+  key: "layout",
+  label: "Display Layout",
+  type: "select" as const,
+  target: "props" as const,
+  options: [
+    { label: "Horizontal Carousel (Snap Scroll)", value: "carousel" },
+    { label: "Responsive Grid (Multi-Column)", value: "grid" },
+  ],
+};
+
+const sectionGroupOuterBgField = {
+  key: "outer_bg_color",
+  label: "Section Outer Background",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const sectionGroupCardBgField = {
+  key: "card_bg_color",
+  label: "Card Background Color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const sectionGroupCardRadiusField = {
+  key: "card_radius",
+  label: "Card Corner Radius",
+  type: "select" as const,
+  target: "props" as const,
+  options: [
+    { label: "Sharp (0px)", value: "0" },
+    { label: "Slightly Rounded (8px)", value: "8" },
+    { label: "Smooth (14px)", value: "14" },
+    { label: "Curved (20px)", value: "20" },
+    { label: "Ultra Curved (30px)", value: "30" },
+  ],
+};
+
+const sectionGroupCardBorderColorField = {
+  key: "card_border_color",
+  label: "Card Border Color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const sectionGroupCardShadowField = {
+  key: "card_shadow",
+  label: "Card Elevation / Shadow",
+  type: "select" as const,
+  target: "props" as const,
+  options: [
+    { label: "Flat (No Shadow)", value: "none" },
+    { label: "Subtle Glow", value: "subtle" },
+    { label: "Soft Floating", value: "soft" },
+    { label: "Deep Elevated", value: "elevated" },
+  ],
+};
+
+const sectionGroupTitleColorField = {
+  key: "title_color",
+  label: "Header Title Color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const sectionGroupSubtitleColorField = {
+  key: "subtitle_color",
+  label: "Header Subtitle Color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const sectionGroupAccentColorField = {
+  key: "accent_color",
+  label: "Accent & Link Color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const sectionGroupShowTitleField = {
+  key: "show_title",
+  label: "Show Title",
+  type: "checkbox" as const,
+  target: "props" as const,
+};
+
+const sectionGroupShowSubtitleField = {
+  key: "show_subtitle",
+  label: "Show Subtitle",
+  type: "checkbox" as const,
+  target: "props" as const,
+};
+
+const sectionGroupMaxWidthField = {
+  key: "max_width",
+  label: "Section Max Width",
+  type: "select" as const,
+  target: "props" as const,
+  options: [
+    { label: "Standard (1200px)", value: "1200px" },
+    { label: "Wide (1280px)", value: "1280px" },
+    { label: "Extra Wide (1440px)", value: "1440px" },
+    { label: "Full Width (100%)", value: "full" },
+  ],
+};
+
+const sectionGroupPaddingYField = {
+  key: "padding_y",
+  label: "Vertical Padding",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "24px",
+};
+
+const sectionGroupPaddingXField = {
+  key: "padding_x",
+  label: "Horizontal Padding",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "16px",
+};
+
+const sectionGroupFields = [
+  sectionGroupTitleField,
+  sectionGroupSubtitleField,
+  sectionGroupTitleAlignmentField,
+  sectionGroupCardShapeField,
+  sectionGroupCardWidthField,
+  sectionGroupCardHeightField,
+  sectionGroupImageFitField,
+  sectionGroupLayoutField,
+  sectionGroupMaxWidthField,
+  sectionGroupPaddingYField,
+  sectionGroupPaddingXField,
+  sectionGroupOuterBgField,
+  sectionGroupCardBgField,
+  sectionGroupCardRadiusField,
+  sectionGroupCardBorderColorField,
+  sectionGroupCardShadowField,
+  sectionGroupTitleColorField,
+  sectionGroupSubtitleColorField,
+  sectionGroupAccentColorField,
+  sectionGroupShowTitleField,
+  sectionGroupShowSubtitleField,
+];
 
 const productDetailAddToCartLabelField = {
   key: "add_to_cart_label",
@@ -1358,13 +1576,37 @@ export const editorRegistry: EditorRegistry = {
     ],
   },
 
+  section_group_carousel: {
+    displayName: "Category & Story Carousel",
+    fields: sectionGroupFields,
+  },
+  sectiongroupcarousel: {
+    displayName: "Category & Story Carousel",
+    fields: sectionGroupFields,
+  },
+  category_story_carousel: {
+    displayName: "Category & Story Carousel",
+    fields: sectionGroupFields,
+  },
+  category_carousel: {
+    displayName: "Category & Story Carousel",
+    fields: sectionGroupFields,
+  },
+  section_carousel: {
+    displayName: "Category & Story Carousel",
+    fields: sectionGroupFields,
+  },
+  story_carousel: {
+    displayName: "Category & Story Carousel",
+    fields: sectionGroupFields,
+  },
   category_grid: {
-    displayName: "Category Grid",
-    fields: [sizeField, textColorField],
+    displayName: "Category & Story Carousel",
+    fields: sectionGroupFields,
   },
   categorygrid: {
-    displayName: "Category Grid",
-    fields: [sizeField, textColorField],
+    displayName: "Category & Story Carousel",
+    fields: sectionGroupFields,
   },
 
   offer_cards: {

@@ -1,6 +1,6 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { isColorDarkHex } from "../context/ThemeContext";
+import { resolveThemeTokens } from "../context/ThemeContext";
 import { optimizeImageUrl } from "../utils/imageOptimizer";
 import { generateSectionFilterUrl } from "./ProductCarousel";
 
@@ -24,17 +24,55 @@ export interface SectionGroupCarouselProps {
   siteId?: string;
   title?: string;
   subtitle?: string;
-  viewAllLink?: string;
+  show_title?: boolean;
+  show_subtitle?: boolean;
+  title_alignment?: "left" | "center" | "right";
+  title_font_size?: string | number;
+  title_font_weight?: string | number;
+  title_text_transform?: "none" | "uppercase" | "capitalize";
+  subtitle_font_size?: string | number;
+  subtitle_font_weight?: string | number;
   items?: SectionGroupTile[];
   tiles?: SectionGroupTile[];
-  cardShape?: "portrait" | "horizontal" | "square" | "circle" | "pill";
+  cardShape?: "portrait" | "horizontal" | "square" | "circle" | "pill" | "custom";
+  card_width?: string | number;
+  card_height?: string | number;
+  card_padding?: string | number;
+  card_text_position?: "bottom_overlay" | "top_overlay" | "center_overlay" | "below_card";
+  card_title_size?: string | number;
+  card_title_weight?: string | number;
+  card_title_align?: "left" | "center" | "right";
+  badge_style?: "pill" | "square" | "minimal" | "hidden";
   layout?: "carousel" | "grid";
+  grid_columns?: number | string;
+  grid_gap?: string | number;
+  gap?: string | number;
+  max_width?: string;
+  padding_y?: string | number;
+  padding_x?: string | number;
+  outer_bg_color?: string;
+  card_bg_color?: string;
+  card_radius?: string | number;
+  card_border_color?: string;
+  card_shadow?: string;
+  title_color?: string;
+  subtitle_color?: string;
+  accent_color?: string;
+  image_fit?: "cover" | "contain";
+  image_bg?: string;
+  badge_bg_color?: string;
+  badge_text_color?: string;
   theme?: {
     primary_bg?: string;
     secondary_bg?: string;
     text_color?: string;
     accent_color?: string;
     card_bg?: string;
+    card_radius?: string | number;
+    card_border_color?: string;
+    card_shadow?: string;
+    card_text_color?: string;
+    muted_text_color?: string;
     mode?: string;
     [key: string]: any;
   };
@@ -44,31 +82,133 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
   siteId,
   title,
   subtitle,
-  viewAllLink,
+  show_title = true,
+  show_subtitle = true,
+  title_alignment = "left",
+  title_font_size,
+  title_font_weight,
+  title_text_transform = "none",
+  subtitle_font_size,
+  subtitle_font_weight,
   items,
   tiles,
   cardShape = "portrait",
+  card_width,
+  card_height,
+  card_padding,
+  card_text_position = "bottom_overlay",
+  card_title_size,
+  card_title_weight,
+  card_title_align,
+  badge_style = "pill",
   layout = "carousel",
+  grid_columns,
+  grid_gap,
+  gap,
+  max_width,
+  padding_y,
+  padding_x,
+  outer_bg_color,
+  card_bg_color,
+  card_radius,
+  card_border_color,
+  card_shadow,
+  title_color,
+  subtitle_color,
+  accent_color,
+  image_fit = "cover",
+  image_bg,
+  badge_bg_color,
+  badge_text_color,
   theme,
 }) => {
   const location = useLocation();
   const { slug: siteSlug } = useParams();
 
+  // Mobile viewport detection
+  const [isMobile, setIsMobile] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerWidth <= 640;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const checkBreakpoint = () => {
+      setIsMobile(window.innerWidth <= 640);
+    };
+    window.addEventListener("resize", checkBreakpoint, { passive: true });
+    return () => window.removeEventListener("resize", checkBreakpoint);
+  }, []);
+
   const rawTiles: SectionGroupTile[] = useMemo(() => {
-    return Array.isArray(items) ? items : Array.isArray(tiles) ? tiles : [];
+    return Array.isArray(items) && items.length > 0 ? items : Array.isArray(tiles) ? tiles : [];
   }, [items, tiles]);
 
-  const isDark =
-    (theme?.primary_bg ? isColorDarkHex(theme.primary_bg) : false) ||
-    (theme?.text_color ? !isColorDarkHex(theme.text_color) : false) ||
-    theme?.mode === "dark";
-
+  // Theme Dynamic Resolution
+  const tokens = resolveThemeTokens(theme);
+  const isDark = tokens.isDark;
   const isLight = !isDark;
-  const textColor = theme?.text_color || (isLight ? "#0f172a" : "#f8fafc");
-  const subtextColor = isLight ? "rgba(15, 23, 42, 0.65)" : "rgba(241, 245, 249, 0.65)";
-  const accentColor = theme?.accent_color || "#2563eb";
-  const cardBg = theme?.card_bg || (isLight ? "#ffffff" : "rgba(30, 41, 59, 0.7)");
-  const cardBorder = isLight ? "1px solid rgba(226, 232, 240, 0.8)" : "1px solid rgba(255, 255, 255, 0.08)";
+
+  const resolvedOuterBg = outer_bg_color || "transparent";
+  const resolvedCardBg = card_bg_color || theme?.card_bg || tokens.cardBg;
+  
+  const rawRadius =
+    card_radius !== undefined && card_radius !== null
+      ? card_radius
+      : (theme as any)?.card_radius !== undefined && (theme as any)?.card_radius !== null
+      ? (theme as any).card_radius
+      : "14px";
+
+  const resolvedCardRadius =
+    typeof rawRadius === "number"
+      ? `${rawRadius}px`
+      : String(rawRadius).endsWith("px") || String(rawRadius).endsWith("%") || String(rawRadius).endsWith("rem")
+      ? String(rawRadius)
+      : !isNaN(Number(rawRadius))
+      ? `${Number(rawRadius)}px`
+      : String(rawRadius);
+
+  const resolvedCardBorder =
+    card_border_color ||
+    theme?.card_border_color ||
+    (isLight ? "1px solid rgba(226, 232, 240, 0.8)" : "1px solid rgba(255, 255, 255, 0.08)");
+
+  const resolvedCardShadow =
+    card_shadow === "none"
+      ? "none"
+      : card_shadow === "subtle"
+      ? isLight
+        ? "0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03)"
+        : "0 2px 6px rgba(0, 0, 0, 0.35)"
+      : card_shadow === "soft"
+      ? isLight
+        ? "0 4px 12px -2px rgba(0, 0, 0, 0.07), 0 2px 6px -1px rgba(0, 0, 0, 0.03)"
+        : "0 6px 18px -2px rgba(0, 0, 0, 0.5)"
+      : card_shadow === "elevated"
+      ? isLight
+        ? "0 10px 24px -4px rgba(0, 0, 0, 0.09), 0 4px 8px -2px rgba(0, 0, 0, 0.04)"
+        : "0 12px 28px -4px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.06)"
+      : theme?.card_shadow || (isLight ? "0 2px 8px -1px rgba(0, 0, 0, 0.05)" : "0 4px 12px rgba(0, 0, 0, 0.4)");
+
+  const resolvedTitleColor = title_color || theme?.card_text_color || theme?.text_color || tokens.textColor;
+  const resolvedSubtitleColor =
+    subtitle_color || theme?.muted_text_color || (isLight ? "rgba(15, 23, 42, 0.65)" : "rgba(241, 245, 249, 0.65)");
+  const resolvedAccentColor = accent_color || theme?.accent_color || tokens.accentColor;
+  const resolvedImageBg = image_bg || (isLight ? "#f1f5f9" : "rgba(255, 255, 255, 0.05)");
+  const resolvedImageFit = image_fit || "cover";
+  const resolvedMaxWidth = max_width === "full" ? "100%" : max_width || "1280px";
+  const resolvedGap =
+    grid_gap !== undefined
+      ? typeof grid_gap === "number"
+        ? `${grid_gap}px`
+        : grid_gap
+      : gap !== undefined
+      ? typeof gap === "number"
+        ? `${gap}px`
+        : gap
+      : isMobile
+      ? "12px"
+      : "16px";
 
   const isStoreRoute = typeof window !== "undefined" && window.location.pathname.startsWith("/store/");
   const appBase = isStoreRoute
@@ -107,47 +247,57 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
     return filterUrl.startsWith("?") ? `${location.pathname}${filterUrl}` : filterUrl;
   };
 
-  if (rawTiles.length === 0) {
-    return null;
-  }
-
-  // Dimensions based on cardShape
+  // Dimensions & Shape styles with mobile scaling
   const getShapeStyles = () => {
+    const hasCustomWidth = card_width !== undefined && card_width !== null && String(card_width).trim().length > 0;
+    const hasCustomHeight = card_height !== undefined && card_height !== null && String(card_height).trim().length > 0;
+
+    const parseDim = (val: string | number | undefined, defaultPx: number, mobileScale = 0.8) => {
+      if (val === undefined || val === null) return `${isMobile ? Math.round(defaultPx * mobileScale) : defaultPx}px`;
+      if (typeof val === "number") return `${isMobile ? Math.round(val * mobileScale) : val}px`;
+      if (val.endsWith("%") || val.endsWith("vw")) return val;
+      const num = parseFloat(val);
+      if (!isNaN(num)) return `${isMobile ? Math.round(num * mobileScale) : num}px`;
+      return val;
+    };
+
     switch (cardShape) {
-      case "circle":
+      case "circle": {
+        const d = hasCustomWidth ? parseDim(card_width, 120, 0.75) : isMobile ? "90px" : "120px";
         return {
-          cardWidth: "120px",
-          imageHeight: "120px",
+          cardWidth: d,
+          imageHeight: d,
           borderRadius: "50%",
           isCircular: true,
         };
+      }
       case "horizontal":
         return {
-          cardWidth: "280px",
-          imageHeight: "155px",
-          borderRadius: "14px",
+          cardWidth: hasCustomWidth ? parseDim(card_width, 280, 0.8) : isMobile ? "220px" : "280px",
+          imageHeight: hasCustomHeight ? parseDim(card_height, 155, 0.8) : isMobile ? "125px" : "155px",
+          borderRadius: resolvedCardRadius,
           isCircular: false,
         };
       case "square":
         return {
-          cardWidth: "180px",
-          imageHeight: "180px",
-          borderRadius: "14px",
+          cardWidth: hasCustomWidth ? parseDim(card_width, 180, 0.78) : isMobile ? "140px" : "180px",
+          imageHeight: hasCustomHeight ? parseDim(card_height, 180, 0.78) : isMobile ? "140px" : "180px",
+          borderRadius: resolvedCardRadius,
           isCircular: false,
         };
       case "pill":
         return {
-          cardWidth: "140px",
-          imageHeight: "95px",
-          borderRadius: "20px",
+          cardWidth: hasCustomWidth ? parseDim(card_width, 140, 0.8) : isMobile ? "115px" : "140px",
+          imageHeight: hasCustomHeight ? parseDim(card_height, 95, 0.8) : isMobile ? "76px" : "95px",
+          borderRadius: card_radius !== undefined ? resolvedCardRadius : "24px",
           isCircular: false,
         };
       case "portrait":
       default:
         return {
-          cardWidth: "200px",
-          imageHeight: "260px",
-          borderRadius: "14px",
+          cardWidth: hasCustomWidth ? parseDim(card_width, 200, 0.75) : isMobile ? "150px" : "200px",
+          imageHeight: hasCustomHeight ? parseDim(card_height, 260, 0.75) : isMobile ? "195px" : "260px",
+          borderRadius: resolvedCardRadius,
           isCircular: false,
         };
     }
@@ -155,109 +305,177 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
 
   const shapeConfig = getShapeStyles();
 
-  const hasTitle = Boolean(title && title.trim().length > 0);
-  const hasSubtitle = Boolean(subtitle && subtitle.trim().length > 0);
-  const hasViewAll = Boolean(viewAllLink && viewAllLink.trim().length > 0);
-  const hasHeader = hasTitle || hasSubtitle || hasViewAll;
+  const effectiveHasTitle = Boolean(show_title && title && title.trim().length > 0);
+  const effectiveHasSubtitle = Boolean(show_subtitle && subtitle && subtitle.trim().length > 0);
+  const hasHeader = effectiveHasTitle || effectiveHasSubtitle;
+
+  const headerAlignStyle =
+    title_alignment === "center"
+      ? { alignItems: "center" as const, textAlign: "center" as const }
+      : title_alignment === "right"
+      ? { alignItems: "flex-end" as const, textAlign: "right" as const }
+      : { alignItems: "flex-start" as const, textAlign: "left" as const };
+
+  const parsedTitleSize = title_font_size
+    ? typeof title_font_size === "number"
+      ? `${title_font_size}px`
+      : title_font_size
+    : isMobile
+    ? "17px"
+    : "20px";
+
+  const parsedSubtitleSize = subtitle_font_size
+    ? typeof subtitle_font_size === "number"
+      ? `${subtitle_font_size}px`
+      : subtitle_font_size
+    : isMobile
+    ? "12px"
+    : "13px";
+
+  const parsedCardTitleSize = card_title_size
+    ? typeof card_title_size === "number"
+      ? `${card_title_size}px`
+      : card_title_size
+    : isMobile
+    ? "13.5px"
+    : "15px";
+
+  const isBelowCardText = card_text_position === "below_card" || shapeConfig.isCircular;
+
+  // Builder empty state placeholder
+  if (rawTiles.length === 0) {
+    return (
+      <section
+        className="section-group-carousel-empty"
+        style={{
+          width: "100%",
+          maxWidth: resolvedMaxWidth,
+          margin: "0 auto",
+          padding: `${padding_y || (isMobile ? "18px" : "28px")} ${padding_x || (isMobile ? "12px" : "16px")}`,
+          boxSizing: "border-box",
+          background: resolvedOuterBg,
+        }}
+      >
+        <div
+          style={{
+            border: `2px dashed ${isLight ? "#cbd5e1" : "rgba(255,255,255,0.15)"}`,
+            borderRadius: "14px",
+            padding: isMobile ? "24px 14px" : "36px 20px",
+            textAlign: "center",
+            background: resolvedCardBg,
+          }}
+        >
+          <div style={{ fontSize: isMobile ? "13px" : "14px", fontWeight: 700, color: resolvedTitleColor, marginBottom: "4px" }}>
+            {title || "Categories & Collections Carousel"}
+          </div>
+          <div style={{ fontSize: "12px", color: resolvedSubtitleColor, maxWidth: "420px", margin: "0 auto" }}>
+            No category or story tiles added yet. Configure collections and styles in the editor sidebar.
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section
       className="section-group-carousel"
       style={{
         width: "100%",
-        maxWidth: "1280px",
+        maxWidth: resolvedMaxWidth,
         margin: "0 auto",
-        padding: "24px 16px",
+        padding: `${padding_y || (isMobile ? "16px" : "24px")} ${padding_x || (isMobile ? "12px" : "16px")}`,
         boxSizing: "border-box",
         position: "relative",
+        background: resolvedOuterBg,
       }}
     >
-      {/* Header with Title, Subtitle, and View All Link */}
+      {/* Header with Title and Subtitle */}
       {hasHeader && (
         <div
           style={{
             display: "flex",
-            alignItems: "flex-end",
-            justifyContent: "space-between",
-            marginBottom: "16px",
-            gap: "12px",
+            flexDirection: "column",
+            ...headerAlignStyle,
+            marginBottom: isMobile ? "12px" : "16px",
+            width: "100%",
           }}
         >
-          <div>
-            {hasTitle && (
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: "20px",
-                  fontWeight: 800,
-                  color: textColor,
-                  letterSpacing: "-0.02em",
-                }}
-              >
-                {title}
-              </h2>
-            )}
-            {hasSubtitle && (
-              <p
-                style={{
-                  margin: hasTitle ? "4px 0 0" : 0,
-                  fontSize: "13px",
-                  color: subtextColor,
-                  fontWeight: 500,
-                }}
-              >
-                {subtitle}
-              </p>
-            )}
-          </div>
-
-          {hasViewAll && (
-            <div style={{ display: "flex", alignItems: "center", marginLeft: "auto" }}>
-              <Link
-                to={viewAllLink!.startsWith("?") ? `${location.pathname}${viewAllLink}` : viewAllLink!}
-                onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-                style={{
-                  fontSize: "13px",
-                  fontWeight: 700,
-                  color: accentColor,
-                  textDecoration: "none",
-                }}
-              >
-                View All &gt;
-              </Link>
-            </div>
+          {effectiveHasTitle && (
+            <h2
+              style={{
+                margin: 0,
+                fontSize: parsedTitleSize,
+                fontWeight: (title_font_weight as any) || 800,
+                textTransform: title_text_transform || "none",
+                color: resolvedTitleColor,
+                letterSpacing: "-0.02em",
+                lineHeight: 1.25,
+              }}
+            >
+              {title}
+            </h2>
+          )}
+          {effectiveHasSubtitle && (
+            <p
+              style={{
+                margin: effectiveHasTitle ? "4px 0 0" : 0,
+                fontSize: parsedSubtitleSize,
+                fontWeight: (subtitle_font_weight as any) || 500,
+                color: resolvedSubtitleColor,
+                lineHeight: 1.4,
+              }}
+            >
+              {subtitle}
+            </p>
           )}
         </div>
       )}
 
-      {/* Tiles Container: Carousel (Horizontal Scroll) or Multi-Column Grid */}
+      {/* Tiles Container: Carousel (Horizontal Snap Scroll) or Multi-Column Grid */}
       <div
+        className="section-group-carousel-container"
         style={
           layout === "grid"
             ? {
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
-                gap: "16px",
+                gridTemplateColumns:
+                  grid_columns && String(grid_columns) !== "auto"
+                    ? `repeat(${grid_columns}, 1fr)`
+                    : isMobile
+                    ? shapeConfig.isCircular
+                      ? "repeat(auto-fill, minmax(80px, 1fr))"
+                      : "repeat(2, 1fr)"
+                    : shapeConfig.isCircular
+                    ? "repeat(auto-fill, minmax(110px, 1fr))"
+                    : "repeat(auto-fill, minmax(180px, 1fr))",
+                gap: resolvedGap,
               }
             : {
                 display: "flex",
-                gap: "14px",
+                gap: resolvedGap,
                 overflowX: "auto",
                 scrollSnapType: "x mandatory",
                 scrollbarWidth: "none",
                 msOverflowStyle: "none",
-                paddingBottom: "8px",
+                paddingBottom: "6px",
                 WebkitOverflowScrolling: "touch",
               }
         }
       >
         <style>{`
+          .section-group-carousel-container::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+          }
+          .section-group-tile-hover {
+            transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+          }
           .section-group-tile-hover:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 12px 24px -6px rgba(0,0,0,0.15) !important;
+            transform: translateY(-3px);
           }
           .section-group-tile-hover:hover img {
-            transform: scale(1.05);
+            transform: scale(1.04);
           }
         `}</style>
 
@@ -265,8 +483,8 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
           const targetUrl = getTileTargetUrl(tile);
           const optimizedImg = tile.imageUrl ? optimizeImageUrl(tile.imageUrl) : "";
 
-          // Circular layout (Avatar / Story pill style)
-          if (shapeConfig.isCircular) {
+          // Circular layout (Avatar / Story style) or Below-Card Text layout
+          if (isBelowCardText) {
             return (
               <Link
                 key={tile.id || idx}
@@ -276,25 +494,25 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                   textDecoration: "none",
                   display: "flex",
                   flexDirection: "column",
-                  alignItems: "center",
-                  gap: "8px",
+                  alignItems: card_title_align === "left" ? "flex-start" : card_title_align === "right" ? "flex-end" : "center",
+                  gap: isMobile ? "6px" : "8px",
                   flexShrink: 0,
-                  width: shapeConfig.cardWidth,
+                  width: layout === "grid" ? "100%" : shapeConfig.cardWidth,
                   scrollSnapAlign: "start",
                   cursor: "pointer",
                 }}
               >
                 <div
                   style={{
-                    width: shapeConfig.imageHeight,
+                    width: shapeConfig.isCircular ? shapeConfig.imageHeight : "100%",
                     height: shapeConfig.imageHeight,
-                    borderRadius: "50%",
+                    borderRadius: shapeConfig.borderRadius,
                     overflow: "hidden",
-                    border: `2px solid ${accentColor}`,
-                    padding: "3px",
-                    background: cardBg,
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-                    transition: "transform 0.2s ease",
+                    border: shapeConfig.isCircular ? `2.5px solid ${resolvedAccentColor}` : resolvedCardBorder,
+                    padding: shapeConfig.isCircular ? (isMobile ? "2px" : "3px") : 0,
+                    background: resolvedCardBg,
+                    boxShadow: resolvedCardShadow,
+                    position: "relative",
                   }}
                   className="section-group-tile-hover"
                 >
@@ -302,9 +520,9 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                     style={{
                       width: "100%",
                       height: "100%",
-                      borderRadius: "50%",
+                      borderRadius: shapeConfig.isCircular ? "50%" : shapeConfig.borderRadius,
                       overflow: "hidden",
-                      background: isLight ? "#f1f5f9" : "#1e293b",
+                      background: resolvedImageBg,
                     }}
                   >
                     {optimizedImg ? (
@@ -314,7 +532,7 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                         style={{
                           width: "100%",
                           height: "100%",
-                          objectFit: "cover",
+                          objectFit: resolvedImageFit as any,
                           transition: "transform 0.3s ease",
                         }}
                       />
@@ -329,20 +547,43 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                         }}
                       >
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-                          <line x1="7" y1="7" x2="7.01" y2="7" />
+                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                          <circle cx="8.5" cy="8.5" r="1.5" />
+                          <polyline points="21 15 16 10 5 21" />
                         </svg>
                       </div>
                     )}
                   </div>
+
+                  {/* Top Badge (if any & not circular) */}
+                  {!shapeConfig.isCircular && badge_style !== "hidden" && tile.subtitle && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "8px",
+                        left: "8px",
+                        background: badge_bg_color || resolvedAccentColor,
+                        color: badge_text_color || "#ffffff",
+                        fontSize: "9.5px",
+                        fontWeight: 700,
+                        padding: badge_style === "pill" ? "2px 8px" : "2px 5px",
+                        borderRadius: badge_style === "pill" ? "12px" : "4px",
+                        letterSpacing: "0.02em",
+                        boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
+                      }}
+                    >
+                      {tile.subtitle}
+                    </div>
+                  )}
                 </div>
 
-                <div style={{ textAlign: "center", width: "100%" }}>
+                {/* Below-Card Text */}
+                <div style={{ textAlign: (card_title_align as any) || (shapeConfig.isCircular ? "center" : "left"), width: "100%" }}>
                   <div
                     style={{
-                      fontSize: "13px",
-                      fontWeight: 700,
-                      color: textColor,
+                      fontSize: parsedCardTitleSize,
+                      fontWeight: (card_title_weight as any) || 700,
+                      color: resolvedTitleColor,
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -350,11 +591,11 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                   >
                     {tile.title}
                   </div>
-                  {tile.subtitle && (
+                  {tile.subtitle && shapeConfig.isCircular && (
                     <div
                       style={{
-                        fontSize: "11px",
-                        color: accentColor,
+                        fontSize: isMobile ? "10px" : "11px",
+                        color: resolvedAccentColor,
                         fontWeight: 600,
                         marginTop: "1px",
                         whiteSpace: "nowrap",
@@ -370,7 +611,16 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
             );
           }
 
-          // Portrait, Horizontal, Square & Pill Card Layout
+          // Overlay Placement (Bottom, Top, or Center Overlay)
+          const justifyContent =
+            card_text_position === "top_overlay"
+              ? "flex-start"
+              : card_text_position === "center_overlay"
+              ? "center"
+              : "flex-end";
+
+          const textAlign = (card_title_align as any) || "left";
+
           return (
             <Link
               key={tile.id || idx}
@@ -387,11 +637,10 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                 position: "relative",
                 display: "flex",
                 flexDirection: "column",
-                justifyContent: "flex-end",
-                background: isLight ? "#f1f5f9" : "#1e293b",
-                border: cardBorder,
-                boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
-                transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+                justifyContent: justifyContent,
+                background: resolvedImageBg,
+                border: resolvedCardBorder,
+                boxShadow: resolvedCardShadow,
                 scrollSnapAlign: "start",
                 cursor: "pointer",
               }}
@@ -406,7 +655,7 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                     inset: 0,
                     width: "100%",
                     height: "100%",
-                    objectFit: "cover",
+                    objectFit: resolvedImageFit as any,
                     transition: "transform 0.4s ease",
                   }}
                 />
@@ -420,7 +669,7 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                     color: "#94a3b8",
                   }}
                 >
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
                     <circle cx="8.5" cy="8.5" r="1.5" />
                     <polyline points="21 15 16 10 5 21" />
@@ -428,31 +677,35 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                 </div>
               )}
 
-              {/* Gradient Scrim for text readability */}
+              {/* Gradient Scrim */}
               <div
                 style={{
                   position: "absolute",
                   inset: 0,
                   background:
-                    "linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.45) 70%, rgba(0,0,0,0.85) 100%)",
+                    card_text_position === "top_overlay"
+                      ? "linear-gradient(0deg, transparent 50%, rgba(0,0,0,0.25) 75%, rgba(0,0,0,0.65) 100%)"
+                      : card_text_position === "center_overlay"
+                      ? "rgba(0,0,0,0.3)"
+                      : "linear-gradient(180deg, transparent 50%, rgba(0,0,0,0.25) 75%, rgba(0,0,0,0.65) 100%)",
                   pointerEvents: "none",
                 }}
               />
 
-              {/* Top Badge (if any) */}
-              {tile.subtitle && (
+              {/* Top Badge (if any & not hidden) */}
+              {badge_style !== "hidden" && tile.subtitle && (
                 <div
                   style={{
                     position: "absolute",
-                    top: "10px",
-                    left: "10px",
-                    background: "rgba(15, 23, 42, 0.85)",
+                    top: isMobile ? "8px" : "10px",
+                    left: isMobile ? "8px" : "10px",
+                    background: badge_bg_color || "rgba(15, 23, 42, 0.85)",
                     backdropFilter: "blur(6px)",
-                    color: "#ffffff",
-                    fontSize: "11px",
+                    color: badge_text_color || "#ffffff",
+                    fontSize: isMobile ? "10px" : "11px",
                     fontWeight: 700,
-                    padding: "3px 8px",
-                    borderRadius: "6px",
+                    padding: badge_style === "pill" ? "2px 8px" : "2px 6px",
+                    borderRadius: badge_style === "pill" ? "12px" : "5px",
                     letterSpacing: "0.02em",
                     boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
                   }}
@@ -461,22 +714,25 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                 </div>
               )}
 
-              {/* Bottom Card Title (Clean, without explore button) */}
+              {/* Card Title */}
               <div
                 style={{
                   position: "relative",
                   zIndex: 1,
-                  padding: "14px",
+                  padding: card_padding !== undefined ? (typeof card_padding === "number" ? `${card_padding}px` : card_padding) : isMobile ? "10px" : "14px",
                   color: "#ffffff",
+                  textAlign: textAlign,
+                  width: "100%",
+                  boxSizing: "border-box",
                 }}
               >
                 <h3
                   style={{
                     margin: 0,
-                    fontSize: "15px",
-                    fontWeight: 800,
+                    fontSize: parsedCardTitleSize,
+                    fontWeight: (card_title_weight as any) || 800,
                     lineHeight: 1.25,
-                    textShadow: "0 2px 4px rgba(0,0,0,0.4)",
+                    textShadow: "0 2px 4px rgba(0,0,0,0.5)",
                   }}
                 >
                   {tile.title}

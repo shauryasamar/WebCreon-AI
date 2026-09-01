@@ -1444,51 +1444,61 @@ const SegmentedRow = ({
   options: { label: string; value: string }[];
   value: string;
   onChange: (val: string) => void;
-}) => (
-  <div
-    style={{
-      display: "grid",
-      gridTemplateColumns: `repeat(${options.length}, 1fr)`,
-      background: "#f1f5f9",
-      padding: "2px",
-      borderRadius: "5px",
-      gap: "2px",
-      width: "100%",
-      maxWidth: "100%",
-      boxSizing: "border-box",
-      minWidth: 0,
-    }}
-  >
-    {options.map((opt) => {
-      const active = opt.value === value;
-      return (
-        <button
-          key={opt.value}
-          type="button"
-          onClick={() => onChange(opt.value)}
-          style={{
-            padding: "4px 4px",
-            fontSize: "10.5px",
-            lineHeight: 1.2,
-            fontWeight: active ? 700 : 500,
-            borderRadius: "4px",
-            border: "none",
-            background: active ? "#ffffff" : "transparent",
-            color: active ? "#0f172a" : "#64748b",
-            boxShadow: active ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
-            cursor: "pointer",
-            textAlign: "center",
-            whiteSpace: "nowrap",
-            transition: "all 0.12s ease",
-            minWidth: 0,
-          }}
-        >
-          {opt.label}
-        </button>
-      );
-    })}
-  </div>
-);
+}) => {
+  const isCompact = options.length >= 4;
+  const isVeryCompact = options.length >= 5;
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))`,
+        background: "#f1f5f9",
+        padding: "2px",
+        borderRadius: "5px",
+        gap: "2px",
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        minWidth: 0,
+      }}
+    >
+      {options.map((opt) => {
+        const active = opt.value === value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            title={opt.label}
+            style={{
+              padding: isVeryCompact ? "4px 1px" : isCompact ? "4px 2px" : "4px 4px",
+              fontSize: isVeryCompact ? "9px" : isCompact ? "9.5px" : "10px",
+              lineHeight: 1.2,
+              fontWeight: active ? 700 : 500,
+              borderRadius: "4px",
+              border: "none",
+              background: active ? "#ffffff" : "transparent",
+              color: active ? "#0f172a" : "#64748b",
+              boxShadow: active ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
+              cursor: "pointer",
+              textAlign: "center",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              transition: "all 0.12s ease",
+              minWidth: 0,
+              width: "100%",
+              boxSizing: "border-box",
+            }}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+};
 
 const NumberStepperField = ({
   label,
@@ -2729,6 +2739,549 @@ function HeroSlidesEditor({
           })}
         </div>
       </section>
+    </div>
+  );
+}
+
+function SectionGroupCarouselEditor({
+  selectedBlock,
+  isLightMode,
+  textColor,
+  accentColor,
+  onSiteDefinitionChange,
+  siteDefinition,
+}: {
+  selectedBlock: any;
+  isLightMode: boolean;
+  textColor: string;
+  accentColor: string;
+  onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
+  siteDefinition: EditorSiteDefinition;
+}) {
+  const currentProps = selectedBlock.props ?? {};
+  const [activeTab, setActiveTab] = useState<"layout" | "styling">("layout");
+
+  const updateProps = (patch: Record<string, any>) => {
+    const nextDef = JSON.parse(JSON.stringify(siteDefinition));
+    if (Array.isArray(nextDef.pages)) {
+      nextDef.pages = nextDef.pages.map((page: any) => ({
+        ...page,
+        blocks: (page.blocks ?? []).map((block: any) => {
+          if (block.id === selectedBlock.id) {
+            return {
+              ...block,
+              props: {
+                ...(block.props ?? {}),
+                ...patch,
+              },
+            };
+          }
+          return block;
+        }),
+      }));
+    }
+    onSiteDefinitionChange(nextDef);
+  };
+
+  const cardShape = currentProps.cardShape || "portrait";
+  const layout = currentProps.layout || "carousel";
+
+  const defaultWidthForShape = (s: string) => {
+    switch (s) {
+      case "circle": return 120;
+      case "horizontal": return 280;
+      case "square": return 180;
+      case "pill": return 140;
+      case "portrait":
+      default: return 200;
+    }
+  };
+
+  const defaultHeightForShape = (s: string) => {
+    switch (s) {
+      case "circle": return 120;
+      case "horizontal": return 155;
+      case "square": return 180;
+      case "pill": return 95;
+      case "portrait":
+      default: return 260;
+    }
+  };
+
+  const currentCardWidth =
+    currentProps.card_width !== undefined && currentProps.card_width !== null
+      ? typeof currentProps.card_width === "number"
+        ? currentProps.card_width
+        : parseInt(String(currentProps.card_width), 10) || defaultWidthForShape(cardShape)
+      : defaultWidthForShape(cardShape);
+
+  const currentCardHeight =
+    currentProps.card_height !== undefined && currentProps.card_height !== null
+      ? typeof currentProps.card_height === "number"
+        ? currentProps.card_height
+        : parseInt(String(currentProps.card_height), 10) || defaultHeightForShape(cardShape)
+      : defaultHeightForShape(cardShape);
+
+  const handleShapePresetChange = (shape: string) => {
+    updateProps({
+      cardShape: shape,
+      card_width: defaultWidthForShape(shape),
+      card_height: defaultHeightForShape(shape),
+    });
+  };
+
+  const parsedTitleSize = parseInt(String(currentProps.title_font_size || "20"), 10) || 20;
+  const parsedSubtitleSize = parseInt(String(currentProps.subtitle_font_size || "13"), 10) || 13;
+  const parsedCardTitleSize = parseInt(String(currentProps.card_title_size || "15"), 10) || 15;
+
+  return (
+    <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
+      {/* 2 Clean Navigation Tabs matching Navbar theme */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(2, 1fr)",
+          gap: "2px",
+          background: "#f1f5f9",
+          padding: "2px",
+          borderRadius: "6px",
+          width: "100%",
+          maxWidth: "100%",
+          boxSizing: "border-box",
+          minWidth: 0,
+        }}
+      >
+        {[
+          { id: "layout", label: "Layout" },
+          { id: "styling", label: "Styles" },
+        ].map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as any)}
+              style={{
+                padding: "5px 1px",
+                border: "none",
+                borderRadius: "4px",
+                background: isActive ? "#ffffff" : "transparent",
+                color: isActive ? ADMIN_BLUE : "#64748b",
+                fontWeight: isActive ? 800 : 600,
+                fontSize: "10px",
+                cursor: "pointer",
+                textAlign: "center",
+                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                transition: "all 0.12s ease",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                minWidth: 0,
+              }}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 1. LAYOUT & STRUCTURE TAB */}
+      {activeTab === "layout" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Card Shape & Custom Dimensions */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Card Dimensions & Shape
+            </div>
+
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Shape Preset
+                </label>
+                <SegmentedRow
+                  value={cardShape}
+                  onChange={handleShapePresetChange}
+                  options={[
+                    { label: "Portrait", value: "portrait" },
+                    { label: "Square", value: "square" },
+                    { label: "Wide", value: "horizontal" },
+                    { label: "Circle", value: "circle" },
+                    { label: "Pill", value: "pill" },
+                  ]}
+                />
+              </div>
+
+              {/* Dual Width & Height Steppers */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Card Width"
+                  value={currentCardWidth}
+                  min={60}
+                  max={500}
+                  step={5}
+                  unit="px"
+                  onChange={(val) => updateProps({ card_width: val })}
+                />
+                <NumberStepperField
+                  label="Card Height"
+                  value={currentCardHeight}
+                  min={60}
+                  max={500}
+                  step={5}
+                  unit="px"
+                  onChange={(val) => updateProps({ card_height: val })}
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Display Mode
+                </label>
+                <SegmentedRow
+                  value={layout}
+                  onChange={(val) => updateProps({ layout: val })}
+                  options={[
+                    { label: "Carousel", value: "carousel" },
+                    { label: "Grid", value: "grid" },
+                  ]}
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Card Text Placement
+                </label>
+                <SegmentedRow
+                  value={currentProps.card_text_position || "bottom_overlay"}
+                  onChange={(val) => updateProps({ card_text_position: val })}
+                  options={[
+                    { label: "Bottom", value: "bottom_overlay" },
+                    { label: "Top", value: "top_overlay" },
+                    { label: "Center", value: "center_overlay" },
+                    { label: "Below", value: "below_card" },
+                  ]}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Bounds, Spacing & Padding */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Spacing & Bounds
+            </div>
+
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                    Max Width
+                  </label>
+                  <CustomSelectDropdown
+                    value={currentProps.max_width || "1280px"}
+                    placeholder="Max Width"
+                    options={[
+                      { label: "Standard (1200px)", value: "1200px" },
+                      { label: "Wide (1280px)", value: "1280px" },
+                      { label: "Extra Wide (1440px)", value: "1440px" },
+                      { label: "Full Width (100%)", value: "full" },
+                    ]}
+                    onChange={(val) => updateProps({ max_width: val })}
+                  />
+                </div>
+
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                    Card Gap
+                  </label>
+                  <CustomSelectDropdown
+                    value={String(currentProps.grid_gap || currentProps.gap || "16px")}
+                    placeholder="Gap"
+                    options={[
+                      { label: "Compact (8px)", value: "8px" },
+                      { label: "Standard (14px)", value: "14px" },
+                      { label: "Spacious (20px)", value: "20px" },
+                      { label: "Wide (28px)", value: "28px" },
+                    ]}
+                    onChange={(val) => updateProps({ grid_gap: val, gap: val })}
+                  />
+                </div>
+              </div>
+
+              {/* Vertical & Horizontal Padding */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Vertical Padding"
+                  value={parseInt(String(currentProps.padding_y || "24"), 10) || 24}
+                  min={8}
+                  max={80}
+                  step={4}
+                  unit="px"
+                  onChange={(val) => updateProps({ padding_y: `${val}px` })}
+                />
+                <NumberStepperField
+                  label="Horizontal Padding"
+                  value={parseInt(String(currentProps.padding_x || "16"), 10) || 16}
+                  min={4}
+                  max={48}
+                  step={4}
+                  unit="px"
+                  onChange={(val) => updateProps({ padding_x: `${val}px` })}
+                />
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* 2. TYPOGRAPHY & STYLES TAB */}
+      {activeTab === "styling" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Header Typography */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Header Typography & Alignment
+            </div>
+
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Title Alignment
+                </label>
+                <SegmentedRow
+                  value={currentProps.title_alignment || "left"}
+                  onChange={(val) => updateProps({ title_alignment: val })}
+                  options={[
+                    { label: "Left", value: "left" },
+                    { label: "Center", value: "center" },
+                    { label: "Right", value: "right" },
+                  ]}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Title Size"
+                  value={parsedTitleSize}
+                  min={14}
+                  max={36}
+                  step={1}
+                  unit="px"
+                  onChange={(val) => updateProps({ title_font_size: `${val}px` })}
+                />
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                    Title Weight
+                  </label>
+                  <CustomSelectDropdown
+                    value={String(currentProps.title_font_weight || "800")}
+                    placeholder="Weight"
+                    options={[
+                      { label: "Semi-Bold (600)", value: "600" },
+                      { label: "Bold (700)", value: "700" },
+                      { label: "Extra Bold (800)", value: "800" },
+                      { label: "Black (900)", value: "900" },
+                    ]}
+                    onChange={(val) => updateProps({ title_font_weight: val })}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                    Letter Case
+                  </label>
+                  <SegmentedRow
+                    value={currentProps.title_text_transform || "none"}
+                    onChange={(val) => updateProps({ title_text_transform: val })}
+                    options={[
+                      { label: "Normal", value: "none" },
+                      { label: "Caps", value: "uppercase" },
+                    ]}
+                  />
+                </div>
+
+                <NumberStepperField
+                  label="Subtitle Size"
+                  value={parsedSubtitleSize}
+                  min={10}
+                  max={20}
+                  step={1}
+                  unit="px"
+                  onChange={(val) => updateProps({ subtitle_font_size: `${val}px` })}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Card Typography & Badge */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Card Typography & Badge
+            </div>
+
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Card Title Size"
+                  value={parsedCardTitleSize}
+                  min={11}
+                  max={24}
+                  step={1}
+                  unit="px"
+                  onChange={(val) => updateProps({ card_title_size: `${val}px` })}
+                />
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                    Card Title Weight
+                  </label>
+                  <CustomSelectDropdown
+                    value={String(currentProps.card_title_weight || "800")}
+                    placeholder="Weight"
+                    options={[
+                      { label: "Medium (500)", value: "500" },
+                      { label: "Semi-Bold (600)", value: "600" },
+                      { label: "Bold (700)", value: "700" },
+                      { label: "Heavy (800)", value: "800" },
+                    ]}
+                    onChange={(val) => updateProps({ card_title_weight: val })}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                    Card Text Align
+                  </label>
+                  <SegmentedRow
+                    value={currentProps.card_title_align || "left"}
+                    onChange={(val) => updateProps({ card_title_align: val })}
+                    options={[
+                      { label: "Left", value: "left" },
+                      { label: "Center", value: "center" },
+                      { label: "Right", value: "right" },
+                    ]}
+                  />
+                </div>
+
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                    Badge Tag Style
+                  </label>
+                  <CustomSelectDropdown
+                    value={currentProps.badge_style || "pill"}
+                    placeholder="Badge Style"
+                    options={[
+                      { label: "Pill (Rounded)", value: "pill" },
+                      { label: "Corner Tag", value: "square" },
+                      { label: "Minimal Clean", value: "minimal" },
+                      { label: "Hidden", value: "hidden" },
+                    ]}
+                    onChange={(val) => updateProps({ badge_style: val })}
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Visual Effects & Colors */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Visual Styling & Colors
+            </div>
+
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Image Fit
+                </label>
+                <SegmentedRow
+                  value={currentProps.image_fit || "cover"}
+                  onChange={(val) => updateProps({ image_fit: val })}
+                  options={[
+                    { label: "Cover", value: "cover" },
+                    { label: "Contain", value: "contain" },
+                  ]}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Corner Radius"
+                  value={
+                    currentProps.card_radius !== undefined && currentProps.card_radius !== null
+                      ? parseInt(String(currentProps.card_radius), 10) || 0
+                      : 14
+                  }
+                  min={0}
+                  max={48}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ card_radius: `${val}px` })}
+                />
+
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                    Card Shadow
+                  </label>
+                  <CustomSelectDropdown
+                    value={currentProps.card_shadow || "subtle"}
+                    placeholder="Shadow"
+                    options={[
+                      { label: "None", value: "none" },
+                      { label: "Subtle (Crisp)", value: "subtle" },
+                      { label: "Soft (Floating)", value: "soft" },
+                      { label: "Elevated (Deep)", value: "elevated" },
+                    ]}
+                    onChange={(val) => updateProps({ card_shadow: val })}
+                  />
+                </div>
+              </div>
+
+              <SectionDivider title="Theme Colors" />
+
+              <CompactColorRow
+                label="Section Background"
+                value={currentProps.outer_bg_color || "transparent"}
+                onChange={(val) => updateProps({ outer_bg_color: val })}
+              />
+
+              <CompactColorRow
+                label="Card Background"
+                value={currentProps.card_bg_color || siteDefinition.theme?.card_bg || "#ffffff"}
+                onChange={(val) => updateProps({ card_bg_color: val })}
+              />
+
+              <CompactColorRow
+                label="Card Border Color"
+                value={currentProps.card_border_color || siteDefinition.theme?.card_border_color || "rgba(226, 232, 240, 0.8)"}
+                onChange={(val) => updateProps({ card_border_color: val })}
+              />
+
+              <CompactColorRow
+                label="Title Color"
+                value={currentProps.title_color || siteDefinition.theme?.text_color || "#0f172a"}
+                onChange={(val) => updateProps({ title_color: val })}
+              />
+
+              <CompactColorRow
+                label="Subtitle Color"
+                value={currentProps.subtitle_color || siteDefinition.theme?.muted_text_color || "#64748b"}
+                onChange={(val) => updateProps({ subtitle_color: val })}
+              />
+
+              <CompactColorRow
+                label="Accent & Ring Color"
+                value={currentProps.accent_color || siteDefinition.theme?.accent_color || ADMIN_BLUE}
+                onChange={(val) => updateProps({ accent_color: val })}
+              />
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
@@ -4363,6 +4916,22 @@ export default function EditorSidebar({
                 />
               ) : selectedBlock.type === "navbar" || selectedBlock.type === "header" ? (
                 <NavbarEditor
+                  selectedBlock={selectedBlock}
+                  isLightMode={isLightMode}
+                  textColor={textColor}
+                  accentColor={accentColor}
+                  onSiteDefinitionChange={onSiteDefinitionChange}
+                  siteDefinition={siteDefinition}
+                />
+              ) : selectedBlock.type === "section_group_carousel" ||
+                selectedBlock.type === "sectiongroupcarousel" ||
+                selectedBlock.type === "category_story_carousel" ||
+                selectedBlock.type === "category_carousel" ||
+                selectedBlock.type === "section_carousel" ||
+                selectedBlock.type === "story_carousel" ||
+                selectedBlock.type === "category_grid" ||
+                selectedBlock.type === "categorygrid" ? (
+                <SectionGroupCarouselEditor
                   selectedBlock={selectedBlock}
                   isLightMode={isLightMode}
                   textColor={textColor}
