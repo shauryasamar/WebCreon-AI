@@ -634,18 +634,112 @@ const Navbar: React.FC<NavbarProps> = (props) => {
       : shellPadding;
 
 
+  // --- Dynamic Action Icons & Buttons Styling ---
+  const iconShape = (props as any).navbar_icon_shape || theme?.navbar_icon_shape || "rounded";
+  const iconButtonSizeNum = Math.max(26, Math.min(56, Number((props as any).navbar_icon_size || theme?.navbar_icon_size || (isMobile ? 36 : 38))));
+  const iconInnerSizeNum = Math.max(12, Math.min(32, Number((props as any).navbar_icon_inner_size || theme?.navbar_icon_inner_size || 18)));
+  const iconStrokeWidthNum = Number((props as any).navbar_icon_stroke_width || theme?.navbar_icon_stroke_width || 2);
+  const iconGapNum = Math.max(2, Math.min(28, Number((props as any).navbar_icon_gap || theme?.navbar_icon_gap || (isMobile ? 6 : 10))));
+
+  const iconBorderEnabled = (props as any).navbar_icon_border_enabled !== undefined
+    ? (props as any).navbar_icon_border_enabled
+    : (theme?.navbar_icon_border_enabled !== undefined ? theme.navbar_icon_border_enabled : true);
+
+  const iconBgEnabled = (props as any).navbar_icon_bg_enabled !== undefined
+    ? (props as any).navbar_icon_bg_enabled
+    : (theme?.navbar_icon_bg_enabled !== undefined ? theme.navbar_icon_bg_enabled : true);
+
+  const iconCustomColor = (props as any).navbar_icon_color || theme?.navbar_icon_color;
+  const iconCustomBg = (props as any).navbar_icon_bg_color || theme?.navbar_icon_bg_color;
+  const iconCustomBorderColor = (props as any).navbar_icon_border_color || theme?.navbar_icon_border_color;
+
+  let resolvedIconRadius = "8px";
+  if (iconShape === "circle") resolvedIconRadius = "50%";
+  else if (iconShape === "square") resolvedIconRadius = "3px";
+  else if (iconShape === "ghost") resolvedIconRadius = "6px";
+  else if (iconShape === "pill") resolvedIconRadius = "999px";
+
+  const resolvedIconBg = !iconBgEnabled || iconShape === "ghost"
+    ? "transparent"
+    : (iconCustomBg || (light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)"));
+
+  const resolvedIconBorder = !iconBorderEnabled || iconShape === "ghost"
+    ? "none"
+    : (iconCustomBorderColor ? `1px solid ${iconCustomBorderColor}` : softBorder);
+
+  const resolvedIconColor = iconCustomColor || textColor;
+
+  const actionButtonStyle: React.CSSProperties = {
+    width: `${iconButtonSizeNum}px`,
+    height: `${iconButtonSizeNum}px`,
+    minWidth: `${iconButtonSizeNum}px`,
+    minHeight: `${iconButtonSizeNum}px`,
+    borderRadius: resolvedIconRadius,
+    border: resolvedIconBorder,
+    background: resolvedIconBg,
+    color: resolvedIconColor,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 0,
+    margin: 0,
+    boxSizing: "border-box",
+    cursor: "pointer",
+    flexShrink: 0,
+    position: "relative",
+    lineHeight: 0,
+    outline: "none",
+    verticalAlign: "middle",
+    transition: "all 0.15s ease",
+  };
+
+  const actionIconSvgStyle: React.CSSProperties = {
+    width: `${iconInnerSizeNum}px`,
+    height: `${iconInnerSizeNum}px`,
+    stroke: "currentColor",
+    strokeWidth: iconStrokeWidthNum,
+    fill: "none",
+    display: "block",
+    flexShrink: 0,
+    margin: "auto",
+  };
+
+  const iconStyle = actionIconSvgStyle;
+
+  const cartBadgeStyle: React.CSSProperties = {
+    position: "absolute",
+    top: "-2px",
+    right: "-2px",
+    minWidth: "16px",
+    height: "16px",
+    padding: "0 3px",
+    borderRadius: "999px",
+    background: (props as any).cart_badge_bg || theme?.cart_badge_bg || accentColor,
+    color: (props as any).cart_badge_text_color || theme?.cart_badge_text_color || "#ffffff",
+    fontSize: "9px",
+    fontWeight: 800,
+    lineHeight: 1,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    border: "none",
+    pointerEvents: "none",
+    zIndex: 2,
+    boxSizing: "border-box",
+  };
+
   const mobileMenuButtonStyle: React.CSSProperties = useMemo(
     () => ({
-      width: "42px",
-      height: "42px",
-      borderRadius: "14px",
-      border: softBorder,
+      width: `${iconButtonSizeNum}px`,
+      height: `${iconButtonSizeNum}px`,
+      borderRadius: resolvedIconRadius,
+      border: resolvedIconBorder,
       background: mobileMenuOpen
         ? light
           ? "rgba(15,23,42,0.08)"
           : "rgba(255,255,255,0.10)"
-        : iconButtonBg,
-      color: textColor,
+        : resolvedIconBg,
+      color: resolvedIconColor,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -653,8 +747,335 @@ const Navbar: React.FC<NavbarProps> = (props) => {
       transition: "all 160ms ease",
       flexShrink: 0,
     }),
-    [softBorder, mobileMenuOpen, light, iconButtonBg, textColor]
+    [iconButtonSizeNum, resolvedIconRadius, resolvedIconBorder, mobileMenuOpen, light, resolvedIconBg, resolvedIconColor]
   );
+  // --- Dynamic Action Icons Visual Family & Variant Renderers ---
+  const iconVisualFamily = ((props as any).navbar_icon_style || theme?.navbar_icon_style || "outline") as "outline" | "solid" | "duotone";
+  const cartIconVariant = ((props as any).navbar_cart_icon_variant || theme?.navbar_cart_icon_variant || "cart") as "cart" | "bag" | "basket";
+  const accountIconVariant = ((props as any).navbar_account_icon_variant || theme?.navbar_account_icon_variant || "user_clean") as "user_clean" | "user_circle" | "user_rounded";
+  const notificationIconVariant = ((props as any).navbar_notification_icon_variant || theme?.navbar_notification_icon_variant || "bell") as "bell" | "bell_curved" | "bell_ring";
+  const searchIconVariant = ((props as any).navbar_search_icon_variant || theme?.navbar_search_icon_variant || "magnifier") as "magnifier" | "search_minimal" | "search_round";
+
+  const renderCartActionIcon = () => {
+    if (cartIconVariant === "bag") {
+      if (iconVisualFamily === "solid") {
+        return (
+          <svg viewBox="0 0 24 24" style={{ ...actionIconSvgStyle, stroke: "none", fill: "currentColor" }}>
+            <path fillRule="evenodd" clipRule="evenodd" d="M7.5 6v1.5H16.5V6a4.5 4.5 0 0 0-9 0zm-2 1.5V6a6.5 6.5 0 0 1 13 0v1.5h1.25a2 2 0 0 1 1.99 2.22l-1.25 11.25A2 2 0 0 1 18.5 22.5H5.5a2 2 0 0 1-1.99-1.78L2.26 9.72A2 2 0 0 1 4.25 7.5H5.5z" />
+          </svg>
+        );
+      }
+      if (iconVisualFamily === "duotone") {
+        return (
+          <svg viewBox="0 0 24 24" style={actionIconSvgStyle}>
+            <path d="M4 9h16l-1.5 12H5.5L4 9z" fill="currentColor" fillOpacity="0.2" stroke="none" />
+            <path d="M6 9V7a6 6 0 0 1 12 0v2" strokeLinecap="round" fill="none" />
+            <path d="M4 9h16l-1.5 12H5.5L4 9z" strokeLinejoin="round" fill="none" />
+          </svg>
+        );
+      }
+      return (
+        <svg viewBox="0 0 24 24" style={actionIconSvgStyle}>
+          <path d="M6 9V7a6 6 0 0 1 12 0v2" strokeLinecap="round" />
+          <path d="M4 9h16l-1.5 12H5.5L4 9z" strokeLinejoin="round" />
+        </svg>
+      );
+    }
+
+    if (cartIconVariant === "basket") {
+      if (iconVisualFamily === "solid") {
+        return (
+          <svg viewBox="0 0 24 24" style={{ ...actionIconSvgStyle, stroke: "none", fill: "currentColor" }}>
+            <path fillRule="evenodd" clipRule="evenodd" d="M12 2.25a.75.75 0 0 1 .63.34l4.5 6.41h4.12a1.25 1.25 0 0 1 1.24 1.39l-1.5 10a1.25 1.25 0 0 1-1.24 1.11H4.25a1.25 1.25 0 0 1-1.24-1.11l-1.5-10a1.25 1.25 0 0 1 1.24-1.39h4.12l4.5-6.41a.75.75 0 0 1 .63-.34zm0 2.87L8.85 9h6.3L12 5.12z" />
+          </svg>
+        );
+      }
+      if (iconVisualFamily === "duotone") {
+        return (
+          <svg viewBox="0 0 24 24" style={actionIconSvgStyle}>
+            <path d="M4 10h16l-1.5 10H5.5L4 10z" fill="currentColor" fillOpacity="0.2" stroke="none" />
+            <path d="M4 10h16l-1.5 10H5.5L4 10z" strokeLinejoin="round" fill="none" />
+            <path d="M7 10l5-7 5 7" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            <path d="M12 10v10" strokeLinecap="round" fill="none" />
+          </svg>
+        );
+      }
+      return (
+        <svg viewBox="0 0 24 24" style={actionIconSvgStyle}>
+          <path d="M4 10h16l-1.5 10H5.5L4 10z" strokeLinejoin="round" />
+          <path d="M7 10l5-7 5 7" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M12 10v10" strokeLinecap="round" />
+          <path d="M4 10h16" strokeLinecap="round" />
+        </svg>
+      );
+    }
+
+    // Default: Clean Rolling Shopping Cart
+    if (iconVisualFamily === "solid") {
+      return (
+        <svg viewBox="0 0 24 24" style={{ ...actionIconSvgStyle, stroke: "none", fill: "currentColor" }}>
+          <path d="M1 2.75A.75.75 0 0 1 1.75 2h3.5a.75.75 0 0 1 .73.58l.75 3.42h14.52a.75.75 0 0 1 .73.92l-2 8a.75.75 0 0 1-.73.58H8.89a.75.75 0 0 1-.73-.59L6.12 3.5H1.75A.75.75 0 0 1 1 2.75z" />
+          <circle cx="9" cy="19.5" r="1.75" />
+          <circle cx="17" cy="19.5" r="1.75" />
+        </svg>
+      );
+    }
+    if (iconVisualFamily === "duotone") {
+      return (
+        <svg viewBox="0 0 24 24" style={actionIconSvgStyle}>
+          <path d="M6.5 6h15.2l-1.8 8.1a2 2 0 0 1-1.95 1.6H9.4a2 2 0 0 1-1.96-1.6L6.5 6z" fill="currentColor" fillOpacity="0.2" stroke="none" />
+          <circle cx="9" cy="20" r="1.5" fill="currentColor" />
+          <circle cx="17" cy="20" r="1.5" fill="currentColor" />
+          <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        </svg>
+      );
+    }
+    return (
+      <svg viewBox="0 0 24 24" style={actionIconSvgStyle}>
+        <circle cx="9" cy="20" r="1.5" />
+        <circle cx="17" cy="20" r="1.5" />
+        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  };
+
+  const renderAccountActionIcon = () => {
+    if (accountIconVariant === "user_circle") {
+      if (iconVisualFamily === "solid") {
+        return (
+          <svg viewBox="0 0 24 24" style={{ ...actionIconSvgStyle, stroke: "none", fill: "currentColor" }}>
+            <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 4a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm-6.2 13.1c.7-2.3 3.3-3.6 6.2-3.6s5.5 1.3 6.2 3.6A8 8 0 0 1 5.8 19.1z" />
+          </svg>
+        );
+      }
+      if (iconVisualFamily === "duotone") {
+        return (
+          <svg viewBox="0 0 24 24" style={actionIconSvgStyle}>
+            <circle cx="12" cy="12" r="9" fill="currentColor" fillOpacity="0.2" stroke="none" />
+            <circle cx="12" cy="12" r="9" fill="none" />
+            <circle cx="12" cy="10" r="3" fill="currentColor" stroke="none" />
+            <path d="M6.2 18.5a7 7 0 0 1 11.6 0" strokeLinecap="round" fill="none" />
+          </svg>
+        );
+      }
+      return (
+        <svg viewBox="0 0 24 24" style={actionIconSvgStyle}>
+          <circle cx="12" cy="12" r="9" />
+          <circle cx="12" cy="10" r="3" />
+          <path d="M6.2 18.5a7 7 0 0 1 11.6 0" strokeLinecap="round" />
+        </svg>
+      );
+    }
+
+    if (accountIconVariant === "user_rounded") {
+      if (iconVisualFamily === "solid") {
+        return (
+          <svg viewBox="0 0 24 24" style={{ ...actionIconSvgStyle, stroke: "none", fill: "currentColor" }}>
+            <circle cx="12" cy="7" r="4.25" />
+            <path d="M4.5 19.5c0-3.6 3.4-6.5 7.5-6.5s7.5 2.9 7.5 6.5a.75.75 0 0 1-.75.75H5.25a.75.75 0 0 1-.75-.75z" />
+          </svg>
+        );
+      }
+      if (iconVisualFamily === "duotone") {
+        return (
+          <svg viewBox="0 0 24 24" style={actionIconSvgStyle}>
+            <circle cx="12" cy="8" r="4.25" fill="currentColor" fillOpacity="0.2" />
+            <path d="M5 19.5a7 7 0 0 1 14 0" fill="currentColor" fillOpacity="0.2" stroke="none" />
+            <circle cx="12" cy="8" r="4.25" fill="none" />
+            <path d="M5 19.5a7 7 0 0 1 14 0" strokeLinecap="round" fill="none" />
+          </svg>
+        );
+      }
+      return (
+        <svg viewBox="0 0 24 24" style={actionIconSvgStyle}>
+          <circle cx="12" cy="8" r="4.25" />
+          <path d="M5 19.5a7 7 0 0 1 14 0" strokeLinecap="round" />
+        </svg>
+      );
+    }
+
+    // Default: Standard Clean User
+    if (iconVisualFamily === "solid") {
+      return (
+        <svg viewBox="0 0 24 24" style={{ ...actionIconSvgStyle, stroke: "none", fill: "currentColor" }}>
+          <circle cx="12" cy="7" r="4.5" />
+          <path d="M4 19.5C4 16.5 7.5 14 12 14s8 2.5 8 5.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z" />
+        </svg>
+      );
+    }
+    if (iconVisualFamily === "duotone") {
+      return (
+        <svg viewBox="0 0 24 24" style={actionIconSvgStyle}>
+          <circle cx="12" cy="7" r="4" fill="currentColor" fillOpacity="0.2" />
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" fill="currentColor" fillOpacity="0.2" stroke="none" />
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" strokeLinecap="round" fill="none" />
+          <circle cx="12" cy="7" r="4" fill="none" />
+        </svg>
+      );
+    }
+    return (
+      <svg viewBox="0 0 24 24" style={actionIconSvgStyle}>
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" strokeLinecap="round" />
+        <circle cx="12" cy="7" r="4" />
+      </svg>
+    );
+  };
+
+  const renderNotificationActionIcon = () => {
+    if (notificationIconVariant === "bell_curved") {
+      if (iconVisualFamily === "solid") {
+        return (
+          <svg viewBox="0 0 24 24" style={{ ...actionIconSvgStyle, stroke: "none", fill: "currentColor" }}>
+            <path d="M12 2a5 5 0 0 0-5 5c0 3.2-.6 6.3-1.8 7.9a.75.75 0 0 0 .6 1.1h16.4a.75.75 0 0 0 .6-1.1C21.6 13.3 21 10.2 21 7a5 5 0 0 0-5-5zm-2 17.5a2 2 0 0 0 4 0h-4z" />
+          </svg>
+        );
+      }
+      if (iconVisualFamily === "duotone") {
+        return (
+          <svg viewBox="0 0 24 24" style={actionIconSvgStyle}>
+            <path d="M6 16h12c-1.5-2-2-5-2-8a4 4 0 1 0-8 0c0 3-.5 6-2 8z" fill="currentColor" fillOpacity="0.2" stroke="none" />
+            <path d="M6 16h12c-1.5-2-2-5-2-8a4 4 0 1 0-8 0c0 3-.5 6-2 8z" strokeLinejoin="round" fill="none" />
+            <path d="M10 19a2 2 0 0 0 4 0" strokeLinecap="round" fill="none" />
+          </svg>
+        );
+      }
+      return (
+        <svg viewBox="0 0 24 24" style={actionIconSvgStyle}>
+          <path d="M6 16h12c-1.5-2-2-5-2-8a4 4 0 1 0-8 0c0 3-.5 6-2 8z" strokeLinejoin="round" />
+          <path d="M10 19a2 2 0 0 0 4 0" strokeLinecap="round" />
+        </svg>
+      );
+    }
+
+    if (notificationIconVariant === "bell_ring") {
+      if (iconVisualFamily === "solid") {
+        return (
+          <svg viewBox="0 0 24 24" style={{ ...actionIconSvgStyle, stroke: "none", fill: "currentColor" }}>
+            <path d="M12 2a1.5 1.5 0 0 1 1.5 1.5v.3c3.2.7 5 3.1 5 6.7v3.8c0 1.2.5 2 1.4 2.7.5.4.3 1.3-.4 1.3H4.5c-.7 0-.9-.9-.4-1.3.9-.7 1.4-1.5 1.4-2.7V10.5c0-3.6 1.8-6 5-6.7V3.5A1.5 1.5 0 0 1 12 2zm-2.5 17.5a2.5 2.5 0 0 0 5 0h-5z" />
+          </svg>
+        );
+      }
+      if (iconVisualFamily === "duotone") {
+        return (
+          <svg viewBox="0 0 24 24" style={actionIconSvgStyle}>
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" fill="currentColor" fillOpacity="0.2" stroke="none" />
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            <path d="M13.73 21a2 2 0 0 1-3.46 0" strokeLinecap="round" fill="none" />
+            <path d="M4 4a8.5 8.5 0 0 0 0 10M20 4a8.5 8.5 0 0 1 0 10" strokeLinecap="round" fill="none" opacity="0.6" />
+          </svg>
+        );
+      }
+      return (
+        <svg viewBox="0 0 24 24" style={actionIconSvgStyle}>
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" strokeLinecap="round" />
+          <path d="M4 4a8.5 8.5 0 0 0 0 10M20 4a8.5 8.5 0 0 1 0 10" strokeLinecap="round" opacity="0.6" />
+        </svg>
+      );
+    }
+
+    // Default: Classic Bell
+    if (iconVisualFamily === "solid") {
+      return (
+        <svg viewBox="0 0 24 24" style={{ ...actionIconSvgStyle, stroke: "none", fill: "currentColor" }}>
+          <path d="M12 2a1.5 1.5 0 0 1 1.5 1.5v.3c3.2.7 5 3.1 5 6.7v3.8c0 1.2.5 2 1.4 2.7.5.4.3 1.3-.4 1.3H4.5c-.7 0-.9-.9-.4-1.3.9-.7 1.4-1.5 1.4-2.7V10.5c0-3.6 1.8-6 5-6.7V3.5A1.5 1.5 0 0 1 12 2zm-2.5 17.5a2.5 2.5 0 0 0 5 0h-5z" />
+        </svg>
+      );
+    }
+    if (iconVisualFamily === "duotone") {
+      return (
+        <svg viewBox="0 0 24 24" style={actionIconSvgStyle}>
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" fill="currentColor" fillOpacity="0.2" stroke="none" />
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" strokeLinecap="round" fill="none" />
+        </svg>
+      );
+    }
+    return (
+      <svg viewBox="0 0 24 24" style={actionIconSvgStyle}>
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M13.73 21a2 2 0 0 1-3.46 0" strokeLinecap="round" />
+      </svg>
+    );
+  };
+
+  const renderSearchActionIcon = (customSvgStyle?: React.CSSProperties) => {
+    const activeSvgStyle = customSvgStyle || actionIconSvgStyle;
+    
+    if (searchIconVariant === "search_minimal") {
+      if (iconVisualFamily === "solid") {
+        return (
+          <svg viewBox="0 0 24 24" style={{ ...activeSvgStyle, stroke: "none", fill: "currentColor" }}>
+            <path fillRule="evenodd" clipRule="evenodd" d="M11 3.5a7.5 7.5 0 1 0 4.67 13.37l3.78 3.78a1 1 0 0 0 1.42-1.42l-3.78-3.78A7.5 7.5 0 0 0 11 3.5zm-5.5 7.5a5.5 5.5 0 1 1 11 0 5.5 5.5 0 0 1-11 0z" />
+          </svg>
+        );
+      }
+      if (iconVisualFamily === "duotone") {
+        return (
+          <svg viewBox="0 0 24 24" style={activeSvgStyle}>
+            <circle cx="11" cy="11" r="7" fill="currentColor" fillOpacity="0.2" stroke="none" />
+            <circle cx="11" cy="11" r="7" fill="none" />
+            <path d="M16 16l4.5 4.5" strokeLinecap="round" fill="none" />
+          </svg>
+        );
+      }
+      return (
+        <svg viewBox="0 0 24 24" style={activeSvgStyle}>
+          <circle cx="11" cy="11" r="7" />
+          <path d="M16 16l4.5 4.5" strokeLinecap="round" />
+        </svg>
+      );
+    }
+
+    if (searchIconVariant === "search_round") {
+      if (iconVisualFamily === "solid") {
+        return (
+          <svg viewBox="0 0 24 24" style={{ ...activeSvgStyle, stroke: "none", fill: "currentColor" }}>
+            <path fillRule="evenodd" clipRule="evenodd" d="M10.5 3a7.5 7.5 0 1 0 4.7 13.34l4.73 4.73a1 1 0 0 0 1.41-1.41l-4.73-4.73A7.5 7.5 0 0 0 10.5 3zm-5.5 7.5a5.5 5.5 0 1 1 11 0 5.5 5.5 0 0 1-11 0z" />
+          </svg>
+        );
+      }
+      if (iconVisualFamily === "duotone") {
+        return (
+          <svg viewBox="0 0 24 24" style={activeSvgStyle}>
+            <circle cx="10.5" cy="10.5" r="6.5" fill="currentColor" fillOpacity="0.2" stroke="none" />
+            <circle cx="10.5" cy="10.5" r="6.5" fill="none" />
+            <path d="M15.5 15.5L20.5 20.5" strokeLinecap="round" fill="none" />
+          </svg>
+        );
+      }
+      return (
+        <svg viewBox="0 0 24 24" style={activeSvgStyle}>
+          <circle cx="10.5" cy="10.5" r="6.5" />
+          <path d="M15.5 15.5L20.5 20.5" strokeLinecap="round" />
+        </svg>
+      );
+    }
+
+    // Default: Classic Search Lens
+    if (iconVisualFamily === "solid") {
+      return (
+        <svg viewBox="0 0 24 24" style={{ ...activeSvgStyle, stroke: "none", fill: "currentColor" }}>
+          <path fillRule="evenodd" clipRule="evenodd" d="M10.5 3.75a6.75 6.75 0 1 0 4.19 12.06l4.25 4.25a1 1 0 0 0 1.42-1.42l-4.25-4.25A6.75 6.75 0 0 0 10.5 3.75zm-4.75 6.75a4.75 4.75 0 1 1 9.5 0 4.75 4.75 0 0 1-9.5 0z" />
+        </svg>
+      );
+    }
+    if (iconVisualFamily === "duotone") {
+      return (
+        <svg viewBox="0 0 24 24" style={activeSvgStyle}>
+          <circle cx="11" cy="11" r="8" fill="currentColor" fillOpacity="0.2" stroke="none" />
+          <circle cx="11" cy="11" r="8" fill="none" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" strokeLinecap="round" fill="none" />
+        </svg>
+      );
+    }
+    return (
+      <svg viewBox="0 0 24 24" style={activeSvgStyle}>
+        <circle cx="11" cy="11" r="8" />
+        <line x1="21" y1="21" x2="16.65" y2="16.65" strokeLinecap="round" />
+      </svg>
+    );
+  };
 
 
   useEffect(() => {
@@ -1716,33 +2137,26 @@ const Navbar: React.FC<NavbarProps> = (props) => {
               );
 
               const renderGlassActions = () => (
-                <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "10px", flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: `${iconGapNum}px`, flexShrink: 0 }}>
                   {effectiveShowSearch && (isMobile || searchDisplayMode === "icon") && (
                     <button
                       type="button"
                       aria-label="Open search"
                       onClick={openSearch}
-                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                      style={actionButtonStyle}
                     >
-                      <svg viewBox="0 0 24 24" style={iconStyle}>
-                        <circle cx="11" cy="11" r="7" />
-                        <path d="M20 20L16.65 16.65" />
-                      </svg>
+                      {renderSearchActionIcon()}
                     </button>
                   )}
                   {showCart && (
                     <button
                       type="button"
                       onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
-                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative", flexShrink: 0 }}
+                      style={actionButtonStyle}
                     >
-                      <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
-                        <circle cx="9" cy="20" r="1.5" />
-                        <circle cx="17" cy="20" r="1.5" />
-                        <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
-                      </svg>
+                      {renderCartActionIcon()}
                       {cartCount > 0 && (
-                        <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
+                        <span style={cartBadgeStyle}>
                           {cartCount}
                         </span>
                       )}
@@ -1753,12 +2167,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     <button
                       type="button"
                       onClick={handleDummyNotification}
-                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                      style={actionButtonStyle}
                     >
-                      <svg viewBox="0 0 24 24" style={iconStyle}>
-                        <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
-                        <path d="M10 17a2 2 0 0 0 4 0" />
-                      </svg>
+                      {renderNotificationActionIcon()}
                     </button>
                   )}
 
@@ -1768,12 +2179,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         ref={accountButtonRef}
                         type="button"
                         onClick={handleAccountClick}
-                        style={{ width: "38px", height: "38px", borderRadius: "999px", border: light ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.15)", background: light ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.08)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                        style={actionButtonStyle}
                       >
-                        <svg viewBox="0 0 24 24" style={iconStyle}>
-                          <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
-                          <circle cx="12" cy="8" r="4" />
-                        </svg>
+                        {renderAccountActionIcon()}
                       </button>
                       {accountMenuOpen && (
                         <div role="menu" style={dropdownPanelStyle}>
@@ -1947,33 +2355,26 @@ const Navbar: React.FC<NavbarProps> = (props) => {
               );
 
               const renderMarketplaceActions = () => (
-                <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "10px", flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: `${iconGapNum}px`, flexShrink: 0 }}>
                   {effectiveShowSearch && (isMobile || searchDisplayMode === "icon") && (
                     <button
                       type="button"
                       aria-label="Open search"
                       onClick={openSearch}
-                      style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                      style={actionButtonStyle}
                     >
-                      <svg viewBox="0 0 24 24" style={iconStyle}>
-                        <circle cx="11" cy="11" r="7" />
-                        <path d="M20 20L16.65 16.65" />
-                      </svg>
+                      {renderSearchActionIcon()}
                     </button>
                   )}
                   {showCart && (
                     <button
                       type="button"
                       onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
-                      style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative", flexShrink: 0 }}
+                      style={actionButtonStyle}
                     >
-                      <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
-                        <circle cx="9" cy="20" r="1.5" />
-                        <circle cx="17" cy="20" r="1.5" />
-                        <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
-                      </svg>
+                      {renderCartActionIcon()}
                       {cartCount > 0 && (
-                        <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
+                        <span style={cartBadgeStyle}>
                           {cartCount}
                         </span>
                       )}
@@ -1984,12 +2385,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     <button
                       type="button"
                       onClick={handleDummyNotification}
-                      style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                      style={actionButtonStyle}
                     >
-                      <svg viewBox="0 0 24 24" style={iconStyle}>
-                        <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
-                        <path d="M10 17a2 2 0 0 0 4 0" />
-                      </svg>
+                      {renderNotificationActionIcon()}
                     </button>
                   )}
 
@@ -1999,12 +2397,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         ref={accountButtonRef}
                         type="button"
                         onClick={handleAccountClick}
-                        style={{ width: "38px", height: "38px", borderRadius: "8px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                        style={actionButtonStyle}
                       >
-                        <svg viewBox="0 0 24 24" style={iconStyle}>
-                          <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
-                          <circle cx="12" cy="8" r="4" />
-                        </svg>
+                        {renderAccountActionIcon()}
                       </button>
                       {accountMenuOpen && (
                         <div role="menu" style={dropdownPanelStyle}>
@@ -2193,33 +2588,26 @@ const Navbar: React.FC<NavbarProps> = (props) => {
               );
 
               const renderLuxuryActions = () => (
-                <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "8px" : "14px", flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: `${iconGapNum}px`, flexShrink: 0 }}>
                   {effectiveShowSearch && (isMobile || searchDisplayMode === "icon") && (
                     <button
                       type="button"
                       aria-label="Open search"
                       onClick={openSearch}
-                      style={{ background: "transparent", border: "none", color: textColor, cursor: "pointer", padding: "4px", flexShrink: 0 }}
+                      style={actionButtonStyle}
                     >
-                      <svg viewBox="0 0 24 24" style={{ width: "19px", height: "19px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
-                        <circle cx="11" cy="11" r="7" />
-                        <path d="M20 20L16.65 16.65" />
-                      </svg>
+                      {renderSearchActionIcon()}
                     </button>
                   )}
                   {showCart && (
                     <button
                       type="button"
                       onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
-                      style={{ background: "transparent", border: "none", color: textColor, cursor: "pointer", position: "relative", padding: "4px", flexShrink: 0 }}
+                      style={actionButtonStyle}
                     >
-                      <svg viewBox="0 0 24 24" style={{ width: "19px", height: "19px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
-                        <circle cx="9" cy="20" r="1.5" />
-                        <circle cx="17" cy="20" r="1.5" />
-                        <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
-                      </svg>
+                      {renderCartActionIcon()}
                       {cartCount > 0 && (
-                        <span style={{ position: "absolute", top: "-2px", right: "-4px", width: "16px", height: "16px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "9px", fontWeight: 800, display: "grid", placeItems: "center" }}>
+                        <span style={cartBadgeStyle}>
                           {cartCount}
                         </span>
                       )}
@@ -2230,12 +2618,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     <button
                       type="button"
                       onClick={handleDummyNotification}
-                      style={{ background: "transparent", border: "none", color: textColor, cursor: "pointer", padding: "4px", flexShrink: 0 }}
+                      style={actionButtonStyle}
                     >
-                      <svg viewBox="0 0 24 24" style={{ width: "19px", height: "19px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
-                        <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
-                        <path d="M10 17a2 2 0 0 0 4 0" />
-                      </svg>
+                      {renderNotificationActionIcon()}
                     </button>
                   )}
 
@@ -2245,12 +2630,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         ref={accountButtonRef}
                         type="button"
                         onClick={handleAccountClick}
-                        style={{ background: "transparent", border: "none", color: textColor, cursor: "pointer", padding: "4px" }}
+                        style={actionButtonStyle}
                       >
-                        <svg viewBox="0 0 24 24" style={{ width: "19px", height: "19px", stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
-                          <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
-                          <circle cx="12" cy="8" r="4" />
-                        </svg>
+                        {renderAccountActionIcon()}
                       </button>
                       {accountMenuOpen && (
                         <div role="menu" style={dropdownPanelStyle}>
@@ -2456,33 +2838,26 @@ const Navbar: React.FC<NavbarProps> = (props) => {
               );
 
               const renderNeoActions = () => (
-                <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "12px", flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: `${iconGapNum}px`, flexShrink: 0 }}>
                   {effectiveShowSearch && (isMobile || searchDisplayMode === "icon") && (
                     <button
                       type="button"
                       aria-label="Open search"
                       onClick={openSearch}
-                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                      style={actionButtonStyle}
                     >
-                      <svg viewBox="0 0 24 24" style={iconStyle}>
-                        <circle cx="11" cy="11" r="7" />
-                        <path d="M20 20L16.65 16.65" />
-                      </svg>
+                      {renderSearchActionIcon()}
                     </button>
                   )}
                   {showCart && (
                     <button
                       type="button"
                       onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
-                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative", flexShrink: 0 }}
+                      style={actionButtonStyle}
                     >
-                      <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
-                        <circle cx="9" cy="20" r="1.5" />
-                        <circle cx="17" cy="20" r="1.5" />
-                        <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
-                      </svg>
+                      {renderCartActionIcon()}
                       {cartCount > 0 && (
-                        <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
+                        <span style={cartBadgeStyle}>
                           {cartCount}
                         </span>
                       )}
@@ -2493,12 +2868,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     <button
                       type="button"
                       onClick={handleDummyNotification}
-                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                      style={actionButtonStyle}
                     >
-                      <svg viewBox="0 0 24 24" style={iconStyle}>
-                        <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
-                        <path d="M10 17a2 2 0 0 0 4 0" />
-                      </svg>
+                      {renderNotificationActionIcon()}
                     </button>
                   )}
 
@@ -2508,12 +2880,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         ref={accountButtonRef}
                         type="button"
                         onClick={handleAccountClick}
-                        style={{ width: "38px", height: "38px", borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                        style={actionButtonStyle}
                       >
-                        <svg viewBox="0 0 24 24" style={iconStyle}>
-                          <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
-                          <circle cx="12" cy="8" r="4" />
-                        </svg>
+                        {renderAccountActionIcon()}
                       </button>
                       {accountMenuOpen && (
                         <div role="menu" style={dropdownPanelStyle}>
@@ -2687,33 +3056,26 @@ const Navbar: React.FC<NavbarProps> = (props) => {
             );
 
             const renderDefaultActions = () => (
-              <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "10px", flexShrink: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: `${iconGapNum}px`, flexShrink: 0 }}>
                 {effectiveShowSearch && (isMobile || searchDisplayMode === "icon") && (
                   <button
                     type="button"
                     aria-label="Open search"
                     onClick={openSearch}
-                    style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                    style={actionButtonStyle}
                   >
-                    <svg viewBox="0 0 24 24" style={iconStyle}>
-                      <circle cx="11" cy="11" r="7" />
-                      <path d="M20 20L16.65 16.65" />
-                    </svg>
+                    {renderSearchActionIcon()}
                   </button>
                 )}
                 {showCart && (
                   <button
                     type="button"
                     onClick={() => (onOpenCart ? onOpenCart() : navigate(resolvedCartPath))}
-                    style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", position: "relative", flexShrink: 0 }}
+                    style={actionButtonStyle}
                   >
-                    <svg viewBox="0 0 24 24" style={{ width: "17px", height: "17px", stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
-                      <circle cx="9" cy="20" r="1.5" />
-                      <circle cx="17" cy="20" r="1.5" />
-                      <path d="M3 4H5L7.2 14.5C7.3 15 7.7 15.3 8.2 15.3H17.4C17.9 15.3 18.3 15 18.4 14.5L20 7H6.2" />
-                    </svg>
+                    {renderCartActionIcon()}
                     {cartCount > 0 && (
-                      <span style={{ position: "absolute", top: "-2px", right: "-2px", width: "18px", height: "18px", borderRadius: "999px", background: accentColor, color: "#ffffff", fontSize: "10px", fontWeight: 800, display: "grid", placeItems: "center" }}>
+                      <span style={cartBadgeStyle}>
                         {cartCount}
                       </span>
                     )}
@@ -2724,12 +3086,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                   <button
                     type="button"
                     onClick={handleDummyNotification}
-                    style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                    style={actionButtonStyle}
                   >
-                    <svg viewBox="0 0 24 24" style={iconStyle}>
-                      <path d="M15 17H5l1.5-1.5V11a5.5 5.5 0 1 1 11 0v4.5L19 17h-4" />
-                      <path d="M10 17a2 2 0 0 0 4 0" />
-                    </svg>
+                    {renderNotificationActionIcon()}
                   </button>
                 )}
 
@@ -2739,12 +3098,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                       ref={accountButtonRef}
                       type="button"
                       onClick={handleAccountClick}
-                      style={{ width: "38px", height: "38px", borderRadius: "999px", border: softBorder, background: light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer" }}
+                      style={actionButtonStyle}
                     >
-                      <svg viewBox="0 0 24 24" style={iconStyle}>
-                        <path d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21" />
-                        <circle cx="12" cy="8" r="4" />
-                      </svg>
+                      {renderAccountActionIcon()}
                     </button>
                     {accountMenuOpen && (
                       <div role="menu" style={dropdownPanelStyle}>

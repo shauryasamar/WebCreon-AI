@@ -2748,7 +2748,7 @@ function NavbarEditor({
   onSiteDefinitionChange: (next: any) => void;
   siteDefinition: any;
 }) {
-  const [activeTab, setActiveTab] = useState<"brand" | "search" | "layout" | "colors">("brand");
+  const [activeTab, setActiveTab] = useState<"brand" | "search" | "layout" | "icons" | "colors">("brand");
 
   const theme = siteDefinition.theme || {};
   const props = selectedBlock?.props || {};
@@ -2797,6 +2797,23 @@ function NavbarEditor({
   const navbarPaddingX = Number(getVal("navbar_padding_x", 16));
   const navbarPaddingY = Number(getVal("navbar_padding_y", 12));
 
+  // Icons Customization Values
+  const navbarIconShape = getVal("navbar_icon_shape", "rounded");
+  const navbarIconStyle = getVal("navbar_icon_style", "outline");
+  const navbarCartIconVariant = getVal("navbar_cart_icon_variant", "cart");
+  const navbarAccountIconVariant = getVal("navbar_account_icon_variant", "user_clean");
+  const navbarNotificationIconVariant = getVal("navbar_notification_icon_variant", "bell");
+  const navbarSearchIconVariant = getVal("navbar_search_icon_variant", "magnifier");
+  const navbarIconSize = Number(getVal("navbar_icon_size", 38));
+  const navbarIconInnerSize = Number(getVal("navbar_icon_inner_size", 18));
+  const navbarIconStrokeWidth = Number(getVal("navbar_icon_stroke_width", 2));
+  const navbarIconGap = Number(getVal("navbar_icon_gap", 8));
+  const navbarIconBorderEnabled = getVal("navbar_icon_border_enabled", true) !== false;
+  const navbarIconBgEnabled = getVal("navbar_icon_bg_enabled", true) !== false;
+  const navbarIconColor = getVal("navbar_icon_color", theme.navbar_icon_color || theme.navbar_text_color || theme.text_color || (isDark ? "#f8fafc" : "#0f172a"));
+  const navbarIconBgColor = getVal("navbar_icon_bg_color", theme.navbar_icon_bg_color || (isDark ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.04)"));
+  const navbarIconBorderColor = getVal("navbar_icon_border_color", theme.navbar_icon_border_color || (isDark ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.08)"));
+
   const defaultNavbarBg = theme.navbar_bg || theme.primary_bg || (isDark ? "#0f172a" : "rgba(255, 255, 255, 0.85)");
   const navbarBg = getVal("navbar_bg", defaultNavbarBg);
   const navbarOuterBg = getVal("navbar_outer_bg", theme.navbar_outer_bg || "transparent");
@@ -2805,11 +2822,11 @@ function NavbarEditor({
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
-      {/* 4 Clean Navigation Tabs */}
+      {/* 5 Clean Navigation Tabs */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
+          gridTemplateColumns: "repeat(5, 1fr)",
           gap: "2px",
           background: "#f1f5f9",
           padding: "2px",
@@ -2824,6 +2841,7 @@ function NavbarEditor({
           { id: "brand", label: "Brand" },
           { id: "search", label: "Search" },
           { id: "layout", label: "Layout" },
+          { id: "icons", label: "Icons" },
           { id: "colors", label: "Colors" },
         ].map((tab) => {
           const isActive = activeTab === tab.id;
@@ -2833,7 +2851,7 @@ function NavbarEditor({
               type="button"
               onClick={() => setActiveTab(tab.id as any)}
               style={{
-                padding: "5px 2px",
+                padding: "5px 1px",
                 border: "none",
                 borderRadius: "4px",
                 background: isActive ? "#ffffff" : "transparent",
@@ -3224,7 +3242,200 @@ function NavbarEditor({
         </section>
       )}
 
-      {/* TAB 4: COLORS & THEME */}
+      {/* TAB 4: ICONS & ACTIONS */}
+      {activeTab === "icons" && (
+        <section style={sectionCardStyle(isLightMode)}>
+          <div style={{ display: "grid", gap: "8px", width: "100%", boxSizing: "border-box" }}>
+            {/* 1. BUTTON STYLE & SHAPE */}
+            <div style={{ display: "grid", gap: "5px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Icon Visual Style
+                </label>
+                <SegmentedRow
+                  value={navbarIconStyle}
+                  onChange={(val) => updateField("navbar_icon_style", val)}
+                  options={[
+                    { label: "Outline", value: "outline" },
+                    { label: "Solid", value: "solid" },
+                    { label: "Duotone", value: "duotone" },
+                  ]}
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Button Shape
+                </label>
+                <SegmentedRow
+                  value={navbarIconShape}
+                  onChange={(val) => updateField("navbar_icon_shape", val)}
+                  options={[
+                    { label: "Rounded", value: "rounded" },
+                    { label: "Circle", value: "circle" },
+                    { label: "Square", value: "square" },
+                    { label: "Ghost", value: "ghost" },
+                  ]}
+                />
+              </div>
+
+              {navbarIconShape !== "ghost" && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                  <div style={{ display: "grid", gap: "2px" }}>
+                    <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                      Background
+                    </label>
+                    <SegmentedRow
+                      value={navbarIconBgEnabled ? "on" : "off"}
+                      onChange={(val) => updateField("navbar_icon_bg_enabled", val === "on")}
+                      options={[
+                        { label: "Filled", value: "on" },
+                        { label: "None", value: "off" },
+                      ]}
+                    />
+                  </div>
+
+                  <div style={{ display: "grid", gap: "2px" }}>
+                    <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                      Border
+                    </label>
+                    <SegmentedRow
+                      value={navbarIconBorderEnabled ? "on" : "off"}
+                      onChange={(val) => updateField("navbar_icon_border_enabled", val === "on")}
+                      options={[
+                        { label: "Border", value: "on" },
+                        { label: "No Border", value: "off" },
+                      ]}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <SectionDivider title="Icon Variants" />
+
+            {/* 2. ICON SHAPES */}
+            <div style={{ display: "grid", gap: "5px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Cart / Bag Icon
+                </label>
+                <SegmentedRow
+                  value={navbarCartIconVariant}
+                  onChange={(val) => updateField("navbar_cart_icon_variant", val)}
+                  options={[
+                    { label: "Cart", value: "cart" },
+                    { label: "Shopping Bag", value: "bag" },
+                    { label: "Basket", value: "basket" },
+                  ]}
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Account Icon
+                </label>
+                <SegmentedRow
+                  value={navbarAccountIconVariant}
+                  onChange={(val) => updateField("navbar_account_icon_variant", val)}
+                  options={[
+                    { label: "Standard", value: "user_clean" },
+                    { label: "Circle", value: "user_circle" },
+                    { label: "Rounded", value: "user_rounded" },
+                  ]}
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Notification Bell
+                </label>
+                <SegmentedRow
+                  value={navbarNotificationIconVariant}
+                  onChange={(val) => updateField("navbar_notification_icon_variant", val)}
+                  options={[
+                    { label: "Classic", value: "bell" },
+                    { label: "Curved", value: "bell_curved" },
+                    { label: "Ringing", value: "bell_ring" },
+                  ]}
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Search Icon
+                </label>
+                <SegmentedRow
+                  value={navbarSearchIconVariant}
+                  onChange={(val) => updateField("navbar_search_icon_variant", val)}
+                  options={[
+                    { label: "Classic", value: "magnifier" },
+                    { label: "Compact", value: "search_minimal" },
+                    { label: "Angled", value: "search_round" },
+                  ]}
+                />
+              </div>
+            </div>
+
+            <SectionDivider title="Size & Spacing" />
+
+            {/* 3. SIZE & SPACING */}
+            <div style={{ display: "grid", gap: "5px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Button Size"
+                  value={navbarIconSize}
+                  min={28}
+                  max={50}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateField("navbar_icon_size", val)}
+                />
+
+                <NumberStepperField
+                  label="Icon Size"
+                  value={navbarIconInnerSize}
+                  min={12}
+                  max={28}
+                  step={1}
+                  unit="px"
+                  onChange={(val) => updateField("navbar_icon_inner_size", val)}
+                />
+              </div>
+
+              {navbarIconStyle !== "solid" && (
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                    Icon Stroke Weight
+                  </label>
+                  <SegmentedRow
+                    value={String(navbarIconStrokeWidth)}
+                    onChange={(val) => updateField("navbar_icon_stroke_width", Number(val))}
+                    options={[
+                      { label: "1.5 Thin", value: "1.5" },
+                      { label: "2.0 Reg", value: "2" },
+                      { label: "2.5 Semi", value: "2.5" },
+                      { label: "3.0 Bold", value: "3" },
+                    ]}
+                  />
+                </div>
+              )}
+
+              <NumberStepperField
+                label="Gap Between Icons"
+                value={navbarIconGap}
+                min={2}
+                max={24}
+                step={2}
+                unit="px"
+                onChange={(val) => updateField("navbar_icon_gap", val)}
+              />
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* TAB 5: COLORS & THEME */}
       {activeTab === "colors" && (
         <section style={sectionCardStyle(isLightMode)}>
           <div style={{ display: "flex", flexDirection: "column", gap: "4px", width: "100%", boxSizing: "border-box" }}>
@@ -3262,6 +3473,27 @@ function NavbarEditor({
               label="Text & Icons Color"
               value={navbarTextColorVal}
               onChange={(val) => updateField("navbar_text_color", val)}
+            />
+
+            <span style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: "4px" }}>
+              Action Icons Colors
+            </span>
+            <CompactColorRow
+              label="Action Icon Color"
+              value={navbarIconColor}
+              onChange={(val) => updateField("navbar_icon_color", val)}
+            />
+
+            <CompactColorRow
+              label="Icon Background"
+              value={navbarIconBgColor}
+              onChange={(val) => updateField("navbar_icon_bg_color", val)}
+            />
+
+            <CompactColorRow
+              label="Icon Border Color"
+              value={navbarIconBorderColor}
+              onChange={(val) => updateField("navbar_icon_border_color", val)}
             />
 
             <span style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: "4px" }}>

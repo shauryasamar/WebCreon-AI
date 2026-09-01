@@ -115,7 +115,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
       onSiteDefinitionChange(updatedDef);
     }
 
-    setToastMsg(`Saved "${themeName}" to SAVED SNAPSHOTS in sidepanel! 📁`);
+    setToastMsg(`Saved "${themeName}" to SAVED SNAPSHOTS in sidepanel!`);
     setTimeout(() => setToastMsg(null), 3500);
   };
 
