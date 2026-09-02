@@ -606,10 +606,13 @@ def customer_signup(
 
     response = JSONResponse(
         content={
-            "user": serialize_customer(user, site)
+            "user": serialize_customer(user, site),
+            "token": token,
         }
     )
     set_auth_cookie(response, CUSTOMER_COOKIE_NAME, token)
+    set_auth_cookie(response, f"customer_token_{site.id}", token)
+    set_auth_cookie(response, f"customer_token_{site.slug.lower()}", token)
     return response
 
 
@@ -645,10 +648,13 @@ def customer_login(
 
     response = JSONResponse(
         content={
-            "user": serialize_customer(user, site)
+            "user": serialize_customer(user, site),
+            "token": token,
         }
     )
     set_auth_cookie(response, CUSTOMER_COOKIE_NAME, token)
+    set_auth_cookie(response, f"customer_token_{site.id}", token)
+    set_auth_cookie(response, f"customer_token_{site.slug.lower()}", token)
     return response
 
 
@@ -685,8 +691,17 @@ def customer_me(
 
 
 @router.post("/customer/logout")
-def customer_logout(response: Response):
+def customer_logout(
+    response: Response,
+    request: Request,
+    website_name: Optional[str] = None,
+):
     clear_auth_cookie(response, CUSTOMER_COOKIE_NAME)
+    target = website_name or request.headers.get("X-Site-Id")
+    if target:
+        clean_target = str(target).strip().lower()
+        clear_auth_cookie(response, f"customer_token_{clean_target}")
+        clear_auth_cookie(response, f"customer_token_{target}")
     return {"message": "Customer logged out"}
 
 
@@ -833,10 +848,13 @@ def customer_google_auth(
 
     response = JSONResponse(
         content={
-            "user": serialize_customer(user, site)
+            "user": serialize_customer(user, site),
+            "token": token,
         }
     )
     set_auth_cookie(response, CUSTOMER_COOKIE_NAME, token)
+    set_auth_cookie(response, f"customer_token_{site.id}", token)
+    set_auth_cookie(response, f"customer_token_{site.slug.lower()}", token)
     return response
 
 
@@ -945,7 +963,10 @@ def customer_reset_password(
         content={
             "message": "Password successfully updated!",
             "user": serialize_customer(user, site),
+            "token": token,
         }
     )
     set_auth_cookie(response, CUSTOMER_COOKIE_NAME, token)
+    set_auth_cookie(response, f"customer_token_{site.id}", token)
+    set_auth_cookie(response, f"customer_token_{site.slug.lower()}", token)
     return response

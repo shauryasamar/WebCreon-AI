@@ -54,6 +54,7 @@ type CartSidebarProps = {
   appliedCoupon?: ValidatedCoupon | null;
   onCouponApplied?: (coupon: ValidatedCoupon) => void;
   onCouponRemoved?: () => void;
+  embeddedInEditorWrapper?: boolean;
 };
 
 type ChargeCode =
@@ -419,6 +420,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   appliedCoupon: propAppliedCoupon,
   onCouponApplied: propOnCouponApplied,
   onCouponRemoved: propOnCouponRemoved,
+  embeddedInEditorWrapper,
 }) => {
   const {
     cartItems,
@@ -547,6 +549,12 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     ? `/builder/${siteId}/checkout`
     : "/admin/sites";
 
+  const explorePath = slug
+    ? `/store/${slug}`
+    : siteId
+    ? `/builder/${siteId}`
+    : "/";
+
   const heading = title || (isCheckoutSummary ? "Order summary" : "Your cart");
   const emptyHeading = empty_title || "Your cart is empty";
   const emptyText = empty_message || "Add a few products to see them here.";
@@ -564,10 +572,10 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   const footerNote = note || (isCheckoutSummary ? "" : "Final charges will be validated at checkout.");
 
   const isDark =
-    (theme?.primary_bg ? isColorDarkHex(theme.primary_bg) : false) ||
+    theme?.mode === "dark" ||
     (background_color ? isColorDarkHex(background_color) : false) ||
-    (theme?.text_color ? !isColorDarkHex(theme.text_color) : false) ||
-    theme?.mode === "dark";
+    (panel_color ? isColorDarkHex(panel_color) : false) ||
+    (theme?.primary_bg ? isColorDarkHex(theme.primary_bg) : false);
 
   const resolvedAccentColor =
     accent_color ||
@@ -590,14 +598,29 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
 
   const hasFestiveTint = Boolean(theme?.festival_theme);
 
-  const outerRadius = clamp(border_radius ?? 24, 0, 40);
-  const innerRadius = clamp(card_radius ?? 18, 0, 32);
-  const resolvedMaxWidth = clamp(
-    max_width ?? (isCheckoutSummary ? 1200 : 1240),
-    240,
-    1400
+  const parseSafeNum = (val: any, fallback: number) => {
+    if (val === undefined || val === null || val === "") return fallback;
+    const n = Number(val);
+    return isNaN(n) ? fallback : n;
+  };
+
+  const resolveWidthRatio = (val: any) => {
+    if (val === undefined || val === null || val === "") return 94;
+    const str = String(val).trim();
+    const n = Number(str.replace(/[^0-9.]/g, ""));
+    if (isNaN(n)) return 94;
+    if (n <= 100) return clamp(Math.round(n), 70, 100);
+    return clamp(Math.round((n / 1240) * 94), 70, 100);
+  };
+
+  const outerRadius = clamp(parseSafeNum(border_radius, 24), 0, 40);
+  const innerRadius = clamp(parseSafeNum(card_radius, 18), 0, 32);
+  const resolvedWidthPercent = resolveWidthRatio(max_width);
+  const resolvedMinHeight = clamp(
+    parseSafeNum(min_height, 380),
+    280,
+    650
   );
-  const resolvedMinHeight = clamp(min_height ?? 0, 0, 1600);
 
   const palette = useMemo(() => {
     const pageBg = resolvedPrimaryBg;
@@ -605,12 +628,12 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     const dynamicShellBorder =
       border_color ||
       (isCheckoutSummary ? (theme as any)?.summary_border_color : (theme as any)?.cart_border_color) ||
-      alpha(resolvedTextColor, isDark ? 0.12 : 0.08);
+      (isDark ? "rgba(255, 255, 255, 0.14)" : "rgba(15, 23, 42, 0.09)");
 
     const dynamicCardBorder =
       border_color ||
       (isCheckoutSummary ? (theme as any)?.summary_border_color : (theme as any)?.cart_border_color) ||
-      alpha(resolvedTextColor, isDark ? 0.09 : 0.06);
+      (isDark ? "rgba(255, 255, 255, 0.11)" : "rgba(15, 23, 42, 0.07)");
 
     if (!isDark) {
       const shellBg =
@@ -663,24 +686,25 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     const shellBg =
       panel_color ||
       background_color ||
+      (theme as any)?.cart_panel_bg ||
       (theme as any)?.cart_bg ||
       (hasFestiveTint
-        ? mixHex(pageBg, "#ffffff", 0.08)
-        : mixHex(pageBg, "#ffffff", 0.04));
+        ? mixHex(pageBg, "#ffffff", 0.09)
+        : mixHex(pageBg, "#ffffff", 0.07));
     const panelBg =
       panel_color ||
       background_color ||
       (theme as any)?.cart_panel_bg ||
       (theme as any)?.cart_bg ||
       (hasFestiveTint
-        ? mixHex(pageBg, "#ffffff", 0.12)
-        : mixHex(pageBg, "#ffffff", 0.06));
+        ? mixHex(pageBg, "#ffffff", 0.13)
+        : mixHex(pageBg, "#ffffff", 0.10));
     const cardBg =
       card_color ||
       (theme as any)?.cart_card_bg ||
       (hasFestiveTint
-        ? mixHex(mixHex(pageBg, "#ffffff", 0.14), resolvedAccentColor, 0.06)
-        : mixHex(pageBg, "#ffffff", 0.09));
+        ? mixHex(mixHex(pageBg, "#ffffff", 0.16), resolvedAccentColor, 0.08)
+        : mixHex(pageBg, "#ffffff", 0.14));
     const mutedBg = mixHex(pageBg, "#000000", 0.12);
     const inputBg = card_color || mixHex(pageBg, "#000000", 0.15);
     const quantityBg = mixHex(pageBg, "#000000", 0.12);
@@ -1382,11 +1406,17 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   return (
     <section
       style={{
-        padding: isMobile ? "16px 12px 32px" : "20px 12px 36px",
-        maxWidth: `${resolvedMaxWidth}px`,
-        minHeight: resolvedMinHeight > 0 ? `${resolvedMinHeight}px` : undefined,
+        padding: embeddedInEditorWrapper
+          ? 0
+          : isMobile
+          ? "16px 0 28px"
+          : "24px 0 36px",
+        width: embeddedInEditorWrapper ? "100%" : `${resolvedWidthPercent}%`,
+        maxWidth: "1280px",
+        minHeight: resolvedMinHeight ? `${resolvedMinHeight}px` : undefined,
         margin: "0 auto",
         background: "transparent",
+        boxSizing: "border-box",
       }}
     >
       <div
@@ -1396,11 +1426,16 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
           borderRadius: `${outerRadius}px`,
           overflow: "hidden",
           boxShadow: palette.shadow,
+          minHeight: `${resolvedMinHeight}px`,
+          width: "100%",
+          boxSizing: "border-box",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
         <div
           style={{
-            padding: isMobile ? "16px 14px" : "22px 22px 18px",
+            padding: isMobile ? "16px 14px" : "20px 24px 18px",
             borderBottom: `1px solid ${palette.shellBorder}`,
             display: "flex",
             justifyContent: "space-between",
@@ -1458,22 +1493,31 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
 
         <div
           style={{
-            padding: isMobile ? "14px" : "18px",
+            padding: isMobile ? "16px 14px" : "22px 24px 28px",
             background: palette.panelBg,
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
           }}
         >
           {cartItems.length === 0 ? (
             <div
               style={{
-                padding: "56px 18px",
+                padding: isMobile ? "32px 16px" : "48px 24px",
+                minHeight: `${Math.max(180, resolvedMinHeight - 140)}px`,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
                 textAlign: "center",
                 borderRadius: `${innerRadius}px`,
                 border: `1px solid ${palette.cardBorder}`,
-                background: palette.panelBg,
+                background: palette.cardBg,
                 boxShadow: "none",
+                flex: 1,
               }}
             >
-              <div style={{ marginBottom: "12px", display: "flex", justifyContent: "center", color: palette.textMuted }}>
+              <div style={{ marginBottom: "14px", display: "flex", justifyContent: "center", color: palette.textMuted }}>
                 <svg
                   viewBox="0 0 24 24"
                   fill="none"
@@ -1481,7 +1525,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                   strokeWidth="1.6"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  style={{ width: "40px", height: "40px" }}
+                  style={{ width: "44px", height: "44px" }}
                 >
                   <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
                   <path d="M3 6h18" />
@@ -1491,7 +1535,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
               <p
                 style={{
                   margin: 0,
-                  fontSize: "18px",
+                  fontSize: "19px",
                   fontWeight: 700,
                   color: palette.text,
                 }}
@@ -1509,6 +1553,27 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
               >
                 {emptyText}
               </p>
+              <Link
+                to={explorePath}
+                style={{
+                  marginTop: "20px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "9px 22px",
+                  borderRadius: "10px",
+                  background: resolvedAccentColor,
+                  color: "#ffffff",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  textDecoration: "none",
+                  cursor: "pointer",
+                  boxShadow: `0 2px 8px ${alpha(resolvedAccentColor, 0.3)}`,
+                  transition: "opacity 0.15s ease",
+                }}
+              >
+                Explore Products
+              </Link>
             </div>
           ) : (
             <div

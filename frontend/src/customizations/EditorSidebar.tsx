@@ -1283,10 +1283,17 @@ function renderFieldControl(
   const inputStyle = sharedInputStyle();
 
   if (field.type === "text") {
+    const activeVal =
+      currentValue !== undefined && currentValue !== null && String(currentValue).trim() !== ""
+        ? String(currentValue)
+        : field.defaultValue !== undefined && field.defaultValue !== null
+        ? String(field.defaultValue)
+        : field.placeholder || "";
+
     return (
       <input
         type="text"
-        value={typeof currentValue === "string" ? currentValue : ""}
+        value={typeof currentValue === "string" && currentValue !== "" ? currentValue : activeVal}
         placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}...`}
         onChange={(e) => onChange(e.target.value)}
         style={inputStyle}
@@ -1295,9 +1302,16 @@ function renderFieldControl(
   }
 
   if (field.type === "textarea") {
+    const activeVal =
+      currentValue !== undefined && currentValue !== null && String(currentValue).trim() !== ""
+        ? String(currentValue)
+        : field.defaultValue !== undefined && field.defaultValue !== null
+        ? String(field.defaultValue)
+        : field.placeholder || "";
+
     return (
       <textarea
-        value={typeof currentValue === "string" ? currentValue : ""}
+        value={typeof currentValue === "string" && currentValue !== "" ? currentValue : activeVal}
         placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}...`}
         onChange={(e) => onChange(e.target.value)}
         rows={2}
@@ -1575,6 +1589,13 @@ const NumberStepperField = ({
   maxRef.current = max;
 
   const isFocusedRef = useRef(false);
+  const [inputValue, setInputValue] = useState(String(value ?? ""));
+
+  useEffect(() => {
+    if (!isFocusedRef.current) {
+      setInputValue(String(value ?? ""));
+    }
+  }, [value]);
 
   const clamp = (val: number) => Math.max(minRef.current, Math.min(maxRef.current, val));
 
@@ -1587,11 +1608,15 @@ const NumberStepperField = ({
       e.preventDefault();
       e.stopPropagation();
       const delta = e.deltaY < 0 ? stepRef.current : -stepRef.current;
+      const current = typeof valueRef.current === "number" ? valueRef.current : parseFloat(String(valueRef.current)) || 0;
       const nextVal = Math.max(
         minRef.current,
-        Math.min(maxRef.current, Number((valueRef.current + delta).toFixed(2)))
+        Math.min(maxRef.current, Number((current + delta).toFixed(2)))
       );
-      onChangeRef.current(nextVal);
+      if (nextVal !== valueRef.current) {
+        setInputValue(String(nextVal));
+        onChangeRef.current(nextVal);
+      }
     };
 
     node.addEventListener("wheel", handleWheel, { passive: false });
@@ -1603,10 +1628,28 @@ const NumberStepperField = ({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "ArrowUp") {
       e.preventDefault();
-      onChange(clamp(Number((value + step).toFixed(2))));
+      const next = clamp(Number((value + step).toFixed(2)));
+      setInputValue(String(next));
+      onChange(next);
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      onChange(clamp(Number((value - step).toFixed(2))));
+      const next = clamp(Number((value - step).toFixed(2)));
+      setInputValue(String(next));
+      onChange(next);
+    }
+  };
+
+  const handleBlur = () => {
+    isFocusedRef.current = false;
+    const parsed = parseFloat(inputValue);
+    if (isNaN(parsed)) {
+      setInputValue(String(value));
+    } else {
+      const clamped = clamp(parsed);
+      setInputValue(String(clamped));
+      if (clamped !== value) {
+        onChange(clamped);
+      }
     }
   };
 
@@ -1646,7 +1689,11 @@ const NumberStepperField = ({
       <div style={{ display: "flex", alignItems: "center", gap: "3px", width: "100%", boxSizing: "border-box" }}>
         <button
           type="button"
-          onClick={() => onChange(clamp(Number((value - step).toFixed(2))))}
+          onClick={() => {
+            const next = clamp(Number((value - step).toFixed(2)));
+            setInputValue(String(next));
+            onChange(next);
+          }}
           title={`Decrease (${step}${unit})`}
           style={{
             width: "28px",
@@ -1673,18 +1720,19 @@ const NumberStepperField = ({
           min={min}
           max={max}
           step={step}
-          value={value}
+          value={inputValue}
+          onWheel={(e) => e.preventDefault()}
           onFocus={() => {
             isFocusedRef.current = true;
           }}
-          onBlur={() => {
-            isFocusedRef.current = false;
-          }}
+          onBlur={handleBlur}
           onKeyDown={handleKeyDown}
           onChange={(e) => {
-            const parsed = parseFloat(e.target.value);
-            if (!isNaN(parsed)) {
-              onChange(clamp(parsed));
+            const raw = e.target.value;
+            setInputValue(raw);
+            const parsed = parseFloat(raw);
+            if (!isNaN(parsed) && parsed >= min && parsed <= max) {
+              onChange(parsed);
             }
           }}
           style={{
@@ -1696,12 +1744,18 @@ const NumberStepperField = ({
             padding: "2px 4px",
             height: "26px",
             minWidth: 0,
+            color: "#0f172a",
+            background: "#ffffff",
           }}
         />
 
         <button
           type="button"
-          onClick={() => onChange(clamp(Number((value + step).toFixed(2))))}
+          onClick={() => {
+            const next = clamp(Number((value + step).toFixed(2)));
+            setInputValue(String(next));
+            onChange(next);
+          }}
           title={`Increase (${step}${unit})`}
           style={{
             width: "28px",
@@ -1730,7 +1784,11 @@ const NumberStepperField = ({
         max={max}
         step={step}
         value={value}
-        onChange={(e) => onChange(clamp(Number(e.target.value)))}
+        onChange={(e) => {
+          const next = clamp(Number(e.target.value));
+          setInputValue(String(next));
+          onChange(next);
+        }}
         style={{
           width: "100%",
           maxWidth: "100%",
@@ -3807,6 +3865,29 @@ function ProductGridEditor({
       {activeTab === "layout" && (
         <div style={{ display: "grid", gap: "8px" }}>
           <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>Card Style & Preset</div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Card Style</label>
+                <CustomSelectDropdown
+                  value={p.card_style || p.cardStyle || "default"}
+                  placeholder="Card Style"
+                  options={[
+                    { label: `Store Theme Default (${(siteDefinition.theme?.card_style || "fashion").toUpperCase()})`, value: "default" },
+                    { label: "Grocery & Daily Needs (Horizontal Row)", value: "grocery" },
+                    { label: "Fashion & Apparel (3:4 Portrait)", value: "fashion" },
+                    { label: "Electronics & Tech (4:3 Landscape)", value: "electronics" },
+                    { label: "Beauty & Minimal (1:1 Rounded)", value: "beauty" },
+                    { label: "Standard Square (1:1)", value: "standard" },
+                    { label: "Books & Stationery", value: "books" },
+                  ]}
+                  onChange={(val) => updateProps({ card_style: val, cardStyle: val })}
+                />
+              </div>
+            </div>
+          </section>
+
+          <section style={sectionCardStyle(isLightMode)}>
             <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>Spacing & Bounds</div>
             <div style={{ display: "grid", gap: "6px" }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
@@ -4614,6 +4695,723 @@ function FooterEditor({
                 label="Input Background"
                 value={inputBgColor}
                 onChange={(val) => updateProps({ input_bg_color: val })}
+              />
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CartEditor({
+  selectedBlock,
+  isLightMode,
+  textColor,
+  accentColor,
+  onSiteDefinitionChange,
+  siteDefinition,
+}: {
+  selectedBlock: any;
+  isLightMode: boolean;
+  textColor: string;
+  accentColor: string;
+  onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
+  siteDefinition: EditorSiteDefinition;
+}) {
+  const [activeTab, setActiveTab] = useState<"layout" | "content" | "colors">("layout");
+  const p = selectedBlock.props ?? {};
+
+  const updateProps = (patch: Record<string, any>) => {
+    const nextDef = JSON.parse(JSON.stringify(siteDefinition));
+    const cartTypes = new Set([
+      "cart",
+      "cart_view",
+      "cartview",
+      "cart_sidebar",
+      "cartsidebar",
+      "cart_items",
+      "cartitems",
+      "order_summary",
+      "ordersummary",
+    ]);
+
+    let updated = false;
+    if (Array.isArray(nextDef.pages)) {
+      nextDef.pages = nextDef.pages.map((page: any) => {
+        const isCartP =
+          page.role === "cart" ||
+          page.page_type === "cart" ||
+          page.slug === "cart" ||
+          page.route === "/cart" ||
+          page.route === "cart";
+
+        const hasMatchingBlock = (page.blocks ?? []).some(
+          (b: any) =>
+            b.id === selectedBlock.id ||
+            b.type === selectedBlock.type ||
+            cartTypes.has(String(b.type || "").toLowerCase())
+        );
+
+        if (hasMatchingBlock || isCartP) {
+          const blocks = (page.blocks ?? []).map((block: any) => {
+            if (
+              block.id === selectedBlock.id ||
+              block.type === selectedBlock.type ||
+              cartTypes.has(String(block.type || "").toLowerCase())
+            ) {
+              updated = true;
+              return {
+                ...block,
+                props: {
+                  ...(block.props ?? {}),
+                  ...patch,
+                },
+              };
+            }
+            return block;
+          });
+
+          if (!updated && isCartP) {
+            updated = true;
+            blocks.push({
+              id: selectedBlock.id || "cart_view",
+              type: "cart_sidebar",
+              props: { ...(selectedBlock.props ?? {}), ...patch },
+            });
+          }
+
+          return { ...page, blocks };
+        }
+        return page;
+      });
+    }
+
+    if (!updated) {
+      if (!Array.isArray(nextDef.pages)) nextDef.pages = [];
+      nextDef.pages.push({
+        id: "page-cart",
+        name: "Cart",
+        route: "/cart",
+        role: "cart",
+        page_type: "cart",
+        show_in_nav: false,
+        blocks: [
+          {
+            id: selectedBlock.id || "cart_view",
+            type: "cart_sidebar",
+            props: { ...(selectedBlock.props ?? {}), ...patch },
+          },
+        ],
+      });
+    }
+
+    onSiteDefinitionChange(nextDef);
+  };
+
+  const parseNumProp = (val: any, fallback: number) => {
+    if (val === undefined || val === null || val === "") return fallback;
+    const n = Number(val);
+    return isNaN(n) ? fallback : n;
+  };
+
+  const getStr = (key: string, fallback: string) => {
+    const val = p[key];
+    if (val !== undefined && val !== null && String(val).trim() !== "") {
+      return String(val);
+    }
+    return fallback;
+  };
+
+  const parseWidthRatio = (val: any, fallback = 94) => {
+    if (val === undefined || val === null || val === "") return fallback;
+    const str = String(val).trim();
+    const n = Number(str.replace(/[^0-9.]/g, ""));
+    if (isNaN(n)) return fallback;
+    if (n <= 100) return Math.max(70, Math.min(100, Math.round(n)));
+    return Math.max(70, Math.min(100, Math.round((n / 1240) * 94)));
+  };
+
+  const parsedBorderRadius = parseNumProp(p.border_radius, 24);
+  const parsedCardRadius = parseNumProp(p.card_radius, 18);
+  const parsedWidthRatio = parseWidthRatio(p.max_width, 94);
+  const parsedMinHeight = Math.max(280, Math.min(650, parseNumProp(p.min_height, 380)));
+
+  return (
+    <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
+      {/* 3 Modern Clean Navigation Tabs */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: "2px",
+          background: "#f1f5f9",
+          padding: "2px",
+          borderRadius: "6px",
+          width: "100%",
+          maxWidth: "100%",
+          boxSizing: "border-box",
+          minWidth: 0,
+        }}
+      >
+        {[
+          { id: "layout", label: "Layout" },
+          { id: "content", label: "Content" },
+          { id: "colors", label: "Colors" },
+        ].map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as any)}
+              style={{
+                padding: "5px 1px",
+                border: "none",
+                borderRadius: "4px",
+                background: isActive ? "#ffffff" : "transparent",
+                color: isActive ? ADMIN_BLUE : "#64748b",
+                fontWeight: isActive ? 800 : 600,
+                fontSize: "10px",
+                cursor: "pointer",
+                textAlign: "center",
+                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 1. LAYOUT & FEATURES TAB */}
+      {activeTab === "layout" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Dimensions & Radii */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Container Dimensions & Radii
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <NumberStepperField
+                label="Container Width"
+                value={parsedWidthRatio}
+                min={70}
+                max={100}
+                step={2}
+                unit="%"
+                onChange={(val) => updateProps({ max_width: `${Math.max(70, Math.min(100, val))}%` })}
+              />
+
+              <NumberStepperField
+                label="Minimum Height"
+                value={parsedMinHeight}
+                min={280}
+                max={650}
+                step={20}
+                unit="px"
+                onChange={(val) => updateProps({ min_height: Math.max(280, Math.min(650, val)) })}
+              />
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Outer Radius"
+                  value={parsedBorderRadius}
+                  min={0}
+                  max={40}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ border_radius: Math.max(0, Math.min(40, val)) })}
+                />
+                <NumberStepperField
+                  label="Card Radius"
+                  value={parsedCardRadius}
+                  min={0}
+                  max={32}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ card_radius: Math.max(0, Math.min(32, val)) })}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Feature Toggles — Only Promo Code as requested */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Promo Code Feature
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              {(() => {
+                const isChecked = p.show_promo !== undefined ? Boolean(p.show_promo) : true;
+                return (
+                  <div
+                    onClick={() => updateProps({ show_promo: !isChecked })}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "6px",
+                      padding: "6px 8px",
+                      borderRadius: "4px",
+                      border: "1px solid #e2e8f0",
+                      background: isChecked ? "rgba(37,99,235,0.04)" : "#ffffff",
+                      cursor: "pointer",
+                      userSelect: "none",
+                      boxSizing: "border-box",
+                      width: "100%",
+                    }}
+                  >
+                    <span style={{ fontSize: "11px", fontWeight: 600, color: isChecked ? "#0f172a" : "#475569" }}>
+                      Show Promo Code Input
+                    </span>
+                    <div
+                      style={{
+                        position: "relative",
+                        width: "24px",
+                        height: "14px",
+                        borderRadius: "999px",
+                        background: isChecked ? ADMIN_BLUE : "#cbd5e1",
+                        transition: "background 0.15s ease",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "2px",
+                          left: isChecked ? "12px" : "2px",
+                          width: "10px",
+                          height: "10px",
+                          borderRadius: "50%",
+                          background: "#ffffff",
+                          transition: "left 0.15s ease",
+                          boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* 2. CONTENT TAB */}
+      {activeTab === "content" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Header & Empty State */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Cart Header & Empty State
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Cart Title
+                </label>
+                <input
+                  type="text"
+                  value={getStr("title", "Your cart")}
+                  placeholder="Your cart"
+                  onChange={(e) => updateProps({ title: e.target.value })}
+                  style={{
+                    width: "100%",
+                    height: "28px",
+                    padding: "0 8px",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: "#0f172a",
+                    borderRadius: "4px",
+                    border: "1px solid #cbd5e1",
+                    background: "#ffffff",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Clear Cart Button Label
+                </label>
+                <input
+                  type="text"
+                  value={getStr("clear_label", "Clear cart")}
+                  placeholder="Clear cart"
+                  onChange={(e) => updateProps({ clear_label: e.target.value })}
+                  style={{
+                    width: "100%",
+                    height: "28px",
+                    padding: "0 8px",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: "#0f172a",
+                    borderRadius: "4px",
+                    border: "1px solid #cbd5e1",
+                    background: "#ffffff",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Empty State Heading
+                </label>
+                <input
+                  type="text"
+                  value={getStr("empty_title", "Your cart is empty")}
+                  placeholder="Your cart is empty"
+                  onChange={(e) => updateProps({ empty_title: e.target.value })}
+                  style={{
+                    width: "100%",
+                    height: "28px",
+                    padding: "0 8px",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: "#0f172a",
+                    borderRadius: "4px",
+                    border: "1px solid #cbd5e1",
+                    background: "#ffffff",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Empty State Message
+                </label>
+                <input
+                  type="text"
+                  value={getStr("empty_message", "Add a few products to see them here.")}
+                  placeholder="Add a few products to see them here."
+                  onChange={(e) => updateProps({ empty_message: e.target.value })}
+                  style={{
+                    width: "100%",
+                    height: "28px",
+                    padding: "0 8px",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: "#0f172a",
+                    borderRadius: "4px",
+                    border: "1px solid #cbd5e1",
+                    background: "#ffffff",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Order Summary & Checkout CTA */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Order Summary & Checkout CTA
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Checkout Button Text
+                </label>
+                <input
+                  type="text"
+                  value={getStr("checkout_label", "Proceed to checkout")}
+                  placeholder="Proceed to checkout"
+                  onChange={(e) => updateProps({ checkout_label: e.target.value })}
+                  style={{
+                    width: "100%",
+                    height: "28px",
+                    padding: "0 8px",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: "#0f172a",
+                    borderRadius: "4px",
+                    border: "1px solid #cbd5e1",
+                    background: "#ffffff",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                    Subtotal Label
+                  </label>
+                  <input
+                    type="text"
+                    value={getStr("subtotal_label", "Subtotal")}
+                    placeholder="Subtotal"
+                    onChange={(e) => updateProps({ subtotal_label: e.target.value })}
+                    style={{
+                      width: "100%",
+                      height: "28px",
+                      padding: "0 8px",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      color: "#0f172a",
+                      borderRadius: "4px",
+                      border: "1px solid #cbd5e1",
+                      background: "#ffffff",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                    Total Label
+                  </label>
+                  <input
+                    type="text"
+                    value={getStr("total_label", "Total")}
+                    placeholder="Total"
+                    onChange={(e) => updateProps({ total_label: e.target.value })}
+                    style={{
+                      width: "100%",
+                      height: "28px",
+                      padding: "0 8px",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      color: "#0f172a",
+                      borderRadius: "4px",
+                      border: "1px solid #cbd5e1",
+                      background: "#ffffff",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                    Shipping Label
+                  </label>
+                  <input
+                    type="text"
+                    value={getStr("shipping_label", "Shipping")}
+                    placeholder="Shipping"
+                    onChange={(e) => updateProps({ shipping_label: e.target.value })}
+                    style={{
+                      width: "100%",
+                      height: "28px",
+                      padding: "0 8px",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      color: "#0f172a",
+                      borderRadius: "4px",
+                      border: "1px solid #cbd5e1",
+                      background: "#ffffff",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                    Tax Label
+                  </label>
+                  <input
+                    type="text"
+                    value={getStr("tax_label", "Estimated tax")}
+                    placeholder="Estimated tax"
+                    onChange={(e) => updateProps({ tax_label: e.target.value })}
+                    style={{
+                      width: "100%",
+                      height: "28px",
+                      padding: "0 8px",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      color: "#0f172a",
+                      borderRadius: "4px",
+                      border: "1px solid #cbd5e1",
+                      background: "#ffffff",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Summary Footer Note
+                </label>
+                <input
+                  type="text"
+                  value={getStr("note", "Taxes and shipping calculated at checkout")}
+                  placeholder="Taxes and shipping calculated at checkout"
+                  onChange={(e) => updateProps({ note: e.target.value })}
+                  style={{
+                    width: "100%",
+                    height: "28px",
+                    padding: "0 8px",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: "#0f172a",
+                    borderRadius: "4px",
+                    border: "1px solid #cbd5e1",
+                    background: "#ffffff",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Promo & Items */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Promo Box & Item Actions
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Promo Box Title
+                </label>
+                <input
+                  type="text"
+                  value={getStr("promo_title", "Promo code")}
+                  placeholder="Promo code"
+                  onChange={(e) => updateProps({ promo_title: e.target.value })}
+                  style={{
+                    width: "100%",
+                    height: "28px",
+                    padding: "0 8px",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: "#0f172a",
+                    borderRadius: "4px",
+                    border: "1px solid #cbd5e1",
+                    background: "#ffffff",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                    Promo Placeholder
+                  </label>
+                  <input
+                    type="text"
+                    value={getStr("promo_placeholder", "Enter code")}
+                    placeholder="Enter code"
+                    onChange={(e) => updateProps({ promo_placeholder: e.target.value })}
+                    style={{
+                      width: "100%",
+                      height: "28px",
+                      padding: "0 8px",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      color: "#0f172a",
+                      borderRadius: "4px",
+                      border: "1px solid #cbd5e1",
+                      background: "#ffffff",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                    Apply Button Text
+                  </label>
+                  <input
+                    type="text"
+                    value={getStr("promo_button_label", "Apply")}
+                    placeholder="Apply"
+                    onChange={(e) => updateProps({ promo_button_label: e.target.value })}
+                    style={{
+                      width: "100%",
+                      height: "28px",
+                      padding: "0 8px",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      color: "#0f172a",
+                      borderRadius: "4px",
+                      border: "1px solid #cbd5e1",
+                      background: "#ffffff",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Remove Item Button Label
+                </label>
+                <input
+                  type="text"
+                  value={getStr("remove_label", "Remove")}
+                  placeholder="Remove"
+                  onChange={(e) => updateProps({ remove_label: e.target.value })}
+                  style={{
+                    width: "100%",
+                    height: "28px",
+                    padding: "0 8px",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: "#0f172a",
+                    borderRadius: "4px",
+                    border: "1px solid #cbd5e1",
+                    background: "#ffffff",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* 3. COLORS TAB */}
+      {activeTab === "colors" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Cart Colors & Surfaces
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Container Background"
+                value={p.panel_color || p.background_color || (siteDefinition.theme?.mode === "dark" ? "#1e293b" : "#ffffff")}
+                onChange={(val) => updateProps({ panel_color: val, background_color: val })}
+              />
+
+              <CompactColorRow
+                label="Card Background"
+                value={p.card_color || (siteDefinition.theme?.mode === "dark" ? "#243047" : "#ffffff")}
+                onChange={(val) => updateProps({ card_color: val })}
+              />
+
+              <CompactColorRow
+                label="Border Color"
+                value={p.border_color || (siteDefinition.theme?.mode === "dark" ? "rgba(255,255,255,0.14)" : "rgba(15,23,42,0.09)")}
+                onChange={(val) => updateProps({ border_color: val })}
+              />
+
+              <CompactColorRow
+                label="Text Color"
+                value={p.text_color || siteDefinition.theme?.text_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                onChange={(val) => updateProps({ text_color: val })}
+              />
+
+              <CompactColorRow
+                label="Muted Text Color"
+                value={p.muted_text_color || siteDefinition.theme?.muted_text_color || (siteDefinition.theme?.mode === "dark" ? "#94a3b8" : "#64748b")}
+                onChange={(val) => updateProps({ muted_text_color: val })}
+              />
+
+              <CompactColorRow
+                label="Accent & Button"
+                value={p.accent_color || siteDefinition.theme?.accent_color || ADMIN_BLUE}
+                onChange={(val) => updateProps({ accent_color: val })}
               />
             </div>
           </section>
@@ -5451,10 +6249,15 @@ export default function EditorSidebar({
   const [refreshCounter, setRefreshCounter] = useState(0);
 
   useEffect(() => {
-    const handleUpdate = () => setRefreshCounter((c) => c + 1);
+    const handleUpdate = (e: any) => {
+      const currentSiteId = (siteDefinition as any)?.id || (siteDefinition as any)?.site_id || getSiteStorageId(siteDefinition);
+      if (!e.detail?.siteId || e.detail.siteId === currentSiteId) {
+        setRefreshCounter((c) => c + 1);
+      }
+    };
     window.addEventListener("webnirmaan_theme_saved", handleUpdate);
     return () => window.removeEventListener("webnirmaan_theme_saved", handleUpdate);
-  }, []);
+  }, [siteDefinition]);
 
   const savedSnapshots = useMemo(
     () => getSavedThemeSnapshots(siteDefinition),
@@ -5547,7 +6350,11 @@ export default function EditorSidebar({
       t === "products_carousel" || t === "product_grid" ||
       t === "productgrid" || t === "featured_products" ||
       t === "collection_products" ||
-      t === "footer"
+      t === "footer" ||
+      t === "cart" || t === "cart_view" || t === "cartview" ||
+      t === "cart_sidebar" || t === "cartsidebar" ||
+      t === "cart_items" || t === "cartitems" ||
+      t === "order_summary" || t === "ordersummary"
     );
   })();
   const currentSearchDisplayMode = siteDefinition.theme?.search_display_mode || "bar";
@@ -6271,6 +7078,14 @@ export default function EditorSidebar({
                       ? "Navbar"
                       : selectedBlock.type === "footer"
                       ? "Footer"
+                      : selectedBlock.type === "cart" ||
+                        selectedBlock.type === "cart_view" ||
+                        selectedBlock.type === "cartview" ||
+                        selectedBlock.type === "cart_sidebar" ||
+                        selectedBlock.type === "cartsidebar" ||
+                        selectedBlock.type === "cart_items" ||
+                        selectedBlock.type === "cartitems"
+                      ? "Shopping Cart"
                       : selectedBlock.type.toUpperCase())
                   : activePageTitle}
               </span>
@@ -6357,6 +7172,23 @@ export default function EditorSidebar({
                 />
               ) : selectedBlock.type === "footer" ? (
                 <FooterEditor
+                  selectedBlock={selectedBlock}
+                  isLightMode={isLightMode}
+                  textColor={textColor}
+                  accentColor={accentColor}
+                  onSiteDefinitionChange={onSiteDefinitionChange}
+                  siteDefinition={siteDefinition}
+                />
+              ) : selectedBlock.type === "cart" ||
+                selectedBlock.type === "cart_view" ||
+                selectedBlock.type === "cartview" ||
+                selectedBlock.type === "cart_sidebar" ||
+                selectedBlock.type === "cartsidebar" ||
+                selectedBlock.type === "cart_items" ||
+                selectedBlock.type === "cartitems" ||
+                selectedBlock.type === "order_summary" ||
+                selectedBlock.type === "ordersummary" ? (
+                <CartEditor
                   selectedBlock={selectedBlock}
                   isLightMode={isLightMode}
                   textColor={textColor}

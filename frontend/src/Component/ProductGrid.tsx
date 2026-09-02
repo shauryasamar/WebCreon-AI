@@ -317,7 +317,17 @@ function isColorDarkHex(colorHex?: string): boolean {
   } = resolveThemeTokens(theme);
   const isLight = !isDark;
 
-  const cardStyleKey = card_style || cardStyle || theme?.card_style || "fashion";
+  // Active Card Style Key: inherits from store theme when set to "default", "inherit", "theme", or omitted
+  const rawCardStyle = String(card_style || cardStyle || "").toLowerCase().trim();
+  const cardStyleKey =
+    rawCardStyle &&
+    rawCardStyle !== "default" &&
+    rawCardStyle !== "inherit" &&
+    rawCardStyle !== "theme" &&
+    rawCardStyle !== "auto"
+      ? rawCardStyle
+      : (theme?.card_style || "fashion").toLowerCase().trim();
+
   const cardBg = card_bg_color || defaultCardBg;
   const isCardDark = isColorDarkHex(cardBg);
 

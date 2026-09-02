@@ -1030,6 +1030,9 @@ export default function BuilderDrawerPanel({
           ) {
             const currentProps = block.props ?? {};
             const patchToApply = { ...mergedPatch };
+            if (patchToApply.card_style) {
+              patchToApply.cardStyle = patchToApply.card_style;
+            }
             // Never overwrite existing user-defined section title, headline, or subtitle with asset defaults
             if (currentProps.title && patchToApply.title) {
               delete patchToApply.title;

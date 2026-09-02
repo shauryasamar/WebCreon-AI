@@ -439,6 +439,7 @@ const cartTitleField = {
   type: "text" as const,
   target: "props" as const,
   placeholder: "Your cart",
+  defaultValue: "Your cart",
 };
 
 const cartEmptyTitleField = {
@@ -447,6 +448,7 @@ const cartEmptyTitleField = {
   type: "text" as const,
   target: "props" as const,
   placeholder: "Your cart is empty",
+  defaultValue: "Your cart is empty",
 };
 
 const cartEmptyMessageField = {
@@ -454,7 +456,8 @@ const cartEmptyMessageField = {
   label: "Empty state message",
   type: "textarea" as const,
   target: "props" as const,
-  placeholder: "Add products to continue shopping.",
+  placeholder: "Add a few products to see them here.",
+  defaultValue: "Add a few products to see them here.",
 };
 
 const cartShowPromoField = {
@@ -462,6 +465,7 @@ const cartShowPromoField = {
   label: "Show promo code",
   type: "checkbox" as const,
   target: "props" as const,
+  defaultValue: true,
 };
 
 const cartShowSummaryField = {
@@ -469,6 +473,7 @@ const cartShowSummaryField = {
   label: "Show summary",
   type: "checkbox" as const,
   target: "props" as const,
+  defaultValue: true,
 };
 
 const cartPromoTitleField = {
@@ -477,6 +482,7 @@ const cartPromoTitleField = {
   type: "text" as const,
   target: "props" as const,
   placeholder: "Promo code",
+  defaultValue: "Promo code",
 };
 
 const cartPromoPlaceholderField = {
@@ -484,7 +490,8 @@ const cartPromoPlaceholderField = {
   label: "Promo placeholder",
   type: "text" as const,
   target: "props" as const,
-  placeholder: "Enter promo code",
+  placeholder: "Enter code",
+  defaultValue: "Enter code",
 };
 
 const cartPromoButtonLabelField = {
@@ -493,6 +500,7 @@ const cartPromoButtonLabelField = {
   type: "text" as const,
   target: "props" as const,
   placeholder: "Apply",
+  defaultValue: "Apply",
 };
 
 const cartSummaryTitleField = {
@@ -501,6 +509,7 @@ const cartSummaryTitleField = {
   type: "text" as const,
   target: "props" as const,
   placeholder: "Order summary",
+  defaultValue: "Order summary",
 };
 
 const cartCheckoutLabelField = {
@@ -509,6 +518,7 @@ const cartCheckoutLabelField = {
   type: "text" as const,
   target: "props" as const,
   placeholder: "Proceed to checkout",
+  defaultValue: "Proceed to checkout",
 };
 
 const cartSubtotalLabelField = {
@@ -517,6 +527,7 @@ const cartSubtotalLabelField = {
   type: "text" as const,
   target: "props" as const,
   placeholder: "Subtotal",
+  defaultValue: "Subtotal",
 };
 
 const cartShippingLabelField = {
@@ -525,6 +536,7 @@ const cartShippingLabelField = {
   type: "text" as const,
   target: "props" as const,
   placeholder: "Shipping",
+  defaultValue: "Shipping",
 };
 
 const cartTaxLabelField = {
@@ -533,6 +545,7 @@ const cartTaxLabelField = {
   type: "text" as const,
   target: "props" as const,
   placeholder: "Estimated tax",
+  defaultValue: "Estimated tax",
 };
 
 const cartTotalLabelField = {
@@ -541,6 +554,7 @@ const cartTotalLabelField = {
   type: "text" as const,
   target: "props" as const,
   placeholder: "Total",
+  defaultValue: "Total",
 };
 
 const cartMaxWidthField = {
@@ -548,10 +562,10 @@ const cartMaxWidthField = {
   label: "Cart width",
   type: "number" as const,
   target: "props" as const,
-  min: 240,
-  max: 900,
-  step: 4,
-  helpText: "Maximum width of the cart container.",
+  min: 960,
+  max: 1280,
+  step: 20,
+  helpText: "Width of the cart container (960px - 1280px).",
 };
 
 const cartMinHeightField = {
@@ -559,10 +573,10 @@ const cartMinHeightField = {
   label: "Cart height",
   type: "number" as const,
   target: "props" as const,
-  min: 0,
-  max: 1200,
-  step: 4,
-  helpText: "Minimum height of the cart container.",
+  min: 280,
+  max: 650,
+  step: 20,
+  helpText: "Minimum height of the cart container (280px - 650px).",
 };
 
 const cartBorderRadiusField = {
@@ -1676,6 +1690,18 @@ export const editorRegistry: EditorRegistry = {
     fields: cartFields,
   },
   cartitems: {
+    displayName: "Cart",
+    fields: cartFields,
+  },
+  cart_view: {
+    displayName: "Cart",
+    fields: cartFields,
+  },
+  cartview: {
+    displayName: "Cart",
+    fields: cartFields,
+  },
+  cart: {
     displayName: "Cart",
     fields: cartFields,
   },

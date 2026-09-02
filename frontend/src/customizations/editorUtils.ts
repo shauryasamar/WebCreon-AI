@@ -541,6 +541,32 @@ export function isCheckoutFallbackId(blockId: string | null | undefined): boolea
   return false;
 }
 
+const CART_BLOCK_TYPES = new Set([
+  "cart",
+  "cart_view",
+  "cartview",
+  "cart_sidebar",
+  "cartsidebar",
+  "cart_items",
+  "cartitems",
+  "order_summary",
+  "ordersummary",
+]);
+
+export function isCartFallbackId(blockId: string | null | undefined): boolean {
+  if (!blockId) return false;
+  const lower = String(blockId).toLowerCase();
+  if (CART_BLOCK_TYPES.has(lower)) return true;
+  if (
+    lower.startsWith("auto-cart") ||
+    lower.startsWith("cart-") ||
+    lower.includes("cart")
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export function isProductDetailPageRoute(route?: string | null): boolean {
   if (!route) return false;
   const normalized = route.replace(/^\/+/, "").toLowerCase();
@@ -642,11 +668,29 @@ export function findBlockById(
     };
   }
 
-  if (blockId === "cart_view" || blockId.includes("cart")) {
+  if (isCartFallbackId(blockId)) {
+    const cartPage = siteDefinition.pages.find(
+      (p) =>
+        p.role === "cart" ||
+        p.page_type === "cart" ||
+        (p as any).slug === "cart" ||
+        p.route === "/cart" ||
+        p.route === "cart" ||
+        p.blocks.some((b) => CART_BLOCK_TYPES.has(String(b.type || "").toLowerCase()))
+    );
+
+    const existingBlock = cartPage?.blocks.find(
+      (b) =>
+        String(b.id || b.type).toLowerCase() === blockId.toLowerCase() ||
+        CART_BLOCK_TYPES.has(String(b.type || "").toLowerCase())
+    );
+
+    if (existingBlock) return existingBlock;
+
     return {
       id: blockId,
-      type: "cart_view",
-      props: {},
+      type: "cart_sidebar",
+      props: cartPage?.blocks?.[0]?.props || {},
     };
   }
 
@@ -990,6 +1034,84 @@ export function updateBlockFieldValue(
     }
   }
 
+  if (!hasExistingBlock && isCartFallbackId(blockId)) {
+    const cartPageIndex = siteDefinition.pages.findIndex(
+      (p) =>
+        p.role === "cart" ||
+        p.page_type === "cart" ||
+        (p as any).slug === "cart" ||
+        p.route === "/cart" ||
+        p.route === "cart" ||
+        p.blocks.some((b) =>
+          CART_BLOCK_TYPES.has(String(b.type || "").toLowerCase())
+        )
+    );
+
+    const targetType = "cart_sidebar";
+
+    if (cartPageIndex !== -1) {
+      const targetPage = siteDefinition.pages[cartPageIndex];
+      const existingBlockIndex = targetPage.blocks.findIndex(
+        (b) =>
+          b.id === blockId ||
+          CART_BLOCK_TYPES.has(String(b.type || "").toLowerCase())
+      );
+
+      const updatedPages = [...siteDefinition.pages];
+      if (existingBlockIndex !== -1) {
+        const existingBlock = targetPage.blocks[existingBlockIndex];
+        const updatedBlock = {
+          ...existingBlock,
+          props: {
+            ...(existingBlock.props || {}),
+            [field.key]: value,
+          },
+        };
+        const updatedBlocks = [...targetPage.blocks];
+        updatedBlocks[existingBlockIndex] = updatedBlock;
+        updatedPages[cartPageIndex] = { ...targetPage, blocks: updatedBlocks };
+      } else {
+        const newBlock: EditorBlock = {
+          id: blockId,
+          type: targetType,
+          props: {
+            [field.key]: value,
+          },
+        };
+        updatedPages[cartPageIndex] = {
+          ...targetPage,
+          blocks: [...targetPage.blocks, newBlock],
+        };
+      }
+      return {
+        ...siteDefinition,
+        pages: updatedPages,
+      };
+    } else {
+      const newCartPage: EditorPage = {
+        id: "page-cart",
+        name: "Cart",
+        route: "/cart",
+        role: "cart",
+        page_type: "cart",
+        show_in_nav: false,
+        blocks: [
+          {
+            id: blockId,
+            type: targetType,
+            props: {
+              [field.key]: value,
+            },
+          },
+        ],
+      };
+      return {
+        ...siteDefinition,
+        pages: [...siteDefinition.pages, newCartPage],
+      };
+    }
+  }
+
   return {
     ...siteDefinition,
     pages: siteDefinition.pages.map((page) => ({
@@ -1168,6 +1290,167 @@ export function updateBlockProps(
     }
   }
 
+  if (!hasExistingBlockProps && isCheckoutFallbackId(blockId)) {
+    const checkoutPageIndex = siteDefinition.pages.findIndex(
+      (p) =>
+        p.role === "checkout" ||
+        p.page_type === "checkout" ||
+        (p as any).slug === "checkout" ||
+        isCheckoutPageRoute(p.route) ||
+        p.blocks.some((b) =>
+          CHECKOUT_BLOCK_TYPES.has(String(b.type || "").toLowerCase())
+        )
+    );
+
+    const targetType = blockId.includes("delivery")
+      ? "delivery_form"
+      : blockId.includes("payment")
+        ? "payment_methods"
+        : blockId.includes("place") || blockId.includes("cta")
+          ? "place_order_cta"
+          : "order_summary";
+
+    if (checkoutPageIndex !== -1) {
+      const targetPage = siteDefinition.pages[checkoutPageIndex];
+      const existingBlockIndex = targetPage.blocks.findIndex(
+        (b) =>
+          b.id === blockId ||
+          String(b.type || "").toLowerCase() === targetType.toLowerCase()
+      );
+
+      const updatedPages = [...siteDefinition.pages];
+      if (existingBlockIndex !== -1) {
+        const existingBlock = targetPage.blocks[existingBlockIndex];
+        const updatedBlock = {
+          ...existingBlock,
+          props: {
+            ...(existingBlock.props || {}),
+            ...propsPatch,
+          },
+        };
+        const updatedBlocks = [...targetPage.blocks];
+        updatedBlocks[existingBlockIndex] = updatedBlock;
+        updatedPages[checkoutPageIndex] = { ...targetPage, blocks: updatedBlocks };
+      } else {
+        const newBlock: EditorBlock = {
+          id: blockId,
+          type: targetType,
+          props: {
+            ...propsPatch,
+          },
+        };
+        updatedPages[checkoutPageIndex] = {
+          ...targetPage,
+          blocks: [...targetPage.blocks, newBlock],
+        };
+      }
+      return {
+        ...siteDefinition,
+        pages: updatedPages,
+      };
+    } else {
+      const newCheckoutPage: EditorPage = {
+        id: "page-checkout",
+        name: "Checkout",
+        route: "/checkout",
+        role: "checkout",
+        page_type: "checkout",
+        show_in_nav: false,
+        blocks: [
+          {
+            id: blockId,
+            type: targetType,
+            props: {
+              ...propsPatch,
+            },
+          },
+        ],
+      };
+      return {
+        ...siteDefinition,
+        pages: [...siteDefinition.pages, newCheckoutPage],
+      };
+    }
+  }
+
+  if (!hasExistingBlockProps && isCartFallbackId(blockId)) {
+    const cartPageIndex = siteDefinition.pages.findIndex(
+      (p) =>
+        p.role === "cart" ||
+        p.page_type === "cart" ||
+        (p as any).slug === "cart" ||
+        p.route === "/cart" ||
+        p.route === "cart" ||
+        p.blocks.some((b) =>
+          CART_BLOCK_TYPES.has(String(b.type || "").toLowerCase())
+        )
+    );
+
+    const targetType = "cart_sidebar";
+
+    if (cartPageIndex !== -1) {
+      const targetPage = siteDefinition.pages[cartPageIndex];
+      const existingBlockIndex = targetPage.blocks.findIndex(
+        (b) =>
+          b.id === blockId ||
+          CART_BLOCK_TYPES.has(String(b.type || "").toLowerCase())
+      );
+
+      const updatedPages = [...siteDefinition.pages];
+      if (existingBlockIndex !== -1) {
+        const existingBlock = targetPage.blocks[existingBlockIndex];
+        const updatedBlock = {
+          ...existingBlock,
+          props: {
+            ...(existingBlock.props || {}),
+            ...propsPatch,
+          },
+        };
+        const updatedBlocks = [...targetPage.blocks];
+        updatedBlocks[existingBlockIndex] = updatedBlock;
+        updatedPages[cartPageIndex] = { ...targetPage, blocks: updatedBlocks };
+      } else {
+        const newBlock: EditorBlock = {
+          id: blockId,
+          type: targetType,
+          props: {
+            ...propsPatch,
+          },
+        };
+        updatedPages[cartPageIndex] = {
+          ...targetPage,
+          blocks: [...targetPage.blocks, newBlock],
+        };
+      }
+      return {
+        ...siteDefinition,
+        pages: updatedPages,
+      };
+    } else {
+      const newCartPage: EditorPage = {
+        id: "page-cart",
+        name: "Cart",
+        route: "/cart",
+        role: "cart",
+        page_type: "cart",
+        show_in_nav: false,
+        blocks: [
+          {
+            id: blockId,
+            type: targetType,
+            props: {
+              ...propsPatch,
+            },
+          },
+        ],
+      };
+      return {
+        ...siteDefinition,
+        pages: [...siteDefinition.pages, newCartPage],
+      };
+    }
+  }
+
   return {
     ...siteDefinition,
     pages: siteDefinition.pages.map((page) => ({
@@ -1278,13 +1561,6 @@ export function applyFestivalTheme(
 }
 
 export function getSiteStorageId(siteDefinition?: EditorSiteDefinition): string {
-  if (typeof window !== "undefined") {
-    try {
-      const path = window.location.pathname || "";
-      const match = path.match(/\/(builder|store)\/([^/?#]+)/);
-      if (match && match[2]) return match[2].trim();
-    } catch { }
-  }
   if (siteDefinition) {
     const id = (siteDefinition as any)?.id || (siteDefinition as any)?.site_id;
     if (id && typeof id === "string" && id.trim()) return id.trim();
@@ -1295,6 +1571,13 @@ export function getSiteStorageId(siteDefinition?: EditorSiteDefinition): string 
       return brand.trim().toLowerCase().replace(/\s+/g, "_");
     }
   }
+  if (typeof window !== "undefined") {
+    try {
+      const path = window.location.pathname || "";
+      const match = path.match(/\/(builder|store)\/([^/?#]+)/);
+      if (match && match[2]) return match[2].trim();
+    } catch { }
+  }
   return "default_site";
 }
 
@@ -1304,20 +1587,24 @@ export function getSavedThemeSnapshots(siteDefinition: EditorSiteDefinition): an
 
   if (typeof window !== "undefined") {
     try {
-      const rawSpecific = localStorage.getItem(`webnirmaan_saved_themes_${siteId}`);
-      if (rawSpecific) {
-        const parsed = JSON.parse(rawSpecific);
-        if (Array.isArray(parsed)) {
-          inStorage = parsed;
+      // Clean up legacy global keys to prevent cross-tenant theme contamination
+      localStorage.removeItem("webnirmaan_saved_themes_global");
+      localStorage.removeItem("webnirmaan_saved_themes_default_site");
+
+      if (siteId && siteId !== "default_site") {
+        const rawSpecific = localStorage.getItem(`webnirmaan_saved_themes_${siteId}`);
+        if (rawSpecific) {
+          const parsed = JSON.parse(rawSpecific);
+          if (Array.isArray(parsed)) inStorage.push(...parsed);
         }
       }
-      if (inStorage.length === 0) {
-        const rawGlobal = localStorage.getItem("webnirmaan_saved_themes_global");
-        if (rawGlobal) {
-          const parsedGlobal = JSON.parse(rawGlobal);
-          if (Array.isArray(parsedGlobal)) {
-            inStorage = parsedGlobal;
-          }
+
+      const slug = (siteDefinition as any)?.slug || (siteDefinition as any)?.site?.slug;
+      if (slug && slug !== siteId && slug !== "default_site") {
+        const rawSlug = localStorage.getItem(`webnirmaan_saved_themes_${slug}`);
+        if (rawSlug) {
+          const parsed = JSON.parse(rawSlug);
+          if (Array.isArray(parsed)) inStorage.push(...parsed);
         }
       }
     } catch { }
@@ -1411,11 +1698,16 @@ export function saveThemeSnapshot(
   const updatedList = [snapshot, ...currentSaved.filter((s: any) => s.id !== snapshot.id)].slice(0, 30);
 
   const siteId = getSiteStorageId(siteDefinition);
+  const slug = (siteDefinition as any)?.slug || (siteDefinition as any)?.site?.slug;
   if (typeof window !== "undefined") {
     try {
-      localStorage.setItem(`webnirmaan_saved_themes_${siteId}`, JSON.stringify(updatedList));
-      localStorage.setItem("webnirmaan_saved_themes_global", JSON.stringify(updatedList));
-      window.dispatchEvent(new CustomEvent("webnirmaan_theme_saved", { detail: { snapshots: updatedList } }));
+      if (siteId && siteId !== "default_site") {
+        localStorage.setItem(`webnirmaan_saved_themes_${siteId}`, JSON.stringify(updatedList));
+      }
+      if (slug && slug !== siteId && slug !== "default_site") {
+        localStorage.setItem(`webnirmaan_saved_themes_${slug}`, JSON.stringify(updatedList));
+      }
+      window.dispatchEvent(new CustomEvent("webnirmaan_theme_saved", { detail: { siteId, slug, snapshots: updatedList } }));
     } catch { }
   }
   const finalTheme: Record<string, any> = {
@@ -1481,11 +1773,16 @@ export function deleteThemeSnapshot(
   const updatedList = currentSaved.filter((s: any) => s.id !== snapshotId);
 
   const siteId = getSiteStorageId(siteDefinition);
+  const slug = (siteDefinition as any)?.slug || (siteDefinition as any)?.site?.slug;
   if (typeof window !== "undefined") {
     try {
-      localStorage.setItem(`webnirmaan_saved_themes_${siteId}`, JSON.stringify(updatedList));
-      localStorage.setItem("webnirmaan_saved_themes_global", JSON.stringify(updatedList));
-      window.dispatchEvent(new CustomEvent("webnirmaan_theme_saved", { detail: { snapshots: updatedList } }));
+      if (siteId && siteId !== "default_site") {
+        localStorage.setItem(`webnirmaan_saved_themes_${siteId}`, JSON.stringify(updatedList));
+      }
+      if (slug && slug !== siteId && slug !== "default_site") {
+        localStorage.setItem(`webnirmaan_saved_themes_${slug}`, JSON.stringify(updatedList));
+      }
+      window.dispatchEvent(new CustomEvent("webnirmaan_theme_saved", { detail: { siteId, slug, snapshots: updatedList } }));
     } catch { }
   }
 

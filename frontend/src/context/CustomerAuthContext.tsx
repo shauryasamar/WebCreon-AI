@@ -81,7 +81,7 @@ type CustomerAuthContextValue = {
     websiteName: string,
     payload: CustomerChangePasswordPayload
   ) => Promise<{ message: string; user?: CustomerUser }>;
-  logout: () => Promise<void>;
+  logout: (websiteName?: string) => Promise<void>;
   clearUser: () => void;
 };
 
@@ -108,6 +108,24 @@ function getErrorMessage(data: any, fallback: string) {
   return fallback;
 }
 
+function getTenantToken(websiteName?: string): string | null {
+  if (typeof window === "undefined" || !websiteName) return null;
+  const clean = websiteName.trim().toLowerCase();
+  return localStorage.getItem(`wc_customer_token_${clean}`);
+}
+
+function setTenantToken(websiteName: string, token: string) {
+  if (typeof window === "undefined" || !websiteName || !token) return;
+  const clean = websiteName.trim().toLowerCase();
+  localStorage.setItem(`wc_customer_token_${clean}`, token);
+}
+
+function clearTenantToken(websiteName?: string) {
+  if (typeof window === "undefined" || !websiteName) return;
+  const clean = websiteName.trim().toLowerCase();
+  localStorage.removeItem(`wc_customer_token_${clean}`);
+}
+
 export function CustomerAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<CustomerUser | null>(null);
   const [loading, setLoading] = useState(false);
@@ -122,13 +140,34 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
       return null;
     }
 
+    // Immediately clear in-memory user if switching tenants to prevent cross-tenant UI bleed
+    const cleanTarget = websiteName.trim().toLowerCase();
+    setUser((prev) => {
+      if (prev) {
+        const prevSlug = (prev.siteSlug || "").trim().toLowerCase();
+        const prevId = (prev.siteId || "").trim().toLowerCase();
+        if (prevSlug !== cleanTarget && prevId !== cleanTarget) {
+          return null;
+        }
+      }
+      return prev;
+    });
+
     setLoading(true);
 
     try {
+      const token = getTenantToken(websiteName);
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+        headers["X-Customer-Token"] = token;
+      }
+
       const response = await fetch(
         `${API_BASE_URL}/auth/customer/me/${websiteName}`,
         {
           method: "GET",
+          headers,
           credentials: "include",
         }
       );
@@ -178,6 +217,12 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
           throw new Error(getErrorMessage(data, "Customer signup failed"));
         }
 
+        if (data?.token) {
+          setTenantToken(websiteName, data.token);
+          if (data.user?.siteSlug) setTenantToken(data.user.siteSlug, data.token);
+          if (data.user?.siteId) setTenantToken(data.user.siteId, data.token);
+        }
+
         setUser(data.user);
         return data.user as CustomerUser;
       } finally {
@@ -210,6 +255,12 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
           throw new Error(getErrorMessage(data, "Customer login failed"));
         }
 
+        if (data?.token) {
+          setTenantToken(websiteName, data.token);
+          if (data.user?.siteSlug) setTenantToken(data.user.siteSlug, data.token);
+          if (data.user?.siteId) setTenantToken(data.user.siteId, data.token);
+        }
+
         setUser(data.user);
         return data.user as CustomerUser;
       } finally {
@@ -240,6 +291,12 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
 
         if (!response.ok || !data?.user) {
           throw new Error(getErrorMessage(data, "Google sign-in failed"));
+        }
+
+        if (data?.token) {
+          setTenantToken(websiteName, data.token);
+          if (data.user?.siteSlug) setTenantToken(data.user.siteSlug, data.token);
+          if (data.user?.siteId) setTenantToken(data.user.siteId, data.token);
         }
 
         setUser(data.user);
@@ -316,6 +373,12 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
           );
         }
 
+        if (data?.token) {
+          setTenantToken(websiteName, data.token);
+          if (data.user?.siteSlug) setTenantToken(data.user.siteSlug, data.token);
+          if (data.user?.siteId) setTenantToken(data.user.siteId, data.token);
+        }
+
         setUser(data.user);
         return data.user as CustomerUser;
       } finally {
@@ -330,13 +393,20 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
       setLoading(true);
 
       try {
+        const token = getTenantToken(websiteName);
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+          headers["X-Customer-Token"] = token;
+        }
+
         const response = await fetch(
           `${API_BASE_URL}/auth/customer/profile/${websiteName}`,
           {
             method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-            },
+            headers,
             credentials: "include",
             body: JSON.stringify(payload),
           }
@@ -364,13 +434,20 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
       setLoading(true);
 
       try {
+        const token = getTenantToken(websiteName);
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+          headers["X-Customer-Token"] = token;
+        }
+
         const response = await fetch(
           `${API_BASE_URL}/auth/customer/change-password/${websiteName}`,
           {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
+            headers,
             credentials: "include",
             body: JSON.stringify(payload),
           }
@@ -396,22 +473,30 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const logout = useCallback(async () => {
+  const logout = useCallback(async (websiteName?: string) => {
     setLoading(true);
 
+    const target = websiteName || user?.siteSlug || user?.siteId;
     try {
       await fetch(`${API_BASE_URL}/auth/customer/logout`, {
         method: "POST",
+        headers: target ? { "X-Site-Id": target } : {},
         credentials: "include",
       });
+      if (target) clearTenantToken(target);
+      if (user?.siteSlug) clearTenantToken(user.siteSlug);
+      if (user?.siteId) clearTenantToken(user.siteId);
       setUser(null);
     } catch (error) {
       console.error("Error logging out customer:", error);
+      if (target) clearTenantToken(target);
+      if (user?.siteSlug) clearTenantToken(user.siteSlug);
+      if (user?.siteId) clearTenantToken(user.siteId);
       setUser(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   const value = useMemo(
     () => ({

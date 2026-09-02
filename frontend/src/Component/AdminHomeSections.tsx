@@ -697,6 +697,7 @@ export const AdminHomeSections: React.FC = () => {
           layout: sec.layout,
           cardShape: sec.cardShape,
           cardStyle: sec.cardStyle,
+          card_style: sec.cardStyle,
           limit: sec.limit,
           rules: sec.rules,
           items: sec.items || [],

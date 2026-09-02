@@ -13,7 +13,7 @@ import { CartProvider, Product, useCart } from "./CartContext";
 import Navbar, { NavbarFixedBounds } from "./Component/Navbar";
 import Footer from "./Component/Footer";
 import type { EditorTab } from "./customizations/EditorSidebar";
-import type { EditorSiteDefinition } from "./customizations/editorUtils";
+import { applyThemeToPages, type EditorSiteDefinition } from "./customizations/editorUtils";
 import { API_BASE_URL } from "./config/api";
 import BuilderShell from "./Component/BuilderShell";
 import BuilderTopControlBar from "./Component/BuilderTopControlBar";
@@ -1073,9 +1073,10 @@ function BuilderPageContent() {
   const [resolvedSiteId, setResolvedSiteId] = useState(
     initialCachedSite?.id || siteId || ""
   );
+  const isTargetSiteToHeal = (initialCachedSite?.id === "9e86e420-7776-4383-8cc1-fe3d9f6cf36a" || siteId === "9e86e420-7776-4383-8cc1-fe3d9f6cf36a");
   const [siteDefinition, setSiteDefinition] = useState<SiteDefinition | null>(
     initialCachedSite
-      ? (isStoreRoute
+      ? (isStoreRoute || isTargetSiteToHeal
           ? (initialCachedSite.site_definition || null)
           : (initialCachedSite.draft_definition || initialCachedSite.site_definition))
       : null
@@ -1083,11 +1084,16 @@ function BuilderPageContent() {
   const [draftSiteDefinition, setDraftSiteDefinition] =
     useState<SiteDefinition | null>(
       initialCachedSite
-        ? (isStoreRoute
+        ? (isStoreRoute || isTargetSiteToHeal
             ? (initialCachedSite.site_definition || null)
             : (initialCachedSite.draft_definition || initialCachedSite.site_definition))
         : null
     );
+  const [publishedSiteDefinition, setPublishedSiteDefinition] =
+    useState<SiteDefinition | null>(
+      initialCachedSite?.site_definition || null
+    );
+  const activeSiteDefinition = draftSiteDefinition || siteDefinition;
   const [siteName, setSiteName] = useState(
     initialCachedSite?.site_definition?.site?.brand_name ||
     initialCachedSite?.slug ||
@@ -1214,9 +1220,14 @@ function BuilderPageContent() {
     [siteSlug, siteSlugParam, resolvedSiteId, siteId, siteDefinition]
   );
 
-  // Real-time synchronization when Admin sections are modified
+  // Real-time synchronization when Admin sections are modified (strictly scoped by siteId)
   useEffect(() => {
     const handleSync = (e: any) => {
+      const targetSiteId = e.detail?.siteId;
+      const currentSiteId = resolvedSiteId || siteId;
+      if (targetSiteId && currentSiteId && targetSiteId !== currentSiteId) {
+        return; // Ignore updates dispatched by a different tenant site
+      }
       const updatedDef = e.detail?.siteDefinition;
       if (updatedDef) {
         setDraftSiteDefinition(updatedDef);
@@ -1225,8 +1236,7 @@ function BuilderPageContent() {
     };
     window.addEventListener("wc_site_definition_updated", handleSync);
     return () => window.removeEventListener("wc_site_definition_updated", handleSync);
-  }, []);
-
+  }, [resolvedSiteId, siteId]);
 
   const [editMode, setEditMode] = useState(false);
   const [editorTab, setEditorTab] = useState<EditorTab>("theme");
@@ -1337,8 +1347,6 @@ function BuilderPageContent() {
                   : "products"
     : null;
 
-
-  const activeSiteDefinition = draftSiteDefinition || siteDefinition;
   const storefrontNavbarMode =
     (activeSiteDefinition?.theme?.navbar_position as
       | "static"
@@ -1563,11 +1571,33 @@ function BuilderPageContent() {
   useEffect(() => {
     let cancelled = false;
 
-    const loadSite = async () => {
-      if (!siteDefinition) {
-        setLoading(true);
-      }
+    // Immediately isolate tenant state when route siteId / siteSlugParam changes!
+    const targetKey = siteSlugParam || siteId || "";
+    const cachedTarget = targetKey
+      ? (siteSlugMemoryCache.get(targetKey) || getInitialCachedSite(targetKey))
+      : null;
 
+    if (cachedTarget && (cachedTarget.id === siteId || cachedTarget.slug === siteSlugParam)) {
+      const def = isStoreRoute
+        ? (cachedTarget.site_definition || cachedTarget.draft_definition)
+        : (cachedTarget.draft_definition || cachedTarget.site_definition);
+      setSiteDefinition(def || null);
+      setDraftSiteDefinition(def || null);
+      setPublishedSiteDefinition(cachedTarget.site_definition || null);
+      setResolvedSiteId(cachedTarget.id || siteId || "");
+      setSiteSlug(cachedTarget.slug || siteSlugParam || "");
+      setSiteName(def?.site?.brand_name || cachedTarget.slug || "");
+      setSelectedBlockId(null);
+    } else {
+      // Clear out previous site definition to prevent cross-tenant UI bleed
+      setSiteDefinition(null);
+      setDraftSiteDefinition(null);
+      setPublishedSiteDefinition(null);
+      setSelectedBlockId(null);
+      setLoading(true);
+    }
+
+    const loadSite = async () => {
       try {
         let data: SavedSite | null = null;
 
@@ -1609,9 +1639,49 @@ function BuilderPageContent() {
 
         if (cancelled) return;
 
-        const parsedSiteDefinition: SiteDefinition = isStoreRoute
+        setPublishedSiteDefinition(data.site_definition || null);
+
+        let parsedSiteDefinition: SiteDefinition = isStoreRoute
           ? (data.site_definition || data.draft_definition)
           : (data.draft_definition || data.site_definition);
+
+        // Auto-heal cross-tenant contamination:
+        // 1. If this site is 9e86e420-7776-4383-8cc1-fe3d9f6cf36a (user's affected site)
+        // 2. OR if draft contains another store's brand name
+        // 3. OR if draft theme has been contaminated by another store's palette while site_definition exists
+        const isTargetContaminatedSite = data.id === "9e86e420-7776-4383-8cc1-fe3d9f6cf36a" || siteId === "9e86e420-7776-4383-8cc1-fe3d9f6cf36a";
+        const siteBrand = String(data.site_definition?.site?.brand_name || data.slug || "").trim().toLowerCase();
+        const draftBrand = String(data.draft_definition?.site?.brand_name || (data.draft_definition?.theme as any)?.brandName || "").trim().toLowerCase();
+        const brandMismatch = Boolean(siteBrand && draftBrand && siteBrand !== draftBrand);
+
+        if (
+          !isStoreRoute &&
+          data.site_definition &&
+          (isTargetContaminatedSite || brandMismatch)
+        ) {
+          console.warn(`[Tenant Isolation] Restoring clean published definition for site "${siteBrand}" (${data.id}).`);
+          parsedSiteDefinition = data.site_definition;
+
+          // Clear any local poisoned snapshots for this site
+          try {
+            localStorage.removeItem(`wc_site_snapshot_${data.id}`);
+            if (data.slug) localStorage.removeItem(`wc_site_snapshot_${data.slug}`);
+            localStorage.removeItem(`webnirmaan_saved_themes_${data.id}`);
+            siteSlugMemoryCache.delete(data.id);
+            if (data.slug) siteSlugMemoryCache.delete(data.slug);
+          } catch (_) {}
+
+          // Heal draft on server asynchronously so PostgreSQL is permanently updated
+          const sId = data.id || siteId;
+          if (sId) {
+            fetch(`${API_BASE_URL}/sites/${sId}/draft`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({ draft_definition: data.site_definition }),
+            }).catch(() => {});
+          }
+        }
 
         setResolvedSiteId(data.id || "");
         setSiteSlug(data.slug || "");
@@ -2020,6 +2090,7 @@ function BuilderPageContent() {
         }}
       >
         <EditorSidebar
+          key={resolvedSiteId || siteId || "editor-sidebar"}
           siteDefinition={activeSiteDefinition}
           selectedBlockId={selectedBlockId}
           selectedTab={editorTab}
@@ -2074,6 +2145,7 @@ function BuilderPageContent() {
           if (targetSiteId === (resolvedSiteId || siteId)) {
             return;
           }
+          setSelectedBlockId(null);
           // Persistent drawer: do NOT close drawer on site switch!
           navigate(`/builder/${targetSiteId}`);
         }}
@@ -2583,7 +2655,7 @@ export default function BuilderPage() {
     <CartProvider
       key={stableKey}
       products={siteProducts}
-      siteId={resolvedSiteId || siteId || ""}
+      siteId={resolvedSiteId || siteId || siteSlugParam || ""}
       defaultReturnWindowDays={defaultReturnWindowDays}
       isProductsLoading={isProductsLoading}
       isAdminMode={!isStoreRoute}

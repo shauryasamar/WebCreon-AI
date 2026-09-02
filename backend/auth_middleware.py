@@ -49,10 +49,39 @@ def authenticate_customer(
     request: Request,
     customer_token: Optional[str] = Cookie(default=None, alias="customer_token"),
 ):
-    if not customer_token:
+    token = None
+
+    # 1. First priority: Authorization header (Bearer <token>)
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.replace("Bearer ", "").strip()
+
+    # 2. Second priority: Custom X-Customer-Token header
+    if not token:
+        token = request.headers.get("X-Customer-Token")
+
+    # 3. Third priority: Tenant-scoped cookie (matching current site_id or website_name)
+    if not token and request.cookies:
+        target_site = (
+            request.path_params.get("website_name")
+            or request.path_params.get("site_id")
+            or request.headers.get("X-Site-Id")
+        )
+        if target_site:
+            clean_target = str(target_site).strip().lower()
+            token = (
+                request.cookies.get(f"customer_token_{clean_target}")
+                or request.cookies.get(f"customer_token_{target_site}")
+            )
+
+    # 4. Fourth priority: Generic customer_token cookie
+    if not token:
+        token = customer_token
+
+    if not token:
         raise _unauthorized("Customer authentication required")
 
-    payload = decode_token(customer_token)
+    payload = decode_token(token)
     if not payload:
         raise _unauthorized("Invalid or expired customer token")
 

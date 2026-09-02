@@ -253,6 +253,8 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
         timestamp: Date.now(),
       };
       try {
+        sessionStorage.setItem(`pending_checkout_order_${siteId}`, JSON.stringify(pendingOrderData));
+        localStorage.setItem(`pending_checkout_order_${siteId}`, JSON.stringify(pendingOrderData));
         sessionStorage.setItem("pending_checkout_order", JSON.stringify(pendingOrderData));
         localStorage.setItem("pending_checkout_order", JSON.stringify(pendingOrderData));
       } catch {}
@@ -380,6 +382,8 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
             }
 
             try {
+              sessionStorage.removeItem(`pending_checkout_order_${siteId}`);
+              localStorage.removeItem(`pending_checkout_order_${siteId}`);
               sessionStorage.removeItem("pending_checkout_order");
               localStorage.removeItem("pending_checkout_order");
             } catch {}

@@ -189,7 +189,6 @@ export default function BuilderShell({
             gridColumn: "2 / 3",
             minWidth: 0,
             margin: "8px",
-            padding: "8px",
             border: "2px dashed #2563eb",
             borderRadius: "8px",
             background: "transparent",

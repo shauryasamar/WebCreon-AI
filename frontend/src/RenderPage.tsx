@@ -155,6 +155,9 @@ const FILTER_TYPES = new Set([
 ]);
 
 const CART_PAGE_TYPES = new Set([
+  "cart",
+  "cart_view",
+  "cartview",
   "cart_sidebar",
   "cartsidebar",
   "cart_items",
@@ -403,19 +406,31 @@ const RenderPage: React.FC<RenderPageProps> = ({
   // Auto-verify any pending payment from mobile redirects (Netbanking / UPI)
   useEffect(() => {
     if (!siteId || !isAuthenticated || !isCheckoutPage) return;
-    const pendingRaw = sessionStorage.getItem("pending_checkout_order") || localStorage.getItem("pending_checkout_order");
+    const siteKey = `pending_checkout_order_${siteId}`;
+    const pendingRaw =
+      sessionStorage.getItem(siteKey) ||
+      localStorage.getItem(siteKey) ||
+      sessionStorage.getItem("pending_checkout_order") ||
+      localStorage.getItem("pending_checkout_order");
     if (!pendingRaw) return;
 
     try {
       const pending = JSON.parse(pendingRaw);
       if (!pending || pending.siteId !== siteId || !pending.order_id) {
-        sessionStorage.removeItem("pending_checkout_order");
-        localStorage.removeItem("pending_checkout_order");
+        // Only clear if this entry actually belongs to current site
+        if (pending?.siteId === siteId) {
+          sessionStorage.removeItem(siteKey);
+          localStorage.removeItem(siteKey);
+          sessionStorage.removeItem("pending_checkout_order");
+          localStorage.removeItem("pending_checkout_order");
+        }
         return;
       }
 
       // If pending order is older than 30 minutes, discard
       if (pending.timestamp && Date.now() - pending.timestamp > 30 * 60 * 1000) {
+        sessionStorage.removeItem(siteKey);
+        localStorage.removeItem(siteKey);
         sessionStorage.removeItem("pending_checkout_order");
         localStorage.removeItem("pending_checkout_order");
         return;
@@ -433,6 +448,8 @@ const RenderPage: React.FC<RenderPageProps> = ({
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           if (data && (data.status === "placed" || data.payment_status === "paid")) {
+            sessionStorage.removeItem(siteKey);
+            localStorage.removeItem(siteKey);
             sessionStorage.removeItem("pending_checkout_order");
             localStorage.removeItem("pending_checkout_order");
             setPlacedOrder({
@@ -444,8 +461,8 @@ const RenderPage: React.FC<RenderPageProps> = ({
         })
         .catch(() => {});
     } catch {
-      sessionStorage.removeItem("pending_checkout_order");
-      localStorage.removeItem("pending_checkout_order");
+      sessionStorage.removeItem(siteKey);
+      localStorage.removeItem(siteKey);
     }
   }, [siteId, isAuthenticated, isCheckoutPage]);
 
@@ -945,11 +962,15 @@ const RenderPage: React.FC<RenderPageProps> = ({
       const type = String(block.type || "").toLowerCase();
       const dataSource = block.data_source ?? block.datasource ?? undefined;
 
-      const isCartLike = CART_PAGE_TYPES.has(type) || dataSource === "cart";
-      if (isCartPage && isCartLike) {
-        if (hasRenderedPrimaryCartBlock) return false;
-        hasRenderedPrimaryCartBlock = true;
-        return true;
+      if (isCartPage) {
+        const isCartLike = CART_PAGE_TYPES.has(type) || dataSource === "cart" || type.includes("cart");
+        if (isCartLike) {
+          if (hasRenderedPrimaryCartBlock) return false;
+          hasRenderedPrimaryCartBlock = true;
+          return true;
+        }
+        // Exclude redundant sub-blocks (checkout_cta, promo_code, cart_summary, etc.) on the cart page
+        return false;
       }
 
       const isProductDetailLike =
@@ -1122,7 +1143,11 @@ const RenderPage: React.FC<RenderPageProps> = ({
           style={{
             position: "relative",
             width: "100%",
-            minHeight: "100%",
+            minHeight: isCartPage ? "calc(100vh - 220px)" : "100%",
+            display: isCartPage ? "flex" : undefined,
+            flexDirection: isCartPage ? "column" : undefined,
+            justifyContent: isCartPage ? "center" : undefined,
+            boxSizing: "border-box",
             background: isFullGlass ? glassBackground : (theme?.primary_bg || (isThemeDark ? "#0f172a" : "#ffffff")),
             color: theme?.text_color || (isThemeDark ? "#f8fafc" : "#0f172a"),
           }}

@@ -87,6 +87,9 @@ type EditorBlockWrapperProps = {
   blockType: string;
   selected: boolean;
   onSelect?: () => void;
+  isCartBlock?: boolean;
+  maxWidth?: number | string;
+  borderRadius?: number;
   children: React.ReactNode;
 };
 
@@ -152,6 +155,9 @@ const FILTER_TYPES = new Set([
 ]);
 
 const CART_PAGE_TYPES = new Set([
+  "cart",
+  "cart_view",
+  "cartview",
   "cart_sidebar",
   "cartsidebar",
   "cart_items",
@@ -200,6 +206,9 @@ function EditorBlockWrapper({
   blockType,
   selected,
   onSelect,
+  isCartBlock,
+  maxWidth,
+  borderRadius,
   children,
 }: EditorBlockWrapperProps) {
   const blockRef = useRef<HTMLDivElement>(null);
@@ -218,6 +227,108 @@ function EditorBlockWrapper({
     .replace(/[-_]/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 
+  const isCart = Boolean(isCartBlock);
+  const parseNumSafe = (val: any, fallback: number) => {
+    if (val === undefined || val === null || val === "") return fallback;
+    const n = Number(val);
+    return isNaN(n) ? fallback : n;
+  };
+  const resolveWidthRatio = (val: any) => {
+    if (val === undefined || val === null || val === "") return 94;
+    const str = String(val).trim();
+    const n = Number(str.replace(/[^0-9.]/g, ""));
+    if (isNaN(n)) return 94;
+    if (n <= 100) return Math.max(70, Math.min(100, Math.round(n)));
+    return Math.max(70, Math.min(100, Math.round((n / 1240) * 94)));
+  };
+
+  const containerRadius = isCart ? parseNumSafe(borderRadius, 24) : 10;
+  const outlineRadius = containerRadius;
+  const cartWidthPercent = isCart ? resolveWidthRatio(maxWidth) : undefined;
+
+  // Shared outline overlay styles
+  const outlineStyle: React.CSSProperties = {
+    position: "absolute",
+    inset: "-2px",
+    border: selected
+      ? "2px solid #2563eb"
+      : isHovered
+        ? "1.5px dashed #3b82f6"
+        : "1.5px dashed transparent",
+    borderRadius: `${outlineRadius}px`,
+    pointerEvents: "none",
+    zIndex: 20,
+    transition: "all 0.15s ease",
+    boxShadow: selected
+      ? "0 0 0 1px rgba(255, 255, 255, 0.9), 0 0 0 3.5px rgba(37, 99, 235, 0.22)"
+      : isHovered
+        ? "0 0 0 2px rgba(59, 130, 246, 0.1)"
+        : "none",
+  };
+
+  const cornerHandleStyle = (pos: React.CSSProperties): React.CSSProperties => ({
+    position: "absolute",
+    width: "7px",
+    height: "7px",
+    background: "#ffffff",
+    border: "1.5px solid #2563eb",
+    borderRadius: "2px",
+    zIndex: 35,
+    pointerEvents: "none",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+    ...pos,
+  });
+
+  const badgeStyle: React.CSSProperties = {
+    position: "absolute",
+    top: "10px",
+    left: "14px",
+    zIndex: 30,
+    padding: "3px 10px 3px 8px",
+    borderRadius: "6px",
+    background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
+    border: "1px solid rgba(255, 255, 255, 0.12)",
+    color: "#f8fafc",
+    fontSize: "11px",
+    fontWeight: 600,
+    letterSpacing: "0.02em",
+    pointerEvents: "none",
+    opacity: selected ? 1 : 0,
+    transform: selected ? "translateY(0)" : "translateY(-4px)",
+    transition: "all 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
+    boxShadow: "0 4px 14px rgba(15, 23, 42, 0.22), 0 1px 3px rgba(0,0,0,0.12)",
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+  };
+
+  const dotStyle: React.CSSProperties = {
+    width: "5.5px",
+    height: "5.5px",
+    borderRadius: "50%",
+    background: "#38bdf8",
+    boxShadow: "0 0 6px rgba(56, 189, 248, 0.7)",
+    flexShrink: 0,
+  };
+
+  const Overlay = () => (
+    <>
+      <div style={outlineStyle} />
+      {selected && (
+        <>
+          <div style={cornerHandleStyle({ top: "-5px", left: "-5px" })} />
+          <div style={cornerHandleStyle({ top: "-5px", right: "-5px" })} />
+          <div style={cornerHandleStyle({ bottom: "-5px", left: "-5px" })} />
+          <div style={cornerHandleStyle({ bottom: "-5px", right: "-5px" })} />
+        </>
+      )}
+      <div style={badgeStyle}>
+        <span style={dotStyle} />
+        {readableName}
+      </div>
+    </>
+  );
+
   return (
     <div
       ref={blockRef}
@@ -231,149 +342,45 @@ function EditorBlockWrapper({
       }}
       style={{
         position: "relative",
-        marginBottom: "0px",
-        borderRadius: "10px",
         cursor: "pointer",
         minWidth: 0,
+        width: "100%",
+        maxWidth: "100%",
+        margin: "0",
+        padding: 0,
         zIndex: selected ? 50 : 1,
         overflow: "visible",
+        boxSizing: "border-box",
+        borderRadius: isCart ? 0 : `${containerRadius}px`,
       }}
     >
-      {/* Bounding Box Outline */}
-      <div
-        style={{
-          position: "absolute",
-          inset: "-2px",
-          border: selected
-            ? "2px solid #2563eb"
-            : isHovered
-              ? "1.5px dashed #3b82f6"
-              : "1.5px dashed transparent",
-          borderRadius: "10px",
-          pointerEvents: "none",
-          zIndex: 20,
-          transition: "all 0.15s ease",
-          boxShadow: selected
-            ? "0 0 0 1px rgba(255, 255, 255, 0.9), 0 0 0 3.5px rgba(37, 99, 235, 0.22)"
-            : isHovered
-              ? "0 0 0 2px rgba(59, 130, 246, 0.1)"
-              : "none",
-        }}
-      />
-
-      {/* 4 Corner Anchor Handles (Figma / Webflow UX standard) */}
-      {selected && (
+      {isCart ? (
+        // ─── Cart Block ───
+        // Uses the exact same proportional width ratio (default 94%)
+        // as the customer view, with clean balanced side margins.
+        <div
+          style={{
+            width: `${cartWidthPercent}%`,
+            maxWidth: "1280px",
+            margin: "0 auto",
+            padding: "24px 0 36px",
+            boxSizing: "border-box",
+          }}
+        >
+          <div style={{ position: "relative", zIndex: 1 }}>
+            <Overlay />
+            {children}
+          </div>
+        </div>
+      ) : (
+        // ─── Non-cart blocks ───
         <>
-          <div
-            style={{
-              position: "absolute",
-              top: "-5px",
-              left: "-5px",
-              width: "7px",
-              height: "7px",
-              background: "#ffffff",
-              border: "1.5px solid #2563eb",
-              borderRadius: "2px",
-              zIndex: 35,
-              pointerEvents: "none",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
-            }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              top: "-5px",
-              right: "-5px",
-              width: "7px",
-              height: "7px",
-              background: "#ffffff",
-              border: "1.5px solid #2563eb",
-              borderRadius: "2px",
-              zIndex: 35,
-              pointerEvents: "none",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
-            }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              bottom: "-5px",
-              left: "-5px",
-              width: "7px",
-              height: "7px",
-              background: "#ffffff",
-              border: "1.5px solid #2563eb",
-              borderRadius: "2px",
-              zIndex: 35,
-              pointerEvents: "none",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
-            }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              bottom: "-5px",
-              right: "-5px",
-              width: "7px",
-              height: "7px",
-              background: "#ffffff",
-              border: "1.5px solid #2563eb",
-              borderRadius: "2px",
-              zIndex: 35,
-              pointerEvents: "none",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
-            }}
-          />
+          <Overlay />
+          <div style={{ position: "relative", zIndex: 1, minWidth: 0 }}>
+            {children}
+          </div>
         </>
       )}
-
-      {/* Component Name Badge */}
-      <div
-        style={{
-          position: "absolute",
-          top: "10px",
-          left: "14px",
-          zIndex: 30,
-          padding: "3px 10px 3px 8px",
-          borderRadius: "6px",
-          background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
-          border: "1px solid rgba(255, 255, 255, 0.12)",
-          color: "#f8fafc",
-          fontSize: "11px",
-          fontWeight: 600,
-          letterSpacing: "0.02em",
-          pointerEvents: "none",
-          opacity: selected ? 1 : 0,
-          transform: selected ? "translateY(0)" : "translateY(-4px)",
-          transition: "all 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
-          boxShadow: "0 4px 14px rgba(15, 23, 42, 0.22), 0 1px 3px rgba(0,0,0,0.12)",
-          display: "flex",
-          alignItems: "center",
-          gap: "6px",
-        }}
-      >
-        <span
-          style={{
-            width: "5.5px",
-            height: "5.5px",
-            borderRadius: "50%",
-            background: "#38bdf8",
-            boxShadow: "0 0 6px rgba(56, 189, 248, 0.7)",
-            flexShrink: 0,
-          }}
-        />
-        {readableName}
-      </div>
-
-      <div
-        style={{
-          position: "relative",
-          zIndex: 1,
-          minWidth: 0,
-        }}
-      >
-        {children}
-      </div>
     </div>
   );
 }
@@ -988,11 +995,15 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
       // Navbar and Footer are rendered globally by StorefrontShell
       if (type === "navbar" || type === "footer") return false;
 
-      const isCartLike = CART_PAGE_TYPES.has(type) || dataSource === "cart";
-      if (isCartPage && isCartLike) {
-        if (hasRenderedPrimaryCartBlock) return false;
-        hasRenderedPrimaryCartBlock = true;
-        return true;
+      if (isCartPage) {
+        const isCartLike = CART_PAGE_TYPES.has(type) || dataSource === "cart" || type.includes("cart");
+        if (isCartLike) {
+          if (hasRenderedPrimaryCartBlock) return false;
+          hasRenderedPrimaryCartBlock = true;
+          return true;
+        }
+        // Exclude redundant sub-blocks (checkout_cta, promo_code, cart_summary, etc.) on the cart page
+        return false;
       }
 
       const isProductDetailLike =
@@ -1040,10 +1051,19 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
     const blockProps = (block.props ?? {}) as Record<string, any>;
     const resolvedTheme: Theme | undefined = theme;
 
+    const isCartBlock = Boolean(
+      isCartPage && (
+        CART_PAGE_TYPES.has(String(block.type || "").toLowerCase()) ||
+        resolvedDataSource === "cart" ||
+        String(blockId || "").toLowerCase().includes("cart")
+      )
+    );
+
     const componentProps = {
       siteId,
       ...blockProps,
       theme: resolvedTheme,
+      embeddedInEditorWrapper: isCartBlock,
       ...(overrides ?? {}),
     };
 
@@ -1152,7 +1172,8 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
         (selectedBlockId === "delivery_form" && DELIVERY_TYPES.has(block.type.toLowerCase())) ||
         (selectedBlockId === "payment_methods" && PAYMENT_TYPES.has(block.type.toLowerCase())) ||
         (selectedBlockId === "place_order_cta" && PLACE_ORDER_TYPES.has(block.type.toLowerCase())) ||
-        (selectedBlockId === "cart_view" && CART_PAGE_TYPES.has(block.type.toLowerCase())))
+        ((selectedBlockId === "cart_view" || selectedBlockId === "cart" || selectedBlockId === "cart_sidebar") &&
+          (CART_PAGE_TYPES.has(block.type.toLowerCase()) || isCartBlock)))
     );
 
     return (
@@ -1162,6 +1183,9 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
         blockType={block.type}
         selected={isSelected}
         onSelect={() => onSelectBlock?.(blockId)}
+        isCartBlock={isCartBlock}
+        maxWidth={blockProps.max_width}
+        borderRadius={blockProps.border_radius}
       >
         {renderedNode}
       </EditorBlockWrapper>
@@ -1188,7 +1212,11 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
           style={{
             position: "relative",
             width: "100%",
-            minHeight: "100%",
+            minHeight: isCartPage ? "calc(100vh - 220px)" : "100%",
+            display: isCartPage ? "flex" : undefined,
+            flexDirection: isCartPage ? "column" : undefined,
+            justifyContent: isCartPage ? "center" : undefined,
+            boxSizing: "border-box",
             background: isFullGlass ? glassBackground : (theme?.primary_bg || (isThemeDark ? "#0f172a" : "#ffffff")),
             color: theme?.text_color || (isThemeDark ? "#f8fafc" : "#0f172a"),
           }}

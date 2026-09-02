@@ -307,12 +307,15 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
   const isLight = !isDark;
 
   // Active Card Style Key (Inherits directly from theme asset selection: fashion | electronics | beauty | grocery | books)
+  const rawCarouselCardStyle = String(card_style || cardStyle || "").toLowerCase().trim();
   const cardStyleKey =
-    card_style && card_style !== "default"
-      ? card_style
-      : cardStyle && cardStyle !== "default"
-        ? cardStyle
-        : theme?.card_style || "fashion";
+    rawCarouselCardStyle &&
+    rawCarouselCardStyle !== "default" &&
+    rawCarouselCardStyle !== "inherit" &&
+    rawCarouselCardStyle !== "theme" &&
+    rawCarouselCardStyle !== "auto"
+      ? rawCarouselCardStyle
+      : (theme?.card_style || "fashion").toLowerCase().trim();
 
   const cardBg = card_bg_color || defaultCardBg;
   const isCardDark = isColorDarkHex(cardBg);
