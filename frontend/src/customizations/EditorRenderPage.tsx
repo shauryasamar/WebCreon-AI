@@ -231,7 +231,7 @@ function EditorBlockWrapper({
       }}
       style={{
         position: "relative",
-        marginBottom: "8px",
+        marginBottom: "0px",
         borderRadius: "10px",
         cursor: "pointer",
         minWidth: 0,

@@ -1210,9 +1210,13 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
         : "14px";
 
   const resolvedPaddingY =
-    padding_y !== undefined
-      ? typeof padding_y === "number" ? `${padding_y}px` : padding_y
-      : isMobile ? "16px" : "24px";
+    padding_y !== undefined && padding_y !== null && String(padding_y).trim() !== ""
+      ? typeof padding_y === "number"
+        ? `${padding_y}px`
+        : !isNaN(parseInt(String(padding_y), 10))
+          ? `${parseInt(String(padding_y), 10)}px`
+          : padding_y
+      : isMobile ? "8px" : "12px";
 
   const resolvedPaddingX =
     padding_x !== undefined
@@ -1418,7 +1422,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
             scrollbarWidth: "none",
             msOverflowStyle: "none",
             paddingTop: "3px",
-            paddingBottom: "10px",
+            paddingBottom: "4px",
             paddingLeft: "2px",
             paddingRight: "2px",
             WebkitOverflowScrolling: "touch",
@@ -1457,7 +1461,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
             scrollbarWidth: "none",
             msOverflowStyle: "none",
             paddingTop: "3px",
-            paddingBottom: "10px",
+            paddingBottom: "4px",
             paddingLeft: "2px",
             paddingRight: "2px",
             WebkitOverflowScrolling: "touch",

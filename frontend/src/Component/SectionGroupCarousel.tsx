@@ -383,6 +383,15 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
     );
   }
 
+  const resolvedPaddingY =
+    padding_y !== undefined && padding_y !== null && String(padding_y).trim() !== ""
+      ? typeof padding_y === "number"
+        ? `${padding_y}px`
+        : !isNaN(parseInt(String(padding_y), 10))
+          ? `${parseInt(String(padding_y), 10)}px`
+          : padding_y
+      : isMobile ? "8px" : "12px";
+
   return (
     <section
       className="section-group-carousel"
@@ -390,7 +399,7 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
         width: "100%",
         maxWidth: resolvedMaxWidth,
         margin: "0 auto",
-        padding: `${padding_y || (isMobile ? "16px" : "24px")} ${padding_x || (isMobile ? "12px" : "16px")}`,
+        padding: `${resolvedPaddingY} ${padding_x || (isMobile ? "12px" : "16px")}`,
         boxSizing: "border-box",
         position: "relative",
         background: resolvedOuterBg,
@@ -467,7 +476,7 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                 scrollbarWidth: "none",
                 msOverflowStyle: "none",
                 paddingTop: "3px",
-                paddingBottom: "10px",
+                paddingBottom: "4px",
                 paddingLeft: "2px",
                 paddingRight: "2px",
                 WebkitOverflowScrolling: "touch",

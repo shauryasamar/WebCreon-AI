@@ -3013,10 +3013,16 @@ function SectionGroupCarouselEditor({
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
                 <NumberStepperField
                   label="Vertical Padding"
-                  value={parseInt(String(currentProps.padding_y || "24"), 10) || 24}
-                  min={8}
+                  value={
+                    currentProps.padding_y !== undefined && currentProps.padding_y !== null && String(currentProps.padding_y).trim() !== ""
+                      ? !isNaN(parseInt(String(currentProps.padding_y), 10))
+                        ? parseInt(String(currentProps.padding_y), 10)
+                        : 12
+                      : 12
+                  }
+                  min={0}
                   max={80}
-                  step={4}
+                  step={2}
                   unit="px"
                   onChange={(val) => updateProps({ padding_y: `${val}px` })}
                 />
@@ -3476,8 +3482,18 @@ function ProductCarouselEditor({
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
                 <NumberStepperField
-                  label="Vertical Pad" value={parseInt(String(p.padding_y || "24"), 10) || 24}
-                  min={8} max={80} step={4} unit="px"
+                  label="Vertical Pad"
+                  value={
+                    p.padding_y !== undefined && p.padding_y !== null && String(p.padding_y).trim() !== ""
+                      ? !isNaN(parseInt(String(p.padding_y), 10))
+                        ? parseInt(String(p.padding_y), 10)
+                        : 12
+                      : 12
+                  }
+                  min={0}
+                  max={80}
+                  step={2}
+                  unit="px"
                   onChange={(val) => updateProps({ padding_y: `${val}px` })}
                 />
                 <NumberStepperField
@@ -3779,8 +3795,18 @@ function ProductGridEditor({
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
                 <NumberStepperField
-                  label="Vertical Pad" value={parseInt(String(p.padding_y || "24"), 10) || 24}
-                  min={8} max={80} step={4} unit="px"
+                  label="Vertical Pad"
+                  value={
+                    p.padding_y !== undefined && p.padding_y !== null && String(p.padding_y).trim() !== ""
+                      ? !isNaN(parseInt(String(p.padding_y), 10))
+                        ? parseInt(String(p.padding_y), 10)
+                        : 12
+                      : 12
+                  }
+                  min={0}
+                  max={80}
+                  step={2}
+                  unit="px"
                   onChange={(val) => updateProps({ padding_y: `${val}px` })}
                 />
                 <NumberStepperField
