@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { Link, useLocation, useParams, useNavigate } from "react-router-dom";
 import { resolveThemeTokens } from "../context/ThemeContext";
 import { optimizeImageUrl } from "../utils/imageOptimizer";
 import { generateSectionFilterUrl } from "./ProductCarousel";
@@ -123,7 +123,14 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
   theme,
 }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { slug: siteSlug } = useParams();
+
+  const handleTileClick = (targetUrl: string) => {
+    if (!targetUrl) return;
+    navigate(targetUrl);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   // Mobile viewport detection
   const [isMobile, setIsMobile] = useState<boolean>(() => {
@@ -396,7 +403,7 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
             display: "flex",
             flexDirection: "column",
             ...headerAlignStyle,
-            marginBottom: isMobile ? "12px" : "16px",
+            marginBottom: isMobile ? "8px" : "11px",
             width: "100%",
           }}
         >
@@ -449,6 +456,8 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                     ? "repeat(auto-fill, minmax(110px, 1fr))"
                     : "repeat(auto-fill, minmax(180px, 1fr))",
                 gap: resolvedGap,
+                paddingTop: "2px",
+                paddingBottom: "8px",
               }
             : {
                 display: "flex",
@@ -457,7 +466,10 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                 scrollSnapType: "x mandatory",
                 scrollbarWidth: "none",
                 msOverflowStyle: "none",
-                paddingBottom: "6px",
+                paddingTop: "3px",
+                paddingBottom: "10px",
+                paddingLeft: "2px",
+                paddingRight: "2px",
                 WebkitOverflowScrolling: "touch",
               }
         }
@@ -469,13 +481,15 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
             height: 0 !important;
           }
           .section-group-tile-hover {
-            transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            transition: box-shadow 0.2s ease, border-color 0.1s ease !important;
           }
-          .section-group-tile-hover:hover {
-            transform: translateY(-3px);
+          @media (hover: hover) and (pointer: fine) {
+            .section-group-tile-hover:hover img {
+              transform: scale(1.018);
+            }
           }
-          .section-group-tile-hover:hover img {
-            transform: scale(1.04);
+          .section-group-tile-hover img {
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
           }
         `}</style>
 
@@ -486,10 +500,17 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
           // Circular layout (Avatar / Story style) or Below-Card Text layout
           if (isBelowCardText) {
             return (
-              <Link
+              <div
                 key={tile.id || idx}
-                to={targetUrl}
-                onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+                role="button"
+                tabIndex={0}
+                onClick={() => handleTileClick(targetUrl)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    handleTileClick(targetUrl);
+                  }
+                }}
                 style={{
                   textDecoration: "none",
                   display: "flex",
@@ -578,7 +599,7 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                 </div>
 
                 {/* Below-Card Text */}
-                <div style={{ textAlign: (card_title_align as any) || (shapeConfig.isCircular ? "center" : "left"), width: "100%" }}>
+                <div style={{ textAlign: card_title_align === "left" ? "left" : card_title_align === "right" ? "right" : "center", width: "100%" }}>
                   <div
                     style={{
                       fontSize: parsedCardTitleSize,
@@ -607,7 +628,7 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                     </div>
                   )}
                 </div>
-              </Link>
+              </div>
             );
           }
 
@@ -622,10 +643,17 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
           const textAlign = (card_title_align as any) || "left";
 
           return (
-            <Link
+            <div
               key={tile.id || idx}
-              to={targetUrl}
-              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              role="button"
+              tabIndex={0}
+              onClick={() => handleTileClick(targetUrl)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleTileClick(targetUrl);
+                }
+              }}
               className="section-group-tile-hover"
               style={{
                 textDecoration: "none",
@@ -738,7 +766,7 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                   {tile.title}
                 </h3>
               </div>
-            </Link>
+            </div>
           );
         })}
       </div>

@@ -181,7 +181,7 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
         card_style: "fashion",
       },
       blockPatch: {
-        title: "Fashion & Apparel Collection",
+        card_style: "fashion",
       },
     },
   },
@@ -197,7 +197,7 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
         card_style: "electronics",
       },
       blockPatch: {
-        title: "Electronics & Tech",
+        card_style: "electronics",
       },
     },
   },
@@ -213,7 +213,7 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
         card_style: "beauty",
       },
       blockPatch: {
-        title: "Beauty & Skincare Essentials",
+        card_style: "beauty",
       },
     },
   },
@@ -229,7 +229,7 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
         card_style: "grocery",
       },
       blockPatch: {
-        title: "Fresh Grocery & Daily Needs",
+        card_style: "grocery",
       },
     },
   },
@@ -245,7 +245,7 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
         card_style: "books",
       },
       blockPatch: {
-        title: "Bestselling Books & Stationery",
+        card_style: "books",
       },
     },
   },

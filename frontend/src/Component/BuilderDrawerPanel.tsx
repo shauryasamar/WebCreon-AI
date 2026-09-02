@@ -115,9 +115,9 @@ function getSiteDescription(site: SavedSite): string {
   }
 
   const siteObj = def.site || {};
-  const domain = (siteObj.domain || siteObj.catalog_type || "").trim();
+  const domain = (siteObj.domain || siteObj.catalog_type || (site as any)?.catalog_type || "").trim();
 
-  // 1. Direct user-defined site description / tagline
+  // 1. Direct user-defined site-level description / tagline / meta
   if (siteObj.description && typeof siteObj.description === "string" && siteObj.description.trim()) {
     return siteObj.description.trim();
   }
@@ -127,35 +127,26 @@ function getSiteDescription(site: SavedSite): string {
   if (def.meta?.description && typeof def.meta.description === "string" && def.meta.description.trim()) {
     return def.meta.description.trim();
   }
+  if ((def as any).description && typeof (def as any).description === "string" && (def as any).description.trim()) {
+    return (def as any).description.trim();
+  }
+  if ((site as any).description && typeof (site as any).description === "string" && (site as any).description.trim()) {
+    return (site as any).description.trim();
+  }
 
-  // 2. Check blocks for genuine custom copy (filter out agent prompt instructions like 'Introduce the...')
+  // 2. Domain & niche awareness for clean natural human-grade copy
   const pages = def.pages;
   let homePrompt = "";
   if (Array.isArray(pages)) {
     for (const p of pages) {
       if (p?.role === "home" || p?.page_type === "landing" || p?.name === "Home" || p?.id === "home") {
         homePrompt = p?.generation_prompt || "";
-        if (Array.isArray(p.blocks)) {
-          for (const b of p.blocks) {
-            const props = b?.props || {};
-            for (const key of ["subheadline", "subtitle", "description", "subtext"]) {
-              const val = props[key];
-              if (typeof val === "string" && val.trim()) {
-                const cleanVal = val.trim();
-                // If not an AI instruction starting with 'Introduce', 'Create', 'Generate', etc.
-                if (!/^(introduce|create|generate|design|showcase)\b/i.test(cleanVal)) {
-                  return cleanVal;
-                }
-              }
-            }
-          }
-        }
+        break;
       }
     }
   }
 
-  // 3. Domain & niche awareness for clean natural human-grade copy
-  const combinedContext = `${domain} ${homePrompt} ${brandName} ${def.prompt || ""}`.toLowerCase();
+  const combinedContext = `${domain} ${homePrompt} ${brandName} ${site.slug || ""} ${def.prompt || ""}`.toLowerCase();
 
   if (combinedContext.includes("skincare") || combinedContext.includes("beauty") || combinedContext.includes("korean")) {
     return "Premium Korean skincare & beauty essentials with natural nourishing formulations.";
@@ -169,7 +160,7 @@ function getSiteDescription(site: SavedSite): string {
   if (combinedContext.includes("cloth") || combinedContext.includes("apparel") || combinedContext.includes("fashion") || combinedContext.includes("shirt")) {
     return "Modern clothing & fashion apparel featuring stylish collections and everyday wear.";
   }
-  if (combinedContext.includes("grocer") || combinedContext.includes("market") || combinedContext.includes("fruit") || combinedContext.includes("vegetable")) {
+  if (combinedContext.includes("grocer") || combinedContext.includes("market") || combinedContext.includes("fruit") || combinedContext.includes("vegetable") || combinedContext.includes("harvest") || combinedContext.includes("green")) {
     return "Fresh groceries, farm produce, daily essentials, and household staples.";
   }
   if (combinedContext.includes("baker") || combinedContext.includes("cake") || combinedContext.includes("pastry")) {
@@ -1037,11 +1028,23 @@ export default function BuilderDrawerPanel({
             (targetType === "footer" && blockType.includes("footer")) ||
             (targetType === "navbar" && blockType.includes("nav"))
           ) {
+            const currentProps = block.props ?? {};
+            const patchToApply = { ...mergedPatch };
+            // Never overwrite existing user-defined section title, headline, or subtitle with asset defaults
+            if (currentProps.title && patchToApply.title) {
+              delete patchToApply.title;
+            }
+            if (currentProps.headline && patchToApply.headline) {
+              delete patchToApply.headline;
+            }
+            if (currentProps.subtitle && patchToApply.subtitle) {
+              delete patchToApply.subtitle;
+            }
             return {
               ...block,
               props: {
-                ...(block.props ?? {}),
-                ...mergedPatch,
+                ...currentProps,
+                ...patchToApply,
               },
             };
           }

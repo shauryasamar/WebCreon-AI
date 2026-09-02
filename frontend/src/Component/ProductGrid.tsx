@@ -14,6 +14,47 @@ import {
   EidGraphics,
 } from "./FestiveGraphics";
 
+function resolveFontFamily(fontKey?: string): string | undefined {
+  if (!fontKey || fontKey === "default" || fontKey === "inherit") return undefined;
+  switch (fontKey) {
+    case "sans_modern":
+    case "modern_sans":
+    case "inter":
+      return "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    case "roboto_sans":
+    case "roboto":
+      return "'Roboto', sans-serif";
+    case "outfit_tech":
+    case "outfit":
+      return "'Outfit', sans-serif";
+    case "plus_jakarta":
+      return "'Plus Jakarta Sans', sans-serif";
+    case "space_grotesk":
+      return "'Space Grotesk', sans-serif";
+    case "playfair_serif":
+    case "playfair":
+      return "'Playfair Display', Georgia, serif";
+    case "cinzel_display":
+    case "cinzel":
+      return "'Cinzel', serif";
+    case "cormorant_serif":
+    case "cormorant":
+      return "'Cormorant Garamond', Georgia, serif";
+    case "montserrat_bold":
+    case "montserrat":
+      return "'Montserrat', sans-serif";
+    case "poppins_rounded":
+    case "poppins":
+      return "'Poppins', sans-serif";
+    case "serif":
+      return "Georgia, 'Times New Roman', serif";
+    case "mono":
+      return "monospace, 'Courier New'";
+    default:
+      return fontKey.includes(" ") || fontKey.includes(",") ? fontKey : `'${fontKey}', sans-serif`;
+  }
+}
+
 type ProductGridProps = {
   siteId: string;
   products?: Product[];
@@ -35,7 +76,10 @@ type ProductGridProps = {
 
   // Layout & Spacing
   grid_gap?: string | number;
+  gap?: string | number;
   max_width?: string;
+  padding_y?: string | number;
+  padding_x?: string | number;
 
   // Card Container & Background
   outer_bg_color?: string;
@@ -48,13 +92,26 @@ type ProductGridProps = {
   image_aspect_ratio?: string;
   image_fit?: "cover" | "contain";
   image_bg?: string;
+  image_radius?: string | number;
+  image_corner_radius?: string | number;
 
   // Typography & Colors
   title_color?: string;
+  product_name_color?: string;
+  product_title_color?: string;
+  product_name_font_family?: string;
+  product_title_font_family?: string;
+  product_name_font_size?: string | number;
+  product_title_font_size?: string | number;
+  product_name_font_weight?: string | number;
+  product_title_font_weight?: string | number;
+  product_name_font_style?: "normal" | "italic";
+  product_title_font_style?: "normal" | "italic";
   brand_color?: string;
   price_color?: string;
   original_price_color?: string;
   rating_star_color?: string;
+  accent_color?: string;
 
   // Visibility Toggles
   show_discount_badge?: boolean;
@@ -107,7 +164,10 @@ const ProductGrid: React.FC<ProductGridProps> = ({
   onPageSizeChange,
   totalProducts,
   grid_gap,
+  gap,
   max_width,
+  padding_y,
+  padding_x,
   outer_bg_color,
   card_bg_color,
   card_radius,
@@ -118,11 +178,24 @@ const ProductGrid: React.FC<ProductGridProps> = ({
   image_aspect_ratio,
   image_fit,
   image_bg,
+  image_radius,
+  image_corner_radius,
   title_color,
+  product_name_color,
+  product_title_color,
+  product_name_font_family,
+  product_title_font_family,
+  product_name_font_size,
+  product_title_font_size,
+  product_name_font_weight,
+  product_title_font_weight,
+  product_name_font_style,
+  product_title_font_style,
   brand_color,
   price_color,
   original_price_color,
   rating_star_color,
+  accent_color,
   show_discount_badge = true,
   show_stock_badge = true,
   show_ratings = true,
@@ -248,7 +321,14 @@ function isColorDarkHex(colorHex?: string): boolean {
   const cardBg = card_bg_color || defaultCardBg;
   const isCardDark = isColorDarkHex(cardBg);
 
-  const preferredTextColor = title_color || (theme as any)?.card_text_color || defaultTextColor;
+  const resolvedAccentColor = accent_color || (theme as any)?.accent_color || accentColor || "#3b82f6";
+
+  const preferredTextColor =
+    product_name_color ||
+    product_title_color ||
+    title_color ||
+    (theme as any)?.card_text_color ||
+    defaultTextColor;
   const isPreferredDark = isColorDarkHex(preferredTextColor);
   const pageText = preferredTextColor && (isPreferredDark !== isCardDark)
     ? preferredTextColor
@@ -277,7 +357,23 @@ function isColorDarkHex(colorHex?: string): boolean {
     ? "0 10px 28px rgba(15,23,42,0.055)"
     : "0 12px 28px rgba(0,0,0,0.3)";
 
-  let computedRadius = card_radius !== undefined && card_radius !== "" ? `${card_radius}px` : "20px";
+  const parsedCardRadiusNum =
+    card_radius !== undefined && card_radius !== null && String(card_radius).trim() !== ""
+      ? typeof card_radius === "number"
+        ? card_radius
+        : parseInt(String(card_radius), 10)
+      : NaN;
+
+  let computedRadius = !isNaN(parsedCardRadiusNum) && parsedCardRadiusNum >= 0
+    ? `${parsedCardRadiusNum}px`
+    : cardStyleKey === "electronics"
+    ? "18px"
+    : cardStyleKey === "beauty"
+    ? "22px"
+    : cardStyleKey === "grocery" || cardStyleKey === "books"
+    ? "16px"
+    : "20px";
+
   let computedCardBg = cardBg;
   let computedBorder = card_border_color ? `1px solid ${card_border_color}` : subtleBorder;
 
@@ -302,11 +398,32 @@ function isColorDarkHex(colorHex?: string): boolean {
       : "0 8px 32px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.16)";
   }
 
-  if (card_radius === undefined || card_radius === "") {
-    if (cardStyleKey === "electronics") computedRadius = "18px";
-    else if (cardStyleKey === "beauty") computedRadius = "22px";
-    else if (cardStyleKey === "grocery" || cardStyleKey === "books") computedRadius = "16px";
-  }
+  const rawImgRadius = image_radius ?? image_corner_radius;
+  const parsedImgRadiusNum =
+    rawImgRadius !== undefined && rawImgRadius !== null && String(rawImgRadius).trim() !== ""
+      ? typeof rawImgRadius === "number"
+        ? rawImgRadius
+        : parseInt(String(rawImgRadius), 10)
+      : NaN;
+
+  const resolvedImageRadius = !isNaN(parsedImgRadiusNum) && parsedImgRadiusNum >= 0
+    ? `${parsedImgRadiusNum}px`
+    : isMobile
+    ? "10px"
+    : "14px";
+
+  const resolvedFontFamily = resolveFontFamily(product_name_font_family || product_title_font_family);
+  const parsedProductNameSizeNum =
+    product_name_font_size || product_title_font_size
+      ? parseInt(String(product_name_font_size || product_title_font_size), 10)
+      : NaN;
+  const resolvedProductNameSize =
+    !isNaN(parsedProductNameSizeNum) && parsedProductNameSizeNum > 0
+      ? `${parsedProductNameSizeNum}px`
+      : isMobile ? "13px" : "15px";
+
+  const resolvedProductNameWeight = (product_name_font_weight || product_title_font_weight || 700) as any;
+  const resolvedProductNameStyle = product_name_font_style || product_title_font_style || "normal";
 
   const normalizedProducts: NormalizedProduct[] = useMemo(() => {
     return (products ?? []).map((product) => {
@@ -337,30 +454,14 @@ function isColorDarkHex(colorHex?: string): boolean {
           ? product.inStock
           : true;
 
-      const discountPercentVal = product.discountPercent ?? product.discount_percent;
       const normalizedDiscountPercent =
-        typeof discountPercentVal === "number" && discountPercentVal > 0
-          ? discountPercentVal
-          : normalizedOriginalPrice && normalizedOriginalPrice > normalizedDisplayPrice
-          ? Math.round(
-              ((normalizedOriginalPrice - normalizedDisplayPrice) /
-                normalizedOriginalPrice) *
-                100
-            )
+        normalizedOriginalPrice && normalizedOriginalPrice > normalizedDisplayPrice
+          ? Math.round(((normalizedOriginalPrice - normalizedDisplayPrice) / normalizedOriginalPrice) * 100)
           : 0;
-
-      const rawImage =
-        product.image_url ||
-        product.imageUrl ||
-        product.image ||
-        (Array.isArray(product.images) && product.images[0]) ||
-        "";
-
-      const normalizedImage = optimizeImageUrl(rawImage, 600, 600);
 
       return {
         ...product,
-        normalizedImage,
+        normalizedImage: optimizeImageUrl(product.image || product.images?.[0] || ""),
         normalizedOriginalPrice,
         normalizedDisplayPrice,
         normalizedInStock,
@@ -375,14 +476,48 @@ function isColorDarkHex(colorHex?: string): boolean {
     navigate(`${appBase}/products/${targetSlug}`);
   };
 
-  const resolvedMaxWidth = max_width === "full" ? "100%" : max_width ? `${max_width}px` : "1120px";
+  const resolvedMaxWidth =
+    max_width === "full"
+      ? "100%"
+      : max_width
+      ? String(max_width).endsWith("px") || String(max_width).endsWith("%")
+        ? String(max_width)
+        : `${max_width}px`
+      : "1280px";
 
-  const parsedGap = Number(grid_gap);
-  const resolvedGridGap = isMobile
+  const rawGapVal = gap !== undefined && gap !== "" ? gap : grid_gap;
+  const parsedGapNum =
+    rawGapVal !== undefined && rawGapVal !== null && String(rawGapVal).trim() !== ""
+      ? typeof rawGapVal === "number"
+        ? rawGapVal
+        : parseInt(String(rawGapVal), 10)
+      : NaN;
+
+  const resolvedGridGap = !isNaN(parsedGapNum) && parsedGapNum >= 0
+    ? `${parsedGapNum}px`
+    : isMobile
     ? isLargePhone ? "12px" : "10px"
-    : grid_gap !== undefined && grid_gap !== "" && !isNaN(parsedGap) && parsedGap >= 0
-    ? `${parsedGap}px`
     : "16px";
+
+  const parsedPaddingYNum =
+    padding_y !== undefined && padding_y !== null && String(padding_y).trim() !== ""
+      ? typeof padding_y === "number"
+        ? padding_y
+        : parseInt(String(padding_y), 10)
+      : NaN;
+  const resolvedPaddingY = !isNaN(parsedPaddingYNum) && parsedPaddingYNum >= 0
+    ? `${parsedPaddingYNum}px`
+    : isMobile ? "12px" : "24px";
+
+  const parsedPaddingXNum =
+    padding_x !== undefined && padding_x !== null && String(padding_x).trim() !== ""
+      ? typeof padding_x === "number"
+        ? padding_x
+        : parseInt(String(padding_x), 10)
+      : NaN;
+  const resolvedPaddingX = !isNaN(parsedPaddingXNum) && parsedPaddingXNum >= 0
+    ? `${parsedPaddingXNum}px`
+    : isMobile ? "10px" : "16px";
 
   const resolvedColumns =
     cardStyleKey === "grocery"
@@ -407,12 +542,22 @@ function isColorDarkHex(colorHex?: string): boolean {
         position: "relative",
         maxWidth: resolvedMaxWidth,
         margin: "0 auto",
-        padding: isMobile ? "12px 10px 32px" : "24px 16px 44px",
+        padding: `${resolvedPaddingY} ${resolvedPaddingX} ${isMobile ? "32px" : "44px"}`,
         background: outer_bg_color || "transparent",
         borderRadius: outer_bg_color ? "16px" : undefined,
         transition: "all 0.2s ease",
       }}
     >
+      <style>{`
+        .product-grid .product-card {
+          transition: border-color 0.1s ease !important;
+        }
+        @media (hover: hover) and (pointer: fine) {
+          .product-grid .product-card:hover {
+            border-color: ${resolvedAccentColor} !important;
+          }
+        }
+      `}</style>
       {/* Section Divider / Decorative Festive Transition — placed cleanly above the header toolbar */}
       {(() => {
         const festTheme = (theme as any)?.festival_theme;
@@ -554,6 +699,8 @@ function isColorDarkHex(colorHex?: string): boolean {
             display: "grid",
             gridTemplateColumns: resolvedColumns,
             gap: resolvedGridGap,
+            paddingTop: "4px",
+            paddingBottom: "8px",
           }}
         >
           {normalizedProducts.map((product, cardIndex) => {
@@ -691,7 +838,9 @@ function isColorDarkHex(colorHex?: string): boolean {
           const cardBaseStyle: React.CSSProperties = {
             cursor: isDisabled ? "not-allowed" : targetSlug ? "pointer" : "default",
             border: computedBorder,
-            borderRadius: isMobile ? "14px" : computedRadius,
+            borderRadius: !isNaN(parsedCardRadiusNum) && parsedCardRadiusNum >= 0
+              ? `${Math.min(parsedCardRadiusNum, isMobile ? 24 : 48)}px`
+              : isMobile ? "14px" : computedRadius,
             padding: isMobile ? "8px" : "10px",
             background: isDisabled
               ? isLight
@@ -710,14 +859,14 @@ function isColorDarkHex(colorHex?: string): boolean {
             boxSizing: "border-box",
             overflow: "hidden",
             opacity: isDisabled ? 0.72 : 1,
-            transition: "transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease",
+            transition: "border-color 150ms ease, box-shadow 150ms ease",
           };
 
           const resolvedImageBg = image_bg || (isLight ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.2)");
 
           const getImgContainerStyle = (defaultAspect: string): React.CSSProperties => ({
             position: "relative",
-            borderRadius: isMobile ? "10px" : "14px",
+            borderRadius: resolvedImageRadius,
             overflow: "hidden",
             background: resolvedImageBg,
             aspectRatio: image_aspect_ratio || (isMobile ? "1 / 1.12" : defaultAspect),
@@ -739,11 +888,11 @@ function isColorDarkHex(colorHex?: string): boolean {
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "2px", padding: "2px", flex: 1 }}>
                   {show_brand_name && (
-                    <span style={{ fontSize: isMobile ? "9px" : "11px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                    <span style={{ fontSize: isMobile ? "9px" : "11px", fontWeight: 700, color: brand_color || faintText, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                       {brandText}
                     </span>
                   )}
-                  <h3 style={{ margin: 0, fontSize: isMobile ? "13px" : "15px", lineHeight: isMobile ? "1.25" : "1.35", fontWeight: 700, color: pageText, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", textOverflow: "ellipsis", minHeight: isMobile ? "32px" : "auto" }}>
+                  <h3 style={{ margin: 0, fontFamily: resolvedFontFamily, fontSize: resolvedProductNameSize, fontWeight: resolvedProductNameWeight, fontStyle: resolvedProductNameStyle, lineHeight: isMobile ? "1.25" : "1.35", color: pageText, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", textOverflow: "ellipsis", minHeight: isMobile ? "32px" : "auto" }}>
                     {product.name}
                   </h3>
                   {show_ratings && (
@@ -777,11 +926,11 @@ function isColorDarkHex(colorHex?: string): boolean {
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "2px", padding: "2px", flex: 1 }}>
                   {show_brand_name && (
-                    <span style={{ fontSize: isMobile ? "9px" : "10px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                    <span style={{ fontSize: isMobile ? "9px" : "10px", fontWeight: 700, color: brand_color || faintText, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                       {brandText}
                     </span>
                   )}
-                  <h3 style={{ margin: 0, fontSize: isMobile ? "13px" : "15px", lineHeight: isMobile ? "1.25" : "1.35", fontWeight: 800, color: pageText, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", minHeight: isMobile ? "32px" : "auto" }}>{product.name}</h3>
+                  <h3 style={{ margin: 0, fontFamily: resolvedFontFamily, fontSize: resolvedProductNameSize, fontWeight: resolvedProductNameWeight, fontStyle: resolvedProductNameStyle, lineHeight: isMobile ? "1.25" : "1.35", color: pageText, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", minHeight: isMobile ? "32px" : "auto" }}>{product.name}</h3>
                   {show_ratings && (
                     <div style={{ fontSize: isMobile ? "10px" : "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "3px" }}>
                       <span style={{ color: starColor }}>★</span> {ratingDisplay}
@@ -813,11 +962,11 @@ function isColorDarkHex(colorHex?: string): boolean {
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px", padding: "2px", flex: 1 }}>
                   {show_brand_name && (
-                    <span style={{ fontSize: isMobile ? "9px" : "10px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                    <span style={{ fontSize: isMobile ? "9px" : "10px", fontWeight: 700, color: brand_color || faintText, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                       {brandText}
                     </span>
                   )}
-                  <h3 style={{ margin: 0, fontSize: isMobile ? "13px" : "15px", lineHeight: isMobile ? "1.25" : "1.35", fontWeight: 800, color: pageText, textAlign: "center", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", minHeight: isMobile ? "32px" : "auto" }}>{product.name}</h3>
+                  <h3 style={{ margin: 0, fontFamily: resolvedFontFamily, fontSize: resolvedProductNameSize, fontWeight: resolvedProductNameWeight, fontStyle: resolvedProductNameStyle, lineHeight: isMobile ? "1.25" : "1.35", color: pageText, textAlign: "center", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", minHeight: isMobile ? "32px" : "auto" }}>{product.name}</h3>
                   {show_ratings && (
                     <div style={{ fontSize: isMobile ? "10px" : "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "3px" }}>
                       <span style={{ color: starColor }}>★</span> {ratingDisplay}
@@ -849,7 +998,7 @@ function isColorDarkHex(colorHex?: string): boolean {
                 <div style={{ display: "flex", flexDirection: "column", gap: "2px", flex: "1 1 0", minWidth: 0, overflow: "hidden" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "4px", minWidth: 0 }}>
                     {show_brand_name && (
-                      <span style={{ fontSize: isMobile ? "9px" : "10px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.08em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <span style={{ fontSize: isMobile ? "9px" : "10px", fontWeight: 700, color: brand_color || faintText, textTransform: "uppercase", letterSpacing: "0.08em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {brandText}
                       </span>
                     )}
@@ -876,7 +1025,7 @@ function isColorDarkHex(colorHex?: string): boolean {
                       </div>
                     )}
                   </div>
-                  <h3 style={{ margin: "1px 0 0", fontSize: isMobile ? "13px" : "14px", lineHeight: "1.25", fontWeight: 700, color: pageText, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <h3 style={{ margin: "1px 0 0", fontFamily: resolvedFontFamily, fontSize: resolvedProductNameSize, fontWeight: resolvedProductNameWeight, fontStyle: resolvedProductNameStyle, lineHeight: "1.25", color: pageText, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {product.name}
                   </h3>
                   {show_ratings && (
@@ -909,11 +1058,11 @@ function isColorDarkHex(colorHex?: string): boolean {
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "2px", padding: "2px", flex: 1 }}>
                 {show_brand_name && (
-                  <span style={{ fontSize: isMobile ? "9px" : "10px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  <span style={{ fontSize: isMobile ? "9px" : "10px", fontWeight: 700, color: brand_color || faintText, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                     {brandText}
                   </span>
                 )}
-                <h3 style={{ margin: 0, fontSize: isMobile ? "13px" : "15px", lineHeight: isMobile ? "1.25" : "1.35", fontWeight: 800, color: pageText, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", minHeight: isMobile ? "32px" : "auto" }}>{product.name}</h3>
+                <h3 style={{ margin: 0, fontFamily: resolvedFontFamily, fontSize: resolvedProductNameSize, fontWeight: resolvedProductNameWeight, fontStyle: resolvedProductNameStyle, lineHeight: isMobile ? "1.25" : "1.35", color: pageText, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", minHeight: isMobile ? "32px" : "auto" }}>{product.name}</h3>
                 <div style={{ borderTop: "1px solid rgba(148,163,184,0.2)", margin: "4px 0" }} />
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "4px" }}>
                   <div style={{ display: "flex", alignItems: "baseline", gap: isMobile ? "4px" : "6px" }}>
