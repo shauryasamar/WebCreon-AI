@@ -147,9 +147,24 @@ function isProductDetailRoute(route?: string | null) {
 
 
 function getNavbarEditorProps(siteDefinition: SiteDefinition) {
+  const t = (siteDefinition.theme || {}) as Record<string, any>;
+  const nav = (siteDefinition.navbar || {}) as Record<string, any>;
+  const f = (siteDefinition.footer || {}) as Record<string, any>;
+  const resolvedBrandName =
+    t.brandName ||
+    t.brand_name ||
+    nav.brandName ||
+    nav.brand_name ||
+    f.brandName ||
+    f.brand_name ||
+    siteDefinition.site?.brand_name ||
+    siteDefinition.site_name ||
+    siteDefinition.name ||
+    "Website";
+
   return {
-    brandName: siteDefinition.site?.brand_name || "Website",
-    tagline: siteDefinition.theme?.brand_tone || "",
+    brandName: resolvedBrandName,
+    tagline: t.brand_tone || "",
     navigation: siteDefinition.navigation || {
       storefront: [],
       admin: [],
@@ -157,6 +172,59 @@ function getNavbarEditorProps(siteDefinition: SiteDefinition) {
     showSearch: siteDefinition.navbar?.showSearch ?? true,
     showAccount: siteDefinition.navbar?.showAccount ?? true,
     showCart: siteDefinition.navbar?.showCart ?? true,
+  };
+}
+
+function getFooterEditorProps(siteDefinition: SiteDefinition) {
+  const f = (siteDefinition.footer || {}) as Record<string, any>;
+  const t = (siteDefinition.theme || {}) as Record<string, any>;
+  const nav = (siteDefinition.navbar || {}) as Record<string, any>;
+  const defaultBrand =
+    f.brandName ||
+    f.brand_name ||
+    t.brandName ||
+    t.brand_name ||
+    nav.brandName ||
+    nav.brand_name ||
+    siteDefinition.site?.brand_name ||
+    siteDefinition.site_name ||
+    siteDefinition.name ||
+    "Website";
+  const defaultTagline = (siteDefinition.site as any)?.description || siteDefinition.tagline || t.brand_tone || "Your premium shopping destination.";
+
+  return {
+    ...f,
+    brandName: f.brandName || f.brand_name || defaultBrand,
+    tagline: f.tagline !== undefined && f.tagline !== null ? f.tagline : defaultTagline,
+    copyrightText: f.copyrightText,
+    show_brand: f.show_brand !== false,
+    show_tagline: f.show_tagline !== false,
+    show_copyright: f.show_copyright !== false,
+    show_newsletter: f.show_newsletter !== false,
+    newsletter_title: f.newsletter_title || "Subscribe to Our Newsletter",
+    newsletter_subtitle: f.newsletter_subtitle || "",
+    newsletter_placeholder: f.newsletter_placeholder || "Enter your email...",
+    newsletter_button_text: f.newsletter_button_text || "Join",
+    show_social_links: f.show_social_links !== false,
+    social_links: Array.isArray(f.social_links) && f.social_links.length > 0
+      ? f.social_links
+      : [
+          { platform: "Instagram", url: "https://instagram.com" },
+          { platform: "Twitter / X", url: "https://x.com" },
+          { platform: "Facebook", url: "https://facebook.com" },
+        ],
+    social_icon_variant: f.social_icon_variant || "pill",
+    footer_bg: f.footer_bg || t.footer_bg,
+    footer_text_color: f.footer_text_color || t.footer_text_color,
+    footer_muted_color: f.footer_muted_color || t.footer_muted_color,
+    footer_border_color: f.footer_border_color || t.footer_border_color,
+    accent_color: f.accent_color || t.accent_color,
+    input_bg_color: f.input_bg_color,
+    padding_y: f.padding_y,
+    padding_x: f.padding_x,
+    margin_top: f.margin_top,
+    max_width: f.max_width || t.footer_max_width,
+    footer_layout: f.footer_layout || t.footer_layout,
   };
 }
 
@@ -427,7 +495,7 @@ function StorefrontShell({
         <Navbar
           {...navbarProps}
           siteId={siteId}
-          brandName={navbarProps.brandName || siteDefinition.site_name || siteDefinition.name || "WebCreon Store"}
+          brandName={navbarProps.brandName}
           tagline={navbarProps.tagline}
           logoUrl={siteDefinition.theme?.logoUrl || siteDefinition.theme?.logo_url || ""}
           theme={{
@@ -603,15 +671,7 @@ function StorefrontShell({
         </div>
 
         <Footer
-          {...(siteDefinition.footer || {})}
-          brandName={siteDefinition.site?.brand_name || (siteDefinition.footer as any)?.brandName}
-          tagline={siteDefinition.footer?.tagline}
-          copyrightText={siteDefinition.footer?.copyrightText}
-          links={siteDefinition.footer?.links}
-          show_newsletter={siteDefinition.footer?.show_newsletter}
-          newsletter_title={siteDefinition.footer?.newsletter_title}
-          show_social_links={siteDefinition.footer?.show_social_links}
-          social_links={siteDefinition.footer?.social_links}
+          {...getFooterEditorProps(siteDefinition)}
           theme={siteDefinition.theme}
         />
       </div>
@@ -1111,6 +1171,16 @@ function BuilderPageContent() {
   const handleSiteDefinitionChange = useCallback(
     (next: SiteDefinition) => {
       setDraftSiteDefinition(next);
+      const nextBrand =
+        next.site?.brand_name ||
+        (next as any).site_name ||
+        (next as any).name ||
+        (next.theme as any)?.brandName ||
+        (next.theme as any)?.brand_name ||
+        (next.footer as any)?.brandName;
+      if (nextBrand) {
+        setSiteName(nextBrand);
+      }
       const currentSlug = siteSlug || siteSlugParam;
       const currentId = resolvedSiteId || siteId;
       const existing =

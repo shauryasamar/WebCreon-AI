@@ -477,13 +477,11 @@ function isColorDarkHex(colorHex?: string): boolean {
   };
 
   const resolvedMaxWidth =
-    max_width === "full"
+    max_width === "full" || !max_width
       ? "100%"
-      : max_width
-      ? String(max_width).endsWith("px") || String(max_width).endsWith("%")
-        ? String(max_width)
-        : `${max_width}px`
-      : "1280px";
+      : String(max_width).endsWith("px") || String(max_width).endsWith("%")
+      ? String(max_width)
+      : `${max_width}px`;
 
   const rawGapVal = gap !== undefined && gap !== "" ? gap : grid_gap;
   const parsedGapNum =
@@ -540,8 +538,10 @@ function isColorDarkHex(colorHex?: string): boolean {
       className="product-grid"
       style={{
         position: "relative",
+        width: "100%",
         maxWidth: resolvedMaxWidth,
         margin: "0 auto",
+        boxSizing: "border-box",
         padding: `${resolvedPaddingY} ${resolvedPaddingX} ${isMobile ? "32px" : "44px"}`,
         background: outer_bg_color || "transparent",
         borderRadius: outer_bg_color ? "16px" : undefined,

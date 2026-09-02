@@ -9,6 +9,7 @@ export interface BrandStoreGridProps {
   maxBrands?: number;
   deliveryText?: string;
   theme?: any;
+  max_width?: string;
 }
 
 export const BrandStoreGrid: React.FC<BrandStoreGridProps> = ({
@@ -18,6 +19,7 @@ export const BrandStoreGrid: React.FC<BrandStoreGridProps> = ({
   maxBrands = 8,
   deliveryText = "Delivery within 24 hours",
   theme,
+  max_width,
 }) => {
   const { products } = useCart();
   const { siteId, slug: siteSlug } = useParams();
@@ -52,12 +54,13 @@ export const BrandStoreGrid: React.FC<BrandStoreGridProps> = ({
   const cardBorder = isDark ? "1px solid rgba(255,255,255,0.1)" : "1px solid #e2e8f0";
   const titleColor = isDark ? "#ffffff" : "#0f172a";
   const subtextColor = isDark ? "#a1a1aa" : "#64748b";
+  const resolvedMaxWidth = max_width === "full" || !max_width ? "100%" : max_width;
 
   return (
     <section
       style={{
         width: "100%",
-        maxWidth: "1280px",
+        maxWidth: resolvedMaxWidth,
         margin: "0 auto",
         padding: "24px 16px",
         boxSizing: "border-box",

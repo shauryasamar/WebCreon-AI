@@ -1200,7 +1200,12 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
   };
 
   // ── Resolved display values (support prop overrides) ──────────────────────
-  const resolvedMaxWidth = max_width === "full" ? "100%" : max_width || "1280px";
+  const resolvedMaxWidth =
+    max_width === "full" || !max_width
+      ? "100%"
+      : String(max_width).endsWith("px") || String(max_width).endsWith("%")
+      ? String(max_width)
+      : `${max_width}px`;
 
   const resolvedGap =
     gap !== undefined

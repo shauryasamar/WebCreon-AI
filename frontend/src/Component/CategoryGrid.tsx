@@ -11,12 +11,14 @@ type CategoryGridProps = {
   title?: string;
   categories?: Category[];
   theme?: any;
+  max_width?: string;
 };
 
 export const CategoryGrid: React.FC<CategoryGridProps> = ({
   title = "Shop by Category",
   categories = [],
   theme,
+  max_width,
 }) => {
   const { products } = useCart();
   const { siteId, slug: siteSlug } = useParams();
@@ -35,12 +37,13 @@ export const CategoryGrid: React.FC<CategoryGridProps> = ({
 
   const isDark = theme?.mode === "dark";
   const titleColor = isDark ? "#ffffff" : "#0f172a";
+  const resolvedMaxWidth = max_width === "full" || !max_width ? "100%" : max_width;
 
   return (
     <section
       style={{
         width: "100%",
-        maxWidth: "1280px",
+        maxWidth: resolvedMaxWidth,
         margin: "0 auto",
         padding: "24px 16px",
         boxSizing: "border-box",

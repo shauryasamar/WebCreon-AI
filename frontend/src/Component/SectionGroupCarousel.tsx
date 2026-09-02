@@ -203,7 +203,12 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
   const resolvedAccentColor = accent_color || theme?.accent_color || tokens.accentColor;
   const resolvedImageBg = image_bg || (isLight ? "#f1f5f9" : "rgba(255, 255, 255, 0.05)");
   const resolvedImageFit = image_fit || "cover";
-  const resolvedMaxWidth = max_width === "full" ? "100%" : max_width || "1280px";
+  const resolvedMaxWidth =
+    max_width === "full" || !max_width
+      ? "100%"
+      : String(max_width).endsWith("px") || String(max_width).endsWith("%")
+      ? String(max_width)
+      : `${max_width}px`;
   const resolvedGap =
     grid_gap !== undefined
       ? typeof grid_gap === "number"

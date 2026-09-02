@@ -1203,11 +1203,30 @@ export function updateThemeValues(
     ...nextPatch,
   };
 
-  return {
+  const nextDef: EditorSiteDefinition = {
     ...siteDefinition,
     theme: updatedTheme,
     pages: siteDefinition.pages,
   };
+
+  if (themePatch.brandName !== undefined || themePatch.brand_name !== undefined) {
+    const brand = themePatch.brandName ?? themePatch.brand_name;
+    if (nextDef.site) {
+      (nextDef.site as any).brand_name = brand;
+    }
+    (nextDef as any).site_name = brand;
+    (nextDef as any).name = brand;
+    if ((nextDef as any).navbar) {
+      (nextDef as any).navbar.brandName = brand;
+      (nextDef as any).navbar.brand_name = brand;
+    }
+    if ((nextDef as any).footer) {
+      (nextDef as any).footer.brandName = brand;
+      (nextDef as any).footer.brand_name = brand;
+    }
+  }
+
+  return nextDef;
 }
 
 export function applyThemeMode(

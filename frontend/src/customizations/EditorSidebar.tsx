@@ -35,11 +35,57 @@ function PageBlocksTreeView({
   const homeBlocks = useMemo(() => {
     const customHome = _siteDefinition?.pages?.find((p: any) => p.id === "home" || p.route === "/");
     if (customHome && Array.isArray(customHome.blocks) && customHome.blocks.length > 0) {
-      return customHome.blocks.map((b: any) => ({
-        id: b.id || b.type,
-        type: b.type,
-        name: b.props?.title || b.name || b.type,
-      }));
+      return customHome.blocks.map((b: any) => {
+        const bType = String(b.type || "").toLowerCase();
+        const bId = String(b.id || "").toLowerCase();
+        let displayName = "Section";
+
+        if (bType === "navbar" || bType === "header" || bId === "navbar") {
+          displayName = "Navbar";
+        } else if (
+          bType === "hero_banner" ||
+          bType === "herobanner" ||
+          bType === "hero" ||
+          bType === "banner" ||
+          bId.includes("hero")
+        ) {
+          displayName = "Hero Banner";
+        } else if (
+          bType === "product_grid" ||
+          bType === "productgrid" ||
+          bId === "product_grid" ||
+          bId.includes("product_grid")
+        ) {
+          displayName = "Product Grid";
+        } else if (bType === "footer" || bId === "footer") {
+          displayName = "Footer";
+        } else if (
+          bType === "product_carousel" ||
+          bType === "productcarousel" ||
+          bType === "products_carousel"
+        ) {
+          displayName = b.props?.title || b.name || "Product Carousel";
+        } else if (
+          bType === "section_group_carousel" ||
+          bType === "sectiongroupcarousel"
+        ) {
+          displayName = b.props?.title || b.name || "Category Carousel";
+        } else if (bType === "category_grid" || bType === "categorygrid") {
+          displayName = b.props?.title || b.name || "Category Grid";
+        } else if (bType === "category_strip") {
+          displayName = b.props?.title || b.name || "Category Strip";
+        } else if (bType === "trust_badges") {
+          displayName = "Trust Badges";
+        } else {
+          displayName = b.name || b.props?.title || b.type;
+        }
+
+        return {
+          id: b.id || b.type,
+          type: b.type,
+          name: displayName,
+        };
+      });
     }
     return [
       { id: "navbar", type: "navbar", name: "Navbar" },
@@ -2979,13 +3025,13 @@ function SectionGroupCarouselEditor({
                     Max Width
                   </label>
                   <CustomSelectDropdown
-                    value={currentProps.max_width || "1280px"}
+                    value={currentProps.max_width || "full"}
                     placeholder="Max Width"
                     options={[
-                      { label: "Standard (1200px)", value: "1200px" },
-                      { label: "Wide (1280px)", value: "1280px" },
-                      { label: "Extra Wide (1440px)", value: "1440px" },
                       { label: "Full Width (100%)", value: "full" },
+                      { label: "Extra Wide (1440px)", value: "1440px" },
+                      { label: "Wide (1280px)", value: "1280px" },
+                      { label: "Standard (1200px)", value: "1200px" },
                     ]}
                     onChange={(val) => updateProps({ max_width: val })}
                   />
@@ -3454,13 +3500,13 @@ function ProductCarouselEditor({
                 <div style={{ display: "grid", gap: "2px" }}>
                   <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Max Width</label>
                   <CustomSelectDropdown
-                    value={p.max_width || "1280px"}
+                    value={p.max_width || "full"}
                     placeholder="Max Width"
                     options={[
-                      { label: "1200px", value: "1200px" },
-                      { label: "1280px", value: "1280px" },
+                      { label: "Full Width (100%)", value: "full" },
                       { label: "1440px", value: "1440px" },
-                      { label: "Full", value: "full" },
+                      { label: "1280px", value: "1280px" },
+                      { label: "1200px", value: "1200px" },
                     ]}
                     onChange={(val) => updateProps({ max_width: val })}
                   />
@@ -3767,13 +3813,13 @@ function ProductGridEditor({
                 <div style={{ display: "grid", gap: "2px" }}>
                   <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Max Width</label>
                   <CustomSelectDropdown
-                    value={p.max_width || "1280px"}
+                    value={p.max_width || "full"}
                     placeholder="Max Width"
                     options={[
-                      { label: "1200px", value: "1200px" },
-                      { label: "1280px", value: "1280px" },
+                      { label: "Full Width (100%)", value: "full" },
                       { label: "1440px", value: "1440px" },
-                      { label: "Full", value: "full" },
+                      { label: "1280px", value: "1280px" },
+                      { label: "1200px", value: "1200px" },
                     ]}
                     onChange={(val) => updateProps({ max_width: val })}
                   />
@@ -3991,6 +4037,592 @@ function ProductGridEditor({
   );
 }
 
+function FooterEditor({
+  selectedBlock,
+  isLightMode,
+  textColor,
+  accentColor,
+  onSiteDefinitionChange,
+  siteDefinition,
+}: {
+  selectedBlock: any;
+  isLightMode: boolean;
+  textColor: string;
+  accentColor: string;
+  onSiteDefinitionChange: (next: any) => void;
+  siteDefinition: any;
+}) {
+  const [activeTab, setActiveTab] = useState<"content" | "social" | "design">("content");
+
+  const f = siteDefinition.footer || {};
+  const theme = siteDefinition.theme || {};
+  const props = selectedBlock?.props || {};
+
+  const getVal = (key: string, defaultVal: any) => {
+    if (f[key] !== undefined && f[key] !== null) return f[key];
+    if (props[key] !== undefined && props[key] !== null) return props[key];
+    if (theme[key] !== undefined && theme[key] !== null) return theme[key];
+    return defaultVal;
+  };
+
+  const updateProps = (patch: Record<string, any>) => {
+    const nextDef = JSON.parse(JSON.stringify(siteDefinition));
+
+    // 1. Update siteDefinition.footer (used by StorefrontShell in BuilderPage)
+    nextDef.footer = {
+      ...(nextDef.footer || {}),
+      ...patch,
+    };
+
+    // If brandName is changed in Footer, sync it across site, navbar, and theme!
+    if (patch.brandName !== undefined || patch.brand_name !== undefined) {
+      const bName = patch.brandName ?? patch.brand_name;
+      if (!nextDef.site) nextDef.site = {};
+      (nextDef.site as any).brand_name = bName;
+      (nextDef as any).site_name = bName;
+      (nextDef as any).name = bName;
+      nextDef.theme = {
+        ...(nextDef.theme || {}),
+        brandName: bName,
+        brand_name: bName,
+      };
+      if (!nextDef.navbar) nextDef.navbar = {};
+      (nextDef.navbar as any).brandName = bName;
+      (nextDef.navbar as any).brand_name = bName;
+    }
+
+    // 2. Keep siteDefinition.theme in sync for shared styling keys
+    if (patch.footer_layout !== undefined) {
+      nextDef.theme = { ...(nextDef.theme || {}), footer_layout: patch.footer_layout };
+    }
+    if (patch.footer_bg !== undefined) {
+      nextDef.theme = { ...(nextDef.theme || {}), footer_bg: patch.footer_bg };
+    }
+    if (patch.footer_text_color !== undefined) {
+      nextDef.theme = { ...(nextDef.theme || {}), footer_text_color: patch.footer_text_color };
+    }
+    if (patch.footer_border_color !== undefined) {
+      nextDef.theme = { ...(nextDef.theme || {}), footer_border_color: patch.footer_border_color };
+    }
+    if (patch.footer_muted_color !== undefined) {
+      nextDef.theme = { ...(nextDef.theme || {}), footer_muted_color: patch.footer_muted_color };
+    }
+    if (patch.accent_color !== undefined) {
+      nextDef.theme = { ...(nextDef.theme || {}), accent_color: patch.accent_color };
+    }
+    if (patch.max_width !== undefined) {
+      nextDef.theme = { ...(nextDef.theme || {}), footer_max_width: patch.max_width };
+    }
+
+    // 3. Keep page blocks in sync if footer block exists in pages
+    if (Array.isArray(nextDef.pages)) {
+      nextDef.pages = nextDef.pages.map((page: any) => ({
+        ...page,
+        blocks: (page.blocks ?? []).map((block: any) => {
+          if (block.id === selectedBlock?.id || block.type === "footer") {
+            return {
+              ...block,
+              props: {
+                ...(block.props ?? {}),
+                ...patch,
+              },
+            };
+          }
+          return block;
+        }),
+      }));
+    }
+
+    onSiteDefinitionChange(nextDef);
+  };
+
+  const defaultBrand =
+    f.brandName ||
+    f.brand_name ||
+    theme.brandName ||
+    theme.brand_name ||
+    siteDefinition.navbar?.brandName ||
+    siteDefinition.navbar?.brand_name ||
+    siteDefinition.site?.brand_name ||
+    siteDefinition.site_name ||
+    siteDefinition.name ||
+    "Website";
+  const brandName = getVal("brandName", defaultBrand);
+  const defaultTagline = siteDefinition.site?.description || siteDefinition.tagline || theme.brand_tone || "Your premium shopping destination.";
+  const tagline = getVal("tagline", defaultTagline);
+  const copyrightText = getVal("copyrightText", `© ${new Date().getFullYear()} ${brandName}. All rights reserved.`);
+
+  const rawMaxWidth = getVal("max_width", theme.footer_max_width || "full");
+  const maxWidth = rawMaxWidth === "full" ? "full" : String(rawMaxWidth);
+
+  const marginTop = (() => {
+    const v = getVal("margin_top", 32);
+    const num = typeof v === "number" ? v : parseInt(String(v), 10);
+    return isNaN(num) ? 32 : num;
+  })();
+
+  const paddingY = (() => {
+    const v = getVal("padding_y", 44);
+    const num = typeof v === "number" ? v : parseInt(String(v), 10);
+    return isNaN(num) ? 44 : num;
+  })();
+
+  const paddingX = (() => {
+    const v = getVal("padding_x", 24);
+    const num = typeof v === "number" ? v : parseInt(String(v), 10);
+    return isNaN(num) ? 24 : num;
+  })();
+
+  // Visibility
+  const showBrand = getVal("show_brand", true) !== false;
+  const showTagline = getVal("show_tagline", true) !== false;
+  const showCopyright = getVal("show_copyright", true) !== false;
+
+  // Newsletter
+  const showNewsletter = getVal("show_newsletter", true) !== false;
+  const newsletterTitle = getVal("newsletter_title", "Subscribe to Our Newsletter");
+  const newsletterSubtitle = getVal("newsletter_subtitle", "Get weekly updates on new arrivals, special promotions and deals.");
+  const newsletterPlaceholder = getVal("newsletter_placeholder", "Enter your email...");
+  const newsletterButtonText = getVal("newsletter_button_text", "Join");
+
+  // Social Links
+  const showSocialLinks = getVal("show_social_links", true) !== false;
+  const socialIconVariant = getVal("social_icon_variant", "pill");
+  const rawSocial = getVal("social_links", [
+    { platform: "Instagram", url: "https://instagram.com" },
+    { platform: "Twitter / X", url: "https://x.com" },
+    { platform: "Facebook", url: "https://facebook.com" },
+  ]);
+  const socialLinks: Array<{ platform: string; url: string }> = Array.isArray(rawSocial) ? rawSocial : [];
+
+  const handleUpdateSocial = (index: number, key: "platform" | "url", val: string) => {
+    const next = [...socialLinks];
+    next[index] = { ...next[index], [key]: val };
+    updateProps({ social_links: next });
+  };
+
+  const handleAddSocial = () => {
+    const next = [...socialLinks, { platform: "YouTube", url: "https://youtube.com" }];
+    updateProps({ social_links: next });
+  };
+
+  const handleRemoveSocial = (index: number) => {
+    const next = socialLinks.filter((_, i) => i !== index);
+    updateProps({ social_links: next });
+  };
+
+  // Colors
+  const isDark = theme.mode === "dark";
+  const defaultFooterBg = theme.footer_bg || theme.secondary_bg || (isDark ? "#0f172a" : "#f8fafc");
+  const footerBg = getVal("footer_bg", defaultFooterBg);
+  const footerTextColor = getVal("footer_text_color", theme.footer_text_color || (isDark ? "#ffffff" : "#0f172a"));
+  const footerMutedColor = getVal("footer_muted_color", theme.footer_muted_color || (isDark ? "#94a3b8" : "#64748b"));
+  const footerBorderColor = getVal("footer_border_color", theme.footer_border_color || (isDark ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.10)"));
+  const resolvedAccent = getVal("accent_color", theme.accent_color || ADMIN_BLUE);
+  const inputBgColor = getVal("input_bg_color", isDark ? "rgba(0,0,0,0.35)" : "rgba(255,255,255,0.95)");
+
+  return (
+    <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
+      {/* 3 Focused Tabs */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: "3px",
+          background: "#f1f5f9",
+          padding: "2px",
+          borderRadius: "6px",
+          width: "100%",
+          boxSizing: "border-box",
+        }}
+      >
+        {[
+          { id: "content", label: "Content" },
+          { id: "social", label: "Social" },
+          { id: "design", label: "Design" },
+        ].map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as any)}
+              style={{
+                border: "none",
+                background: isActive ? "#ffffff" : "transparent",
+                color: isActive ? "#0f172a" : "#64748b",
+                fontSize: "11px",
+                fontWeight: isActive ? 800 : 600,
+                padding: "6px 4px",
+                borderRadius: "5px",
+                cursor: "pointer",
+                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                transition: "all 0.1s ease",
+                whiteSpace: "nowrap",
+                textAlign: "center",
+              }}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── 1. Content Tab (Brand, Tagline, Copyright & Newsletter) ─────────── */}
+      {activeTab === "content" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Brand Identity & Copy */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Brand Identity & Copy
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Brand Name</label>
+                <input
+                  type="text"
+                  value={brandName}
+                  placeholder="Website"
+                  onChange={(e) => updateProps({ brandName: e.target.value, brand_name: e.target.value })}
+                  style={sharedInputStyle()}
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Store Tagline</label>
+                <textarea
+                  rows={2}
+                  value={tagline}
+                  placeholder="Your premium shopping destination."
+                  onChange={(e) => updateProps({ tagline: e.target.value })}
+                  style={{ ...sharedInputStyle(), resize: "none" }}
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Copyright Notice</label>
+                <input
+                  type="text"
+                  value={copyrightText}
+                  placeholder="© 2026 Brand. All rights reserved."
+                  onChange={(e) => updateProps({ copyrightText: e.target.value, copyright_text: e.target.value })}
+                  style={sharedInputStyle()}
+                />
+              </div>
+
+              <SectionDivider title="Element Visibility" />
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Brand Name</label>
+                  <SegmentedRow
+                    value={showBrand ? "on" : "off"}
+                    onChange={(v) => updateProps({ show_brand: v === "on" })}
+                    options={[{ label: "On", value: "on" }, { label: "Off", value: "off" }]}
+                  />
+                </div>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Tagline</label>
+                  <SegmentedRow
+                    value={showTagline ? "on" : "off"}
+                    onChange={(v) => updateProps({ show_tagline: v === "on" })}
+                    options={[{ label: "On", value: "on" }, { label: "Off", value: "off" }]}
+                  />
+                </div>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Copyright</label>
+                  <SegmentedRow
+                    value={showCopyright ? "on" : "off"}
+                    onChange={(v) => updateProps({ show_copyright: v === "on" })}
+                    options={[{ label: "On", value: "on" }, { label: "Off", value: "off" }]}
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Newsletter Subscription */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Newsletter Subscription
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Show Newsletter Form</label>
+                <SegmentedRow
+                  value={showNewsletter ? "on" : "off"}
+                  onChange={(v) => updateProps({ show_newsletter: v === "on" })}
+                  options={[{ label: "On", value: "on" }, { label: "Off", value: "off" }]}
+                />
+              </div>
+
+              {showNewsletter && (
+                <>
+                  <div style={{ display: "grid", gap: "2px" }}>
+                    <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Heading</label>
+                    <input
+                      type="text"
+                      value={newsletterTitle}
+                      placeholder="Subscribe to Our Newsletter"
+                      onChange={(e) => updateProps({ newsletter_title: e.target.value })}
+                      style={sharedInputStyle()}
+                    />
+                  </div>
+
+                  <div style={{ display: "grid", gap: "2px" }}>
+                    <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Subtitle</label>
+                    <input
+                      type="text"
+                      value={newsletterSubtitle}
+                      placeholder="Get weekly updates..."
+                      onChange={(e) => updateProps({ newsletter_subtitle: e.target.value })}
+                      style={sharedInputStyle()}
+                    />
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                    <div style={{ display: "grid", gap: "2px" }}>
+                      <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Placeholder</label>
+                      <input
+                        type="text"
+                        value={newsletterPlaceholder}
+                        placeholder="Enter email..."
+                        onChange={(e) => updateProps({ newsletter_placeholder: e.target.value })}
+                        style={sharedInputStyle()}
+                      />
+                    </div>
+                    <div style={{ display: "grid", gap: "2px" }}>
+                      <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Button Text</label>
+                      <input
+                        type="text"
+                        value={newsletterButtonText}
+                        placeholder="Join"
+                        onChange={(e) => updateProps({ newsletter_button_text: e.target.value })}
+                        style={sharedInputStyle()}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* ── 2. Social Tab (Icons Toggle, Variants & Platform Links) ─────────── */}
+      {activeTab === "social" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Social Media Display
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Show Social Icons</label>
+                <SegmentedRow
+                  value={showSocialLinks ? "on" : "off"}
+                  onChange={(v) => updateProps({ show_social_links: v === "on" })}
+                  options={[{ label: "On", value: "on" }, { label: "Off", value: "off" }]}
+                />
+              </div>
+
+              {showSocialLinks && (
+                <div style={{ display: "grid", gap: "2px", marginTop: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Icon Style Variant</label>
+                  <SegmentedRow
+                    value={socialIconVariant}
+                    onChange={(val) => updateProps({ social_icon_variant: val })}
+                    options={[
+                      { label: "Pills", value: "pill" },
+                      { label: "Circles", value: "circle" },
+                      { label: "Rounded", value: "rounded" },
+                      { label: "Minimal", value: "minimal" },
+                    ]}
+                  />
+                </div>
+              )}
+            </div>
+          </section>
+
+          {showSocialLinks && (
+            <section style={sectionCardStyle(isLightMode)}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+                  Platforms ({socialLinks.length})
+                </span>
+                <button
+                  type="button"
+                  onClick={handleAddSocial}
+                  style={{
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    color: ADMIN_BLUE,
+                    background: "rgba(37,99,235,0.08)",
+                    border: "none",
+                    padding: "3px 8px",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                  }}
+                >
+                  + Add Social
+                </button>
+              </div>
+
+              <div style={{ display: "grid", gap: "6px" }}>
+                {socialLinks.map((s, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1.3fr auto",
+                      gap: "4px",
+                      alignItems: "center",
+                      background: "#f8fafc",
+                      padding: "4px 6px",
+                      borderRadius: "6px",
+                      border: "1px solid #e2e8f0",
+                    }}
+                  >
+                    <input
+                      type="text"
+                      value={s.platform}
+                      placeholder="Platform"
+                      onChange={(e) => handleUpdateSocial(idx, "platform", e.target.value)}
+                      style={{ ...sharedInputStyle(), fontSize: "11px", padding: "4px 6px" }}
+                    />
+                    <input
+                      type="text"
+                      value={s.url}
+                      placeholder="https://..."
+                      onChange={(e) => handleUpdateSocial(idx, "url", e.target.value)}
+                      style={{ ...sharedInputStyle(), fontSize: "11px", padding: "4px 6px" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveSocial(idx)}
+                      title="Remove Social Link"
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: "#ef4444",
+                        cursor: "pointer",
+                        padding: "4px",
+                        borderRadius: "4px",
+                        display: "grid",
+                        placeItems: "center",
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      )}
+
+      {/* ── 3. Design Tab (Spacing & Colors) ─────────────────────────────────── */}
+      {activeTab === "design" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Spacing & Container Width */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Container & Spacing
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Max Width
+                </label>
+                <SegmentedRow
+                  value={maxWidth}
+                  onChange={(val) => updateProps({ max_width: val })}
+                  options={[
+                    { label: "Full (100%)", value: "full" },
+                    { label: "1400px", value: "1400px" },
+                    { label: "1200px", value: "1200px" },
+                    { label: "1000px", value: "1000px" },
+                  ]}
+                />
+              </div>
+
+              <NumberStepperField
+                label="Top Spacing Margin"
+                value={marginTop}
+                min={0}
+                max={120}
+                step={4}
+                unit="px"
+                onChange={(val) => updateProps({ margin_top: `${val}px` })}
+              />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Vertical Pad"
+                  value={paddingY}
+                  min={8}
+                  max={120}
+                  step={4}
+                  unit="px"
+                  onChange={(val) => updateProps({ padding_y: `${val}px` })}
+                />
+                <NumberStepperField
+                  label="Horiz. Pad"
+                  value={paddingX}
+                  min={4}
+                  max={60}
+                  step={4}
+                  unit="px"
+                  onChange={(val) => updateProps({ padding_x: `${val}px` })}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Theme Colors */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Footer Theme Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Footer Background"
+                value={footerBg}
+                onChange={(val) => updateProps({ footer_bg: val, background_color: val })}
+              />
+              <CompactColorRow
+                label="Text Color"
+                value={footerTextColor}
+                onChange={(val) => updateProps({ footer_text_color: val, text_color: val })}
+              />
+              <CompactColorRow
+                label="Muted Text Color"
+                value={footerMutedColor}
+                onChange={(val) => updateProps({ footer_muted_color: val })}
+              />
+              <CompactColorRow
+                label="Divider / Border"
+                value={footerBorderColor}
+                onChange={(val) => updateProps({ footer_border_color: val })}
+              />
+              <CompactColorRow
+                label="Accent / Buttons"
+                value={resolvedAccent}
+                onChange={(val) => updateProps({ accent_color: val })}
+              />
+              <CompactColorRow
+                label="Input Background"
+                value={inputBgColor}
+                onChange={(val) => updateProps({ input_bg_color: val })}
+              />
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NavbarEditor({
   selectedBlock,
   isLightMode,
@@ -4018,11 +4650,37 @@ function NavbarEditor({
   };
 
   const updateField = (key: string, value: any) => {
-    onSiteDefinitionChange(updateThemeValues(siteDefinition, { [key]: value }));
+    const patch: Record<string, any> = { [key]: value };
+    if (key === "brandName" || key === "brand_name") {
+      patch.brandName = value;
+      patch.brand_name = value;
+    }
+    const nextDef = updateThemeValues(siteDefinition, patch);
+    if (key === "brandName" || key === "brand_name") {
+      if (!nextDef.site) nextDef.site = {} as any;
+      (nextDef.site as any).brand_name = value;
+      (nextDef as any).site_name = value;
+      (nextDef as any).name = value;
+      if (!nextDef.navbar) nextDef.navbar = {};
+      (nextDef.navbar as any).brandName = value;
+      (nextDef.navbar as any).brand_name = value;
+      if (!nextDef.footer) nextDef.footer = {};
+      (nextDef.footer as any).brandName = value;
+      (nextDef.footer as any).brand_name = value;
+    }
+    onSiteDefinitionChange(nextDef);
   };
 
   const isDark = theme?.mode === "dark";
-  const defaultBrandName = siteDefinition.brand_name || siteDefinition.site_name || siteDefinition.name || "My Store";
+  const defaultBrandName =
+    theme.brandName ||
+    theme.brand_name ||
+    siteDefinition.site?.brand_name ||
+    siteDefinition.navbar?.brandName ||
+    siteDefinition.navbar?.brand_name ||
+    siteDefinition.site_name ||
+    siteDefinition.name ||
+    "My Store";
 
   // Values
   const brandDisplayMode = getVal("brand_display_mode", "both");
@@ -4049,7 +4707,7 @@ function NavbarEditor({
   const navbarVariant = getVal("navbar_variant", "glassmorphism");
   const navbarPosition = getVal("navbar_position", "sticky");
   const navbarHeight = Number(getVal("navbar_height", 72));
-  const rawMaxWidth = String(getVal("navbar_max_width", "1280px"));
+  const rawMaxWidth = String(getVal("navbar_max_width", "100%"));
   const navbarMaxWidth = rawMaxWidth === "full" ? "100%" : rawMaxWidth;
   const navbarRadius = Number(getVal("navbar_radius", 16));
   const navbarPaddingX = Number(getVal("navbar_padding_x", 16));
@@ -4489,10 +5147,10 @@ function NavbarEditor({
                 value={navbarMaxWidth}
                 onChange={(val) => updateField("navbar_max_width", val)}
                 options={[
-                  { label: "1100px", value: "1100px" },
-                  { label: "1280px", value: "1280px" },
-                  { label: "1440px", value: "1440px" },
                   { label: "100%", value: "100%" },
+                  { label: "1440px", value: "1440px" },
+                  { label: "1280px", value: "1280px" },
+                  { label: "1100px", value: "1100px" },
                 ]}
               />
             </div>
@@ -4888,7 +5546,8 @@ export default function EditorSidebar({
       t === "product_carousel" || t === "productcarousel" ||
       t === "products_carousel" || t === "product_grid" ||
       t === "productgrid" || t === "featured_products" ||
-      t === "collection_products"
+      t === "collection_products" ||
+      t === "footer"
     );
   })();
   const currentSearchDisplayMode = siteDefinition.theme?.search_display_mode || "bar";
@@ -5602,7 +6261,18 @@ export default function EditorSidebar({
               )}
               <span style={{ fontSize: "9px", color: "#cbd5e1" }}>/</span>
               <span style={{ fontSize: "11px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {selectedBlock ? (editableConfig?.displayName || selectedBlock.type.toUpperCase()) : activePageTitle}
+                {selectedBlock
+                  ? editableConfig?.displayName ||
+                    (selectedBlock.type === "product_grid" || selectedBlock.type === "productgrid"
+                      ? "Product Grid"
+                      : selectedBlock.type === "hero_banner" || selectedBlock.type === "herobanner" || selectedBlock.type === "hero"
+                      ? "Hero Banner"
+                      : selectedBlock.type === "navbar" || selectedBlock.type === "header"
+                      ? "Navbar"
+                      : selectedBlock.type === "footer"
+                      ? "Footer"
+                      : selectedBlock.type.toUpperCase())
+                  : activePageTitle}
               </span>
             </div>
             {selectedBlock && (
@@ -5678,6 +6348,15 @@ export default function EditorSidebar({
                 selectedBlock.type === "featured_products" ||
                 selectedBlock.type === "collection_products" ? (
                 <ProductCarouselEditor
+                  selectedBlock={selectedBlock}
+                  isLightMode={isLightMode}
+                  textColor={textColor}
+                  accentColor={accentColor}
+                  onSiteDefinitionChange={onSiteDefinitionChange}
+                  siteDefinition={siteDefinition}
+                />
+              ) : selectedBlock.type === "footer" ? (
+                <FooterEditor
                   selectedBlock={selectedBlock}
                   isLightMode={isLightMode}
                   textColor={textColor}

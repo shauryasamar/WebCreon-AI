@@ -394,7 +394,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
   const navbarHeight = theme?.navbar_height ?? 72;
   const navbarHeightNum = Number(navbarHeight) || 72;
-  const rawMaxWidth = (props as any).navbar_max_width || theme?.navbar_max_width || "1280px";
+  const rawMaxWidth = (props as any).navbar_max_width || theme?.navbar_max_width || "full";
   const navbarMaxWidth =
     String(rawMaxWidth) === "100%" || String(rawMaxWidth) === "full"
       ? "100%"
