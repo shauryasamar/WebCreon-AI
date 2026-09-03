@@ -1206,16 +1206,30 @@ const RenderPage: React.FC<RenderPageProps> = ({
   );
 
   const paymentBlock = blocksToRender.find((block) =>
+    block.id === "payment_methods" ||
+    block.type === "payment_methods" ||
+    block.type === "paymentmethods" ||
     PAYMENT_TYPES.has(block.type.toLowerCase())
-  );
+  ) || {
+    id: "payment_methods",
+    type: "payment_methods",
+    props: {},
+  };
 
   const placeOrderBlock = blocksToRender.find((block) =>
     PLACE_ORDER_TYPES.has(block.type.toLowerCase())
   );
 
   const summaryBlock = blocksToRender.find((block) =>
+    block.id === "checkout_order_summary" ||
+    block.type === "checkout_order_summary" ||
+    block.type === "checkoutordersummary" ||
     CHECKOUT_SUMMARY_TYPES.has(block.type.toLowerCase())
-  );
+  ) || {
+    id: "checkout_order_summary",
+    type: "checkout_order_summary",
+    props: {},
+  };
 
   const {
     isDark,

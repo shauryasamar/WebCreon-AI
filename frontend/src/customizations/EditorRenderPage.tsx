@@ -1119,6 +1119,13 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
       setCheckoutStep("delivery");
       return;
     }
+    if (
+      selectedBlockId === "payment_methods" ||
+      selectedBlockId === "checkout_order_summary"
+    ) {
+      setCheckoutStep("payment");
+      return;
+    }
     const matched = blocksToRender.find((b) => (b.id || b.type) === selectedBlockId);
     if (!matched) return;
     const type = (matched.type || "").toLowerCase();
@@ -1268,7 +1275,8 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
         (selectedBlockId === "product_grid" && (block.type.includes("grid") || block.type.includes("product") || isProductListingBlock)) ||
         (selectedBlockId === "product_detail" && (PRODUCT_DETAIL_TYPES.has(block.type.toLowerCase()) || block.type.includes("detail"))) ||
         (selectedBlockId === "delivery_form" && DELIVERY_TYPES.has(block.type.toLowerCase())) ||
-        (selectedBlockId === "payment_methods" && PAYMENT_TYPES.has(block.type.toLowerCase())) ||
+        (selectedBlockId === "payment_methods" && (block.id === "payment_methods" || block.type === "payment_methods" || PAYMENT_TYPES.has(block.type.toLowerCase()))) ||
+        (selectedBlockId === "checkout_order_summary" && (block.id === "checkout_order_summary" || block.type === "checkout_order_summary" || CHECKOUT_SUMMARY_TYPES.has(block.type.toLowerCase()))) ||
         (selectedBlockId === "place_order_cta" && PLACE_ORDER_TYPES.has(block.type.toLowerCase())) ||
         ((selectedBlockId === "cart_view" || selectedBlockId === "cart" || selectedBlockId === "cart_sidebar") &&
           (CART_PAGE_TYPES.has(block.type.toLowerCase()) || isCartBlock)))
@@ -1361,16 +1369,30 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
   );
 
   const paymentBlock = blocksToRender.find((block) =>
+    block.id === "payment_methods" ||
+    block.type === "payment_methods" ||
+    block.type === "paymentmethods" ||
     PAYMENT_TYPES.has(block.type.toLowerCase())
-  );
+  ) || {
+    id: "payment_methods",
+    type: "payment_methods",
+    props: {},
+  };
 
   const placeOrderBlock = blocksToRender.find((block) =>
     PLACE_ORDER_TYPES.has(block.type.toLowerCase())
   );
 
   const summaryBlock = blocksToRender.find((block) =>
+    block.id === "checkout_order_summary" ||
+    block.type === "checkout_order_summary" ||
+    block.type === "checkoutordersummary" ||
     CHECKOUT_SUMMARY_TYPES.has(block.type.toLowerCase())
-  );
+  ) || {
+    id: "checkout_order_summary",
+    type: "checkout_order_summary",
+    props: {},
+  };
 
   const usedBlockIds = new Set(
     [checkoutStepsBlock, deliveryBlock, paymentBlock, placeOrderBlock, summaryBlock]

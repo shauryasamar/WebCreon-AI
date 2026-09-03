@@ -129,6 +129,7 @@ function PageBlocksTreeView({
         { id: "delivery_map_picker", type: "delivery_map_picker", name: "Map Location Picker" },
         { id: "delivery_address_form", type: "delivery_address_form", name: "Add / Edit Address Form" },
         { id: "payment_methods", type: "payment_methods", name: "Payment Methods" },
+        { id: "checkout_order_summary", type: "checkout_order_summary", name: "Order Summary" },
         { id: "place_order_cta", type: "place_order_cta", name: "Place Order" },
       ],
     },
@@ -5832,12 +5833,679 @@ function CheckoutStepsEditor({
   );
 }
 
+function CompactToggleRow({
+  label,
+  subtitle,
+  checked,
+  onChange,
+}: {
+  label: string;
+  subtitle?: string;
+  checked: boolean;
+  onChange: (val: boolean) => void;
+}) {
+  return (
+    <div
+      onClick={() => onChange(!checked)}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "8px",
+        padding: "5px 7px",
+        borderRadius: "5px",
+        background: checked ? "rgba(37,99,235,0.05)" : "#f8fafc",
+        border: `1px solid ${checked ? "#bfdbfe" : "#e2e8f0"}`,
+        cursor: "pointer",
+        transition: "all 0.15s ease",
+        userSelect: "none",
+      }}
+    >
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: "10px", fontWeight: 700, color: checked ? "#1e40af" : "#334155", lineHeight: 1.2 }}>
+          {label}
+        </div>
+        {subtitle && (
+          <div style={{ fontSize: "8.5px", color: "#64748b", marginTop: "1px" }}>
+            {subtitle}
+          </div>
+        )}
+      </div>
+      <div
+        style={{
+          width: "28px",
+          height: "16px",
+          borderRadius: "999px",
+          background: checked ? ADMIN_BLUE : "#cbd5e1",
+          position: "relative",
+          transition: "background 0.2s ease",
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            width: "12px",
+            height: "12px",
+            borderRadius: "50%",
+            background: "#ffffff",
+            position: "absolute",
+            top: "2px",
+            left: checked ? "14px" : "2px",
+            transition: "left 0.2s ease",
+            boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function isPaymentMethodsBlock(block?: any): boolean {
+  if (!block) return false;
+  const rawType = String(block.type || "").toLowerCase().trim();
+  const rawId = String(block.id || "").toLowerCase().trim();
+  const normType = rawType.replace(/[-_\s]/g, "");
+  const normId = rawId.replace(/[-_\s]/g, "");
+
+  return (
+    normType === "paymentmethods" ||
+    normType === "payment" ||
+    normId === "paymentmethods" ||
+    normId === "payment" ||
+    rawType.includes("payment_method") ||
+    rawId.includes("payment_method") ||
+    rawType.includes("paymentmethod") ||
+    rawId.includes("paymentmethod")
+  );
+}
+
+function isCheckoutSummaryBlock(block?: any): boolean {
+  if (!block) return false;
+  const rawType = String(block.type || "").toLowerCase().trim();
+  const rawId = String(block.id || "").toLowerCase().trim();
+  return (
+    rawId === "checkout_order_summary" ||
+    rawType === "checkout_order_summary" ||
+    rawId === "checkoutordersummary" ||
+    rawType === "checkoutordersummary"
+  );
+}
+
+function PaymentMethodsEditor({
+  selectedBlock,
+  isLightMode,
+  textColor: _textColor,
+  accentColor: _accentColor,
+  onSiteDefinitionChange,
+  siteDefinition,
+}: {
+  selectedBlock: any;
+  isLightMode: boolean;
+  textColor: string;
+  accentColor: string;
+  onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
+  siteDefinition: EditorSiteDefinition;
+}) {
+  const [activeTab, setActiveTab] = useState<"layout" | "content" | "colors">("layout");
+  const p = selectedBlock?.props ?? {};
+
+  const updateProps = (patch: Record<string, any>) => {
+    const nextDef = JSON.parse(JSON.stringify(siteDefinition));
+    let updated = false;
+
+    if (Array.isArray(nextDef.pages)) {
+      nextDef.pages = nextDef.pages.map((page: any) => {
+        const isCheckoutP =
+          page.role === "checkout" ||
+          page.page_type === "checkout" ||
+          page.slug === "checkout" ||
+          page.route === "/checkout" ||
+          page.route === "checkout";
+
+        if (isCheckoutP) {
+          let found = false;
+          const blocks = (page.blocks ?? []).map((block: any) => {
+            if (
+              block.id === "payment_methods" ||
+              block.type === "payment_methods" ||
+              block.type === "paymentmethods" ||
+              block.id === selectedBlock.id ||
+              block.type === selectedBlock.type
+            ) {
+              found = true;
+              updated = true;
+              return {
+                ...block,
+                props: {
+                  ...(block.props ?? {}),
+                  ...patch,
+                },
+              };
+            }
+            return block;
+          });
+
+          if (!found) {
+            updated = true;
+            blocks.push({
+              id: "payment_methods",
+              type: "payment_methods",
+              props: { ...(selectedBlock.props ?? {}), ...patch },
+            });
+          }
+
+          return { ...page, blocks };
+        }
+        return page;
+      });
+    }
+
+    if (!updated) {
+      if (!Array.isArray(nextDef.pages)) nextDef.pages = [];
+      nextDef.pages.push({
+        id: "page-checkout",
+        name: "Checkout",
+        route: "/checkout",
+        role: "checkout",
+        page_type: "checkout",
+        show_in_nav: false,
+        blocks: [
+          {
+            id: "payment_methods",
+            type: "payment_methods",
+            props: { ...(selectedBlock.props ?? {}), ...patch },
+          },
+        ],
+      });
+    }
+
+    onSiteDefinitionChange(nextDef);
+  };
+
+  const getStr = (key: string, fallback = "") =>
+    p[key] !== undefined && p[key] !== null ? String(p[key]) : fallback;
+
+  const parseNumProp = (val: any, fallback: number) => {
+    if (val === undefined || val === null || val === "") return fallback;
+    const n = Number(val);
+    return isNaN(n) ? fallback : n;
+  };
+
+  const textInputStyle: React.CSSProperties = {
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+    boxSizing: "border-box",
+    height: "26px",
+    padding: "2px 6px",
+    borderRadius: "4px",
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    fontSize: "11px",
+    color: "#0f172a",
+  };
+
+  const fieldLabelStyle: React.CSSProperties = {
+    fontSize: "9px",
+    fontWeight: 700,
+    color: "#64748b",
+    textTransform: "uppercase",
+  };
+
+  return (
+    <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
+      {/* 3 Navigation Tabs with Layout Coming First */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: "2px",
+          padding: "2px",
+          background: "#f1f5f9",
+          borderRadius: "6px",
+          width: "100%",
+          maxWidth: "100%",
+          boxSizing: "border-box",
+          minWidth: 0,
+        }}
+      >
+        {[
+          { id: "layout", label: "Layout" },
+          { id: "content", label: "Content" },
+          { id: "colors", label: "Colors" },
+        ].map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as any)}
+              style={{
+                padding: "5px 1px",
+                border: "none",
+                borderRadius: "4px",
+                background: isActive ? "#ffffff" : "transparent",
+                color: isActive ? ADMIN_BLUE : "#64748b",
+                fontWeight: isActive ? 800 : 600,
+                fontSize: "10px",
+                cursor: "pointer",
+                textAlign: "center",
+                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 1. LAYOUT TAB (METHODS TOGGLES + RADII + SPACING) */}
+      {activeTab === "layout" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Method Toggles */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Enabled Payment Methods
+            </div>
+            <div style={{ display: "grid", gap: "5px" }}>
+              <CompactToggleRow
+                label="UPI (Google Pay / PhonePe / Paytm / QR)"
+                subtitle="Instant UPI App or QR code payment"
+                checked={p.enable_upi !== false}
+                onChange={(val) => updateProps({ enable_upi: val })}
+              />
+              <CompactToggleRow
+                label="Credit / Debit Card"
+                subtitle="Visa, Mastercard, RuPay"
+                checked={p.enable_card !== false}
+                onChange={(val) => updateProps({ enable_card: val })}
+              />
+              <CompactToggleRow
+                label="Netbanking"
+                subtitle="50+ major Indian banks"
+                checked={p.enable_netbanking !== false}
+                onChange={(val) => updateProps({ enable_netbanking: val })}
+              />
+              <CompactToggleRow
+                label="Cash on Delivery (COD)"
+                subtitle="Pay with cash upon delivery"
+                checked={p.enable_cod !== false}
+                onChange={(val) => updateProps({ enable_cod: val })}
+              />
+            </div>
+          </section>
+
+          {/* Corner Radii */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Corner Radii
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Container Radius"
+                  value={parseNumProp(p.border_radius, 14)}
+                  min={0}
+                  max={36}
+                  step={1}
+                  unit="px"
+                  onChange={(val) => updateProps({ border_radius: val })}
+                />
+                <NumberStepperField
+                  label="Option Radius"
+                  value={parseNumProp(p.item_radius, 12)}
+                  min={0}
+                  max={24}
+                  step={1}
+                  unit="px"
+                  onChange={(val) => updateProps({ item_radius: val })}
+                />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Button Radius"
+                  value={parseNumProp(p.button_border_radius, 10)}
+                  min={0}
+                  max={24}
+                  step={1}
+                  unit="px"
+                  onChange={(val) => updateProps({ button_border_radius: val })}
+                />
+                <NumberStepperField
+                  label="Badge Radius"
+                  value={parseNumProp(p.badge_border_radius, 12)}
+                  min={0}
+                  max={24}
+                  step={1}
+                  unit="px"
+                  onChange={(val) => updateProps({ badge_border_radius: val })}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Spacing & Dimensions */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Spacing & Dimensions
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+              <NumberStepperField
+                label="Padding"
+                value={parseNumProp(p.padding, 18)}
+                min={6}
+                max={40}
+                step={2}
+                unit="px"
+                onChange={(val) => updateProps({ padding: val })}
+              />
+              <NumberStepperField
+                label="Option Gap"
+                value={parseNumProp(p.gap, 12)}
+                min={4}
+                max={30}
+                step={2}
+                unit="px"
+                onChange={(val) => updateProps({ gap: val })}
+              />
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* 2. CONTENT TAB */}
+      {activeTab === "content" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Header & Button Labels
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Section Title</label>
+                <input
+                  type="text"
+                  value={getStr("title", "Payment method")}
+                  placeholder="Payment method"
+                  onChange={(e) => updateProps({ title: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Subtitle</label>
+                <input
+                  type="text"
+                  value={getStr("subtitle", "Choose how you want to complete payment for this order.")}
+                  placeholder="Choose payment method"
+                  onChange={(e) => updateProps({ subtitle: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Back Button</label>
+                  <input
+                    type="text"
+                    value={getStr("back_button_label", "← Back")}
+                    placeholder="← Back"
+                    onChange={(e) => updateProps({ back_button_label: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Continue Button</label>
+                  <input
+                    type="text"
+                    value={getStr("continue_button_label", "Review order →")}
+                    placeholder="Review order →"
+                    onChange={(e) => updateProps({ continue_button_label: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Method Labels & Subtitles
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>UPI Title & Badge</label>
+                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "4px" }}>
+                  <input
+                    type="text"
+                    value={getStr("upi_title", "UPI (Google Pay, PhonePe, Paytm, QR)")}
+                    placeholder="UPI Title"
+                    onChange={(e) => updateProps({ upi_title: e.target.value })}
+                    style={textInputStyle}
+                  />
+                  <input
+                    type="text"
+                    value={getStr("upi_badge", "Fastest")}
+                    placeholder="Badge"
+                    onChange={(e) => updateProps({ upi_badge: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+              </div>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Card Title</label>
+                <input
+                  type="text"
+                  value={getStr("card_title", "Credit / Debit Card")}
+                  placeholder="Card Title"
+                  onChange={(e) => updateProps({ card_title: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Netbanking Title</label>
+                <input
+                  type="text"
+                  value={getStr("netbanking_title", "Netbanking")}
+                  placeholder="Netbanking Title"
+                  onChange={(e) => updateProps({ netbanking_title: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>COD Title</label>
+                <input
+                  type="text"
+                  value={getStr("cod_title", "Cash on Delivery (COD)")}
+                  placeholder="COD Title"
+                  onChange={(e) => updateProps({ cod_title: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* 3. COLORS TAB */}
+      {activeTab === "colors" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Container & Cards
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Container Background"
+                value={p.background_color || (siteDefinition.theme?.mode === "dark" ? "#0f172a" : "#ffffff")}
+                onChange={(val) => updateProps({ background_color: val })}
+              />
+              <CompactColorRow
+                label="Container Border"
+                value={p.border_color || (siteDefinition.theme?.mode === "dark" ? "#334155" : "#e2e8f0")}
+                onChange={(val) => updateProps({ border_color: val })}
+              />
+              <CompactColorRow
+                label="Option Card Background"
+                value={p.card_color || (siteDefinition.theme?.mode === "dark" ? "#1e293b" : "#ffffff")}
+                onChange={(val) => updateProps({ card_color: val })}
+              />
+              <CompactColorRow
+                label="Selected Option Background"
+                value={p.selected_card_bg || "rgba(37,99,235,0.08)"}
+                onChange={(val) => updateProps({ selected_card_bg: val })}
+              />
+              <CompactColorRow
+                label="Selected Accent / Ring"
+                value={p.accent_color || siteDefinition.theme?.accent_color || ADMIN_BLUE}
+                onChange={(val) => updateProps({ accent_color: val })}
+              />
+            </div>
+          </section>
+
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Text & Action Buttons
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Primary Text"
+                value={p.text_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                onChange={(val) => updateProps({ text_color: val })}
+              />
+              <CompactColorRow
+                label="Muted / Subtitle Text"
+                value={p.muted_text_color || (siteDefinition.theme?.mode === "dark" ? "#94a3b8" : "#64748b")}
+                onChange={(val) => updateProps({ muted_text_color: val })}
+              />
+              <CompactColorRow
+                label="Continue Button Background"
+                value={p.button_bg_color || siteDefinition.theme?.accent_color || ADMIN_BLUE}
+                onChange={(val) => updateProps({ button_bg_color: val })}
+              />
+              <CompactColorRow
+                label="Continue Button Text"
+                value={p.button_text_color || "#ffffff"}
+                onChange={(val) => updateProps({ button_text_color: val })}
+              />
+              <CompactColorRow
+                label="Back Button Background"
+                value={p.back_button_bg || (siteDefinition.theme?.mode === "dark" ? "#1e293b" : "#f1f5f9")}
+                onChange={(val) => updateProps({ back_button_bg: val })}
+              />
+              <CompactColorRow
+                label="Back Button Text"
+                value={p.back_button_text || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                onChange={(val) => updateProps({ back_button_text: val })}
+              />
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CheckoutOrderSummaryNotice({
+  isLightMode,
+  onSelectPage,
+  onSelectBlock,
+}: {
+  isLightMode: boolean;
+  onSelectPage?: (pageId: string) => void;
+  onSelectBlock?: (blockId: string | null) => void;
+}) {
+  return (
+    <div style={{ display: "grid", gap: "10px", width: "100%", boxSizing: "border-box" }}>
+      <section
+        style={{
+          ...sectionCardStyle(isLightMode),
+          padding: "14px 12px",
+          background: "linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)",
+          border: "1px solid #cbd5e1",
+          borderRadius: "8px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+          <div
+            style={{
+              width: "28px",
+              height: "28px",
+              borderRadius: "6px",
+              background: "rgba(37,99,235,0.1)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: ADMIN_BLUE,
+              flexShrink: 0,
+            }}
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="16" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12.01" y2="8" />
+            </svg>
+          </div>
+          <div>
+            <div style={{ fontSize: "12px", fontWeight: 800, color: "#0f172a" }}>
+              Order Summary (Inherited)
+            </div>
+            <span style={{ fontSize: "9px", fontWeight: 700, padding: "1px 5px", borderRadius: "3px", background: "#e0f2fe", color: "#0369a1" }}>
+              SYNCS WITH CART
+            </span>
+          </div>
+        </div>
+
+        <p style={{ margin: "0 0 10px", fontSize: "11px", color: "#475569", lineHeight: 1.5 }}>
+          This Order Summary component is inherited directly from your <strong>Shopping Cart</strong> settings to ensure consistent pricing, promo rules, and labels between the Cart and Checkout pages.
+        </p>
+
+        <p style={{ margin: "0 0 14px", fontSize: "10.5px", color: "#64748b", lineHeight: 1.4 }}>
+          To customize this component's text labels, promo input, border radii, or colors, please edit it on the <strong>Cart</strong> page.
+        </p>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (onSelectPage) onSelectPage("/cart");
+            if (onSelectBlock) onSelectBlock("cart_sidebar");
+          }}
+          style={{
+            width: "100%",
+            height: "32px",
+            borderRadius: "6px",
+            border: "none",
+            background: ADMIN_BLUE,
+            color: "#ffffff",
+            fontSize: "11px",
+            fontWeight: 700,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "6px",
+            boxShadow: "0 1px 3px rgba(37,99,235,0.3)",
+            transition: "all 0.15s ease",
+          }}
+        >
+          Go to Cart Page to Edit →
+        </button>
+      </section>
+    </div>
+  );
+}
+
 function isDeliveryBlock(block?: any): boolean {
   if (!block) return false;
   if (isCheckoutStepsBlock(block)) return false;
+  if (isPaymentMethodsBlock(block)) return false;
+  if (isCheckoutSummaryBlock(block)) return false;
   const rawType = String(block.type || "").toLowerCase().trim();
   const rawId = String(block.id || "").toLowerCase().trim();
   if (rawType.includes("checkoutstep") || rawId.includes("checkoutstep")) return false;
+  if (rawType.includes("payment") || rawId.includes("payment")) return false;
   const normType = rawType.replace(/[-_\s]/g, "");
   const normId = rawId.replace(/[-_\s]/g, "");
 
@@ -8348,6 +9016,10 @@ export default function EditorSidebar({
       t === "cart_sidebar" || t === "cartsidebar" ||
       isCheckoutStepsBlock(selectedBlock) ||
       t === "checkout_steps" || t === "checkoutsteps" ||
+      isPaymentMethodsBlock(selectedBlock) ||
+      t === "payment_methods" || t === "paymentmethods" ||
+      isCheckoutSummaryBlock(selectedBlock) ||
+      t === "checkout_order_summary" || t === "checkoutordersummary" ||
       isDeliveryBlock(selectedBlock) ||
       t === "delivery_form" || t === "deliveryform" ||
       t === "delivery_map_picker" || t === "delivery_address_form"
@@ -9097,6 +9769,18 @@ export default function EditorSidebar({
                           : selectedBlock.type === "delivery_address_form"
                           ? "Add / Edit Address Form"
                           : "Delivery Form")
+                      : isPaymentMethodsBlock(selectedBlock) ||
+                        selectedBlock.id === "payment_methods" ||
+                        selectedBlock.type === "payment_methods" ||
+                        selectedBlock.type === "paymentmethods" ||
+                        selectedBlockId === "payment_methods"
+                      ? "Payment Methods"
+                      : isCheckoutSummaryBlock(selectedBlock) ||
+                        selectedBlock.id === "checkout_order_summary" ||
+                        selectedBlock.type === "checkout_order_summary" ||
+                        selectedBlock.type === "checkoutordersummary" ||
+                        selectedBlockId === "checkout_order_summary"
+                      ? "Order Summary"
                       : selectedBlock.type.toUpperCase())
                   : activePageTitle}
               </span>
@@ -9197,8 +9881,8 @@ export default function EditorSidebar({
                 selectedBlock.type === "cartsidebar" ||
                 selectedBlock.type === "cart_items" ||
                 selectedBlock.type === "cartitems" ||
-                selectedBlock.type === "order_summary" ||
-                selectedBlock.type === "ordersummary" ? (
+                (selectedBlock.type === "order_summary" && !isCheckoutSummaryBlock(selectedBlock) && selectedBlock.id !== "checkout_order_summary") ||
+                (selectedBlock.type === "ordersummary" && !isCheckoutSummaryBlock(selectedBlock) && selectedBlock.id !== "checkout_order_summary") ? (
                 <CartEditor
                   selectedBlock={selectedBlock}
                   isLightMode={isLightMode}
@@ -9243,6 +9927,29 @@ export default function EditorSidebar({
                   accentColor={accentColor}
                   onSiteDefinitionChange={onSiteDefinitionChange}
                   siteDefinition={siteDefinition}
+                />
+              ) : isPaymentMethodsBlock(selectedBlock) ||
+                selectedBlock.id === "payment_methods" ||
+                selectedBlock.type === "payment_methods" ||
+                selectedBlock.type === "paymentmethods" ||
+                selectedBlockId === "payment_methods" ? (
+                <PaymentMethodsEditor
+                  selectedBlock={selectedBlock}
+                  isLightMode={isLightMode}
+                  textColor={textColor}
+                  accentColor={accentColor}
+                  onSiteDefinitionChange={onSiteDefinitionChange}
+                  siteDefinition={siteDefinition}
+                />
+              ) : isCheckoutSummaryBlock(selectedBlock) ||
+                selectedBlock.id === "checkout_order_summary" ||
+                selectedBlock.type === "checkout_order_summary" ||
+                selectedBlock.type === "checkoutordersummary" ||
+                selectedBlockId === "checkout_order_summary" ? (
+                <CheckoutOrderSummaryNotice
+                  isLightMode={isLightMode}
+                  onSelectPage={onSelectPage}
+                  onSelectBlock={onSelectBlock}
                 />
               ) : (
                 fieldGroups.map((group) => (

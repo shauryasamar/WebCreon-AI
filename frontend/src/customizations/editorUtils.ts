@@ -539,6 +539,8 @@ const CHECKOUT_BLOCK_TYPES = new Set([
   "placeordercta",
   "checkout_summary",
   "checkoutsummary",
+  "checkout_order_summary",
+  "checkoutordersummary",
   "order_summary",
   "ordersummary",
 ]);
@@ -655,6 +657,51 @@ export function findBlockById(
     return {
       id: "checkout_steps",
       type: "checkout_steps",
+      props: {},
+    };
+  }
+
+  if (blockId === "checkout_order_summary" || blockId === "checkoutordersummary") {
+    const checkoutP = siteDefinition.pages.find(
+      (p) =>
+        p.role === "checkout" ||
+        p.page_type === "checkout" ||
+        (p as any).slug === "checkout" ||
+        isCheckoutPageRoute(p.route)
+    );
+    const inCheckout = checkoutP?.blocks?.find(
+      (b) =>
+        b.id === "checkout_order_summary" ||
+        b.type === "checkout_order_summary" ||
+        b.type === "order_summary" ||
+        b.id === "order_summary"
+    );
+    if (inCheckout) return inCheckout;
+    return {
+      id: "checkout_order_summary",
+      type: "checkout_order_summary",
+      props: {},
+    };
+  }
+
+  if (blockId === "payment_methods" || blockId === "paymentmethods") {
+    const checkoutP = siteDefinition.pages.find(
+      (p) =>
+        p.role === "checkout" ||
+        p.page_type === "checkout" ||
+        (p as any).slug === "checkout" ||
+        isCheckoutPageRoute(p.route)
+    );
+    const inCheckout = checkoutP?.blocks?.find(
+      (b) =>
+        b.id === "payment_methods" ||
+        b.type === "payment_methods" ||
+        b.type === "paymentmethods"
+    );
+    if (inCheckout) return inCheckout;
+    return {
+      id: "payment_methods",
+      type: "payment_methods",
       props: {},
     };
   }
