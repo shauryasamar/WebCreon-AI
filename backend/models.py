@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, Column, DateTime, Index, Numeric, String, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, Index, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
@@ -20,7 +20,20 @@ class Admin(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     email: str = Field(index=True, unique=True)
     name: Optional[str] = Field(default=None)
-    password_hash: str
+    gender: Optional[str] = Field(default=None)
+    phone: Optional[str] = Field(default=None)
+    avatar_url: Optional[str] = Field(default=None)
+    role: str = Field(default="super_admin")
+    auth_provider: str = Field(default="email")
+    google_id: Optional[str] = Field(default=None)
+    is_verified: bool = Field(default=True)
+    is_active: bool = Field(default=True)
+    timezone: str = Field(default="Asia/Kolkata")
+    reset_token: Optional[str] = Field(default=None)
+    reset_token_expires_at: Optional[datetime] = Field(default=None)
+    last_login_at: Optional[datetime] = Field(default=None)
+    last_login_ip: Optional[str] = Field(default=None)
+    password_hash: Optional[str] = Field(default=None)
     created_at: datetime = Field(
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False),
@@ -42,6 +55,10 @@ class Site(SQLModel, table=True):
     checkout_settings: Optional[dict[str, Any]] = Field(
         default=None,
         sa_column=Column(JSONB, nullable=True),
+    )
+    default_return_window_days: int = Field(
+        default=7,
+        sa_column=Column(Integer, nullable=False, default=7),
     )
     version: int = Field(default=1, nullable=False)
     created_at: datetime = Field(
@@ -80,7 +97,17 @@ class User(SQLModel, table=True):
     name: Optional[str] = Field(default=None, nullable=True)
     email: Optional[str] = Field(default=None, index=True, nullable=True)
     phone: Optional[str] = Field(default=None, nullable=True)
+    gender: Optional[str] = Field(default=None, nullable=True)
+    date_of_birth: Optional[str] = Field(default=None, nullable=True)
     password_hash: Optional[str] = Field(default=None, nullable=True)
+    auth_provider: str = Field(default="local", nullable=False)
+    google_id: Optional[str] = Field(default=None, nullable=True)
+    avatar_url: Optional[str] = Field(default=None, nullable=True)
+    reset_token: Optional[str] = Field(default=None, nullable=True)
+    reset_token_expires_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
 
     is_guest: bool = Field(default=False, nullable=False)
     is_active: bool = Field(default=True, nullable=False)
@@ -141,6 +168,11 @@ class UserAddress(SQLModel, table=True):
         ),
     )
 
+    # Geo-location (pinned or geocoded)
+    latitude: Optional[float] = Field(default=None, nullable=True)
+    longitude: Optional[float] = Field(default=None, nullable=True)
+    geo_accuracy: Optional[str] = Field(default=None, max_length=30, nullable=True)  # 'pinned' | 'geocoded'
+
 
 class Category(SQLModel, table=True):
     __tablename__ = "categories"
@@ -171,6 +203,11 @@ class Collection(SQLModel, table=True):
     name: str = Field(max_length=255, nullable=False)
     slug: Optional[str] = Field(default=None, max_length=255)
     description: str = Field(default="")
+    is_badge: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, default=False),
+    )
+    badge_color: Optional[str] = Field(default=None, max_length=50, nullable=True)
     created_at: datetime = Field(
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False),
@@ -221,9 +258,42 @@ class Product(SQLModel, table=True):
 
     stock: int = Field(default=0, nullable=False)
     in_stock: bool = Field(default=True, nullable=False)
+    is_active: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, default=True),
+    )
+    sku: Optional[str] = Field(default=None, max_length=100, nullable=True, index=True)
+    hsn_code: Optional[str] = Field(default=None, max_length=50, nullable=True)
+    video_url: Optional[str] = Field(default=None, nullable=True)
+    video_position: Optional[int] = Field(
+        default=2,
+        sa_column=Column(Integer, nullable=True, default=2),
+    )
+    sibling_group: Optional[str] = Field(default=None, max_length=100, nullable=True, index=True)
+    sibling_label: Optional[str] = Field(default=None, max_length=100, nullable=True)
     weight_grams: int = Field(default=500, nullable=False)  # used for shipping label weight
+    length_cm: Optional[float] = Field(
+        default=None,
+        sa_column=Column(Numeric(8, 2), nullable=True),
+    )
+    width_cm: Optional[float] = Field(
+        default=None,
+        sa_column=Column(Numeric(8, 2), nullable=True),
+    )
+    height_cm: Optional[float] = Field(
+        default=None,
+        sa_column=Column(Numeric(8, 2), nullable=True),
+    )
+    return_window_days: Optional[int] = Field(
+        default=None,
+        sa_column=Column(Integer, nullable=True),
+    )
 
     images: list[str] = Field(
+        default_factory=list,
+        sa_column=Column(JSONB, nullable=False),
+    )
+    highlights: list[str] = Field(
         default_factory=list,
         sa_column=Column(JSONB, nullable=False),
     )
@@ -381,6 +451,11 @@ class Order(SQLModel, table=True):
     )
     status: str = Field(default="placed", nullable=False)
     cancel_reason: Optional[str] = Field(default=None)
+    coupon_code: Optional[str] = Field(default=None, max_length=50, nullable=True)
+    discount_amount: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(12, 2), nullable=False, default=Decimal("0.00")),
+    )
     total: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
     confirmed_at: Optional[datetime] = Field(
         default=None,
@@ -428,7 +503,7 @@ class OrderItem(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     order_id: UUID = Field(foreign_key="orders.id", index=True)
     site_id: UUID = Field(foreign_key="sites.id", index=True)
-    product_id: UUID = Field(foreign_key="products.id", index=True)
+    product_id: Optional[UUID] = Field(default=None, foreign_key="products.id", index=True, nullable=True)
 
     product_name: str
     product_slug: Optional[str] = Field(default=None)
@@ -446,6 +521,10 @@ class OrderItem(SQLModel, table=True):
     line_total: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
     status: str = Field(default="placed", max_length=40, nullable=False)
     returnable_quantity: int = Field(default=0, nullable=False)
+    return_window_days: int = Field(
+        default=7,
+        sa_column=Column(Integer, nullable=False, default=7),
+    )
     pricing_snapshot: Optional[dict[str, Any]] = Field(
         default=None,
         sa_column=Column(JSONB, nullable=True),
@@ -461,6 +540,107 @@ class OrderItem(SQLModel, table=True):
             nullable=False,
             onupdate=utc_now,
         ),
+    )
+
+
+class Coupon(SQLModel, table=True):
+    __tablename__ = "coupons"
+    __table_args__ = (
+        UniqueConstraint("site_id", "code", name="uq_site_coupons_code"),
+        Index("ix_coupons_site_id_code", "site_id", "code"),
+        Index("ix_coupons_site_id_is_active", "site_id", "is_active"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    site_id: UUID = Field(foreign_key="sites.id", index=True)
+
+    code: str = Field(max_length=50, nullable=False)
+    description: Optional[str] = Field(default="", nullable=True)
+
+    discount_type: str = Field(default="percentage", max_length=30, nullable=False)
+    discount_value: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False),
+    )
+    max_discount_amount: Optional[Decimal] = Field(
+        default=None,
+        sa_column=Column(Numeric(10, 2), nullable=True),
+    )
+
+    min_order_value: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False, default=Decimal("0.00")),
+    )
+    is_first_order_only: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, default=False),
+    )
+
+    total_usage_limit: Optional[int] = Field(
+        default=None,
+        sa_column=Column(Integer, nullable=True),
+    )
+    times_used: int = Field(
+        default=0,
+        sa_column=Column(Integer, nullable=False, default=0),
+    )
+    per_customer_limit: int = Field(
+        default=1,
+        sa_column=Column(Integer, nullable=False, default=1),
+    )
+
+    starts_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    expires_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+
+    is_active: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, default=True),
+    )
+    is_public: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, default=True),
+    )
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            onupdate=utc_now,
+        ),
+    )
+
+
+class CouponUsage(SQLModel, table=True):
+    __tablename__ = "coupon_usages"
+    __table_args__ = (
+        Index("ix_coupon_usages_site_id_coupon_id", "site_id", "coupon_id"),
+        Index("ix_coupon_usages_customer_email", "site_id", "customer_email"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    site_id: UUID = Field(foreign_key="sites.id", index=True)
+    coupon_id: UUID = Field(foreign_key="coupons.id", index=True)
+    order_id: UUID = Field(foreign_key="orders.id", index=True)
+    user_id: Optional[UUID] = Field(default=None, foreign_key="users.id", nullable=True)
+
+    customer_email: str = Field(max_length=255, nullable=False)
+    discount_amount: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False),
+    )
+    used_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
     )
 
 
@@ -601,8 +781,28 @@ class DeliverySettings(SQLModel, table=True):
     # Mode: own_agent | shiprocket | hybrid | manual
     delivery_mode: str = Field(default="manual", max_length=30, nullable=False)
 
+    # Independent delivery channel toggles
+    enable_fleet: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, default=True),
+    )
+    enable_shiprocket: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, default=False),
+    )
+    enable_manual: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, default=True),
+    )
+
     # Hybrid mode: orders within this radius use own agents, outside go to courier
     own_delivery_radius_km: float = Field(default=10.0, nullable=False)
+
+    # Open pickup toggle: whether own delivery fleet riders can self-claim unassigned orders from the store pool
+    allow_open_pickup: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, default=True),
+    )
 
     # Shiprocket credentials (password stored encrypted)
     shiprocket_email: Optional[str] = Field(default=None, max_length=255, nullable=True)
@@ -631,6 +831,13 @@ class DeliverySettings(SQLModel, table=True):
     # Default product weight fallback (grams) when product.weight_grams is 0
     default_weight_grams: int = Field(default=500, nullable=False)
 
+    # Store / sender geo-location (for accurate delivery radius calculations)
+    sender_latitude: Optional[float] = Field(default=None, nullable=True)
+    sender_longitude: Optional[float] = Field(default=None, nullable=True)
+
+    # Optional Shiprocket courier max delivery distance in KM (None or 0 = nationwide unlimited)
+    shiprocket_delivery_radius_km: Optional[float] = Field(default=None, nullable=True)
+
     created_at: datetime = Field(
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False),
@@ -650,7 +857,7 @@ class InventoryMovement(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     site_id: UUID = Field(foreign_key="sites.id", index=True)
-    product_id: UUID = Field(foreign_key="products.id", index=True)
+    product_id: Optional[UUID] = Field(default=None, foreign_key="products.id", index=True, nullable=True)
     order_id: Optional[UUID] = Field(default=None, foreign_key="orders.id")
     order_item_id: Optional[UUID] = Field(default=None, foreign_key="order_items.id")
     movement_type: str = Field(max_length=40, nullable=False)
@@ -763,7 +970,7 @@ class ReturnItem(SQLModel, table=True):
     site_id: UUID = Field(foreign_key="sites.id", index=True)
     order_id: UUID = Field(foreign_key="orders.id", index=True)
     order_item_id: UUID = Field(foreign_key="order_items.id", index=True)
-    product_id: UUID = Field(foreign_key="products.id", index=True)
+    product_id: Optional[UUID] = Field(default=None, foreign_key="products.id", index=True, nullable=True)
 
     product_name: str
     product_slug: Optional[str] = Field(default=None)

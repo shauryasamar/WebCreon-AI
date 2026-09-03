@@ -8,6 +8,8 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { usePublicSiteTheme, cleanSiteName } from "../hooks/usePublicSiteTheme";
+import GlassToast from "../Component/GlassToast";
+import { getRiderStorageKey } from "./RiderLoginPage";
 
 type DeliveryItem = {
   id?: string;
@@ -70,6 +72,7 @@ type RiderProfile = {
   cash_in_hand: number;
   current_order_count: number;
   total_deliveries: number;
+  allow_open_pickup?: boolean;
   site_id: string;
   site_name: string;
   site_slug?: string;
@@ -288,6 +291,13 @@ export default function AgentDeliveryPage() {
     setRescheduleDateTime(localIso);
   }, []);
 
+  // Auto-switch to tasks tab if open pickup is disabled
+  useEffect(() => {
+    if (profile?.allow_open_pickup === false && activeTab === "pool") {
+      setActiveTab("tasks");
+    }
+  }, [profile?.allow_open_pickup, activeTab]);
+
   // Load session or token
   useEffect(() => {
     bootstrap();
@@ -304,9 +314,10 @@ export default function AgentDeliveryPage() {
       return;
     }
 
-    // Otherwise load full rider portal session
-    const stored = localStorage.getItem("rider_session");
-    const storedToken = localStorage.getItem("rider_token");
+    // Otherwise load full rider portal session scoped to this store
+    const { sessionKey, tokenKey } = getRiderStorageKey(slug);
+    const stored = localStorage.getItem(sessionKey);
+    const storedToken = localStorage.getItem(tokenKey);
     if (!stored || !storedToken) {
       navigate(slug ? `/store/${slug}/rider/login` : "/rider/login");
       return;
@@ -318,6 +329,8 @@ export default function AgentDeliveryPage() {
       await Promise.all([loadTasks(storedToken), loadPool(storedToken), loadProfile(storedToken)]);
     } catch {
       setError("Session expired. Please log in again.");
+      localStorage.removeItem(sessionKey);
+      localStorage.removeItem(tokenKey);
       localStorage.removeItem("rider_session");
       localStorage.removeItem("rider_token");
       navigate(slug ? `/store/${slug}/rider/login` : "/rider/login");
@@ -412,6 +425,12 @@ export default function AgentDeliveryPage() {
     }
   };
 
+  const getRiderAuthToken = (): string | null => {
+    const targetSlug = slug || profile?.site_slug;
+    const { tokenKey } = getRiderStorageKey(targetSlug);
+    return localStorage.getItem(tokenKey) || localStorage.getItem("rider_token");
+  };
+
   const handleUpdateStatus = async (
     targetShipmentId: string,
     action: string,
@@ -428,7 +447,7 @@ export default function AgentDeliveryPage() {
     setSuccessMsg(null);
 
     try {
-      const authToken = localStorage.getItem("rider_token");
+      const authToken = getRiderAuthToken();
       let res;
       const bodyData = {
         action,
@@ -507,7 +526,7 @@ export default function AgentDeliveryPage() {
     setActionLoadingId(orderId);
     setError(null);
     try {
-      const authToken = localStorage.getItem("rider_token");
+      const authToken = getRiderAuthToken();
       if (!authToken) throw new Error("Please log in to claim orders");
 
       const res = await fetch(`${API_BASE_URL}/delivery/rider/claim/${orderId}`, {
@@ -542,9 +561,12 @@ export default function AgentDeliveryPage() {
     } catch {
       // ignore
     }
+    const targetSlug = profile?.site_slug || slug;
+    const { sessionKey, tokenKey } = getRiderStorageKey(targetSlug);
+    localStorage.removeItem(sessionKey);
+    localStorage.removeItem(tokenKey);
     localStorage.removeItem("rider_session");
     localStorage.removeItem("rider_token");
-    const targetSlug = profile?.site_slug || slug;
     navigate(targetSlug ? `/store/${targetSlug}/rider/login` : "/rider/login");
   };
 
@@ -683,15 +705,20 @@ export default function AgentDeliveryPage() {
       <div style={{ maxWidth: "520px", margin: "0 auto", padding: "16px" }}>
         {/* Toast / Status Alerts */}
         {error && (
-          <div style={{ padding: "10px 14px", borderRadius: "8px", background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", fontSize: "13px", marginBottom: "14px", fontWeight: 500 }}>
-            {error}
-          </div>
+          <GlassToast
+            message={error}
+            type="error"
+            onClose={() => setError(null)}
+            top="76px"
+          />
         )}
         {successMsg && (
-          <div style={{ padding: "10px 14px", borderRadius: "8px", background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#15803d", fontSize: "13px", marginBottom: "14px", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }}>
-            <CheckCircleIcon />
-            <span>{successMsg}</span>
-          </div>
+          <GlassToast
+            message={successMsg}
+            type="success"
+            onClose={() => setSuccessMsg(null)}
+            top="76px"
+          />
         )}
 
         {/* Pure White Bento Shift Summary Card */}
@@ -792,90 +819,118 @@ export default function AgentDeliveryPage() {
           </div>
         </div>
 
-        {/* Segmented Tab Switcher */}
-        <div
-          style={{
-            display: "flex",
-            gap: "4px",
-            background: "#f1f5f9",
-            border: "1px solid #e2e8f0",
-            padding: "3px",
-            borderRadius: "10px",
-            marginBottom: "16px",
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => setActiveTab("tasks")}
+        {/* Segmented Tab Switcher / Header */}
+        {profile?.allow_open_pickup !== false ? (
+          <div
             style={{
-              flex: 1,
-              padding: "8px 12px",
-              borderRadius: "8px",
-              border: "none",
-              background: activeTab === "tasks" ? "#ffffff" : "transparent",
-              color: activeTab === "tasks" ? "#0f172a" : "#64748b",
-              fontWeight: activeTab === "tasks" ? 700 : 600,
-              fontSize: "13px",
-              cursor: "pointer",
-              boxShadow: activeTab === "tasks" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "6px",
-              transition: "all 0.15s ease",
+              gap: "4px",
+              background: "#f1f5f9",
+              border: "1px solid #e2e8f0",
+              padding: "3px",
+              borderRadius: "10px",
+              marginBottom: "16px",
             }}
           >
-            <span>Assigned Tasks</span>
-            <span
+            <button
+              type="button"
+              onClick={() => setActiveTab("tasks")}
               style={{
-                padding: "1px 6px",
-                borderRadius: "10px",
-                fontSize: "11px",
-                fontWeight: 700,
-                background: activeTab === "tasks" ? "#eff6ff" : "#e2e8f0",
-                color: activeTab === "tasks" ? "#2563eb" : "#64748b",
+                flex: 1,
+                padding: "8px 12px",
+                borderRadius: "8px",
+                border: "none",
+                background: activeTab === "tasks" ? "#ffffff" : "transparent",
+                color: activeTab === "tasks" ? "#0f172a" : "#64748b",
+                fontWeight: activeTab === "tasks" ? 700 : 600,
+                fontSize: "13px",
+                cursor: "pointer",
+                boxShadow: activeTab === "tasks" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                transition: "all 0.15s ease",
               }}
             >
-              {tasks.length}
-            </span>
-          </button>
+              <span>Assigned Tasks</span>
+              <span
+                style={{
+                  padding: "1px 6px",
+                  borderRadius: "10px",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  background: activeTab === "tasks" ? "#eff6ff" : "#e2e8f0",
+                  color: activeTab === "tasks" ? "#2563eb" : "#64748b",
+                }}
+              >
+                {tasks.length}
+              </span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab("pool")}
-            style={{
-              flex: 1,
-              padding: "8px 12px",
-              borderRadius: "8px",
-              border: "none",
-              background: activeTab === "pool" ? "#ffffff" : "transparent",
-              color: activeTab === "pool" ? "#0f172a" : "#64748b",
-              fontWeight: activeTab === "pool" ? 700 : 600,
-              fontSize: "13px",
-              cursor: "pointer",
-              boxShadow: activeTab === "pool" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "6px",
-              transition: "all 0.15s ease",
-            }}
-          >
-            <span>Open Pickups</span>
-            <span
+            <button
+              type="button"
+              onClick={() => setActiveTab("pool")}
               style={{
-                padding: "1px 6px",
-                borderRadius: "10px",
-                fontSize: "11px",
-                fontWeight: 700,
-                background: activeTab === "pool" ? "#eff6ff" : "#e2e8f0",
-                color: activeTab === "pool" ? "#2563eb" : "#64748b",
+                flex: 1,
+                padding: "8px 12px",
+                borderRadius: "8px",
+                border: "none",
+                background: activeTab === "pool" ? "#ffffff" : "transparent",
+                color: activeTab === "pool" ? "#0f172a" : "#64748b",
+                fontWeight: activeTab === "pool" ? 700 : 600,
+                fontSize: "13px",
+                cursor: "pointer",
+                boxShadow: activeTab === "pool" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                transition: "all 0.15s ease",
               }}
             >
-              {pool.length}
+              <span>Open Pickups</span>
+              <span
+                style={{
+                  padding: "1px 6px",
+                  borderRadius: "10px",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  background: activeTab === "pool" ? "#eff6ff" : "#e2e8f0",
+                  color: activeTab === "pool" ? "#2563eb" : "#64748b",
+                }}
+              >
+                {pool.length}
+              </span>
+            </button>
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: "16px",
+              padding: "0 2px",
+            }}
+          >
+            <span style={{ fontSize: "15px", fontWeight: 800, color: "#0f172a" }}>
+              Assigned Tasks
             </span>
-          </button>
-        </div>
+            <span
+              style={{
+                padding: "2px 8px",
+                borderRadius: "12px",
+                fontSize: "11px",
+                fontWeight: 700,
+                background: "#eff6ff",
+                color: "#2563eb",
+              }}
+            >
+              {tasks.length} active
+            </span>
+          </div>
+        )}
 
         {/* TAB 1: ACTIVE DELIVERIES */}
         {activeTab === "tasks" && (
@@ -894,26 +949,30 @@ export default function AgentDeliveryPage() {
                 <div style={{ fontSize: "15px", fontWeight: 800, color: "#0f172a", marginBottom: "4px" }}>
                   All Assigned Tasks Completed
                 </div>
-                <p style={{ fontSize: "13px", color: "#64748b", margin: "0 0 16px" }}>
-                  You have completed all active deliveries. Check the Open Pickups tab to claim new orders.
+                <p style={{ fontSize: "13px", color: "#64748b", margin: profile?.allow_open_pickup !== false ? "0 0 16px" : "0" }}>
+                  {profile?.allow_open_pickup !== false
+                    ? "You have completed all active deliveries. Check the Open Pickups tab to claim new orders."
+                    : "You have completed all active deliveries. New orders will appear here when assigned by store management."}
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("pool")}
-                  style={{
-                    padding: "9px 18px",
-                    borderRadius: "8px",
-                    background: "#2563eb",
-                    color: "#ffffff",
-                    fontWeight: 700,
-                    fontSize: "13px",
-                    border: "none",
-                    cursor: "pointer",
-                    boxShadow: "0 2px 4px rgba(37, 99, 235, 0.2)",
-                  }}
-                >
-                  View Open Pickups →
-                </button>
+                {profile?.allow_open_pickup !== false && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("pool")}
+                    style={{
+                      padding: "9px 18px",
+                      borderRadius: "8px",
+                      background: "#2563eb",
+                      color: "#ffffff",
+                      fontWeight: 700,
+                      fontSize: "13px",
+                      border: "none",
+                      cursor: "pointer",
+                      boxShadow: "0 2px 4px rgba(37, 99, 235, 0.2)",
+                    }}
+                  >
+                    View Open Pickups →
+                  </button>
+                )}
               </div>
             ) : (
               tasks.map((task, index) => {
@@ -1541,7 +1600,7 @@ export default function AgentDeliveryPage() {
         )}
 
         {/* TAB 2: OPEN PICKUPS POOL */}
-        {activeTab === "pool" && (
+        {profile?.allow_open_pickup !== false && activeTab === "pool" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             {pool.length === 0 ? (
               <div style={{ textAlign: "center", padding: "44px 20px", background: "#ffffff", borderRadius: "14px", border: "1px solid #e2e8f0" }}>

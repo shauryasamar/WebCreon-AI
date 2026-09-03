@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from copy import deepcopy
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
@@ -10,6 +11,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm.attributes import flag_modified
+from sqlalchemy import cast, String
 from sqlmodel import Session, delete, func, select
 
 from auth_middleware import authenticate_admin, authenticate_customer, enforce_site_ownership
@@ -19,6 +21,8 @@ logger = logging.getLogger(__name__)
 from models import (
     Cart,
     CartItem,
+    Coupon,
+    CouponUsage,
     DeliveryAgent,
     DeliverySettings,
     InventoryMovement,
@@ -71,12 +75,12 @@ def get_effective_payment_status(order: Order) -> str:
     return status
 
 ALLOWED_STATUS_TRANSITIONS = {
-    "placed": {"confirmed", "cancelled"},
-    "confirmed": {"shipped", "out_for_delivery", "cancelled"},
-    "shipped": {"out_for_delivery", "cancelled", "rescheduled"},
-    "out_for_delivery": {"delivered", "rescheduled", "failed"},
+    "placed": {"confirmed", "shipped", "cancelled"},
+    "confirmed": {"shipped", "out_for_delivery", "delivered", "cancelled"},
+    "shipped": {"out_for_delivery", "delivered", "cancelled", "rescheduled"},
+    "out_for_delivery": {"delivered", "rescheduled", "failed", "cancelled"},
     "rescheduled": {"out_for_delivery", "shipped", "delivered", "failed", "cancelled"},
-    "failed": {"rescheduled", "shipped", "cancelled"},
+    "failed": {"rescheduled", "shipped", "delivered", "cancelled"},
     "delivered": set(),
     "partially_cancelled": set(),
     "cancelled": set(),
@@ -160,6 +164,10 @@ def serialize_address_snapshot(address: UserAddress) -> dict[str, Any]:
         "email": address.email,
         "addressType": address.address_type,
         "address_type": address.address_type,
+        "latitude": getattr(address, "latitude", None),
+        "longitude": getattr(address, "longitude", None),
+        "geoAccuracy": getattr(address, "geo_accuracy", None),
+        "geo_accuracy": getattr(address, "geo_accuracy", None),
     }
 
 
@@ -180,7 +188,12 @@ def ensure_order_delivery_otp(order: Order, session: Optional[Session] = None) -
     return str(order.delivery_otp)
 
 
-def serialize_shipment(shipment: Optional[Shipment], order_status: Optional[str] = None, session: Optional[Session] = None) -> Optional[dict[str, Any]]:
+def serialize_shipment(
+    shipment: Optional[Shipment],
+    order_status: Optional[str] = None,
+    session: Optional[Session] = None,
+    is_admin: bool = False,
+) -> Optional[dict[str, Any]]:
     if not shipment:
         return None
     agent_id_str = str(shipment.agent_id) if getattr(shipment, "agent_id", None) else None
@@ -207,7 +220,29 @@ def serialize_shipment(shipment: Optional[Shipment], order_status: Optional[str]
                 delivery_partner_phone = agent.phone
             vehicle_type = getattr(agent, "vehicle_type", "bike")
 
-    is_shiprocket = getattr(shipment, "delivery_mode", None) == "shiprocket" or getattr(shipment, "mode", None) == "shiprocket"
+    is_manual = (
+        getattr(shipment, "delivery_mode", None) == "manual"
+        or getattr(shipment, "mode", None) == "manual"
+        or (
+            bool(getattr(shipment, "delivery_partner_name", None))
+            and getattr(shipment, "delivery_mode", None) != "own_agent"
+            and getattr(shipment, "mode", None) != "own_agent"
+            and not getattr(shipment, "agent_id", None)
+        )
+    )
+
+    is_shiprocket = (
+        getattr(shipment, "delivery_mode", None) == "shiprocket"
+        or getattr(shipment, "mode", None) == "shiprocket"
+        or bool(getattr(shipment, "courier_name", None))
+        or bool(getattr(shipment, "awb_number", None))
+    ) and not is_manual
+
+    is_own_agent = (
+        getattr(shipment, "delivery_mode", None) == "own_agent"
+        or getattr(shipment, "mode", None) == "own_agent"
+        or bool(shipment.agent_id)
+    ) and not is_shiprocket and not is_manual
 
     scans: list[dict[str, Any]] = []
     if is_shiprocket and getattr(shipment, "awb_number", None):
@@ -241,24 +276,75 @@ def serialize_shipment(shipment: Optional[Shipment], order_status: Optional[str]
                 "location": "Destination City",
                 "date": dt_del,
             })
+    elif is_manual or (not is_shiprocket and not is_own_agent and (delivery_partner_name or delivery_partner_phone)):
+        dt_shipped = shipment.shipped_at.strftime("%d %b %Y, %I:%M %p") if shipment.shipped_at else None
+        partner_lbl = delivery_partner_name or getattr(shipment, "courier_name", None) or "Courier Partner"
+        tracking_lbl = f" (Tracking/Contact: {delivery_partner_phone or getattr(shipment, 'awb_number', None)})" if (delivery_partner_phone or getattr(shipment, "awb_number", None)) else ""
+        scans.append({
+            "status": "Dispatched",
+            "activity": f"Dispatched via {partner_lbl}{tracking_lbl}",
+            "location": "Origin Warehouse",
+            "date": dt_shipped,
+        })
+        if effective_status in ("out_for_delivery", "delivered"):
+            dt_ofd = (shipment.out_for_delivery_at or shipment.shipped_at).strftime("%d %b %Y, %I:%M %p") if (shipment.out_for_delivery_at or shipment.shipped_at) else None
+            scans.append({
+                "status": "In Transit / Out for Delivery",
+                "activity": f"In transit with {partner_lbl}",
+                "location": "Destination City",
+                "date": dt_ofd,
+            })
+        if effective_status == "delivered":
+            dt_del = (shipment.delivered_at or shipment.shipped_at).strftime("%d %b %Y, %I:%M %p") if (shipment.delivered_at or shipment.shipped_at) else None
+            scans.append({
+                "status": "Delivered",
+                "activity": "Package delivered to consignee",
+                "location": "Destination City",
+                "date": dt_del,
+            })
 
-    # Rider privacy: Only expose live direct rider name and phone when shipment is actively out for delivery
+    # For Admin: ALWAYS expose assigned delivery partner info regardless of order status
+    # For Customer:
+    # - If own_agent: withhold direct phone/tracking token until out for delivery
+    # - If manual courier: ALWAYS expose delivery_partner_name and delivery_partner_phone (tracking/AWB)
     is_active_ofd = (effective_status == "out_for_delivery")
-    public_delivery_partner_name = delivery_partner_name if is_active_ofd else None
-    public_delivery_partner_phone = delivery_partner_phone if is_active_ofd else None
+
+    if is_manual:
+        resolved_partner_name = shipment.delivery_partner_name or getattr(shipment, "courier_name", None)
+        resolved_partner_phone = shipment.delivery_partner_phone or getattr(shipment, "awb_number", None)
+        resolved_agent_id = None
+        resolved_vehicle_type = None
+    elif is_admin:
+        resolved_partner_name = delivery_partner_name
+        resolved_partner_phone = delivery_partner_phone
+        resolved_agent_id = agent_id_str
+        resolved_vehicle_type = vehicle_type
+    elif is_own_agent:
+        resolved_partner_name = delivery_partner_name
+        resolved_partner_phone = delivery_partner_phone if is_active_ofd else None
+        resolved_agent_id = agent_id_str if is_active_ofd else None
+        resolved_vehicle_type = vehicle_type if is_active_ofd else None
+    else:
+        # Manual Courier / Shiprocket
+        resolved_partner_name = delivery_partner_name or getattr(shipment, "courier_name", None)
+        resolved_partner_phone = delivery_partner_phone or getattr(shipment, "awb_number", None)
+        resolved_agent_id = None
+        resolved_vehicle_type = None
+
+    resolved_mode = "shiprocket" if is_shiprocket else ("own_agent" if is_own_agent else "manual")
 
     return {
         "id": str(shipment.id),
         "status": effective_status,
-        "mode": getattr(shipment, "delivery_mode", "manual"),
-        "delivery_mode": getattr(shipment, "delivery_mode", "manual"),
-        "agent_id": agent_id_str if is_active_ofd else None,
-        "agent_token": agent_token if is_active_ofd else None,
-        "delivery_partner_name": public_delivery_partner_name,
-        "delivery_partner_phone": public_delivery_partner_phone,
-        "vehicle_type": vehicle_type if is_active_ofd else None,
-        "courier_name": getattr(shipment, "courier_name", None),
-        "awb_number": getattr(shipment, "awb_number", None),
+        "mode": resolved_mode,
+        "delivery_mode": resolved_mode,
+        "agent_id": resolved_agent_id,
+        "agent_token": agent_token if (is_admin or is_active_ofd) else None,
+        "delivery_partner_name": resolved_partner_name,
+        "delivery_partner_phone": resolved_partner_phone,
+        "vehicle_type": resolved_vehicle_type,
+        "courier_name": getattr(shipment, "courier_name", None) or (resolved_partner_name if resolved_mode == "manual" else None),
+        "awb_number": getattr(shipment, "awb_number", None) or (resolved_partner_phone if resolved_mode == "manual" else None),
         "tracking_url": getattr(shipment, "tracking_url", None),
         "label_url": getattr(shipment, "label_url", None),
         "estimated_delivery_at": shipment.estimated_delivery_at.isoformat() if shipment.estimated_delivery_at else None,
@@ -267,7 +353,7 @@ def serialize_shipment(shipment: Optional[Shipment], order_status: Optional[str]
         "delivered_at": shipment.delivered_at.isoformat() if shipment.delivered_at else None,
         "notes": getattr(shipment, "notes", None),
         "scans": scans,
-        "delivery_otp": None if is_shiprocket else getattr(shipment, "delivery_otp", None),
+        "delivery_otp": getattr(shipment, "delivery_otp", None) if (resolved_mode == "own_agent" and (is_admin or is_active_ofd or effective_status == "shipped")) else None,
     }
 
 
@@ -293,6 +379,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": True,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "99",
                 "applyConditionType": "none",
@@ -308,6 +395,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "29",
                 "applyConditionType": "none",
@@ -323,6 +411,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": True,
                 "amountType": "fixed",
                 "amountValue": "19",
                 "applyConditionType": "none",
@@ -338,6 +427,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "15",
                 "applyConditionType": "none",
@@ -353,6 +443,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "9",
                 "applyConditionType": "none",
@@ -368,6 +459,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "49",
                 "applyConditionType": "subtotal_lt",
@@ -383,6 +475,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "39",
                 "applyConditionType": "payment_method",
@@ -398,13 +491,14 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": True,
                 "customerSelectable": True,
+                "refundable": True,
                 "amountType": "fixed",
                 "amountValue": "49",
                 "applyConditionType": "none",
                 "applyConditionValue": "",
                 "waiveConditionType": "none",
                 "waiveConditionValue": "",
-                "description": "Optional checkout add-on selected by customer.",
+                "description": "",
             },
         ],
     }
@@ -448,11 +542,81 @@ def calculate_charge_amount(charge: dict[str, Any], base_amount: Decimal) -> Dec
 def evaluate_promo_discount(
     subtotal: Decimal,
     promo_code: Optional[str],
-) -> tuple[Optional[str], Decimal]:
-    normalized = str(promo_code or "").strip()
-    if normalized.lower() == "save10":
-        return normalized, money(subtotal * Decimal("0.10"))
-    return normalized or None, Decimal("0.00")
+    site_id: Optional[UUID] = None,
+    session: Optional[Session] = None,
+    customer_email: Optional[str] = None,
+    delivery_fee: Decimal = Decimal("0.00"),
+) -> tuple[Optional[str], Decimal, Optional[Coupon]]:
+    normalized = str(promo_code or "").strip().upper()
+    if not normalized:
+        return None, Decimal("0.00"), None
+
+    if not site_id or not session:
+        if normalized.lower() == "save10":
+            return normalized, money(subtotal * Decimal("0.10")), None
+        return normalized or None, Decimal("0.00"), None
+
+    coupon = session.exec(
+        select(Coupon).where(
+            Coupon.site_id == site_id,
+            Coupon.code == normalized,
+            Coupon.is_active == True,
+        )
+    ).first()
+
+    if not coupon:
+        return None, Decimal("0.00"), None
+
+    now = datetime.now(timezone.utc)
+    if coupon.starts_at and now < coupon.starts_at:
+        return None, Decimal("0.00"), None
+    if coupon.expires_at and now > coupon.expires_at:
+        return None, Decimal("0.00"), None
+    if coupon.total_usage_limit is not None and coupon.times_used >= coupon.total_usage_limit:
+        return None, Decimal("0.00"), None
+    if subtotal < coupon.min_order_value:
+        return None, Decimal("0.00"), None
+
+    # Customer specific rules
+    if customer_email:
+        email_clean = customer_email.strip().lower()
+        if coupon.is_first_order_only:
+            past_order = session.exec(
+                select(Order)
+                .join(User, Order.customer_id == User.id)
+                .where(
+                    Order.site_id == site_id,
+                    User.email == email_clean,
+                    Order.status != "cancelled",
+                )
+            ).first()
+            if past_order:
+                return None, Decimal("0.00"), None
+
+        if coupon.per_customer_limit:
+            usage_count = session.exec(
+                select(func.count(CouponUsage.id)).where(
+                    CouponUsage.site_id == site_id,
+                    CouponUsage.coupon_id == coupon.id,
+                    CouponUsage.customer_email == email_clean,
+                )
+            ).one()
+            if usage_count >= coupon.per_customer_limit:
+                return None, Decimal("0.00"), None
+
+    discount_amount = Decimal("0.00")
+    if coupon.discount_type == "percentage":
+        computed = (subtotal * coupon.discount_value) / Decimal("100.00")
+        if coupon.max_discount_amount is not None and coupon.max_discount_amount > 0:
+            computed = min(computed, coupon.max_discount_amount)
+        discount_amount = min(computed, subtotal)
+    elif coupon.discount_type == "fixed_amount":
+        discount_amount = min(coupon.discount_value, subtotal)
+    elif coupon.discount_type == "free_shipping":
+        discount_amount = delivery_fee
+
+    discount_amount = money(discount_amount)
+    return coupon.code, discount_amount, coupon
 
 
 def extract_variant_details(
@@ -633,9 +797,18 @@ def evaluate_pricing(
     payment_method: str,
     selected_optional_charge_ids: list[str],
     promo_code: Optional[str],
+    site_id: Optional[UUID] = None,
+    session: Optional[Session] = None,
+    customer_email: Optional[str] = None,
 ) -> dict[str, Any]:
     subtotal = sum((item["line_total"] for item in cart_items), Decimal("0.00"))
-    applied_promo_code, promo_discount = evaluate_promo_discount(subtotal, promo_code)
+    applied_promo_code, promo_discount, coupon_obj = evaluate_promo_discount(
+        subtotal=subtotal,
+        promo_code=promo_code,
+        site_id=site_id,
+        session=session,
+        customer_email=customer_email,
+    )
     subtotal_after_discount = max(subtotal - promo_discount, Decimal("0.00"))
 
     charges = checkout_settings.get("charges") or []
@@ -674,6 +847,7 @@ def evaluate_pricing(
             "finalAmount": float(final_amount),
             "applied": True,
             "waived": waived,
+            "refundable": bool(charge.get("refundable", True)),
             "applyConditionType": charge.get("applyConditionType"),
             "applyConditionValue": charge.get("applyConditionValue"),
             "waiveConditionType": charge.get("waiveConditionType"),
@@ -723,10 +897,13 @@ def evaluate_pricing(
                 "code": "promo_code",
                 "label": applied_promo_code,
                 "amount": float(promo_discount),
+                "couponId": str(coupon_obj.id) if coupon_obj else None,
             }]
             if promo_discount > 0 and applied_promo_code
             else []
         ),
+        "couponId": str(coupon_obj.id) if coupon_obj else None,
+        "discountAmount": float(promo_discount),
         "total": float(total),
         "paymentMethod": payment_method,
     }
@@ -749,11 +926,22 @@ def build_order_item_pricing_snapshot(
     shipping_allocated = Decimal("0.00")
     cod_fee_allocated = Decimal("0.00")
     other_charges_allocated = Decimal("0.00")
+    refundable_charges_allocated = Decimal("0.00")
+    non_refundable_charges_allocated = Decimal("0.00")
+    charges_breakdown: list[dict[str, Any]] = []
 
     for charge in pricing_snapshot.get("charges", []):
+        charge_id = charge.get("id")
         code = charge.get("code")
+        label = charge.get("label") or code or "Charge"
+        is_refundable = bool(charge.get("refundable", True))
         final_amount = money(charge.get("finalAmount") or 0)
         allocated = money(final_amount * ratio)
+
+        if is_refundable:
+            refundable_charges_allocated += allocated
+        else:
+            non_refundable_charges_allocated += allocated
 
         if code == "shipping_fee":
             shipping_allocated += allocated
@@ -762,8 +950,20 @@ def build_order_item_pricing_snapshot(
         else:
             other_charges_allocated += allocated
 
+        charges_breakdown.append({
+            "id": charge_id,
+            "code": code,
+            "label": label,
+            "refundable": is_refundable,
+            "total_order_amount": float(final_amount),
+            "item_allocated_amount": float(allocated),
+        })
+
+    refundable_line_total = money(
+        line_total - promo_discount + tax_amount + refundable_charges_allocated
+    )
     final_paid_for_line = money(
-        line_total - promo_discount + tax_amount + shipping_allocated + cod_fee_allocated + other_charges_allocated
+        line_total - promo_discount + tax_amount + refundable_charges_allocated + non_refundable_charges_allocated
     )
 
     return {
@@ -775,7 +975,11 @@ def build_order_item_pricing_snapshot(
         "shipping_allocated": float(shipping_allocated),
         "cod_fee_allocated": float(cod_fee_allocated),
         "other_charges_allocated": float(other_charges_allocated),
+        "refundable_charges_allocated": float(refundable_charges_allocated),
+        "non_refundable_charges_allocated": float(non_refundable_charges_allocated),
+        "refundable_line_total": float(refundable_line_total),
         "final_paid_for_line": float(final_paid_for_line),
+        "charges_breakdown": charges_breakdown,
     }
 
 
@@ -793,7 +997,8 @@ def serialize_customer_order_item(item: OrderItem, order_status: Optional[str] =
     elif order_status == "returned":
         effective_status = "returned"
 
-    is_returnable = (order_status == "delivered" and returnable_quantity > 0)
+    item_return_days = getattr(item, "return_window_days", 7)
+    is_returnable = (order_status == "delivered" and returnable_quantity > 0 and item_return_days > 0)
 
     return {
         "id": str(item.id),
@@ -809,6 +1014,7 @@ def serialize_customer_order_item(item: OrderItem, order_status: Optional[str] =
         "line_total": float(item.line_total),
         "status": effective_status,
         "returnable_quantity": returnable_quantity,
+        "return_window_days": item_return_days,
         "is_returnable": is_returnable,
         "max_returnable_quantity": returnable_quantity,
         "pricing_snapshot": item.pricing_snapshot,
@@ -1033,18 +1239,106 @@ def get_admin_pending_counts(
     }
 
 
+ORDER_TAB_STATUS_MAP = {
+    "new": ["placed"],
+    "yet_to_ship": ["confirmed"],
+    "yet_to_deliver": ["shipped", "out_for_delivery"],
+    "delivered": ["delivered"],
+    "cancelled": ["cancelled", "partially_cancelled"],
+}
+
+
 @router.get("/admin/{site_id}")
 def get_admin_orders(
     site_id: UUID,
+    page: Optional[int] = Query(None, ge=1, description="Page number"),
+    page_size: Optional[int] = Query(None, ge=1, le=100, description="Items per page"),
+    tab: Optional[str] = Query(None, description="Filter by tab: new, yet_to_ship, yet_to_deliver, delivered, cancelled"),
+    status: Optional[str] = Query(None, description="Direct status filter"),
+    search: Optional[str] = Query(None, description="Search by order ID, customer name, phone, email"),
+    payment_method: Optional[str] = Query(None, description="Filter by payment method: all, upi, card, cod, etc."),
+    fulfillment: Optional[str] = Query(None, description="Filter by fulfillment mode: all, own_agent, shiprocket, manual, unassigned"),
+    date_filter: Optional[str] = Query(None, description="all, today, last_7_days, last_30_days, custom"),
+    from_date: Optional[str] = Query(None),
+    to_date: Optional[str] = Query(None),
     admin=Depends(authenticate_admin),
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
-    orders = session.exec(
-        select(Order)
-        .where(Order.site_id == site_id)
-        .order_by(Order.created_at.desc())
-    ).all()
+    base_query = select(Order).where(Order.site_id == site_id)
+
+    # 1. Filter by Tab or Status
+    if tab and tab in ORDER_TAB_STATUS_MAP:
+        base_query = base_query.where(Order.status.in_(ORDER_TAB_STATUS_MAP[tab]))
+    elif status and status != "all":
+        base_query = base_query.where(Order.status == status)
+
+    # 2. Payment Method Filter
+    if payment_method and payment_method != "all":
+        base_query = base_query.where(Order.payment_method.ilike(f"%{payment_method}%"))
+
+    # 3. Search Filter
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        base_query = base_query.where(
+            (cast(Order.id, String).ilike(term))
+            | (cast(Order.shipping_address, String).ilike(term))
+            | (Order.payment_method.ilike(term))
+        )
+
+    # 4. Date Filter
+    now = datetime.now(timezone.utc)
+    if date_filter == "today":
+        start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        base_query = base_query.where(Order.created_at >= start_of_today)
+    elif date_filter == "last_7_days":
+        from datetime import timedelta
+        base_query = base_query.where(Order.created_at >= now - timedelta(days=7))
+    elif date_filter == "last_30_days":
+        from datetime import timedelta
+        base_query = base_query.where(Order.created_at >= now - timedelta(days=30))
+    elif date_filter == "custom":
+        if from_date:
+            try:
+                dt_from = datetime.fromisoformat(from_date)
+                base_query = base_query.where(Order.created_at >= dt_from)
+            except Exception:
+                pass
+        if to_date:
+            try:
+                dt_to = datetime.fromisoformat(to_date)
+                base_query = base_query.where(Order.created_at <= dt_to)
+            except Exception:
+                pass
+
+    # Compute Tab Counts directly in PostgreSQL
+    tab_counts = {}
+    for t_key, statuses in ORDER_TAB_STATUS_MAP.items():
+        cnt = session.exec(
+            select(func.count()).select_from(Order).where(
+                Order.site_id == site_id,
+                Order.status.in_(statuses),
+            )
+        ).one() or 0
+        tab_counts[t_key] = cnt
+
+    # Total Count for active query
+    total_count = session.exec(
+        select(func.count()).select_from(base_query.subquery())
+    ).one() or 0
+
+    # Paginate
+    if page is not None and page_size is not None:
+        total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
+        paginated_query = (
+            base_query.order_by(Order.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        orders = session.exec(paginated_query).all()
+    else:
+        orders = session.exec(base_query.order_by(Order.created_at.desc())).all()
+        total_pages = 1
 
     order_ids = [order.id for order in orders]
     shipment_map: dict[UUID, Shipment] = {}
@@ -1064,6 +1358,13 @@ def get_admin_orders(
         for item in order_items:
             order_items_map.setdefault(item.order_id, []).append(item)
 
+        prod_ids = [item.product_id for item in order_items if item.product_id]
+        prod_weights: dict[UUID, int] = {}
+        if prod_ids:
+            from models import Product
+            prods = session.exec(select(Product.id, Product.weight_grams).where(Product.id.in_(prod_ids))).all()
+            prod_weights = {p_id: (w if w and w > 0 else 500) for p_id, w in prods}
+
     has_admin_sync = False
     for order in orders:
         if _sync_order_return_status(order, session, order_items_map.get(order.id)):
@@ -1074,13 +1375,14 @@ def get_admin_orders(
         except Exception:
             session.rollback()
 
-    return [
+    serialized = [
         {
             "id": str(order.id),
             "customer_id": str(order.customer_id),
             "status": order.status,
             "payment_status": getattr(order, "payment_status", None),
             "total": float(order.total),
+            "total_weight_grams": sum(prod_weights.get(item.product_id, 500) * (item.quantity or 1) for item in order_items_map.get(order.id, [])),
             "payment_method": order.payment_method,
             "razorpay_payment_id": order.razorpay_payment_id,
             "razorpay_order_id": order.razorpay_order_id,
@@ -1095,7 +1397,7 @@ def get_admin_orders(
             "customer_email": (order.shipping_address or {}).get("email"),
             "shipping_address": order.shipping_address,
             "delivery_otp": None if bool(shipment_map.get(order.id) and (getattr(shipment_map.get(order.id), "delivery_mode", None) == "shiprocket" or getattr(shipment_map.get(order.id), "mode", None) == "shiprocket" or shipment_map.get(order.id).courier_name or shipment_map.get(order.id).awb_number)) else ensure_order_delivery_otp(order, session),
-            "shipment": serialize_shipment(shipment_map.get(order.id)),
+            "shipment": serialize_shipment(shipment_map.get(order.id), order_status=order.status, session=session, is_admin=True),
             "items": [
                 {
                     "id": str(item.id),
@@ -1109,8 +1411,11 @@ def get_admin_orders(
                     "compare_price": float(item.compare_price) if item.compare_price is not None else None,
                     "quantity": item.quantity,
                     "line_total": float(item.line_total),
+                    "weight_grams": prod_weights.get(item.product_id, 500),
                     "status": item.status,
                     "returnable_quantity": item.returnable_quantity,
+                    "return_window_days": getattr(item, "return_window_days", 7),
+                    "is_returnable": getattr(item, "return_window_days", 7) > 0,
                     "pricing_snapshot": item.pricing_snapshot,
                 }
                 for item in order_items_map.get(order.id, [])
@@ -1120,6 +1425,18 @@ def get_admin_orders(
         }
         for order in orders
     ]
+
+    if page is not None and page_size is not None:
+        return {
+            "orders": serialized,
+            "total": total_count,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "tab_counts": tab_counts,
+        }
+
+    return serialized
 
 
 @router.get("/admin/{site_id}/{order_id}")
@@ -1156,6 +1473,13 @@ def get_admin_order_detail(
         .order_by(OrderStatusHistory.id.asc())
     ).all()
 
+    detail_prod_ids = [item.product_id for item in items if item.product_id]
+    detail_prod_weights: dict[UUID, int] = {}
+    if detail_prod_ids:
+        from models import Product
+        d_prods = session.exec(select(Product.id, Product.weight_grams).where(Product.id.in_(detail_prod_ids))).all()
+        detail_prod_weights = {p_id: (w if w and w > 0 else 500) for p_id, w in d_prods}
+
     return {
         "id": str(order.id),
         "customer_id": str(order.customer_id),
@@ -1165,6 +1489,7 @@ def get_admin_order_detail(
         "status": order.status,
         "payment_status": getattr(order, "payment_status", None),
         "total": float(order.total),
+        "total_weight_grams": sum(detail_prod_weights.get(item.product_id, 500) * (item.quantity or 1) for item in items),
         "payment_method": order.payment_method,
         "razorpay_payment_id": order.razorpay_payment_id,
         "razorpay_order_id": order.razorpay_order_id,
@@ -1190,13 +1515,16 @@ def get_admin_order_detail(
                 "compare_price": float(item.compare_price) if item.compare_price is not None else None,
                 "quantity": item.quantity,
                 "line_total": float(item.line_total),
+                "weight_grams": detail_prod_weights.get(item.product_id, 500),
                 "status": item.status,
                 "returnable_quantity": item.returnable_quantity,
+                "return_window_days": getattr(item, "return_window_days", 7),
+                "is_returnable": getattr(item, "return_window_days", 7) > 0,
                 "pricing_snapshot": item.pricing_snapshot,
             }
             for item in items
         ],
-        "shipment": serialize_shipment(shipment, order.status),
+        "shipment": serialize_shipment(shipment, order_status=order.status, session=session, is_admin=True),
         "status_history": [
             {
                 "id": str(entry.id),
@@ -1266,9 +1594,12 @@ def update_order_status(
                 shipment = Shipment(
                     order_id=order.id,
                     site_id=site_id,
+                    mode="manual",
                     status="shipped",
                     delivery_partner_name=payload.delivery_partner_name,
                     delivery_partner_phone=payload.delivery_partner_phone,
+                    awb_number=payload.delivery_partner_phone,
+                    courier_name=payload.delivery_partner_name,
                     estimated_delivery_at=payload.estimated_delivery_at,
                     shipped_at=now,
                 )
@@ -1276,8 +1607,15 @@ def update_order_status(
                 shipment.status = "shipped"
                 if payload.delivery_partner_name is not None:
                     shipment.delivery_partner_name = payload.delivery_partner_name
+                    shipment.courier_name = payload.delivery_partner_name
+                    shipment.mode = "manual"
+                    shipment.agent_id = None
+                    shipment.agent_token = None
+                    shipment.agent_accepted_at = None
+                    order.delivery_otp = None
                 if payload.delivery_partner_phone is not None:
                     shipment.delivery_partner_phone = payload.delivery_partner_phone
+                    shipment.awb_number = payload.delivery_partner_phone
                 if payload.estimated_delivery_at is not None:
                     shipment.estimated_delivery_at = payload.estimated_delivery_at
                 shipment.shipped_at = now
@@ -1300,9 +1638,12 @@ def update_order_status(
                 shipment = Shipment(
                     order_id=order.id,
                     site_id=site_id,
+                    mode="manual",
                     status="out_for_delivery",
                     delivery_partner_name=payload.delivery_partner_name,
                     delivery_partner_phone=payload.delivery_partner_phone,
+                    awb_number=payload.delivery_partner_phone,
+                    courier_name=payload.delivery_partner_name,
                     estimated_delivery_at=payload.estimated_delivery_at,
                     out_for_delivery_at=now,
                 )
@@ -1310,8 +1651,15 @@ def update_order_status(
                 shipment.status = "out_for_delivery"
                 if payload.delivery_partner_name is not None:
                     shipment.delivery_partner_name = payload.delivery_partner_name
+                    shipment.courier_name = payload.delivery_partner_name
+                    shipment.mode = "manual"
+                    shipment.agent_id = None
+                    shipment.agent_token = None
+                    shipment.agent_accepted_at = None
+                    order.delivery_otp = None
                 if payload.delivery_partner_phone is not None:
                     shipment.delivery_partner_phone = payload.delivery_partner_phone
+                    shipment.awb_number = payload.delivery_partner_phone
                 if payload.estimated_delivery_at is not None:
                     shipment.estimated_delivery_at = payload.estimated_delivery_at
                 shipment.out_for_delivery_at = now
@@ -1329,13 +1677,37 @@ def update_order_status(
                 )
             from datetime import timedelta
             order.delivered_at = now
-            order.return_window_closes_at = now + timedelta(days=2)
+
+            order_items = session.exec(
+                select(OrderItem).where(OrderItem.order_id == order.id)
+            ).all()
+            site = session.get(Site, order.site_id)
+            site_default = getattr(site, "default_return_window_days", 7) if site else 7
+            max_days = max(
+                (
+                    it.return_window_days if getattr(it, "return_window_days", None) is not None else site_default
+                    for it in order_items
+                    if it.status != "cancelled"
+                ),
+                default=0,
+            )
+
+            if max_days == 0:
+                order.return_window_closes_at = now
+                order.escrow_status = "unheld"
+            else:
+                order.return_window_closes_at = now + timedelta(days=max_days)
+                order.escrow_status = "held"
 
             ledger_entry = session.exec(
                 select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
             ).first()
             if ledger_entry:
                 ledger_entry.escrow_release_due_at = order.return_window_closes_at
+                if max_days == 0:
+                    ledger_entry.escrow_status = "unheld"
+                    ledger_entry.status = "paid"
+                    ledger_entry.settled_at = now
                 if getattr(order, "payment_method", "").lower() in ("cod", "cash_on_delivery"):
                     order.payment_status = "paid"
                     ledger_entry.status = "paid"
@@ -1375,7 +1747,14 @@ def update_order_status(
                         client = get_razorpay_client()
                         if client:
                             refund_amount_paise = int(Decimal(str(order.total)) * 100)
-                            refund_resp = client.payment.refund(order.razorpay_payment_id, {"amount": refund_amount_paise})
+                            refund_resp = client.payment.refund(
+                                order.razorpay_payment_id,
+                                {
+                                    "amount": refund_amount_paise,
+                                    "reverse_all": 1,
+                                    "notes": {"reason": "Admin cancellation refund"},
+                                },
+                            )
                             if isinstance(refund_resp, dict):
                                 snapshot = dict(order.pricing_snapshot or {})
                                 snapshot["refund_details"] = {
@@ -1499,7 +1878,7 @@ def place_order(
     user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
-    get_site_or_404(session, site_id)
+    site = get_site_or_404(session, site_id)
 
     if str(site_id) != user["siteId"]:
         raise HTTPException(
@@ -1511,6 +1890,51 @@ def place_order(
     cart = get_cart_for_user_or_404(session, site_id, customer.id)
     address = get_address_for_user_or_404(session, site_id, customer.id, payload.address_id)
 
+    # Deliverability check for delivery radius
+    delivery_settings = session.exec(
+        select(DeliverySettings).where(DeliverySettings.site_id == site_id)
+    ).first()
+    if delivery_settings:
+        store_lat = getattr(delivery_settings, "sender_latitude", None)
+        store_lng = getattr(delivery_settings, "sender_longitude", None)
+        delivery_mode = delivery_settings.delivery_mode or "manual"
+
+        ef = getattr(delivery_settings, "enable_fleet", None)
+        es = getattr(delivery_settings, "enable_shiprocket", None)
+        is_fleet = bool(ef) if ef is not None else (delivery_mode in ("own_agent", "hybrid"))
+        is_sr = bool(es) if es is not None else (delivery_mode in ("shiprocket", "hybrid"))
+
+        fleet_radius_km = float(delivery_settings.own_delivery_radius_km or 10)
+        sr_radius_raw = getattr(delivery_settings, "shiprocket_delivery_radius_km", None)
+        sr_radius_km = float(sr_radius_raw) if (sr_radius_raw is not None and float(sr_radius_raw) > 0) else None
+
+        if store_lat is not None and store_lng is not None:
+            cust_lat = getattr(address, "latitude", None)
+            cust_lng = getattr(address, "longitude", None)
+            if cust_lat is not None and cust_lng is not None:
+                # Haversine distance in km
+                R = 6371.0
+                phi1, phi2 = math.radians(store_lat), math.radians(cust_lat)
+                dphi = math.radians(cust_lat - store_lat)
+                dlambda = math.radians(cust_lng - store_lng)
+                a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+                dist = R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+                if is_sr:
+                    if sr_radius_km is not None:
+                        effective_max = max(sr_radius_km, fleet_radius_km if is_fleet else 0.0)
+                        if dist > effective_max:
+                            raise HTTPException(
+                                status_code=400,
+                                detail="Sorry, we currently do not deliver to this address. Please choose a different delivery location.",
+                            )
+                elif is_fleet:
+                    if dist > fleet_radius_km:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Sorry, we currently do not deliver to this address. Please choose a different delivery location.",
+                        )
+
     cart_items = session.exec(
         select(CartItem).where(CartItem.cart_id == cart.id)
     ).all()
@@ -1519,7 +1943,7 @@ def place_order(
         raise HTTPException(status_code=400, detail="Cart is empty")
 
     payment_method = normalize_payment_method(payload.payment_method)
-    checkout_settings = get_site_or_404(session, site_id).checkout_settings or build_default_checkout_settings()
+    checkout_settings = site.checkout_settings or build_default_checkout_settings()
 
     order_line_items: list[dict[str, Any]] = []
     product_map: dict[UUID, Product] = {}
@@ -1578,7 +2002,13 @@ def place_order(
             payment_method=payment_method,
             selected_optional_charge_ids=payload.selected_optional_charge_ids,
             promo_code=payload.promo_code,
+            site_id=site_id,
+            session=session,
+            customer_email=customer.email,
         )
+
+        applied_coupon_code = pricing_snapshot.get("promoCode")
+        applied_discount_amount = money(Decimal(str(pricing_snapshot.get("promoDiscount", 0))))
 
         order = Order(
             site_id=site_id,
@@ -1602,6 +2032,8 @@ def place_order(
             ],
             pricing_snapshot=pricing_snapshot,
             payment_method=payment_method,
+            coupon_code=applied_coupon_code,
+            discount_amount=applied_discount_amount,
             status="placed",
             delivery_otp=f"{secrets.randbelow(9000) + 1000}",
             total=money(pricing_snapshot["total"]),
@@ -1609,12 +2041,34 @@ def place_order(
         session.add(order)
         session.flush()
 
+        # Atomically record coupon usage & increment usage counter
+        if applied_coupon_code and pricing_snapshot.get("couponId"):
+            try:
+                coupon_uuid = UUID(str(pricing_snapshot["couponId"]))
+                coupon_rec = session.get(Coupon, coupon_uuid)
+                if coupon_rec:
+                    coupon_rec.times_used += 1
+                    session.add(coupon_rec)
+                    usage = CouponUsage(
+                        site_id=site_id,
+                        coupon_id=coupon_rec.id,
+                        order_id=order.id,
+                        user_id=customer.id,
+                        customer_email=customer.email or "",
+                        discount_amount=applied_discount_amount,
+                    )
+                    session.add(usage)
+            except Exception as e:
+                logger.warning(f"Failed to record coupon usage: {e}")
+
         order_subtotal = sum((item["line_total"] for item in order_line_items), Decimal("0.00"))
 
         for item in order_line_items:
             product = product_map[item["product_id"]]
             decrement_product_stock(product, item["quantity"], item["selected_variant_value"])
             session.add(product)
+
+            item_return_days = product.return_window_days if product.return_window_days is not None else getattr(site, "default_return_window_days", 7)
 
             order_item = OrderItem(
                 order_id=order.id,
@@ -1631,6 +2085,7 @@ def place_order(
                 line_total=item["line_total"],
                 status="placed",
                 returnable_quantity=0,
+                return_window_days=item_return_days,
                 pricing_snapshot=build_order_item_pricing_snapshot(
                     line_total=item["line_total"],
                     quantity=item["quantity"],
@@ -1859,17 +2314,22 @@ def get_my_orders(
                 shipment_map[sh.order_id] = sh
 
     response = []
-    has_customer_sync = False
     for order in orders:
-        if _sync_order_return_status(order, session, items_map.get(order.id)):
-            has_customer_sync = True
         serialized_items = [
             serialize_customer_order_item(item, order.status)
             for item in items_map.get(order.id, [])
         ]
         has_returnable_items = any(item["is_returnable"] for item in serialized_items)
         sh = shipment_map.get(order.id)
-        is_shiprocket = bool(sh and (getattr(sh, "delivery_mode", None) == "shiprocket" or getattr(sh, "mode", None) == "shiprocket" or sh.courier_name or sh.awb_number))
+        is_own_agent = bool(
+            sh
+            and (
+                getattr(sh, "delivery_mode", None) == "own_agent"
+                or getattr(sh, "mode", None) == "own_agent"
+                or getattr(sh, "agent_id", None)
+            )
+            and not (getattr(sh, "courier_name", None) or getattr(sh, "awb_number", None))
+        )
 
         response.append(
             {
@@ -1883,19 +2343,13 @@ def get_my_orders(
                 "created_at": order.created_at.isoformat() if order.created_at else None,
                 "items": serialized_items,
                 "pricing_snapshot": order.pricing_snapshot,
-                "delivery_otp": None if is_shiprocket else ensure_order_delivery_otp(order, session),
+                "delivery_otp": ensure_order_delivery_otp(order, session) if is_own_agent else None,
                 "shipment": serialize_shipment(sh, order.status, session=session),
                 "has_returnable_items": has_returnable_items,
                 "can_request_return": order.status == "delivered" and has_returnable_items,
                 "refund_info": build_customer_refund_info(order),
             }
         )
-
-    if has_customer_sync:
-        try:
-            session.commit()
-        except Exception:
-            session.rollback()
 
     if page is not None and page_size is not None:
         return {
@@ -2033,7 +2487,19 @@ def get_my_order_detail(
         "cancelled_at": order.cancelled_at.isoformat() if order.cancelled_at else None,
         "items": serialized_items,
         "shipment": serialize_shipment(shipment, order.status, session=session),
-        "delivery_otp": None if bool(shipment and (getattr(shipment, "delivery_mode", None) == "shiprocket" or getattr(shipment, "mode", None) == "shiprocket" or shipment.courier_name or shipment.awb_number)) else ensure_order_delivery_otp(order, session),
+        "delivery_otp": (
+            ensure_order_delivery_otp(order, session)
+            if bool(
+                shipment
+                and (
+                    getattr(shipment, "delivery_mode", None) == "own_agent"
+                    or getattr(shipment, "mode", None) == "own_agent"
+                    or getattr(shipment, "agent_id", None)
+                )
+                and not (getattr(shipment, "courier_name", None) or getattr(shipment, "awb_number", None))
+            )
+            else None
+        ),
         "has_returnable_items": has_returnable_items,
         "can_request_return": order.status == "delivered" and has_returnable_items,
         "refund_info": build_customer_refund_info(order, allow_live_check=True, session=session),
@@ -2152,7 +2618,14 @@ def cancel_my_order(
                     client = get_razorpay_client()
                     if client:
                         refund_amount_paise = int(Decimal(str(order.total)) * 100)
-                        refund_resp = client.payment.refund(order.razorpay_payment_id, {"amount": refund_amount_paise})
+                        refund_resp = client.payment.refund(
+                            order.razorpay_payment_id,
+                            {
+                                "amount": refund_amount_paise,
+                                "reverse_all": 1,
+                                "notes": {"reason": "Customer cancellation refund"},
+                            },
+                        )
                         if isinstance(refund_resp, dict):
                             snapshot = dict(order.pricing_snapshot or {})
                             snapshot["refund_details"] = {

@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
+import GlassToast from "./GlassToast";
 
-
-// This is for admin checkout settings
-type ChargeCode =
+export type ChargeCode =
   | "shipping_fee"
   | "tax"
   | "handling_fee"
@@ -15,14 +14,14 @@ type ChargeCode =
   | "cod_fee"
   | "gift_wrap";
 
-
-type ChargeRule = {
+export type ChargeRule = {
   id: string;
   code: ChargeCode | "custom";
   label: string;
   enabled: boolean;
   optional: boolean;
   customerSelectable: boolean;
+  refundable: boolean;
   amountType: "fixed" | "percent";
   amountValue: string;
   applyConditionType: "none" | "subtotal_lt" | "subtotal_gte" | "payment_method";
@@ -32,22 +31,19 @@ type ChargeRule = {
   description: string;
 };
 
-
-type TaxSettings = {
+export type TaxSettings = {
   enabled: boolean;
   label: string;
   rate: string;
   applyOnShipping: boolean;
 };
 
-
-type CheckoutSettingsResponse = {
+export type CheckoutSettingsResponse = {
   taxSettings: TaxSettings;
   charges: ChargeRule[];
 };
 
-
-const createDefaultCharges = (): ChargeRule[] => [
+export const createDefaultCharges = (): ChargeRule[] => [
   {
     id: "shipping_fee",
     code: "shipping_fee",
@@ -55,13 +51,14 @@ const createDefaultCharges = (): ChargeRule[] => [
     enabled: true,
     optional: false,
     customerSelectable: false,
+    refundable: false,
     amountType: "fixed",
     amountValue: "99",
     applyConditionType: "none",
     applyConditionValue: "",
     waiveConditionType: "subtotal_gte",
     waiveConditionValue: "999",
-    description: "Standard shipping charge for all eligible orders.",
+    description: "Standard delivery charge for orders.",
   },
   {
     id: "handling_fee",
@@ -70,13 +67,14 @@ const createDefaultCharges = (): ChargeRule[] => [
     enabled: false,
     optional: false,
     customerSelectable: false,
+    refundable: false,
     amountType: "fixed",
     amountValue: "29",
     applyConditionType: "none",
     applyConditionValue: "",
     waiveConditionType: "none",
     waiveConditionValue: "",
-    description: "Store handling or order processing fee.",
+    description: "Store handling and processing fee.",
   },
   {
     id: "packaging_fee",
@@ -85,13 +83,14 @@ const createDefaultCharges = (): ChargeRule[] => [
     enabled: false,
     optional: false,
     customerSelectable: false,
+    refundable: true,
     amountType: "fixed",
     amountValue: "19",
     applyConditionType: "none",
     applyConditionValue: "",
     waiveConditionType: "none",
     waiveConditionValue: "",
-    description: "Extra packaging or premium packing charge.",
+    description: "Extra packaging or packing charge.",
   },
   {
     id: "service_fee",
@@ -100,13 +99,14 @@ const createDefaultCharges = (): ChargeRule[] => [
     enabled: false,
     optional: false,
     customerSelectable: false,
+    refundable: false,
     amountType: "fixed",
     amountValue: "15",
     applyConditionType: "none",
     applyConditionValue: "",
     waiveConditionType: "none",
     waiveConditionValue: "",
-    description: "Store service or convenience charge.",
+    description: "Store service charge.",
   },
   {
     id: "platform_fee",
@@ -115,13 +115,14 @@ const createDefaultCharges = (): ChargeRule[] => [
     enabled: false,
     optional: false,
     customerSelectable: false,
+    refundable: false,
     amountType: "fixed",
     amountValue: "9",
     applyConditionType: "none",
     applyConditionValue: "",
     waiveConditionType: "subtotal_gte",
     waiveConditionValue: "799",
-    description: "Platform or service support charge.",
+    description: "Platform support fee.",
   },
   {
     id: "small_order_fee",
@@ -130,13 +131,14 @@ const createDefaultCharges = (): ChargeRule[] => [
     enabled: false,
     optional: false,
     customerSelectable: false,
+    refundable: false,
     amountType: "fixed",
     amountValue: "49",
     applyConditionType: "subtotal_lt",
     applyConditionValue: "499",
     waiveConditionType: "none",
     waiveConditionValue: "",
-    description: "Applies only when the order value is below a threshold.",
+    description: "Applies when order subtotal is below minimum threshold.",
   },
   {
     id: "cod_fee",
@@ -145,6 +147,7 @@ const createDefaultCharges = (): ChargeRule[] => [
     enabled: false,
     optional: false,
     customerSelectable: false,
+    refundable: false,
     amountType: "fixed",
     amountValue: "39",
     applyConditionType: "payment_method",
@@ -160,38 +163,40 @@ const createDefaultCharges = (): ChargeRule[] => [
     enabled: false,
     optional: true,
     customerSelectable: true,
+    refundable: true,
     amountType: "fixed",
     amountValue: "49",
     applyConditionType: "none",
     applyConditionValue: "",
     waiveConditionType: "none",
     waiveConditionValue: "",
-    description: "Optional checkout add-on selected by customer.",
+    description: "Optional gift wrap add-on selected by customer.",
   },
 ];
 
-
-const defaultTaxSettings: TaxSettings = {
+export const defaultTaxSettings: TaxSettings = {
   enabled: true,
   label: "GST",
   rate: "5",
   applyOnShipping: false,
 };
 
-
-const createDefaultCheckoutSettings = (): CheckoutSettingsResponse => ({
+export const createDefaultCheckoutSettings = (): CheckoutSettingsResponse => ({
   taxSettings: defaultTaxSettings,
   charges: createDefaultCharges(),
 });
 
-
-const normalizeCharge = (charge: Partial<ChargeRule>, index: number): ChargeRule => ({
+export const normalizeCharge = (charge: Partial<ChargeRule>, index: number): ChargeRule => ({
   id: String(charge.id ?? `custom_${index}`),
   code: (charge.code ?? "custom") as ChargeRule["code"],
   label: String(charge.label ?? `Custom charge ${index + 1}`),
   enabled: Boolean(charge.enabled),
   optional: Boolean(charge.optional),
   customerSelectable: Boolean(charge.customerSelectable),
+  refundable:
+    charge.refundable !== undefined
+      ? Boolean(charge.refundable)
+      : charge.code === "packaging_fee" || charge.code === "gift_wrap",
   amountType: charge.amountType === "percent" ? "percent" : "fixed",
   amountValue: String(charge.amountValue ?? "0"),
   applyConditionType:
@@ -206,11 +211,10 @@ const normalizeCharge = (charge: Partial<ChargeRule>, index: number): ChargeRule
   description: String(charge.description ?? ""),
 });
 
-
-const normalizeResponse = (data: Partial<CheckoutSettingsResponse> | null | undefined): CheckoutSettingsResponse => {
+export const normalizeResponse = (
+  data: Partial<CheckoutSettingsResponse> | null | undefined
+): CheckoutSettingsResponse => {
   const fallback = createDefaultCheckoutSettings();
-
-
   return {
     taxSettings: {
       enabled: data?.taxSettings?.enabled ?? fallback.taxSettings.enabled,
@@ -226,65 +230,182 @@ const normalizeResponse = (data: Partial<CheckoutSettingsResponse> | null | unde
   };
 };
 
+const XMarkIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
 
-const CheckoutChargesPage = () => {
+const CheckIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+
+const PlusIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
+
+const TrashIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+  </svg>
+);
+
+const ToggleSwitch: React.FC<{
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+  id?: string;
+}> = ({ checked, onChange, disabled, id }) => (
+  <button
+    type="button"
+    role="switch"
+    id={id}
+    aria-checked={checked}
+    disabled={disabled}
+    onClick={(e) => {
+      e.stopPropagation();
+      onChange(!checked);
+    }}
+    style={{
+      position: "relative",
+      display: "inline-flex",
+      alignItems: "center",
+      width: "32px",
+      height: "18px",
+      flexShrink: 0,
+      cursor: disabled ? "not-allowed" : "pointer",
+      borderRadius: "999px",
+      border: "none",
+      backgroundColor: checked ? "#16a34a" : "#cbd5e1",
+      transition: "background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+      padding: "2px",
+      outline: "none",
+      boxSizing: "border-box",
+    }}
+  >
+    <span
+      style={{
+        display: "inline-block",
+        width: "14px",
+        height: "14px",
+        borderRadius: "50%",
+        backgroundColor: "#ffffff",
+        boxShadow: "0 1px 2px rgba(0, 0, 0, 0.2)",
+        transform: checked ? "translateX(14px)" : "translateX(0px)",
+        transition: "transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+      }}
+    />
+  </button>
+);
+
+const getShortTabLabel = (label: string) => {
+  const map: Record<string, string> = {
+    "Shipping fee": "Shipping",
+    "Handling fee": "Handling",
+    "Packaging fee": "Packaging",
+    "Service fee": "Service",
+    "Platform fee": "Platform",
+    "Small order fee": "Small Order",
+    "COD fee": "COD",
+    "Gift wrap": "Gift Wrap",
+  };
+  return map[label] ?? label;
+};
+
+const getCachedCheckoutSettings = (id?: string): CheckoutSettingsResponse | null => {
+  if (!id || typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(`wc_admin_checkout_settings_${id}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const CheckoutChargesPage: React.FC = () => {
   const { siteId } = useParams<{ siteId: string }>();
 
+  const cachedSettings = getCachedCheckoutSettings(siteId);
 
-  const [charges, setCharges] = useState<ChargeRule[]>(createDefaultCharges);
-  const [taxSettings, setTaxSettings] = useState<TaxSettings>(defaultTaxSettings);
-  const [saveMessage, setSaveMessage] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [mode, setMode] = useState<"standard" | "tax" | "custom">("standard");
+
+  const [charges, setCharges] = useState<ChargeRule[]>(() => cachedSettings?.charges || createDefaultCharges());
+  const [taxSettings, setTaxSettings] = useState<TaxSettings>(() => cachedSettings?.taxSettings || defaultTaxSettings);
+  const [initialSnapshot, setInitialSnapshot] = useState<string>(() => cachedSettings ? JSON.stringify(cachedSettings) : "");
+
+  const [toast, setToast] = useState<{ id: number; type: "success" | "error"; text: string } | null>(null);
+  const [loading, setLoading] = useState(!cachedSettings);
   const [saving, setSaving] = useState(false);
-  const [activeStandardTab, setActiveStandardTab] = useState<string>("shipping_fee");
-  const [activeCustomTab, setActiveCustomTab] = useState<string | null>(null);
 
+  const showToast = (type: "success" | "error", text: string) => {
+    const id = Date.now();
+    setToast({ id, type, text });
+    setTimeout(() => {
+      setToast((cur) => (cur?.id === id ? null : cur));
+    }, 3500);
+  };
 
-  const activeCharges = useMemo(
-    () => charges.filter((charge) => charge.enabled),
-    [charges]
-  );
-
-
-  const optionalChargesCount = useMemo(
-    () => charges.filter((charge) => charge.enabled && charge.customerSelectable).length,
-    [charges]
-  );
-
+  const [activeStandardTab, setActiveStandardTab] = useState<string>(() => {
+    const list = cachedSettings?.charges || createDefaultCharges();
+    const firstStandard = list.find((c) => c.code !== "custom");
+    return firstStandard?.id ?? "shipping_fee";
+  });
+  const [activeCustomTab, setActiveCustomTab] = useState<string | null>(() => {
+    const list = cachedSettings?.charges || createDefaultCharges();
+    const firstCustom = list.find((c) => c.code === "custom");
+    return firstCustom?.id ?? null;
+  });
 
   const standardCharges = useMemo(
     () => charges.filter((charge) => charge.code !== "custom"),
     [charges]
   );
 
-
   const customCharges = useMemo(
     () => charges.filter((charge) => charge.code === "custom"),
     [charges]
   );
 
+  const activeStandardCharge = useMemo(() => {
+    return (
+      standardCharges.find((charge) => charge.id === activeStandardTab) ||
+      standardCharges[0]
+    );
+  }, [activeStandardTab, standardCharges]);
 
-  const activeStandardCharge =
-    standardCharges.find((charge) => charge.id === activeStandardTab) ?? standardCharges[0];
+  const activeCustomCharge = useMemo(() => {
+    return (
+      customCharges.find((charge) => charge.id === activeCustomTab) ||
+      customCharges[0] ||
+      null
+    );
+  }, [activeCustomTab, customCharges]);
 
-
-  const activeCustomCharge =
-    customCharges.find((charge) => charge.id === activeCustomTab) ?? customCharges[0] ?? null;
-
+  const hasUnsavedChanges = useMemo(() => {
+    if (!initialSnapshot) return false;
+    const current = JSON.stringify({ taxSettings, charges });
+    return current !== initialSnapshot;
+  }, [taxSettings, charges, initialSnapshot]);
 
   useEffect(() => {
     const loadCheckoutSettings = async () => {
       if (!siteId) {
-        setSaveMessage("Missing site id in route.");
+        showToast("error", "Missing site id in route.");
         setLoading(false);
         return;
       }
 
-
       try {
-        setLoading(true);
-        setSaveMessage("");
-
+        if (!cachedSettings) {
+          setLoading(true);
+        }
 
         const response = await fetch(
           `${API_BASE_URL}/sites/${siteId}/checkout-settings`,
@@ -293,38 +414,35 @@ const CheckoutChargesPage = () => {
           }
         );
 
-
         if (!response.ok) {
           throw new Error(`Failed to load checkout settings: ${response.status}`);
         }
 
-
         const data: CheckoutSettingsResponse = await response.json();
         const normalized = normalizeResponse(data);
 
-
         setTaxSettings(normalized.taxSettings);
         setCharges(normalized.charges);
-
+        setInitialSnapshot(JSON.stringify(normalized));
+        try {
+          localStorage.setItem(`wc_admin_checkout_settings_${siteId}`, JSON.stringify(normalized));
+        } catch (_) {}
 
         const firstStandard = normalized.charges.find((charge) => charge.code !== "custom");
         const firstCustom = normalized.charges.find((charge) => charge.code === "custom");
 
-
         setActiveStandardTab(firstStandard?.id ?? "shipping_fee");
         setActiveCustomTab(firstCustom?.id ?? null);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error loading checkout settings:", error);
-        setSaveMessage("Failed to load checkout settings.");
+        showToast("error", error?.message || "Failed to load checkout settings.");
       } finally {
         setLoading(false);
       }
     };
 
-
     loadCheckoutSettings();
   }, [siteId]);
-
 
   const updateCharge = (
     id: string,
@@ -336,63 +454,55 @@ const CheckoutChargesPage = () => {
         charge.id === id ? { ...charge, [field]: value } : charge
       )
     );
-    setSaveMessage("");
   };
-
 
   const addCustomCharge = () => {
     const nextId = `custom_${Date.now()}`;
     const customCount = charges.filter((charge) => charge.code === "custom").length + 1;
 
+    const newCharge: ChargeRule = {
+      id: nextId,
+      code: "custom",
+      label: `Custom Charge ${customCount}`,
+      enabled: true,
+      optional: false,
+      customerSelectable: false,
+      refundable: true,
+      amountType: "fixed",
+      amountValue: "0",
+      applyConditionType: "none",
+      applyConditionValue: "",
+      waiveConditionType: "none",
+      waiveConditionValue: "",
+      description: "Custom store charge.",
+    };
 
-    setCharges((prev) => [
-      ...prev,
-      {
-        id: nextId,
-        code: "custom",
-        label: `Custom charge ${customCount}`,
-        enabled: true,
-        optional: false,
-        customerSelectable: false,
-        amountType: "fixed",
-        amountValue: "0",
-        applyConditionType: "none",
-        applyConditionValue: "",
-        waiveConditionType: "none",
-        waiveConditionValue: "",
-        description: "Store-specific custom charge.",
-      },
-    ]);
+    setCharges((prev) => [...prev, newCharge]);
+    setMode("custom");
     setActiveCustomTab(nextId);
-    setSaveMessage("");
   };
-
 
   const removeCustomCharge = (id: string) => {
     const nextCustomCharges = customCharges.filter((charge) => charge.id !== id);
     setCharges((prev) => prev.filter((charge) => charge.id !== id));
-    setActiveCustomTab(nextCustomCharges[0]?.id ?? null);
-    setSaveMessage("");
+    if (activeCustomTab === id) {
+      setActiveCustomTab(nextCustomCharges[0]?.id ?? null);
+    }
   };
-
 
   const handleSave = async () => {
     if (!siteId) {
-      setSaveMessage("Missing site id in route.");
+      showToast("error", "Missing site id in route.");
       return;
     }
 
-
     try {
       setSaving(true);
-      setSaveMessage("");
-
 
       const payload: CheckoutSettingsResponse = {
         taxSettings,
         charges,
       };
-
 
       const response = await fetch(
         `${API_BASE_URL}/sites/${siteId}/checkout-settings`,
@@ -405,7 +515,6 @@ const CheckoutChargesPage = () => {
           body: JSON.stringify(payload),
         }
       );
-
 
       if (!response.ok) {
         let errorMessage = `Failed to save settings: ${response.status}`;
@@ -423,615 +532,716 @@ const CheckoutChargesPage = () => {
         throw new Error(errorMessage);
       }
 
-
       const data: CheckoutSettingsResponse = await response.json();
       const normalized = normalizeResponse(data);
 
-
       setTaxSettings(normalized.taxSettings);
       setCharges(normalized.charges);
-      setSaveMessage("Checkout settings saved successfully.");
-    } catch (error) {
+      setInitialSnapshot(JSON.stringify(normalized));
+      showToast("success", "Checkout settings saved successfully.");
+    } catch (error: any) {
       console.error("Error saving checkout settings:", error);
-      setSaveMessage(
-        error instanceof Error ? error.message : "Failed to save checkout settings."
-      );
+      showToast("error", error instanceof Error ? error.message : "Failed to save checkout settings.");
     } finally {
       setSaving(false);
     }
   };
 
-
   if (loading) {
     return (
-      <div
-        style={{
-          minHeight: "320px",
-          display: "grid",
-          placeItems: "center",
-          color: "#0f172a",
-        }}
-      >
-        <p style={{ margin: 0, fontSize: "14px", color: "#64748b" }}>
-          Loading checkout settings...
-        </p>
+      <div style={{ minHeight: "300px", display: "grid", placeItems: "center", color: "#64748b", fontSize: "13.5px" }}>
+        Loading settings...
       </div>
     );
   }
 
-
   return (
-    <div style={{ maxWidth: "1120px", color: "#0f172a" }}>
+    <div style={{ color: "#0f172a", width: "100%" }}>
+      {/* Top Header Card (Segmented Mode + Search & Action Button) */}
       <div
         style={{
+          background: "#ffffff",
+          border: "1px solid #e2e8f0",
+          borderRadius: "10px",
+          padding: "10px 14px",
+          marginBottom: "16px",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
           display: "flex",
-          justifyContent: "flex-end",
-          marginBottom: "18px",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "10px",
         }}
       >
-        <button onClick={handleSave} style={primaryButtonStyle} disabled={saving}>
-          {saving ? "Saving..." : "Save settings"}
-        </button>
-      </div>
-
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-          gap: "12px",
-          marginBottom: "20px",
-        }}
-      >
-        <StatCard label="Active charges" value={String(activeCharges.length)} />
-        <StatCard label="Optional charges" value={String(optionalChargesCount)} />
-        <StatCard
-          label="Tax status"
-          value={taxSettings.enabled ? "Enabled" : "Disabled"}
-        />
-      </div>
-
-
-      <SectionCard
-        title="Tax settings"
-        subtitle="Tax stays separate from other charges because it is not waivable."
-        style={{ marginBottom: "20px" }}
-      >
+        {/* Segmented Pill Switcher */}
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: "14px",
+            display: "inline-flex",
+            background: "#f1f5f9",
+            padding: "3px",
+            borderRadius: "8px",
+            border: "1px solid #e2e8f0",
+            gap: "2px",
           }}
         >
-          <ToggleField
-            label="Enable tax"
-            checked={taxSettings.enabled}
-            onChange={(checked) => {
-              setTaxSettings((prev) => ({ ...prev, enabled: checked }));
-              setSaveMessage("");
-            }}
-          />
-          <FormField
-            label="Tax label"
-            value={taxSettings.label}
-            onChange={(value) => {
-              setTaxSettings((prev) => ({ ...prev, label: value }));
-              setSaveMessage("");
-            }}
-          />
-          <FormField
-            label="Tax rate (%)"
-            type="number"
-            value={taxSettings.rate}
-            onChange={(value) => {
-              setTaxSettings((prev) => ({ ...prev, rate: value }));
-              setSaveMessage("");
-            }}
-          />
-          <ToggleField
-            label="Apply tax on shipping"
-            checked={taxSettings.applyOnShipping}
-            onChange={(checked) => {
-              setTaxSettings((prev) => ({ ...prev, applyOnShipping: checked }));
-              setSaveMessage("");
-            }}
-          />
+          {(
+            [
+              { id: "standard", label: "Standard Charges" },
+              { id: "tax", label: "Tax Settings" },
+              { id: "custom", label: "Custom Charges" },
+            ] as const
+          ).map((tab) => {
+            const isActive = mode === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => {
+                  setMode(tab.id);
+                }}
+                style={{
+                  borderRadius: "6px",
+                  padding: "6px 14px",
+                  border: "none",
+                  background: isActive ? "#ffffff" : "transparent",
+                  color: isActive ? "#0f172a" : "#64748b",
+                  boxShadow: isActive
+                    ? "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
+                    : "none",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
-      </SectionCard>
 
+        {/* Right Action Area: Add + Save */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
+          {mode === "custom" && (
+            <button
+              type="button"
+              onClick={addCustomCharge}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                padding: "7px 12px",
+                borderRadius: "6px",
+                background: "#ffffff",
+                border: "1px solid #cbd5e1",
+                color: "#0f172a",
+                fontWeight: 600,
+                fontSize: "12.5px",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <PlusIcon />
+              Add Custom Charge
+            </button>
+          )}
 
-      <SectionCard
-        title="Standard charges"
-        subtitle="Click a charge button to open and edit that section only."
-        style={{ marginBottom: "20px" }}
-      >
-        <TabBar
-          items={standardCharges.map((charge) => ({
-            id: charge.id,
-            label: charge.label,
-            enabled: charge.enabled,
-          }))}
-          activeId={activeStandardCharge?.id ?? ""}
-          onChange={setActiveStandardTab}
-        />
-
-
-        {activeStandardCharge ? (
-          <div style={{ marginTop: "14px" }}>
-            <ChargeCard charge={activeStandardCharge} onChange={updateCharge} />
-          </div>
-        ) : null}
-      </SectionCard>
-
-
-      <SectionCard
-        title="Custom charges"
-        subtitle="Each custom charge gets its own tab. Add a new one to create another section."
-        action={
-          <button onClick={addCustomCharge} style={primaryButtonStyle}>
-            + Add custom charge
-          </button>
-        }
-      >
-        {customCharges.length === 0 ? (
-          <div
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
             style={{
-              padding: "14px 16px",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "7px 16px",
               borderRadius: "6px",
-              border: "1px dashed #cbd5e1",
-              color: "#64748b",
-              fontSize: "14px",
-              background: "#ffffff",
+              border: "none",
+              background: hasUnsavedChanges ? "#2563eb" : "#0f172a",
+              color: "#ffffff",
+              fontWeight: 700,
+              fontSize: "13px",
+              cursor: saving ? "wait" : "pointer",
+              boxShadow: hasUnsavedChanges ? "0 1px 3px rgba(37,99,235,0.3)" : "none",
+              opacity: saving ? 0.7 : 1,
+              whiteSpace: "nowrap",
             }}
           >
-            No custom charges added yet.
-          </div>
-        ) : (
-          <>
-            <TabBar
-              items={customCharges.map((charge) => ({
-                id: charge.id,
-                label: charge.label,
-                enabled: charge.enabled,
-              }))}
-              activeId={activeCustomCharge?.id ?? ""}
-              onChange={setActiveCustomTab}
-            />
+            {saving ? "Saving..." : "Save Settings"}
+          </button>
+        </div>
+      </div>
 
+      {/* Floating Top-Center Toast Notification */}
+      {toast && (
+        <GlassToast
+          message={toast.text}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
 
-            {activeCustomCharge ? (
-              <div style={{ marginTop: "14px" }}>
-                <ChargeCard
-                  charge={activeCustomCharge}
-                  onChange={updateCharge}
-                  onRemove={() => removeCustomCharge(activeCustomCharge.id)}
-                />
-              </div>
-            ) : null}
-          </>
-        )}
-      </SectionCard>
-
-
-      {saveMessage ? (
+      {/* Sub-Tab Navigation Bar */}
+      {mode === "standard" && (
         <div
           style={{
-            marginTop: "16px",
-            padding: "10px 12px",
-            borderRadius: "6px",
-            background: saveMessage.toLowerCase().includes("saved") ? "#f0fdf4" : "#fef2f2",
-            border: saveMessage.toLowerCase().includes("saved")
-              ? "1px solid #bbf7d0"
-              : "1px solid #fecaca",
-            color: saveMessage.toLowerCase().includes("saved") ? "#15803d" : "#b91c1c",
-            fontSize: "14px",
-            fontWeight: 600,
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "4px",
+            borderBottom: "1px solid #e2e8f0",
+            marginBottom: "16px",
           }}
         >
-          {saveMessage}
+          {standardCharges.map((charge) => {
+            const isActive = charge.id === activeStandardCharge?.id;
+            const shortLabel = getShortTabLabel(charge.label);
+            return (
+              <button
+                key={charge.id}
+                type="button"
+                onClick={() => setActiveStandardTab(charge.id)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "8px 12px",
+                  border: "none",
+                  borderBottom: isActive ? "2px solid #2563eb" : "2px solid transparent",
+                  background: "transparent",
+                  color: isActive ? "#2563eb" : "#64748b",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                  marginBottom: "-1px",
+                }}
+              >
+                <span>{shortLabel}</span>
+                <span
+                  style={{
+                    width: "6px",
+                    height: "6px",
+                    minWidth: "6px",
+                    borderRadius: "999px",
+                    background: charge.enabled ? "#16a34a" : "#cbd5e1",
+                    display: "inline-block",
+                    transition: "background 0.2s ease",
+                  }}
+                  title={charge.enabled ? "Active" : "Disabled"}
+                />
+              </button>
+            );
+          })}
         </div>
-      ) : null}
+      )}
+
+      {mode === "custom" && (
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "4px",
+            borderBottom: "1px solid #e2e8f0",
+            marginBottom: "16px",
+          }}
+        >
+          {customCharges.map((charge) => {
+            const isActive = charge.id === activeCustomCharge?.id;
+            return (
+              <button
+                key={charge.id}
+                type="button"
+                onClick={() => setActiveCustomTab(charge.id)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "8px 12px",
+                  border: "none",
+                  borderBottom: isActive ? "2px solid #2563eb" : "2px solid transparent",
+                  background: "transparent",
+                  color: isActive ? "#2563eb" : "#64748b",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                  marginBottom: "-1px",
+                }}
+              >
+                <span>{charge.label}</span>
+                <span
+                  style={{
+                    width: "6px",
+                    height: "6px",
+                    minWidth: "6px",
+                    borderRadius: "999px",
+                    background: charge.enabled ? "#16a34a" : "#cbd5e1",
+                    display: "inline-block",
+                    transition: "background 0.2s ease",
+                  }}
+                  title={charge.enabled ? "Active" : "Disabled"}
+                />
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Main Mode View Panels */}
+      {mode === "standard" && (
+        <div>
+          {activeStandardCharge ? (
+            <ChargeConfigCard charge={activeStandardCharge} onChange={updateCharge} />
+          ) : (
+            <div style={emptyCardStyle}>No charges match your filter.</div>
+          )}
+        </div>
+      )}
+
+      {mode === "custom" && (
+        <div>
+          {customCharges.length === 0 ? (
+            <div
+              style={{
+                ...plainCardStyle,
+                padding: "36px 20px",
+                textAlign: "center",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+                No custom charges
+              </div>
+              <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+                Create optional or mandatory store charges tailored to your checkout flow.
+              </p>
+              <button
+                type="button"
+                onClick={addCustomCharge}
+                style={{
+                  marginTop: "6px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  padding: "7px 14px",
+                  borderRadius: "6px",
+                  background: "#2563eb",
+                  color: "#ffffff",
+                  fontWeight: 700,
+                  fontSize: "12.5px",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                <PlusIcon />
+                Add Custom Charge
+              </button>
+            </div>
+          ) : activeCustomCharge ? (
+            <ChargeConfigCard
+              charge={activeCustomCharge}
+              onChange={updateCharge}
+              onRemove={() => removeCustomCharge(activeCustomCharge.id)}
+            />
+          ) : (
+            <div style={emptyCardStyle}>No custom charge selected.</div>
+          )}
+        </div>
+      )}
+
+      {mode === "tax" && (
+        <div style={plainCardStyle}>
+          {/* Header */}
+          <div
+            style={{
+              padding: "14px 18px",
+              borderBottom: "1px solid #f1f5f9",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "10px",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+                Tax (GST) Settings
+              </div>
+              <div style={{ fontSize: "12.5px", color: "#64748b", marginTop: "2px" }}>
+                Calculated on line items during checkout and automatically prorated on returns.
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                cursor: "pointer",
+                userSelect: "none",
+              }}
+              onClick={() => setTaxSettings((prev) => ({ ...prev, enabled: !prev.enabled }))}
+            >
+              <span
+                style={{
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  color: taxSettings.enabled ? "#0f172a" : "#64748b",
+                }}
+              >
+                Enable Tax
+              </span>
+              <ToggleSwitch
+                checked={taxSettings.enabled}
+                onChange={(val) => setTaxSettings((prev) => ({ ...prev, enabled: val }))}
+              />
+            </div>
+          </div>
+
+          {/* Form Content */}
+          <div style={{ padding: "18px" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                gap: "16px",
+                maxWidth: "700px",
+              }}
+            >
+              <div>
+                <div style={labelStyle}>Tax Display Label</div>
+                <input
+                  type="text"
+                  value={taxSettings.label}
+                  onChange={(e) => {
+                    setTaxSettings((prev) => ({ ...prev, label: e.target.value }));
+                  }}
+                  placeholder="e.g. GST"
+                  style={inputStyle}
+                />
+              </div>
+
+              <div>
+                <div style={labelStyle}>Tax Rate (%)</div>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={taxSettings.rate}
+                  onChange={(e) => {
+                    setTaxSettings((prev) => ({ ...prev, rate: e.target.value }));
+                  }}
+                  placeholder="e.g. 5"
+                  style={inputStyle}
+                />
+              </div>
+
+              <div style={{ gridColumn: "1 / -1", paddingTop: "4px" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "13px", color: "#334155" }}>
+                  <input
+                    type="checkbox"
+                    checked={taxSettings.applyOnShipping}
+                    onChange={(e) => {
+                      setTaxSettings((prev) => ({ ...prev, applyOnShipping: e.target.checked }));
+                    }}
+                    style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#2563eb" }}
+                  />
+                  Apply tax on shipping fee as well
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-
-const SectionCard = ({
-  title,
-  subtitle,
-  action,
-  children,
-  style,
-}: {
-  title: string;
-  subtitle: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-  style?: React.CSSProperties;
-}) => (
-  <div
-    style={{
-      padding: "16px",
-      borderRadius: "8px",
-      background: "#ffffff",
-      border: "1px solid #e2e8f0",
-      ...style,
-    }}
-  >
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        gap: "12px",
-        flexWrap: "wrap",
-        marginBottom: "14px",
-      }}
-    >
-      <div>
-        <h2 style={{ margin: "0 0 4px", fontSize: "15px", color: "#0f172a", fontWeight: 700 }}>
-          {title}
-        </h2>
-        <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>{subtitle}</p>
-      </div>
-      {action}
-    </div>
-
-
-    {children}
-  </div>
-);
-
-
-const getShortTabLabel = (label: string) => {
-  const map: Record<string, string> = {
-    "Shipping fee": "Shipping",
-    "Handling fee": "Handling",
-    "Packaging fee": "Packaging",
-    "Service fee": "Service",
-    "Platform fee": "Platform",
-    "Small order fee": "Small Order",
-    "COD fee": "COD",
-    "Gift wrap": "Gift Wrap",
-  };
-
-
-  return map[label] ?? label;
-};
-
-
-const TabBar = ({
-  items,
-  activeId,
-  onChange,
-}: {
-  items: { id: string; label: string; enabled: boolean }[];
-  activeId: string;
-  onChange: (id: string) => void;
-}) => (
-  <div
-    style={{
-      display: "grid",
-      gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`,
-      gap: "8px",
-      width: "100%",
-    }}
-  >
-    {items.map((item) => {
-      const isActive = item.id === activeId;
-      const shortLabel = getShortTabLabel(item.label);
-
-
-      return (
-        <button
-          key={item.id}
-          type="button"
-          onClick={() => onChange(item.id)}
-          style={{
-            minWidth: 0,
-            padding: "8px 8px",
-            borderRadius: "6px",
-            border: isActive ? "1px solid #bfdbfe" : "1px solid #e2e8f0",
-            background: isActive ? "#eff6ff" : "#ffffff",
-            color: isActive ? "#1d4ed8" : "#334155",
-            fontWeight: isActive ? 700 : 600,
-            fontSize: "12px",
-            lineHeight: 1.2,
-            cursor: "pointer",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "6px",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-          title={item.label}
-        >
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {shortLabel}
-          </span>
-
-
-          <span
-            style={{
-              width: "6px",
-              height: "6px",
-              minWidth: "6px",
-              borderRadius: "999px",
-              background: item.enabled ? "#22c55e" : "#cbd5e1",
-              display: "inline-block",
-            }}
-          />
-        </button>
-      );
-    })}
-  </div>
-);
-
-
-const ChargeCard = ({
-  charge,
-  onChange,
-  onRemove,
-}: {
+/* Individual Charge Configuration Card (Clean & Minimal) */
+const ChargeConfigCard: React.FC<{
   charge: ChargeRule;
   onChange: (id: string, field: keyof ChargeRule, value: string | boolean) => void;
   onRemove?: () => void;
-}) => {
+}> = ({ charge, onChange, onRemove }) => {
   return (
-    <div
-      style={{
-        padding: "14px 16px",
-        borderRadius: "6px",
-        background: "#ffffff",
-        border: "1px solid #e2e8f0",
-      }}
-    >
+    <div style={plainCardStyle}>
+      {/* Card Header */}
       <div
         style={{
+          padding: "14px 18px",
+          borderBottom: "1px solid #f1f5f9",
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "flex-start",
-          gap: "14px",
-          marginBottom: "12px",
+          alignItems: "center",
           flexWrap: "wrap",
+          gap: "10px",
         }}
       >
-        <div>
-          <h3 style={{ margin: "0 0 4px", fontSize: "14px", color: "#0f172a", fontWeight: 700 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
             {charge.label}
-          </h3>
-          <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>{charge.description}</p>
+          </div>
+          {charge.refundable ? (
+            <span style={{ fontSize: "11px", fontWeight: 700, padding: "1px 6px", borderRadius: "4px", background: "#f1f5f9", color: "#475569" }}>
+              Refundable
+            </span>
+          ) : (
+            <span style={{ fontSize: "11px", fontWeight: 700, padding: "1px 6px", borderRadius: "4px", background: "#fffbeb", color: "#92400e", border: "1px solid #fde68a" }}>
+              Non-Refundable
+            </span>
+          )}
         </div>
 
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          {onRemove && (
+            <button
+              type="button"
+              onClick={onRemove}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                padding: "5px 9px",
+                borderRadius: "5px",
+                border: "1px solid #e2e8f0",
+                background: "#ffffff",
+                color: "#64748b",
+                fontSize: "12px",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              <TrashIcon />
+              Delete
+            </button>
+          )}
 
-        {onRemove ? (
-          <button onClick={onRemove} style={dangerButtonStyle}>
-            Remove
-          </button>
-        ) : null}
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              cursor: "pointer",
+              userSelect: "none",
+            }}
+            onClick={() => onChange(charge.id, "enabled", !charge.enabled)}
+          >
+            <span
+              style={{
+                fontSize: "13px",
+                fontWeight: 600,
+                color: charge.enabled ? "#0f172a" : "#64748b",
+              }}
+            >
+              Active
+            </span>
+            <ToggleSwitch
+              checked={charge.enabled}
+              onChange={(val) => onChange(charge.id, "enabled", val)}
+            />
+          </div>
+        </div>
       </div>
 
+      {/* Form Content */}
+      <div style={{ padding: "18px" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+            gap: "16px",
+          }}
+        >
+          {/* Label */}
+          <div>
+            <div style={labelStyle}>Charge Label</div>
+            <input
+              type="text"
+              value={charge.label}
+              onChange={(e) => onChange(charge.id, "label", e.target.value)}
+              placeholder="Display label"
+              style={inputStyle}
+            />
+          </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: "14px",
-        }}
-      >
-        <ToggleField
-          label="Enable charge"
-          checked={charge.enabled}
-          onChange={(checked) => onChange(charge.id, "enabled", checked)}
-        />
+          {/* Amount Type */}
+          <div>
+            <div style={labelStyle}>Amount Type</div>
+            <select
+              value={charge.amountType}
+              onChange={(e) => onChange(charge.id, "amountType", e.target.value as "fixed" | "percent")}
+              style={inputStyle}
+            >
+              <option value="fixed">Fixed (₹)</option>
+              <option value="percent">Percentage (%)</option>
+            </select>
+          </div>
 
+          {/* Amount Value */}
+          <div>
+            <div style={labelStyle}>
+              {charge.amountType === "fixed" ? "Amount (₹)" : "Amount (%)"}
+            </div>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={charge.amountValue}
+              onChange={(e) => onChange(charge.id, "amountValue", e.target.value)}
+              style={inputStyle}
+            />
+          </div>
 
-        <ToggleField
-          label="Optional charge"
-          checked={charge.optional}
-          onChange={(checked) => onChange(charge.id, "optional", checked)}
-        />
+          {/* Application Condition */}
+          <div>
+            <div style={labelStyle}>Application Condition</div>
+            <select
+              value={charge.applyConditionType}
+              onChange={(e) => onChange(charge.id, "applyConditionType", e.target.value as ChargeRule["applyConditionType"])}
+              style={inputStyle}
+            >
+              <option value="none">Always Apply (Default)</option>
+              <option value="subtotal_lt">Subtotal less than (&lt;)</option>
+              <option value="subtotal_gte">Subtotal greater than or equal (≥)</option>
+              <option value="payment_method">Payment method (e.g. COD)</option>
+            </select>
+          </div>
 
+          {/* Condition Value (if condition active) */}
+          {charge.applyConditionType !== "none" && (
+            <div>
+              <div style={labelStyle}>
+                {charge.applyConditionType === "payment_method"
+                  ? "Payment Method (e.g. cod)"
+                  : "Threshold Value (₹)"}
+              </div>
+              <input
+                type="text"
+                value={charge.applyConditionValue}
+                onChange={(e) => onChange(charge.id, "applyConditionValue", e.target.value)}
+                placeholder={charge.applyConditionType === "payment_method" ? "cod" : "499"}
+                style={inputStyle}
+              />
+            </div>
+          )}
 
-        <ToggleField
-          label="Customer selectable"
-          checked={charge.customerSelectable}
-          onChange={(checked) => onChange(charge.id, "customerSelectable", checked)}
-        />
+          {/* Waiver Condition */}
+          <div>
+            <div style={labelStyle}>Free / Waiver Condition</div>
+            <select
+              value={charge.waiveConditionType}
+              onChange={(e) => onChange(charge.id, "waiveConditionType", e.target.value as ChargeRule["waiveConditionType"])}
+              style={inputStyle}
+            >
+              <option value="none">No Waiver</option>
+              <option value="subtotal_gte">Free when Subtotal ≥</option>
+            </select>
+          </div>
 
+          {/* Waiver Value */}
+          {charge.waiveConditionType === "subtotal_gte" && (
+            <div>
+              <div style={labelStyle}>Free Waiver Subtotal (₹)</div>
+              <input
+                type="number"
+                min="0"
+                value={charge.waiveConditionValue}
+                onChange={(e) => onChange(charge.id, "waiveConditionValue", e.target.value)}
+                placeholder="e.g. 999"
+                style={inputStyle}
+              />
+            </div>
+          )}
 
-        <SelectField
-          label="Amount type"
-          value={charge.amountType}
-          onChange={(value) => onChange(charge.id, "amountType", value)}
-          options={[
-            { label: "Fixed amount", value: "fixed" },
-            { label: "Percentage", value: "percent" },
-          ]}
-        />
+          {/* Description */}
+          <div style={{ gridColumn: "1 / -1" }}>
+            <div style={labelStyle}>Description</div>
+            <input
+              type="text"
+              value={charge.description}
+              onChange={(e) => onChange(charge.id, "description", e.target.value)}
+              placeholder="Short internal description"
+              style={inputStyle}
+            />
+          </div>
 
+          {/* Checkbox Options */}
+          <div style={{ gridColumn: "1 / -1", display: "flex", flexWrap: "wrap", gap: "20px", paddingTop: "4px" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "13px", color: "#334155" }}>
+              <input
+                type="checkbox"
+                checked={charge.refundable}
+                onChange={(e) => onChange(charge.id, "refundable", e.target.checked)}
+                style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#2563eb" }}
+              />
+              Refundable on return
+            </label>
 
-        <FormField
-          label={charge.amountType === "fixed" ? "Amount (₹)" : "Amount (%)"}
-          type="number"
-          value={charge.amountValue}
-          onChange={(value) => onChange(charge.id, "amountValue", value)}
-        />
-
-
-        <FormField
-          label="Customer label"
-          value={charge.label}
-          onChange={(value) => onChange(charge.id, "label", value)}
-        />
-
-
-        <SelectField
-          label="Apply condition"
-          value={charge.applyConditionType}
-          onChange={(value) => onChange(charge.id, "applyConditionType", value)}
-          options={[
-            { label: "No condition", value: "none" },
-            { label: "Subtotal less than", value: "subtotal_lt" },
-            { label: "Subtotal greater than or equal", value: "subtotal_gte" },
-            { label: "Payment method", value: "payment_method" },
-          ]}
-        />
-
-
-        <FormField
-          label="Apply condition value"
-          value={charge.applyConditionValue}
-          onChange={(value) => onChange(charge.id, "applyConditionValue", value)}
-        />
-
-
-        <SelectField
-          label="Waive condition"
-          value={charge.waiveConditionType}
-          onChange={(value) => onChange(charge.id, "waiveConditionType", value)}
-          options={[
-            { label: "No waiver", value: "none" },
-            { label: "Waive at subtotal >=", value: "subtotal_gte" },
-          ]}
-        />
-
-
-        <FormField
-          label="Waive condition value"
-          value={charge.waiveConditionValue}
-          onChange={(value) => onChange(charge.id, "waiveConditionValue", value)}
-        />
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "13px", color: "#334155" }}>
+              <input
+                type="checkbox"
+                checked={charge.customerSelectable}
+                onChange={(e) => {
+                  onChange(charge.id, "customerSelectable", e.target.checked);
+                  onChange(charge.id, "optional", e.target.checked);
+                }}
+                style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#2563eb" }}
+              />
+              Customer-selectable add-on (e.g. Gift Wrap)
+            </label>
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
-
-const FormField = ({
-  label,
-  value,
-  onChange,
-  type = "text",
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  type?: "text" | "number";
-}) => (
-  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-    <span style={labelStyle}>{label}</span>
-    <input type={type} value={value} onChange={(e) => onChange(e.target.value)} style={inputStyle} />
-  </label>
-);
-
-
-const SelectField = ({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  options: { label: string; value: string }[];
-}) => (
-  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-    <span style={labelStyle}>{label}</span>
-    <select value={value} onChange={(e) => onChange(e.target.value)} style={inputStyle}>
-      {options.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </select>
-  </label>
-);
-
-
-const ToggleField = ({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) => (
-  <label
-    style={{
-      display: "flex",
-      alignItems: "center",
-      gap: "10px",
-      minHeight: "42px",
-      color: "#334155",
-      fontSize: "14px",
-      fontWeight: 600,
-      paddingTop: "24px",
-    }}
-  >
-    <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-    {label}
-  </label>
-);
-
-
-const StatCard = ({ label, value }: { label: string; value: string }) => (
-  <div
-    style={{
-      padding: "14px 16px",
-      borderRadius: "8px",
-      background: "#ffffff",
-      border: "1px solid #e2e8f0",
-    }}
-  >
-    <p style={{ margin: "0 0 6px", fontSize: "13px", color: "#64748b" }}>{label}</p>
-    <h3 style={{ margin: 0, fontSize: "22px", color: "#0f172a" }}>{value}</h3>
-  </div>
-);
-
-
-const labelStyle: React.CSSProperties = {
-  fontSize: "13px",
-  color: "#475569",
+const plainCardStyle: React.CSSProperties = {
+  background: "#ffffff",
+  border: "1px solid #e2e8f0",
+  borderRadius: "10px",
+  boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+  overflow: "hidden",
 };
 
+const emptyCardStyle: React.CSSProperties = {
+  ...plainCardStyle,
+  padding: "24px 16px",
+  textAlign: "center",
+  color: "#64748b",
+  fontSize: "13.5px",
+};
+
+const labelStyle: React.CSSProperties = {
+  fontSize: "12px",
+  fontWeight: 600,
+  color: "#475569",
+  marginBottom: "4px",
+};
 
 const inputStyle: React.CSSProperties = {
-  padding: "9px 10px",
+  padding: "7px 10px",
   borderRadius: "6px",
   border: "1px solid #cbd5e1",
   background: "#ffffff",
   color: "#0f172a",
-  fontSize: "14px",
+  fontSize: "13px",
   width: "100%",
+  boxSizing: "border-box",
+  outline: "none",
 };
-
-
-const primaryButtonStyle: React.CSSProperties = {
-  padding: "9px 14px",
-  borderRadius: "6px",
-  border: "none",
-  background: "#2563eb",
-  color: "white",
-  fontWeight: 600,
-  cursor: "pointer",
-};
-
-
-const dangerButtonStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  borderRadius: "6px",
-  border: "1px solid #fecaca",
-  background: "#fef2f2",
-  color: "#b91c1c",
-  fontWeight: 600,
-  cursor: "pointer",
-};
-
 
 export default CheckoutChargesPage;

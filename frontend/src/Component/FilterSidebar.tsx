@@ -23,6 +23,7 @@ type FilterSidebarProps = {
   sortBy?: string;
   onSortChange?: (sort: string) => void;
   onFilterClick?: () => void;
+  showFilterButton?: boolean;
   theme?: {
     mode?: string;
     text_color?: string;
@@ -42,6 +43,7 @@ export const FilterSidebar = ({
   sortBy = "newest",
   onSortChange,
   onFilterClick,
+  showFilterButton = true,
   theme,
 }: FilterSidebarProps) => {
   const [sortOpen, setSortOpen] = useState(false);
@@ -105,22 +107,24 @@ export const FilterSidebar = ({
         <div className="product-toolbar-actions">
           {/* Item count */}
           <span className="product-toolbar-count">
-            {itemCount} item{itemCount !== 1 ? "s" : ""}
+            {itemCount.toLocaleString()} item{itemCount !== 1 ? "s" : ""}
           </span>
 
           {/* Filter & Categories button */}
-          <button
-            onClick={onFilterClick}
-            className="product-toolbar-btn"
-          >
-            <span>☰</span>
-            <span>Filter & Categories</span>
-            {activeFilterCount > 0 && (
-              <span className="product-toolbar-badge">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
+          {showFilterButton && (
+            <button
+              onClick={onFilterClick}
+              className="product-toolbar-btn"
+            >
+              <span>☰</span>
+              <span>Filter & Categories</span>
+              {activeFilterCount > 0 && (
+                <span className="product-toolbar-badge">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+          )}
 
           {/* Sort by dropdown */}
           <div ref={sortRef} style={{ position: "relative" }}>

@@ -7,6 +7,8 @@ import React, {
   useState,
 } from "react";
 import { API_BASE_URL } from "./config/api";
+import { getThumbnailUrl } from "./utils/imageOptimizer";
+import { getCustomerAuthHeaders, getCustomerToken } from "./utils/customerAuthFetch";
 
 export type ProductVariantValue = {
   value: string;
@@ -52,15 +54,37 @@ export type Product = {
   category?: string;
   category_id?: string | null;
   category_name?: string | null;
-  collections?: { id: string; name: string; slug?: string }[];
+  collections?: { id: string; name: string; slug?: string; is_badge?: boolean; badge_color?: string | null }[];
   description: string;
+  highlights?: string[];
   slug?: string;
   price: number;
   compare_price?: number | null;
   images?: string[];
   stock?: number;
   in_stock?: boolean;
+  is_active?: boolean;
+  sku?: string | null;
+  hsn_code?: string | null;
+  video_url?: string | null;
+  weight_grams?: number;
+  length_cm?: number | null;
+  width_cm?: number | null;
+  height_cm?: number | null;
   variant_option?: ProductVariantOption | null;
+  sibling_group?: string | null;
+  sibling_label?: string | null;
+  siblings?: Array<{
+    id: string;
+    name: string;
+    sibling_label?: string | null;
+    slug?: string | null;
+    price: number;
+    compare_price?: number | null;
+    in_stock: boolean;
+    cover_image?: string | null;
+    is_current?: boolean;
+  }>;
   originalPrice?: number;
   discountPercent?: number;
   discount_percent?: number;
@@ -73,6 +97,9 @@ export type Product = {
   selectedVariantLabel?: string | null;
   average_rating?: number;
   review_count?: number;
+  sales_count?: number | null;
+  salesCount?: number | null;
+  return_window_days?: number | null;
   created_at?: string | Date | null;
   updated_at?: string | Date | null;
   reviews?: ProductReview[];
@@ -84,12 +111,25 @@ export type CartItem = Product & {
 
 type ProductId = string | number;
 
+export type ValidatedCoupon = {
+  id?: string;
+  code: string;
+  discountType: "percentage" | "fixed_amount" | "free_shipping";
+  discountValue: number;
+  discountAmount: number;
+  message?: string;
+};
+
 type CartContextType = {
   products: Product[];
   cartItems: CartItem[];
   cartCount: number;
   cartTotal: number;
   isCartLoading: boolean;
+  isProductsLoading?: boolean;
+  appliedCoupon: ValidatedCoupon | null;
+  setAppliedCoupon: (coupon: ValidatedCoupon | null) => void;
+  clearAppliedCoupon: () => void;
   addToCart: (product: Product, quantity?: number) => Promise<void>;
   removeFromCart: (
     productId: ProductId,
@@ -102,6 +142,7 @@ type CartContextType = {
   ) => Promise<void>;
   clearCart: () => Promise<void>;
   refreshCart: () => Promise<void>;
+  defaultReturnWindowDays?: number;
 };
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -110,6 +151,12 @@ type CartProviderProps = {
   children: React.ReactNode;
   products?: Product[];
   siteId?: string;
+  defaultReturnWindowDays?: number;
+  isProductsLoading?: boolean;
+  /** When true the cart provider is running inside the admin builder preview.
+   *  Skip the authenticated /cart fetch (which would 403 with a cross-site
+   *  customer cookie) and operate in guest-cart mode instead. */
+  isAdminMode?: boolean;
 };
 
 type BackendCartItem = {
@@ -185,16 +232,70 @@ const clearGuestCartStorage = (siteId?: string) => {
   window.localStorage.removeItem(buildGuestStorageKey(siteId));
 };
 
+const buildCouponStorageKey = (siteId?: string) =>
+  `webcreon_coupon:${siteId ?? "default"}`;
+
+const readPersistedCoupon = (siteId?: string): ValidatedCoupon | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(buildCouponStorageKey(siteId));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const writePersistedCoupon = (siteId: string | undefined, coupon: ValidatedCoupon | null) => {
+  if (typeof window === "undefined") return;
+  try {
+    if (coupon) {
+      window.sessionStorage.setItem(buildCouponStorageKey(siteId), JSON.stringify(coupon));
+    } else {
+      window.sessionStorage.removeItem(buildCouponStorageKey(siteId));
+    }
+  } catch {}
+};
+
 export function CartProvider({
   children,
   products = [],
   siteId,
+  defaultReturnWindowDays = 7,
+  isProductsLoading = false,
+  isAdminMode = false,
 }: CartProviderProps) {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartItemIds, setCartItemIds] = useState<Record<string, string>>({});
   const [isCartLoading, setIsCartLoading] = useState(false);
+  const [appliedCoupon, setAppliedCouponState] = useState<ValidatedCoupon | null>(() =>
+    readPersistedCoupon(siteId)
+  );
 
   const resolvedSiteId = siteId;
+
+  const setAppliedCoupon = useCallback((coupon: ValidatedCoupon | null) => {
+    setAppliedCouponState(coupon);
+    writePersistedCoupon(resolvedSiteId, coupon);
+  }, [resolvedSiteId]);
+
+  const clearAppliedCoupon = useCallback(() => {
+    setAppliedCouponState(null);
+    writePersistedCoupon(resolvedSiteId, null);
+  }, [resolvedSiteId]);
+
+  // Pre-load all cart item images into browser memory so cart drawer and checkout render them in 0ms
+  useEffect(() => {
+    if (Array.isArray(cartItems) && cartItems.length > 0 && typeof window !== "undefined") {
+      cartItems.forEach((item) => {
+        if (item.image) {
+          const i1 = new Image();
+          i1.src = getThumbnailUrl(item.image, 180, 180);
+          const i2 = new Image();
+          i2.src = getThumbnailUrl(item.image, 140, 140);
+        }
+      });
+    }
+  }, [cartItems]);
 
   const applyCartResponse = useCallback((data: BackendCartResponse) => {
     const mappedItems = data.items.map(mapBackendCartItemToCartItem);
@@ -222,11 +323,24 @@ export function CartProvider({
       return;
     }
 
+    // In admin/builder preview mode, skip the backend fetch only if there is
+    // no customer token. If the user is logged in (token exists in localStorage)
+    // we should still fetch their real cart from the backend so the admin
+    // preview reflects the same cart as the customer storefront.
+    if (isAdminMode) {
+      const hasToken = Boolean(getCustomerToken(resolvedSiteId));
+      if (!hasToken) {
+        loadGuestCartIntoState();
+        return;
+      }
+    }
+
     setIsCartLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/cart/${resolvedSiteId}`, {
         method: "GET",
         credentials: "include",
+        headers: getCustomerAuthHeaders(resolvedSiteId),
       });
 
       if (res.status === 401 || res.status === 403) {
@@ -246,11 +360,52 @@ export function CartProvider({
     } finally {
       setIsCartLoading(false);
     }
-  }, [applyCartResponse, loadGuestCartIntoState, resolvedSiteId]);
+  }, [applyCartResponse, isAdminMode, loadGuestCartIntoState, resolvedSiteId]);
 
+  // Initial cart load
   useEffect(() => {
     refreshCart();
   }, [refreshCart]);
+
+  // Cross-tab cart sync: re-fetch whenever the customer token changes in
+  // another tab (e.g. they log in on the storefront tab) or when this tab
+  // regains focus after such a change.
+  useEffect(() => {
+    // Snapshot the token so we only re-fetch when it actually changes.
+    let lastSeenToken: string | null = resolvedSiteId
+      ? getCustomerToken(resolvedSiteId)
+      : null;
+
+    const handleStorage = (event: StorageEvent) => {
+      if (
+        event.key &&
+        event.key.startsWith("wc_customer_token_") &&
+        resolvedSiteId
+      ) {
+        // A login/logout happened in another tab — re-fetch the cart so this
+        // tab (admin or store) reflects the correct state.
+        lastSeenToken = event.newValue;
+        refreshCart();
+      }
+    };
+
+    const handleFocus = () => {
+      if (!resolvedSiteId) return;
+      const currentToken = getCustomerToken(resolvedSiteId);
+      // Only re-fetch if the token actually changed since last check
+      if (currentToken !== lastSeenToken) {
+        lastSeenToken = currentToken;
+        refreshCart();
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [refreshCart, resolvedSiteId]);
 
   const addToCart = useCallback(
     async (product: Product, quantity = 1) => {
@@ -263,9 +418,9 @@ export function CartProvider({
         const res = await fetch(`${API_BASE_URL}/cart/${resolvedSiteId}/items`, {
           method: "POST",
           credentials: "include",
-          headers: {
+          headers: getCustomerAuthHeaders(resolvedSiteId, {
             "Content-Type": "application/json",
-          },
+          }),
           body: JSON.stringify({
             product_id: product.id,
             quantity: safeQuantity,
@@ -368,6 +523,7 @@ export function CartProvider({
           {
             method: "DELETE",
             credentials: "include",
+            headers: getCustomerAuthHeaders(resolvedSiteId),
           }
         );
 
@@ -433,9 +589,9 @@ export function CartProvider({
           {
             method: "PUT",
             credentials: "include",
-            headers: {
+            headers: getCustomerAuthHeaders(resolvedSiteId, {
               "Content-Type": "application/json",
-            },
+            }),
             body: JSON.stringify({ quantity }),
           }
         );
@@ -473,10 +629,12 @@ export function CartProvider({
       const res = await fetch(`${API_BASE_URL}/cart/${resolvedSiteId}/clear`, {
         method: "DELETE",
         credentials: "include",
+        headers: getCustomerAuthHeaders(resolvedSiteId),
       });
 
       if (res.status === 401 || res.status === 403) {
         clearGuestCartStorage(resolvedSiteId);
+        clearAppliedCoupon();
         setCartItems([]);
         setCartItemIds({});
         return;
@@ -486,12 +644,13 @@ export function CartProvider({
         throw new Error("Failed to clear cart");
       }
 
+      clearAppliedCoupon();
       const data: BackendCartResponse = await res.json();
       applyCartResponse(data);
     } catch (error) {
       console.error("Failed to clear cart", error);
     }
-  }, [applyCartResponse, resolvedSiteId]);
+  }, [applyCartResponse, clearAppliedCoupon, resolvedSiteId]);
 
   const cartCount = useMemo(
     () => cartItems.reduce((sum, item) => sum + item.quantity, 0),
@@ -510,11 +669,16 @@ export function CartProvider({
       cartCount,
       cartTotal,
       isCartLoading,
+      isProductsLoading,
+      appliedCoupon,
+      setAppliedCoupon,
+      clearAppliedCoupon,
       addToCart,
       removeFromCart,
       updateQuantity,
       clearCart,
       refreshCart,
+      defaultReturnWindowDays,
     }),
     [
       products,
@@ -522,11 +686,16 @@ export function CartProvider({
       cartCount,
       cartTotal,
       isCartLoading,
+      isProductsLoading,
+      appliedCoupon,
+      setAppliedCoupon,
+      clearAppliedCoupon,
       addToCart,
       removeFromCart,
       updateQuantity,
       clearCart,
       refreshCart,
+      defaultReturnWindowDays,
     ]
   );
 

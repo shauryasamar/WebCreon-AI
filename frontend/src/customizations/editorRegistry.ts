@@ -79,7 +79,7 @@ const heroBackgroundSizeField = {
 
 const navbarBrandNameField = {
   key: "brandName",
-  label: "Brand name",
+  label: "Brand Name",
   type: "text" as const,
   target: "props" as const,
   placeholder: "Storefront",
@@ -87,32 +87,229 @@ const navbarBrandNameField = {
 
 const navbarLogoUrlField = {
   key: "logoUrl",
-  label: "Brand logo image URL",
-  type: "text" as const,
+  label: "Brand Logo Image",
+  type: "image_upload" as const,
   target: "props" as const,
-  placeholder: "https://example.com/logo.png",
-  helpText: "Transparent PNG or SVG images work best on all dark & light background colors.",
+  helpText: "Upload a PNG, SVG, or WEBP logo.",
 };
 
-const navbarShowSearchField = {
-  key: "showSearch",
-  label: "Show search",
-  type: "checkbox" as const,
-  target: "props" as const,
+const navbarBrandDisplayModeField = {
+  key: "brand_display_mode",
+  label: "Brand Display Mode",
+  type: "select" as const,
+  target: "theme" as const,
+  defaultValue: "both",
+  options: [
+    { label: "Logo & Brand Name", value: "both" },
+    { label: "Logo Only", value: "logo_only" },
+    { label: "Brand Name Only", value: "name_only" },
+  ],
+  helpText: "Choose whether to display both logo and brand name, logo only, or brand name only.",
 };
 
-const navbarShowAccountField = {
-  key: "showAccount",
-  label: "Show account",
-  type: "checkbox" as const,
-  target: "props" as const,
+const navbarBrandAlignmentField = {
+  key: "brand_alignment",
+  label: "Brand Placement",
+  type: "select" as const,
+  target: "theme" as const,
+  defaultValue: "left",
+  options: [
+    { label: "Left Aligned", value: "left" },
+    { label: "Center Aligned", value: "center" },
+  ],
+  helpText: "Position the brand identity on the left or centered in the navbar.",
 };
 
-const navbarShowCartField = {
-  key: "showCart",
-  label: "Show cart",
-  type: "checkbox" as const,
-  target: "props" as const,
+const navbarBrandLayoutDirectionField = {
+  key: "brand_layout_direction",
+  label: "Brand & Logo Layout",
+  type: "select" as const,
+  target: "theme" as const,
+  defaultValue: "row",
+  options: [
+    { label: "Side by Side (Row)", value: "row" },
+    { label: "Stacked (Column)", value: "column" },
+  ],
+  helpText: "Arrange the logo and brand name horizontally or vertically.",
+};
+
+const navbarBrandFontFamilyField = {
+  key: "brand_font_family",
+  label: "Brand Font Style",
+  type: "select" as const,
+  target: "theme" as const,
+  defaultValue: "modern_sans",
+  options: [
+    { label: "Modern Clean (Inter)", value: "modern_sans" },
+    { label: "Luxury Editorial Serif (Playfair)", value: "playfair_serif" },
+    { label: "Royal Roman Display (Cinzel)", value: "cinzel_display" },
+    { label: "Literary Fine Serif (Cormorant)", value: "cormorant_serif" },
+    { label: "Contemporary Geometric (Outfit)", value: "outfit_geometric" },
+    { label: "Neo-Grotesque Tech (Jakarta)", value: "jakarta_sans" },
+    { label: "Modern Bold Sans (Montserrat)", value: "montserrat_bold" },
+    { label: "Flowing Signature (Dancing Script)", value: "dancing_script" },
+    { label: "Elegant Calligraphy (Great Vibes)", value: "great_vibes" },
+    { label: "Vintage Editorial Display (Abril)", value: "abril_fatface" },
+    { label: "Developer Monospace (Fira Code)", value: "monospace" },
+  ],
+  helpText: "Choose a curated typography family for the brand name.",
+};
+
+const navbarBrandFontWeightField = {
+  key: "brand_font_weight",
+  label: "Brand Font Weight",
+  type: "select" as const,
+  target: "theme" as const,
+  defaultValue: "700",
+  options: [
+    { label: "Light (300)", value: "300" },
+    { label: "Regular (400)", value: "400" },
+    { label: "Medium (500)", value: "500" },
+    { label: "Semi-Bold (600)", value: "600" },
+    { label: "Bold (700)", value: "700" },
+    { label: "Extra Bold (800)", value: "800" },
+    { label: "Black / Heavy (900)", value: "900" },
+  ],
+  helpText: "Stroke thickness and weight for the brand name text.",
+};
+
+const navbarBrandFontStyleField = {
+  key: "brand_font_style",
+  label: "Brand Font Style (Italic)",
+  type: "select" as const,
+  target: "theme" as const,
+  defaultValue: "normal",
+  options: [
+    { label: "Normal (Upright)", value: "normal" },
+    { label: "Italic (Slanted)", value: "italic" },
+  ],
+  helpText: "Choose between upright or italicized slanted text.",
+};
+
+const navbarBrandFontSizeField = {
+  key: "brand_font_size",
+  label: "Brand Font Size (px)",
+  type: "number" as const,
+  target: "theme" as const,
+  defaultValue: 16,
+  min: 12,
+  max: 36,
+  step: 1,
+  helpText: "Font size for the brand name text.",
+};
+
+const navbarBrandTextColorField = {
+  key: "brand_text_color",
+  label: "Brand Name Text Color",
+  type: "color" as const,
+  target: "theme" as const,
+  helpText: "Custom text color specifically for the brand name.",
+};
+
+const navbarLogoSizeField = {
+  key: "logo_size",
+  label: "Logo Size (px)",
+  type: "number" as const,
+  target: "theme" as const,
+  defaultValue: 36,
+  min: 16,
+  max: 120,
+  step: 2,
+  helpText: "Overall size of the brand logo in pixels (automatically fits inside navbar height).",
+};
+
+const navbarLogoFitField = {
+  key: "logo_fit",
+  label: "Logo Image Fit",
+  type: "select" as const,
+  target: "theme" as const,
+  defaultValue: "contain",
+  options: [
+    { label: "Contain (Preserve Aspect)", value: "contain" },
+    { label: "Cover (Fill Frame Box)", value: "cover" },
+    { label: "Fill / Stretch (Exact Box)", value: "fill" },
+    { label: "Scale Down (Compact Fit)", value: "scale-down" },
+  ],
+  helpText: "How the logo scales and fits within its boundary box.",
+};
+
+const navbarLogoZoomField = {
+  key: "logo_zoom",
+  label: "Logo Zoom / Scale (%)",
+  type: "number" as const,
+  target: "theme" as const,
+  defaultValue: 100,
+  min: 60,
+  max: 300,
+  step: 5,
+  helpText: "Zoom into the logo image to make emblems and artwork larger and clearer in less space.",
+};
+
+const navbarSearchDisplayModeField = {
+  key: "search_display_mode",
+  label: "Search Display Style",
+  type: "select" as const,
+  target: "theme" as const,
+  defaultValue: "bar",
+  options: [
+    { label: "Full Search Bar", value: "bar" },
+    { label: "Icon Button Only", value: "icon" },
+  ],
+  helpText: "Choose between an always-visible search bar or a compact icon that expands when clicked.",
+};
+
+const navbarSearchPlacementField = {
+  key: "search_placement",
+  label: "Search Bar Placement",
+  type: "select" as const,
+  target: "theme" as const,
+  defaultValue: "center",
+  options: [
+    { label: "Center (Balanced)", value: "center" },
+    { label: "Left (Next to Brand)", value: "left" },
+    { label: "Right (Next to Actions)", value: "right" },
+  ],
+  helpText: "Controls where the search bar sits across the navbar layout on desktop screens.",
+};
+
+const navbarSearchMaxWidthField = {
+  key: "search_max_width",
+  label: "Search Bar Width (px)",
+  type: "number" as const,
+  target: "theme" as const,
+  defaultValue: 460,
+  min: 160,
+  max: 800,
+  step: 10,
+  helpText: "Maximum pixel width for the search input capsule.",
+};
+
+const navbarSearchHeightField = {
+  key: "search_height",
+  label: "Search Bar Height (px)",
+  type: "number" as const,
+  target: "theme" as const,
+  defaultValue: 38,
+  min: 28,
+  max: 64,
+  step: 2,
+  helpText: "Height of the search bar capsule.",
+};
+
+const navbarSearchTextColorField = {
+  key: "search_text_color",
+  label: "Search Input Text Color",
+  type: "color" as const,
+  target: "theme" as const,
+  helpText: "Color of the text typed into the search bar.",
+};
+
+const navbarSearchMutedTextColorField = {
+  key: "search_muted_text_color",
+  label: "Search Placeholder & Muted Color",
+  type: "color" as const,
+  target: "theme" as const,
+  helpText: "Color of the placeholder hint and clear icon in the search bar.",
 };
 
 const navbarVariantField = {
@@ -234,30 +431,6 @@ const navbarPaddingYField = {
   helpText: "Controls top and bottom spacing inside the navbar.",
 };
 
-const navbarLogoHeightField = {
-  key: "logo_height",
-  label: "Logo Height",
-  type: "select" as const,
-  target: "theme" as const,
-  options: [
-    { label: "Compact (28px)", value: "28" },
-    { label: "Standard (36px)", value: "36" },
-    { label: "Large (44px)", value: "44" },
-    { label: "Extra Large (52px)", value: "52" },
-  ],
-};
-
-const navbarLogoFitField = {
-  key: "logo_fit",
-  label: "Logo Image Fit",
-  type: "select" as const,
-  target: "theme" as const,
-  options: [
-    { label: "Contain (Fit Inside)", value: "contain" },
-    { label: "Cover (Fill)", value: "cover" },
-  ],
-};
-
 
 
 const cartTitleField = {
@@ -266,6 +439,7 @@ const cartTitleField = {
   type: "text" as const,
   target: "props" as const,
   placeholder: "Your cart",
+  defaultValue: "Your cart",
 };
 
 const cartEmptyTitleField = {
@@ -274,6 +448,7 @@ const cartEmptyTitleField = {
   type: "text" as const,
   target: "props" as const,
   placeholder: "Your cart is empty",
+  defaultValue: "Your cart is empty",
 };
 
 const cartEmptyMessageField = {
@@ -281,7 +456,8 @@ const cartEmptyMessageField = {
   label: "Empty state message",
   type: "textarea" as const,
   target: "props" as const,
-  placeholder: "Add products to continue shopping.",
+  placeholder: "Add a few products to see them here.",
+  defaultValue: "Add a few products to see them here.",
 };
 
 const cartShowPromoField = {
@@ -289,6 +465,7 @@ const cartShowPromoField = {
   label: "Show promo code",
   type: "checkbox" as const,
   target: "props" as const,
+  defaultValue: true,
 };
 
 const cartShowSummaryField = {
@@ -296,6 +473,7 @@ const cartShowSummaryField = {
   label: "Show summary",
   type: "checkbox" as const,
   target: "props" as const,
+  defaultValue: true,
 };
 
 const cartPromoTitleField = {
@@ -304,6 +482,7 @@ const cartPromoTitleField = {
   type: "text" as const,
   target: "props" as const,
   placeholder: "Promo code",
+  defaultValue: "Promo code",
 };
 
 const cartPromoPlaceholderField = {
@@ -311,7 +490,8 @@ const cartPromoPlaceholderField = {
   label: "Promo placeholder",
   type: "text" as const,
   target: "props" as const,
-  placeholder: "Enter promo code",
+  placeholder: "Enter code",
+  defaultValue: "Enter code",
 };
 
 const cartPromoButtonLabelField = {
@@ -320,6 +500,7 @@ const cartPromoButtonLabelField = {
   type: "text" as const,
   target: "props" as const,
   placeholder: "Apply",
+  defaultValue: "Apply",
 };
 
 const cartSummaryTitleField = {
@@ -328,6 +509,7 @@ const cartSummaryTitleField = {
   type: "text" as const,
   target: "props" as const,
   placeholder: "Order summary",
+  defaultValue: "Order summary",
 };
 
 const cartCheckoutLabelField = {
@@ -336,6 +518,7 @@ const cartCheckoutLabelField = {
   type: "text" as const,
   target: "props" as const,
   placeholder: "Proceed to checkout",
+  defaultValue: "Proceed to checkout",
 };
 
 const cartSubtotalLabelField = {
@@ -344,6 +527,7 @@ const cartSubtotalLabelField = {
   type: "text" as const,
   target: "props" as const,
   placeholder: "Subtotal",
+  defaultValue: "Subtotal",
 };
 
 const cartShippingLabelField = {
@@ -352,6 +536,7 @@ const cartShippingLabelField = {
   type: "text" as const,
   target: "props" as const,
   placeholder: "Shipping",
+  defaultValue: "Shipping",
 };
 
 const cartTaxLabelField = {
@@ -360,6 +545,7 @@ const cartTaxLabelField = {
   type: "text" as const,
   target: "props" as const,
   placeholder: "Estimated tax",
+  defaultValue: "Estimated tax",
 };
 
 const cartTotalLabelField = {
@@ -368,6 +554,7 @@ const cartTotalLabelField = {
   type: "text" as const,
   target: "props" as const,
   placeholder: "Total",
+  defaultValue: "Total",
 };
 
 const cartMaxWidthField = {
@@ -375,10 +562,10 @@ const cartMaxWidthField = {
   label: "Cart width",
   type: "number" as const,
   target: "props" as const,
-  min: 240,
-  max: 900,
-  step: 4,
-  helpText: "Maximum width of the cart container.",
+  min: 960,
+  max: 1280,
+  step: 20,
+  helpText: "Width of the cart container (960px - 1280px).",
 };
 
 const cartMinHeightField = {
@@ -386,10 +573,10 @@ const cartMinHeightField = {
   label: "Cart height",
   type: "number" as const,
   target: "props" as const,
-  min: 0,
-  max: 1200,
-  step: 4,
-  helpText: "Minimum height of the cart container.",
+  min: 280,
+  max: 650,
+  step: 20,
+  helpText: "Minimum height of the cart container (280px - 650px).",
 };
 
 const cartBorderRadiusField = {
@@ -477,6 +664,104 @@ const deliveryTitleField = {
   placeholder: "Delivery details",
 };
 
+const deliverySubtitleField = {
+  key: "subtitle",
+  label: "Subtitle description",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Select one of your saved delivery addresses or add a new one.",
+};
+
+const deliveryAddButtonLabelField = {
+  key: "add_address_button_label",
+  label: "Add address button label",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "+ Add New Address",
+};
+
+const deliveryContinueButtonLabelField = {
+  key: "continue_button_label",
+  label: "Continue button label",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Deliver to this address",
+};
+
+const deliveryEmptyTitleField = {
+  key: "empty_title",
+  label: "Empty state title",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "No address saved",
+};
+
+const deliveryEmptyMessageField = {
+  key: "empty_message",
+  label: "Empty state message",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Add your first delivery address to continue.",
+};
+
+const deliveryCardRadiusField = {
+  key: "card_radius",
+  label: "Address card radius (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 0,
+  max: 32,
+  step: 1,
+};
+
+const deliveryButtonRadiusField = {
+  key: "button_border_radius",
+  label: "Button corner radius (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 0,
+  max: 32,
+  step: 1,
+};
+
+const deliveryBadgeRadiusField = {
+  key: "badge_border_radius",
+  label: "Badge corner radius (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 0,
+  max: 24,
+  step: 1,
+};
+
+const deliveryCardColorField = {
+  key: "card_color",
+  label: "Address card background",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const deliverySelectedCardBgField = {
+  key: "selected_card_bg",
+  label: "Selected address card background",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const deliveryButtonBgColorField = {
+  key: "button_bg_color",
+  label: "Continue button background",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const deliveryButtonTextColorField = {
+  key: "button_text_color",
+  label: "Continue button text color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
 const deliveryAccentColorField = {
   key: "accentColor",
   label: "Accent color override",
@@ -488,6 +773,278 @@ const deliveryCompactField = {
   key: "compact",
   label: "Compact layout",
   type: "checkbox" as const,
+  target: "props" as const,
+};
+
+// --- Map Location Picker Fields ---
+const mapModalTitleField = {
+  key: "map_modal_title",
+  label: "Map modal title",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Select Delivery Location",
+};
+
+const mapSearchPlaceholderField = {
+  key: "map_search_placeholder",
+  label: "Location search placeholder",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Search address, landmark, area...",
+};
+
+const mapConfirmButtonLabelField = {
+  key: "map_confirm_button_label",
+  label: "Confirm button text",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Confirm This Location",
+};
+
+const mapHelperTextField = {
+  key: "map_helper_text",
+  label: "Map helper instructions",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Move the map to place the pin directly over your building or entrance.",
+};
+
+const mapModalRadiusField = {
+  key: "map_modal_radius",
+  label: "Modal corner radius (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 0,
+  max: 32,
+  step: 1,
+};
+
+const mapButtonRadiusField = {
+  key: "map_button_radius",
+  label: "Confirm button radius (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 0,
+  max: 24,
+  step: 1,
+};
+
+const mapSearchRadiusField = {
+  key: "map_search_radius",
+  label: "Search input radius (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 0,
+  max: 24,
+  step: 1,
+};
+
+const mapModalBgField = {
+  key: "map_modal_bg",
+  label: "Modal background color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const mapHeaderTextColorField = {
+  key: "map_header_text_color",
+  label: "Header text color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const mapSearchBgField = {
+  key: "map_search_bg",
+  label: "Search input background",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const mapSearchTextColorField = {
+  key: "map_search_text_color",
+  label: "Search input text color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const mapConfirmBtnBgField = {
+  key: "map_confirm_btn_bg",
+  label: "Confirm button background",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const mapConfirmBtnTextColorField = {
+  key: "map_confirm_btn_text",
+  label: "Confirm button text color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+// --- Address Details Form Fields ---
+const formTitleAddField = {
+  key: "form_title_add",
+  label: "Add form title",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Add New Address",
+};
+
+const formTitleEditField = {
+  key: "form_title_edit",
+  label: "Edit form title",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Edit Address",
+};
+
+const formSubtitleField = {
+  key: "form_subtitle",
+  label: "Form subtitle text",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Fill in the details below",
+};
+
+const formNamePlaceholderField = {
+  key: "form_name_placeholder",
+  label: "Full Name placeholder",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "e.g. Rahul Sharma",
+};
+
+const formPhonePlaceholderField = {
+  key: "form_phone_placeholder",
+  label: "Mobile Number placeholder",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "9876543210",
+};
+
+const formAddressPlaceholderField = {
+  key: "form_address_placeholder",
+  label: "Flat / Building placeholder",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "e.g. Flat 402, Block B, Green Heights",
+};
+
+const formCityPlaceholderField = {
+  key: "form_city_placeholder",
+  label: "City / Locality placeholder",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "City / Area",
+};
+
+const formPincodePlaceholderField = {
+  key: "form_pincode_placeholder",
+  label: "Pincode placeholder",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "e.g. 560102",
+};
+
+const formEmailPlaceholderField = {
+  key: "form_email_placeholder",
+  label: "Email placeholder",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "name@example.com",
+};
+
+const formSaveButtonLabelField = {
+  key: "form_save_button_label",
+  label: "Save address button label",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Save and Deliver Here",
+};
+
+const formCardRadiusField = {
+  key: "form_card_radius",
+  label: "Form panel corner radius (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 0,
+  max: 32,
+  step: 1,
+};
+
+const formButtonRadiusField = {
+  key: "form_button_radius",
+  label: "Save button corner radius (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 0,
+  max: 24,
+  step: 1,
+};
+
+const formPaddingField = {
+  key: "form_padding",
+  label: "Form inner padding (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 8,
+  max: 32,
+  step: 1,
+};
+
+const formPanelBgField = {
+  key: "form_panel_bg",
+  label: "Form panel background",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const formInputBgField = {
+  key: "form_input_bg",
+  label: "Form inputs background",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const formInputTextColorField = {
+  key: "form_input_text",
+  label: "Form inputs text color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const formLabelColorField = {
+  key: "form_label_color",
+  label: "Field labels color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const formPlaceholderColorField = {
+  key: "form_placeholder_color",
+  label: "Placeholder text color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const formBorderColorField = {
+  key: "form_border_color",
+  label: "Form fields border color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const formSaveBtnBgField = {
+  key: "form_save_btn_bg",
+  label: "Save button background",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const formSaveBtnTextColorField = {
+  key: "form_save_btn_text",
+  label: "Save button text color",
+  type: "color" as const,
   target: "props" as const,
 };
 
@@ -896,173 +1453,442 @@ const productGridShowBrandNameField = {
   target: "props" as const,
 };
 
-
-
-const productDetailAddToCartLabelField = {
-  key: "add_to_cart_label",
-  label: "Add to Cart button text",
+// --- Section Group Carousel / Category Story Carousel Fields ---
+const sectionGroupTitleField = {
+  key: "title",
+  label: "Section Title",
   type: "text" as const,
   target: "props" as const,
-  placeholder: "Add to Bag",
+  placeholder: "Shop By Category",
 };
 
-const productDetailButtonBgColorField = {
-  key: "button_bg_color",
-  label: "Primary button background",
-  type: "color" as const,
-  target: "props" as const,
-};
-
-const productDetailButtonTextColorField = {
-  key: "button_text_color",
-  label: "Primary button text color",
-  type: "color" as const,
-  target: "props" as const,
-};
-
-const productDetailShowDeliveryInfoField = {
-  key: "show_delivery_info",
-  label: "Show Delivery Info Badge",
-  type: "checkbox" as const,
-  target: "props" as const,
-};
-
-const productDetailDeliveryTextField = {
-  key: "delivery_text",
-  label: "Delivery badge text",
+const sectionGroupSubtitleField = {
+  key: "subtitle",
+  label: "Section Subtitle",
   type: "text" as const,
   target: "props" as const,
-  placeholder: "Free Express Delivery on orders over ₹499",
+  placeholder: "Explore curated collections and popular categories",
 };
 
-const productDetailShowReturnPolicyField = {
-  key: "show_return_policy",
-  label: "Show Return Policy Badge",
-  type: "checkbox" as const,
-  target: "props" as const,
-};
-
-const productDetailReturnPolicyTextField = {
-  key: "return_policy_text",
-  label: "Return policy badge text",
-  type: "text" as const,
-  target: "props" as const,
-  placeholder: "7-Day Easy Returns & Exchange",
-};
-
-const productDetailShowQualityGuaranteeField = {
-  key: "show_quality_guarantee",
-  label: "Show Quality Guarantee Badge",
-  type: "checkbox" as const,
-  target: "props" as const,
-};
-
-const productDetailQualityTextField = {
-  key: "quality_text",
-  label: "Quality guarantee text",
-  type: "text" as const,
-  target: "props" as const,
-  placeholder: "100% Authentic & Quality Assured",
-};
-
-const productDetailShowDiscountBadgeField = {
-  key: "show_discount_badge",
-  label: "Show Discount Badge (% OFF)",
-  type: "checkbox" as const,
-  target: "props" as const,
-};
-
-const productDetailShowStockBadgeField = {
-  key: "show_stock_badge",
-  label: "Show Stock Status Badge",
-  type: "checkbox" as const,
-  target: "props" as const,
-};
-
-const productDetailShowRatingsField = {
-  key: "show_ratings",
-  label: "Show Customer Ratings",
-  type: "checkbox" as const,
-  target: "props" as const,
-};
-
-const productDetailShowOriginalPriceField = {
-  key: "show_original_price",
-  label: "Show Original / Compare Price",
-  type: "checkbox" as const,
-  target: "props" as const,
-};
-
-const productDetailShowBrandNameField = {
-  key: "show_brand_name",
-  label: "Show Brand / Category Tag",
-  type: "checkbox" as const,
-  target: "props" as const,
-};
-
-const productDetailShowReviewsSectionField = {
-  key: "show_reviews_section",
-  label: "Show Reviews Section",
-  type: "checkbox" as const,
-  target: "props" as const,
-};
-
-const productDetailMaxWidthField = {
-  key: "max_width",
-  label: "Max Container Width (px)",
+const sectionGroupTitleAlignmentField = {
+  key: "title_alignment",
+  label: "Title Alignment",
   type: "select" as const,
   target: "props" as const,
   options: [
-    { label: "Default (1160px)", value: "1160" },
-    { label: "Compact (1000px)", value: "1000" },
-    { label: "Wide (1280px)", value: "1280" },
-    { label: "Full Width (100%)", value: "full" },
+    { label: "Left Aligned", value: "left" },
+    { label: "Centered", value: "center" },
   ],
 };
 
-const productDetailImageAspectRatioField = {
-  key: "image_aspect_ratio",
-  label: "Product Image Aspect Ratio",
+const sectionGroupCardShapeField = {
+  key: "cardShape",
+  label: "Card Shape & Style",
   type: "select" as const,
   target: "props" as const,
   options: [
-    { label: "Square (1 : 1)", value: "1 / 1" },
-    { label: "Portrait (4 : 5)", value: "4 / 5" },
-    { label: "Tall (2 : 3)", value: "2 / 3" },
-    { label: "Landscape (4 : 3)", value: "4 / 3" },
+    { label: "Portrait (Tall Card)", value: "portrait" },
+    { label: "Square (1:1 Ratio)", value: "square" },
+    { label: "Horizontal (Wide Card)", value: "horizontal" },
+    { label: "Circle (Story Avatar)", value: "circle" },
+    { label: "Pill (Compact)", value: "pill" },
   ],
 };
 
-const productDetailImageFitField = {
+const sectionGroupCardWidthField = {
+  key: "card_width",
+  label: "Card Width (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 70,
+  max: 480,
+  step: 5,
+};
+
+const sectionGroupCardHeightField = {
+  key: "card_height",
+  label: "Card Height (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 60,
+  max: 480,
+  step: 5,
+};
+
+const sectionGroupImageFitField = {
   key: "image_fit",
-  label: "Product Image Fit Mode",
+  label: "Image Fit",
   type: "select" as const,
   target: "props" as const,
   options: [
-    { label: "Cover (Fill Frame)", value: "cover" },
+    { label: "Cover (Fill Space)", value: "cover" },
     { label: "Contain (Fit Inside)", value: "contain" },
   ],
 };
 
+const sectionGroupLayoutField = {
+  key: "layout",
+  label: "Display Layout",
+  type: "select" as const,
+  target: "props" as const,
+  options: [
+    { label: "Horizontal Carousel (Snap Scroll)", value: "carousel" },
+    { label: "Responsive Grid (Multi-Column)", value: "grid" },
+  ],
+};
+
+const sectionGroupOuterBgField = {
+  key: "outer_bg_color",
+  label: "Section Outer Background",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const sectionGroupCardBgField = {
+  key: "card_bg_color",
+  label: "Card Background Color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const sectionGroupCardRadiusField = {
+  key: "card_radius",
+  label: "Card Corner Radius",
+  type: "select" as const,
+  target: "props" as const,
+  options: [
+    { label: "Sharp (0px)", value: "0" },
+    { label: "Slightly Rounded (8px)", value: "8" },
+    { label: "Smooth (14px)", value: "14" },
+    { label: "Curved (20px)", value: "20" },
+    { label: "Ultra Curved (30px)", value: "30" },
+  ],
+};
+
+const sectionGroupCardBorderColorField = {
+  key: "card_border_color",
+  label: "Card Border Color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const sectionGroupCardShadowField = {
+  key: "card_shadow",
+  label: "Card Elevation / Shadow",
+  type: "select" as const,
+  target: "props" as const,
+  options: [
+    { label: "Flat (No Shadow)", value: "none" },
+    { label: "Subtle Glow", value: "subtle" },
+    { label: "Soft Floating", value: "soft" },
+    { label: "Deep Elevated", value: "elevated" },
+  ],
+};
+
+const sectionGroupTitleColorField = {
+  key: "title_color",
+  label: "Header Title Color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const sectionGroupSubtitleColorField = {
+  key: "subtitle_color",
+  label: "Header Subtitle Color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const sectionGroupAccentColorField = {
+  key: "accent_color",
+  label: "Accent & Link Color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const sectionGroupShowTitleField = {
+  key: "show_title",
+  label: "Show Title",
+  type: "checkbox" as const,
+  target: "props" as const,
+};
+
+const sectionGroupShowSubtitleField = {
+  key: "show_subtitle",
+  label: "Show Subtitle",
+  type: "checkbox" as const,
+  target: "props" as const,
+};
+
+const sectionGroupMaxWidthField = {
+  key: "max_width",
+  label: "Section Max Width",
+  type: "select" as const,
+  target: "props" as const,
+  options: [
+    { label: "Standard (1200px)", value: "1200px" },
+    { label: "Wide (1280px)", value: "1280px" },
+    { label: "Extra Wide (1440px)", value: "1440px" },
+    { label: "Full Width (100%)", value: "full" },
+  ],
+};
+
+const sectionGroupPaddingYField = {
+  key: "padding_y",
+  label: "Vertical Padding",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "24px",
+};
+
+const sectionGroupPaddingXField = {
+  key: "padding_x",
+  label: "Horizontal Padding",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "16px",
+};
+
+const sectionGroupFields = [
+  sectionGroupTitleField,
+  sectionGroupSubtitleField,
+  sectionGroupTitleAlignmentField,
+  sectionGroupCardShapeField,
+  sectionGroupCardWidthField,
+  sectionGroupCardHeightField,
+  sectionGroupImageFitField,
+  sectionGroupLayoutField,
+  sectionGroupMaxWidthField,
+  sectionGroupPaddingYField,
+  sectionGroupPaddingXField,
+  sectionGroupOuterBgField,
+  sectionGroupCardBgField,
+  sectionGroupCardRadiusField,
+  sectionGroupCardBorderColorField,
+  sectionGroupCardShadowField,
+  sectionGroupTitleColorField,
+  sectionGroupSubtitleColorField,
+  sectionGroupAccentColorField,
+  sectionGroupShowTitleField,
+  sectionGroupShowSubtitleField,
+];
+
 const productDetailFields = [
-  productDetailAddToCartLabelField,
-  productDetailButtonBgColorField,
-  productDetailButtonTextColorField,
-  productDetailShowDeliveryInfoField,
-  productDetailDeliveryTextField,
-  productDetailShowReturnPolicyField,
-  productDetailReturnPolicyTextField,
-  productDetailShowQualityGuaranteeField,
-  productDetailQualityTextField,
-  productDetailShowDiscountBadgeField,
-  productDetailShowStockBadgeField,
-  productDetailShowRatingsField,
-  productDetailShowOriginalPriceField,
-  productDetailShowBrandNameField,
-  productDetailShowReviewsSectionField,
-  productDetailMaxWidthField,
-  productDetailImageAspectRatioField,
-  productDetailImageFitField,
+  {
+    key: "image_aspect_ratio",
+    label: "Image Aspect Ratio",
+    type: "select" as const,
+    target: "props" as const,
+    options: [
+      { label: "Square (1:1)", value: "1 / 1" },
+      { label: "Portrait (3:4)", value: "3 / 4" },
+      { label: "Tall (4:5)", value: "4 / 5" },
+      { label: "Wide (16:9)", value: "16 / 9" },
+    ],
+  },
+  {
+    key: "image_fit",
+    label: "Image Fit",
+    type: "select" as const,
+    target: "props" as const,
+    options: [
+      { label: "Cover (Fill area)", value: "cover" },
+      { label: "Contain (Show full image)", value: "contain" },
+    ],
+  },
+  {
+    key: "image_border_radius",
+    label: "Image Corner Radius",
+    type: "number" as const,
+    target: "props" as const,
+  },
+  {
+    key: "title_font_size",
+    label: "Title Font Size (px)",
+    type: "number" as const,
+    target: "props" as const,
+  },
+  {
+    key: "description_font_size",
+    label: "Description Font Size (px)",
+    type: "number" as const,
+    target: "props" as const,
+  },
+  {
+    key: "color_variant_layout",
+    label: "Color Variant Display",
+    type: "select" as const,
+    target: "props" as const,
+    options: [
+      { label: "Carousel (Horizontal strip)", value: "carousel" },
+      { label: "Grid (Wrap rows)", value: "grid" },
+    ],
+  },
+  {
+    key: "add_to_cart_label",
+    label: "Add to Cart Button Text",
+    type: "text" as const,
+    target: "props" as const,
+    placeholder: "Add to cart",
+  },
+  {
+    key: "show_brand_name",
+    label: "Show Brand & Category",
+    type: "checkbox" as const,
+    target: "props" as const,
+  },
+  {
+    key: "show_ratings",
+    label: "Show Customer Ratings",
+    type: "checkbox" as const,
+    target: "props" as const,
+  },
+  {
+    key: "show_discount_badge",
+    label: "Show Discount Badge",
+    type: "checkbox" as const,
+    target: "props" as const,
+  },
+  {
+    key: "show_stock_badge",
+    label: "Show Stock Status",
+    type: "checkbox" as const,
+    target: "props" as const,
+  },
+  {
+    key: "show_original_price",
+    label: "Show Original Strikethrough Price",
+    type: "checkbox" as const,
+    target: "props" as const,
+  },
+  {
+    key: "show_description_accordion",
+    label: "Show Description Accordion",
+    type: "checkbox" as const,
+    target: "props" as const,
+  },
+  {
+    key: "show_specs_accordion",
+    label: "Show Specifications Accordion",
+    type: "checkbox" as const,
+    target: "props" as const,
+  },
+  {
+    key: "show_reviews_section",
+    label: "Show Customer Reviews Section",
+    type: "checkbox" as const,
+    target: "props" as const,
+  },
+  {
+    key: "panel_color",
+    label: "Card Background Color",
+    type: "color" as const,
+    target: "props" as const,
+  },
+  {
+    key: "text_color",
+    label: "Text Color",
+    type: "color" as const,
+    target: "props" as const,
+  },
+  {
+    key: "button_bg_color",
+    label: "Button Background Color",
+    type: "color" as const,
+    target: "props" as const,
+  },
+  {
+    key: "button_text_color",
+    label: "Button Text Color",
+    type: "color" as const,
+    target: "props" as const,
+  },
+  {
+    key: "card_border_radius",
+    label: "Card Border Radius (px)",
+    type: "number" as const,
+    target: "props" as const,
+  },
+  {
+    key: "button_border_radius",
+    label: "Button Border Radius (px)",
+    type: "number" as const,
+    target: "props" as const,
+  },
+  {
+    key: "badge_border_radius",
+    label: "Badge Border Radius (px)",
+    type: "number" as const,
+    target: "props" as const,
+  },
+];
+
+const deliveryFormFields = [
+  // --- Content & Headings ---
+  deliverySectionLabelField,
+  deliveryTitleField,
+  deliverySubtitleField,
+  deliveryAddButtonLabelField,
+  deliveryContinueButtonLabelField,
+  deliveryEmptyTitleField,
+  deliveryEmptyMessageField,
+  formTitleAddField,
+  formTitleEditField,
+  formSubtitleField,
+  formNamePlaceholderField,
+  formPhonePlaceholderField,
+  formAddressPlaceholderField,
+  formCityPlaceholderField,
+  formPincodePlaceholderField,
+  formEmailPlaceholderField,
+  formSaveButtonLabelField,
+  mapModalTitleField,
+  mapSearchPlaceholderField,
+  mapConfirmButtonLabelField,
+  mapHelperTextField,
+
+  // --- Layout & Spacing ---
+  styleBorderRadiusField,
+  deliveryCardRadiusField,
+  styleFieldRadiusField,
+  deliveryButtonRadiusField,
+  deliveryBadgeRadiusField,
+  formCardRadiusField,
+  formButtonRadiusField,
+  mapModalRadiusField,
+  mapButtonRadiusField,
+  mapSearchRadiusField,
+  stylePaddingField,
+  formPaddingField,
+  styleGapField,
+  styleMaxWidthField,
+
+  // --- Color Palette ---
+  deliveryAccentColorField,
+  styleBackgroundColorField,
+  deliveryCardColorField,
+  deliverySelectedCardBgField,
+  deliveryButtonBgColorField,
+  deliveryButtonTextColorField,
+  formPanelBgField,
+  formInputBgField,
+  formInputTextColorField,
+  formLabelColorField,
+  formPlaceholderColorField,
+  formBorderColorField,
+  formSaveBtnBgField,
+  formSaveBtnTextColorField,
+  mapModalBgField,
+  mapHeaderTextColorField,
+  mapSearchBgField,
+  mapSearchTextColorField,
+  mapConfirmBtnBgField,
+  mapConfirmBtnTextColorField,
+  styleTextColorField,
+  styleMutedTextColorField,
+  styleSoftTextColorField,
+  styleBorderColorField,
+  styleSoftBorderColorField,
 ];
 
 export const editorRegistry: EditorRegistry = {
@@ -1177,13 +2003,37 @@ export const editorRegistry: EditorRegistry = {
     ],
   },
 
+  section_group_carousel: {
+    displayName: "Category & Story Carousel",
+    fields: sectionGroupFields,
+  },
+  sectiongroupcarousel: {
+    displayName: "Category & Story Carousel",
+    fields: sectionGroupFields,
+  },
+  category_story_carousel: {
+    displayName: "Category & Story Carousel",
+    fields: sectionGroupFields,
+  },
+  category_carousel: {
+    displayName: "Category & Story Carousel",
+    fields: sectionGroupFields,
+  },
+  section_carousel: {
+    displayName: "Category & Story Carousel",
+    fields: sectionGroupFields,
+  },
+  story_carousel: {
+    displayName: "Category & Story Carousel",
+    fields: sectionGroupFields,
+  },
   category_grid: {
-    displayName: "Category Grid",
-    fields: [sizeField, textColorField],
+    displayName: "Category & Story Carousel",
+    fields: sectionGroupFields,
   },
   categorygrid: {
-    displayName: "Category Grid",
-    fields: [sizeField, textColorField],
+    displayName: "Category & Story Carousel",
+    fields: sectionGroupFields,
   },
 
   offer_cards: {
@@ -1207,10 +2057,25 @@ export const editorRegistry: EditorRegistry = {
   navbar: {
     displayName: "Navbar",
     fields: [
+      navbarBrandDisplayModeField,
+      navbarBrandAlignmentField,
       navbarBrandNameField,
       navbarLogoUrlField,
-      navbarLogoHeightField,
+      navbarBrandLayoutDirectionField,
+      navbarBrandFontFamilyField,
+      navbarBrandFontWeightField,
+      navbarBrandFontStyleField,
+      navbarBrandFontSizeField,
+      navbarBrandTextColorField,
+      navbarLogoSizeField,
       navbarLogoFitField,
+      navbarLogoZoomField,
+      navbarSearchDisplayModeField,
+      navbarSearchPlacementField,
+      navbarSearchMaxWidthField,
+      navbarSearchHeightField,
+      navbarSearchTextColorField,
+      navbarSearchMutedTextColorField,
       navbarVariantField,
       navbarPositionField,
       navbarHeightField,
@@ -1222,9 +2087,6 @@ export const editorRegistry: EditorRegistry = {
       navbarBackgroundColorField,
       navbarTextColorField,
       navbarBorderColorField,
-      navbarShowSearchField,
-      navbarShowAccountField,
-      navbarShowCartField,
     ],
   },
 
@@ -1244,23 +2106,81 @@ export const editorRegistry: EditorRegistry = {
     displayName: "Cart",
     fields: cartFields,
   },
+  cart_view: {
+    displayName: "Cart",
+    fields: cartFields,
+  },
+  cartview: {
+    displayName: "Cart",
+    fields: cartFields,
+  },
+  cart: {
+    displayName: "Cart",
+    fields: cartFields,
+  },
 
   delivery_form: {
     displayName: "Delivery Form",
-    fields: [
-      deliveryTitleField,
-      deliveryCompactField,
-      deliveryAccentColorField,
-      ...checkoutStyleFields,
-    ],
+    fields: deliveryFormFields,
   },
   deliveryform: {
     displayName: "Delivery Form",
+    fields: deliveryFormFields,
+  },
+
+  delivery_map_picker: {
+    displayName: "Map Location Picker",
     fields: [
-      deliveryTitleField,
-      deliveryCompactField,
-      deliveryAccentColorField,
-      ...checkoutStyleFields,
+      mapModalTitleField,
+      mapSearchPlaceholderField,
+      mapConfirmButtonLabelField,
+      mapHelperTextField,
+      mapModalRadiusField,
+      mapButtonRadiusField,
+      mapSearchRadiusField,
+      mapModalBgField,
+      mapHeaderTextColorField,
+      mapSearchBgField,
+      mapSearchTextColorField,
+      mapConfirmBtnBgField,
+      mapConfirmBtnTextColorField,
+    ],
+  },
+
+  checkout_steps: {
+    displayName: "Checkout Steps",
+    fields: [],
+  },
+  checkoutsteps: {
+    displayName: "Checkout Steps",
+    fields: [],
+  },
+
+  delivery_address_form: {
+    displayName: "Add / Edit Address Form",
+    fields: [
+      formTitleAddField,
+      formTitleEditField,
+      formSubtitleField,
+      formNamePlaceholderField,
+      formPhonePlaceholderField,
+      formAddressPlaceholderField,
+      formCityPlaceholderField,
+      formPincodePlaceholderField,
+      formEmailPlaceholderField,
+      formSaveButtonLabelField,
+      formCardRadiusField,
+      styleFieldRadiusField,
+      formButtonRadiusField,
+      formPaddingField,
+      formPanelBgField,
+      formInputBgField,
+      formInputTextColorField,
+      formLabelColorField,
+      formPlaceholderColorField,
+      formBorderColorField,
+      formSaveBtnBgField,
+      formSaveBtnTextColorField,
     ],
   },
 
@@ -1286,7 +2206,7 @@ export const editorRegistry: EditorRegistry = {
   },
 
   place_order_cta: {
-    displayName: "Place Order Button",
+    displayName: "Review & Pay",
     fields: [
       placeOrderLabelField,
       placeOrderCompactField,
@@ -1298,7 +2218,7 @@ export const editorRegistry: EditorRegistry = {
     ],
   },
   placeordercta: {
-    displayName: "Place Order Button",
+    displayName: "Review & Pay",
     fields: [
       placeOrderLabelField,
       placeOrderCompactField,
@@ -1307,6 +2227,64 @@ export const editorRegistry: EditorRegistry = {
       styleBorderRadiusField,
       stylePaddingField,
       styleMaxWidthField,
+    ],
+  },
+
+  profile_details: {
+    displayName: "Profile Details",
+    fields: [
+      styleMaxWidthField,
+      styleBorderRadiusField,
+      stylePaddingField,
+    ],
+  },
+  profiledetails: {
+    displayName: "Profile Details",
+    fields: [
+      styleMaxWidthField,
+      styleBorderRadiusField,
+      stylePaddingField,
+    ],
+  },
+  profile: {
+    displayName: "Profile Details",
+    fields: [
+      styleMaxWidthField,
+      styleBorderRadiusField,
+      stylePaddingField,
+    ],
+  },
+
+  signin_form: {
+    displayName: "Sign In Form",
+    fields: [
+      styleMaxWidthField,
+      styleBorderRadiusField,
+      stylePaddingField,
+    ],
+  },
+  login_form: {
+    displayName: "Sign In Form",
+    fields: [
+      styleMaxWidthField,
+      styleBorderRadiusField,
+      stylePaddingField,
+    ],
+  },
+  signup_form: {
+    displayName: "Sign Up Form",
+    fields: [
+      styleMaxWidthField,
+      styleBorderRadiusField,
+      stylePaddingField,
+    ],
+  },
+  register_form: {
+    displayName: "Sign Up Form",
+    fields: [
+      styleMaxWidthField,
+      styleBorderRadiusField,
+      stylePaddingField,
     ],
   },
 
@@ -1404,4 +2382,4 @@ export const editorRegistry: EditorRegistry = {
       },
     ],
   },
-};
+};

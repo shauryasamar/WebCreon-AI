@@ -60,7 +60,21 @@ export type EditorSiteDefinition = {
     navbar_max_width?: number | string;
     navbar_radius?: number;
     navbar_padding_x?: number;
-    navbar_padding_y?: number;
+    navbar_icon_shape?: "rounded" | "circle" | "square" | "ghost" | "pill";
+    navbar_icon_style?: "outline" | "solid" | "duotone";
+    navbar_cart_icon_variant?: "cart" | "bag" | "basket";
+    navbar_account_icon_variant?: "user_clean" | "user_circle" | "user_rounded";
+    navbar_notification_icon_variant?: "bell" | "bell_curved" | "bell_ring";
+    navbar_search_icon_variant?: "magnifier" | "search_minimal" | "search_round";
+    navbar_icon_size?: number;
+    navbar_icon_inner_size?: number;
+    navbar_icon_stroke_width?: number;
+    navbar_icon_gap?: number;
+    navbar_icon_border_enabled?: boolean;
+    navbar_icon_bg_enabled?: boolean;
+    navbar_icon_color?: string;
+    navbar_icon_bg_color?: string;
+    navbar_icon_border_color?: string;
     logo_height?: number | string;
     logo_fit?: "contain" | "cover";
     icon_color?: string;
@@ -125,7 +139,9 @@ export type FestivalThemeKey =
   | "diwali"
   | "christmas"
   | "eid"
-  | "holi";
+  | "holi"
+  | "durga_puja"
+  | "rakhi";
 
 type ThemeValues = EditorSiteDefinition["theme"];
 
@@ -134,97 +150,57 @@ const GLOBAL_FOOTER_BLOCK_ID = "global-footer";
 
 const DEFAULT_LIGHT_THEME: Partial<ThemeValues> = {
   mode: "light",
-  festival_theme: "none",
-  primary_bg: "#f8fafc",
-  secondary_bg: "#ffffff",
+  primary_bg: "#ffffff",
+  secondary_bg: "#f8fafc",
   card_bg: "#ffffff",
-  card_shadow: "0 10px 28px rgba(15,23,42,0.055)",
-  card_border_color: "rgba(15,23,42,0.08)",
-  text_color: "#111827",
+  text_color: "#0f172a",
   muted_text_color: "rgba(15,23,42,0.65)",
   accent_color: "#2563eb",
   navbar_bg: "#ffffff",
-  navbar_outer_bg: "#f8fafc",
-  navbar_text_color: "#111827",
+  navbar_outer_bg: "#ffffff",
+  navbar_text_color: "#0f172a",
   navbar_muted_text_color: "rgba(15,23,42,0.65)",
   navbar_border_color: "rgba(15,23,42,0.08)",
   footer_bg: "#ffffff",
-  footer_text_color: "#111827",
-  footer_muted_color: "rgba(15,23,42,0.65)",
+  footer_text_color: "#0f172a",
   footer_border_color: "rgba(15,23,42,0.08)",
-  hero_bg: "#ffffff",
-  hero_text_color: "#111827",
+  hero_bg: "#f8fafc",
+  hero_text_color: "#0f172a",
   hero_accent: "#2563eb",
-  navbar_variant: "soft",
-  navbar_position: "fixed",
-  navbar_height: 72,
-  navbar_max_width: 1280,
-  navbar_radius: 20,
-  navbar_padding_x: 16,
-  navbar_padding_y: 14,
 };
 
 const DEFAULT_DARK_THEME: Partial<ThemeValues> = {
   mode: "dark",
-  festival_theme: "none",
-  primary_bg: "#0f172a",
-  secondary_bg: "#1e293b",
-  card_bg: "#1e293b",
-  card_shadow: "0 12px 28px rgba(0,0,0,0.3)",
-  card_border_color: "rgba(255,255,255,0.12)",
-  text_color: "#f9fafb",
-  muted_text_color: "rgba(248,250,252,0.65)",
-  accent_color: "#60a5fa",
-  navbar_bg: "#0f172a",
-  navbar_outer_bg: "#0f172a",
-  navbar_text_color: "#f9fafb",
-  navbar_muted_text_color: "rgba(248,250,252,0.65)",
-  navbar_border_color: "rgba(255,255,255,0.12)",
-  footer_bg: "#0f172a",
-  footer_text_color: "#f9fafb",
-  footer_muted_color: "rgba(248,250,252,0.65)",
-  footer_border_color: "rgba(255,255,255,0.12)",
-  hero_bg: "#1e293b",
-  hero_text_color: "#f9fafb",
+  primary_bg: "#121316",
+  secondary_bg: "#1a1c21",
+  card_bg: "#22252b",
+  text_color: "#f8fafc",
+  muted_text_color: "rgba(248, 250, 252, 0.72)",
+  accent_color: "#3b82f6",
+  navbar_bg: "#121316",
+  navbar_outer_bg: "#121316",
+  navbar_text_color: "#f8fafc",
+  navbar_muted_text_color: "rgba(248, 250, 252, 0.72)",
+  navbar_border_color: "rgba(255, 255, 255, 0.1)",
+  footer_bg: "#0e0f12",
+  footer_text_color: "#f8fafc",
+  footer_border_color: "rgba(255, 255, 255, 0.1)",
+  hero_bg: "#1a1c21",
+  hero_text_color: "#f8fafc",
   hero_accent: "#60a5fa",
-  navbar_variant: "soft",
-  navbar_position: "fixed",
-  navbar_height: 72,
-  navbar_max_width: 1280,
-  navbar_radius: 20,
-  navbar_padding_x: 16,
-  navbar_padding_y: 14,
 };
 
-const FESTIVAL_THEME_PRESETS: Record<
+export const FESTIVAL_THEME_PRESETS: Record<
   FestivalThemeKey,
-  Omit<Partial<ThemeValues>, "mode">
+  { festival_theme: FestivalThemeKey }
 > = {
-  none: {},
-  diwali: {
-    festival_theme: "diwali",
-    accent_color: "#f59e0b",
-    brand_tone: "Warm and festive",
-    visual_style: "Elegant celebration",
-  },
-  christmas: {
-    festival_theme: "christmas",
-    accent_color: "#dc2626",
-    brand_tone: "Cozy and joyful",
-    visual_style: "Classic festive",
-  },
-  eid: {
-    festival_theme: "eid",
-    accent_color: "#14b8a6",
-    brand_tone: "Refined and celebratory",
-    visual_style: "Modern festive",
-  },
-  holi: {
-    festival_theme: "holi",
-    accent_color: "#9333ea",
-    brand_tone: "Playful and vibrant",
-    visual_style: "Colorful festive",
-  },
+  none: { festival_theme: "none" },
+  diwali: { festival_theme: "diwali" },
+  christmas: { festival_theme: "christmas" },
+  eid: { festival_theme: "eid" },
+  holi: { festival_theme: "holi" },
+  durga_puja: { festival_theme: "durga_puja" },
+  rakhi: { festival_theme: "rakhi" },
 };
 
 function buildGlobalNavbarBlock(siteDefinition: EditorSiteDefinition): EditorBlock {
@@ -283,61 +259,61 @@ function getFestivalThemeOverrides(
       return {
         ...FESTIVAL_THEME_PRESETS.diwali,
         festival_theme: "diwali",
-        primary_bg: isDark ? "#1f172a" : "#fff7ed",
-        secondary_bg: isDark ? "#2a1f3d" : "#ffffff",
-        card_bg: isDark ? "#2a1f3d" : "#ffffff",
-        text_color: isDark ? "#fff7ed" : "#3b1d12",
+        primary_bg: isDark ? "#130f1c" : "#fffcf0",
+        secondary_bg: isDark ? "#1f1530" : "#ffffff",
+        card_bg: isDark ? "#1f1530" : "#ffffff",
+        text_color: isDark ? "#fef3c7" : "#78350f",
         muted_text_color: isDark
-          ? "rgba(255,247,237,0.74)"
-          : "rgba(59,29,18,0.68)",
-        accent_color: isDark ? "#fbbf24" : "#f59e0b",
-        navbar_bg: isDark ? "#2a1f3d" : "#ffffff",
-        navbar_outer_bg: isDark ? "#1f172a" : "#fff7ed",
-        navbar_text_color: isDark ? "#fff7ed" : "#3b1d12",
+          ? "rgba(254,243,199,0.72)"
+          : "rgba(120,53,15,0.7)",
+        accent_color: isDark ? "#fbbf24" : "#d97706",
+        navbar_bg: isDark ? "#1a1226" : "#ffffff",
+        navbar_outer_bg: isDark ? "#130f1c" : "#fffcf0",
+        navbar_text_color: isDark ? "#fef3c7" : "#78350f",
         navbar_muted_text_color: isDark
-          ? "rgba(255,247,237,0.74)"
-          : "rgba(59,29,18,0.68)",
+          ? "rgba(254,243,199,0.72)"
+          : "rgba(120,53,15,0.7)",
         navbar_border_color: isDark
-          ? "rgba(245,158,11,0.24)"
-          : "rgba(245,158,11,0.18)",
-        footer_bg: isDark ? "#1f172a" : "#fff7ed",
-        footer_text_color: isDark ? "#fff7ed" : "#3b1d12",
+          ? "rgba(251,191,36,0.3)"
+          : "rgba(217,119,6,0.22)",
+        footer_bg: isDark ? "#130f1c" : "#fef3c7",
+        footer_text_color: isDark ? "#fef3c7" : "#78350f",
         footer_border_color: isDark
-          ? "rgba(245,158,11,0.24)"
-          : "rgba(245,158,11,0.18)",
-        hero_bg: isDark ? "#2a1f3d" : "#fff7ed",
-        hero_text_color: isDark ? "#fff7ed" : "#3b1d12",
-        hero_accent: isDark ? "#fbbf24" : "#f59e0b",
+          ? "rgba(251,191,36,0.3)"
+          : "rgba(217,119,6,0.22)",
+        hero_bg: isDark ? "#241838" : "#fff7ed",
+        hero_text_color: isDark ? "#fef3c7" : "#78350f",
+        hero_accent: isDark ? "#fbbf24" : "#d97706",
       };
 
     case "christmas":
       return {
         ...FESTIVAL_THEME_PRESETS.christmas,
         festival_theme: "christmas",
-        primary_bg: isDark ? "#0f2e1f" : "#f0fdf4",
-        secondary_bg: isDark ? "#163524" : "#ffffff",
-        card_bg: isDark ? "#163524" : "#ffffff",
-        text_color: isDark ? "#f0fdf4" : "#163a2b",
+        primary_bg: isDark ? "#07150e" : "#f4fbf7",
+        secondary_bg: isDark ? "#0f231a" : "#ffffff",
+        card_bg: isDark ? "#0f231a" : "#ffffff",
+        text_color: isDark ? "#f0fdf4" : "#0f291e",
         muted_text_color: isDark
-          ? "rgba(240,253,244,0.72)"
-          : "rgba(22,58,43,0.68)",
+          ? "rgba(240,253,244,0.75)"
+          : "rgba(15,41,30,0.68)",
         accent_color: isDark ? "#ef4444" : "#dc2626",
-        navbar_bg: isDark ? "#163524" : "#ffffff",
-        navbar_outer_bg: isDark ? "#0f2e1f" : "#f0fdf4",
-        navbar_text_color: isDark ? "#f0fdf4" : "#163a2b",
+        navbar_bg: isDark ? "#0c1e15" : "#ffffff",
+        navbar_outer_bg: isDark ? "#07150e" : "#f4fbf7",
+        navbar_text_color: isDark ? "#f0fdf4" : "#0f291e",
         navbar_muted_text_color: isDark
-          ? "rgba(240,253,244,0.72)"
-          : "rgba(22,58,43,0.68)",
+          ? "rgba(240,253,244,0.75)"
+          : "rgba(15,41,30,0.68)",
         navbar_border_color: isDark
-          ? "rgba(220,38,38,0.22)"
-          : "rgba(220,38,38,0.18)",
-        footer_bg: isDark ? "#0f2e1f" : "#f0fdf4",
-        footer_text_color: isDark ? "#f0fdf4" : "#163a2b",
+          ? "rgba(239,68,68,0.28)"
+          : "rgba(220,38,38,0.2)",
+        footer_bg: isDark ? "#07150e" : "#ecfdf5",
+        footer_text_color: isDark ? "#f0fdf4" : "#0f291e",
         footer_border_color: isDark
-          ? "rgba(220,38,38,0.22)"
-          : "rgba(220,38,38,0.18)",
-        hero_bg: isDark ? "#163524" : "#f0fdf4",
-        hero_text_color: isDark ? "#f0fdf4" : "#163a2b",
+          ? "rgba(239,68,68,0.28)"
+          : "rgba(220,38,38,0.2)",
+        hero_bg: isDark ? "#10281e" : "#f0fdf4",
+        hero_text_color: isDark ? "#f0fdf4" : "#0f291e",
         hero_accent: isDark ? "#ef4444" : "#dc2626",
       };
 
@@ -345,65 +321,64 @@ function getFestivalThemeOverrides(
       return {
         ...FESTIVAL_THEME_PRESETS.eid,
         festival_theme: "eid",
-        primary_bg: isDark ? "#102a43" : "#f0fdfa",
-        secondary_bg: isDark ? "#173552" : "#ffffff",
-        card_bg: isDark ? "#173552" : "#ffffff",
-        text_color: isDark ? "#f8fafc" : "#123040",
+        primary_bg: isDark ? "#05131f" : "#f0fdfa",
+        secondary_bg: isDark ? "#0a2236" : "#ffffff",
+        card_bg: isDark ? "#0a2236" : "#ffffff",
+        text_color: isDark ? "#f0fdfa" : "#134e4a",
         muted_text_color: isDark
-          ? "rgba(248,250,252,0.74)"
-          : "rgba(18,48,64,0.68)",
-        accent_color: isDark ? "#2dd4bf" : "#14b8a6",
-        navbar_bg: isDark ? "#173552" : "#ffffff",
-        navbar_outer_bg: isDark ? "#102a43" : "#f0fdfa",
-        navbar_text_color: isDark ? "#f8fafc" : "#123040",
+          ? "rgba(240,253,250,0.75)"
+          : "rgba(19,78,74,0.7)",
+        accent_color: isDark ? "#2dd4bf" : "#0d9488",
+        navbar_bg: isDark ? "#081b2c" : "#ffffff",
+        navbar_outer_bg: isDark ? "#05131f" : "#f0fdfa",
+        navbar_text_color: isDark ? "#f0fdfa" : "#134e4a",
         navbar_muted_text_color: isDark
-          ? "rgba(248,250,252,0.74)"
-          : "rgba(18,48,64,0.68)",
+          ? "rgba(240,253,250,0.75)"
+          : "rgba(19,78,74,0.7)",
         navbar_border_color: isDark
-          ? "rgba(20,184,166,0.22)"
-          : "rgba(20,184,166,0.18)",
-        footer_bg: isDark ? "#102a43" : "#f0fdfa",
-        footer_text_color: isDark ? "#f8fafc" : "#123040",
+          ? "rgba(45,212,191,0.28)"
+          : "rgba(13,148,136,0.2)",
+        footer_bg: isDark ? "#05131f" : "#e6fffa",
+        footer_text_color: isDark ? "#f0fdfa" : "#134e4a",
         footer_border_color: isDark
-          ? "rgba(20,184,166,0.22)"
-          : "rgba(20,184,166,0.18)",
-        hero_bg: isDark ? "#173552" : "#f0fdfa",
-        hero_text_color: isDark ? "#f8fafc" : "#123040",
-        hero_accent: isDark ? "#2dd4bf" : "#14b8a6",
+          ? "rgba(45,212,191,0.28)"
+          : "rgba(13,148,136,0.2)",
+        hero_bg: isDark ? "#0b263d" : "#e6fffa",
+        hero_text_color: isDark ? "#f0fdfa" : "#134e4a",
+        hero_accent: isDark ? "#facc15" : "#0d9488",
       };
 
     case "holi":
       return {
         ...FESTIVAL_THEME_PRESETS.holi,
         festival_theme: "holi",
-        primary_bg: isDark ? "#1a1024" : "#fff1f2",
-        secondary_bg: isDark ? "#241235" : "#ffffff",
-        card_bg: isDark ? "#241235" : "#ffffff",
-        text_color: isDark ? "#fdf4ff" : "#1f2937",
+        primary_bg: isDark ? "#11071c" : "#fff5f8",
+        secondary_bg: isDark ? "#1c0e2e" : "#ffffff",
+        card_bg: isDark ? "#1c0e2e" : "#ffffff",
+        text_color: isDark ? "#fdf4ff" : "#18181b",
         muted_text_color: isDark
-          ? "rgba(253,244,255,0.74)"
-          : "rgba(31,41,55,0.72)",
-        accent_color: isDark ? "#a855f7" : "#9333ea",
-        navbar_bg: isDark ? "#241235" : "#ffffff",
-        navbar_outer_bg: isDark ? "#1a1024" : "#fff1f2",
-        navbar_text_color: isDark ? "#fdf4ff" : "#1f2937",
+          ? "rgba(253,244,255,0.75)"
+          : "rgba(24,24,27,0.7)",
+        accent_color: isDark ? "#ec4899" : "#db2777",
+        navbar_bg: isDark ? "#180c28" : "#ffffff",
+        navbar_outer_bg: isDark ? "#11071c" : "#fff5f8",
+        navbar_text_color: isDark ? "#fdf4ff" : "#18181b",
         navbar_muted_text_color: isDark
-          ? "rgba(253,244,255,0.74)"
-          : "rgba(31,41,55,0.72)",
+          ? "rgba(253,244,255,0.75)"
+          : "rgba(24,24,27,0.7)",
         navbar_border_color: isDark
-          ? "rgba(147,51,234,0.24)"
-          : "rgba(147,51,234,0.16)",
-        footer_bg: isDark ? "#1a1024" : "#fff1f2",
-        footer_text_color: isDark ? "#fdf4ff" : "#1f2937",
+          ? "rgba(236,72,153,0.3)"
+          : "rgba(219,39,119,0.22)",
+        footer_bg: isDark ? "#11071c" : "#fdf2f8",
+        footer_text_color: isDark ? "#fdf4ff" : "#18181b",
         footer_border_color: isDark
-          ? "rgba(147,51,234,0.24)"
-          : "rgba(147,51,234,0.16)",
-        hero_bg: isDark ? "#241235" : "#fff1f2",
-        hero_text_color: isDark ? "#fdf4ff" : "#1f2937",
-        hero_accent: isDark ? "#a855f7" : "#9333ea",
+          ? "rgba(236,72,153,0.3)"
+          : "rgba(219,39,119,0.22)",
+        hero_bg: isDark ? "#221138" : "#fdf2f8",
+        hero_text_color: isDark ? "#fdf4ff" : "#18181b",
+        hero_accent: isDark ? "#38bdf8" : "#db2777",
       };
 
-    case "none":
     default:
       return {};
   }
@@ -412,7 +387,7 @@ function getFestivalThemeOverrides(
 export const ALL_COMPONENT_OVERRIDE_KEYS = [
   "delivery_form_bg", "delivery_form_text", "delivery_form_input_bg", "delivery_form_input_text", "delivery_form_border", "delivery_form_btn_bg", "delivery_form_btn_text",
   "order_history_bg", "order_history_card_bg", "order_history_text", "order_history_muted_text", "order_history_border",
-  "product_detail_bg", "product_detail_text", "product_detail_btn_bg", "product_detail_btn_text",
+  "product_detail_bg", "product_detail_text", "product_detail_btn_bg", "product_detail_btn_text", "badge_bg_color", "badge_border_color", "product_detail_badge_bg", "product_detail_badge_border",
   "cart_bg", "cart_text_color", "cart_card_bg", "cart_accent_color", "cart_border_color", "cart_panel_bg",
   "summary_bg", "summary_card_bg", "summary_text_color", "summary_accent_color", "summary_border_color",
   "payment_bg", "payment_card_bg", "payment_text_color", "payment_accent_color", "payment_border_color",
@@ -431,6 +406,16 @@ export function applyThemeToPages(pages: EditorPage[], targetTheme: any): Editor
       const isNav = btype === "navbar" || btype === "header";
       const isFooter = btype === "footer";
       const isHero = btype === "hero_banner" || btype === "hero" || btype === "banner";
+      const isProductDetail =
+        btype === "product_detail" ||
+        btype === "productdetail" ||
+        btype === "product_info" ||
+        btype === "productinfo" ||
+        btype === "purchase_panel" ||
+        btype === "purchasepanel" ||
+        btype === "product_gallery" ||
+        btype === "productgallery" ||
+        String(block.id || "").toLowerCase().includes("product-detail");
 
       const updatedProps = { ...(block.props || {}) };
 
@@ -467,6 +452,10 @@ export function applyThemeToPages(pages: EditorPage[], targetTheme: any): Editor
       delete updatedProps.button_text_color;
       delete updatedProps.card_color;
       delete updatedProps.active_bg_color;
+      delete updatedProps.badge_bg_color;
+      delete updatedProps.badge_border_color;
+      delete updatedProps.product_detail_badge_bg;
+      delete updatedProps.product_detail_badge_border;
 
       for (const k of ALL_COMPONENT_OVERRIDE_KEYS) {
         delete updatedProps[k];
@@ -501,6 +490,20 @@ export function applyThemeToPages(pages: EditorPage[], targetTheme: any): Editor
             return nextSlide;
           });
         }
+      } else if (isProductDetail) {
+        if (targetTheme.badge_bg_color || targetTheme.product_detail_badge_bg) {
+          updatedProps.badge_bg_color = targetTheme.badge_bg_color || targetTheme.product_detail_badge_bg;
+        }
+        if (targetTheme.badge_border_color || targetTheme.product_detail_badge_border) {
+          updatedProps.badge_border_color = targetTheme.badge_border_color || targetTheme.product_detail_badge_border;
+        }
+        if (targetTheme.product_detail_bg) {
+          updatedProps.panel_color = targetTheme.product_detail_bg;
+          updatedProps.background_color = targetTheme.product_detail_bg;
+        }
+        if (targetTheme.product_detail_text) updatedProps.text_color = targetTheme.product_detail_text;
+        if (targetTheme.product_detail_btn_bg) updatedProps.button_bg_color = targetTheme.product_detail_btn_bg;
+        if (targetTheme.product_detail_btn_text) updatedProps.button_text_color = targetTheme.product_detail_btn_text;
       }
 
       return {
@@ -523,14 +526,21 @@ const PRODUCT_DETAIL_BLOCK_TYPES = new Set([
 ]);
 
 const CHECKOUT_BLOCK_TYPES = new Set([
+  "checkout_steps",
+  "checkoutsteps",
+  "checkout_stepper",
   "delivery_form",
   "deliveryform",
+  "delivery_map_picker",
+  "delivery_address_form",
   "payment_methods",
   "paymentmethods",
   "place_order_cta",
   "placeordercta",
   "checkout_summary",
   "checkoutsummary",
+  "checkout_order_summary",
+  "checkoutordersummary",
   "order_summary",
   "ordersummary",
 ]);
@@ -560,6 +570,32 @@ export function isCheckoutFallbackId(blockId: string | null | undefined): boolea
     lower.includes("delivery") ||
     lower.includes("payment") ||
     lower.includes("place")
+  ) {
+    return true;
+  }
+  return false;
+}
+
+const CART_BLOCK_TYPES = new Set([
+  "cart",
+  "cart_view",
+  "cartview",
+  "cart_sidebar",
+  "cartsidebar",
+  "cart_items",
+  "cartitems",
+  "order_summary",
+  "ordersummary",
+]);
+
+export function isCartFallbackId(blockId: string | null | undefined): boolean {
+  if (!blockId) return false;
+  const lower = String(blockId).toLowerCase();
+  if (CART_BLOCK_TYPES.has(lower)) return true;
+  if (
+    lower.startsWith("auto-cart") ||
+    lower.startsWith("cart-") ||
+    lower.includes("cart")
   ) {
     return true;
   }
@@ -598,16 +634,177 @@ export function findBlockById(
 ): EditorBlock | null {
   if (!siteDefinition || !blockId) return null;
 
-  if (blockId === GLOBAL_NAVBAR_BLOCK_ID) {
+  if (blockId === GLOBAL_NAVBAR_BLOCK_ID || blockId === "navbar") {
     return buildGlobalNavbarBlock(siteDefinition);
   }
 
-  if (blockId === GLOBAL_FOOTER_BLOCK_ID) {
+  if (blockId === GLOBAL_FOOTER_BLOCK_ID || blockId === "footer") {
     return buildGlobalFooterBlock(siteDefinition);
   }
 
+  if (blockId === "checkout_steps" || blockId === "checkoutsteps" || blockId === "checkout_stepper") {
+    for (const page of siteDefinition.pages) {
+      const match = page.blocks?.find(
+        (block) =>
+          block.id === "checkout_steps" ||
+          block.type === "checkout_steps" ||
+          block.type === "checkoutsteps" ||
+          block.id === blockId ||
+          block.type === blockId
+      );
+      if (match) return match;
+    }
+    return {
+      id: "checkout_steps",
+      type: "checkout_steps",
+      props: {},
+    };
+  }
+
+  if (blockId === "checkout_order_summary" || blockId === "checkoutordersummary") {
+    const checkoutP = siteDefinition.pages.find(
+      (p) =>
+        p.role === "checkout" ||
+        p.page_type === "checkout" ||
+        (p as any).slug === "checkout" ||
+        isCheckoutPageRoute(p.route)
+    );
+    const inCheckout = checkoutP?.blocks?.find(
+      (b) =>
+        b.id === "checkout_order_summary" ||
+        b.type === "checkout_order_summary" ||
+        b.type === "order_summary" ||
+        b.id === "order_summary"
+    );
+    if (inCheckout) return inCheckout;
+    return {
+      id: "checkout_order_summary",
+      type: "checkout_order_summary",
+      props: {},
+    };
+  }
+
+  if (blockId === "payment_methods" || blockId === "paymentmethods") {
+    const checkoutP = siteDefinition.pages.find(
+      (p) =>
+        p.role === "checkout" ||
+        p.page_type === "checkout" ||
+        (p as any).slug === "checkout" ||
+        isCheckoutPageRoute(p.route)
+    );
+    const inCheckout = checkoutP?.blocks?.find(
+      (b) =>
+        b.id === "payment_methods" ||
+        b.type === "payment_methods" ||
+        b.type === "paymentmethods"
+    );
+    if (inCheckout) return inCheckout;
+    return {
+      id: "payment_methods",
+      type: "payment_methods",
+      props: {},
+    };
+  }
+
+  if (
+    blockId === "profile_details" ||
+    blockId === "profiledetails" ||
+    blockId === "profile" ||
+    blockId === "customer_profile"
+  ) {
+    const profileP = siteDefinition.pages.find(
+      (p) =>
+        p.role === "profile" ||
+        p.page_type === "profile" ||
+        p.route === "/profile" ||
+        p.route === "profile" ||
+        p.id === "profile" ||
+        p.id === "page-profile"
+    );
+    const inProfile = profileP?.blocks?.find(
+      (b) =>
+        b.id === "profile_details" ||
+        b.type === "profile_details" ||
+        b.type === "profiledetails" ||
+        b.type === "profile" ||
+        b.type === "customer_profile"
+    );
+    if (inProfile) return inProfile;
+    return {
+      id: "profile_details",
+      type: "profile_details",
+      props: {},
+    };
+  }
+
+  if (
+    blockId === "signin_form" ||
+    blockId === "signinform" ||
+    blockId === "login_form" ||
+    blockId === "loginform" ||
+    blockId === "login"
+  ) {
+    const loginP = siteDefinition.pages.find(
+      (p) =>
+        p.role === "login" ||
+        p.page_type === "login" ||
+        p.route === "/login" ||
+        p.route === "login" ||
+        p.id === "login" ||
+        p.id === "page-login"
+    );
+    const inLogin = loginP?.blocks?.find(
+      (b) =>
+        b.id === "signin_form" ||
+        b.type === "signin_form" ||
+        b.type === "signinform" ||
+        b.type === "login_form" ||
+        b.type === "login"
+    );
+    if (inLogin) return inLogin;
+    return {
+      id: "signin_form",
+      type: "signin_form",
+      props: {},
+    };
+  }
+
+  if (
+    blockId === "signup_form" ||
+    blockId === "signupform" ||
+    blockId === "register_form" ||
+    blockId === "registerform" ||
+    blockId === "signup"
+  ) {
+    const signupP = siteDefinition.pages.find(
+      (p) =>
+        p.role === "signup" ||
+        p.page_type === "signup" ||
+        p.route === "/signup" ||
+        p.route === "signup" ||
+        p.id === "signup" ||
+        p.id === "page-signup"
+    );
+    const inSignup = signupP?.blocks?.find(
+      (b) =>
+        b.id === "signup_form" ||
+        b.type === "signup_form" ||
+        b.type === "signupform" ||
+        b.type === "register_form" ||
+        b.type === "signup"
+    );
+    if (inSignup) return inSignup;
+    return {
+      id: "signup_form",
+      type: "signup_form",
+      props: {},
+    };
+  }
+
   for (const page of siteDefinition.pages) {
-    const match = page.blocks.find((block) => block.id === blockId);
+    const match = page.blocks.find(
+      (block) => block.id === blockId || block.type === blockId
+    );
     if (match) return match;
   }
 
@@ -642,6 +839,44 @@ export function findBlockById(
         isCheckoutPageRoute(p.route)
     );
 
+    const deliveryFormBlock = checkoutPage?.blocks.find(
+      (b) =>
+        String(b.type || "").toLowerCase() === "delivery_form" ||
+        String(b.id || "").toLowerCase() === "delivery_form" ||
+        String(b.type || "").toLowerCase() === "deliveryform"
+    );
+
+    if (blockId === "checkout_steps" || blockId === "checkoutsteps" || blockId === "checkout_stepper") {
+      const existing = checkoutPage?.blocks.find(
+        (b) =>
+          String(b.id || "").toLowerCase() === "checkout_steps" ||
+          String(b.type || "").toLowerCase() === "checkout_steps" ||
+          String(b.type || "").toLowerCase() === "checkoutsteps"
+      );
+      if (existing) return existing;
+      return {
+        id: "checkout_steps",
+        type: "checkout_steps",
+        props: {},
+      };
+    }
+
+    if (blockId === "delivery_map_picker") {
+      return {
+        id: "delivery_map_picker",
+        type: "delivery_map_picker",
+        props: deliveryFormBlock?.props || {},
+      };
+    }
+
+    if (blockId === "delivery_address_form") {
+      return {
+        id: "delivery_address_form",
+        type: "delivery_address_form",
+        props: deliveryFormBlock?.props || {},
+      };
+    }
+
     const existingBlock = checkoutPage?.blocks.find(
       (b) =>
         String(b.id || b.type).toLowerCase() === blockId.toLowerCase() ||
@@ -653,14 +888,72 @@ export function findBlockById(
     const targetType = blockId.includes("delivery")
       ? "delivery_form"
       : blockId.includes("payment")
-      ? "payment_methods"
-      : blockId.includes("place") || blockId.includes("cta")
-      ? "place_order_cta"
-      : "order_summary";
+        ? "payment_methods"
+        : blockId.includes("place") || blockId.includes("cta")
+          ? "place_order_cta"
+          : "order_summary";
 
     return {
       id: blockId,
       type: targetType,
+      props: {},
+    };
+  }
+
+  if (isCartFallbackId(blockId)) {
+    const cartPage = siteDefinition.pages.find(
+      (p) =>
+        p.role === "cart" ||
+        p.page_type === "cart" ||
+        (p as any).slug === "cart" ||
+        p.route === "/cart" ||
+        p.route === "cart" ||
+        p.blocks.some((b) => CART_BLOCK_TYPES.has(String(b.type || "").toLowerCase()))
+    );
+
+    const existingBlock = cartPage?.blocks.find(
+      (b) =>
+        String(b.id || b.type).toLowerCase() === blockId.toLowerCase() ||
+        CART_BLOCK_TYPES.has(String(b.type || "").toLowerCase())
+    );
+
+    if (existingBlock) return existingBlock;
+
+    return {
+      id: blockId,
+      type: "cart_sidebar",
+      props: cartPage?.blocks?.[0]?.props || {},
+    };
+  }
+
+  if (blockId === "hero_banner" || blockId === "herobanner") {
+    return {
+      id: blockId,
+      type: "hero_banner",
+      props: {},
+    };
+  }
+
+  if (blockId === "product_grid" || blockId === "productgrid") {
+    return {
+      id: blockId,
+      type: "product_grid",
+      props: {},
+    };
+  }
+
+  if (blockId === "signin_form" || blockId === "login_form") {
+    return {
+      id: blockId,
+      type: "signin_form",
+      props: {},
+    };
+  }
+
+  if (blockId === "signup_form" || blockId === "register_form") {
+    return {
+      id: blockId,
+      type: "signup_form",
       props: {},
     };
   }
@@ -726,7 +1019,7 @@ export function updateBlockFieldValue(
   field: EditorField,
   value: any
 ): EditorSiteDefinition {
-  if (blockId === GLOBAL_NAVBAR_BLOCK_ID) {
+  if (blockId === GLOBAL_NAVBAR_BLOCK_ID || blockId === "navbar") {
     if (field.target === "theme") {
       return {
         ...siteDefinition,
@@ -792,7 +1085,7 @@ export function updateBlockFieldValue(
     return siteDefinition;
   }
 
-  if (blockId === GLOBAL_FOOTER_BLOCK_ID) {
+  if (blockId === GLOBAL_FOOTER_BLOCK_ID || blockId === "footer") {
     if (field.target === "theme") {
       return {
         ...siteDefinition,
@@ -905,10 +1198,10 @@ export function updateBlockFieldValue(
     const targetType = blockId.includes("delivery")
       ? "delivery_form"
       : blockId.includes("payment")
-      ? "payment_methods"
-      : blockId.includes("place") || blockId.includes("cta")
-      ? "place_order_cta"
-      : "order_summary";
+        ? "payment_methods"
+        : blockId.includes("place") || blockId.includes("cta")
+          ? "place_order_cta"
+          : "order_summary";
 
     if (checkoutPageIndex !== -1) {
       const targetPage = siteDefinition.pages[checkoutPageIndex];
@@ -969,6 +1262,84 @@ export function updateBlockFieldValue(
       return {
         ...siteDefinition,
         pages: [...siteDefinition.pages, newCheckoutPage],
+      };
+    }
+  }
+
+  if (!hasExistingBlock && isCartFallbackId(blockId)) {
+    const cartPageIndex = siteDefinition.pages.findIndex(
+      (p) =>
+        p.role === "cart" ||
+        p.page_type === "cart" ||
+        (p as any).slug === "cart" ||
+        p.route === "/cart" ||
+        p.route === "cart" ||
+        p.blocks.some((b) =>
+          CART_BLOCK_TYPES.has(String(b.type || "").toLowerCase())
+        )
+    );
+
+    const targetType = "cart_sidebar";
+
+    if (cartPageIndex !== -1) {
+      const targetPage = siteDefinition.pages[cartPageIndex];
+      const existingBlockIndex = targetPage.blocks.findIndex(
+        (b) =>
+          b.id === blockId ||
+          CART_BLOCK_TYPES.has(String(b.type || "").toLowerCase())
+      );
+
+      const updatedPages = [...siteDefinition.pages];
+      if (existingBlockIndex !== -1) {
+        const existingBlock = targetPage.blocks[existingBlockIndex];
+        const updatedBlock = {
+          ...existingBlock,
+          props: {
+            ...(existingBlock.props || {}),
+            [field.key]: value,
+          },
+        };
+        const updatedBlocks = [...targetPage.blocks];
+        updatedBlocks[existingBlockIndex] = updatedBlock;
+        updatedPages[cartPageIndex] = { ...targetPage, blocks: updatedBlocks };
+      } else {
+        const newBlock: EditorBlock = {
+          id: blockId,
+          type: targetType,
+          props: {
+            [field.key]: value,
+          },
+        };
+        updatedPages[cartPageIndex] = {
+          ...targetPage,
+          blocks: [...targetPage.blocks, newBlock],
+        };
+      }
+      return {
+        ...siteDefinition,
+        pages: updatedPages,
+      };
+    } else {
+      const newCartPage: EditorPage = {
+        id: "page-cart",
+        name: "Cart",
+        route: "/cart",
+        role: "cart",
+        page_type: "cart",
+        show_in_nav: false,
+        blocks: [
+          {
+            id: blockId,
+            type: targetType,
+            props: {
+              [field.key]: value,
+            },
+          },
+        ],
+      };
+      return {
+        ...siteDefinition,
+        pages: [...siteDefinition.pages, newCartPage],
       };
     }
   }
@@ -1151,6 +1522,323 @@ export function updateBlockProps(
     }
   }
 
+  if (!hasExistingBlockProps && isCheckoutFallbackId(blockId)) {
+    const checkoutPageIndex = siteDefinition.pages.findIndex(
+      (p) =>
+        p.role === "checkout" ||
+        p.page_type === "checkout" ||
+        (p as any).slug === "checkout" ||
+        isCheckoutPageRoute(p.route) ||
+        p.blocks.some((b) =>
+          CHECKOUT_BLOCK_TYPES.has(String(b.type || "").toLowerCase())
+        )
+    );
+
+    const targetType = blockId.includes("delivery")
+      ? "delivery_form"
+      : blockId.includes("payment")
+        ? "payment_methods"
+        : blockId.includes("place") || blockId.includes("cta")
+          ? "place_order_cta"
+          : "order_summary";
+
+    if (checkoutPageIndex !== -1) {
+      const targetPage = siteDefinition.pages[checkoutPageIndex];
+      const existingBlockIndex = targetPage.blocks.findIndex(
+        (b) =>
+          b.id === blockId ||
+          String(b.type || "").toLowerCase() === targetType.toLowerCase()
+      );
+
+      const updatedPages = [...siteDefinition.pages];
+      if (existingBlockIndex !== -1) {
+        const existingBlock = targetPage.blocks[existingBlockIndex];
+        const updatedBlock = {
+          ...existingBlock,
+          props: {
+            ...(existingBlock.props || {}),
+            ...propsPatch,
+          },
+        };
+        const updatedBlocks = [...targetPage.blocks];
+        updatedBlocks[existingBlockIndex] = updatedBlock;
+        updatedPages[checkoutPageIndex] = { ...targetPage, blocks: updatedBlocks };
+      } else {
+        const newBlock: EditorBlock = {
+          id: blockId,
+          type: targetType,
+          props: {
+            ...propsPatch,
+          },
+        };
+        updatedPages[checkoutPageIndex] = {
+          ...targetPage,
+          blocks: [...targetPage.blocks, newBlock],
+        };
+      }
+      return {
+        ...siteDefinition,
+        pages: updatedPages,
+      };
+    } else {
+      const newCheckoutPage: EditorPage = {
+        id: "page-checkout",
+        name: "Checkout",
+        route: "/checkout",
+        role: "checkout",
+        page_type: "checkout",
+        show_in_nav: false,
+        blocks: [
+          {
+            id: blockId,
+            type: targetType,
+            props: {
+              ...propsPatch,
+            },
+          },
+        ],
+      };
+      return {
+        ...siteDefinition,
+        pages: [...siteDefinition.pages, newCheckoutPage],
+      };
+    }
+  }
+
+  if (!hasExistingBlockProps && isCartFallbackId(blockId)) {
+    const cartPageIndex = siteDefinition.pages.findIndex(
+      (p) =>
+        p.role === "cart" ||
+        p.page_type === "cart" ||
+        (p as any).slug === "cart" ||
+        p.route === "/cart" ||
+        p.route === "cart" ||
+        p.blocks.some((b) =>
+          CART_BLOCK_TYPES.has(String(b.type || "").toLowerCase())
+        )
+    );
+
+    const targetType = "cart_sidebar";
+
+    if (cartPageIndex !== -1) {
+      const targetPage = siteDefinition.pages[cartPageIndex];
+      const existingBlockIndex = targetPage.blocks.findIndex(
+        (b) =>
+          b.id === blockId ||
+          CART_BLOCK_TYPES.has(String(b.type || "").toLowerCase())
+      );
+
+      const updatedPages = [...siteDefinition.pages];
+      if (existingBlockIndex !== -1) {
+        const existingBlock = targetPage.blocks[existingBlockIndex];
+        const updatedBlock = {
+          ...existingBlock,
+          props: {
+            ...(existingBlock.props || {}),
+            ...propsPatch,
+          },
+        };
+        const updatedBlocks = [...targetPage.blocks];
+        updatedBlocks[existingBlockIndex] = updatedBlock;
+        updatedPages[cartPageIndex] = { ...targetPage, blocks: updatedBlocks };
+      } else {
+        const newBlock: EditorBlock = {
+          id: blockId,
+          type: targetType,
+          props: {
+            ...propsPatch,
+          },
+        };
+        updatedPages[cartPageIndex] = {
+          ...targetPage,
+          blocks: [...targetPage.blocks, newBlock],
+        };
+      }
+      return {
+        ...siteDefinition,
+        pages: updatedPages,
+      };
+    } else {
+      const newCartPage: EditorPage = {
+        id: "page-cart",
+        name: "Cart",
+        route: "/cart",
+        role: "cart",
+        page_type: "cart",
+        show_in_nav: false,
+        blocks: [
+          {
+            id: blockId,
+            type: targetType,
+            props: {
+              ...propsPatch,
+            },
+          },
+        ],
+      };
+      return {
+        ...siteDefinition,
+        pages: [...siteDefinition.pages, newCartPage],
+      };
+    }
+  }
+
+  const isProfileFallbackId = (id: string) =>
+    id === "profile_details" || id === "profiledetails" || id === "profile" || id === "customer_profile";
+  if (!hasExistingBlockProps && isProfileFallbackId(blockId)) {
+    const profilePageIndex = siteDefinition.pages.findIndex(
+      (p) =>
+        p.role === "profile" ||
+        p.page_type === "profile" ||
+        p.route === "/profile" ||
+        p.route === "profile" ||
+        p.id === "profile" ||
+        p.id === "page-profile"
+    );
+    if (profilePageIndex !== -1) {
+      const targetPage = siteDefinition.pages[profilePageIndex];
+      const existingBlockIndex = targetPage.blocks.findIndex(
+        (b) => isProfileFallbackId(b.id) || isProfileFallbackId(b.type)
+      );
+      const updatedPages = [...siteDefinition.pages];
+      if (existingBlockIndex !== -1) {
+        const existingBlock = targetPage.blocks[existingBlockIndex];
+        const updatedBlocks = [...targetPage.blocks];
+        updatedBlocks[existingBlockIndex] = {
+          ...existingBlock,
+          props: { ...(existingBlock.props || {}), ...propsPatch },
+        };
+        updatedPages[profilePageIndex] = { ...targetPage, blocks: updatedBlocks };
+      } else {
+        updatedPages[profilePageIndex] = {
+          ...targetPage,
+          blocks: [
+            ...targetPage.blocks,
+            { id: "profile_details", type: "profile_details", props: { ...propsPatch } },
+          ],
+        };
+      }
+      return { ...siteDefinition, pages: updatedPages };
+    } else {
+      const newProfilePage: EditorPage = {
+        id: "page-profile",
+        name: "Customer Profile",
+        route: "/profile",
+        role: "profile",
+        page_type: "profile",
+        show_in_nav: false,
+        blocks: [
+          { id: "profile_details", type: "profile_details", props: { ...propsPatch } },
+        ],
+      };
+      return { ...siteDefinition, pages: [...siteDefinition.pages, newProfilePage] };
+    }
+  }
+
+  const isSignInFallbackId = (id: string) =>
+    id === "signin_form" || id === "signinform" || id === "login_form" || id === "login";
+  if (!hasExistingBlockProps && isSignInFallbackId(blockId)) {
+    const loginPageIndex = siteDefinition.pages.findIndex(
+      (p) =>
+        p.role === "login" ||
+        p.page_type === "login" ||
+        p.route === "/login" ||
+        p.route === "login" ||
+        p.id === "login" ||
+        p.id === "page-login"
+    );
+    if (loginPageIndex !== -1) {
+      const targetPage = siteDefinition.pages[loginPageIndex];
+      const existingBlockIndex = targetPage.blocks.findIndex(
+        (b) => isSignInFallbackId(b.id) || isSignInFallbackId(b.type)
+      );
+      const updatedPages = [...siteDefinition.pages];
+      if (existingBlockIndex !== -1) {
+        const existingBlock = targetPage.blocks[existingBlockIndex];
+        const updatedBlocks = [...targetPage.blocks];
+        updatedBlocks[existingBlockIndex] = {
+          ...existingBlock,
+          props: { ...(existingBlock.props || {}), ...propsPatch },
+        };
+        updatedPages[loginPageIndex] = { ...targetPage, blocks: updatedBlocks };
+      } else {
+        updatedPages[loginPageIndex] = {
+          ...targetPage,
+          blocks: [
+            ...targetPage.blocks,
+            { id: "signin_form", type: "signin_form", props: { ...propsPatch } },
+          ],
+        };
+      }
+      return { ...siteDefinition, pages: updatedPages };
+    } else {
+      const newLoginPage: EditorPage = {
+        id: "page-login",
+        name: "Customer Sign In",
+        route: "/login",
+        role: "login",
+        page_type: "login",
+        show_in_nav: false,
+        blocks: [
+          { id: "signin_form", type: "signin_form", props: { ...propsPatch } },
+        ],
+      };
+      return { ...siteDefinition, pages: [...siteDefinition.pages, newLoginPage] };
+    }
+  }
+
+  const isSignUpFallbackId = (id: string) =>
+    id === "signup_form" || id === "signupform" || id === "register_form" || id === "signup";
+  if (!hasExistingBlockProps && isSignUpFallbackId(blockId)) {
+    const signupPageIndex = siteDefinition.pages.findIndex(
+      (p) =>
+        p.role === "signup" ||
+        p.page_type === "signup" ||
+        p.route === "/signup" ||
+        p.route === "signup" ||
+        p.id === "signup" ||
+        p.id === "page-signup"
+    );
+    if (signupPageIndex !== -1) {
+      const targetPage = siteDefinition.pages[signupPageIndex];
+      const existingBlockIndex = targetPage.blocks.findIndex(
+        (b) => isSignUpFallbackId(b.id) || isSignUpFallbackId(b.type)
+      );
+      const updatedPages = [...siteDefinition.pages];
+      if (existingBlockIndex !== -1) {
+        const existingBlock = targetPage.blocks[existingBlockIndex];
+        const updatedBlocks = [...targetPage.blocks];
+        updatedBlocks[existingBlockIndex] = {
+          ...existingBlock,
+          props: { ...(existingBlock.props || {}), ...propsPatch },
+        };
+        updatedPages[signupPageIndex] = { ...targetPage, blocks: updatedBlocks };
+      } else {
+        updatedPages[signupPageIndex] = {
+          ...targetPage,
+          blocks: [
+            ...targetPage.blocks,
+            { id: "signup_form", type: "signup_form", props: { ...propsPatch } },
+          ],
+        };
+      }
+      return { ...siteDefinition, pages: updatedPages };
+    } else {
+      const newSignUpPage: EditorPage = {
+        id: "page-signup",
+        name: "Customer Sign Up",
+        route: "/signup",
+        role: "signup",
+        page_type: "signup",
+        show_in_nav: false,
+        blocks: [
+          { id: "signup_form", type: "signup_form", props: { ...propsPatch } },
+        ],
+      };
+      return { ...siteDefinition, pages: [...siteDefinition.pages, newSignUpPage] };
+    }
+  }
+
   return {
     ...siteDefinition,
     pages: siteDefinition.pages.map((page) => ({
@@ -1186,54 +1874,58 @@ export function updateThemeValues(
     ...nextPatch,
   };
 
-  // If this is a global theme update (e.g. palette change, primary_bg / secondary_bg update),
-  // purge all residual component-level overrides so the new theme takes effect 100% across all components!
-  const isGlobal =
-    isGlobalPatch ||
-    ("primary_bg" in nextPatch && "secondary_bg" in nextPatch) ||
-    ("primary_bg" in nextPatch && "text_color" in nextPatch) ||
-    ("festival_theme" in nextPatch);
+  const nextDef: EditorSiteDefinition = {
+    ...siteDefinition,
+    theme: updatedTheme,
+    pages: siteDefinition.pages,
+  };
 
-  if (isGlobal) {
-    for (const k of ALL_COMPONENT_OVERRIDE_KEYS) {
-      if (!(k in nextPatch)) {
-        delete (updatedTheme as any)[k];
-      }
+  if (themePatch.brandName !== undefined || themePatch.brand_name !== undefined) {
+    const brand = themePatch.brandName ?? themePatch.brand_name;
+    if (nextDef.site) {
+      (nextDef.site as any).brand_name = brand;
+    }
+    (nextDef as any).site_name = brand;
+    (nextDef as any).name = brand;
+    if ((nextDef as any).navbar) {
+      (nextDef as any).navbar.brandName = brand;
+      (nextDef as any).navbar.brand_name = brand;
+    }
+    if ((nextDef as any).footer) {
+      (nextDef as any).footer.brandName = brand;
+      (nextDef as any).footer.brand_name = brand;
     }
   }
 
-  const nextPages = applyThemeToPages(siteDefinition.pages || [], updatedTheme);
-
-  return {
-    ...siteDefinition,
-    theme: updatedTheme,
-    pages: nextPages,
-  };
+  return nextDef;
 }
 
 export function applyThemeMode(
   siteDefinition: EditorSiteDefinition,
   mode: ThemeMode
 ): EditorSiteDefinition {
-  const baseDefaults = mode === "light" ? DEFAULT_LIGHT_THEME : DEFAULT_DARK_THEME;
+  const currentTheme = siteDefinition.theme || {};
+  const baseDefaults = mode === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
 
   const updatedTheme: any = {
+    ...currentTheme,
     ...baseDefaults,
+    // Preserve custom branding, logos, layout configs, fonts, etc.
+    logo_url: currentTheme.logo_url || currentTheme.logoUrl,
+    logoUrl: currentTheme.logoUrl || currentTheme.logo_url,
+    brand_tone: currentTheme.brand_tone,
+    font_family: currentTheme.font_family,
+    navbar_position: currentTheme.navbar_position,
+    navbar_height: currentTheme.navbar_height,
     mode,
-    festival_theme: "none",
+    festival_theme: currentTheme.festival_theme || "none",
   };
-
-  // Purge any residual component-level overrides from prior chats/customizations
-  for (const k of ALL_COMPONENT_OVERRIDE_KEYS) {
-    delete updatedTheme[k];
-  }
-
-  const nextPages = applyThemeToPages(siteDefinition.pages || [], updatedTheme);
 
   return {
     ...siteDefinition,
     theme: updatedTheme,
-    pages: nextPages,
+    // Do NOT wipe out pages, layout positions, custom slides, or photos!
+    pages: siteDefinition.pages,
   };
 }
 
@@ -1241,55 +1933,83 @@ export function applyFestivalTheme(
   siteDefinition: EditorSiteDefinition,
   preset: FestivalThemeKey
 ): EditorSiteDefinition {
-  const mode: ThemeMode = siteDefinition.theme?.mode === "dark" ? "dark" : "light";
-  const baseDefaults = mode === "light" ? DEFAULT_LIGHT_THEME : DEFAULT_DARK_THEME;
-  const festivalOverrides = getFestivalThemeOverrides(preset, mode);
-
+  const currentTheme = siteDefinition.theme || {};
+  const presetConfig = FESTIVAL_THEME_PRESETS[preset] || {};
   const updatedTheme: any = {
-    ...baseDefaults,
-    ...festivalOverrides,
-    mode,
+    ...currentTheme,
+    ...presetConfig,
     festival_theme: preset,
   };
-
-  // Purge any residual component-level overrides from prior chats/customizations
-  for (const k of ALL_COMPONENT_OVERRIDE_KEYS) {
-    delete updatedTheme[k];
-  }
-
-  const nextPages = applyThemeToPages(siteDefinition.pages || [], updatedTheme);
 
   return {
     ...siteDefinition,
     theme: updatedTheme,
-    pages: nextPages,
+    pages: siteDefinition.pages,
   };
 }
 
-export function getSavedThemeSnapshots(siteDefinition: EditorSiteDefinition): any[] {
-  const siteId = (siteDefinition as any)?.id || (siteDefinition as any)?.site_id || siteDefinition?.site?.brand_name || "";
-  let inStorage: any[] | null = null;
-
-  if (typeof window !== "undefined" && siteId) {
+export function getSiteStorageId(siteDefinition?: EditorSiteDefinition): string {
+  if (siteDefinition) {
+    const id = (siteDefinition as any)?.id || (siteDefinition as any)?.site_id;
+    if (id && typeof id === "string" && id.trim()) return id.trim();
+    const slug = (siteDefinition as any)?.slug || (siteDefinition as any)?.site?.slug;
+    if (slug && typeof slug === "string" && slug.trim()) return slug.trim();
+    const brand = siteDefinition?.site?.brand_name;
+    if (brand && typeof brand === "string" && brand.trim()) {
+      return brand.trim().toLowerCase().replace(/\s+/g, "_");
+    }
+  }
+  if (typeof window !== "undefined") {
     try {
-      const raw = localStorage.getItem(`webnirmaan_saved_themes_${siteId}`);
-      if (raw !== null) {
-        inStorage = JSON.parse(raw);
+      const path = window.location.pathname || "";
+      const match = path.match(/\/(builder|store)\/([^/?#]+)/);
+      if (match && match[2]) return match[2].trim();
+    } catch { }
+  }
+  return "default_site";
+}
+
+export function getSavedThemeSnapshots(siteDefinition: EditorSiteDefinition): any[] {
+  const siteId = getSiteStorageId(siteDefinition);
+  let inStorage: any[] = [];
+
+  if (typeof window !== "undefined") {
+    try {
+      // Clean up legacy global keys to prevent cross-tenant theme contamination
+      localStorage.removeItem("webnirmaan_saved_themes_global");
+      localStorage.removeItem("webnirmaan_saved_themes_default_site");
+
+      if (siteId && siteId !== "default_site") {
+        const rawSpecific = localStorage.getItem(`webnirmaan_saved_themes_${siteId}`);
+        if (rawSpecific) {
+          const parsed = JSON.parse(rawSpecific);
+          if (Array.isArray(parsed)) inStorage.push(...parsed);
+        }
       }
-    } catch {}
+
+      const slug = (siteDefinition as any)?.slug || (siteDefinition as any)?.site?.slug;
+      if (slug && slug !== siteId && slug !== "default_site") {
+        const rawSlug = localStorage.getItem(`webnirmaan_saved_themes_${slug}`);
+        if (rawSlug) {
+          const parsed = JSON.parse(rawSlug);
+          if (Array.isArray(parsed)) inStorage.push(...parsed);
+        }
+      }
+    } catch { }
   }
 
-  // If localStorage has an active record for this siteId, return it as authoritative
-  if (Array.isArray(inStorage)) {
-    return inStorage.slice(0, 30);
-  }
-
-  // Fallback to siteDefinition.saved_themes in memory
   const inMemory = Array.isArray((siteDefinition as any)?.saved_themes)
     ? (siteDefinition as any).saved_themes
     : [];
 
-  return inMemory.slice(0, 30);
+  const map = new Map<string, any>();
+  [...inMemory, ...inStorage].forEach((item) => {
+    if (item && item.id && !map.has(item.id)) {
+      map.set(item.id, item);
+    }
+  });
+
+  return Array.from(map.values()).slice(0, 30);
 }
 
 export function saveThemeSnapshot(
@@ -1306,10 +2026,17 @@ export function saveThemeSnapshot(
     }
   });
 
-  // Capture hero block overrides into theme object for snapshot
+  // Capture hero and product detail block overrides into theme object for snapshot
   let heroBlockBg: string | undefined;
   let heroBlockText: string | undefined;
   let heroBlockAccent: string | undefined;
+
+  let pdBadgeBg: string | undefined;
+  let pdBadgeBorder: string | undefined;
+  let pdPanelBg: string | undefined;
+  let pdTextColor: string | undefined;
+  let pdBtnBg: string | undefined;
+  let pdBtnText: string | undefined;
 
   (siteDefinition.pages || []).forEach((page) => {
     (page.blocks || []).forEach((block) => {
@@ -1330,6 +2057,26 @@ export function saveThemeSnapshot(
         if (props.accent_color) heroBlockAccent = props.accent_color;
         else if (activeSlide?.accent_color) heroBlockAccent = activeSlide.accent_color;
       }
+
+      if (
+        btype === "product_detail" ||
+        btype === "productdetail" ||
+        btype === "product_info" ||
+        btype === "productinfo" ||
+        btype === "purchase_panel" ||
+        btype === "purchasepanel" ||
+        btype === "product_gallery" ||
+        btype === "productgallery" ||
+        String(block.id || "").toLowerCase().includes("product-detail")
+      ) {
+        const props = block.props || {};
+        if (props.badge_bg_color) pdBadgeBg = props.badge_bg_color;
+        if (props.badge_border_color) pdBadgeBorder = props.badge_border_color;
+        if (props.panel_color) pdPanelBg = props.panel_color;
+        if (props.text_color) pdTextColor = props.text_color;
+        if (props.button_bg_color) pdBtnBg = props.button_bg_color;
+        if (props.button_text_color) pdBtnText = props.button_text_color;
+      }
     });
   });
 
@@ -1348,6 +2095,12 @@ export function saveThemeSnapshot(
     ...(heroBlockBg ? { hero_bg: heroBlockBg } : {}),
     ...(heroBlockText ? { hero_text_color: heroBlockText } : {}),
     ...(heroBlockAccent ? { hero_accent: heroBlockAccent } : {}),
+    ...(pdBadgeBg ? { badge_bg_color: pdBadgeBg, product_detail_badge_bg: pdBadgeBg } : {}),
+    ...(pdBadgeBorder ? { badge_border_color: pdBadgeBorder, product_detail_badge_border: pdBadgeBorder } : {}),
+    ...(pdPanelBg ? { product_detail_bg: pdPanelBg } : {}),
+    ...(pdTextColor ? { product_detail_text: pdTextColor } : {}),
+    ...(pdBtnBg ? { product_detail_btn_bg: pdBtnBg } : {}),
+    ...(pdBtnText ? { product_detail_btn_text: pdBtnText } : {}),
     ...cleanCustomPatch,
   };
 
@@ -1356,7 +2109,7 @@ export function saveThemeSnapshot(
   }
 
   const snapshot = {
-    id: `theme_${Date.now()}`,
+    id: `theme_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     name: name.trim() || `Theme ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
     created_at: new Date().toISOString(),
     theme: { ...themeToSave },
@@ -1365,27 +2118,31 @@ export function saveThemeSnapshot(
   const currentSaved = getSavedThemeSnapshots(siteDefinition);
   const updatedList = [snapshot, ...currentSaved.filter((s: any) => s.id !== snapshot.id)].slice(0, 30);
 
-  const siteId = (siteDefinition as any)?.id || (siteDefinition as any)?.site_id || siteDefinition?.site?.brand_name || "";
-  if (typeof window !== "undefined" && siteId) {
+  const siteId = getSiteStorageId(siteDefinition);
+  const slug = (siteDefinition as any)?.slug || (siteDefinition as any)?.site?.slug;
+  if (typeof window !== "undefined") {
     try {
-      localStorage.setItem(`webnirmaan_saved_themes_${siteId}`, JSON.stringify(updatedList));
-      window.dispatchEvent(new Event("webnirmaan_theme_saved"));
-    } catch {}
+      if (siteId && siteId !== "default_site") {
+        localStorage.setItem(`webnirmaan_saved_themes_${siteId}`, JSON.stringify(updatedList));
+      }
+      if (slug && slug !== siteId && slug !== "default_site") {
+        localStorage.setItem(`webnirmaan_saved_themes_${slug}`, JSON.stringify(updatedList));
+      }
+      window.dispatchEvent(new CustomEvent("webnirmaan_theme_saved", { detail: { siteId, slug, snapshots: updatedList } }));
+    } catch { }
   }
-
-  const finalTheme: Record<string, any> = {
+  const finalTheme: Record<string, any> = {
     ...siteDefinition.theme,
     ...themeToSave,
   };
   if (finalTheme.navbar_bg && !finalTheme.navbar_outer_bg) {
     finalTheme.navbar_outer_bg = finalTheme.navbar_bg;
   }
-  const nextPages = applyThemeToPages(siteDefinition.pages || [], finalTheme);
 
   return {
     ...siteDefinition,
     theme: finalTheme,
-    pages: nextPages,
+    pages: siteDefinition.pages,
     saved_themes: updatedList,
   } as any;
 }
@@ -1400,7 +2157,7 @@ export function applyThemeSnapshot(
 
   const patchProps = found.theme;
   const mode: ThemeMode = patchProps.mode === "dark" ? "dark" : "light";
-  const baseDefaults = mode === "light" ? DEFAULT_LIGHT_THEME : DEFAULT_DARK_THEME;
+  const baseDefaults = mode === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
 
   const cleanPatchProps: Record<string, any> = {};
   Object.keys(patchProps).forEach((k) => {
@@ -1436,16 +2193,23 @@ export function deleteThemeSnapshot(
   const currentSaved = getSavedThemeSnapshots(siteDefinition);
   const updatedList = currentSaved.filter((s: any) => s.id !== snapshotId);
 
-  const siteId = (siteDefinition as any)?.id || (siteDefinition as any)?.site_id || siteDefinition?.site?.brand_name || "";
-  if (typeof window !== "undefined" && siteId) {
+  const siteId = getSiteStorageId(siteDefinition);
+  const slug = (siteDefinition as any)?.slug || (siteDefinition as any)?.site?.slug;
+  if (typeof window !== "undefined") {
     try {
-      localStorage.setItem(`webnirmaan_saved_themes_${siteId}`, JSON.stringify(updatedList));
-      window.dispatchEvent(new Event("webnirmaan_theme_saved"));
-    } catch {}
+      if (siteId && siteId !== "default_site") {
+        localStorage.setItem(`webnirmaan_saved_themes_${siteId}`, JSON.stringify(updatedList));
+      }
+      if (slug && slug !== siteId && slug !== "default_site") {
+        localStorage.setItem(`webnirmaan_saved_themes_${slug}`, JSON.stringify(updatedList));
+      }
+      window.dispatchEvent(new CustomEvent("webnirmaan_theme_saved", { detail: { siteId, slug, snapshots: updatedList } }));
+    } catch { }
   }
 
   return {
     ...siteDefinition,
     saved_themes: updatedList,
+    pages: siteDefinition.pages,
   } as any;
 }

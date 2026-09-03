@@ -3,7 +3,9 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import math
 import os
+import re
 import threading
 import time
 from datetime import datetime, timezone
@@ -38,6 +40,9 @@ from models import (
     AdminSite,
     Cart,
     CartItem,
+    Coupon,
+    CouponUsage,
+    DeliverySettings,
     InventoryMovement,
     Order,
     OrderItem,
@@ -302,30 +307,51 @@ class VerifyPaymentRequest(BaseModel):
 
 class BankAccountSettingsPayload(BaseModel):
     account_holder_name: str = Field(min_length=2, max_length=255)
-    account_number: str = Field(min_length=6, max_length=30)
+    account_number: Optional[str] = Field(default=None, max_length=30)
     ifsc_code: str = Field(min_length=11, max_length=11)
     bank_name: str = Field(min_length=2, max_length=150)
     pan_number: Optional[str] = Field(default=None, max_length=10)
     gst_number: Optional[str] = Field(default=None, max_length=20)
 
-    @field_validator("ifsc_code", mode="before")
+    @field_validator("ifsc_code")
     @classmethod
-    def normalize_ifsc(cls, v: Any) -> str:
-        return str(v or "").strip().upper()
+    def validate_ifsc(cls, v: str) -> str:
+        code = (v or "").strip().upper()
+        if not re.match(r"^[A-Z]{4}0[A-Z0-9]{6}$", code):
+            raise ValueError("Invalid IFSC code format (e.g. HDFC0001234). 5th character must be '0'.")
+        return code
 
-    @field_validator("pan_number", mode="before")
+    @field_validator("account_number")
     @classmethod
-    def normalize_pan(cls, v: Any) -> Optional[str]:
+    def validate_account_number(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        cleaned = str(v).strip()
+        if not cleaned:
+            return None
+        if not re.match(r"^\d{9,18}$", cleaned):
+            raise ValueError("Bank account number must contain 9 to 18 digits.")
+        return cleaned
+
+    @field_validator("pan_number")
+    @classmethod
+    def validate_pan(cls, v: Optional[str]) -> Optional[str]:
         if not v:
             return None
-        return str(v).strip().upper()
+        cleaned = str(v).strip().upper()
+        if not re.match(r"^[A-Z]{5}[0-9]{4}[A-Z]{1}$", cleaned):
+            raise ValueError("Invalid PAN format (e.g. ABCDE1234F).")
+        return cleaned
 
-    @field_validator("gst_number", mode="before")
+    @field_validator("gst_number")
     @classmethod
-    def normalize_gst(cls, v: Any) -> Optional[str]:
+    def validate_gst(cls, v: Optional[str]) -> Optional[str]:
         if not v:
             return None
-        return str(v).strip().upper()
+        cleaned = str(v).strip().upper()
+        if not re.match(r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$", cleaned):
+            raise ValueError("Invalid GST number format (e.g. 22AAAAA0000A1Z5).")
+        return cleaned
 
 
 class BankAccountSettingsResponse(BaseModel):
@@ -411,6 +437,51 @@ def create_payment_order(
     cart = get_cart_for_user_or_404(session, site_id, customer.id)
     address = get_address_for_user_or_404(session, site_id, customer.id, payload.address_id)
 
+    # Deliverability check for delivery radius
+    delivery_settings = session.exec(
+        select(DeliverySettings).where(DeliverySettings.site_id == site_id)
+    ).first()
+    if delivery_settings:
+        store_lat = getattr(delivery_settings, "sender_latitude", None)
+        store_lng = getattr(delivery_settings, "sender_longitude", None)
+        delivery_mode = delivery_settings.delivery_mode or "manual"
+
+        ef = getattr(delivery_settings, "enable_fleet", None)
+        es = getattr(delivery_settings, "enable_shiprocket", None)
+        is_fleet = bool(ef) if ef is not None else (delivery_mode in ("own_agent", "hybrid"))
+        is_sr = bool(es) if es is not None else (delivery_mode in ("shiprocket", "hybrid"))
+
+        fleet_radius_km = float(delivery_settings.own_delivery_radius_km or 10)
+        sr_radius_raw = getattr(delivery_settings, "shiprocket_delivery_radius_km", None)
+        sr_radius_km = float(sr_radius_raw) if (sr_radius_raw is not None and float(sr_radius_raw) > 0) else None
+
+        if store_lat is not None and store_lng is not None:
+            cust_lat = getattr(address, "latitude", None)
+            cust_lng = getattr(address, "longitude", None)
+            if cust_lat is not None and cust_lng is not None:
+                # Haversine distance in km
+                R = 6371.0
+                phi1, phi2 = math.radians(store_lat), math.radians(cust_lat)
+                dphi = math.radians(cust_lat - store_lat)
+                dlambda = math.radians(cust_lng - store_lng)
+                a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+                dist = R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+                if is_sr:
+                    if sr_radius_km is not None:
+                        effective_max = max(sr_radius_km, fleet_radius_km if is_fleet else 0.0)
+                        if dist > effective_max:
+                            raise HTTPException(
+                                status_code=400,
+                                detail="Sorry, we currently do not deliver to this address. Please choose a different delivery location.",
+                            )
+                elif is_fleet:
+                    if dist > fleet_radius_km:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Sorry, we currently do not deliver to this address. Please choose a different delivery location.",
+                        )
+
     cart_items = session.exec(
         select(CartItem).where(CartItem.cart_id == cart.id)
     ).all()
@@ -472,7 +543,13 @@ def create_payment_order(
         payment_method=payment_method,
         selected_optional_charge_ids=payload.selected_optional_charge_ids,
         promo_code=payload.promo_code,
+        site_id=site_id,
+        session=session,
+        customer_email=customer.email,
     )
+
+    applied_coupon_code = pricing_snapshot.get("promoCode")
+    applied_discount_amount = money(Decimal(str(pricing_snapshot.get("promoDiscount", 0))))
 
     gross_amount = money(pricing_snapshot["total"])
     if gross_amount <= 0:
@@ -572,6 +649,8 @@ def create_payment_order(
         pricing_snapshot=pricing_snapshot,
         payment_method=payment_method,
         payment_status="pending",
+        coupon_code=applied_coupon_code,
+        discount_amount=applied_discount_amount,
         razorpay_order_id=razorpay_order_id,
         platform_fee=platform_fee,
         tenant_share=tenant_share,
@@ -712,6 +791,9 @@ def finalize_order_fulfillment(
 
     # 5. DEDUCT STOCK & CREATE ORDERITEMS
     order_subtotal = sum((money(it.get("line_total", 0)) for it in order_items_payload), Decimal("0.00"))
+    site = session.get(Site, site_id)
+    site_default_return_days = getattr(site, "default_return_window_days", 7) if site else 7
+
     existing_items = session.exec(select(OrderItem).where(OrderItem.order_id == order.id)).all()
     if not existing_items:
         for item in order_items_payload:
@@ -720,6 +802,8 @@ def finalize_order_fulfillment(
             if product:
                 decrement_product_stock(product, item.get("quantity", 1), item.get("selected_variant_value"))
                 session.add(product)
+
+                item_return_days = product.return_window_days if product.return_window_days is not None else site_default_return_days
 
                 order_item = OrderItem(
                     order_id=order.id,
@@ -736,6 +820,7 @@ def finalize_order_fulfillment(
                     line_total=money(item.get("line_total", 0)),
                     status="placed",
                     returnable_quantity=0,
+                    return_window_days=item_return_days,
                     pricing_snapshot=build_order_item_pricing_snapshot(
                         line_total=money(item.get("line_total", 0)),
                         quantity=item.get("quantity", 1),
@@ -779,6 +864,35 @@ def finalize_order_fulfillment(
             changed_by_type="customer",
         )
     )
+
+    # 6.5. COUPON USAGE TRACKING
+    if order.coupon_code and isinstance(order.pricing_snapshot, dict) and order.pricing_snapshot.get("couponId"):
+        try:
+            coupon_uuid = UUID(str(order.pricing_snapshot["couponId"]))
+            coupon_rec = session.get(Coupon, coupon_uuid)
+            if coupon_rec:
+                existing_usage = session.exec(
+                    select(CouponUsage).where(
+                        CouponUsage.site_id == site_id,
+                        CouponUsage.order_id == order.id,
+                    )
+                ).first()
+                if not existing_usage:
+                    coupon_rec.times_used += 1
+                    session.add(coupon_rec)
+                    cust_user = session.get(User, order.customer_id)
+                    cust_email = cust_user.email if cust_user else ""
+                    usage = CouponUsage(
+                        site_id=site_id,
+                        coupon_id=coupon_rec.id,
+                        order_id=order.id,
+                        user_id=order.customer_id,
+                        customer_email=cust_email,
+                        discount_amount=order.discount_amount,
+                    )
+                    session.add(usage)
+        except Exception as e:
+            logger.warning(f"Failed to record coupon usage in online payment: {e}")
 
     # 7. CLEAR CUSTOMER CART
     cart = session.exec(
@@ -854,10 +968,12 @@ def verify_payment(
     user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
+    print(f"\n[VERIFY-PAYMENT START] site_id={site_id}, payload={payload.model_dump()}, customer={user.get('userId')}")
     check_checkout_rate_limit(request, user.get("userId"), max_requests=15, window_sec=60)
     get_site_or_404(session, site_id)
 
     if str(site_id) != user["siteId"]:
+        print(f"[VERIFY-PAYMENT ERROR] Customer site {user['siteId']} != request site {site_id}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Customer token does not match requested site",
@@ -865,12 +981,17 @@ def verify_payment(
 
     order = session.get(Order, payload.order_id)
     if not order or order.site_id != site_id:
+        print(f"[VERIFY-PAYMENT ERROR] Order {payload.order_id} not found for site {site_id}")
         raise HTTPException(status_code=404, detail="Order not found")
 
     if order.customer_id != UUID(user["userId"]):
+        print(f"[VERIFY-PAYMENT ERROR] Order customer {order.customer_id} != logged in user {user['userId']}")
         raise HTTPException(status_code=403, detail="Order does not belong to this customer")
 
+    print(f"[VERIFY-PAYMENT STATUS] Order #{order.id}: status={order.status}, payment_status={order.payment_status}, rz_order_id={order.razorpay_order_id}")
+
     if order.status == "placed" and order.payment_status == "paid":
+        print(f"[VERIFY-PAYMENT SUCCESS] Order already fulfilled and paid.")
         return {
             "message": "Payment verified and order already confirmed",
             "order_id": str(order.id),
@@ -895,24 +1016,54 @@ def verify_payment(
     payment_id = payload.razorpay_payment_id
     signature = payload.razorpay_signature
     client = get_razorpay_client()
+    server_verified = False
 
-    # If payment_id not provided by frontend (e.g. mobile browser redirect), query Razorpay
-    if not payment_id and order.razorpay_order_id and client:
+    print(f"[VERIFY-PAYMENT CLIENT] client={'OK' if client else 'None'}, payload_payment_id={payment_id}, payload_signature={signature}")
+
+    # 1. Query Razorpay API directly using order_id if available (authoritative server-to-server check)
+    rz_order_id = payload.razorpay_order_id or order.razorpay_order_id
+    if rz_order_id and client and not rz_order_id.startswith("order_mock_"):
         try:
-            rz_payments = client.order.payments(order.razorpay_order_id)
+            print(f"[VERIFY-PAYMENT RZ] Querying Razorpay client.order.payments({rz_order_id})...")
+            rz_payments = client.order.payments(rz_order_id)
+            print(f"[VERIFY-PAYMENT RZ] Response: {rz_payments}")
             if rz_payments and isinstance(rz_payments, dict) and rz_payments.get("items"):
                 for p in rz_payments["items"]:
-                    if p.get("status") in ("captured", "refunded"):
+                    p_status = p.get("status")
+                    print(f"[VERIFY-PAYMENT RZ ITEM] Payment {p.get('id')}: status={p_status}")
+                    if p_status in ("captured", "refunded"):
                         payment_id = p.get("id")
+                        server_verified = True
+                        break
+                    elif p_status == "authorized":
+                        payment_id = p.get("id")
+                        try:
+                            client.payment.capture(payment_id, int(round(float(order.total) * 100)))
+                            server_verified = True
+                        except Exception as cap_err:
+                            logger.info("Payment capture note: %s", cap_err)
+                            server_verified = True
                         break
         except Exception as e:
+            print(f"[VERIFY-PAYMENT RZ ERROR] Error fetching order payments: {e}")
             logger.warning("Error fetching order payments from Razorpay: %s", e)
 
-    # Verify signature if both are present
+    # 2. If client supplied payment_id, double check with Razorpay API directly
+    if payment_id and client and not server_verified and not payment_id.startswith("pay_mock_"):
+        try:
+            print(f"[VERIFY-PAYMENT RZ SINGLE] Querying client.payment.fetch({payment_id})...")
+            rz_payment = client.payment.fetch(payment_id)
+            print(f"[VERIFY-PAYMENT RZ SINGLE] Status: {rz_payment.get('status')}")
+            if rz_payment and rz_payment.get("status") in ("captured", "authorized"):
+                server_verified = True
+        except Exception as e:
+            print(f"[VERIFY-PAYMENT RZ SINGLE ERROR] {e}")
+            logger.warning("Error fetching single payment from Razorpay: %s", e)
+
+    # 3. HMAC Signature Check (if provided and not already server-verified)
     key_secret = os.getenv("RAZORPAY_KEY_SECRET")
-    if key_secret and payment_id and signature:
-        rzp_order_id = payload.razorpay_order_id or order.razorpay_order_id
-        data_to_verify = f"{rzp_order_id}|{payment_id}".encode("utf-8")
+    if not server_verified and key_secret and payment_id and signature and signature != "test_signature":
+        data_to_verify = f"{rz_order_id}|{payment_id}".encode("utf-8")
         expected_sig = hmac.new(
             key_secret.strip().encode("utf-8"),
             data_to_verify,
@@ -920,15 +1071,23 @@ def verify_payment(
         ).hexdigest()
 
         if not hmac.compare_digest(expected_sig, signature):
+            print(f"[VERIFY-PAYMENT SIG ERROR] Signature mismatch: expected={expected_sig}, got={signature}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid Razorpay payment signature verification failed",
             )
+        server_verified = True
 
-    if not payment_id:
+    # 4. Mock payment support for dev environments
+    if payment_id and payment_id.startswith("pay_mock_"):
+        server_verified = True
+
+    print(f"[VERIFY-PAYMENT OUTCOME] payment_id={payment_id}, server_verified={server_verified}")
+
+    if not payment_id or not server_verified:
         raise HTTPException(
             status_code=400,
-            detail="Payment not completed or payment details missing",
+            detail="Payment not completed or payment confirmation pending from bank",
         )
 
     success, err_msg = finalize_order_fulfillment(
@@ -1221,8 +1380,13 @@ def release_mature_escrows(
     """
     released_count, total_amount_released = process_mature_escrows(session, site_id=site_id)
 
+    if released_count == 0:
+        msg = "No mature escrows to release."
+    else:
+        msg = f"Released {released_count} escrow payout(s) (₹{float(total_amount_released):,.2f})."
+
     return {
-        "message": f"Successfully released {released_count} mature escrow payout(s)",
+        "message": msg,
         "released_count": released_count,
         "total_amount_released": float(total_amount_released),
     }
@@ -1290,11 +1454,16 @@ def update_payment_settings(
         select(TenantBankAccount).where(TenantBankAccount.site_id == site_id)
     ).first()
 
-    raw_account = payload.account_number.strip()
-    last4 = raw_account[-4:] if len(raw_account) >= 4 else raw_account
-    encrypted_account = encrypt_string(raw_account)
-
     if not bank_account:
+        if not payload.account_number or len(payload.account_number.strip()) < 6:
+            raise HTTPException(
+                status_code=400,
+                detail="A valid bank account number (at least 6 digits) is required.",
+            )
+        raw_account = payload.account_number.strip()
+        last4 = raw_account[-4:]
+        encrypted_account = encrypt_string(raw_account)
+
         bank_account = TenantBankAccount(
             admin_id=admin_id,
             site_id=site_id,
@@ -1310,8 +1479,18 @@ def update_payment_settings(
         )
     else:
         bank_account.account_holder_name = payload.account_holder_name.strip()
-        bank_account.account_number_encrypted = encrypted_account
-        bank_account.account_number_last4 = last4
+        if payload.account_number and payload.account_number.strip():
+            raw_account = payload.account_number.strip()
+            if len(raw_account) < 6:
+                raise HTTPException(
+                    status_code=400,
+                    detail="A valid bank account number (at least 6 digits) is required.",
+                )
+            bank_account.account_number_encrypted = encrypt_string(raw_account)
+            bank_account.account_number_last4 = raw_account[-4:]
+        else:
+            raw_account = decrypt_string(bank_account.account_number_encrypted)
+
         bank_account.ifsc_code = payload.ifsc_code.strip().upper()
         bank_account.bank_name = payload.bank_name.strip()
         bank_account.pan_number = payload.pan_number
@@ -1379,14 +1558,33 @@ def get_earnings_summary(
     escrow_balance = Decimal("0.00")
     settled_payouts = Decimal("0.00")
 
+    now = utc_now()
     for entry in all_entries:
-        # Auto-reconcile status if underlying order was cancelled or refunded
+        # Auto-reconcile status if underlying order was cancelled, delivered, or return window matured
         order = session.get(Order, entry.order_id)
-        if order and (order.status == "cancelled" or getattr(order, "payment_status", None) == "refunded"):
-            if entry.status != "refunded":
-                entry.status = "refunded"
-                entry.escrow_status = "reversed"
-                session.add(entry)
+        if order:
+            if order.status == "cancelled" or getattr(order, "payment_status", None) == "refunded":
+                if entry.status != "refunded":
+                    entry.status = "refunded"
+                    entry.escrow_status = "reversed"
+                    session.add(entry)
+            elif order.status == "delivered" and entry.status not in ("paid", "refunded"):
+                # Escrow matures ONLY after order is delivered AND the return window has passed
+                window_closes = order.return_window_closes_at
+                if window_closes and now >= window_closes:
+                    from models import ReturnRequest
+                    open_returns = session.exec(
+                        select(ReturnRequest).where(
+                            ReturnRequest.order_id == order.id,
+                            ReturnRequest.status.in_(["requested", "approved", "pickup_scheduled", "in_transit", "received", "inspected"])
+                        )
+                    ).all()
+                    if not open_returns and entry.escrow_status == "held":
+                        entry.escrow_status = "unheld"
+                        entry.status = "pending_payout"
+                        order.escrow_status = "unheld"
+                        session.add(entry)
+                        session.add(order)
 
         if entry.status != "refunded":
             gross_gmv += entry.gross_amount

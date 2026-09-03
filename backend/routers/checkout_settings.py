@@ -30,6 +30,7 @@ class ChargeRulePayload(BaseModel):
     enabled: bool
     optional: bool
     customerSelectable: bool
+    refundable: bool = True
     amountType: Literal["fixed", "percent"]
     amountValue: str
     applyConditionType: Literal["none", "subtotal_lt", "subtotal_gte", "payment_method"]
@@ -174,6 +175,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": True,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "99",
                 "applyConditionType": "none",
@@ -189,6 +191,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "29",
                 "applyConditionType": "none",
@@ -204,6 +207,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": True,
                 "amountType": "fixed",
                 "amountValue": "19",
                 "applyConditionType": "none",
@@ -219,6 +223,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "15",
                 "applyConditionType": "none",
@@ -234,6 +239,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "9",
                 "applyConditionType": "none",
@@ -249,6 +255,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "49",
                 "applyConditionType": "subtotal_lt",
@@ -264,6 +271,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "39",
                 "applyConditionType": "payment_method",
@@ -279,13 +287,14 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": True,
                 "customerSelectable": True,
+                "refundable": True,
                 "amountType": "fixed",
                 "amountValue": "49",
                 "applyConditionType": "none",
                 "applyConditionValue": "",
                 "waiveConditionType": "none",
                 "waiveConditionValue": "",
-                "description": "Optional checkout add-on selected by customer.",
+                "description": "",
             },
         ],
     }

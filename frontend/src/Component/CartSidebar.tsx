@@ -3,6 +3,8 @@ import { Link, useParams } from "react-router-dom";
 import { useCart } from "../CartContext";
 import { API_BASE_URL } from "../config/api";
 import { isColorDarkHex } from "../context/ThemeContext";
+import { getThumbnailUrl } from "../utils/imageOptimizer";
+import PromoCodeInput, { ValidatedCoupon } from "./PromoCodeInput";
 
 type CartTheme = {
   name?: string;
@@ -35,7 +37,7 @@ type CartSidebarProps = {
   show_items?: boolean;
   show_gift_card?: boolean;
   review_mode?: boolean;
-  max_width?: number;
+  max_width?: number | string;
   min_height?: number;
   border_radius?: number;
   card_radius?: number;
@@ -49,6 +51,10 @@ type CartSidebarProps = {
   theme?: CartTheme;
   accentColor?: string;
   paymentMethod?: string;
+  appliedCoupon?: ValidatedCoupon | null;
+  onCouponApplied?: (coupon: ValidatedCoupon) => void;
+  onCouponRemoved?: () => void;
+  embeddedInEditorWrapper?: boolean;
 };
 
 type ChargeCode =
@@ -69,6 +75,7 @@ type ChargeRule = {
   enabled: boolean;
   optional: boolean;
   customerSelectable: boolean;
+  refundable?: boolean;
   amountType: "fixed" | "percent";
   amountValue: string;
   applyConditionType: "none" | "subtotal_lt" | "subtotal_gte" | "payment_method";
@@ -227,6 +234,153 @@ function calculateChargeAmount(charge: ChargeRule, baseAmount: number) {
   return Math.max(0, Math.round(raw));
 }
 
+const ChargeInfoTooltip: React.FC<{
+  text: string;
+  palette: any;
+}> = ({ text, palette }) => {
+  const [hover, setHover] = useState(false);
+  if (!text) return null;
+
+  return (
+    <span
+      style={{
+        position: "relative",
+        display: "inline-flex",
+        alignItems: "center",
+        marginLeft: "5px",
+        verticalAlign: "middle",
+      }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onClick={(e) => {
+        e.stopPropagation();
+        setHover((prev) => !prev);
+      }}
+    >
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "15px",
+          height: "15px",
+          borderRadius: "50%",
+          fontSize: "9.5px",
+          fontWeight: 700,
+          background: hover ? palette.text : palette.softBg,
+          color: hover ? palette.cardBg : palette.textMuted,
+          border: `1px solid ${palette.cardBorder}`,
+          cursor: "pointer",
+          userSelect: "none",
+          transition: "all 0.15s ease",
+          lineHeight: 1,
+        }}
+      >
+        i
+      </span>
+
+      {hover && (
+        <span
+          style={{
+            position: "absolute",
+            bottom: "calc(100% + 6px)",
+            left: "0",
+            transform: "translateX(-15%)",
+            background: "#0f172a",
+            color: "#f8fafc",
+            fontSize: "11px",
+            fontWeight: 500,
+            padding: "6px 10px",
+            borderRadius: "7px",
+            whiteSpace: "normal",
+            wordBreak: "break-word",
+            boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
+            border: "1px solid rgba(255,255,255,0.15)",
+            zIndex: 1000,
+            pointerEvents: "none",
+            lineHeight: 1.35,
+            width: "max-content",
+            maxWidth: "200px",
+            textAlign: "left",
+            boxSizing: "border-box",
+          }}
+        >
+          {text}
+        </span>
+      )}
+    </span>
+  );
+};
+
+const FreeShippingProgress: React.FC<{
+  subtotal: number;
+  threshold: number;
+  remaining: number;
+  shippingWaived: boolean;
+  accentColor: string;
+  palette: any;
+}> = ({ subtotal, threshold, remaining, shippingWaived, accentColor, palette }) => {
+  if (!threshold || threshold <= 0) return null;
+  const isUnlocked = shippingWaived || remaining <= 0;
+  const progressPercent = Math.min(100, Math.max(0, Math.round((subtotal / threshold) * 100)));
+
+  return (
+    <div
+      style={{
+        padding: "12px 14px",
+        borderRadius: "12px",
+        background: isUnlocked ? palette.successBg : palette.softBg,
+        border: `1px solid ${isUnlocked ? "rgba(34, 197, 94, 0.25)" : palette.cardBorder}`,
+        marginBottom: "14px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "8px",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+        <div style={{ fontSize: "13px", fontWeight: 600 }}>
+          <span style={{ color: isUnlocked ? palette.successText : palette.text }}>
+            {isUnlocked ? (
+              "You have unlocked Free Delivery!"
+            ) : (
+              <>
+                Add <strong style={{ color: accentColor }}>₹{remaining}</strong> more for <strong>Free Delivery</strong>
+              </>
+            )}
+          </span>
+        </div>
+        <span style={{ fontSize: "11.5px", fontWeight: 700, color: isUnlocked ? palette.successText : palette.textMuted }}>
+          {progressPercent}%
+        </span>
+      </div>
+
+      {/* Progress Track */}
+      <div
+        style={{
+          width: "100%",
+          height: "6px",
+          borderRadius: "999px",
+          background: isUnlocked ? "rgba(34, 197, 94, 0.2)" : "rgba(0, 0, 0, 0.08)",
+          overflow: "hidden",
+          position: "relative",
+        }}
+      >
+        <div
+          style={{
+            height: "100%",
+            width: `${progressPercent}%`,
+            borderRadius: "999px",
+            background: isUnlocked
+              ? "linear-gradient(90deg, #22c55e, #16a34a)"
+              : `linear-gradient(90deg, ${accentColor}, ${accentColor})`,
+            transition: "width 0.35s ease",
+          }}
+        />
+      </div>
+    </div>
+  );
+};
+
 const CartSidebar: React.FC<CartSidebarProps> = ({
   mode = "cart",
   title,
@@ -263,15 +417,37 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   theme,
   accentColor,
   paymentMethod,
+  appliedCoupon: propAppliedCoupon,
+  onCouponApplied: propOnCouponApplied,
+  onCouponRemoved: propOnCouponRemoved,
+  embeddedInEditorWrapper,
 }) => {
-  const { cartItems, updateQuantity, removeFromCart, clearCart } = useCart();
+  const {
+    cartItems,
+    updateQuantity,
+    removeFromCart,
+    clearCart,
+    appliedCoupon: cartContextCoupon,
+    setAppliedCoupon: setCartContextCoupon,
+    clearAppliedCoupon,
+  } = useCart();
   const { siteId, slug } = useParams();
 
-  const [promoCode, setPromoCode] = useState("");
-  const [appliedCode, setAppliedCode] = useState("");
-  const [windowWidth, setWindowWidth] = useState(
-    typeof window !== "undefined" ? window.innerWidth : 1280
-  );
+  const appliedCoupon = propAppliedCoupon !== undefined ? propAppliedCoupon : cartContextCoupon;
+  const handleCouponApplied = (coupon: ValidatedCoupon) => {
+    setCartContextCoupon(coupon);
+    propOnCouponApplied?.(coupon);
+  };
+  const handleCouponRemoved = () => {
+    clearAppliedCoupon();
+    propOnCouponRemoved?.();
+  };
+
+  const [screenSize, setScreenSize] = useState<{ isMobile: boolean; isTablet: boolean }>(() => {
+    if (typeof window === "undefined") return { isMobile: false, isTablet: false };
+    const w = window.innerWidth;
+    return { isMobile: w < 768, isTablet: w >= 768 && w < 1024 };
+  });
   const [checkoutSettings, setCheckoutSettings] =
     useState<CheckoutSettingsResponse | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(false);
@@ -281,10 +457,29 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const onResize = () => setWindowWidth(window.innerWidth);
-    onResize();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    let timeoutId: any = null;
+    const checkBreakpoints = () => {
+      const w = window.innerWidth;
+      const nextMobile = w < 768;
+      const nextTablet = w >= 768 && w < 1024;
+      setScreenSize((prev) => {
+        if (prev.isMobile === nextMobile && prev.isTablet === nextTablet) {
+          return prev;
+        }
+        return { isMobile: nextMobile, isTablet: nextTablet };
+      });
+    };
+
+    const debouncedResize = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(checkBreakpoints, 150);
+    };
+
+    window.addEventListener("resize", debouncedResize, { passive: true });
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      window.removeEventListener("resize", debouncedResize);
+    };
   }, []);
 
   useEffect(() => {
@@ -340,8 +535,8 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     return () => controller.abort();
   }, [siteId, slug]);
 
-  const isMobile = windowWidth < 768;
-  const isTablet = windowWidth >= 768 && windowWidth < 1024;
+  const isMobile = screenSize.isMobile;
+  const isTablet = screenSize.isTablet;
   const isCheckoutSummary = mode === "checkout_summary";
 
   const shouldShowItems = show_items && !review_mode;
@@ -353,6 +548,12 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     : siteId
     ? `/builder/${siteId}/checkout`
     : "/admin/sites";
+
+  const explorePath = slug
+    ? `/store/${slug}`
+    : siteId
+    ? `/builder/${siteId}`
+    : "/";
 
   const heading = title || (isCheckoutSummary ? "Order summary" : "Your cart");
   const emptyHeading = empty_title || "Your cart is empty";
@@ -368,13 +569,13 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   const fallbackTaxLabel = tax_label || "Tax";
   const subtotalLabel = subtotal_label || "Subtotal";
   const totalLabel = total_label || "Total";
-  const footerNote = note || "Final charges will be validated at checkout.";
+  const footerNote = note || (isCheckoutSummary ? "" : "Final charges will be validated at checkout.");
 
   const isDark =
-    (theme?.primary_bg ? isColorDarkHex(theme.primary_bg) : false) ||
+    theme?.mode === "dark" ||
     (background_color ? isColorDarkHex(background_color) : false) ||
-    (theme?.text_color ? !isColorDarkHex(theme.text_color) : false) ||
-    theme?.mode === "dark";
+    (panel_color ? isColorDarkHex(panel_color) : false) ||
+    (theme?.primary_bg ? isColorDarkHex(theme.primary_bg) : false);
 
   const resolvedAccentColor =
     accent_color ||
@@ -397,14 +598,32 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
 
   const hasFestiveTint = Boolean(theme?.festival_theme);
 
-  const outerRadius = clamp(border_radius ?? 24, 0, 40);
-  const innerRadius = clamp(card_radius ?? 18, 0, 32);
-  const resolvedMaxWidth = clamp(
-    max_width ?? (isCheckoutSummary ? 1200 : 1240),
-    240,
-    1400
+  const parseSafeNum = (val: any, fallback: number) => {
+    if (val === undefined || val === null || val === "") return fallback;
+    const n = Number(val);
+    return isNaN(n) ? fallback : n;
+  };
+
+  const resolveMaxWidthStyle = (val: any, fallback = "1280px") => {
+    if (!val) return fallback;
+    const str = String(val).trim();
+    if (str === "100%" || str === "full" || str === "100") return "100%";
+    if (str.endsWith("px") || str.endsWith("%")) return str;
+    const num = Number(str);
+    if (!isNaN(num)) {
+      return num <= 100 ? `${num}%` : `${num}px`;
+    }
+    return fallback;
+  };
+
+  const outerRadius = clamp(parseSafeNum(border_radius, 24), 0, 40);
+  const innerRadius = clamp(parseSafeNum(card_radius, 18), 0, 32);
+  const resolvedMaxWidth = resolveMaxWidthStyle(max_width, "1280px");
+  const resolvedMinHeight = clamp(
+    parseSafeNum(min_height, 380),
+    280,
+    650
   );
-  const resolvedMinHeight = clamp(min_height ?? 0, 0, 1600);
 
   const palette = useMemo(() => {
     const pageBg = resolvedPrimaryBg;
@@ -412,12 +631,12 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     const dynamicShellBorder =
       border_color ||
       (isCheckoutSummary ? (theme as any)?.summary_border_color : (theme as any)?.cart_border_color) ||
-      alpha(resolvedTextColor, isDark ? 0.12 : 0.08);
+      (isDark ? "rgba(255, 255, 255, 0.14)" : "rgba(15, 23, 42, 0.09)");
 
     const dynamicCardBorder =
       border_color ||
       (isCheckoutSummary ? (theme as any)?.summary_border_color : (theme as any)?.cart_border_color) ||
-      alpha(resolvedTextColor, isDark ? 0.09 : 0.06);
+      (isDark ? "rgba(255, 255, 255, 0.11)" : "rgba(15, 23, 42, 0.07)");
 
     if (!isDark) {
       const shellBg =
@@ -470,24 +689,25 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     const shellBg =
       panel_color ||
       background_color ||
+      (theme as any)?.cart_panel_bg ||
       (theme as any)?.cart_bg ||
       (hasFestiveTint
-        ? mixHex(pageBg, "#ffffff", 0.08)
-        : mixHex(pageBg, "#ffffff", 0.04));
+        ? mixHex(pageBg, "#ffffff", 0.09)
+        : mixHex(pageBg, "#ffffff", 0.07));
     const panelBg =
       panel_color ||
       background_color ||
       (theme as any)?.cart_panel_bg ||
       (theme as any)?.cart_bg ||
       (hasFestiveTint
-        ? mixHex(pageBg, "#ffffff", 0.12)
-        : mixHex(pageBg, "#ffffff", 0.06));
+        ? mixHex(pageBg, "#ffffff", 0.13)
+        : mixHex(pageBg, "#ffffff", 0.10));
     const cardBg =
       card_color ||
       (theme as any)?.cart_card_bg ||
       (hasFestiveTint
-        ? mixHex(mixHex(pageBg, "#ffffff", 0.14), resolvedAccentColor, 0.06)
-        : mixHex(pageBg, "#ffffff", 0.09));
+        ? mixHex(mixHex(pageBg, "#ffffff", 0.16), resolvedAccentColor, 0.08)
+        : mixHex(pageBg, "#ffffff", 0.14));
     const mutedBg = mixHex(pageBg, "#000000", 0.12);
     const inputBg = card_color || mixHex(pageBg, "#000000", 0.15);
     const quantityBg = mixHex(pageBg, "#000000", 0.12);
@@ -537,10 +757,8 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     0
   );
 
-  const promoDiscount =
-    appliedCode.trim().toLowerCase() === "save10"
-      ? Math.round(subtotal * 0.1)
-      : 0;
+  const isCouponFreeShipping = appliedCoupon?.discountType === "free_shipping";
+  const promoDiscount = appliedCoupon && !isCouponFreeShipping ? appliedCoupon.discountAmount : 0;
 
   const subtotalAfterDiscount = Math.max(subtotal - promoDiscount, 0);
   const normalizedPaymentMethod = normalizePaymentMethod(paymentMethod);
@@ -616,10 +834,6 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
       ? Math.max(freeShippingThreshold - subtotalAfterDiscount, 0)
       : 0;
 
-  const handleApplyPromo = () => {
-    setAppliedCode(promoCode.trim());
-  };
-
   const toggleOptionalCharge = (chargeId: string) => {
     setSelectedOptionalChargeIds((prev) =>
       prev.includes(chargeId)
@@ -651,12 +865,12 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
         <h4
           style={{
             margin: "0 0 12px",
-            fontSize: "16px",
+            fontSize: "15px",
             fontWeight: 700,
             color: palette.text,
           }}
         >
-          Optional add-ons
+          Add-ons
         </h4>
 
         <div style={{ display: "grid", gap: "10px" }}>
@@ -666,6 +880,11 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
               charge,
               subtotalAfterDiscount
             );
+
+            const hasValidDescription =
+              charge.description &&
+              !charge.description.toLowerCase().includes("optional checkout") &&
+              !charge.description.toLowerCase().includes("selected by customer");
 
             return (
               <label
@@ -706,7 +925,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                     >
                       {charge.label}
                     </div>
-                    {charge.description ? (
+                    {hasValidDescription ? (
                       <div
                         style={{
                           marginTop: "4px",
@@ -761,6 +980,24 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
       </h4>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        {show_promo !== false && (
+          <div style={{ marginBottom: "6px" }}>
+            <PromoCodeInput
+              siteId={siteId || slug || ""}
+              subtotal={subtotal}
+              deliveryFee={shippingCharge}
+              appliedCoupon={appliedCoupon}
+              onCouponApplied={handleCouponApplied}
+              onCouponRemoved={handleCouponRemoved}
+              accentColor={resolvedAccentColor}
+              textColor={palette.text}
+              cardBg={palette.cardBg}
+              inputBg={palette.inputBg}
+              borderColor={palette.cardBorder}
+            />
+          </div>
+        )}
+
         <div
           style={{
             display: "flex",
@@ -782,10 +1019,11 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
               gap: "12px",
               color: palette.successText,
               fontSize: "14px",
+              fontWeight: 600,
             }}
           >
-            <span>Discount</span>
-            <span>-₹{promoDiscount}</span>
+            <span>Promo Discount ({appliedCoupon?.code})</span>
+            <span>-₹{promoDiscount.toFixed(2)}</span>
           </div>
         ) : null}
 
@@ -796,57 +1034,62 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
             gap: "12px",
             color: palette.textMuted,
             fontSize: "14px",
+            alignItems: "center",
           }}
         >
-          <span>{shippingRule?.label || shippingLabel}</span>
-          <span style={{ color: palette.text }}>
+          <span style={{ display: "inline-flex", alignItems: "center" }}>
+            {shippingRule?.label || shippingLabel}
+            {shippingRule && (
+              <ChargeInfoTooltip
+                text={
+                  freeShippingThreshold > 0
+                    ? `Free delivery on orders above ₹${freeShippingThreshold}`
+                    : "Standard delivery fee"
+                }
+                palette={palette}
+              />
+            )}
+          </span>
+          <span style={{ color: shippingWaived ? palette.successText : palette.text, fontWeight: shippingWaived ? 700 : 500 }}>
             {shippingWaived ? "Free" : shippingCharge > 0 ? `₹${shippingCharge}` : "₹0"}
           </span>
         </div>
 
-        {shippingRule && shippingWaived ? (
-          <div
-            style={{
-              padding: "10px 12px",
-              borderRadius: "10px",
-              background: palette.successBg,
-              color: palette.successText,
-              fontSize: "13px",
-              lineHeight: 1.5,
-            }}
-          >
-            {shippingRule.label} waived for this order.
-          </div>
-        ) : shippingRule && freeShippingThreshold > 0 && remainingForFreeShipping > 0 ? (
-          <div
-            style={{
-              padding: "10px 12px",
-              borderRadius: "10px",
-              background: palette.softBg,
-              color: palette.textMuted,
-              fontSize: "13px",
-              lineHeight: 1.5,
-            }}
-          >
-            Add ₹{remainingForFreeShipping} more to waive {shippingRule.label.toLowerCase()}.
-          </div>
-        ) : null}
+        {nonShippingCharges.map((charge) => {
+          const tooltipParts: string[] = [];
+          if (charge.refundable === false) tooltipParts.push("Non-refundable");
+          if (charge.waiveConditionType === "subtotal_gte" && charge.waiveConditionValue) {
+            tooltipParts.push(`Waived above ₹${charge.waiveConditionValue}`);
+          }
+          if (
+            charge.description &&
+            !charge.description.toLowerCase().includes("optional checkout") &&
+            !charge.description.toLowerCase().includes("selected by customer")
+          ) {
+            tooltipParts.push(charge.description);
+          }
+          const tooltipText = tooltipParts.join(". ");
 
-        {nonShippingCharges.map((charge) => (
-          <div
-            key={charge.id}
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              gap: "12px",
-              color: palette.textMuted,
-              fontSize: "14px",
-            }}
-          >
-            <span>{charge.label}</span>
-            <span style={{ color: palette.text }}>₹{charge.calculatedAmount}</span>
-          </div>
-        ))}
+          return (
+            <div
+              key={charge.id}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: "12px",
+                color: palette.textMuted,
+                fontSize: "14px",
+                alignItems: "center",
+              }}
+            >
+              <span style={{ display: "inline-flex", alignItems: "center" }}>
+                {charge.label}
+                {tooltipText ? <ChargeInfoTooltip text={tooltipText} palette={palette} /> : null}
+              </span>
+              <span style={{ color: palette.text }}>₹{charge.calculatedAmount}</span>
+            </div>
+          );
+        })}
 
         {taxSettings?.enabled ? (
           <div
@@ -856,9 +1099,16 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
               gap: "12px",
               color: palette.textMuted,
               fontSize: "14px",
+              alignItems: "center",
             }}
           >
-            <span>{taxSettings.label || fallbackTaxLabel}</span>
+            <span style={{ display: "inline-flex", alignItems: "center" }}>
+              {taxSettings.label || fallbackTaxLabel}
+              <ChargeInfoTooltip
+                text={taxSettings.rate ? `Applied at ${taxSettings.rate}%` : "Calculated at checkout"}
+                palette={palette}
+              />
+            </span>
             <span style={{ color: palette.text }}>₹{tax}</span>
           </div>
         ) : null}
@@ -901,16 +1151,18 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
         </div>
       </div>
 
-      <p
-        style={{
-          margin: "14px 0 16px",
-          fontSize: "13px",
-          color: palette.textMuted,
-          lineHeight: 1.5,
-        }}
-      >
-        {settingsLoading ? "Updating charges..." : footerNote}
-      </p>
+      {(footerNote || settingsLoading) && (
+        <p
+          style={{
+            margin: "14px 0 16px",
+            fontSize: "13px",
+            color: palette.textMuted,
+            lineHeight: 1.5,
+          }}
+        >
+          {settingsLoading ? "Updating charges..." : footerNote}
+        </p>
+      )}
 
       {cartItems.length > 0 ? (
         <Link
@@ -1039,6 +1291,14 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
               </div>
             ) : (
               <>
+                <FreeShippingProgress
+                  subtotal={subtotalAfterDiscount}
+                  threshold={freeShippingThreshold}
+                  remaining={remainingForFreeShipping}
+                  shippingWaived={shippingWaived}
+                  accentColor={resolvedAccentColor}
+                  palette={palette}
+                />
                 {shouldShowItems ? (
                   <div style={{ display: "grid", gap: "12px" }}>
                     {cartItems.map((item, index) => (
@@ -1066,8 +1326,10 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                           }}
                         >
                           <img
-                            src={item.image}
+                            src={getThumbnailUrl(item.image, 140, 140)}
                             alt={item.name}
+                            loading="eager"
+                            decoding="async"
                             style={{
                               width: "100%",
                               height: "100%",
@@ -1135,86 +1397,6 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
 
                 {shouldShowGiftCard ? optionalChargePicker : null}
 
-                {shouldShowPromo ? (
-                  <div
-                    style={{
-                      borderRadius: `${innerRadius}px`,
-                      background: palette.cardBg,
-                      border: `1px solid ${palette.cardBorder}`,
-                      boxShadow: palette.cardShadow,
-                      padding: "16px",
-                    }}
-                  >
-                    <h4
-                      style={{
-                        margin: "0 0 12px",
-                        fontSize: "15px",
-                        fontWeight: 700,
-                        color: palette.text,
-                      }}
-                    >
-                      {promoTitle}
-                    </h4>
-
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: isMobile ? "1fr" : "1fr auto",
-                        gap: "10px",
-                      }}
-                    >
-                      <input
-                        type="text"
-                        value={promoCode}
-                        onChange={(e) => setPromoCode(e.target.value)}
-                        placeholder={promoPlaceholder}
-                        style={{
-                          minHeight: "44px",
-                          borderRadius: "12px",
-                          border: `1px solid ${palette.cardBorder}`,
-                          background: palette.inputBg,
-                          color: palette.text,
-                          padding: "0 14px",
-                          outline: "none",
-                        }}
-                      />
-
-                      <button
-                        type="button"
-                        onClick={handleApplyPromo}
-                        style={{
-                          minHeight: "44px",
-                          border: "none",
-                          borderRadius: "12px",
-                          background: resolvedAccentColor,
-                          color: isColorDarkHex(resolvedAccentColor) ? "#ffffff" : "#0f172a",
-                          padding: "0 16px",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          width: isMobile ? "100%" : "auto",
-                        }}
-                      >
-                        {promoButtonLabel}
-                      </button>
-                    </div>
-
-                    {appliedCode ? (
-                      <p
-                        style={{
-                          margin: "10px 0 0",
-                          fontSize: "13px",
-                          color: palette.successText,
-                          background: palette.successBg,
-                          borderRadius: "10px",
-                          padding: "10px 12px",
-                        }}
-                      >
-                        Promo code <strong>{appliedCode}</strong> applied.
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-
                 {show_summary ? summaryCard : null}
               </>
             )}
@@ -1227,11 +1409,17 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   return (
     <section
       style={{
-        padding: isMobile ? "16px 12px 32px" : "20px 12px 36px",
-        maxWidth: `${resolvedMaxWidth}px`,
-        minHeight: resolvedMinHeight > 0 ? `${resolvedMinHeight}px` : undefined,
+        padding: embeddedInEditorWrapper
+          ? 0
+          : isMobile
+          ? "16px 0 28px"
+          : "24px 0 36px",
+        width: "100%",
+        maxWidth: resolvedMaxWidth,
+        minHeight: resolvedMinHeight ? `${resolvedMinHeight}px` : undefined,
         margin: "0 auto",
         background: "transparent",
+        boxSizing: "border-box",
       }}
     >
       <div
@@ -1241,17 +1429,22 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
           borderRadius: `${outerRadius}px`,
           overflow: "hidden",
           boxShadow: palette.shadow,
+          minHeight: `${resolvedMinHeight}px`,
+          width: "100%",
+          boxSizing: "border-box",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
         <div
           style={{
-            padding: isMobile ? "18px 16px 16px" : "22px 22px 18px",
+            padding: isMobile ? "16px 14px" : "20px 24px 18px",
             borderBottom: `1px solid ${palette.shellBorder}`,
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "flex-start",
-            gap: "16px",
-            flexWrap: "wrap",
+            alignItems: isMobile ? "center" : "flex-start",
+            gap: "12px",
+            flexWrap: isMobile ? "nowrap" : "wrap",
             background: palette.headerBg,
           }}
         >
@@ -1259,7 +1452,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
             <h3
               style={{
                 margin: 0,
-                fontSize: isMobile ? "24px" : "clamp(22px, 2vw, 30px)",
+                fontSize: isMobile ? "20px" : "clamp(22px, 2vw, 30px)",
                 lineHeight: 1.05,
                 letterSpacing: "-0.03em",
                 color: palette.text,
@@ -1270,9 +1463,9 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
 
             <p
               style={{
-                margin: "8px 0 0",
+                margin: isMobile ? "4px 0 0" : "8px 0 0",
                 color: palette.textMuted,
-                fontSize: "14px",
+                fontSize: isMobile ? "12px" : "14px",
               }}
             >
               {totalItems} item{totalItems !== 1 ? "s" : ""} in your cart
@@ -1286,12 +1479,14 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                 border: `1px solid ${palette.shellBorder}`,
                 background: palette.softBg,
                 color: palette.text,
-                borderRadius: "12px",
+                borderRadius: isMobile ? "10px" : "12px",
                 cursor: "pointer",
-                padding: "10px 14px",
-                fontSize: "13px",
+                padding: isMobile ? "6px 12px" : "10px 14px",
+                fontSize: isMobile ? "12px" : "13px",
                 fontWeight: 600,
-                width: isMobile ? "100%" : "auto",
+                width: "auto",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
               }}
             >
               {clearText}
@@ -1301,26 +1496,49 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
 
         <div
           style={{
-            padding: isMobile ? "14px" : "18px",
+            padding: isMobile ? "16px 14px" : "22px 24px 28px",
             background: palette.panelBg,
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
           }}
         >
           {cartItems.length === 0 ? (
             <div
               style={{
-                padding: "56px 18px",
+                padding: isMobile ? "32px 16px" : "48px 24px",
+                minHeight: `${Math.max(180, resolvedMinHeight - 140)}px`,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
                 textAlign: "center",
                 borderRadius: `${innerRadius}px`,
                 border: `1px solid ${palette.cardBorder}`,
-                background: palette.panelBg,
+                background: palette.cardBg,
                 boxShadow: "none",
+                flex: 1,
               }}
             >
-              <div style={{ fontSize: "42px", marginBottom: "12px" }}>🛍️</div>
+              <div style={{ marginBottom: "14px", display: "flex", justifyContent: "center", color: palette.textMuted }}>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ width: "44px", height: "44px" }}
+                >
+                  <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+                  <path d="M3 6h18" />
+                  <path d="M16 10a4 4 0 0 1-8 0" />
+                </svg>
+              </div>
               <p
                 style={{
                   margin: 0,
-                  fontSize: "18px",
+                  fontSize: "19px",
                   fontWeight: 700,
                   color: palette.text,
                 }}
@@ -1338,6 +1556,27 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
               >
                 {emptyText}
               </p>
+              <Link
+                to={explorePath}
+                style={{
+                  marginTop: "20px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "9px 22px",
+                  borderRadius: "10px",
+                  background: resolvedAccentColor,
+                  color: "#ffffff",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  textDecoration: "none",
+                  cursor: "pointer",
+                  boxShadow: `0 2px 8px ${alpha(resolvedAccentColor, 0.3)}`,
+                  transition: "opacity 0.15s ease",
+                }}
+              >
+                Explore Products
+              </Link>
             </div>
           ) : (
             <div
@@ -1355,6 +1594,14 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                   gap: "14px",
                 }}
               >
+                <FreeShippingProgress
+                  subtotal={subtotalAfterDiscount}
+                  threshold={freeShippingThreshold}
+                  remaining={remainingForFreeShipping}
+                  shippingWaived={shippingWaived}
+                  accentColor={resolvedAccentColor}
+                  palette={palette}
+                />
                 {cartItems.map((item, index) => (
                   <div
                     key={`${item.id}-${item.selectedVariantValue || "default"}-${index}`}
@@ -1383,8 +1630,10 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                       }}
                     >
                       <img
-                        src={item.image}
+                        src={getThumbnailUrl(item.image, 180, 180)}
                         alt={item.name}
+                        loading="eager"
+                        decoding="async"
                         style={{
                           width: "100%",
                           height: "100%",
@@ -1459,9 +1708,9 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                         style={{
                           display: "flex",
                           justifyContent: "space-between",
-                          alignItems: isMobile ? "stretch" : "center",
-                          gap: "12px",
-                          flexWrap: isMobile ? "wrap" : "nowrap",
+                          alignItems: "center",
+                          gap: "10px",
+                          marginTop: isMobile ? "6px" : "0",
                         }}
                       >
                         <div
@@ -1472,7 +1721,8 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                             border: `1px solid ${palette.cardBorder}`,
                             background: palette.quantityBg,
                             overflow: "hidden",
-                            minHeight: "42px",
+                            minHeight: isMobile ? "34px" : "42px",
+                            height: isMobile ? "34px" : "42px",
                           }}
                         >
                           <button
@@ -1485,13 +1735,17 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                               )
                             }
                             style={{
-                              width: "40px",
-                              height: "42px",
+                              width: isMobile ? "32px" : "40px",
+                              height: isMobile ? "34px" : "42px",
                               border: "none",
                               background: "transparent",
                               color: palette.text,
-                              fontSize: "18px",
+                              fontSize: isMobile ? "16px" : "18px",
                               cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              padding: 0,
                             }}
                           >
                             -
@@ -1499,9 +1753,9 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
 
                           <div
                             style={{
-                              minWidth: "42px",
+                              minWidth: isMobile ? "32px" : "42px",
                               textAlign: "center",
-                              fontSize: "14px",
+                              fontSize: isMobile ? "13px" : "14px",
                               fontWeight: 700,
                               color: palette.text,
                             }}
@@ -1519,13 +1773,17 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                               )
                             }
                             style={{
-                              width: "40px",
-                              height: "42px",
+                              width: isMobile ? "32px" : "40px",
+                              height: isMobile ? "34px" : "42px",
                               border: "none",
                               background: "transparent",
                               color: palette.text,
-                              fontSize: "18px",
+                              fontSize: isMobile ? "16px" : "18px",
                               cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              padding: 0,
                             }}
                           >
                             +
@@ -1542,12 +1800,16 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                           }
                           style={{
                             border: "none",
-                            background: "transparent",
+                            background: isMobile ? palette.softBg : "transparent",
                             color: palette.danger,
                             cursor: "pointer",
-                            fontSize: "13px",
-                            fontWeight: 700,
-                            padding: 0,
+                            fontSize: isMobile ? "12px" : "13px",
+                            fontWeight: 600,
+                            padding: isMobile ? "6px 10px" : 0,
+                            borderRadius: isMobile ? "8px" : 0,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
                           }}
                         >
                           {removeText}
@@ -1568,86 +1830,6 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                 }}
               >
                 {optionalChargePicker}
-
-                {show_promo ? (
-                  <div
-                    style={{
-                      borderRadius: `${innerRadius}px`,
-                      background: palette.cardBg,
-                      border: `1px solid ${palette.cardBorder}`,
-                      boxShadow: palette.cardShadow,
-                      padding: "16px",
-                    }}
-                  >
-                    <h4
-                      style={{
-                        margin: "0 0 12px",
-                        fontSize: "15px",
-                        fontWeight: 700,
-                        color: palette.text,
-                      }}
-                    >
-                      {promoTitle}
-                    </h4>
-
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: isMobile ? "1fr" : "1fr auto",
-                        gap: "10px",
-                      }}
-                    >
-                      <input
-                        type="text"
-                        value={promoCode}
-                        onChange={(e) => setPromoCode(e.target.value)}
-                        placeholder={promoPlaceholder}
-                        style={{
-                          minHeight: "44px",
-                          borderRadius: "12px",
-                          border: `1px solid ${palette.cardBorder}`,
-                          background: palette.inputBg,
-                          color: palette.text,
-                          padding: "0 14px",
-                          outline: "none",
-                        }}
-                      />
-
-                      <button
-                        type="button"
-                        onClick={handleApplyPromo}
-                        style={{
-                          minHeight: "44px",
-                          border: "none",
-                          borderRadius: "12px",
-                          background: resolvedAccentColor,
-                          color: isColorDarkHex(resolvedAccentColor) ? "#ffffff" : "#0f172a",
-                          padding: "0 16px",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          width: isMobile ? "100%" : "auto",
-                        }}
-                      >
-                        {promoButtonLabel}
-                      </button>
-                    </div>
-
-                    {appliedCode ? (
-                      <p
-                        style={{
-                          margin: "10px 0 0",
-                          fontSize: "13px",
-                          color: palette.successText,
-                          background: palette.successBg,
-                          borderRadius: "10px",
-                          padding: "10px 12px",
-                        }}
-                      >
-                        Promo code <strong>{appliedCode}</strong> applied.
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
 
                 {show_summary ? summaryCard : null}
               </div>

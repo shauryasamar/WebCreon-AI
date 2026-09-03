@@ -48,6 +48,20 @@ const ArrowRightIcon = () => (
   </svg>
 );
 
+export function getRiderStorageKey(siteSlug?: string): { sessionKey: string; tokenKey: string } {
+  if (siteSlug && siteSlug.trim()) {
+    const clean = siteSlug.trim().toLowerCase();
+    return {
+      sessionKey: `rider_session_${clean}`,
+      tokenKey: `rider_token_${clean}`,
+    };
+  }
+  return {
+    sessionKey: "rider_session_global",
+    tokenKey: "rider_token_global",
+  };
+}
+
 export default function RiderLoginPage() {
   const { slug, siteId } = useParams<{ slug?: string; siteId?: string }>();
   const navigate = useNavigate();
@@ -76,20 +90,22 @@ export default function RiderLoginPage() {
     }
   }, [slug, siteId]);
 
-  // If already logged in, redirect to dashboard
+  // If already logged in for this specific store, redirect to dashboard
   useEffect(() => {
-    const existingRider = localStorage.getItem("rider_session");
+    const { sessionKey } = getRiderStorageKey(slug || siteId);
+    const existingRider = localStorage.getItem(sessionKey);
     if (existingRider) {
       try {
         const parsed = JSON.parse(existingRider);
         if (parsed?.token) {
-          navigate(slug ? `/store/${slug}/rider/dashboard` : "/rider/dashboard");
+          const targetSlug = parsed.agent?.site_slug || slug || siteId;
+          navigate(targetSlug ? `/store/${targetSlug}/rider/dashboard` : "/rider/dashboard");
         }
       } catch {
         // ignore
       }
     }
-  }, [navigate, slug]);
+  }, [navigate, slug, siteId]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,11 +143,16 @@ export default function RiderLoginPage() {
         throw new Error(data.detail || "Login failed. Please check your mobile number and PIN.");
       }
 
-      // Save session
-      localStorage.setItem("rider_session", JSON.stringify(data));
-      localStorage.setItem("rider_token", data.token);
+      // Save session scoped strictly to this store
+      const targetSlug = data.agent?.site_slug || slug || storeIdentifier.trim();
+      const { sessionKey, tokenKey } = getRiderStorageKey(targetSlug);
+      localStorage.setItem(sessionKey, JSON.stringify(data));
+      localStorage.setItem(tokenKey, data.token);
 
-      const targetSlug = data.agent?.site_slug || slug || storeIdentifier;
+      // Clean up any legacy unscoped keys
+      localStorage.removeItem("rider_session");
+      localStorage.removeItem("rider_token");
+
       navigate(targetSlug ? `/store/${targetSlug}/rider/dashboard` : "/rider/dashboard");
     } catch (err: any) {
       setError(err.message || "Unable to log in. Please check your credentials.");

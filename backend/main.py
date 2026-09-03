@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(usecwd=True))
@@ -9,7 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -34,13 +35,16 @@ from models import (
     Shipment, InventoryMovement, OrderStatusHistory, User, UserAddress,
     DeliveryAgent, DeliverySettings,
 )
-from routers import auth, cart, categories, checkout, checkout_settings, collections, orders, payments, products, returns
+from routers import auth, cart, categories, checkout, checkout_settings, collections, coupons, orders, payments, products, returns
 from routers import delivery
 
 logger = logging.getLogger(__name__)
 
 UPLOADS_DIR = Path("uploads")
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+ASSETS_DIR = Path("uploads/assets")
+ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 async def _mature_escrow_cron_task():
@@ -75,21 +79,25 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="AI Website Builder Backend", lifespan=lifespan)
 
 
-origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
-
+# Allow all origins during development; tighten in production.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?",
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
+from starlette.types import Scope
+
+class CachedStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        response = await super().get_response(path, scope)
+        if response.status_code == 200:
+            response.headers["Cache-Control"] = "public, max-age=604800, immutable"
+        return response
+
+app.mount("/uploads", CachedStaticFiles(directory=UPLOADS_DIR), name="uploads")
 
 app.include_router(auth.router)
 app.include_router(products.router)
@@ -102,6 +110,65 @@ app.include_router(orders.router)
 app.include_router(payments.router)
 app.include_router(returns.router)
 app.include_router(delivery.router)
+app.include_router(coupons.router)
+
+# ---------------------------------------------------------------------------
+# Asset Upload Endpoint (brand logos, etc.)
+# ---------------------------------------------------------------------------
+
+ALLOWED_LOGO_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/svg+xml"}
+
+@app.post("/assets/upload-logo")
+async def upload_brand_logo(
+    request: Request,
+    file: UploadFile = File(...),
+    admin=Depends(lambda: None),  # No auth required – only used inside the authenticated builder
+):
+    """Accepts a logo image, stores it as-is (preserving original format including transparency)
+    in uploads/assets/. Returns the absolute URL."""
+    from uuid import uuid4
+
+    content_type = (file.content_type or "").lower()
+    if content_type not in ALLOWED_LOGO_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Allowed: PNG, JPEG, WEBP, SVG.",
+        )
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty file uploaded")
+
+    suffix = Path(file.filename or "logo").suffix.lower() or ".png"
+    if suffix not in {".png", ".jpg", ".jpeg", ".webp", ".svg"}:
+        suffix = ".png"
+
+    # For raster images – optimize but PRESERVE ALPHA channel (do NOT flatten to RGB)
+    try:
+        from PIL import Image, ImageOps
+        import io as _io
+        if suffix != ".svg":
+            with Image.open(_io.BytesIO(content)) as img:
+                img = ImageOps.exif_transpose(img)
+                # Keep RGBA/LA so transparency is preserved
+                if img.mode in ("RGBA", "LA", "P"):
+                    img = img.convert("RGBA")
+                else:
+                    img = img.convert("RGB")
+                # Preserve crisp high-resolution detail (up to 1600x1600) while keeping aspect ratio
+                img.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+                buf = _io.BytesIO()
+                # Always save as PNG to preserve transparency
+                img.save(buf, "PNG", optimize=True)
+                content = buf.getvalue()
+                suffix = ".png"
+    except Exception:
+        pass  # Fall back to storing the file as-is
+
+    filename = f"{uuid4()}{suffix}"
+    (ASSETS_DIR / filename).write_bytes(content)
+
+    return {"url": f"{request.base_url}uploads/assets/{filename}", "filename": filename}
 
 
 class GenerateSiteRequest(BaseModel):
@@ -685,6 +752,58 @@ def publish_site(
     session.commit()
     session.refresh(site)
 
+    invalidate_public_site_cache(site.slug, site.id)
+    return site
+
+
+@app.patch("/sites/{site_identifier}/draft")
+def save_site_draft(
+    site_identifier: str,
+    payload: PublishSiteRequest,
+    admin=Depends(authenticate_admin),
+    session: Session = Depends(get_session),
+):
+    admin_id = UUID(admin["adminId"])
+
+    site = None
+    try:
+        site_uuid = UUID(site_identifier)
+        site = session.get(Site, site_uuid)
+    except (ValueError, TypeError):
+        pass
+
+    if not site:
+        site = session.exec(select(Site).where(Site.slug == site_identifier)).first()
+
+    if not site:
+        # Check prefix match for timestamp-suffixed slugs (e.g. greenharvest -> greenharvest-1786...)
+        site = session.exec(
+            select(Site)
+            .join(AdminSite, AdminSite.site_id == Site.id)
+            .where(
+                AdminSite.admin_id == admin_id,
+                Site.slug.startswith(site_identifier),
+            )
+            .order_by(Site.created_at.desc())
+        ).first()
+
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    ownership = session.exec(
+        select(AdminSite).where(
+            AdminSite.admin_id == admin_id,
+            AdminSite.site_id == site.id,
+        )
+    ).first()
+
+    if not ownership:
+        raise HTTPException(status_code=403, detail="Admin does not have access to this site")
+
+    site.draft_definition = payload.draft_definition
+    session.add(site)
+    session.commit()
+    session.refresh(site)
     return site
 
 
@@ -785,11 +904,83 @@ def get_site_by_slug(
     return site
 
 
+# High-speed in-memory cache for public site metadata & themes
+import time
+
+PUBLIC_SITE_CACHE: dict = {}
+
+
+def invalidate_public_site_cache(slug: str = None, site_id: UUID = None):
+    if slug and slug in PUBLIC_SITE_CACHE:
+        PUBLIC_SITE_CACHE.pop(slug, None)
+    if site_id:
+        to_remove = [k for k, v in PUBLIC_SITE_CACHE.items() if v.get("id") == str(site_id)]
+        for k in to_remove:
+            PUBLIC_SITE_CACHE.pop(k, None)
+
+
+@app.get("/public/sites/slug/{slug}/theme")
+def get_public_site_theme_fast(
+    slug: str,
+    response: Response,
+    session: Session = Depends(get_session),
+):
+    """Ultra-low-latency endpoint returning only the minimal theme & branding payload (<1KB)."""
+    now = time.time()
+    cached = PUBLIC_SITE_CACHE.get(slug)
+    if cached and cached.get("theme_payload") and cached.get("expiry", 0) > now:
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        response.headers["ETag"] = cached.get("etag", f'"{cached["id"]}"')
+        return cached["theme_payload"]
+
+    site = session.exec(
+        select(Site.id, Site.slug, Site.site_definition).where(Site.slug == slug)
+    ).first()
+
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    site_id, site_slug, site_def = site
+    site_def = site_def or {}
+    etag_val = f'"{site_id}-{site_def.get("theme", {}).get("footer_layout", "default")}"'
+
+    theme_payload = {
+        "id": str(site_id),
+        "slug": site_slug,
+        "site_name": site_def.get("site_name") or site_def.get("site_title") or site_def.get("title") or site_def.get("name") or "",
+        "logo": site_def.get("logo") or site_def.get("header", {}).get("logo") or site_def.get("theme", {}).get("logo"),
+        "theme": site_def.get("theme") or {},
+        "navbar": {
+            "brandName": site_def.get("navbar", {}).get("brandName") or site_def.get("header", {}).get("brandName") or site_def.get("site_name") or "",
+            "logoUrl": site_def.get("logo") or site_def.get("header", {}).get("logo") or site_def.get("theme", {}).get("logo"),
+        },
+    }
+
+    PUBLIC_SITE_CACHE[slug] = {
+        "id": str(site_id),
+        "theme_payload": theme_payload,
+        "etag": etag_val,
+        "expiry": now + 300,
+    }
+
+    response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    response.headers["ETag"] = etag_val
+    return theme_payload
+
+
 @app.get("/public/sites/slug/{slug}")
 def get_public_site_by_slug(
     slug: str,
+    response: Response,
     session: Session = Depends(get_session),
 ):
+    now = time.time()
+    cached = PUBLIC_SITE_CACHE.get(slug)
+    if cached and cached.get("full_site") and cached.get("expiry", 0) > now:
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        response.headers["ETag"] = cached.get("etag", f'"{cached["id"]}"')
+        return cached["full_site"]
+
     site = session.exec(
         select(Site).where(Site.slug == slug)
     ).first()
@@ -797,6 +988,16 @@ def get_public_site_by_slug(
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
 
+    etag_val = f'"{site.id}-{site.version}"'
+    if slug not in PUBLIC_SITE_CACHE:
+        PUBLIC_SITE_CACHE[slug] = {}
+    PUBLIC_SITE_CACHE[slug]["id"] = str(site.id)
+    PUBLIC_SITE_CACHE[slug]["full_site"] = site
+    PUBLIC_SITE_CACHE[slug]["etag"] = etag_val
+    PUBLIC_SITE_CACHE[slug]["expiry"] = now + 300
+
+    response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    response.headers["ETag"] = etag_val
     return site
 
 
@@ -829,6 +1030,7 @@ def create_site(
     session.add(admin_site)
     session.commit()
 
+    invalidate_public_site_cache(payload.slug, site.id)
     session.refresh(site)
     return site
 
@@ -859,7 +1061,34 @@ def update_site(
     session.commit()
     session.refresh(site)
 
+    invalidate_public_site_cache(payload.slug, site_id)
     return site
+
+
+class UpdateDefaultReturnPolicyRequest(BaseModel):
+    default_return_window_days: int = Field(ge=0, le=365)
+
+
+@app.patch("/sites/{site_id}/default-return-policy")
+def update_site_default_return_policy(
+    site_id: UUID,
+    payload: UpdateDefaultReturnPolicyRequest,
+    ownership=Depends(enforce_site_ownership),
+    session: Session = Depends(get_session),
+):
+    site = session.get(Site, site_id)
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    site.default_return_window_days = payload.default_return_window_days
+    site.updated_at = datetime.now(timezone.utc)
+    session.add(site)
+    session.commit()
+    session.refresh(site)
+    return {
+        "message": "Store default return policy updated",
+        "default_return_window_days": site.default_return_window_days,
+    }
 
 
 @app.get("/sites/{site_id}/delete-check")

@@ -49,12 +49,78 @@ def authenticate_customer(
     request: Request,
     customer_token: Optional[str] = Cookie(default=None, alias="customer_token"),
 ):
-    if not customer_token:
-        raise _unauthorized("Customer authentication required")
+    token = None
+    payload = None
 
-    payload = decode_token(customer_token)
+    # Determine target site identifier from path parameters or headers
+    raw_target = (
+        request.path_params.get("website_name")
+        or request.path_params.get("site_id")
+        or request.headers.get("X-Site-Id")
+    )
+    target_site_str = str(raw_target).strip().lower() if raw_target else None
+
+    # 1. First priority: Authorization header (Bearer <token>)
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        candidate = auth_header.replace("Bearer ", "").strip()
+        p = decode_token(candidate)
+        if p and p.get("tokenType") == "customer":
+            token = candidate
+            payload = p
+
+    # 2. Second priority: Custom X-Customer-Token header
     if not payload:
-        raise _unauthorized("Invalid or expired customer token")
+        header_token = request.headers.get("X-Customer-Token")
+        if header_token:
+            p = decode_token(header_token)
+            if p and p.get("tokenType") == "customer":
+                token = header_token
+                payload = p
+
+    # 3. Third priority: Direct tenant-scoped cookie match
+    if not payload and request.cookies and target_site_str:
+        clean_base = target_site_str.split("-")[0]
+        cookie_keys_to_try = [
+            f"customer_token_{target_site_str}",
+            f"customer_token_{clean_base}",
+        ]
+        if raw_target:
+            cookie_keys_to_try.append(f"customer_token_{raw_target}")
+
+        for k in cookie_keys_to_try:
+            cand = request.cookies.get(k)
+            if cand:
+                p = decode_token(cand)
+                if p and p.get("tokenType") == "customer":
+                    token = cand
+                    payload = p
+                    break
+
+    # 4. Fourth priority: Scan all tenant cookies in cookie jar for matching siteId
+    if not payload and request.cookies and target_site_str:
+        clean_base = target_site_str.split("-")[0]
+        for c_name, c_val in request.cookies.items():
+            if c_name.startswith("customer_token_") and c_val:
+                p = decode_token(c_val)
+                if p and p.get("tokenType") == "customer":
+                    p_site = str(p.get("siteId", "")).lower()
+                    if p_site == target_site_str or c_name.endswith(f"_{target_site_str}") or c_name.endswith(f"_{clean_base}"):
+                        token = c_val
+                        payload = p
+                        break
+
+    # 5. Fifth priority: Generic customer_token cookie ONLY IF it matches target site (or target site unknown)
+    if not payload and customer_token:
+        p = decode_token(customer_token)
+        if p and p.get("tokenType") == "customer":
+            p_site = str(p.get("siteId", "")).lower()
+            if not target_site_str or p_site == target_site_str:
+                token = customer_token
+                payload = p
+
+    if not token or not payload:
+        raise _unauthorized("Customer authentication required")
 
     if payload.get("tokenType") != "customer":
         raise _unauthorized("Invalid customer token")

@@ -9,6 +9,7 @@ type BuilderTopControlBarProps = {
   userName?: string;
   userEmail?: string;
   avatarUrl?: string;
+  gender?: string;
 };
 
 export default function BuilderTopControlBar({
@@ -18,6 +19,7 @@ export default function BuilderTopControlBar({
   userName,
   userEmail,
   avatarUrl,
+  gender,
 }: BuilderTopControlBarProps) {
   const [logoutHovered, setLogoutHovered] = useState(false);
 
@@ -44,6 +46,7 @@ export default function BuilderTopControlBar({
 
   return (
     <div
+      className="builder-top-control-bar-root"
       style={{
         height: "100%",
         display: "flex",
@@ -51,8 +54,18 @@ export default function BuilderTopControlBar({
         justifyContent: "space-between",
         padding: "0 20px",
         background: "#ffffff",
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
     >
+      <style>{`
+        .builder-top-control-bar-root,
+        .builder-top-control-bar-root button,
+        .builder-top-control-bar-root div,
+        .builder-top-control-bar-root span,
+        .builder-top-control-bar-root p {
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+        }
+      `}</style>
       <button
         type="button"
         onClick={onGoDashboard}
@@ -102,7 +115,7 @@ export default function BuilderTopControlBar({
             padding: "4px 0",
           }}
         >
-          <UserAvatar size={34} avatarUrl={avatarUrl} variant="yellow" />
+          <UserAvatar size={34} avatarUrl={avatarUrl} gender={gender} variant="yellow" />
           <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <span style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a", lineHeight: 1.2 }}>
               {displayName}

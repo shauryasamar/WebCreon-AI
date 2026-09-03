@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { Pagination } from "../Component/Pagination";
 import { resolveThemeTokens } from "../context/ThemeContext";
+import { getThumbnailUrl } from "../utils/imageOptimizer";
+import { getCustomerAuthHeaders } from "../utils/customerAuthFetch";
 
 type RefundInfo = {
   status: string;
@@ -58,6 +60,7 @@ type OrderItem = {
   line_total: number;
   status: string;
   returnable_quantity: number;
+  return_window_days?: number | null;
   is_returnable?: boolean;
   max_returnable_quantity?: number;
   pricing_snapshot?: any;
@@ -122,6 +125,8 @@ type CustomerReturnListItem = {
   refund_override_reason?: string | null;
   suggested_refund_amount: number;
   final_refund_amount: number;
+  pickup_status?: string | null;
+  pickup_details?: any;
   refund_method?: string | null;
   approved_at?: string | null;
   rejected_at?: string | null;
@@ -162,6 +167,28 @@ type CustomerReturnItem = {
   updated_at?: string | null;
 };
 
+type RefundChargeAllocation = {
+  id: string;
+  code?: string | null;
+  label: string;
+  refundable: boolean;
+  total_order_amount: number;
+  allocated_amount: number;
+};
+
+type RefundBreakdown = {
+  items_subtotal: number;
+  discounts_prorated: number;
+  tax_refund: number;
+  refundable_charges_added: number;
+  non_refundable_charges_retained: number;
+  suggested_refund_amount: number;
+  max_refundable_amount: number;
+  actual_refund_amount?: number;
+  exception_refund_added?: number;
+  charge_allocations: RefundChargeAllocation[];
+};
+
 type CustomerReturnDetail = {
   id: string;
   site_id: string;
@@ -175,6 +202,9 @@ type CustomerReturnDetail = {
   refund_override_reason?: string | null;
   suggested_refund_amount: number;
   final_refund_amount: number;
+  pickup_status?: string | null;
+  pickup_details?: any;
+  refund_breakdown?: RefundBreakdown | null;
   refund_method?: string | null;
   approved_at?: string | null;
   rejected_at?: string | null;
@@ -522,6 +552,16 @@ const RETURN_REASONS: Array<{ value: ReturnReasonCode; label: string }> = [
   { value: "other", label: "Other" },
 ];
 
+const getCachedCustomerOrders = (sId?: string): OrderListItem[] => {
+  if (!sId || typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`wc_customer_orders_${sId}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
 const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
   siteId,
   siteSlug,
@@ -529,10 +569,11 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
 }) => {
   const navigate = useNavigate();
 
-  const [orders, setOrders] = useState<OrderListItem[]>([]);
+  const initialCachedOrders = useMemo(() => getCachedCustomerOrders(siteId), [siteId]);
+  const [orders, setOrders] = useState<OrderListItem[]>(initialCachedOrders);
   const [returns, setReturns] = useState<CustomerReturnListItem[]>([]);
   const [returnDetailMap, setReturnDetailMap] = useState<Record<string, CustomerReturnDetail>>({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(initialCachedOrders.length === 0);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [detailMap, setDetailMap] = useState<Record<string, OrderDetail>>({});
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
@@ -591,72 +632,237 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
   }, []);
 
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(5);
+  const [pageSize, setPageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
   const [totalOrders, setTotalOrders] = useState(0);
 
-  const loadOrders = async (page = currentPage) => {
-    if (!siteId) return;
-    const response = await fetch(`${API_BASE_URL}/orders/${siteId}/my-orders?page=${page}&page_size=${pageSize}`, {
-      credentials: "include",
+  // Industry-Level Customer Filter State
+  const [searchInputValue, setSearchInputValue] = useState("");
+  const [appliedSearchQuery, setAppliedSearchQuery] = useState("");
+  const [statusTab, setStatusTab] = useState<"all" | "active" | "delivered" | "returns" | "cancelled">("all");
+  const [dateFilter, setDateFilter] = useState<"30_days" | "60_days" | "6_months" | "this_year" | "custom">("30_days");
+  const [customFromDate, setCustomFromDate] = useState("");
+  const [customToDate, setCustomToDate] = useState("");
+  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "amount_high" | "amount_low">("newest");
+
+  const statusCounts = useMemo(() => {
+    let all = 0;
+    let active = 0;
+    let delivered = 0;
+    let returnsCount = 0;
+    let cancelled = 0;
+
+    orders.forEach((order) => {
+      // 1. Date Range Filter
+      if (order.created_at) {
+        const orderTime = new Date(order.created_at).getTime();
+        const now = Date.now();
+        if (!isNaN(orderTime)) {
+          if (dateFilter === "30_days" && now - orderTime > 30 * 24 * 60 * 60 * 1000) return;
+          if (dateFilter === "60_days" && now - orderTime > 60 * 24 * 60 * 60 * 1000) return;
+          if (dateFilter === "6_months" && now - orderTime > 180 * 24 * 60 * 60 * 1000) return;
+          if (dateFilter === "this_year" && new Date(orderTime).getFullYear() !== new Date().getFullYear()) return;
+          if (dateFilter === "custom") {
+            if (customFromDate) {
+              const fromTime = new Date(customFromDate).setHours(0, 0, 0, 0);
+              if (!isNaN(fromTime) && orderTime < fromTime) return;
+            }
+            if (customToDate) {
+              const toTime = new Date(customToDate).setHours(23, 59, 59, 999);
+              if (!isNaN(toTime) && orderTime > toTime) return;
+            }
+          }
+        }
+      }
+
+      // 2. Search Query Filter (Matches applied search term)
+      if (appliedSearchQuery.trim()) {
+        const q = appliedSearchQuery.trim().toLowerCase();
+        const matchId = (order.id || "").toLowerCase().includes(q);
+        const matchRazorpay = (order.razorpay_order_id || "").toLowerCase().includes(q) || (order.razorpay_payment_id || "").toLowerCase().includes(q);
+        const matchCourier = (order.shipment?.courier_name || "").toLowerCase().includes(q) || (order.shipment?.tracking_number || "").toLowerCase().includes(q) || (order.shipment?.awb_number || "").toLowerCase().includes(q);
+        const matchItems = (order.items || []).some((item) => (item.product_name || "").toLowerCase().includes(q) || (item.selected_variant_value || "").toLowerCase().includes(q));
+
+        if (!matchId && !matchRazorpay && !matchCourier && !matchItems) {
+          return;
+        }
+      }
+
+      all++;
+      const s = (order.status || "").toLowerCase();
+      const hasReturn = Boolean(order.refund_info || (returns && returns.some((r) => r.order_id === order.id)) || ["returned", "refunded"].includes(s));
+
+      if (["placed", "confirmed", "processing", "shipped", "out_for_delivery", "rescheduled"].includes(s)) {
+        active++;
+      } else if (s === "delivered") {
+        delivered++;
+      } else if (["returned", "refunded", "requested", "approved", "received", "inspected"].includes(s) || hasReturn) {
+        returnsCount++;
+      } else if (["cancelled", "rejected"].includes(s)) {
+        cancelled++;
+      }
     });
-    if (!response.ok) throw new Error("Failed to load orders");
-    const data = await response.json();
-    if (Array.isArray(data)) {
-      setOrders(data);
-      setTotalOrders(data.length);
-      setTotalPages(Math.ceil(data.length / pageSize) || 1);
-    } else if (data && Array.isArray(data.orders)) {
-      setOrders(data.orders);
-      setTotalOrders(data.total ?? data.orders.length);
-      setTotalPages(data.total_pages ?? Math.ceil((data.total ?? data.orders.length) / pageSize) ?? 1);
-    } else {
-      setOrders([]);
-      setTotalOrders(0);
-      setTotalPages(1);
-    }
+
+    return {
+      all,
+      active,
+      delivered,
+      returns: returnsCount,
+      cancelled,
+    };
+  }, [orders, returns, dateFilter, customFromDate, customToDate, appliedSearchQuery]);
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter((order) => {
+      // 1. Status Filter
+      const s = (order.status || "").toLowerCase();
+      const hasReturn = Boolean(order.refund_info || (returns && returns.some((r) => r.order_id === order.id)) || ["returned", "refunded"].includes(s));
+
+      if (statusTab === "active") {
+        if (!["placed", "confirmed", "processing", "shipped", "out_for_delivery", "rescheduled"].includes(s)) {
+          return false;
+        }
+      } else if (statusTab === "delivered") {
+        if (s !== "delivered") return false;
+      } else if (statusTab === "returns") {
+        if (!hasReturn && !["returned", "refunded", "requested", "approved", "received", "inspected"].includes(s)) {
+          return false;
+        }
+      } else if (statusTab === "cancelled") {
+        if (!["cancelled", "rejected"].includes(s)) return false;
+      }
+
+      // 2. Date Range Filter (Default: Last 30 Days)
+      if (order.created_at) {
+        const orderTime = new Date(order.created_at).getTime();
+        const now = Date.now();
+        if (!isNaN(orderTime)) {
+          if (dateFilter === "30_days" && now - orderTime > 30 * 24 * 60 * 60 * 1000) return false;
+          if (dateFilter === "60_days" && now - orderTime > 60 * 24 * 60 * 60 * 1000) return false;
+          if (dateFilter === "6_months" && now - orderTime > 180 * 24 * 60 * 60 * 1000) return false;
+          if (dateFilter === "this_year" && new Date(orderTime).getFullYear() !== new Date().getFullYear()) return false;
+          if (dateFilter === "custom") {
+            if (customFromDate) {
+              const fromTime = new Date(customFromDate).setHours(0, 0, 0, 0);
+              if (!isNaN(fromTime) && orderTime < fromTime) return false;
+            }
+            if (customToDate) {
+              const toTime = new Date(customToDate).setHours(23, 59, 59, 999);
+              if (!isNaN(toTime) && orderTime > toTime) return false;
+            }
+          }
+        }
+      }
+
+      // 3. Search Query Filter (Order ID, Payment ID, Tracking, Item name)
+      if (appliedSearchQuery.trim()) {
+        const q = appliedSearchQuery.trim().toLowerCase();
+        const matchId = (order.id || "").toLowerCase().includes(q);
+        const matchRazorpay = (order.razorpay_order_id || "").toLowerCase().includes(q) || (order.razorpay_payment_id || "").toLowerCase().includes(q);
+        const matchCourier = (order.shipment?.courier_name || "").toLowerCase().includes(q) || (order.shipment?.tracking_number || "").toLowerCase().includes(q) || (order.shipment?.awb_number || "").toLowerCase().includes(q);
+        const matchItems = (order.items || []).some((item) => (item.product_name || "").toLowerCase().includes(q) || (item.selected_variant_value || "").toLowerCase().includes(q));
+
+        if (!matchId && !matchRazorpay && !matchCourier && !matchItems) {
+          return false;
+        }
+      }
+
+      return true;
+    }).sort((a, b) => {
+      if (sortBy === "oldest") {
+        return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+      }
+      if (sortBy === "amount_high") {
+        return Number(b.total || 0) - Number(a.total || 0);
+      }
+      if (sortBy === "amount_low") {
+        return Number(a.total || 0) - Number(b.total || 0);
+      }
+      // default: newest first
+      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+    });
+  }, [orders, returns, statusTab, dateFilter, customFromDate, customToDate, appliedSearchQuery, sortBy]);
+
+  const paginatedOrders = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredOrders.slice(start, start + pageSize);
+  }, [filteredOrders, currentPage, pageSize]);
+
+  const effectiveTotalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
+
+  const hasActiveFilters = appliedSearchQuery.trim() !== "" || statusTab !== "all" || dateFilter !== "30_days" || sortBy !== "newest";
+
+  const handleResetFilters = () => {
+    setSearchInputValue("");
+    setAppliedSearchQuery("");
+    setStatusTab("all");
+    setDateFilter("30_days");
+    setCustomFromDate("");
+    setCustomToDate("");
+    setSortBy("newest");
+    setCurrentPage(1);
   };
 
-  const handlePageChange = async (newPage: number) => {
-    if (newPage === currentPage) return;
-    setCurrentPage(newPage);
-    setLoading(true);
+  const loadOrders = async () => {
+    if (!siteId) return;
     try {
-      await loadOrders(newPage);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      const response = await fetch(`${API_BASE_URL}/orders/${siteId}/my-orders`, {
+        credentials: "include",
+        headers: getCustomerAuthHeaders(siteId),
+      });
+      if (!response.ok) throw new Error("Failed to load orders");
+      const data = await response.json();
+      const list = Array.isArray(data) ? data : (data && Array.isArray(data.orders) ? data.orders : []);
+      setOrders(list);
+      setTotalOrders(list.length);
+      setTotalPages(Math.ceil(list.length / pageSize) || 1);
+      try {
+        localStorage.setItem(`wc_customer_orders_${siteId}`, JSON.stringify(list));
+      } catch (_) {}
     } catch (err) {
-      console.error("Failed to navigate order pages", err);
+      console.error("Failed to load customer orders", err);
     } finally {
       setLoading(false);
     }
   };
 
+  const handlePageChange = (newPage: number) => {
+    if (newPage === currentPage) return;
+    setCurrentPage(newPage);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setCurrentPage(1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const loadReturns = async () => {
     if (!siteId) return;
-    const response = await fetch(`${API_BASE_URL}/returns/${siteId}/my-returns`, {
-      credentials: "include",
-    });
-    if (!response.ok) throw new Error("Failed to load returns");
-    const data = await response.json();
-    const list = Array.isArray(data) ? data : [];
-    setReturns(list);
+    try {
+      const response = await fetch(`${API_BASE_URL}/returns/${siteId}/my-returns`, {
+        credentials: "include",
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const list = Array.isArray(data) ? data : [];
+        setReturns(list);
+      }
+    } catch (err) {
+      console.error("Failed to load customer returns", err);
+    }
   };
 
   useEffect(() => {
     const bootstrap = async () => {
       if (!siteId) return;
-      try {
+      if (initialCachedOrders.length === 0) {
         setLoading(true);
-        setError("");
-        await Promise.all([loadOrders(1), loadReturns()]);
-      } catch (err) {
-        console.error(err);
-        setOrders([]);
-        setReturns([]);
-        setError("Unable to load orders right now.");
-      } finally {
-        setLoading(false);
       }
+      setError("");
+      loadOrders();
+      loadReturns();
     };
 
     bootstrap();
@@ -680,6 +886,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       setDetailLoadingId(orderId);
       const response = await fetch(`${API_BASE_URL}/orders/${siteId}/my-orders/${orderId}`, {
         credentials: "include",
+        headers: getCustomerAuthHeaders(siteId),
       });
 
       if (!response.ok) {
@@ -790,9 +997,9 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       const response = await fetch(`${API_BASE_URL}/orders/${siteId}/${orderId}/cancel`, {
         method: "POST",
         credentials: "include",
-        headers: {
+        headers: getCustomerAuthHeaders(siteId, {
           "Content-Type": "application/json",
-        },
+        }),
         body: JSON.stringify({
           cancel_reason: cancelReason || "Cancelled by customer",
         }),
@@ -823,8 +1030,14 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   };
 
-  const isItemReturnable = (item: OrderItem) => {
-    return Number(item.returnable_quantity || 0) > 0;
+  const isItemReturnable = (item: OrderItem, deliveredAt?: string | null) => {
+    if (item.return_window_days === 0) return false;
+    if (Number(item.returnable_quantity || 0) <= 0) return false;
+    if (deliveredAt && item.return_window_days != null && item.return_window_days > 0) {
+      const windowClosesMs = new Date(deliveredAt).getTime() + item.return_window_days * 24 * 60 * 60 * 1000;
+      if (Date.now() > windowClosesMs) return false;
+    }
+    return true;
   };
 
   const canRequestReturnForOrder = (detail?: OrderDetail | null, order?: OrderListItem | null) => {
@@ -837,7 +1050,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
     }
 
     if (!detail || detail.status !== "delivered") return false;
-    return detail.items.some((item) => isItemReturnable(item));
+    return detail.items.some((item) => isItemReturnable(item, detail.delivered_at));
   };
 
   const getSelectedReturnItems = (orderId: string) => {
@@ -1048,19 +1261,20 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
     const isPacked = !isCancelled && (currentRank >= 2 || isShipped);
     const isPlaced = true;
 
-    const isOwnAgent =
-      detail.shipment?.delivery_mode === "own_agent" ||
-      detail.shipment?.mode === "own_agent" ||
-      Boolean(detail.shipment?.agent_id) ||
-      Boolean(detail.shipment?.delivery_partner_name && !detail.shipment?.awb_number);
+    const isShiprocket = Boolean(
+      detail.shipment?.delivery_mode === "shiprocket" ||
+      detail.shipment?.mode === "shiprocket" ||
+      (detail.shipment?.awb_number && !detail.shipment?.agent_id) ||
+      Boolean(detail.shipment?.courier_name && !detail.shipment?.agent_id)
+    );
 
-    const isShiprocket =
-      !isOwnAgent && (
-        detail.shipment?.delivery_mode === "shiprocket" ||
-        detail.shipment?.mode === "shiprocket" ||
-        Boolean(detail.shipment?.awb_number) ||
-        Boolean(detail.shipment?.courier_name)
-      );
+    const isOwnAgent = Boolean(
+      !isShiprocket && (
+        detail.shipment?.delivery_mode === "own_agent" ||
+        detail.shipment?.mode === "own_agent" ||
+        Boolean(detail.shipment?.agent_id)
+      )
+    );
 
     const orderedDate = formatFlipkartDate(detail.created_at);
     const orderedTime = formatFlipkartDateTime(detail.created_at);
@@ -1434,8 +1648,8 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
           })}
         </div>
 
-        {/* Own Fleet Rider Contact Card — below tracker, only when out for delivery and not cancelled */}
-        {isOwnAgent && !isCancelled && isOutForDelivery && (detail.shipment?.delivery_partner_name || detail.shipment?.delivery_partner_phone) && (
+        {/* Own Fleet Rider Contact Card — below tracker, only when actively out for delivery and not delivered/cancelled */}
+        {isOwnAgent && !isCancelled && !isDelivered && (orderStatus === "out_for_delivery" || detail.shipment?.status === "out_for_delivery") && (detail.shipment?.delivery_partner_name || detail.shipment?.delivery_partner_phone) && (
           <div
             style={{
               marginTop: "16px",
@@ -1503,6 +1717,57 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                 <span>Call Delivery Partner</span>
               </a>
             )}
+          </div>
+        )}
+
+        {/* Manual Courier Partner Card — shows partner name and tracking/contact number */}
+        {!isOwnAgent && !isShiprocket && !isCancelled && (isShipped || isOutForDelivery || isDelivered) && (detail.shipment?.delivery_partner_name || detail.shipment?.delivery_partner_phone) && (
+          <div
+            style={{
+              marginTop: "16px",
+              padding: "12px 16px",
+              borderRadius: "14px",
+              background: isLight ? "#f8fafc" : "rgba(148, 163, 184, 0.08)",
+              border: "1.5px solid rgba(148, 163, 184, 0.25)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: "12px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <div
+                style={{
+                  width: "38px",
+                  height: "38px",
+                  borderRadius: "10px",
+                  background: "#2563eb",
+                  color: "#ffffff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 800,
+                  fontSize: "18px",
+                  flexShrink: 0,
+                }}
+              >
+                🚚
+              </div>
+              <div>
+                <div style={{ fontSize: "11px", fontWeight: 800, color: "#2563eb", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Dispatched via Courier Partner
+                </div>
+                <div style={{ fontSize: "14px", fontWeight: 800, color: textPrimary }}>
+                  {detail.shipment.delivery_partner_name || "Courier Partner"}
+                </div>
+                {detail.shipment.delivery_partner_phone && (
+                  <div style={{ fontSize: "12px", color: textMuted, marginTop: "2px" }}>
+                    Tracking No. / Contact: <strong style={{ color: textPrimary }}>{detail.shipment.delivery_partner_phone}</strong>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -1619,7 +1884,12 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                 <div style={{ fontSize: "13px", color: textMuted }}>
                   Refund:{" "}
                   <span style={{ color: textPrimary, fontWeight: 700 }}>
-                    {formatPrice(latestReturn.final_refund_amount || latestReturn.suggested_refund_amount)}
+                    {formatPrice(
+                      latestDetail?.final_refund_amount ||
+                      latestReturn.final_refund_amount ||
+                      latestDetail?.suggested_refund_amount ||
+                      latestReturn.suggested_refund_amount
+                    )}
                   </span>
                 </div>
 
@@ -1805,6 +2075,137 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                   ) : null}
                 </div>
 
+                {/* Reverse Logistics & Return Pickup Card */}
+                {(() => {
+                  const pickup = latestDetail.pickup_details || latestReturn.pickup_details;
+                  if (!pickup || latestDetail.status === "rejected") return null;
+
+                  const isManual = pickup.mode === "manual" || (!pickup.agent_name && Boolean(pickup.courier_name));
+                  const isFleet = pickup.mode === "own_agent" || Boolean(pickup.agent_name);
+                  const isShiprocket = pickup.mode === "shiprocket";
+
+                  return (
+                    <div
+                      style={{
+                        borderRadius: "16px",
+                        background: innerBg,
+                        border: cardBorder,
+                        padding: isCompact ? "12px" : "14px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          marginBottom: "10px",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: "12px",
+                            fontWeight: 800,
+                            letterSpacing: "0.05em",
+                            textTransform: "uppercase",
+                            color: textMuted,
+                          }}
+                        >
+                          Reverse Logistics & Pickup
+                        </span>
+                        <span
+                          style={{
+                            fontSize: "11px",
+                            color: isManual ? "#0369a1" : isFleet ? "#15803d" : "#7c3aed",
+                            background: isManual
+                              ? isLight ? "#e0f2fe" : "rgba(3,105,161,0.18)"
+                              : isFleet
+                              ? isLight ? "#f0fdf4" : "rgba(21,128,61,0.18)"
+                              : isLight ? "#f5f3ff" : "rgba(124,58,237,0.18)",
+                            padding: "2px 8px",
+                            borderRadius: "999px",
+                            fontWeight: 700,
+                          }}
+                        >
+                          {isManual ? "Self-Ship / Courier" : isFleet ? "Store Rider" : "Shiprocket"}
+                        </span>
+                      </div>
+
+                      {isManual ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          <div style={{ fontSize: "14px", fontWeight: 700, color: textPrimary }}>
+                            {pickup.courier_name || "Manual Courier / Self Ship"}
+                          </div>
+                          {pickup.tracking_number ? (
+                            <div style={{ fontSize: "13px", color: textMuted }}>
+                              AWB / Tracking Number:{" "}
+                              <strong style={{ color: textPrimary }}>{pickup.tracking_number}</strong>
+                            </div>
+                          ) : null}
+                          {pickup.pickup_notes ? (
+                            <div
+                              style={{
+                                marginTop: "4px",
+                                fontSize: "12px",
+                                color: isLight ? "#92400e" : "#fde68a",
+                                background: isLight ? "#fffbeb" : "rgba(253,230,138,0.1)",
+                                padding: "8px 10px",
+                                borderRadius: "8px",
+                                border: `1px solid ${isLight ? "#fde68a" : "rgba(253,230,138,0.2)"}`,
+                              }}
+                            >
+                              {pickup.pickup_notes}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : isFleet ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          <div style={{ fontSize: "14px", fontWeight: 700, color: textPrimary }}>
+                            {pickup.agent_name || "Assigned Store Rider"}
+                          </div>
+                          {pickup.agent_phone ? (
+                            <div style={{ fontSize: "13px", color: textMuted }}>
+                              Rider Contact:{" "}
+                              <a
+                                href={`tel:${pickup.agent_phone}`}
+                                style={{ color: "#2563eb", fontWeight: 600, textDecoration: "none" }}
+                              >
+                                {pickup.agent_phone}
+                              </a>
+                            </div>
+                          ) : null}
+                          {pickup.inspection_result === "failed" || pickup.pickup_status === "doorstep_rejected" ? (
+                            <div
+                              style={{
+                                marginTop: "4px",
+                                fontSize: "12px",
+                                color: "#dc2626",
+                                background: isLight ? "#fef2f2" : "rgba(220,38,38,0.1)",
+                                padding: "8px 10px",
+                                borderRadius: "8px",
+                                border: "1px solid rgba(220,38,38,0.2)",
+                              }}
+                            >
+                              <strong>Doorstep Verification Failed:</strong>{" "}
+                              {pickup.inspection_failed_reason || "Item did not match return conditions."}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : isShiprocket ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          <div style={{ fontSize: "14px", fontWeight: 700, color: textPrimary }}>
+                            {pickup.courier_name || "Shiprocket Reverse Logistics"}
+                          </div>
+                          {pickup.tracking_number ? (
+                            <div style={{ fontSize: "13px", color: textMuted }}>
+                              AWB: <strong style={{ color: textPrimary }}>{pickup.tracking_number}</strong>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })()}
+
                 <div
                   style={{
                     borderRadius: "16px",
@@ -1826,8 +2227,12 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                   >
                     <div>
                       <div style={{ fontSize: "12px", color: textMuted, marginBottom: "4px" }}>Refund amount</div>
-                      <div style={{ fontSize: "16px", fontWeight: 800 }}>
-                        {formatPrice(latestDetail.final_refund_amount || latestDetail.suggested_refund_amount)}
+                      <div style={{ fontSize: "16px", fontWeight: 800, color: "#16a34a" }}>
+                        {formatPrice(
+                          typeof latestDetail.final_refund_amount === "number" && latestDetail.final_refund_amount > 0
+                            ? latestDetail.final_refund_amount
+                            : latestDetail.suggested_refund_amount
+                        )}
                       </div>
                     </div>
                     <div>
@@ -1844,6 +2249,148 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                     </div>
                   </div>
                 </div>
+
+                {latestDetail.refund_breakdown ? (
+                  <div
+                    style={{
+                      borderRadius: "16px",
+                      background: innerBg,
+                      border: cardBorder,
+                      padding: isCompact ? "12px" : "14px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          fontWeight: 800,
+                          letterSpacing: "0.05em",
+                          textTransform: "uppercase",
+                          color: textMuted,
+                        }}
+                      >
+                        Refund breakdown
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          color: textMuted,
+                          background: isLight ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.06)",
+                          padding: "2px 8px",
+                          borderRadius: "999px",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Prorated
+                      </span>
+                    </div>
+
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "13px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", color: textMuted }}>
+                        <span>Items Subtotal</span>
+                        <span style={{ fontWeight: 600, color: textPrimary }}>
+                          +{formatPrice(latestDetail.refund_breakdown.items_subtotal)}
+                        </span>
+                      </div>
+
+                      {latestDetail.refund_breakdown.discounts_prorated > 0 ? (
+                        <div style={{ display: "flex", justifyContent: "space-between", color: textMuted }}>
+                          <span>Discount</span>
+                          <span style={{ fontWeight: 600, color: "#dc2626" }}>
+                            -{formatPrice(latestDetail.refund_breakdown.discounts_prorated)}
+                          </span>
+                        </div>
+                      ) : null}
+
+                      {latestDetail.refund_breakdown.tax_refund > 0 ? (
+                        <div style={{ display: "flex", justifyContent: "space-between", color: textMuted }}>
+                          <span>Tax (GST)</span>
+                          <span style={{ fontWeight: 600, color: textPrimary }}>
+                            +{formatPrice(latestDetail.refund_breakdown.tax_refund)}
+                          </span>
+                        </div>
+                      ) : null}
+
+                      {latestDetail.refund_breakdown.refundable_charges_added > 0 ? (
+                        <div style={{ display: "flex", justifyContent: "space-between", color: textMuted }}>
+                          <span>Refundable Charges</span>
+                          <span style={{ fontWeight: 600, color: textPrimary }}>
+                            +{formatPrice(latestDetail.refund_breakdown.refundable_charges_added)}
+                          </span>
+                        </div>
+                      ) : null}
+
+                      {latestDetail.refund_breakdown.non_refundable_charges_retained > 0 ? (
+                        <div style={{ display: "flex", justifyContent: "space-between", color: textMuted }}>
+                          <div>
+                            <span>Non-Refundable Retained</span>
+                            <div style={{ fontSize: "11px", opacity: 0.7 }}>
+                              {latestDetail.refund_breakdown.charge_allocations
+                                ?.filter((c) => !c.refundable)
+                                .map((c) => c.label)
+                                .join(", ") || "Shipping / COD fee"}
+                            </div>
+                          </div>
+                          <span style={{ fontWeight: 600, color: "#dc2626" }}>
+                            -{formatPrice(latestDetail.refund_breakdown.non_refundable_charges_retained)}
+                          </span>
+                        </div>
+                      ) : null}
+
+                      {(latestDetail.refund_breakdown.exception_refund_added || 0) > 0 ? (
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            color: "#16a34a",
+                            fontWeight: 600,
+                            padding: "6px 8px",
+                            borderRadius: "8px",
+                            background: "rgba(22,163,74,0.08)",
+                          }}
+                        >
+                          <div>
+                            <div>Retained Charges Refunded</div>
+                            <div style={{ fontSize: "11px", fontWeight: 400, opacity: 0.85 }}>
+                              Approved exception upon review
+                            </div>
+                          </div>
+                          <span style={{ fontWeight: 700 }}>
+                            +{formatPrice(latestDetail.refund_breakdown.exception_refund_added || 0)}
+                          </span>
+                        </div>
+                      ) : null}
+
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          paddingTop: "8px",
+                          marginTop: "2px",
+                          borderTop: divider,
+                          fontWeight: 800,
+                          fontSize: "14px",
+                        }}
+                      >
+                        <span>Total Refund</span>
+                        <span style={{ color: "#16a34a" }}>
+                          {formatPrice(
+                            typeof latestDetail.final_refund_amount === "number" && latestDetail.final_refund_amount > 0
+                              ? latestDetail.final_refund_amount
+                              : latestDetail.suggested_refund_amount
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
 
                 <div
                   style={{
@@ -1887,8 +2434,10 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                       >
                         {item.product_image ? (
                           <img
-                            src={item.product_image}
+                            src={getThumbnailUrl(item.product_image, 140, 140)}
                             alt={item.product_name}
+                            loading="eager"
+                            decoding="async"
                             style={{
                               width: "64px",
                               height: "64px",
@@ -2045,91 +2594,683 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
           margin: "0 auto",
         }}
       >
+        {/* Clean Minimalist E-Commerce Header with Store Breadcrumb */}
         <div
           style={{
             display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: "16px",
-            flexWrap: "wrap",
-            marginBottom: "24px",
+            flexDirection: "column",
+            gap: "8px",
+            marginBottom: "20px",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: isMobile ? "24px" : "28px",
-                lineHeight: 1.2,
-                fontWeight: 800,
-                letterSpacing: "-0.02em",
-                color: textPrimary,
-              }}
-            >
-              Order history
-            </h1>
-            {totalOrders > 0 && (
-              <span
-                style={{
-                  fontSize: "12px",
-                  fontWeight: 700,
-                  padding: "4px 10px",
-                  borderRadius: "999px",
-                  background: isLight ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.08)",
-                  color: textMuted,
-                }}
-              >
-                {totalOrders} {totalOrders === 1 ? "order" : "orders"}
-              </span>
-            )}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              const path = window.location.pathname;
-              if (path.startsWith("/builder/")) {
-                const segments = path.split("/").filter(Boolean);
-                const currentSiteId = segments[1] || siteId;
-                navigate(`/builder/${currentSiteId}`);
-              } else if (siteSlug) {
-                navigate(`/store/${siteSlug}`);
-              } else if (siteId) {
-                navigate(`/builder/${siteId}`);
-              } else {
-                navigate("/");
-              }
-            }}
+          {/* Breadcrumb back-link */}
+          <div
             style={{
-              border: cardBorder,
-              background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)",
-              color: textPrimary,
-              borderRadius: "12px",
-              padding: "10px 16px",
-              fontSize: "13px",
-              fontWeight: 700,
-              cursor: "pointer",
               display: "inline-flex",
               alignItems: "center",
-              gap: "8px",
-              boxShadow: isLight ? "0 2px 6px rgba(15,23,42,0.04)" : "none",
-              transition: "all 0.15s ease",
+              gap: "6px",
+              fontSize: "13px",
+              color: textMuted,
+              fontWeight: 500,
             }}
           >
-            ← Continue shopping
-          </button>
+            <span
+              onClick={() => {
+                const path = window.location.pathname;
+                if (path.startsWith("/builder/")) {
+                  const segments = path.split("/").filter(Boolean);
+                  const currentSiteId = segments[1] || siteId;
+                  navigate(`/builder/${currentSiteId}`);
+                } else if (siteSlug) {
+                  navigate(`/store/${siteSlug}`);
+                } else if (siteId) {
+                  navigate(`/builder/${siteId}`);
+                } else {
+                  navigate("/");
+                }
+              }}
+              style={{
+                cursor: "pointer",
+                transition: "color 0.15s ease",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                color: textMuted,
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = accentColor)}
+              onMouseLeave={(e) => (e.currentTarget.style.color = textMuted)}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="19" y1="12" x2="5" y2="12" />
+                <polyline points="12 19 5 12 12 5" />
+              </svg>
+              <span>Store</span>
+            </span>
+            <span>/</span>
+            <span style={{ color: textPrimary, fontWeight: 700 }}>Orders</span>
+          </div>
         </div>
 
-        {loading ? (
+        {/* Industry-Level Themed Customer Orders Filter Bar */}
+        {!loading && orders.length > 0 && (
           <div
             style={{
               background: cardBg,
               border: cardBorder,
-              borderRadius: "24px",
-              padding: "24px",
+              borderRadius: "16px",
+              padding: isMobile ? "14px" : "16px 20px",
+              marginBottom: "20px",
+              boxShadow: isLight ? "0 2px 10px rgba(15,23,42,0.03)" : "0 8px 24px rgba(2,6,23,0.20)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "14px",
             }}
           >
-            Loading orders...
+            {/* Search Input and Filter Controls */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "stretch",
+                justifyContent: "space-between",
+                gap: "10px",
+                flexDirection: isMobile ? "column" : "row",
+                width: "100%",
+              }}
+            >
+              {/* Search Form with Phone-Compatible Submit, Enter Key, Magnifier & Clear */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setAppliedSearchQuery(searchInputValue.trim());
+                  setCurrentPage(1);
+                }}
+                style={{
+                  position: "relative",
+                  flex: isMobile ? "1 1 100%" : "1 1 280px",
+                  width: "100%",
+                  margin: 0,
+                }}
+              >
+                <button
+                  type="submit"
+                  style={{
+                    position: "absolute",
+                    left: "10px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    color: textMuted,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: "4px",
+                  }}
+                  title="Search orders"
+                  aria-label="Search orders"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                </button>
+                <input
+                  type="search"
+                  enterKeyHint="search"
+                  inputMode="search"
+                  value={searchInputValue}
+                  onChange={(e) => {
+                    setSearchInputValue(e.target.value);
+                    if (e.target.value === "") {
+                      setAppliedSearchQuery("");
+                      setCurrentPage(1);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      setAppliedSearchQuery(searchInputValue.trim());
+                      setCurrentPage(1);
+                    }
+                  }}
+                  placeholder="Search by order ID, item name, tracking..."
+                  style={{
+                    width: "100%",
+                    padding: "9px 34px 9px 36px",
+                    borderRadius: "10px",
+                    border: `1px solid ${isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}`,
+                    background: isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)",
+                    color: textPrimary,
+                    fontSize: "13px",
+                    fontWeight: 500,
+                    outline: "none",
+                    boxSizing: "border-box",
+                    transition: "all 0.15s ease",
+                  }}
+                />
+                {searchInputValue && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchInputValue("");
+                      setAppliedSearchQuery("");
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      position: "absolute",
+                      right: "10px",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      background: "transparent",
+                      border: "none",
+                      color: textMuted,
+                      fontSize: "14px",
+                      cursor: "pointer",
+                      padding: "4px",
+                      lineHeight: 1,
+                    }}
+                    title="Clear search"
+                    aria-label="Clear search"
+                  >
+                    ✕
+                  </button>
+                )}
+              </form>
+
+              {/* Mobile Filter Controls: Status Dropdown + Date & Sort Dropdowns */}
+              {isMobile ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", width: "100%" }}>
+                  {/* Status Selector Dropdown */}
+                  <div style={{ position: "relative", width: "100%" }}>
+                    <select
+                      value={statusTab}
+                      onChange={(e) => {
+                        setStatusTab(e.target.value as any);
+                        setCurrentPage(1);
+                      }}
+                      style={{
+                        appearance: "none",
+                        width: "100%",
+                        padding: "9px 32px 9px 12px",
+                        borderRadius: "10px",
+                        border: `1px solid ${statusTab !== "all" ? accentColor : (isLight ? "rgba(15,23,42,0.14)" : "rgba(255,255,255,0.16)")}`,
+                        background: statusTab !== "all"
+                          ? (isLight ? `${accentColor}12` : `${accentColor}25`)
+                          : (isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)"),
+                        color: textPrimary,
+                        fontSize: "12.5px",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        outline: "none",
+                      }}
+                    >
+                      <option value="all">Status: All Orders ({statusCounts.all})</option>
+                      <option value="active">Status: In Transit / Active ({statusCounts.active})</option>
+                      <option value="delivered">Status: Delivered ({statusCounts.delivered})</option>
+                      <option value="returns">Status: Returns & Refunds ({statusCounts.returns})</option>
+                      <option value="cancelled">Status: Cancelled ({statusCounts.cancelled})</option>
+                    </select>
+                    <div style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: textMuted, display: "flex" }}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                    </div>
+                  </div>
+
+                  {/* Date & Sort in 2 equal columns */}
+                  <div style={{ display: "flex", gap: "8px", width: "100%" }}>
+                    <div style={{ position: "relative", flex: 1, width: "50%" }}>
+                      <select
+                        value={dateFilter}
+                        onChange={(e) => {
+                          setDateFilter(e.target.value as any);
+                          setCurrentPage(1);
+                        }}
+                        style={{
+                          appearance: "none",
+                          width: "100%",
+                          padding: "8px 24px 8px 10px",
+                          borderRadius: "10px",
+                          border: `1px solid ${isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}`,
+                          background: isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)",
+                          color: textPrimary,
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          outline: "none",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        <option value="30_days">Last 30 days</option>
+                        <option value="60_days">Last 60 days</option>
+                        <option value="6_months">Last 6 months</option>
+                        <option value="this_year">This year ({new Date().getFullYear()})</option>
+                        <option value="custom">Custom dates...</option>
+                      </select>
+                      <div style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: textMuted, display: "flex" }}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                      </div>
+                    </div>
+
+                    <div style={{ position: "relative", flex: 1, width: "50%" }}>
+                      <select
+                        value={sortBy}
+                        onChange={(e) => {
+                          setSortBy(e.target.value as any);
+                          setCurrentPage(1);
+                        }}
+                        style={{
+                          appearance: "none",
+                          width: "100%",
+                          padding: "8px 24px 8px 10px",
+                          borderRadius: "10px",
+                          border: `1px solid ${isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}`,
+                          background: isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)",
+                          color: textPrimary,
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          outline: "none",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        <option value="newest">Newest first</option>
+                        <option value="oldest">Oldest first</option>
+                        <option value="amount_high">Total: High to Low</option>
+                        <option value="amount_low">Total: Low to High</option>
+                      </select>
+                      <div style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: textMuted, display: "flex" }}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Desktop Date Filter & Sort Dropdowns */
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  <div style={{ position: "relative" }}>
+                    <select
+                      value={dateFilter}
+                      onChange={(e) => {
+                        setDateFilter(e.target.value as any);
+                        setCurrentPage(1);
+                      }}
+                      style={{
+                        appearance: "none",
+                        padding: "8px 28px 8px 12px",
+                        borderRadius: "10px",
+                        border: `1px solid ${isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}`,
+                        background: isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)",
+                        color: textPrimary,
+                        fontSize: "12.5px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        outline: "none",
+                      }}
+                    >
+                      <option value="30_days">Last 30 days (Default)</option>
+                      <option value="60_days">Last 60 days</option>
+                      <option value="6_months">Last 6 months</option>
+                      <option value="this_year">This year ({new Date().getFullYear()})</option>
+                      <option value="custom">Custom date range...</option>
+                    </select>
+                    <div style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: textMuted, display: "flex" }}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                    </div>
+                  </div>
+
+                  <div style={{ position: "relative" }}>
+                    <select
+                      value={sortBy}
+                      onChange={(e) => {
+                        setSortBy(e.target.value as any);
+                        setCurrentPage(1);
+                      }}
+                      style={{
+                        appearance: "none",
+                        padding: "8px 28px 8px 12px",
+                        borderRadius: "10px",
+                        border: `1px solid ${isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}`,
+                        background: isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)",
+                        color: textPrimary,
+                        fontSize: "12.5px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        outline: "none",
+                      }}
+                    >
+                      <option value="newest">Newest first</option>
+                      <option value="oldest">Oldest first</option>
+                      <option value="amount_high">Total: High to Low</option>
+                      <option value="amount_low">Total: Low to High</option>
+                    </select>
+                    <div style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: textMuted, display: "flex" }}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Custom Date Range Pickers (Rendered when 'Custom date range' is active) */}
+            {dateFilter === "custom" && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr 1fr" : "auto auto auto",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "10px 12px",
+                  borderRadius: "12px",
+                  border: `1px dashed ${isLight ? "rgba(15,23,42,0.18)" : "rgba(255,255,255,0.20)"}`,
+                  background: isLight ? "rgba(15,23,42,0.01)" : "rgba(255,255,255,0.02)",
+                  width: "100%",
+                  boxSizing: "border-box",
+                }}
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0 }}>
+                  <label style={{ fontSize: "11px", fontWeight: 700, color: textMuted, textTransform: "uppercase" }}>From</label>
+                  <input
+                    type="date"
+                    value={customFromDate}
+                    onChange={(e) => {
+                      setCustomFromDate(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "6px 8px",
+                      borderRadius: "8px",
+                      border: `1px solid ${isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}`,
+                      background: isLight ? "#ffffff" : "rgba(255,255,255,0.06)",
+                      color: textPrimary,
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0 }}>
+                  <label style={{ fontSize: "11px", fontWeight: 700, color: textMuted, textTransform: "uppercase" }}>To</label>
+                  <input
+                    type="date"
+                    value={customToDate}
+                    onChange={(e) => {
+                      setCustomToDate(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "6px 8px",
+                      borderRadius: "8px",
+                      border: `1px solid ${isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}`,
+                      background: isLight ? "#ffffff" : "rgba(255,255,255,0.06)",
+                      color: textPrimary,
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+
+                {(customFromDate || customToDate) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomFromDate("");
+                      setCustomToDate("");
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      gridColumn: isMobile ? "span 2" : "auto",
+                      background: "transparent",
+                      border: "none",
+                      color: accentColor,
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      textDecoration: "underline",
+                      padding: "4px 8px",
+                      textAlign: isMobile ? "center" : "left",
+                    }}
+                  >
+                    Clear custom dates
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Desktop Status Filter Tabs (Rendered on wide screens for 1-click tab switching) */}
+            {!isMobile && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  flexWrap: "wrap",
+                  width: "100%",
+                }}
+              >
+                {[
+                  { key: "all", label: "All Orders", count: statusCounts.all },
+                  { key: "active", label: "In Transit / Active", count: statusCounts.active },
+                  { key: "delivered", label: "Delivered", count: statusCounts.delivered },
+                  { key: "returns", label: "Returns & Refunds", count: statusCounts.returns },
+                  { key: "cancelled", label: "Cancelled", count: statusCounts.cancelled },
+                ].map((tab) => {
+                  const isActive = statusTab === tab.key;
+                  const activeColor = isColorDarkHex(accentColor) ? "#ffffff" : "#0f172a";
+
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => {
+                        setStatusTab(tab.key as any);
+                        setCurrentPage(1);
+                      }}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "6px 13px",
+                        borderRadius: "999px",
+                        border: isActive
+                          ? `1px solid ${accentColor}`
+                          : `1px solid ${isLight ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.10)"}`,
+                        background: isActive
+                          ? accentColor
+                          : (isLight ? "rgba(15,23,42,0.03)" : "rgba(255,255,255,0.05)"),
+                        color: isActive ? activeColor : textMuted,
+                        fontSize: "12.5px",
+                        fontWeight: isActive ? 700 : 500,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                        transition: "all 0.15s ease",
+                        boxShadow: isActive ? `0 2px 8px ${accentColor}33` : "none",
+                      }}
+                    >
+                      <span>{tab.label}</span>
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          padding: "1px 6px",
+                          borderRadius: "8px",
+                          background: isActive
+                            ? "rgba(255,255,255,0.25)"
+                            : (isLight ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.10)"),
+                          color: isActive ? activeColor : textMuted,
+                        }}
+                      >
+                        {tab.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Active Filters Bar (if any active filters) */}
+            {hasActiveFilters && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  flexWrap: "wrap",
+                  paddingTop: "6px",
+                  borderTop: `1px dashed ${isLight ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.10)"}`,
+                  fontSize: "12px",
+                }}
+              >
+                <span style={{ color: textMuted, fontWeight: 600 }}>Active filters:</span>
+
+                {statusTab !== "all" && (
+                  <span
+                    onClick={() => setStatusTab("all")}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      background: isLight ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.08)",
+                      color: textPrimary,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Status: {statusTab.toUpperCase()} ✕
+                  </span>
+                )}
+
+                {dateFilter !== "30_days" && (
+                  <span
+                    onClick={() => {
+                      setDateFilter("30_days");
+                      setCustomFromDate("");
+                      setCustomToDate("");
+                    }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      background: isLight ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.08)",
+                      color: textPrimary,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Date: {dateFilter.replace("_", " ")} ✕
+                  </span>
+                )}
+
+                {appliedSearchQuery && (
+                  <span
+                    onClick={() => {
+                      setSearchInputValue("");
+                      setAppliedSearchQuery("");
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      background: isLight ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.08)",
+                      color: textPrimary,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Search: "{appliedSearchQuery}" ✕
+                  </span>
+                )}
+
+                {sortBy !== "newest" && (
+                  <span
+                    onClick={() => setSortBy("newest")}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      background: isLight ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.08)",
+                      color: textPrimary,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Sort: {sortBy.replace("_", " ")} ✕
+                  </span>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: accentColor,
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    padding: "2px 6px",
+                    textDecoration: "underline",
+                  }}
+                >
+                  Clear all
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {loading && orders.length === 0 ? (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "14px",
+              width: "100%",
+            }}
+          >
+            {[1, 2, 3].map((skelId) => (
+              <div
+                key={skelId}
+                style={{
+                  background: cardBg,
+                  border: cardBorder,
+                  borderRadius: "20px",
+                  padding: isMobile ? "16px 14px" : "20px 22px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "12px",
+                  boxShadow: isLight ? "0 4px 16px rgba(15,23,42,0.04)" : "0 10px 24px rgba(2,6,23,0.20)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ height: "18px", width: "160px", borderRadius: "6px", background: "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)", backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
+                  <div style={{ height: "24px", width: "80px", borderRadius: "999px", background: "#f1f5f9" }} />
+                </div>
+                <div style={{ height: "14px", width: "100px", borderRadius: "4px", background: "#f1f5f9" }} />
+                <div style={{ height: "40px", width: "100%", borderRadius: "8px", background: "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)", backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
+              </div>
+            ))}
           </div>
         ) : error ? (
           <div
@@ -2159,6 +3300,61 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
               Orders placed from this account will show here.
             </div>
           </div>
+        ) : filteredOrders.length === 0 ? (
+          <div
+            style={{
+              background: cardBg,
+              border: cardBorder,
+              borderRadius: "24px",
+              padding: "48px 24px",
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "12px",
+            }}
+          >
+            <div
+              style={{
+                width: "48px",
+                height: "48px",
+                borderRadius: "50%",
+                background: isLight ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)",
+                display: "grid",
+                placeItems: "center",
+                color: textMuted,
+              }}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+            </div>
+            <div style={{ fontSize: "17px", fontWeight: 700, color: textPrimary }}>
+              No orders match your filter criteria
+            </div>
+            <div style={{ color: textMuted, fontSize: "13.5px", maxWidth: "380px" }}>
+              Try adjusting your search keyword, date range, or switching to "All Orders".
+            </div>
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              style={{
+                marginTop: "6px",
+                background: accentColor,
+                color: isColorDarkHex(accentColor) ? "#ffffff" : "#0f172a",
+                border: "none",
+                borderRadius: "10px",
+                padding: "8px 18px",
+                fontSize: "13px",
+                fontWeight: 700,
+                cursor: "pointer",
+                boxShadow: `0 4px 12px ${accentColor}33`,
+              }}
+            >
+              Reset All Filters
+            </button>
+          </div>
         ) : (
           <div
             style={{
@@ -2167,7 +3363,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
               gap: "14px",
             }}
           >
-            {orders.map((order) => {
+            {paginatedOrders.map((order) => {
               const detail = detailMap[order.id];
               const isExpanded = expandedOrderId === order.id;
               const canCancel = order.status !== "delivered" && order.status !== "returned" && order.status !== "cancelled";
@@ -2179,7 +3375,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
               const orderReturns = getReturnsForOrder(order.id);
               const hasExistingReturn = orderReturns.length > 0;
               const hasSelectableReturnItems =
-                !!detail && detail.items.some((item) => isItemReturnable(item));
+                !!detail && detail.items.some((item) => isItemReturnable(item, detail.delivered_at));
 
               return (
                 <div
@@ -2342,7 +3538,11 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                         })()}
 
                         {/* Delivery OTP Badge on Card — only for Own Fleet */}
-                        {(order.status === "out_for_delivery" || order.status === "shipped") && order.delivery_otp && order.shipment?.mode !== "shiprocket" && order.shipment?.delivery_mode !== "shiprocket" ? (
+                        {(order.status === "out_for_delivery" || order.status === "shipped") &&
+                        order.delivery_otp &&
+                        (order.shipment?.delivery_mode === "own_agent" ||
+                          order.shipment?.mode === "own_agent" ||
+                          Boolean(order.shipment?.agent_id)) ? (
                           <div
                             style={{
                               display: "inline-flex",
@@ -2432,7 +3632,11 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                       ) : detail ? (
                         <>
                           {/* Delivery Verification Code (OTP) Banner — only for Own Fleet */}
-                          {detail.delivery_otp && detail.shipment?.mode !== "shiprocket" && detail.shipment?.delivery_mode !== "shiprocket" && (detail.status === "out_for_delivery" || detail.status === "shipped") ? (
+                          {detail.delivery_otp &&
+                          (detail.shipment?.delivery_mode === "own_agent" ||
+                            detail.shipment?.mode === "own_agent" ||
+                            Boolean(detail.shipment?.agent_id)) &&
+                          (detail.status === "out_for_delivery" || detail.status === "shipped") ? (
                             <div
                               style={{
                                 display: "flex",
@@ -2529,7 +3733,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                               >
                                 {detail.items.map((item) => {
                                   const draftItem = draft?.items?.[item.id];
-                                  const itemCanReturn = isItemReturnable(item);
+                                  const itemCanReturn = isItemReturnable(item, detail.delivered_at);
                                   const isEligible = itemCanReturn && isReturnFormOpen;
 
                                   return (
@@ -2559,8 +3763,10 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                       >
                                         {item.product_image ? (
                                           <img
-                                            src={item.product_image}
+                                            src={getThumbnailUrl(item.product_image, 140, 140)}
                                             alt={item.product_name}
+                                            loading="eager"
+                                            decoding="async"
                                             style={{
                                               width: "72px",
                                               height: "72px",
@@ -2590,13 +3796,23 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                           <div style={{ fontSize: "12px", color: textMuted, marginTop: "4px" }}>
                                             Item status: {item.status.replaceAll("_", " ")}
                                           </div>
-                                          {Number(item.returnable_quantity || 0) > 0 ? (
-                                            <div style={{ fontSize: "12px", color: "#16a34a", marginTop: "4px", fontWeight: 600 }}>
-                                              Returnable quantity: {item.returnable_quantity}
-                                            </div>
-                                          ) : (detail.status === "delivered" || detail.status === "returned") ? (
+                                          {item.return_window_days === 0 ? (
                                             <div style={{ fontSize: "12px", color: "#dc2626", marginTop: "4px", fontWeight: 600 }}>
-                                              Already fully returned or not eligible for return
+                                              Non-Returnable (Final Sale)
+                                            </div>
+                                          ) : Number(item.returnable_quantity || 0) > 0 ? (
+                                            itemCanReturn ? (
+                                              <div style={{ fontSize: "12px", color: "#16a34a", marginTop: "4px", fontWeight: 600 }}>
+                                                Returnable ({item.return_window_days != null ? `${item.return_window_days} Days Policy` : "Returnable"} • Qty: {item.returnable_quantity})
+                                              </div>
+                                            ) : (
+                                              <div style={{ fontSize: "12px", color: "#dc2626", marginTop: "4px", fontWeight: 600 }}>
+                                                Return window expired {item.return_window_days != null ? `(${item.return_window_days} Days Policy)` : ""}
+                                              </div>
+                                            )
+                                          ) : (detail.status === "delivered" || detail.status === "returned") ? (
+                                            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px", fontWeight: 600 }}>
+                                              Already fully returned
                                             </div>
                                           ) : null}
                                         </div>
@@ -3111,6 +4327,59 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                   </div>
                                 )}
 
+                                {(() => {
+                                   const selectedEntries = Object.entries(draft?.items || {}).filter(([_, it]) => it.selected);
+                                   if (!selectedEntries.length) return null;
+                                   let estItemsSubtotal = 0;
+                                   let estRefundTotal = 0;
+                                   let estNonRefundableRetained = 0;
+
+                                   selectedEntries.forEach(([itemId, draftItem]) => {
+                                     const matchedItem = detail.items.find((i) => i.id === itemId);
+                                     if (matchedItem && draftItem.quantity > 0) {
+                                       const qty = draftItem.quantity;
+                                       const totalQty = matchedItem.quantity || 1;
+                                       const unitPrice = Number(matchedItem.unit_price || 0);
+                                       estItemsSubtotal += unitPrice * qty;
+
+                                       const snap = matchedItem.pricing_snapshot;
+                                       if (snap && snap.refundable_line_total != null) {
+                                         estRefundTotal += (Number(snap.refundable_line_total) / totalQty) * qty;
+                                         estNonRefundableRetained += (Number(snap.non_refundable_charges_allocated || 0) / totalQty) * qty;
+                                       } else {
+                                         estRefundTotal += (Number(matchedItem.line_total || 0) / totalQty) * qty;
+                                       }
+                                     }
+                                   });
+
+                                   return (
+                                     <div
+                                       style={{
+                                         border: cardBorder,
+                                         borderRadius: "14px",
+                                         padding: "12px 14px",
+                                         background: isLight ? "#f0fdf4" : "rgba(16,185,129,0.06)",
+                                         marginBottom: "14px",
+                                         fontSize: "12.5px",
+                                       }}
+                                     >
+                                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                                         <span style={{ fontWeight: 700, color: textPrimary }}>
+                                           Estimated Refund Amount
+                                         </span>
+                                         <span style={{ fontWeight: 800, fontSize: "14px", color: "#16a34a" }}>
+                                           {formatPrice(estRefundTotal)}
+                                         </span>
+                                       </div>
+                                       {estNonRefundableRetained > 0 && (
+                                         <div style={{ fontSize: "11.5px", color: textMuted, marginTop: "2px" }}>
+                                           Note: Non-refundable checkout charges ({formatPrice(estNonRefundableRetained)} prorated) are deducted according to store policy.
+                                         </div>
+                                       )}
+                                     </div>
+                                   );
+                                 })()}
+
                                 <div
                                   style={{
                                     fontSize: "13px",
@@ -3513,14 +4782,22 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
           </div>
         )}
 
-        {totalPages > 1 && (
+        {Boolean(effectiveTotalPages > 1 || filteredOrders.length > 0) && (
           <Pagination
             currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={handlePageChange}
-            totalItems={totalOrders}
+            totalPages={effectiveTotalPages}
+            onPageChange={(p) => {
+              setCurrentPage(p);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            totalItems={filteredOrders.length}
             pageSize={pageSize}
-            showRangeText={true}
+            pageSizeOptions={[5, 10, 15, 25, 50]}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize);
+              setCurrentPage(1);
+            }}
+            showRangeText={false}
             theme={theme}
             accentColor={accentColor}
           />
