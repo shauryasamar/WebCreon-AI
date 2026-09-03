@@ -706,6 +706,101 @@ export function findBlockById(
     };
   }
 
+  if (
+    blockId === "profile_details" ||
+    blockId === "profiledetails" ||
+    blockId === "profile" ||
+    blockId === "customer_profile"
+  ) {
+    const profileP = siteDefinition.pages.find(
+      (p) =>
+        p.role === "profile" ||
+        p.page_type === "profile" ||
+        p.route === "/profile" ||
+        p.route === "profile" ||
+        p.id === "profile" ||
+        p.id === "page-profile"
+    );
+    const inProfile = profileP?.blocks?.find(
+      (b) =>
+        b.id === "profile_details" ||
+        b.type === "profile_details" ||
+        b.type === "profiledetails" ||
+        b.type === "profile" ||
+        b.type === "customer_profile"
+    );
+    if (inProfile) return inProfile;
+    return {
+      id: "profile_details",
+      type: "profile_details",
+      props: {},
+    };
+  }
+
+  if (
+    blockId === "signin_form" ||
+    blockId === "signinform" ||
+    blockId === "login_form" ||
+    blockId === "loginform" ||
+    blockId === "login"
+  ) {
+    const loginP = siteDefinition.pages.find(
+      (p) =>
+        p.role === "login" ||
+        p.page_type === "login" ||
+        p.route === "/login" ||
+        p.route === "login" ||
+        p.id === "login" ||
+        p.id === "page-login"
+    );
+    const inLogin = loginP?.blocks?.find(
+      (b) =>
+        b.id === "signin_form" ||
+        b.type === "signin_form" ||
+        b.type === "signinform" ||
+        b.type === "login_form" ||
+        b.type === "login"
+    );
+    if (inLogin) return inLogin;
+    return {
+      id: "signin_form",
+      type: "signin_form",
+      props: {},
+    };
+  }
+
+  if (
+    blockId === "signup_form" ||
+    blockId === "signupform" ||
+    blockId === "register_form" ||
+    blockId === "registerform" ||
+    blockId === "signup"
+  ) {
+    const signupP = siteDefinition.pages.find(
+      (p) =>
+        p.role === "signup" ||
+        p.page_type === "signup" ||
+        p.route === "/signup" ||
+        p.route === "signup" ||
+        p.id === "signup" ||
+        p.id === "page-signup"
+    );
+    const inSignup = signupP?.blocks?.find(
+      (b) =>
+        b.id === "signup_form" ||
+        b.type === "signup_form" ||
+        b.type === "signupform" ||
+        b.type === "register_form" ||
+        b.type === "signup"
+    );
+    if (inSignup) return inSignup;
+    return {
+      id: "signup_form",
+      type: "signup_form",
+      props: {},
+    };
+  }
+
   for (const page of siteDefinition.pages) {
     const match = page.blocks.find(
       (block) => block.id === blockId || block.type === blockId
@@ -1585,6 +1680,162 @@ export function updateBlockProps(
         ...siteDefinition,
         pages: [...siteDefinition.pages, newCartPage],
       };
+    }
+  }
+
+  const isProfileFallbackId = (id: string) =>
+    id === "profile_details" || id === "profiledetails" || id === "profile" || id === "customer_profile";
+  if (!hasExistingBlockProps && isProfileFallbackId(blockId)) {
+    const profilePageIndex = siteDefinition.pages.findIndex(
+      (p) =>
+        p.role === "profile" ||
+        p.page_type === "profile" ||
+        p.route === "/profile" ||
+        p.route === "profile" ||
+        p.id === "profile" ||
+        p.id === "page-profile"
+    );
+    if (profilePageIndex !== -1) {
+      const targetPage = siteDefinition.pages[profilePageIndex];
+      const existingBlockIndex = targetPage.blocks.findIndex(
+        (b) => isProfileFallbackId(b.id) || isProfileFallbackId(b.type)
+      );
+      const updatedPages = [...siteDefinition.pages];
+      if (existingBlockIndex !== -1) {
+        const existingBlock = targetPage.blocks[existingBlockIndex];
+        const updatedBlocks = [...targetPage.blocks];
+        updatedBlocks[existingBlockIndex] = {
+          ...existingBlock,
+          props: { ...(existingBlock.props || {}), ...propsPatch },
+        };
+        updatedPages[profilePageIndex] = { ...targetPage, blocks: updatedBlocks };
+      } else {
+        updatedPages[profilePageIndex] = {
+          ...targetPage,
+          blocks: [
+            ...targetPage.blocks,
+            { id: "profile_details", type: "profile_details", props: { ...propsPatch } },
+          ],
+        };
+      }
+      return { ...siteDefinition, pages: updatedPages };
+    } else {
+      const newProfilePage: EditorPage = {
+        id: "page-profile",
+        name: "Customer Profile",
+        route: "/profile",
+        role: "profile",
+        page_type: "profile",
+        show_in_nav: false,
+        blocks: [
+          { id: "profile_details", type: "profile_details", props: { ...propsPatch } },
+        ],
+      };
+      return { ...siteDefinition, pages: [...siteDefinition.pages, newProfilePage] };
+    }
+  }
+
+  const isSignInFallbackId = (id: string) =>
+    id === "signin_form" || id === "signinform" || id === "login_form" || id === "login";
+  if (!hasExistingBlockProps && isSignInFallbackId(blockId)) {
+    const loginPageIndex = siteDefinition.pages.findIndex(
+      (p) =>
+        p.role === "login" ||
+        p.page_type === "login" ||
+        p.route === "/login" ||
+        p.route === "login" ||
+        p.id === "login" ||
+        p.id === "page-login"
+    );
+    if (loginPageIndex !== -1) {
+      const targetPage = siteDefinition.pages[loginPageIndex];
+      const existingBlockIndex = targetPage.blocks.findIndex(
+        (b) => isSignInFallbackId(b.id) || isSignInFallbackId(b.type)
+      );
+      const updatedPages = [...siteDefinition.pages];
+      if (existingBlockIndex !== -1) {
+        const existingBlock = targetPage.blocks[existingBlockIndex];
+        const updatedBlocks = [...targetPage.blocks];
+        updatedBlocks[existingBlockIndex] = {
+          ...existingBlock,
+          props: { ...(existingBlock.props || {}), ...propsPatch },
+        };
+        updatedPages[loginPageIndex] = { ...targetPage, blocks: updatedBlocks };
+      } else {
+        updatedPages[loginPageIndex] = {
+          ...targetPage,
+          blocks: [
+            ...targetPage.blocks,
+            { id: "signin_form", type: "signin_form", props: { ...propsPatch } },
+          ],
+        };
+      }
+      return { ...siteDefinition, pages: updatedPages };
+    } else {
+      const newLoginPage: EditorPage = {
+        id: "page-login",
+        name: "Customer Sign In",
+        route: "/login",
+        role: "login",
+        page_type: "login",
+        show_in_nav: false,
+        blocks: [
+          { id: "signin_form", type: "signin_form", props: { ...propsPatch } },
+        ],
+      };
+      return { ...siteDefinition, pages: [...siteDefinition.pages, newLoginPage] };
+    }
+  }
+
+  const isSignUpFallbackId = (id: string) =>
+    id === "signup_form" || id === "signupform" || id === "register_form" || id === "signup";
+  if (!hasExistingBlockProps && isSignUpFallbackId(blockId)) {
+    const signupPageIndex = siteDefinition.pages.findIndex(
+      (p) =>
+        p.role === "signup" ||
+        p.page_type === "signup" ||
+        p.route === "/signup" ||
+        p.route === "signup" ||
+        p.id === "signup" ||
+        p.id === "page-signup"
+    );
+    if (signupPageIndex !== -1) {
+      const targetPage = siteDefinition.pages[signupPageIndex];
+      const existingBlockIndex = targetPage.blocks.findIndex(
+        (b) => isSignUpFallbackId(b.id) || isSignUpFallbackId(b.type)
+      );
+      const updatedPages = [...siteDefinition.pages];
+      if (existingBlockIndex !== -1) {
+        const existingBlock = targetPage.blocks[existingBlockIndex];
+        const updatedBlocks = [...targetPage.blocks];
+        updatedBlocks[existingBlockIndex] = {
+          ...existingBlock,
+          props: { ...(existingBlock.props || {}), ...propsPatch },
+        };
+        updatedPages[signupPageIndex] = { ...targetPage, blocks: updatedBlocks };
+      } else {
+        updatedPages[signupPageIndex] = {
+          ...targetPage,
+          blocks: [
+            ...targetPage.blocks,
+            { id: "signup_form", type: "signup_form", props: { ...propsPatch } },
+          ],
+        };
+      }
+      return { ...siteDefinition, pages: updatedPages };
+    } else {
+      const newSignUpPage: EditorPage = {
+        id: "page-signup",
+        name: "Customer Sign Up",
+        route: "/signup",
+        role: "signup",
+        page_type: "signup",
+        show_in_nav: false,
+        blocks: [
+          { id: "signup_form", type: "signup_form", props: { ...propsPatch } },
+        ],
+      };
+      return { ...siteDefinition, pages: [...siteDefinition.pages, newSignUpPage] };
     }
   }
 

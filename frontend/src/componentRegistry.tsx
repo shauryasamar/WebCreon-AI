@@ -11,6 +11,9 @@ import { CheckoutCta } from "./Component/CheckoutCta";
 import { DeliveryForm } from "./Component/DeliveryForm";
 import { PaymentMethods } from "./Component/PaymentMethods";
 import { PlaceOrderCta } from "./Component/PlaceOrderCta";
+import CustomerProfilePage from "./pages/CustomerProfilePage";
+import CustomerLoginPage from "./pages/CustomerLoginPage";
+import CustomerSignupPage from "./pages/CustomerSignupPage";
 import { HeroBanner } from "./Component/HeroBanner";
 import { ProductCarousel } from "./Component/ProductCarousel";
 import { BrandStoreGrid } from "./Component/BrandStoreGrid";
@@ -80,6 +83,24 @@ export const componentRegistry: ComponentRegistry = {
 
   place_order_cta: PlaceOrderCta,
   placeordercta: PlaceOrderCta,
+
+  profile_details: CustomerProfilePage,
+  profiledetails: CustomerProfilePage,
+  profile: CustomerProfilePage,
+  customer_profile: CustomerProfilePage,
+  customerprofile: CustomerProfilePage,
+
+  signin_form: CustomerLoginPage,
+  signinform: CustomerLoginPage,
+  login_form: CustomerLoginPage,
+  loginform: CustomerLoginPage,
+  login: CustomerLoginPage,
+
+  signup_form: CustomerSignupPage,
+  signupform: CustomerSignupPage,
+  register_form: CustomerSignupPage,
+  registerform: CustomerSignupPage,
+  signup: CustomerSignupPage,
 };
 
 export default componentRegistry;

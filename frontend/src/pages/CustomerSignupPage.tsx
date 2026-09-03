@@ -13,15 +13,38 @@ type LocationState = {
   from?: string;
 };
 
-export default function CustomerSignupPage({
-  siteSlug: propSiteSlug,
-  siteName: propSiteName,
-  theme: propTheme,
-}: {
+export type CustomerSignupPageProps = {
   siteSlug?: string;
   siteName?: string;
   theme?: any;
-} = {}) {
+  card_bg?: string;
+  border_color?: string;
+  title_color?: string;
+  subtext_color?: string;
+  input_bg?: string;
+  input_border?: string;
+  input_text_color?: string;
+  button_bg_color?: string;
+  button_text_color?: string;
+  card_radius?: number | string;
+  card_padding?: number | string;
+  input_radius?: number | string;
+  button_radius?: number | string;
+  max_width?: string;
+  title?: string;
+  subtitle?: string;
+  submit_button_label?: string;
+  show_google_auth?: boolean;
+  [key: string]: any;
+};
+
+export default function CustomerSignupPage(props: CustomerSignupPageProps = {}) {
+  const {
+    siteSlug: propSiteSlug,
+    siteName: propSiteName,
+    theme: propTheme,
+    ...customProps
+  } = props;
   const navigate = useNavigate();
   const location = useLocation();
   const { slug, siteId } = useParams<{ slug?: string; siteId?: string }>();
@@ -35,8 +58,15 @@ export default function CustomerSignupPage({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [previewNotice, setPreviewNotice] = useState("");
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const [inputFocused, setInputFocused] = useState<string | null>(null);
+
+  const isInsideEditor =
+    typeof window !== "undefined" &&
+    (window.location.pathname.startsWith("/builder/") ||
+      window.location.search.includes("edit_mode=true") ||
+      (window as any).__WC_EDIT_MODE__ === true);
 
   // Responsive viewport hook
   const [windowWidth, setWindowWidth] = useState(
@@ -156,42 +186,84 @@ export default function CustomerSignupPage({
     handleGoogleSuccess(mockIdToken);
   };
 
-  // Exact theme definitions inherited from site theme
-  const siteName = propSiteName || siteData?.siteName || cleanSiteName("", websiteName);
   const theme = propTheme || siteData?.theme || {};
   const isLight = theme.mode !== "dark";
+  const isHexId = (str?: string) => Boolean(str && /^[0-9a-fA-F]{24}$/.test(str.trim()));
+  const siteName =
+    propSiteName ||
+    (customProps as any)?.siteName ||
+    (customProps as any)?.site_name ||
+    siteData?.siteName ||
+    siteData?.navbar?.brandName ||
+    (theme as any)?.site_name ||
+    (propSiteSlug && !isHexId(propSiteSlug) ? cleanSiteName("", propSiteSlug) : "") ||
+    (slug && !isHexId(slug) ? cleanSiteName("", slug) : "") ||
+    (websiteName && !isHexId(websiteName) ? cleanSiteName("", websiteName) : "") ||
+    "Store";
 
   const primaryBg = theme.primary_bg || (isLight ? "#f8fafc" : "#0f172a");
   const baseCardBg = theme.card_bg || theme.secondary_bg || (isLight ? "#ffffff" : "#1e293b");
-  const cardBg =
+  const defaultCardBg =
     baseCardBg.toLowerCase().trim() === primaryBg.toLowerCase().trim()
       ? isLight
         ? "#ffffff"
         : "#1e293b"
       : baseCardBg;
+  const cardBg = customProps.card_bg || defaultCardBg;
 
   const computedContrastText = getContrastTextColor(cardBg);
   const rawThemeTextColor = theme.text_color;
   const isDarkCard = computedContrastText === "#ffffff";
 
-  const textColor =
+  const defaultTextColor =
     rawThemeTextColor && Math.abs(getLuminance(rawThemeTextColor) - getLuminance(cardBg)) > 45
       ? rawThemeTextColor
       : computedContrastText;
+  const textColor = customProps.title_color || defaultTextColor;
 
-  const subtextColor = isDarkCard ? "rgba(226, 232, 240, 0.78)" : "rgba(51, 65, 85, 0.78)";
-  const accentColor = theme.accent_color || "#2563eb";
+  const subtextColor = customProps.subtext_color || (isDarkCard ? "rgba(226, 232, 240, 0.78)" : "rgba(51, 65, 85, 0.78)");
+  const accentColor = customProps.button_bg_color || theme.accent_color || "#2563eb";
   const accessibleAccentColor = getAccessibleAccentColor(accentColor, cardBg);
-  const buttonTextColor = getContrastTextColor(accentColor);
-  const borderColor = isDarkCard ? "rgba(255, 255, 255, 0.14)" : "rgba(15, 23, 42, 0.12)";
+  const buttonTextColor = customProps.button_text_color || getContrastTextColor(accentColor);
+  const borderColor = customProps.border_color || (isDarkCard ? "rgba(255, 255, 255, 0.14)" : "rgba(15, 23, 42, 0.12)");
 
-  const inputBg = isDarkCard ? "#0f172a" : "#ffffff";
-  const inputTextColor = isDarkCard ? "#f8fafc" : "#0f172a";
-  const inputBorder = isDarkCard ? "rgba(255, 255, 255, 0.2)" : "rgba(15, 23, 42, 0.2)";
+  const inputBg = customProps.input_bg || (isDarkCard ? "#0f172a" : "#ffffff");
+  const inputTextColor = customProps.input_text_color || (isDarkCard ? "#f8fafc" : "#0f172a");
+  const inputBorder = customProps.input_border || (isDarkCard ? "rgba(255, 255, 255, 0.2)" : "rgba(15, 23, 42, 0.2)");
+
+  const rawCardRadius = customProps.card_radius ?? (isMobile ? 18 : 24);
+  const cardRadius = typeof rawCardRadius === "number" ? `${rawCardRadius}px` : rawCardRadius;
+
+  const rawCardPadding = customProps.card_padding ?? (isMobile ? (isShortScreen ? "18px 18px" : "22px 20px") : "34px 36px 26px 36px");
+  const cardPadding = typeof rawCardPadding === "number" ? `${rawCardPadding}px` : rawCardPadding;
+
+  const rawInputRadius = customProps.input_radius ?? (isMobile ? 8 : 10);
+  const inputRadius = typeof rawInputRadius === "number" ? `${rawInputRadius}px` : rawInputRadius;
+
+  const rawButtonRadius = customProps.button_radius ?? (isMobile ? 9 : 11);
+  const buttonRadius = typeof rawButtonRadius === "number" ? `${rawButtonRadius}px` : rawButtonRadius;
+
+  const resolvedMaxWidth = (() => {
+    const raw = customProps.max_width;
+    if (!raw) return isMobile ? "380px" : "450px";
+    const str = String(raw).trim().toLowerCase();
+    if (str === "full" || str === "100%" || str === "100") return "100%";
+    if (str.endsWith("px") || str.endsWith("%")) return str;
+    const n = Number(str);
+    return isNaN(n) ? "450px" : `${n}px`;
+  })();
+
+  const showGoogleAuth = customProps.show_google_auth !== false;
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
+
+    if (isInsideEditor) {
+      setPreviewNotice("Account registration verified! (Visual Preview)");
+      setTimeout(() => setPreviewNotice(""), 3000);
+      return;
+    }
 
     if (!websiteName) {
       setError("Missing site slug");
@@ -242,14 +314,12 @@ export default function CustomerSignupPage({
       <div
         style={{
           width: "100%",
-          maxWidth: isMobile ? "380px" : "450px",
+          maxWidth: resolvedMaxWidth,
           margin: "auto",
           background: cardBg,
           color: textColor,
-          borderRadius: isMobile ? "18px" : "24px",
-          padding: isMobile
-            ? isShortScreen ? "18px 18px" : "22px 20px"
-            : "34px 36px 26px 36px",
+          borderRadius: cardRadius,
+          padding: cardPadding,
           border: `1px solid ${borderColor}`,
           boxShadow: isLight
             ? "0 16px 40px rgba(15, 23, 42, 0.08)"
@@ -298,7 +368,7 @@ export default function CustomerSignupPage({
               lineHeight: 1.2,
             }}
           >
-            {siteName}
+            {customProps.title || siteName}
           </h1>
           <p
             style={{
@@ -308,74 +378,95 @@ export default function CustomerSignupPage({
               color: subtextColor,
             }}
           >
-            Create your account
+            {customProps.subtitle || "Create your account"}
           </p>
         </div>
 
-        {/* 1-CLICK GOOGLE SIGN-UP */}
-        <div>
+        {/* PREVIEW NOTICE */}
+        {previewNotice && (
           <div
-            id="customer-signup-google-btn"
-            style={{ display: "flex", justifyContent: "center", width: "100%" }}
-          ></div>
-          <button
-            id="customer-signup-google-fallback"
-            type="button"
-            onClick={() => {
-              if ((window as any).google?.accounts?.id) {
-                (window as any).google.accounts.id.prompt();
-              } else {
-                handleDevGoogleLogin();
-              }
-            }}
-            disabled={googleSubmitting || authLoading}
             style={{
-              width: "100%",
-              height: isMobile ? "38px" : "44px",
-              background: isDarkCard ? "#0f172a" : "#ffffff",
-              border: `1px solid ${borderColor}`,
-              borderRadius: isMobile ? "9px" : "11px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "10px",
-              cursor: "pointer",
+              padding: "10px 14px",
+              borderRadius: inputRadius,
+              background: "rgba(34, 197, 94, 0.12)",
+              color: "#16a34a",
+              fontSize: "13px",
               fontWeight: 600,
-              fontSize: isMobile ? "13px" : "14px",
-              color: textColor,
-              transition: "all 0.15s ease",
+              textAlign: "center",
             }}
           >
-            <svg width={isMobile ? 16 : 18} height={isMobile ? 16 : 18} viewBox="0 0 24 24">
-              <path
-                fill="#4285F4"
-                d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.35 24 12 24z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
-              />
-              <path
-                fill="#EA4335"
-                d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-              />
-            </svg>
-            <span>{googleSubmitting ? "Connecting..." : "Sign up with Google"}</span>
-          </button>
-        </div>
+            ✓ {previewNotice}
+          </div>
+        )}
+
+        {/* 1-CLICK GOOGLE SIGN-UP */}
+        {showGoogleAuth && (
+          <div>
+            <div
+              id="customer-signup-google-btn"
+              style={{ display: "flex", justifyContent: "center", width: "100%" }}
+            ></div>
+            <button
+              id="customer-signup-google-fallback"
+              type="button"
+              onClick={() => {
+                if ((window as any).google?.accounts?.id) {
+                  (window as any).google.accounts.id.prompt();
+                } else {
+                  handleDevGoogleLogin();
+                }
+              }}
+              disabled={googleSubmitting || authLoading}
+              style={{
+                width: "100%",
+                height: isMobile ? "38px" : "44px",
+                background: isDarkCard ? "#0f172a" : "#ffffff",
+                border: `1px solid ${borderColor}`,
+                borderRadius: buttonRadius,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "10px",
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: isMobile ? "13px" : "14px",
+                color: textColor,
+                transition: "all 0.15s ease",
+              }}
+            >
+              <svg width={isMobile ? 16 : 18} height={isMobile ? 16 : 18} viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.35 24 12 24z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                />
+              </svg>
+              <span>{googleSubmitting ? "Connecting..." : "Sign up with Google"}</span>
+            </button>
+          </div>
+        )}
 
         {/* DIVIDER */}
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <div style={{ flex: 1, height: "1px", background: borderColor }}></div>
-          <span style={{ fontSize: isMobile ? "10.5px" : "11.5px", fontWeight: 600, color: subtextColor, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-            or with email
-          </span>
-          <div style={{ flex: 1, height: "1px", background: borderColor }}></div>
-        </div>
+        {showGoogleAuth && (
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ flex: 1, height: "1px", background: borderColor }}></div>
+            <span style={{ fontSize: isMobile ? "10.5px" : "11.5px", fontWeight: 600, color: subtextColor, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              or with email
+            </span>
+            <div style={{ flex: 1, height: "1px", background: borderColor }}></div>
+          </div>
+        )}
 
         {/* FORM */}
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: isMobile ? "8px" : "12px" }}>
@@ -400,7 +491,7 @@ export default function CustomerSignupPage({
                 height: isMobile ? "34px" : "40px",
                 boxSizing: "border-box",
                 padding: isMobile ? "0 10px" : "0 12px",
-                borderRadius: isMobile ? "8px" : "10px",
+                borderRadius: inputRadius,
                 border: `1px solid ${inputFocused === "name" ? accentColor : inputBorder}`,
                 background: inputBg,
                 color: inputTextColor,
@@ -433,7 +524,7 @@ export default function CustomerSignupPage({
                 height: isMobile ? "34px" : "40px",
                 boxSizing: "border-box",
                 padding: isMobile ? "0 10px" : "0 12px",
-                borderRadius: isMobile ? "8px" : "10px",
+                borderRadius: inputRadius,
                 border: `1px solid ${inputFocused === "email" ? accentColor : inputBorder}`,
                 background: inputBg,
                 color: inputTextColor,
@@ -467,7 +558,7 @@ export default function CustomerSignupPage({
                   height: isMobile ? "34px" : "40px",
                   boxSizing: "border-box",
                   padding: isMobile ? "0 10px" : "0 12px",
-                  borderRadius: isMobile ? "8px" : "10px",
+                  borderRadius: inputRadius,
                   border: `1px solid ${inputFocused === "password" ? accentColor : inputBorder}`,
                   background: inputBg,
                   color: inputTextColor,
@@ -500,7 +591,7 @@ export default function CustomerSignupPage({
                   height: isMobile ? "34px" : "40px",
                   boxSizing: "border-box",
                   padding: isMobile ? "0 10px" : "0 12px",
-                  borderRadius: isMobile ? "8px" : "10px",
+                  borderRadius: inputRadius,
                   border: `1px solid ${inputFocused === "confirmPassword" ? accentColor : inputBorder}`,
                   background: inputBg,
                   color: inputTextColor,
@@ -535,7 +626,7 @@ export default function CustomerSignupPage({
             <div
               style={{
                 padding: "8px 12px",
-                borderRadius: "8px",
+                borderRadius: inputRadius,
                 background: "rgba(239, 68, 68, 0.12)",
                 color: "#ef4444",
                 fontSize: "12.5px",
@@ -552,7 +643,7 @@ export default function CustomerSignupPage({
             style={{
               marginTop: "2px",
               height: isMobile ? "38px" : "44px",
-              borderRadius: isMobile ? "9px" : "11px",
+              borderRadius: buttonRadius,
               border: "none",
               background: accentColor,
               color: buttonTextColor,
@@ -564,7 +655,7 @@ export default function CustomerSignupPage({
               transition: "all 0.15s ease",
             }}
           >
-            {authLoading ? "Creating account..." : "Create Account"}
+            {authLoading ? "Creating account..." : (customProps.submit_button_label || "Create Account")}
           </button>
         </form>
 

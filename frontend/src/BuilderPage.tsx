@@ -43,6 +43,7 @@ import BuilderDrawerPanel from "./Component/BuilderDrawerPanel";
 import { normalizeStorefrontProduct, slugify } from "./utils/productNormalizer";
 import { isColorDarkHex } from "./context/ThemeContext";
 import FestiveBackgroundOverlay from "./Component/FestiveBackgroundOverlay";
+import { cleanSiteName } from "./hooks/usePublicSiteTheme";
 
 // Standalone secondary routes remain lazy
 const AgentDeliveryPage = React.lazy(() => import("./pages/AgentDeliveryPage"));
@@ -692,6 +693,7 @@ function StorefrontPage({
   onSelectBlock,
   storefrontNavbarMode,
   navbarFixedBounds,
+  siteName,
   appBase,
 }: {
   page: Page;
@@ -699,6 +701,7 @@ function StorefrontPage({
   selectedProduct?: Product | null;
   siteId: string;
   siteSlug: string;
+  siteName?: string;
   editMode: boolean;
   adminTopbarVisible: boolean;
   selectedBlockId: string | null;
@@ -708,6 +711,19 @@ function StorefrontPage({
   appBase: string;
 }) {
   const location = useLocation();
+  const resolvedSiteName = useMemo(() => {
+    return (
+      siteName ||
+      (siteDefinition as any)?.site?.brand_name ||
+      (siteDefinition as any)?.site_name ||
+      (siteDefinition as any)?.site_title ||
+      (siteDefinition?.navbar as any)?.brandName ||
+      (siteDefinition?.navbar as any)?.brand_name ||
+      cleanSiteName("", siteSlug) ||
+      "Store"
+    );
+  }, [siteName, siteDefinition, siteSlug]);
+
   return (
     <StorefrontShell
       siteDefinition={siteDefinition}
@@ -740,6 +756,8 @@ function StorefrontPage({
             key={`editor-render-${page?.id || page?.route || "page"}-${location.search}`}
             page={page}
             siteId={siteId}
+            siteSlug={siteSlug}
+            siteName={resolvedSiteName}
             selectedProduct={selectedProduct ?? undefined}
             selectedBlockId={selectedBlockId}
             onSelectBlock={onSelectBlock}
@@ -751,6 +769,8 @@ function StorefrontPage({
           key={`storefront-render-${page?.id || page?.route || "page"}-${location.search}`}
           page={page}
           siteId={siteId}
+          siteSlug={siteSlug}
+          siteName={resolvedSiteName}
           selectedProduct={selectedProduct ?? undefined}
           theme={siteDefinition.theme}
         />
@@ -1887,6 +1907,122 @@ function BuilderPageContent() {
     } as Page;
   }, [activeSiteDefinition]);
 
+  const profilePage = useMemo(() => {
+    if (!activeSiteDefinition) return null;
+    const exact = activeSiteDefinition.pages.find(
+      (p) =>
+        p.route === "/profile" ||
+        p.route === "profile" ||
+        p.role === "profile" ||
+        p.id === "profile" ||
+        p.id === "page-profile"
+    );
+    if (exact) {
+      const cleanBlocks = (exact.blocks || []).filter((b) => {
+        const type = String(b.type || "").toLowerCase();
+        return (
+          !type.includes("banner") &&
+          !type.includes("hero") &&
+          !type.includes("carousel") &&
+          !type.includes("grid") &&
+          type !== "navbar" &&
+          type !== "footer"
+        );
+      });
+      return {
+        ...exact,
+        blocks: cleanBlocks.length > 0 ? cleanBlocks : [
+          { id: "profile_details", type: "profile_details", props: {} },
+        ],
+      };
+    }
+    return {
+      id: "fallback-profile-page",
+      name: "Customer Profile",
+      route: "/profile",
+      show_in_nav: false,
+      blocks: [
+        { id: "profile_details", type: "profile_details", props: {} },
+      ],
+    } as Page;
+  }, [activeSiteDefinition]);
+
+  const loginPage = useMemo(() => {
+    const raw = activeSiteDefinition.pages.find(
+      (p) =>
+        p.role === "login" ||
+        p.page_type === "login" ||
+        p.route === "/login" ||
+        p.route === "login" ||
+        p.id === "login" ||
+        p.id === "page-login"
+    );
+    if (raw) {
+      const hasBlock = raw.blocks?.some(
+        (b) =>
+          b.type === "signin_form" ||
+          b.type === "signinform" ||
+          b.type === "login_form" ||
+          b.type === "login"
+      );
+      if (hasBlock) return raw;
+      return {
+        ...raw,
+        blocks: [
+          ...(raw.blocks || []),
+          { id: "signin_form", type: "signin_form", props: {} },
+        ],
+      };
+    }
+    return {
+      id: "fallback-login-page",
+      name: "Customer Sign In",
+      route: "/login",
+      show_in_nav: false,
+      blocks: [
+        { id: "signin_form", type: "signin_form", props: {} },
+      ],
+    } as Page;
+  }, [activeSiteDefinition]);
+
+  const signupPage = useMemo(() => {
+    const raw = activeSiteDefinition.pages.find(
+      (p) =>
+        p.role === "signup" ||
+        p.page_type === "signup" ||
+        p.route === "/signup" ||
+        p.route === "signup" ||
+        p.id === "signup" ||
+        p.id === "page-signup"
+    );
+    if (raw) {
+      const hasBlock = raw.blocks?.some(
+        (b) =>
+          b.type === "signup_form" ||
+          b.type === "signupform" ||
+          b.type === "register_form" ||
+          b.type === "signup"
+      );
+      if (hasBlock) return raw;
+      return {
+        ...raw,
+        blocks: [
+          ...(raw.blocks || []),
+          { id: "signup_form", type: "signup_form", props: {} },
+        ],
+      };
+    }
+    return {
+      id: "fallback-signup-page",
+      name: "Customer Sign Up",
+      route: "/signup",
+      show_in_nav: false,
+      blocks: [
+        { id: "signup_form", type: "signup_form", props: {} },
+      ],
+    } as Page;
+  }, [activeSiteDefinition]);
+
 
   /**
    * Note: this no longer bails out when `isAdminRoute` is true. Callers
@@ -2115,7 +2251,13 @@ function BuilderPageContent() {
           selectedBlockId={selectedBlockId}
           selectedTab={editorTab}
           onTabChange={setEditorTab}
-          onSelectBlock={setSelectedBlockId}
+          onSelectBlock={(bId) => {
+            if (bId) {
+              handleSelectBlock(bId);
+            } else {
+              setSelectedBlockId(null);
+            }
+          }}
           onSelectPage={(targetRouteOrId) => {
             const targetPage = activeSiteDefinition.pages.find(
               (p) => p.id === targetRouteOrId || p.route === targetRouteOrId
@@ -2282,56 +2424,79 @@ function BuilderPageContent() {
                 }
               />
 
-              <Route
-                path="profile"
-                element={
-                  <StorefrontShell
-                    siteDefinition={activeSiteDefinition}
-                    siteId={resolvedSiteId || siteId || ""}
-                    siteSlug={siteSlug}
-                    editMode={editMode}
-                    adminTopbarVisible={showAdminTopbar}
-                    selectedBlockId={selectedBlockId}
-                    onSelectBlock={handleSelectBlock}
-                    storefrontNavbarMode={storefrontNavbarMode}
-                    navbarFixedBounds={navbarFixedBounds}
-                    appBase={appBase}
-                  >
-                    <CustomerProfilePage
+              {profilePage && (
+                <Route
+                  path="profile"
+                  element={
+                    <StorefrontPage
+                      page={profilePage}
+                      siteDefinition={activeSiteDefinition}
                       siteId={resolvedSiteId || siteId || ""}
                       siteSlug={siteSlug}
-                      theme={activeSiteDefinition.theme}
+                      siteName={siteName}
+                      selectedProduct={undefined}
+                      editMode={editMode}
+                      adminTopbarVisible={showAdminTopbar}
+                      selectedBlockId={selectedBlockId}
+                      onSelectBlock={handleSelectBlock}
+                      storefrontNavbarMode={storefrontNavbarMode}
+                      navbarFixedBounds={navbarFixedBounds}
+                      appBase={appBase}
                     />
-                  </StorefrontShell>
-                }
-              />
+                  }
+                />
+              )}
 
               <Route
                 path="account"
                 element={<Navigate to="profile" replace />}
               />
 
-              <Route
-                path="login"
-                element={
-                  <CustomerLoginPage
-                    siteSlug={siteSlug || siteSlugParam || ""}
-                    siteName={activeSiteDefinition?.site?.brand_name || siteName || "Store"}
-                    theme={activeSiteDefinition?.theme}
-                  />
-                }
-              />
+              {loginPage && (
+                <Route
+                  path="login"
+                  element={
+                    <StorefrontPage
+                      page={loginPage}
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      siteName={siteName}
+                      selectedProduct={undefined}
+                      editMode={editMode}
+                      adminTopbarVisible={showAdminTopbar}
+                      selectedBlockId={selectedBlockId}
+                      onSelectBlock={handleSelectBlock}
+                      storefrontNavbarMode={storefrontNavbarMode}
+                      navbarFixedBounds={navbarFixedBounds}
+                      appBase={appBase}
+                    />
+                  }
+                />
+              )}
 
-              <Route
-                path="signup"
-                element={
-                  <CustomerSignupPage
-                    siteSlug={siteSlug || siteSlugParam || ""}
-                    siteName={activeSiteDefinition?.site?.brand_name || siteName || "Store"}
-                    theme={activeSiteDefinition?.theme}
-                  />
-                }
-              />
+              {signupPage && (
+                <Route
+                  path="signup"
+                  element={
+                    <StorefrontPage
+                      page={signupPage}
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      siteName={siteName}
+                      selectedProduct={undefined}
+                      editMode={editMode}
+                      adminTopbarVisible={showAdminTopbar}
+                      selectedBlockId={selectedBlockId}
+                      onSelectBlock={handleSelectBlock}
+                      storefrontNavbarMode={storefrontNavbarMode}
+                      navbarFixedBounds={navbarFixedBounds}
+                      appBase={appBase}
+                    />
+                  }
+                />
+              )}
 
               {cartPage && (
                 <Route

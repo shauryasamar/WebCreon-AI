@@ -78,6 +78,8 @@ function isColorDarkHex(colorHex?: string): boolean {
 type EditorRenderPageProps = {
   page: Page | null | undefined;
   siteId: string;
+  siteSlug?: string;
+  siteName?: string;
   selectedProduct?: Product | null;
   selectedBlockId?: string | null;
   onSelectBlock?: (blockId: string) => void;
@@ -261,6 +263,12 @@ function EditorBlockWrapper({
   const readableName =
     blockType === "place_order_cta" || blockType === "placeordercta" || blockId === "place_order_cta" || blockType === "checkout_review"
       ? "Review & Pay"
+      : blockType === "profile_details" || blockType === "profiledetails" || blockId === "profile_details" || blockType === "profile"
+      ? "Profile Details"
+      : blockType === "signin_form" || blockType === "signinform" || blockId === "signin_form" || blockType === "login_form" || blockType === "login"
+      ? "Sign In Form"
+      : blockType === "signup_form" || blockType === "signupform" || blockId === "signup_form" || blockType === "register_form" || blockType === "signup"
+      ? "Sign Up Form"
       : (blockType || "")
           .replace(/[-_]/g, " ")
           .replace(/\b\w/g, (c) => c.toUpperCase());
@@ -437,6 +445,8 @@ function EditorBlockWrapper({
 const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
   page,
   siteId,
+  siteSlug,
+  siteName,
   selectedProduct = null,
   selectedBlockId = null,
   onSelectBlock,
@@ -1214,6 +1224,9 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
 
     const componentProps = {
       siteId,
+      siteSlug,
+      siteName,
+      editMode: true,
       ...blockProps,
       theme: resolvedTheme,
       embeddedInEditorWrapper: isCartBlock,
@@ -1326,6 +1339,12 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
         (selectedBlockId === "payment_methods" && (block.id === "payment_methods" || block.type === "payment_methods" || PAYMENT_TYPES.has(block.type.toLowerCase()))) ||
         (selectedBlockId === "checkout_order_summary" && (block.id === "checkout_order_summary" || block.type === "checkout_order_summary" || CHECKOUT_SUMMARY_TYPES.has(block.type.toLowerCase()))) ||
         (selectedBlockId === "place_order_cta" && PLACE_ORDER_TYPES.has(block.type.toLowerCase())) ||
+        ((selectedBlockId === "profile_details" || selectedBlockId === "profile") &&
+          (block.id === "profile_details" || block.type === "profile_details" || block.type === "profile" || block.type === "profiledetails")) ||
+        ((selectedBlockId === "signin_form" || selectedBlockId === "login" || selectedBlockId === "signinform" || selectedBlockId === "login_form") &&
+          (block.id === "signin_form" || block.type === "signin_form" || block.type === "login" || block.type === "signinform" || block.type === "login_form")) ||
+        ((selectedBlockId === "signup_form" || selectedBlockId === "signup" || selectedBlockId === "signupform" || selectedBlockId === "register_form") &&
+          (block.id === "signup_form" || block.type === "signup_form" || block.type === "signup" || block.type === "signupform" || block.type === "register_form")) ||
         ((selectedBlockId === "cart_view" || selectedBlockId === "cart" || selectedBlockId === "cart_sidebar") &&
           (CART_PAGE_TYPES.has(block.type.toLowerCase()) || isCartBlock)))
     );

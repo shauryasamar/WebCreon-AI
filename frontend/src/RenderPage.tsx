@@ -80,6 +80,8 @@ function isColorDarkHex(colorHex?: string): boolean {
 type RenderPageProps = {
   page: Page | null | undefined;
   siteId: string;
+  siteSlug?: string;
+  siteName?: string;
   selectedProduct?: Product | null;
   theme?: Theme;
 };
@@ -221,6 +223,8 @@ function mapSavedAddressToDeliveryData(address: SavedAddress): DeliveryData {
 const RenderPage: React.FC<RenderPageProps> = ({
   page,
   siteId,
+  siteSlug,
+  siteName,
   selectedProduct = null,
   theme,
 }) => {
@@ -1015,6 +1019,8 @@ const RenderPage: React.FC<RenderPageProps> = ({
 
     const componentProps = {
       siteId,
+      siteSlug,
+      siteName,
       ...blockProps,
       theme: resolvedTheme,
       ...(overrides ?? {}),

@@ -137,7 +137,6 @@ function PageBlocksTreeView({
       route: "/profile",
       blocks: [
         { id: "profile_details", type: "profile_details", name: "Profile Details" },
-        { id: "saved_addresses", type: "saved_addresses", name: "Saved Addresses" },
       ],
     },
     {
@@ -218,7 +217,19 @@ function PageBlocksTreeView({
                 <div
                   onClick={() => {
                     if (onSelectPage) onSelectPage(p.route);
-                    if (onSelectBlock) onSelectBlock(null);
+                    if (p.id === "profile") {
+                      if (onSelectBlock) onSelectBlock("profile_details");
+                    } else if (p.id === "login") {
+                      if (onSelectBlock) onSelectBlock("signin_form");
+                    } else if (p.id === "signup") {
+                      if (onSelectBlock) onSelectBlock("signup_form");
+                    } else if (p.id === "cart") {
+                      if (onSelectBlock) onSelectBlock("cart_view");
+                    } else if (p.id === "product_detail") {
+                      if (onSelectBlock) onSelectBlock("product_detail");
+                    } else {
+                      if (onSelectBlock) onSelectBlock(null);
+                    }
                     setManualToggled((prev) => ({
                       ...prev,
                       [p.id]: !isOpen,
@@ -6419,6 +6430,1243 @@ function PaymentMethodsEditor({
   );
 }
 
+function isProfileBlock(block?: any): boolean {
+  if (!block) return false;
+  const rawType = String(block.type || "").toLowerCase().trim();
+  const rawId = String(block.id || "").toLowerCase().trim();
+  const normType = rawType.replace(/[-_\s]/g, "");
+  const normId = rawId.replace(/[-_\s]/g, "");
+
+  return (
+    normType === "profiledetails" ||
+    normType === "profile" ||
+    normType === "customerprofile" ||
+    normId === "profiledetails" ||
+    normId === "profile" ||
+    normId === "customerprofile" ||
+    rawType === "profile_details" ||
+    rawId === "profile_details" ||
+    rawType === "customer_profile" ||
+    rawId === "customer_profile"
+  );
+}
+
+function ProfileEditor({
+  selectedBlock,
+  isLightMode,
+  textColor: _textColor,
+  accentColor: _accentColor,
+  onSiteDefinitionChange,
+  siteDefinition,
+}: {
+  selectedBlock: any;
+  isLightMode: boolean;
+  textColor: string;
+  accentColor: string;
+  onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
+  siteDefinition: EditorSiteDefinition;
+}) {
+  const [activeTab, setActiveTab] = useState<"layout" | "content" | "colors">("layout");
+  const p = selectedBlock?.props ?? {};
+
+  const updateProps = (patch: Record<string, any>) => {
+    const nextDef = JSON.parse(JSON.stringify(siteDefinition));
+    let updated = false;
+
+    if (Array.isArray(nextDef.pages)) {
+      for (const pg of nextDef.pages) {
+        if (Array.isArray(pg.blocks)) {
+          for (let i = 0; i < pg.blocks.length; i++) {
+            const b = pg.blocks[i];
+            if (
+              b.id === selectedBlock.id ||
+              b.type === selectedBlock.type ||
+              isProfileBlock(b)
+            ) {
+              pg.blocks[i] = {
+                ...b,
+                props: { ...(b.props ?? {}), ...patch },
+              };
+              updated = true;
+            }
+          }
+        }
+      }
+    }
+
+    if (!updated) {
+      if (!Array.isArray(nextDef.pages)) nextDef.pages = [];
+      let profilePg = nextDef.pages.find((pg: any) => pg.route === "/profile" || pg.role === "profile");
+      if (!profilePg) {
+        profilePg = {
+          id: "page-profile",
+          name: "Customer Profile",
+          route: "/profile",
+          role: "profile",
+          show_in_nav: false,
+          blocks: [],
+        };
+        nextDef.pages.push(profilePg);
+      }
+      if (!Array.isArray(profilePg.blocks)) profilePg.blocks = [];
+      profilePg.blocks.push({
+        id: "profile_details",
+        type: "profile_details",
+        props: { ...(selectedBlock.props ?? {}), ...patch },
+      });
+    }
+
+    onSiteDefinitionChange(nextDef);
+  };
+
+  const parseNumProp = (val: any, fallback: number) => {
+    if (val === undefined || val === null || val === "") return fallback;
+    const n = Number(val);
+    return isNaN(n) ? fallback : n;
+  };
+
+  const getStr = (key: string, fallback: string) => {
+    const val = p[key];
+    if (val !== undefined && val !== null && String(val).trim() !== "") {
+      return String(val);
+    }
+    return fallback;
+  };
+
+  const textInputStyle: React.CSSProperties = {
+    width: "100%",
+    height: "28px",
+    padding: "0 8px",
+    fontSize: "11px",
+    fontWeight: 600,
+    color: "#0f172a",
+    borderRadius: "4px",
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    boxSizing: "border-box",
+  };
+
+  const fieldLabelStyle: React.CSSProperties = {
+    fontSize: "9px",
+    fontWeight: 700,
+    color: "#64748b",
+    textTransform: "uppercase",
+  };
+
+  const normalizedWidth = (() => {
+    const raw = p.max_width;
+    if (!raw) return "1180px";
+    const str = String(raw).trim().toLowerCase();
+    if (str === "full" || str === "100%" || str === "100") return "100%";
+    if (str === "1440px" || str === "1440") return "1440px";
+    if (str === "1280px" || str === "1280") return "1280px";
+    if (str === "1180px" || str === "1180") return "1180px";
+    if (str === "1000px" || str === "1000") return "1000px";
+    return String(raw);
+  })();
+
+  return (
+    <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
+      {/* 3 Clean Modern Tabs */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: "2px",
+          background: "#f1f5f9",
+          padding: "2px",
+          borderRadius: "6px",
+          marginBottom: "2px",
+        }}
+      >
+        {(["layout", "content", "colors"] as const).map((tab) => {
+          const active = activeTab === tab;
+          return (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              style={{
+                padding: "4px 2px",
+                fontSize: "10.5px",
+                fontWeight: active ? 700 : 500,
+                borderRadius: "4px",
+                border: "none",
+                background: active ? "#ffffff" : "transparent",
+                color: active ? "#0f172a" : "#64748b",
+                boxShadow: active ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
+                cursor: "pointer",
+                textTransform: "capitalize",
+                textAlign: "center",
+              }}
+            >
+              {tab}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 1. LAYOUT TAB */}
+      {activeTab === "layout" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Dimensions */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Card Dimensions & Spacing
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Max Width</label>
+                <SegmentedRow
+                  value={normalizedWidth}
+                  onChange={(val) => updateProps({ max_width: val })}
+                  options={[
+                    { label: "100% Full", value: "100%" },
+                    { label: "1440px", value: "1440px" },
+                    { label: "1280px", value: "1280px" },
+                    { label: "1180px", value: "1180px" },
+                    { label: "1000px", value: "1000px" },
+                  ]}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Card Padding"
+                  value={parseNumProp(p.card_padding, 32)}
+                  min={12}
+                  max={64}
+                  step={4}
+                  unit="px"
+                  onChange={(val) => updateProps({ card_padding: val })}
+                />
+                <NumberStepperField
+                  label="Card Radius"
+                  value={parseNumProp(p.card_radius, 16)}
+                  min={0}
+                  max={36}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ card_radius: val })}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Form Controls Shapes */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Input & Button Corners
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+              <NumberStepperField
+                label="Input Radius"
+                value={parseNumProp(p.input_radius, 10)}
+                min={0}
+                max={24}
+                step={2}
+                unit="px"
+                onChange={(val) => updateProps({ input_radius: val })}
+              />
+              <NumberStepperField
+                label="Button Radius"
+                value={parseNumProp(p.button_radius, 10)}
+                min={0}
+                max={24}
+                step={2}
+                unit="px"
+                onChange={(val) => updateProps({ button_radius: val })}
+              />
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* 2. CONTENT TAB */}
+      {activeTab === "content" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Header & Button Labels */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Titles & Labels
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Section Title</label>
+                <input
+                  type="text"
+                  value={getStr("title", "")}
+                  placeholder="Customer Profile"
+                  onChange={(e) => updateProps({ title: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Section Subtitle</label>
+                <input
+                  type="text"
+                  value={getStr("subtitle", "")}
+                  placeholder="Manage your account details and password."
+                  onChange={(e) => updateProps({ subtitle: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Save Button Label</label>
+                  <input
+                    type="text"
+                    value={getStr("save_button_label", "Save Profile Details")}
+                    placeholder="Save Profile Details"
+                    onChange={(e) => updateProps({ save_button_label: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Sign Out Label</label>
+                  <input
+                    type="text"
+                    value={getStr("sign_out_label", "Sign Out")}
+                    placeholder="Sign Out"
+                    onChange={(e) => updateProps({ sign_out_label: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Change Password Link Label</label>
+                <input
+                  type="text"
+                  value={getStr("change_password_label", "Change Password")}
+                  placeholder="Change Password"
+                  onChange={(e) => updateProps({ change_password_label: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Field Toggles */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Field Visibility
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactToggleRow
+                label="Phone Number Field"
+                checked={p.show_phone !== false}
+                onChange={(checked) => updateProps({ show_phone: checked })}
+              />
+              <CompactToggleRow
+                label="Gender Selection Field"
+                checked={p.show_gender !== false}
+                onChange={(checked) => updateProps({ show_gender: checked })}
+              />
+              <CompactToggleRow
+                label="Date of Birth Field"
+                checked={p.show_dob !== false}
+                onChange={(checked) => updateProps({ show_dob: checked })}
+              />
+              <CompactToggleRow
+                label="Change Password Section"
+                checked={p.show_password_section !== false}
+                onChange={(checked) => updateProps({ show_password_section: checked })}
+              />
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* 3. COLORS TAB */}
+      {activeTab === "colors" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Card & Text Colors */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Card & Text Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Card Background"
+                value={p.card_bg || (siteDefinition.theme?.mode === "dark" ? "#1e293b" : "#ffffff")}
+                onChange={(val) => updateProps({ card_bg: val })}
+              />
+              <CompactColorRow
+                label="Card Border"
+                value={p.border_color || (siteDefinition.theme?.mode === "dark" ? "#334155" : "#e2e8f0")}
+                onChange={(val) => updateProps({ border_color: val })}
+              />
+              <CompactColorRow
+                label="Heading / Name Color"
+                value={p.title_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                onChange={(val) => updateProps({ title_color: val })}
+              />
+              <CompactColorRow
+                label="Subtitle & Muted Text"
+                value={p.subtext_color || (siteDefinition.theme?.mode === "dark" ? "#94a3b8" : "#64748b")}
+                onChange={(val) => updateProps({ subtext_color: val })}
+              />
+            </div>
+          </section>
+
+          {/* Input Colors */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Input Field Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Input Background"
+                value={p.input_bg || (siteDefinition.theme?.mode === "dark" ? "#0f172a" : "#ffffff")}
+                onChange={(val) => updateProps({ input_bg: val })}
+              />
+              <CompactColorRow
+                label="Input Border"
+                value={p.input_border || (siteDefinition.theme?.mode === "dark" ? "#334155" : "#cbd5e1")}
+                onChange={(val) => updateProps({ input_border: val })}
+              />
+              <CompactColorRow
+                label="Input Text Color"
+                value={p.input_text_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                onChange={(val) => updateProps({ input_text_color: val })}
+              />
+            </div>
+          </section>
+
+          {/* Action Button Colors */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Button Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Save Button Background"
+                value={p.button_bg_color || siteDefinition.theme?.accent_color || ADMIN_BLUE}
+                onChange={(val) => updateProps({ button_bg_color: val })}
+              />
+              <CompactColorRow
+                label="Save Button Text"
+                value={p.button_text_color || "#ffffff"}
+                onChange={(val) => updateProps({ button_text_color: val })}
+              />
+              <CompactColorRow
+                label="Sign Out Button Color"
+                value={p.sign_out_color || "#ef4444"}
+                onChange={(val) => updateProps({ sign_out_color: val })}
+              />
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function isSignInBlock(block?: any): boolean {
+  if (!block) return false;
+  const rawType = String(block.type || "").toLowerCase().trim();
+  const rawId = String(block.id || "").toLowerCase().trim();
+  const normType = rawType.replace(/[-_\s]/g, "");
+  const normId = rawId.replace(/[-_\s]/g, "");
+
+  return (
+    normType === "signinform" ||
+    normType === "signin" ||
+    normType === "loginform" ||
+    normType === "login" ||
+    normId === "signinform" ||
+    normId === "signin" ||
+    normId === "loginform" ||
+    normId === "login" ||
+    rawType === "signin_form" ||
+    rawId === "signin_form" ||
+    rawType === "login_form" ||
+    rawId === "login_form"
+  );
+}
+
+function SignInEditor({
+  selectedBlock,
+  isLightMode,
+  textColor: _textColor,
+  accentColor: _accentColor,
+  onSiteDefinitionChange,
+  siteDefinition,
+}: {
+  selectedBlock: any;
+  isLightMode: boolean;
+  textColor: string;
+  accentColor: string;
+  onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
+  siteDefinition: EditorSiteDefinition;
+}) {
+  const [activeTab, setActiveTab] = useState<"layout" | "content" | "colors">("layout");
+  const p = selectedBlock?.props ?? {};
+
+  const updateProps = (patch: Record<string, any>) => {
+    const nextDef = JSON.parse(JSON.stringify(siteDefinition));
+    let updated = false;
+
+    if (Array.isArray(nextDef.pages)) {
+      for (const pg of nextDef.pages) {
+        if (Array.isArray(pg.blocks)) {
+          for (let i = 0; i < pg.blocks.length; i++) {
+            const b = pg.blocks[i];
+            if (
+              b.id === selectedBlock.id ||
+              b.type === selectedBlock.type ||
+              isSignInBlock(b)
+            ) {
+              pg.blocks[i] = {
+                ...b,
+                props: { ...(b.props ?? {}), ...patch },
+              };
+              updated = true;
+            }
+          }
+        }
+      }
+    }
+
+    if (!updated) {
+      if (!Array.isArray(nextDef.pages)) nextDef.pages = [];
+      let loginPg = nextDef.pages.find((pg: any) => pg.route === "/login" || pg.role === "login");
+      if (!loginPg) {
+        loginPg = {
+          id: "page-login",
+          name: "Customer Sign In",
+          route: "/login",
+          role: "login",
+          page_type: "login",
+          show_in_nav: false,
+          blocks: [],
+        };
+        nextDef.pages.push(loginPg);
+      }
+      if (!Array.isArray(loginPg.blocks)) loginPg.blocks = [];
+      loginPg.blocks.push({
+        id: "signin_form",
+        type: "signin_form",
+        props: { ...(selectedBlock?.props ?? {}), ...patch },
+      });
+    }
+
+    onSiteDefinitionChange(nextDef);
+  };
+
+  const getStr = (key: string, fallback = "") =>
+    p[key] !== undefined && p[key] !== null ? String(p[key]) : fallback;
+
+  const parseNumProp = (val: any, fallback: number) => {
+    if (val === undefined || val === null || val === "") return fallback;
+    const n = Number(val);
+    return isNaN(n) ? fallback : n;
+  };
+
+  const textInputStyle: React.CSSProperties = {
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+    boxSizing: "border-box",
+    height: "26px",
+    padding: "2px 6px",
+    borderRadius: "4px",
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    fontSize: "11px",
+    color: "#0f172a",
+  };
+
+  const fieldLabelStyle: React.CSSProperties = {
+    fontSize: "9px",
+    fontWeight: 700,
+    color: "#64748b",
+    textTransform: "uppercase",
+  };
+
+  return (
+    <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
+      {/* 3 Navigation Tabs */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: "2px",
+          padding: "2px",
+          background: "#f1f5f9",
+          borderRadius: "6px",
+          width: "100%",
+          maxWidth: "100%",
+          boxSizing: "border-box",
+          minWidth: 0,
+        }}
+      >
+        {[
+          { id: "layout", label: "Layout" },
+          { id: "content", label: "Content" },
+          { id: "colors", label: "Colors" },
+        ].map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as any)}
+              style={{
+                padding: "5px 1px",
+                border: "none",
+                borderRadius: "4px",
+                background: isActive ? "#ffffff" : "transparent",
+                color: isActive ? ADMIN_BLUE : "#64748b",
+                fontWeight: isActive ? 800 : 600,
+                fontSize: "10px",
+                cursor: "pointer",
+                textAlign: "center",
+                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 1. LAYOUT TAB */}
+      {activeTab === "layout" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Container Sizing
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Max Width</label>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "4px" }}>
+                  {[
+                    { label: "450px", value: "450px" },
+                    { label: "480px", value: "480px" },
+                    { label: "520px", value: "520px" },
+                    { label: "100%", value: "100%" },
+                  ].map((opt) => {
+                    const isSelected = (p.max_width || "450px") === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => updateProps({ max_width: opt.value })}
+                        style={{
+                          padding: "4px 2px",
+                          fontSize: "9.5px",
+                          fontWeight: isSelected ? 800 : 600,
+                          borderRadius: "4px",
+                          border: `1px solid ${isSelected ? ADMIN_BLUE : "#cbd5e1"}`,
+                          background: isSelected ? ADMIN_BLUE : "#ffffff",
+                          color: isSelected ? "#ffffff" : "#0f172a",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Padding"
+                  value={parseNumProp(p.card_padding, 36)}
+                  min={16}
+                  max={56}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ card_padding: val })}
+                />
+                <NumberStepperField
+                  label="Card Radius"
+                  value={parseNumProp(p.card_radius, 24)}
+                  min={0}
+                  max={40}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ card_radius: val })}
+                />
+              </div>
+            </div>
+          </section>
+
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Input & Button Corners
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+              <NumberStepperField
+                label="Input Radius"
+                value={parseNumProp(p.input_radius, 10)}
+                min={0}
+                max={24}
+                step={1}
+                unit="px"
+                onChange={(val) => updateProps({ input_radius: val })}
+              />
+              <NumberStepperField
+                label="Button Radius"
+                value={parseNumProp(p.button_radius, 11)}
+                min={0}
+                max={24}
+                step={1}
+                unit="px"
+                onChange={(val) => updateProps({ button_radius: val })}
+              />
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* 2. CONTENT TAB */}
+      {activeTab === "content" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Headings & Button Text
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Card Title</label>
+                <input
+                  type="text"
+                  value={getStr("title", "")}
+                  placeholder="Store Name"
+                  onChange={(e) => updateProps({ title: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Subtitle Description</label>
+                <input
+                  type="text"
+                  value={getStr("subtitle", "")}
+                  placeholder="Sign in to your account"
+                  onChange={(e) => updateProps({ subtitle: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Sign In Button Text</label>
+                <input
+                  type="text"
+                  value={getStr("submit_button_label", "")}
+                  placeholder="Sign In"
+                  onChange={(e) => updateProps({ submit_button_label: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+            </div>
+          </section>
+
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Authentication Options
+            </div>
+            <div style={{ display: "grid", gap: "5px" }}>
+              <CompactToggleRow
+                label="1-Click Google Sign-In"
+                subtitle="Sign in with Google prompt or button"
+                checked={p.show_google_auth !== false}
+                onChange={(val) => updateProps({ show_google_auth: val })}
+              />
+              <CompactToggleRow
+                label="Guest Access Button"
+                subtitle="Allow visitors to proceed without credentials"
+                checked={p.show_guest_continue !== false}
+                onChange={(val) => updateProps({ show_guest_continue: val })}
+              />
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* 3. COLORS TAB */}
+      {activeTab === "colors" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Card & Text Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Card Background"
+                value={p.card_bg || (siteDefinition.theme?.mode === "dark" ? "#1e293b" : "#ffffff")}
+                onChange={(val) => updateProps({ card_bg: val })}
+              />
+              <CompactColorRow
+                label="Card Border"
+                value={p.border_color || (siteDefinition.theme?.mode === "dark" ? "#334155" : "#e2e8f0")}
+                onChange={(val) => updateProps({ border_color: val })}
+              />
+              <CompactColorRow
+                label="Title Color"
+                value={p.title_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                onChange={(val) => updateProps({ title_color: val })}
+              />
+              <CompactColorRow
+                label="Subtitle & Muted Text"
+                value={p.subtext_color || (siteDefinition.theme?.mode === "dark" ? "#94a3b8" : "#64748b")}
+                onChange={(val) => updateProps({ subtext_color: val })}
+              />
+            </div>
+          </section>
+
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Input Field Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Input Background"
+                value={p.input_bg || (siteDefinition.theme?.mode === "dark" ? "#0f172a" : "#ffffff")}
+                onChange={(val) => updateProps({ input_bg: val })}
+              />
+              <CompactColorRow
+                label="Input Border"
+                value={p.input_border || (siteDefinition.theme?.mode === "dark" ? "#334155" : "#cbd5e1")}
+                onChange={(val) => updateProps({ input_border: val })}
+              />
+              <CompactColorRow
+                label="Input Text Color"
+                value={p.input_text_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                onChange={(val) => updateProps({ input_text_color: val })}
+              />
+            </div>
+          </section>
+
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Button Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Sign In Button Bg"
+                value={p.button_bg_color || siteDefinition.theme?.accent_color || ADMIN_BLUE}
+                onChange={(val) => updateProps({ button_bg_color: val })}
+              />
+              <CompactColorRow
+                label="Sign In Button Text"
+                value={p.button_text_color || "#ffffff"}
+                onChange={(val) => updateProps({ button_text_color: val })}
+              />
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function isSignUpBlock(block?: any): boolean {
+  if (!block) return false;
+  const rawType = String(block.type || "").toLowerCase().trim();
+  const rawId = String(block.id || "").toLowerCase().trim();
+  const normType = rawType.replace(/[-_\s]/g, "");
+  const normId = rawId.replace(/[-_\s]/g, "");
+
+  return (
+    normType === "signupform" ||
+    normType === "signup" ||
+    normType === "registerform" ||
+    normType === "register" ||
+    normId === "signupform" ||
+    normId === "signup" ||
+    normId === "registerform" ||
+    normId === "register" ||
+    rawType === "signup_form" ||
+    rawId === "signup_form" ||
+    rawType === "register_form" ||
+    rawId === "register_form"
+  );
+}
+
+function SignUpEditor({
+  selectedBlock,
+  isLightMode,
+  textColor: _textColor,
+  accentColor: _accentColor,
+  onSiteDefinitionChange,
+  siteDefinition,
+}: {
+  selectedBlock: any;
+  isLightMode: boolean;
+  textColor: string;
+  accentColor: string;
+  onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
+  siteDefinition: EditorSiteDefinition;
+}) {
+  const [activeTab, setActiveTab] = useState<"layout" | "content" | "colors">("layout");
+  const p = selectedBlock?.props ?? {};
+
+  const updateProps = (patch: Record<string, any>) => {
+    const nextDef = JSON.parse(JSON.stringify(siteDefinition));
+    let updated = false;
+
+    if (Array.isArray(nextDef.pages)) {
+      for (const pg of nextDef.pages) {
+        if (Array.isArray(pg.blocks)) {
+          for (let i = 0; i < pg.blocks.length; i++) {
+            const b = pg.blocks[i];
+            if (
+              b.id === selectedBlock.id ||
+              b.type === selectedBlock.type ||
+              isSignUpBlock(b)
+            ) {
+              pg.blocks[i] = {
+                ...b,
+                props: { ...(b.props ?? {}), ...patch },
+              };
+              updated = true;
+            }
+          }
+        }
+      }
+    }
+
+    if (!updated) {
+      if (!Array.isArray(nextDef.pages)) nextDef.pages = [];
+      let signupPg = nextDef.pages.find((pg: any) => pg.route === "/signup" || pg.role === "signup");
+      if (!signupPg) {
+        signupPg = {
+          id: "page-signup",
+          name: "Customer Sign Up",
+          route: "/signup",
+          role: "signup",
+          page_type: "signup",
+          show_in_nav: false,
+          blocks: [],
+        };
+        nextDef.pages.push(signupPg);
+      }
+      if (!Array.isArray(signupPg.blocks)) signupPg.blocks = [];
+      signupPg.blocks.push({
+        id: "signup_form",
+        type: "signup_form",
+        props: { ...(selectedBlock?.props ?? {}), ...patch },
+      });
+    }
+
+    onSiteDefinitionChange(nextDef);
+  };
+
+  const getStr = (key: string, fallback = "") =>
+    p[key] !== undefined && p[key] !== null ? String(p[key]) : fallback;
+
+  const parseNumProp = (val: any, fallback: number) => {
+    if (val === undefined || val === null || val === "") return fallback;
+    const n = Number(val);
+    return isNaN(n) ? fallback : n;
+  };
+
+  const textInputStyle: React.CSSProperties = {
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+    boxSizing: "border-box",
+    height: "26px",
+    padding: "2px 6px",
+    borderRadius: "4px",
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    fontSize: "11px",
+    color: "#0f172a",
+  };
+
+  const fieldLabelStyle: React.CSSProperties = {
+    fontSize: "9px",
+    fontWeight: 700,
+    color: "#64748b",
+    textTransform: "uppercase",
+  };
+
+  return (
+    <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
+      {/* 3 Navigation Tabs */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: "2px",
+          padding: "2px",
+          background: "#f1f5f9",
+          borderRadius: "6px",
+          width: "100%",
+          maxWidth: "100%",
+          boxSizing: "border-box",
+          minWidth: 0,
+        }}
+      >
+        {[
+          { id: "layout", label: "Layout" },
+          { id: "content", label: "Content" },
+          { id: "colors", label: "Colors" },
+        ].map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as any)}
+              style={{
+                padding: "5px 1px",
+                border: "none",
+                borderRadius: "4px",
+                background: isActive ? "#ffffff" : "transparent",
+                color: isActive ? ADMIN_BLUE : "#64748b",
+                fontWeight: isActive ? 800 : 600,
+                fontSize: "10px",
+                cursor: "pointer",
+                textAlign: "center",
+                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 1. LAYOUT TAB */}
+      {activeTab === "layout" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Container Sizing
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Max Width</label>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "4px" }}>
+                  {[
+                    { label: "450px", value: "450px" },
+                    { label: "480px", value: "480px" },
+                    { label: "520px", value: "520px" },
+                    { label: "100%", value: "100%" },
+                  ].map((opt) => {
+                    const isSelected = (p.max_width || "450px") === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => updateProps({ max_width: opt.value })}
+                        style={{
+                          padding: "4px 2px",
+                          fontSize: "9.5px",
+                          fontWeight: isSelected ? 800 : 600,
+                          borderRadius: "4px",
+                          border: `1px solid ${isSelected ? ADMIN_BLUE : "#cbd5e1"}`,
+                          background: isSelected ? ADMIN_BLUE : "#ffffff",
+                          color: isSelected ? "#ffffff" : "#0f172a",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Padding"
+                  value={parseNumProp(p.card_padding, 34)}
+                  min={16}
+                  max={56}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ card_padding: val })}
+                />
+                <NumberStepperField
+                  label="Card Radius"
+                  value={parseNumProp(p.card_radius, 24)}
+                  min={0}
+                  max={40}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ card_radius: val })}
+                />
+              </div>
+            </div>
+          </section>
+
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Input & Button Corners
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+              <NumberStepperField
+                label="Input Radius"
+                value={parseNumProp(p.input_radius, 10)}
+                min={0}
+                max={24}
+                step={1}
+                unit="px"
+                onChange={(val) => updateProps({ input_radius: val })}
+              />
+              <NumberStepperField
+                label="Button Radius"
+                value={parseNumProp(p.button_radius, 11)}
+                min={0}
+                max={24}
+                step={1}
+                unit="px"
+                onChange={(val) => updateProps({ button_radius: val })}
+              />
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* 2. CONTENT TAB */}
+      {activeTab === "content" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Headings & Button Text
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Card Title</label>
+                <input
+                  type="text"
+                  value={getStr("title", "")}
+                  placeholder="Store Name"
+                  onChange={(e) => updateProps({ title: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Subtitle Description</label>
+                <input
+                  type="text"
+                  value={getStr("subtitle", "")}
+                  placeholder="Create your account"
+                  onChange={(e) => updateProps({ subtitle: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Submit Button Text</label>
+                <input
+                  type="text"
+                  value={getStr("submit_button_label", "")}
+                  placeholder="Create Account"
+                  onChange={(e) => updateProps({ submit_button_label: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+            </div>
+          </section>
+
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Authentication Options
+            </div>
+            <div style={{ display: "grid", gap: "5px" }}>
+              <CompactToggleRow
+                label="1-Click Google Sign-Up"
+                subtitle="Sign up with Google prompt or button"
+                checked={p.show_google_auth !== false}
+                onChange={(val) => updateProps({ show_google_auth: val })}
+              />
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* 3. COLORS TAB */}
+      {activeTab === "colors" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Card & Text Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Card Background"
+                value={p.card_bg || (siteDefinition.theme?.mode === "dark" ? "#1e293b" : "#ffffff")}
+                onChange={(val) => updateProps({ card_bg: val })}
+              />
+              <CompactColorRow
+                label="Card Border"
+                value={p.border_color || (siteDefinition.theme?.mode === "dark" ? "#334155" : "#e2e8f0")}
+                onChange={(val) => updateProps({ border_color: val })}
+              />
+              <CompactColorRow
+                label="Title Color"
+                value={p.title_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                onChange={(val) => updateProps({ title_color: val })}
+              />
+              <CompactColorRow
+                label="Subtitle & Muted Text"
+                value={p.subtext_color || (siteDefinition.theme?.mode === "dark" ? "#94a3b8" : "#64748b")}
+                onChange={(val) => updateProps({ subtext_color: val })}
+              />
+            </div>
+          </section>
+
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Input Field Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Input Background"
+                value={p.input_bg || (siteDefinition.theme?.mode === "dark" ? "#0f172a" : "#ffffff")}
+                onChange={(val) => updateProps({ input_bg: val })}
+              />
+              <CompactColorRow
+                label="Input Border"
+                value={p.input_border || (siteDefinition.theme?.mode === "dark" ? "#334155" : "#cbd5e1")}
+                onChange={(val) => updateProps({ input_border: val })}
+              />
+              <CompactColorRow
+                label="Input Text Color"
+                value={p.input_text_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                onChange={(val) => updateProps({ input_text_color: val })}
+              />
+            </div>
+          </section>
+
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Button Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Submit Button Bg"
+                value={p.button_bg_color || siteDefinition.theme?.accent_color || ADMIN_BLUE}
+                onChange={(val) => updateProps({ button_bg_color: val })}
+              />
+              <CompactColorRow
+                label="Submit Button Text"
+                value={p.button_text_color || "#ffffff"}
+                onChange={(val) => updateProps({ button_text_color: val })}
+              />
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function isPlaceOrderBlock(block?: any): boolean {
   if (!block) return false;
   const rawType = String(block.type || "").toLowerCase().trim();
@@ -9508,6 +10756,12 @@ export default function EditorSidebar({
         ? { id: "checkout_order_summary", type: "checkout_order_summary", props: _rawSelectedBlock?.props ?? {} }
       : (selectedBlockId === "place_order_cta" || selectedBlockId === "checkout_review")
         ? (_rawSelectedBlock || { id: "place_order_cta", type: "place_order_cta", props: {} })
+      : (selectedBlockId === "profile_details" || selectedBlockId === "profile" || selectedBlockId === "profiledetails" || selectedBlockId === "customer_profile")
+        ? (_rawSelectedBlock || { id: "profile_details", type: "profile_details", props: {} })
+      : (selectedBlockId === "signin_form" || selectedBlockId === "login" || selectedBlockId === "signinform" || selectedBlockId === "login_form")
+        ? (_rawSelectedBlock || { id: "signin_form", type: "signin_form", props: {} })
+      : (selectedBlockId === "signup_form" || selectedBlockId === "signup" || selectedBlockId === "signupform" || selectedBlockId === "register_form")
+        ? (_rawSelectedBlock || { id: "signup_form", type: "signup_form", props: {} })
       : _rawSelectedBlock;
   const editableConfig = selectedBlock
     ? getEditableConfigForBlock(selectedBlock.type)
@@ -9541,6 +10795,12 @@ export default function EditorSidebar({
       isDeliveryBlock(selectedBlock) ||
       t === "delivery_form" || t === "deliveryform" ||
       t === "delivery_map_picker" || t === "delivery_address_form" ||
+      isProfileBlock(selectedBlock) ||
+      t === "profile_details" || t === "profiledetails" || t === "profile" || t === "customer_profile" ||
+      isSignInBlock(selectedBlock) ||
+      t === "signin_form" || t === "signinform" || t === "login_form" || t === "login" ||
+      isSignUpBlock(selectedBlock) ||
+      t === "signup_form" || t === "signupform" || t === "register_form" || t === "signup" ||
       isPlaceOrderBlock(selectedBlock) ||
       t === "place_order_cta" || t === "placeordercta" ||
       t === "checkout_review"
@@ -10267,6 +11527,32 @@ export default function EditorSidebar({
                      selectedBlockId === "place_order_cta" ||
                      selectedBlockId === "checkout_review"
                       ? "Review & Pay"
+                      : isProfileBlock(selectedBlock) ||
+                        selectedBlock.id === "profile_details" ||
+                        selectedBlock.type === "profile_details" ||
+                        selectedBlock.type === "profiledetails" ||
+                        selectedBlock.type === "profile" ||
+                        selectedBlockId === "profile_details" ||
+                        selectedBlockId === "profile"
+                      ? "Profile Details"
+                      : isSignInBlock(selectedBlock) ||
+                        selectedBlock.id === "signin_form" ||
+                        selectedBlock.type === "signin_form" ||
+                        selectedBlock.type === "signinform" ||
+                        selectedBlock.type === "login_form" ||
+                        selectedBlock.type === "login" ||
+                        selectedBlockId === "signin_form" ||
+                        selectedBlockId === "login"
+                      ? "Sign In Form"
+                      : isSignUpBlock(selectedBlock) ||
+                        selectedBlock.id === "signup_form" ||
+                        selectedBlock.type === "signup_form" ||
+                        selectedBlock.type === "signupform" ||
+                        selectedBlock.type === "register_form" ||
+                        selectedBlock.type === "signup" ||
+                        selectedBlockId === "signup_form" ||
+                        selectedBlockId === "signup"
+                      ? "Sign Up Form"
                       : isDeliveryBlock(selectedBlock) || editableConfig?.displayName === "Delivery Form"
                       ? (selectedBlock.type === "delivery_map_picker"
                           ? "Map Location Picker"
@@ -10489,6 +11775,53 @@ export default function EditorSidebar({
                 selectedBlockId === "place_order_cta" ||
                 selectedBlockId === "checkout_review" ? (
                 <PlaceOrderEditor
+                  selectedBlock={selectedBlock}
+                  isLightMode={isLightMode}
+                  textColor={textColor}
+                  accentColor={accentColor}
+                  onSiteDefinitionChange={onSiteDefinitionChange}
+                  siteDefinition={siteDefinition}
+                />
+              ) : isProfileBlock(selectedBlock) ||
+                selectedBlock.id === "profile_details" ||
+                selectedBlock.type === "profile_details" ||
+                selectedBlock.type === "profiledetails" ||
+                selectedBlock.type === "profile" ||
+                selectedBlockId === "profile_details" ||
+                selectedBlockId === "profile" ? (
+                <ProfileEditor
+                  selectedBlock={selectedBlock}
+                  isLightMode={isLightMode}
+                  textColor={textColor}
+                  accentColor={accentColor}
+                  onSiteDefinitionChange={onSiteDefinitionChange}
+                  siteDefinition={siteDefinition}
+                />
+              ) : isSignInBlock(selectedBlock) ||
+                selectedBlock.id === "signin_form" ||
+                selectedBlock.type === "signin_form" ||
+                selectedBlock.type === "signinform" ||
+                selectedBlock.type === "login_form" ||
+                selectedBlock.type === "login" ||
+                selectedBlockId === "signin_form" ||
+                selectedBlockId === "login" ? (
+                <SignInEditor
+                  selectedBlock={selectedBlock}
+                  isLightMode={isLightMode}
+                  textColor={textColor}
+                  accentColor={accentColor}
+                  onSiteDefinitionChange={onSiteDefinitionChange}
+                  siteDefinition={siteDefinition}
+                />
+              ) : isSignUpBlock(selectedBlock) ||
+                selectedBlock.id === "signup_form" ||
+                selectedBlock.type === "signup_form" ||
+                selectedBlock.type === "signupform" ||
+                selectedBlock.type === "register_form" ||
+                selectedBlock.type === "signup" ||
+                selectedBlockId === "signup_form" ||
+                selectedBlockId === "signup" ? (
+                <SignUpEditor
                   selectedBlock={selectedBlock}
                   isLightMode={isLightMode}
                   textColor={textColor}

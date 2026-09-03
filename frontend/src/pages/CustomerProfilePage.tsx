@@ -13,27 +13,78 @@ interface CustomerProfilePageProps {
   siteId?: string;
   siteSlug?: string;
   theme?: Record<string, any>;
+  props?: Record<string, any>;
+  max_width?: number | string;
+  card_radius?: number | string;
+  card_padding?: number | string;
+  input_radius?: number | string;
+  button_radius?: number | string;
+  card_bg?: string;
+  border_color?: string;
+  title_color?: string;
+  subtext_color?: string;
+  input_bg?: string;
+  input_border?: string;
+  input_text_color?: string;
+  button_bg_color?: string;
+  button_text_color?: string;
+  sign_out_color?: string;
+  title?: string;
+  subtitle?: string;
+  save_button_label?: string;
+  sign_out_label?: string;
+  change_password_label?: string;
+  show_phone?: boolean;
+  show_gender?: boolean;
+  show_dob?: boolean;
+  show_password_section?: boolean;
+  editMode?: boolean;
+  [key: string]: any;
 }
+
+const SAMPLE_PREVIEW_USER = {
+  name: "Jane Cooper",
+  email: "jane.cooper@example.com",
+  phone: "+91 98765 43210",
+  gender: "Female",
+  dateOfBirth: "1995-06-15",
+  avatarUrl: "",
+  hasPassword: true,
+  authProvider: "email",
+};
 
 export default function CustomerProfilePage({
   siteId: propSiteId,
   siteSlug: propSiteSlug,
   theme: propTheme,
+  ...restProps
 }: CustomerProfilePageProps) {
   const { slug: routeSlug } = useParams<{ slug: string }>();
   const activeSlug = propSiteSlug || routeSlug || "";
   const navigate = useNavigate();
 
-  const { user, isAuthenticated, loading: authLoading, refreshMe, updateProfile, changePassword, logout } =
+  const customProps = useMemo(() => ({
+    ...(propTheme || {}),
+    ...(restProps.props || {}),
+    ...restProps,
+  }), [propTheme, restProps]);
+
+  const isInsideEditor =
+    Boolean(restProps.editMode) ||
+    (typeof window !== "undefined" && window.location.pathname.startsWith("/builder/"));
+
+  const { user: realUser, isAuthenticated, loading: authLoading, refreshMe, updateProfile, changePassword, logout } =
     useCustomerAuth();
   const { siteData } = usePublicSiteTheme(activeSlug);
 
+  const user = (!realUser && isInsideEditor) ? SAMPLE_PREVIEW_USER : realUser;
+
   // Form State
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [gender, setGender] = useState("");
-  const [dob, setDob] = useState("");
+  const [name, setName] = useState(user?.name || "");
+  const [email, setEmail] = useState(user?.email || "");
+  const [phone, setPhone] = useState(user?.phone || "");
+  const [gender, setGender] = useState(user?.gender || "");
+  const [dob, setDob] = useState(user?.dateOfBirth || "");
 
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState("");
@@ -52,10 +103,10 @@ export default function CustomerProfilePage({
 
   // Load user data into form
   useEffect(() => {
-    if (activeSlug) {
+    if (activeSlug && !isInsideEditor) {
       refreshMe(activeSlug);
     }
-  }, [activeSlug, refreshMe]);
+  }, [activeSlug, refreshMe, isInsideEditor]);
 
   useEffect(() => {
     if (user) {
@@ -68,37 +119,86 @@ export default function CustomerProfilePage({
   }, [user]);
 
   // Theme setup
-  const siteName = siteData?.siteName || cleanSiteName("", activeSlug);
+  const isHexId = (str?: string) => Boolean(str && /^[0-9a-fA-F]{24}$/.test(str.trim()));
+  const siteName =
+    (customProps as any)?.siteName ||
+    (customProps as any)?.site_name ||
+    siteData?.siteName ||
+    siteData?.navbar?.brandName ||
+    (activeSlug && !isHexId(activeSlug) ? cleanSiteName("", activeSlug) : "") ||
+    "Store";
   const activeTheme = propTheme || siteData?.theme || {};
   const isLight = activeTheme.mode !== "dark";
 
   const primaryBg = activeTheme.primary_bg || (isLight ? "#f8fafc" : "#0f172a");
   const baseCardBg = activeTheme.card_bg || activeTheme.secondary_bg || (isLight ? "#ffffff" : "#1e293b");
-  const cardBg =
+  const fallbackCardBg =
     baseCardBg.toLowerCase().trim() === primaryBg.toLowerCase().trim()
       ? isLight
         ? "#ffffff"
         : "#1e293b"
       : baseCardBg;
 
+  const cardBg = customProps.card_bg || customProps.background_color || fallbackCardBg;
+
   const computedContrastText = getContrastTextColor(cardBg);
   const rawThemeTextColor = activeTheme.text_color;
   const isDarkCard = computedContrastText === "#ffffff";
 
-  const textColor =
+  const fallbackTextColor =
     rawThemeTextColor && Math.abs(getLuminance(rawThemeTextColor) - getLuminance(cardBg)) > 45
       ? rawThemeTextColor
       : computedContrastText;
 
-  const subtextColor = isDarkCard ? "rgba(226, 232, 240, 0.75)" : "rgba(51, 65, 85, 0.75)";
-  const accentColor = activeTheme.accent_color || "#2563eb";
-  const accessibleAccentColor = getAccessibleAccentColor(accentColor, cardBg);
-  const buttonTextColor = getContrastTextColor(accentColor);
-  const borderColor = isDarkCard ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)";
+  const textColor = customProps.title_color || customProps.text_color || fallbackTextColor;
+  const subtextColor =
+    customProps.subtext_color ||
+    customProps.muted_text_color ||
+    (isDarkCard ? "rgba(226, 232, 240, 0.75)" : "rgba(51, 65, 85, 0.75)");
 
-  const inputBg = isDarkCard ? "#0a0f1d" : "#ffffff";
-  const inputTextColor = isDarkCard ? "#f8fafc" : "#0f172a";
-  const inputBorder = isDarkCard ? "rgba(255, 255, 255, 0.16)" : "rgba(15, 23, 42, 0.16)";
+  const accentColor = customProps.button_bg_color || activeTheme.accent_color || "#2563eb";
+  const accessibleAccentColor = getAccessibleAccentColor(accentColor, cardBg);
+  const buttonTextColor = customProps.button_text_color || getContrastTextColor(accentColor);
+  const borderColor = customProps.border_color
+    ? customProps.border_color
+    : isDarkCard
+    ? "rgba(255, 255, 255, 0.12)"
+    : "rgba(15, 23, 42, 0.12)";
+
+  const parseDimension = (val: any, fallback: string) => {
+    if (val === undefined || val === null || val === "") return fallback;
+    if (typeof val === "number") return `${val}px`;
+    const s = String(val).trim();
+    return s.endsWith("px") || s.endsWith("%") || s.endsWith("rem") ? s : `${s}px`;
+  };
+
+  const cardBorder = `1px solid ${borderColor}`;
+  const cardRadius = parseDimension(customProps.card_radius, "16px");
+  const cardPadding = parseDimension(customProps.card_padding, "32px");
+  const inputRadius = parseDimension(customProps.input_radius, "10px");
+  const buttonRadius = parseDimension(customProps.button_radius, "10px");
+
+  const inputBg = customProps.input_bg || (isDarkCard ? "#0a0f1d" : "#ffffff");
+  const inputTextColor = customProps.input_text_color || (isDarkCard ? "#f8fafc" : "#0f172a");
+  const inputBorder = customProps.input_border
+    ? `1px solid ${customProps.input_border}`
+    : isDarkCard
+    ? "rgba(255, 255, 255, 0.16)"
+    : "rgba(15, 23, 42, 0.16)";
+
+  const resolvedMaxWidth = useMemo(() => {
+    const raw = customProps.max_width;
+    if (!raw) return "1180px";
+    if (raw === "100%" || raw === "full") return "100%";
+    if (typeof raw === "number") return `${raw}px`;
+    return String(raw);
+  }, [customProps.max_width]);
+
+  const showPhone = customProps.show_phone !== false;
+  const showGender = customProps.show_gender !== false;
+  const showDob = customProps.show_dob !== false;
+  const showPasswordSectionToggle = customProps.show_password_section !== false;
+  const signOutColor = customProps.sign_out_color || "#ef4444";
 
   const initials = useMemo(() => {
     if (!name.trim()) return "U";
@@ -261,7 +361,8 @@ export default function CustomerProfilePage({
     >
       <div
         style={{
-          maxWidth: "1180px",
+          maxWidth: resolvedMaxWidth,
+          width: "100%",
           margin: "0 auto",
           display: "flex",
           flexDirection: "column",
@@ -334,10 +435,10 @@ export default function CustomerProfilePage({
               alignItems: "center",
               gap: "6px",
               padding: "7px 14px",
-              borderRadius: "8px",
+              borderRadius: buttonRadius,
               background: "transparent",
-              color: "#ef4444",
-              border: "1px solid rgba(239, 68, 68, 0.25)",
+              color: signOutColor,
+              border: `1px solid ${signOutColor}40`,
               fontSize: "13px",
               fontWeight: 600,
               cursor: "pointer",
@@ -349,7 +450,7 @@ export default function CustomerProfilePage({
               <polyline points="16 17 21 12 16 7" />
               <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
-            <span>Sign Out</span>
+            <span>{customProps.sign_out_label || "Sign Out"}</span>
           </button>
         </div>
 
@@ -357,9 +458,9 @@ export default function CustomerProfilePage({
         <div
           style={{
             background: cardBg,
-            borderRadius: "16px",
-            padding: "32px 32px",
-            border: `1px solid ${borderColor}`,
+            borderRadius: cardRadius,
+            padding: cardPadding,
+            border: cardBorder,
             boxShadow: isLight
               ? "0 2px 10px rgba(15,23,42,0.03)"
               : "0 8px 24px rgba(2,6,23,0.20)",
@@ -409,9 +510,9 @@ export default function CustomerProfilePage({
             <div style={{ flex: 1, minWidth: "200px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                 <h1 style={{ margin: 0, fontSize: "22px", fontWeight: 800, color: textColor }}>
-                  {user?.name || "Customer Profile"}
+                  {customProps.title || user?.name || "Customer Profile"}
                 </h1>
-                {user?.authProvider === "google" && (
+                {(user as any)?.authProvider === "google" && (
                   <span
                     style={{
                       fontSize: "11px",
@@ -428,7 +529,7 @@ export default function CustomerProfilePage({
                 )}
               </div>
               <p style={{ margin: "4px 0 0 0", color: subtextColor, fontSize: "14px" }}>
-                {user?.email || "No email"}
+                {customProps.subtitle || user?.email || "Manage your account details and password."}
               </p>
             </div>
           </div>
@@ -493,8 +594,8 @@ export default function CustomerProfilePage({
                     height: "44px",
                     boxSizing: "border-box",
                     padding: "0 14px",
-                    borderRadius: "10px",
-                    border: `1px solid ${inputBorder}`,
+                    borderRadius: inputRadius,
+                    border: inputBorder,
                     background: inputBg,
                     color: inputTextColor,
                     fontSize: "14px",
@@ -522,7 +623,7 @@ export default function CustomerProfilePage({
                     height: "44px",
                     boxSizing: "border-box",
                     padding: "0 14px",
-                    borderRadius: "10px",
+                    borderRadius: inputRadius,
                     border: `1px solid ${borderColor}`,
                     background: isDarkCard ? "rgba(255,255,255,0.03)" : "#f1f5f9",
                     color: subtextColor,
@@ -533,108 +634,114 @@ export default function CustomerProfilePage({
               </div>
 
               {/* PHONE NUMBER */}
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "6px",
-                    fontSize: "13px",
-                    fontWeight: 700,
-                    color: textColor,
-                  }}
-                >
-                  Phone Number
-                </label>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+91 98765 43210"
-                  style={{
-                    width: "100%",
-                    height: "44px",
-                    boxSizing: "border-box",
-                    padding: "0 14px",
-                    borderRadius: "10px",
-                    border: `1px solid ${inputBorder}`,
-                    background: inputBg,
-                    color: inputTextColor,
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                />
-              </div>
+              {showPhone && (
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      marginBottom: "6px",
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      color: textColor,
+                    }}
+                  >
+                    Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+91 98765 43210"
+                    style={{
+                      width: "100%",
+                      height: "44px",
+                      boxSizing: "border-box",
+                      padding: "0 14px",
+                      borderRadius: inputRadius,
+                      border: inputBorder,
+                      background: inputBg,
+                      color: inputTextColor,
+                      fontSize: "14px",
+                      outline: "none",
+                    }}
+                  />
+                </div>
+              )}
 
               {/* GENDER */}
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "6px",
-                    fontSize: "13px",
-                    fontWeight: 700,
-                    color: textColor,
-                  }}
-                >
-                  Gender
-                </label>
-                <select
-                  value={gender}
-                  onChange={(e) => setGender(e.target.value)}
-                  style={{
-                    width: "100%",
-                    height: "44px",
-                    boxSizing: "border-box",
-                    padding: "0 14px",
-                    borderRadius: "10px",
-                    border: `1px solid ${inputBorder}`,
-                    background: inputBg,
-                    color: inputTextColor,
-                    fontSize: "14px",
-                    outline: "none",
-                    cursor: "pointer",
-                  }}
-                >
-                  <option value="">Select Gender</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                  <option value="Non-Binary">Non-Binary</option>
-                  <option value="Other">Other</option>
-                  <option value="Prefer not to say">Prefer not to say</option>
-                </select>
-              </div>
+              {showGender && (
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      marginBottom: "6px",
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      color: textColor,
+                    }}
+                  >
+                    Gender
+                  </label>
+                  <select
+                    value={gender}
+                    onChange={(e) => setGender(e.target.value)}
+                    style={{
+                      width: "100%",
+                      height: "44px",
+                      boxSizing: "border-box",
+                      padding: "0 14px",
+                      borderRadius: inputRadius,
+                      border: inputBorder,
+                      background: inputBg,
+                      color: inputTextColor,
+                      fontSize: "14px",
+                      outline: "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <option value="">Select Gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Non-Binary">Non-Binary</option>
+                    <option value="Other">Other</option>
+                    <option value="Prefer not to say">Prefer not to say</option>
+                  </select>
+                </div>
+              )}
 
               {/* DATE OF BIRTH */}
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "6px",
-                    fontSize: "13px",
-                    fontWeight: 700,
-                    color: textColor,
-                  }}
-                >
-                  Date of Birth
-                </label>
-                <input
-                  type="date"
-                  value={dob}
-                  onChange={(e) => setDob(e.target.value)}
-                  style={{
-                    width: "100%",
-                    height: "44px",
-                    boxSizing: "border-box",
-                    padding: "0 14px",
-                    borderRadius: "10px",
-                    border: `1px solid ${inputBorder}`,
-                    background: inputBg,
-                    color: inputTextColor,
-                    fontSize: "14px",
-                    outline: "none",
-                  }}
-                />
-              </div>
+              {showDob && (
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      marginBottom: "6px",
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      color: textColor,
+                    }}
+                  >
+                    Date of Birth
+                  </label>
+                  <input
+                    type="date"
+                    value={dob}
+                    onChange={(e) => setDob(e.target.value)}
+                    style={{
+                      width: "100%",
+                      height: "44px",
+                      boxSizing: "border-box",
+                      padding: "0 14px",
+                      borderRadius: inputRadius,
+                      border: inputBorder,
+                      background: inputBg,
+                      color: inputTextColor,
+                      fontSize: "14px",
+                      outline: "none",
+                    }}
+                  />
+                </div>
+              )}
             </div>
 
             {/* ACTION BUTTONS */}
@@ -651,32 +758,34 @@ export default function CustomerProfilePage({
               }}
             >
               {/* CLICKABLE CHANGE PASSWORD BUTTON (DOES NOT CLUTTER PAGE) */}
-              <button
-                type="button"
-                onClick={() => {
-                  setPassError("");
-                  setPassSuccess("");
-                  setShowPasswordSection(!showPasswordSection);
-                }}
-                style={{
-                  background: "none",
-                  border: "none",
-                  padding: 0,
-                  fontSize: "13.5px",
-                  fontWeight: 700,
-                  color: accessibleAccentColor,
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                }}
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-                <span>{showPasswordSection ? "Hide Password Settings" : "Change Password"}</span>
-              </button>
+              {showPasswordSectionToggle && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPassError("");
+                    setPassSuccess("");
+                    setShowPasswordSection(!showPasswordSection);
+                  }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    fontSize: "13.5px",
+                    fontWeight: 700,
+                    color: accessibleAccentColor,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  <span>{showPasswordSection ? "Hide Password Settings" : (customProps.change_password_label || "Change Password")}</span>
+                </button>
+              )}
 
               <button
                 type="submit"
@@ -684,7 +793,7 @@ export default function CustomerProfilePage({
                 style={{
                   height: "44px",
                   padding: "0 28px",
-                  borderRadius: "10px",
+                  borderRadius: buttonRadius,
                   border: "none",
                   background: accentColor,
                   color: buttonTextColor,
@@ -694,22 +803,23 @@ export default function CustomerProfilePage({
                   opacity: savingProfile ? 0.75 : 1,
                   boxShadow: `0 4px 14px ${accentColor}35`,
                   transition: "all 0.15s ease",
+                  marginLeft: showPasswordSectionToggle ? undefined : "auto",
                 }}
               >
-                {savingProfile ? "Saving Changes..." : "Save Profile Details"}
+                {savingProfile ? "Saving Changes..." : (customProps.save_button_label || "Save Profile Details")}
               </button>
             </div>
           </form>
         </div>
 
         {/* EXPANDABLE CHANGE PASSWORD SECTION (APPEARS ONLY ON CLICK) */}
-        {showPasswordSection && (
+        {showPasswordSectionToggle && showPasswordSection && (
           <div
             style={{
               background: cardBg,
-              borderRadius: "16px",
-              padding: "28px 32px",
-              border: `1px solid ${borderColor}`,
+              borderRadius: cardRadius,
+              padding: cardPadding,
+              border: cardBorder,
               boxShadow: isLight
                 ? "0 2px 10px rgba(15,23,42,0.03)"
                 : "0 8px 24px rgba(2,6,23,0.20)",
@@ -802,8 +912,8 @@ export default function CustomerProfilePage({
                         height: "42px",
                         boxSizing: "border-box",
                         padding: "0 46px 0 14px",
-                        borderRadius: "10px",
-                        border: `1px solid ${inputBorder}`,
+                        borderRadius: inputRadius,
+                        border: inputBorder,
                         background: inputBg,
                         color: inputTextColor,
                         fontSize: "14px",
@@ -858,8 +968,8 @@ export default function CustomerProfilePage({
                         height: "42px",
                         boxSizing: "border-box",
                         padding: "0 46px 0 14px",
-                        borderRadius: "10px",
-                        border: `1px solid ${inputBorder}`,
+                        borderRadius: inputRadius,
+                        border: inputBorder,
                         background: inputBg,
                         color: inputTextColor,
                         fontSize: "14px",
@@ -911,8 +1021,8 @@ export default function CustomerProfilePage({
                       height: "42px",
                       boxSizing: "border-box",
                       padding: "0 14px",
-                      borderRadius: "10px",
-                      border: `1px solid ${inputBorder}`,
+                      borderRadius: inputRadius,
+                      border: inputBorder,
                       background: inputBg,
                       color: inputTextColor,
                       fontSize: "14px",
@@ -929,7 +1039,7 @@ export default function CustomerProfilePage({
                   style={{
                     height: "40px",
                     padding: "0 18px",
-                    borderRadius: "9px",
+                    borderRadius: buttonRadius,
                     border: `1px solid ${borderColor}`,
                     background: "transparent",
                     color: textColor,
@@ -946,7 +1056,7 @@ export default function CustomerProfilePage({
                   style={{
                     height: "40px",
                     padding: "0 22px",
-                    borderRadius: "9px",
+                    borderRadius: buttonRadius,
                     border: "none",
                     background: accentColor,
                     color: buttonTextColor,

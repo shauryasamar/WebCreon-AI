@@ -2230,6 +2230,64 @@ export const editorRegistry: EditorRegistry = {
     ],
   },
 
+  profile_details: {
+    displayName: "Profile Details",
+    fields: [
+      styleMaxWidthField,
+      styleBorderRadiusField,
+      stylePaddingField,
+    ],
+  },
+  profiledetails: {
+    displayName: "Profile Details",
+    fields: [
+      styleMaxWidthField,
+      styleBorderRadiusField,
+      stylePaddingField,
+    ],
+  },
+  profile: {
+    displayName: "Profile Details",
+    fields: [
+      styleMaxWidthField,
+      styleBorderRadiusField,
+      stylePaddingField,
+    ],
+  },
+
+  signin_form: {
+    displayName: "Sign In Form",
+    fields: [
+      styleMaxWidthField,
+      styleBorderRadiusField,
+      stylePaddingField,
+    ],
+  },
+  login_form: {
+    displayName: "Sign In Form",
+    fields: [
+      styleMaxWidthField,
+      styleBorderRadiusField,
+      stylePaddingField,
+    ],
+  },
+  signup_form: {
+    displayName: "Sign Up Form",
+    fields: [
+      styleMaxWidthField,
+      styleBorderRadiusField,
+      stylePaddingField,
+    ],
+  },
+  register_form: {
+    displayName: "Sign Up Form",
+    fields: [
+      styleMaxWidthField,
+      styleBorderRadiusField,
+      stylePaddingField,
+    ],
+  },
+
   footer: {
     displayName: "Footer Settings",
     fields: [
