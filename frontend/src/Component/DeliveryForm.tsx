@@ -19,8 +19,10 @@ type ThemeInput =
       mode?: string;
       primary_bg?: string;
       text_color?: string;
+      muted_text_color?: string;
       accent_color?: string;
       festival_theme?: string;
+      [key: string]: any;
     };
 
 export type DeliveryFormData = {
@@ -46,6 +48,7 @@ type DeliveryFormProps = {
   accentColor?: string;
   compact?: boolean;
   background_color?: string;
+  card_color?: string;
   input_color?: string;
   text_color?: string;
   muted_text_color?: string;
@@ -57,7 +60,7 @@ type DeliveryFormProps = {
   field_radius?: number;
   padding?: number;
   gap?: number;
-  max_width?: number;
+  max_width?: number | string;
   deliveryData?: DeliveryFormData;
   onDeliveryDataChange?: (data: DeliveryFormData) => void;
   onContinue?: () => void;
@@ -69,6 +72,59 @@ type DeliveryFormProps = {
   isAuthenticated?: boolean;
   isAddressesLoading?: boolean;
   deliveryMode?: string; // 'own_agent' | 'shiprocket' | 'hybrid' | 'manual'
+  selectedBlockId?: string | null;
+  // Content & Text
+  subtitle?: string;
+  add_address_button_label?: string;
+  continue_button_label?: string;
+  empty_title?: string;
+  empty_message?: string;
+  // Radii
+  card_radius?: number;
+  item_radius?: number;
+  button_border_radius?: number;
+  badge_border_radius?: number;
+  badge_radius?: number;
+  // Colors & Button
+  selected_card_bg?: string;
+  button_bg_color?: string;
+  button_text_color?: string;
+  // Map Picker Props
+  map_modal_title?: string;
+  map_search_placeholder?: string;
+  map_confirm_button_label?: string;
+  map_helper_text?: string;
+  map_modal_radius?: number;
+  map_button_radius?: number;
+  map_search_radius?: number;
+  map_modal_bg?: string;
+  map_header_text_color?: string;
+  map_search_bg?: string;
+  map_search_text_color?: string;
+  map_confirm_btn_bg?: string;
+  map_confirm_btn_text?: string;
+  // Address Form Props
+  form_title_add?: string;
+  form_title_edit?: string;
+  form_subtitle?: string;
+  form_name_placeholder?: string;
+  form_phone_placeholder?: string;
+  form_address_placeholder?: string;
+  form_city_placeholder?: string;
+  form_pincode_placeholder?: string;
+  form_email_placeholder?: string;
+  form_save_button_label?: string;
+  form_card_radius?: number;
+  form_button_radius?: number;
+  form_padding?: number;
+  form_panel_bg?: string;
+  form_input_bg?: string;
+  form_input_text?: string;
+  form_label_color?: string;
+  form_placeholder_color?: string;
+  form_border_color?: string;
+  form_save_btn_bg?: string;
+  form_save_btn_text?: string;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -199,6 +255,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
   accentColor,
   compact = false,
   background_color,
+  card_color,
   input_color,
   text_color,
   muted_text_color,
@@ -222,6 +279,54 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
   isAuthenticated = false,
   isAddressesLoading = false,
   deliveryMode,
+  selectedBlockId,
+  subtitle,
+  add_address_button_label,
+  continue_button_label,
+  empty_title,
+  empty_message,
+  card_radius,
+  item_radius,
+  button_border_radius,
+  badge_border_radius,
+  badge_radius,
+  selected_card_bg,
+  button_bg_color,
+  button_text_color,
+  map_modal_title,
+  map_search_placeholder,
+  map_confirm_button_label,
+  map_helper_text,
+  map_modal_radius,
+  map_button_radius,
+  map_search_radius,
+  map_modal_bg,
+  map_header_text_color,
+  map_search_bg,
+  map_search_text_color,
+  map_confirm_btn_bg,
+  map_confirm_btn_text,
+  form_title_add,
+  form_title_edit,
+  form_subtitle,
+  form_name_placeholder,
+  form_phone_placeholder,
+  form_address_placeholder,
+  form_city_placeholder,
+  form_pincode_placeholder,
+  form_email_placeholder,
+  form_save_button_label,
+  form_card_radius,
+  form_button_radius,
+  form_padding,
+  form_panel_bg,
+  form_input_bg,
+  form_input_text,
+  form_label_color,
+  form_placeholder_color,
+  form_border_color,
+  form_save_btn_bg,
+  form_save_btn_text,
 }) => {
   const [addresses, setAddresses] = useState<DeliveryFormData[]>(savedAddresses);
   const [formMode, setFormMode] = useState<"hidden" | "add" | "edit">("hidden");
@@ -246,6 +351,20 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
     window.addEventListener("resize", syncViewport);
     return () => window.removeEventListener("resize", syncViewport);
   }, []);
+
+  // Sync canvas view when a specific sub-block is selected in the editor sidebar tree
+  useEffect(() => {
+    if (selectedBlockId === "delivery_map_picker") {
+      setShowMapPicker(true);
+      setFormMode("hidden");
+    } else if (selectedBlockId === "delivery_address_form") {
+      setShowMapPicker(false);
+      setFormMode("add");
+    } else if (selectedBlockId === "delivery_form") {
+      setShowMapPicker(false);
+      setFormMode("hidden");
+    }
+  }, [selectedBlockId]);
 
   useEffect(() => {
     setAddresses(savedAddresses);
@@ -323,134 +442,145 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
   const themeObject = typeof theme === "object" ? theme : undefined;
   const isDark =
     theme === "dark" ||
-    (themeObject?.primary_bg ? isColorDarkHex(themeObject.primary_bg) : false) ||
-    (background_color ? isColorDarkHex(background_color) : false) ||
     themeObject?.mode === "dark" ||
+    (themeObject?.primary_bg ? isColorDarkHex(themeObject.primary_bg) : false) ||
     (themeObject?.text_color ? !isColorDarkHex(themeObject.text_color) : false);
 
   const resolvedAccent =
     accentColor ||
-    (themeObject as any)?.delivery_form_btn_bg ||
     themeObject?.accent_color ||
-    (isDark ? "#4f8cff" : "#2f6df6");
-
-  const resolvedPrimaryBg =
-    background_color ||
-    (themeObject as any)?.delivery_form_bg ||
-    themeObject?.primary_bg ||
-    (isDark ? "#0f172a" : "#f6f7fb");
+    (themeObject as any)?.delivery_form_btn_bg ||
+    (isDark ? "#3b82f6" : "#2563eb");
 
   const resolvedText =
     text_color ||
     (themeObject as any)?.delivery_form_text ||
     themeObject?.text_color ||
-    (isDark ? "#f8fafc" : "#111827");
+    (isDark ? "#f8fafc" : "#0f172a");
 
   const resolvedPadding = padding ?? (compact ? 16 : 18);
   const resolvedGap = gap ?? 16;
   const resolvedBorderRadius = border_radius ?? 14;
   const resolvedFieldRadius = field_radius ?? 8;
+  const resolvedCardRadius = card_radius ?? item_radius ?? 12;
+  const resolvedButtonRadius = button_border_radius ?? 10;
+  const rawBadgeRadius = badge_border_radius ?? badge_radius;
+  const resolvedBadgeRadius =
+    rawBadgeRadius !== undefined && rawBadgeRadius !== null
+      ? (Number(rawBadgeRadius) > 30 ? 12 : Number(rawBadgeRadius))
+      : 12;
+  const resolvedFormCardRadius = form_card_radius ?? 12;
+  const resolvedFormButtonRadius = form_button_radius ?? 8;
+  const resolvedFormPadding = form_padding ?? (isMobile ? 14 : 16);
 
   const palette = useMemo(() => {
-    if (!isDark) {
-      // Light or Warm Festive Light Theme
-      const surfaceBg = background_color || (themeObject as any)?.delivery_form_bg || (themeObject as any)?.surface_bg || (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.7);
-      const isPureWhiteBg = resolvedPrimaryBg.toLowerCase() === "#ffffff" || resolvedPrimaryBg.toLowerCase() === "#f8fafc" || resolvedPrimaryBg.toLowerCase() === "#f6f7fb";
-      const cardBgFinal = background_color || (themeObject as any)?.delivery_form_bg || (isPureWhiteBg ? (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || "#ffffff" : surfaceBg);
-      const inputBgFinal = input_color || (themeObject as any)?.delivery_form_input_bg || (isPureWhiteBg ? "#ffffff" : mixHex(cardBgFinal, "#ffffff", 0.5));
-      const borderFinal = border_color || (themeObject as any)?.delivery_form_border || (isPureWhiteBg ? "#e5e7eb" : mixHex(resolvedText, cardBgFinal, 0.15));
+    // Individual, independent colors with direct fallbacks to theme
+    const finalContainerBg =
+      background_color ||
+      (themeObject as any)?.delivery_form_bg ||
+      (isDark ? "#0f172a" : "#ffffff");
 
-      return {
-        cardBg: cardBgFinal,
-        panelBg: cardBgFinal,
-        listCardBg: isPureWhiteBg ? "#ffffff" : mixHex(cardBgFinal, "#ffffff", 0.3),
-        listCardSelectedBg: alpha(resolvedAccent, 0.08),
-        emptyStateBg: isPureWhiteBg ? "#f8fafc" : mixHex(cardBgFinal, "#000000", 0.03),
-        emptyStateBorder: borderFinal,
-        inputBg: inputBgFinal,
-        inputText: (themeObject as any)?.delivery_form_input_text || resolvedText,
-        border: borderFinal,
-        softBorder: soft_border_color || mixHex(borderFinal, cardBgFinal, 0.5),
-        selectedBorder: resolvedAccent,
-        text: resolvedText,
-        textMuted: muted_text_color || mixHex(resolvedText, cardBgFinal, 0.4),
-        textSoft: soft_text_color || mixHex(resolvedText, cardBgFinal, 0.55),
-        placeholder: placeholder_color || mixHex(resolvedText, cardBgFinal, 0.55),
-        shadow: "0 2px 8px rgba(0,0,0,0.05)",
-        accentRing: `0 0 0 3px ${resolvedAccent}22`,
-        subtleButtonBg: inputBgFinal,
-        subtleButtonText: resolvedText,
-        subtleButtonBorder: borderFinal,
-        secondaryButtonBg: inputBgFinal,
-        secondaryButtonText: muted_text_color || mixHex(resolvedText, cardBgFinal, 0.4),
-        secondaryButtonBorder: borderFinal,
-        primaryButtonBg: resolvedAccent,
-        primaryButtonDisabledBg: mixHex(resolvedAccent, cardBgFinal, 0.3),
-        primaryButtonText: (themeObject as any)?.delivery_form_btn_text || "#ffffff",
-        radioBorder: borderFinal,
-        editText: mixHex(resolvedText, cardBgFinal, 0.5),
-        deleteText: "#dc2626",
-        defaultBadgeBg: alpha(resolvedAccent, 0.1),
-        errorBg: "#fef2f2",
-        errorText: "#b91c1c",
-        errorBorder: "#fecaca",
-      };
-    }
+    const finalCardBg =
+      card_color ||
+      (themeObject as any)?.card_bg ||
+      (isDark ? "#1e293b" : "#ffffff");
 
-    // Dark or Deep Festive Dark Theme (e.g. Deep Maroon, Forest Emerald, Festive Purple, Slate Dark)
-    const cardBgDark = background_color || (themeObject as any)?.delivery_form_bg || (themeObject as any)?.surface_bg || (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.06);
-    const isFormCardDark = isColorDarkHex(cardBgDark);
-    const inputBgDark = input_color || (themeObject as any)?.delivery_form_input_bg || (isFormCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.09) : "#ffffff");
-    const borderDark = border_color || (themeObject as any)?.delivery_form_border || (isFormCardDark ? mixHex(resolvedText, resolvedPrimaryBg, 0.15) : "#e2e8f0");
-    const formTextFinal = (themeObject as any)?.delivery_form_text || (isFormCardDark ? resolvedText : "#0f172a");
+    const finalSelectedCardBg =
+      selected_card_bg ||
+      (isDark ? "#1e3a8a" : "#eff6ff");
+
+    const finalBorder =
+      border_color ||
+      (themeObject as any)?.delivery_form_border ||
+      (isDark ? "#334155" : "#e2e8f0");
+
+    const finalSoftBorder =
+      soft_border_color ||
+      (isDark ? "#1e293b" : "#f1f5f9");
+
+    const finalText = resolvedText;
+
+    const finalTextMuted =
+      muted_text_color ||
+      themeObject?.muted_text_color ||
+      (isDark ? "#94a3b8" : "#64748b");
+
+    const finalTextSoft =
+      soft_text_color ||
+      (isDark ? "#64748b" : "#94a3b8");
+
+    const finalPlaceholder =
+      placeholder_color ||
+      (isDark ? "#64748b" : "#94a3b8");
+
+    const finalInputBg =
+      input_color ||
+      (themeObject as any)?.delivery_form_input_bg ||
+      (isDark ? "#0f172a" : "#ffffff");
+
+    const finalButtonBg =
+      button_bg_color ||
+      (themeObject as any)?.delivery_form_btn_bg ||
+      resolvedAccent;
+
+    const finalButtonText =
+      button_text_color ||
+      (themeObject as any)?.delivery_form_btn_text ||
+      "#ffffff";
 
     return {
-      cardBg: cardBgDark,
-      panelBg: isFormCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.07) : cardBgDark,
-      listCardBg: isFormCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.04) : "#f8fafc",
-      listCardSelectedBg: alpha(resolvedAccent, 0.16),
-      emptyStateBg: isFormCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.04) : "#f8fafc",
-      emptyStateBorder: borderDark,
-      inputBg: inputBgDark,
-      inputText: (themeObject as any)?.delivery_form_input_text || formTextFinal,
-      border: borderDark,
-      softBorder: soft_border_color || mixHex(borderDark, cardBgDark, 0.5),
+      cardBg: finalContainerBg, // Outer container background
+      panelBg: finalContainerBg,
+      listCardBg: finalCardBg, // Address cards background
+      listCardSelectedBg: finalSelectedCardBg, // Selected address card background
+      emptyStateBg: isDark ? "rgba(255,255,255,0.03)" : "#f8fafc",
+      emptyStateBorder: finalBorder,
+      inputBg: finalInputBg,
+      inputText: (themeObject as any)?.delivery_form_input_text || finalText,
+      border: finalBorder, // Address card border
+      softBorder: finalSoftBorder, // Container outer border
       selectedBorder: resolvedAccent,
-      text: formTextFinal,
-      textMuted: muted_text_color || (isFormCardDark ? mixHex(resolvedText, resolvedPrimaryBg, 0.3) : "#475569"),
-      textSoft: soft_text_color || (isFormCardDark ? mixHex(resolvedText, resolvedPrimaryBg, 0.45) : "#64748b"),
-      placeholder: placeholder_color || (isFormCardDark ? mixHex(resolvedText, resolvedPrimaryBg, 0.45) : "#94a3b8"),
-      shadow: "0 8px 22px rgba(0,0,0,0.25)",
-      accentRing: `0 0 0 3px ${resolvedAccent}2e`,
-      subtleButtonBg: isFormCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.07) : "#f1f5f9",
-      subtleButtonText: formTextFinal,
-      subtleButtonBorder: borderDark,
-      secondaryButtonBg: isFormCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.05) : "#f8fafc",
-      secondaryButtonText: muted_text_color || (isFormCardDark ? mixHex(resolvedText, resolvedPrimaryBg, 0.3) : "#475569"),
-      secondaryButtonBorder: borderDark,
-      primaryButtonBg: resolvedAccent,
-      primaryButtonDisabledBg: "rgba(148,163,184,0.28)",
-      primaryButtonText: (themeObject as any)?.delivery_form_btn_text || "#ffffff",
-      radioBorder: borderDark,
-      editText: isFormCardDark ? mixHex(resolvedText, resolvedPrimaryBg, 0.35) : "#64748b",
-      deleteText: "#f87171",
-      defaultBadgeBg: alpha(resolvedAccent, 0.16),
-      errorBg: "rgba(239,68,68,0.12)",
-      errorText: "#fca5a5",
-      errorBorder: "rgba(248,113,113,0.32)",
+      text: finalText,
+      textMuted: finalTextMuted,
+      textSoft: finalTextSoft,
+      placeholder: finalPlaceholder,
+      shadow: isDark ? "0 8px 22px rgba(0,0,0,0.25)" : "0 2px 8px rgba(0,0,0,0.05)",
+      accentRing: `0 0 0 3px ${alpha(resolvedAccent, 0.2)}`,
+      subtleButtonBg: isDark ? "rgba(255,255,255,0.06)" : "#f8fafc",
+      subtleButtonText: finalText,
+      subtleButtonBorder: finalBorder,
+      secondaryButtonBg: isDark ? "rgba(255,255,255,0.05)" : "#f8fafc",
+      secondaryButtonText: finalTextMuted,
+      secondaryButtonBorder: finalBorder,
+      primaryButtonBg: finalButtonBg,
+      primaryButtonDisabledBg: alpha(finalButtonBg, 0.4),
+      primaryButtonText: finalButtonText,
+      radioBorder: finalBorder,
+      editText: finalTextMuted,
+      deleteText: "#ef4444",
+      defaultBadgeBg: alpha(resolvedAccent, isDark ? 0.2 : 0.1),
+      errorBg: isDark ? "rgba(239,68,68,0.15)" : "#fef2f2",
+      errorText: isDark ? "#fca5a5" : "#b91c1c",
+      errorBorder: isDark ? "rgba(248,113,113,0.35)" : "#fecaca",
     };
   }, [
     background_color,
+    card_color,
+    selected_card_bg,
     border_color,
-    input_color,
-    isDark,
-    muted_text_color,
-    placeholder_color,
-    resolvedAccent,
-    resolvedPrimaryBg,
-    resolvedText,
     soft_border_color,
+    text_color,
+    muted_text_color,
     soft_text_color,
+    placeholder_color,
+    input_color,
+    accentColor,
+    button_bg_color,
+    button_text_color,
+    resolvedAccent,
+    resolvedText,
+    isDark,
+    themeObject,
   ]);
 
   const syncAddresses = (nextAddresses: DeliveryFormData[]) => {
@@ -864,7 +994,15 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
       ref={deliverySectionRef}
       style={{
         width: "100%",
-        maxWidth: max_width ? `${max_width}px` : undefined,
+        maxWidth:
+          !max_width || max_width === "100%" || max_width === "full"
+            ? "100%"
+            : typeof max_width === "number"
+            ? `${max_width}px`
+            : String(max_width).endsWith("%") || String(max_width).endsWith("px")
+            ? String(max_width)
+            : `${max_width}px`,
+        margin: "0 auto",
       }}
     >
       <div
@@ -890,6 +1028,22 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
           }}
         >
           <div>
+            {sectionLabel ? (
+              <div
+                style={{
+                  display: "inline-block",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  color: resolvedAccent,
+                  marginBottom: "4px",
+                }}
+              >
+                {sectionLabel}
+              </div>
+            ) : null}
+
             <h3
               style={{
                 margin: 0,
@@ -899,7 +1053,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                 color: palette.text,
               }}
             >
-              {title}
+              {title || "Delivery Address"}
             </h3>
 
             <p
@@ -910,9 +1064,9 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                 color: palette.textMuted,
               }}
             >
-              {isAuthenticated
+              {subtitle || (isAuthenticated
                 ? "Select one of your saved delivery addresses or add a new one."
-                : "Please sign in or signup to continue shopping."}
+                : "Please sign in or signup to continue shopping.")}
             </p>
           </div>
 
@@ -922,7 +1076,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
             style={{
               minHeight: "40px",
               border: `1px solid ${palette.subtleButtonBorder}`,
-              borderRadius: "10px",
+              borderRadius: `${resolvedButtonRadius}px`,
               background: palette.subtleButtonBg,
               color: palette.subtleButtonText,
               padding: isMobile ? "0 12px" : "0 14px",
@@ -932,7 +1086,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
               width: isMobile ? "100%" : "auto",
             }}
           >
-            + Add New Address
+            {add_address_button_label || "+ Add New Address"}
           </button>
         </div>
 
@@ -1009,7 +1163,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                       background: isSelected
                         ? palette.listCardSelectedBg
                         : palette.listCardBg,
-                      borderRadius: "12px",
+                      borderRadius: `${resolvedCardRadius}px`,
                       padding: isMobile ? "12px" : "14px 16px",
                       cursor: "pointer",
                       boxSizing: "border-box",
@@ -1079,7 +1233,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                                   fontWeight: 700,
                                   color: resolvedAccent,
                                   background: palette.defaultBadgeBg,
-                                  borderRadius: "999px",
+                                  borderRadius: `${resolvedBadgeRadius}px`,
                                   padding: "3px 8px",
                                 }}
                               >
@@ -1095,7 +1249,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                                   color: "#15803d",
                                   background: "#f0fdf4",
                                   border: "1px solid #bbf7d0",
-                                  borderRadius: "999px",
+                                  borderRadius: `${resolvedBadgeRadius}px`,
                                   padding: "2px 7px",
                                   display: "inline-flex",
                                   alignItems: "center",
@@ -1181,7 +1335,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                     color: palette.text,
                   }}
                 >
-                  No address saved
+                  {empty_title || "No address saved"}
                 </h4>
 
                 <p
@@ -1192,9 +1346,9 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                     color: palette.textMuted,
                   }}
                 >
-                  {isAuthenticated
+                  {empty_message || (isAuthenticated
                     ? "Add your first delivery address to continue."
-                    : "Please sign in or signup to continue shopping."}
+                    : "Please sign in or signup to continue shopping.")}
                 </p>
               </div>
             )}
@@ -1211,10 +1365,10 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
               <div
                 style={{
                   minWidth: 0,
-                  border: `1px solid ${palette.border}`,
-                  borderRadius: "12px",
-                  background: palette.panelBg,
-                  padding: isMobile ? "14px" : "16px",
+                  border: `1px solid ${form_border_color || palette.border}`,
+                  borderRadius: `${resolvedFormCardRadius}px`,
+                  background: form_panel_bg || palette.panelBg,
+                  padding: `${resolvedFormPadding}px`,
                 }}
               >
                 <div
@@ -1236,7 +1390,9 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                         color: palette.text,
                       }}
                     >
-                      {formMode === "edit" ? "Edit Address" : "Add New Address"}
+                      {formMode === "edit"
+                        ? form_title_edit || "Edit Address"
+                        : form_title_add || "Add New Address"}
                     </h4>
 
                     <p
@@ -1247,7 +1403,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                         color: palette.textMuted,
                       }}
                     >
-                      Fill in the details below
+                      {form_subtitle || "Fill in the details below"}
                     </p>
                   </div>
 
@@ -1351,7 +1507,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                     }}
                   >
                     <div style={{ minWidth: 0 }}>
-                      <label htmlFor="delivery-full-name" style={labelStyle}>
+                      <label htmlFor="delivery-full-name" style={{ ...labelStyle, color: form_label_color || labelStyle.color }}>
                         Receiver's Full Name *
                       </label>
                       <input
@@ -1360,14 +1516,20 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                         maxLength={100}
                         value={draftAddress.fullName}
                         onChange={handleDraftChange("fullName")}
-                        placeholder="e.g. Rahul Sharma"
+                        placeholder={form_name_placeholder || "e.g. Rahul Sharma"}
                         required
-                        style={inputBaseStyle}
+                        style={{
+                          ...inputBaseStyle,
+                          background: form_input_bg || inputBaseStyle.background,
+                          color: form_input_text || inputBaseStyle.color,
+                          borderColor: form_border_color || inputBaseStyle.borderColor,
+                          borderRadius: `${resolvedFieldRadius}px`,
+                        }}
                       />
                     </div>
 
                     <div style={{ minWidth: 0 }}>
-                      <label htmlFor="delivery-phone" style={labelStyle}>
+                      <label htmlFor="delivery-phone" style={{ ...labelStyle, color: form_label_color || labelStyle.color }}>
                         Mobile Number *
                       </label>
                       <div style={{ display: "flex", alignItems: "center" }}>
@@ -1378,7 +1540,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                             alignItems: "center",
                             padding: "0 10px",
                             background: "rgba(0,0,0,0.04)",
-                            border: `1px solid ${palette.border}`,
+                            border: `1px solid ${form_border_color || palette.border}`,
                             borderRight: "none",
                             borderRadius: `${resolvedFieldRadius}px 0 0 ${resolvedFieldRadius}px`,
                             fontSize: "13px",
@@ -1398,11 +1560,14 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                           maxLength={10}
                           value={draftAddress.phone}
                           onChange={handleDraftChange("phone")}
-                          placeholder="9876543210"
+                          placeholder={form_phone_placeholder || "9876543210"}
                           required
                           style={{
                             ...inputBaseStyle,
                             height: "42px",
+                            background: form_input_bg || inputBaseStyle.background,
+                            color: form_input_text || inputBaseStyle.color,
+                            borderColor: form_border_color || inputBaseStyle.borderColor,
                             borderRadius: `0 ${resolvedFieldRadius}px ${resolvedFieldRadius}px 0`,
                           }}
                         />
@@ -1411,7 +1576,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                   </div>
 
                   <div>
-                    <label htmlFor="delivery-address" style={labelStyle}>
+                    <label htmlFor="delivery-address" style={{ ...labelStyle, color: form_label_color || labelStyle.color }}>
                       House / Flat / Floor / Building No. *
                     </label>
                     <input
@@ -1420,9 +1585,15 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                       maxLength={255}
                       value={draftAddress.address}
                       onChange={handleDraftChange("address")}
-                      placeholder="e.g. Flat 402, Block B, Green Heights"
+                      placeholder={form_address_placeholder || "e.g. Flat 402, Block B, Green Heights"}
                       required
-                      style={inputBaseStyle}
+                      style={{
+                        ...inputBaseStyle,
+                        background: form_input_bg || inputBaseStyle.background,
+                        color: form_input_text || inputBaseStyle.color,
+                        borderColor: form_border_color || inputBaseStyle.borderColor,
+                        borderRadius: `${resolvedFieldRadius}px`,
+                      }}
                     />
                   </div>
 
@@ -1436,7 +1607,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                     }}
                   >
                     <div style={{ minWidth: 0 }}>
-                      <label htmlFor="delivery-city" style={labelStyle}>
+                      <label htmlFor="delivery-city" style={{ ...labelStyle, color: form_label_color || labelStyle.color }}>
                         City / Area *
                       </label>
                       <input
@@ -1445,14 +1616,20 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                         maxLength={100}
                         value={draftAddress.city}
                         onChange={handleDraftChange("city")}
-                        placeholder="City / Area"
+                        placeholder={form_city_placeholder || "City / Area"}
                         required
-                        style={inputBaseStyle}
+                        style={{
+                          ...inputBaseStyle,
+                          background: form_input_bg || inputBaseStyle.background,
+                          color: form_input_text || inputBaseStyle.color,
+                          borderColor: form_border_color || inputBaseStyle.borderColor,
+                          borderRadius: `${resolvedFieldRadius}px`,
+                        }}
                       />
                     </div>
 
                     <div style={{ minWidth: 0 }}>
-                      <label htmlFor="delivery-pincode" style={labelStyle}>
+                      <label htmlFor="delivery-pincode" style={{ ...labelStyle, color: form_label_color || labelStyle.color }}>
                         Postal Code (6 Digits) *
                       </label>
                       <input
@@ -1463,15 +1640,21 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                         maxLength={6}
                         value={draftAddress.pincode}
                         onChange={handleDraftChange("pincode")}
-                        placeholder="e.g. 560102"
+                        placeholder={form_pincode_placeholder || "e.g. 560102"}
                         required
-                        style={inputBaseStyle}
+                        style={{
+                          ...inputBaseStyle,
+                          background: form_input_bg || inputBaseStyle.background,
+                          color: form_input_text || inputBaseStyle.color,
+                          borderColor: form_border_color || inputBaseStyle.borderColor,
+                          borderRadius: `${resolvedFieldRadius}px`,
+                        }}
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label htmlFor="delivery-email" style={labelStyle}>
+                    <label htmlFor="delivery-email" style={{ ...labelStyle, color: form_label_color || labelStyle.color }}>
                       Email Address (Optional)
                     </label>
                     <input
@@ -1480,8 +1663,14 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                       maxLength={120}
                       value={draftAddress.email}
                       onChange={handleDraftChange("email")}
-                      placeholder="name@example.com"
-                      style={inputBaseStyle}
+                      placeholder={form_email_placeholder || "name@example.com"}
+                      style={{
+                        ...inputBaseStyle,
+                        background: form_input_bg || inputBaseStyle.background,
+                        color: form_input_text || inputBaseStyle.color,
+                        borderColor: form_border_color || inputBaseStyle.borderColor,
+                        borderRadius: `${resolvedFieldRadius}px`,
+                      }}
                     />
                   </div>
 
@@ -1609,13 +1798,13 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                           minHeight: "42px",
                           minWidth: isMobile ? "100%" : "140px",
                           width: isMobile ? "100%" : "auto",
-                          borderRadius: "8px",
+                          borderRadius: `${resolvedFormButtonRadius}px`,
                           border: "none",
                           background:
                             isAddressValid(draftAddress) && !isSaving
-                              ? palette.primaryButtonBg
+                              ? form_save_btn_bg || palette.primaryButtonBg
                               : palette.primaryButtonDisabledBg,
-                          color: palette.primaryButtonText,
+                          color: form_save_btn_text || palette.primaryButtonText,
                           padding: "0 18px",
                           fontSize: "13px",
                           fontWeight: 700,
@@ -1627,9 +1816,10 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                       >
                         {isSaving
                           ? "Saving..."
-                          : formMode === "edit"
-                          ? "Save Changes"
-                          : "Save Address"}
+                          : form_save_button_label ||
+                            (formMode === "edit"
+                              ? "Save Changes"
+                              : "Save Address")}
                       </button>
                     </div>
                   </div>
@@ -1693,7 +1883,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
               minHeight: "42px",
               minWidth: isMobile ? "100%" : "120px",
               width: isMobile ? "100%" : "auto",
-              borderRadius: "8px",
+              borderRadius: `${resolvedButtonRadius}px`,
               border: "none",
               background: disableContinue
                 ? palette.primaryButtonDisabledBg
@@ -1705,7 +1895,9 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
               cursor: isCheckingDeliverability ? "wait" : "pointer",
             }}
           >
-            {isCheckingDeliverability ? "Checking..." : "Continue"}
+            {isCheckingDeliverability
+              ? "Checking..."
+              : continue_button_label || "Deliver to this address"}
           </button>
         </div>
       </div>
@@ -1752,6 +1944,19 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
         deliveryMode={deliveryMode}
         initialLat={draftAddress.latitude ?? undefined}
         initialLng={draftAddress.longitude ?? undefined}
+        map_modal_title={map_modal_title}
+        map_search_placeholder={map_search_placeholder}
+        map_confirm_button_label={map_confirm_button_label}
+        map_helper_text={map_helper_text}
+        map_modal_radius={map_modal_radius}
+        map_button_radius={map_button_radius}
+        map_search_radius={map_search_radius}
+        map_modal_bg={map_modal_bg}
+        map_header_text_color={map_header_text_color}
+        map_search_bg={map_search_bg}
+        map_search_text_color={map_search_text_color}
+        map_confirm_btn_bg={map_confirm_btn_bg}
+        map_confirm_btn_text={map_confirm_btn_text}
       />
     </section>
   );

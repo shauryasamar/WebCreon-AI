@@ -124,7 +124,10 @@ function PageBlocksTreeView({
       name: "Checkout",
       route: "/checkout",
       blocks: [
+        { id: "checkout_steps", type: "checkout_steps", name: "Checkout Steps" },
         { id: "delivery_form", type: "delivery_form", name: "Delivery Form" },
+        { id: "delivery_map_picker", type: "delivery_map_picker", name: "Map Location Picker" },
+        { id: "delivery_address_form", type: "delivery_address_form", name: "Add / Edit Address Form" },
         { id: "payment_methods", type: "payment_methods", name: "Payment Methods" },
         { id: "place_order_cta", type: "place_order_cta", name: "Place Order" },
       ],
@@ -578,57 +581,54 @@ function getFieldGroupTitle(field: EditorField) {
   const key = field.key.toLowerCase();
   const label = (field.label || "").toLowerCase();
 
-  if (["brandname", "logo", "tagline", "storename", "brand"].some((k) => key.includes(k) || label.includes(k))) {
-    return "BRAND & IDENTITY";
+  // 1. Color Palette: Any color picker or color/bg/border key
+  if (
+    field.type === "color" ||
+    ["_color", "_bg", "background", "border_color", "accent", "muted_text", "soft_text", "placeholder_color"].some(
+      (k) => key.includes(k) || label.includes(k)
+    )
+  ) {
+    return "COLOR PALETTE";
   }
 
-  if (key.includes("search") || label.includes("search")) {
-    return "SEARCH BAR";
-  }
-
+  // 2. Layout & Spacing: Any dimensions, radii, padding, gap, max width, alignment
   if (
     [
-      "variant",
-      "position",
-      "height",
-      "max_width",
-      "width",
       "radius",
       "padding",
-      "columns",
       "gap",
+      "width",
+      "height",
+      "max_width",
+      "position",
+      "align",
+      "columns",
       "grid",
       "layout",
-      "align",
+      "aspect_ratio",
+      "fit",
     ].some((k) => key.includes(k) || label.includes(k))
   ) {
     return "LAYOUT & SPACING";
   }
 
+  // 3. Brand & Search specific categories if applicable
+  if (["brandname", "logo", "tagline", "storename"].some((k) => key.includes(k) || label.includes(k))) {
+    return "BRAND & IDENTITY";
+  }
+  if (key.includes("search") && !key.includes("placeholder") && !key.includes("radius") && !key.includes("bg") && !key.includes("color")) {
+    return "SEARCH BAR";
+  }
+
+  // 4. Feature Toggles
   if (
-    [
-      "showaccount",
-      "showcart",
-      "button",
-      "cta",
-      "link",
-      "action",
-      "enable",
-    ].some((k) => key.includes(k) || label.includes(k)) ||
-    field.type === "checkbox"
+    field.type === "checkbox" ||
+    ["showaccount", "showcart", "enable"].some((k) => key.includes(k) || label.includes(k))
   ) {
     return "ACTIONS & TOGGLES";
   }
 
-  if (
-    ["bg", "color", "text_color", "muted", "border", "accent", "theme", "shadow"].some(
-      (k) => key.includes(k) || label.includes(k)
-    ) ||
-    field.type === "color"
-  ) {
-    return "COLOR PALETTE";
-  }
-
+  // 5. Default to Settings & Content
   return "SETTINGS & CONTENT";
 }
 
@@ -5420,6 +5420,1169 @@ function CartEditor({
   );
 }
 
+function isCheckoutStepsBlock(block?: any): boolean {
+  if (!block) return false;
+  const rawType = String(block.type || "").toLowerCase().trim();
+  const rawId = String(block.id || "").toLowerCase().trim();
+  const normType = rawType.replace(/[-_\s]/g, "");
+  const normId = rawId.replace(/[-_\s]/g, "");
+
+  return (
+    normType === "checkoutsteps" ||
+    normType === "checkoutstepper" ||
+    normId === "checkoutsteps" ||
+    normId === "checkoutstepper" ||
+    rawType.includes("checkoutstep") ||
+    rawId.includes("checkoutstep")
+  );
+}
+
+function CheckoutStepsEditor({
+  selectedBlock,
+  isLightMode,
+  textColor: _textColor,
+  accentColor: _accentColor,
+  onSiteDefinitionChange,
+  siteDefinition,
+}: {
+  selectedBlock: any;
+  isLightMode: boolean;
+  textColor: string;
+  accentColor: string;
+  onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
+  siteDefinition: EditorSiteDefinition;
+}) {
+  const [activeTab, setActiveTab] = useState<"layout" | "content" | "colors">("layout");
+  const p = selectedBlock?.props ?? {};
+
+  const updateProps = (patch: Record<string, any>) => {
+    const nextDef = JSON.parse(JSON.stringify(siteDefinition));
+    let updated = false;
+
+    if (Array.isArray(nextDef.pages)) {
+      nextDef.pages = nextDef.pages.map((page: any) => {
+        const isCheckoutP =
+          page.role === "checkout" ||
+          page.page_type === "checkout" ||
+          page.slug === "checkout" ||
+          page.route === "/checkout" ||
+          page.route === "checkout";
+
+        if (isCheckoutP) {
+          const blocks = (page.blocks ?? []).map((block: any) => {
+            if (
+              block.id === "checkout_steps" ||
+              block.type === "checkout_steps" ||
+              block.id === selectedBlock.id ||
+              block.type === selectedBlock.type
+            ) {
+              updated = true;
+              return {
+                ...block,
+                props: {
+                  ...(block.props ?? {}),
+                  ...patch,
+                },
+              };
+            }
+            return block;
+          });
+
+          if (!updated) {
+            updated = true;
+            blocks.unshift({
+              id: "checkout_steps",
+              type: "checkout_steps",
+              props: { ...(selectedBlock.props ?? {}), ...patch },
+            });
+          }
+
+          return { ...page, blocks };
+        }
+        return page;
+      });
+    }
+
+    if (!updated) {
+      if (!Array.isArray(nextDef.pages)) nextDef.pages = [];
+      nextDef.pages.push({
+        id: "page-checkout",
+        name: "Checkout",
+        route: "/checkout",
+        role: "checkout",
+        page_type: "checkout",
+        show_in_nav: false,
+        blocks: [
+          {
+            id: "checkout_steps",
+            type: "checkout_steps",
+            props: { ...(selectedBlock.props ?? {}), ...patch },
+          },
+        ],
+      });
+    }
+
+    onSiteDefinitionChange(nextDef);
+  };
+
+  const parseNumProp = (val: any, fallback: number) => {
+    if (val === undefined || val === null || val === "") return fallback;
+    const n = Number(val);
+    return isNaN(n) ? fallback : n;
+  };
+
+  const getStr = (key: string, fallback: string) => {
+    const val = p[key];
+    if (val !== undefined && val !== null && String(val).trim() !== "") {
+      return String(val);
+    }
+    return fallback;
+  };
+
+  const textInputStyle: React.CSSProperties = {
+    width: "100%",
+    height: "28px",
+    padding: "0 8px",
+    fontSize: "11px",
+    fontWeight: 600,
+    color: "#0f172a",
+    borderRadius: "4px",
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    boxSizing: "border-box",
+  };
+
+  const fieldLabelStyle: React.CSSProperties = {
+    fontSize: "9px",
+    fontWeight: 700,
+    color: "#64748b",
+    textTransform: "uppercase",
+  };
+
+
+
+  return (
+    <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
+      {/* 3 Navigation Tabs: Layout, Content, Colors */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: "2px",
+          background: "#f1f5f9",
+          padding: "2px",
+          borderRadius: "6px",
+          width: "100%",
+          maxWidth: "100%",
+          boxSizing: "border-box",
+          minWidth: 0,
+        }}
+      >
+        {[
+          { id: "layout", label: "Layout" },
+          { id: "content", label: "Content" },
+          { id: "colors", label: "Colors" },
+        ].map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as any)}
+              style={{
+                padding: "5px 1px",
+                border: "none",
+                borderRadius: "4px",
+                background: isActive ? "#ffffff" : "transparent",
+                color: isActive ? ADMIN_BLUE : "#64748b",
+                fontWeight: isActive ? 800 : 600,
+                fontSize: "10px",
+                cursor: "pointer",
+                textAlign: "center",
+                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 1. LAYOUT TAB */}
+      {activeTab === "layout" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Dimensions & Width */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Container Dimensions
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Text Alignment</label>
+                <SegmentedRow
+                  value={p.text_align || "left"}
+                  onChange={(val) => updateProps({ text_align: val })}
+                  options={[
+                    { label: "Left", value: "left" },
+                    { label: "Center", value: "center" },
+                    { label: "Right", value: "right" },
+                  ]}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Padding"
+                  value={parseNumProp(p.padding, 18)}
+                  min={6}
+                  max={40}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ padding: val })}
+                />
+                <NumberStepperField
+                  label="Step Gap"
+                  value={parseNumProp(p.step_gap, 16)}
+                  min={4}
+                  max={48}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ step_gap: val })}
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <NumberStepperField
+                  label="Bottom Spacing"
+                  value={parseNumProp(p.gap || p.margin_bottom, 18)}
+                  min={4}
+                  max={40}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ gap: val, margin_bottom: val })}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Corner Radii */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Corner Radii
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Container Radius"
+                  value={parseNumProp(p.border_radius, 18)}
+                  min={0}
+                  max={36}
+                  step={1}
+                  unit="px"
+                  onChange={(val) => updateProps({ border_radius: val })}
+                />
+                <NumberStepperField
+                  label="Circle Radius"
+                  value={parseNumProp(p.step_radius, 11) > 20 ? 11 : parseNumProp(p.step_radius, 11)}
+                  min={0}
+                  max={20}
+                  step={1}
+                  unit="px"
+                  onChange={(val) => updateProps({ step_radius: val })}
+                />
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* 2. CONTENT TAB */}
+      {activeTab === "content" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Step Titles
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Step 1 Label</label>
+                <input
+                  type="text"
+                  value={getStr("step_1_label", "Delivery Address")}
+                  placeholder="Delivery Address"
+                  onChange={(e) => updateProps({ step_1_label: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Step 2 Label</label>
+                <input
+                  type="text"
+                  value={getStr("step_2_label", "Payment")}
+                  placeholder="Payment"
+                  onChange={(e) => updateProps({ step_2_label: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Step 3 Label</label>
+                <input
+                  type="text"
+                  value={getStr("step_3_label", "Review & Pay")}
+                  placeholder="Review & Pay"
+                  onChange={(e) => updateProps({ step_3_label: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* 3. COLORS TAB */}
+      {activeTab === "colors" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Container Colors */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Container Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Container Background"
+                value={p.background_color || (siteDefinition.theme?.mode === "dark" ? "#1e293b" : "#ffffff")}
+                onChange={(val) => updateProps({ background_color: val })}
+              />
+              <CompactColorRow
+                label="Container Border Color"
+                value={p.border_color || (siteDefinition.theme?.mode === "dark" ? "#334155" : "#e2e8f0")}
+                onChange={(val) => updateProps({ border_color: val })}
+              />
+            </div>
+          </section>
+
+          {/* Active Step Colors */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Active Step Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Active Badge Background"
+                value={p.active_step_bg || siteDefinition.theme?.accent_color || ADMIN_BLUE}
+                onChange={(val) => updateProps({ active_step_bg: val })}
+              />
+              <CompactColorRow
+                label="Active Badge Text"
+                value={p.active_step_text || "#ffffff"}
+                onChange={(val) => updateProps({ active_step_text: val })}
+              />
+              <CompactColorRow
+                label="Active Step Title"
+                value={p.active_text_color || siteDefinition.theme?.text_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                onChange={(val) => updateProps({ active_text_color: val })}
+              />
+              <CompactColorRow
+                label="Active Connecting Line"
+                value={p.line_active_color || siteDefinition.theme?.accent_color || ADMIN_BLUE}
+                onChange={(val) => updateProps({ line_active_color: val })}
+              />
+            </div>
+          </section>
+
+          {/* Inactive Step Colors */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Inactive Step Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Inactive Badge Background"
+                value={p.inactive_step_bg || (siteDefinition.theme?.mode === "dark" ? "#0f172a" : "#f8fafc")}
+                onChange={(val) => updateProps({ inactive_step_bg: val })}
+              />
+              <CompactColorRow
+                label="Inactive Badge Border"
+                value={p.inactive_step_border || (siteDefinition.theme?.mode === "dark" ? "#334155" : "#d5dbe4")}
+                onChange={(val) => updateProps({ inactive_step_border: val })}
+              />
+              <CompactColorRow
+                label="Inactive Badge Text"
+                value={p.inactive_step_text || (siteDefinition.theme?.mode === "dark" ? "#94a3b8" : "#64748b")}
+                onChange={(val) => updateProps({ inactive_step_text: val })}
+              />
+              <CompactColorRow
+                label="Inactive Step Title"
+                value={p.inactive_text_color || (siteDefinition.theme?.mode === "dark" ? "#94a3b8" : "#64748b")}
+                onChange={(val) => updateProps({ inactive_text_color: val })}
+              />
+              <CompactColorRow
+                label="Inactive Connecting Line"
+                value={p.line_inactive_color || (siteDefinition.theme?.mode === "dark" ? "#334155" : "#e5e7eb")}
+                onChange={(val) => updateProps({ line_inactive_color: val })}
+              />
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function isDeliveryBlock(block?: any): boolean {
+  if (!block) return false;
+  if (isCheckoutStepsBlock(block)) return false;
+  const rawType = String(block.type || "").toLowerCase().trim();
+  const rawId = String(block.id || "").toLowerCase().trim();
+  if (rawType.includes("checkoutstep") || rawId.includes("checkoutstep")) return false;
+  const normType = rawType.replace(/[-_\s]/g, "");
+  const normId = rawId.replace(/[-_\s]/g, "");
+
+  return (
+    normType === "deliveryform" ||
+    normType === "delivery" ||
+    normType === "deliverymappicker" ||
+    normType === "deliveryaddressform" ||
+    normId === "deliveryform" ||
+    normId === "delivery" ||
+    normId === "deliverymappicker" ||
+    normId === "deliveryaddressform" ||
+    rawType.includes("delivery") ||
+    rawId.includes("delivery")
+  );
+}
+
+function DeliveryFormEditor({
+  selectedBlock,
+  isLightMode,
+  textColor: _textColor,
+  accentColor: _accentColor,
+  onSiteDefinitionChange,
+  siteDefinition,
+}: {
+  selectedBlock: any;
+  isLightMode: boolean;
+  textColor: string;
+  accentColor: string;
+  onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
+  siteDefinition: EditorSiteDefinition;
+}) {
+  const [activeTab, setActiveTab] = useState<"layout" | "content" | "colors">("layout");
+  const p = selectedBlock?.props ?? {};
+
+  const updateProps = (patch: Record<string, any>) => {
+    const nextDef = JSON.parse(JSON.stringify(siteDefinition));
+    const deliveryTypes = new Set([
+      "delivery_form",
+      "deliveryform",
+      "delivery_map_picker",
+      "delivery_address_form",
+    ]);
+
+    let updated = false;
+    if (Array.isArray(nextDef.pages)) {
+      nextDef.pages = nextDef.pages.map((page: any) => {
+        const isCheckoutP =
+          page.role === "checkout" ||
+          page.page_type === "checkout" ||
+          page.slug === "checkout" ||
+          page.route === "/checkout" ||
+          page.route === "checkout";
+
+        const hasMatchingBlock = (page.blocks ?? []).some(
+          (b: any) =>
+            b.id === selectedBlock.id ||
+            b.type === selectedBlock.type ||
+            deliveryTypes.has(String(b.type || "").toLowerCase())
+        );
+
+        if (hasMatchingBlock || isCheckoutP) {
+          const blocks = (page.blocks ?? []).map((block: any) => {
+            if (
+              block.id === selectedBlock.id ||
+              block.type === selectedBlock.type ||
+              deliveryTypes.has(String(block.type || "").toLowerCase())
+            ) {
+              updated = true;
+              return {
+                ...block,
+                props: {
+                  ...(block.props ?? {}),
+                  ...patch,
+                },
+              };
+            }
+            return block;
+          });
+
+          if (!updated && isCheckoutP) {
+            updated = true;
+            blocks.push({
+              id: selectedBlock.id || "delivery_form",
+              type: "delivery_form",
+              props: { ...(selectedBlock.props ?? {}), ...patch },
+            });
+          }
+
+          return { ...page, blocks };
+        }
+        return page;
+      });
+    }
+
+    if (!updated) {
+      if (!Array.isArray(nextDef.pages)) nextDef.pages = [];
+      nextDef.pages.push({
+        id: "page-checkout",
+        name: "Checkout",
+        route: "/checkout",
+        role: "checkout",
+        page_type: "checkout",
+        show_in_nav: false,
+        blocks: [
+          {
+            id: selectedBlock.id || "delivery_form",
+            type: "delivery_form",
+            props: { ...(selectedBlock.props ?? {}), ...patch },
+          },
+        ],
+      });
+    }
+
+    onSiteDefinitionChange(nextDef);
+  };
+
+  const parseNumProp = (val: any, fallback: number) => {
+    if (val === undefined || val === null || val === "") return fallback;
+    const n = Number(val);
+    return isNaN(n) ? fallback : n;
+  };
+
+  const getStr = (key: string, fallback: string) => {
+    const val = p[key];
+    if (val !== undefined && val !== null && String(val).trim() !== "") {
+      return String(val);
+    }
+    return fallback;
+  };
+
+  const textInputStyle: React.CSSProperties = {
+    width: "100%",
+    height: "28px",
+    padding: "0 8px",
+    fontSize: "11px",
+    fontWeight: 600,
+    color: "#0f172a",
+    borderRadius: "4px",
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    boxSizing: "border-box",
+  };
+
+  const fieldLabelStyle: React.CSSProperties = {
+    fontSize: "9px",
+    fontWeight: 700,
+    color: "#64748b",
+    textTransform: "uppercase",
+  };
+
+  const currentMaxWidth = p.max_width ? String(p.max_width) : "100%";
+  const normalizedWidth =
+    currentMaxWidth === "100%" || currentMaxWidth === "full"
+      ? "100%"
+      : currentMaxWidth.endsWith("px")
+      ? currentMaxWidth
+      : `${currentMaxWidth}px`;
+
+  return (
+    <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
+      {/* 3 Standard Navigation Tabs: Layout, Content, Colors */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: "2px",
+          background: "#f1f5f9",
+          padding: "2px",
+          borderRadius: "6px",
+          width: "100%",
+          maxWidth: "100%",
+          boxSizing: "border-box",
+          minWidth: 0,
+        }}
+      >
+        {[
+          { id: "layout", label: "Layout" },
+          { id: "content", label: "Content" },
+          { id: "colors", label: "Colors" },
+        ].map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as any)}
+              style={{
+                padding: "5px 1px",
+                border: "none",
+                borderRadius: "4px",
+                background: isActive ? "#ffffff" : "transparent",
+                color: isActive ? ADMIN_BLUE : "#64748b",
+                fontWeight: isActive ? 800 : 600,
+                fontSize: "10px",
+                cursor: "pointer",
+                textAlign: "center",
+                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 1. LAYOUT TAB */}
+      {/* ========================================================================= */}
+      {activeTab === "layout" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Width & Spacing */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Container Dimensions
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Container Width</label>
+                <SegmentedRow
+                  value={
+                    normalizedWidth === "100%" || normalizedWidth === "full"
+                      ? "100%"
+                      : normalizedWidth
+                  }
+                  onChange={(val) => updateProps({ max_width: val })}
+                  options={[
+                    { label: "100% Full", value: "100%" },
+                    { label: "1280px", value: "1280px" },
+                    { label: "1100px", value: "1100px" },
+                    { label: "900px", value: "900px" },
+                  ]}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Padding"
+                  value={parseNumProp(p.padding, 18)}
+                  min={8}
+                  max={40}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ padding: val })}
+                />
+                <NumberStepperField
+                  label="Section Gap"
+                  value={parseNumProp(p.gap || p.section_gap, 16)}
+                  min={4}
+                  max={40}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ gap: val, section_gap: val })}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Corner Radii */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Corner Radii
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Outer Radius"
+                  value={parseNumProp(p.border_radius, 14)}
+                  min={0}
+                  max={36}
+                  step={1}
+                  unit="px"
+                  onChange={(val) => updateProps({ border_radius: val })}
+                />
+                <NumberStepperField
+                  label="Card Radius"
+                  value={parseNumProp(p.card_radius, 12)}
+                  min={0}
+                  max={32}
+                  step={1}
+                  unit="px"
+                  onChange={(val) => updateProps({ card_radius: val })}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Button Radius"
+                  value={parseNumProp(p.button_border_radius, 10)}
+                  min={0}
+                  max={30}
+                  step={1}
+                  unit="px"
+                  onChange={(val) => updateProps({ button_border_radius: val, button_radius: val })}
+                />
+                <NumberStepperField
+                  label="Badge Radius"
+                  value={parseNumProp(p.badge_border_radius || p.badge_radius, 12) > 24 ? 12 : parseNumProp(p.badge_border_radius || p.badge_radius, 12)}
+                  min={0}
+                  max={24}
+                  step={1}
+                  unit="px"
+                  onChange={(val) => updateProps({ badge_border_radius: val, badge_radius: val })}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Field Radius"
+                  value={parseNumProp(p.field_radius, 8)}
+                  min={0}
+                  max={24}
+                  step={1}
+                  unit="px"
+                  onChange={(val) => updateProps({ field_radius: val })}
+                />
+                <NumberStepperField
+                  label="Modal Radius"
+                  value={parseNumProp(p.map_modal_radius || p.form_card_radius, 14)}
+                  min={0}
+                  max={32}
+                  step={1}
+                  unit="px"
+                  onChange={(val) => updateProps({ map_modal_radius: val, form_card_radius: val })}
+                />
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 2. CONTENT TAB */}
+      {/* ========================================================================= */}
+      {activeTab === "content" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Header & Headings */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Delivery Info
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1.3fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Badge</label>
+                  <input
+                    type="text"
+                    value={getStr("sectionLabel", "Delivery")}
+                    placeholder="Delivery"
+                    onChange={(e) => updateProps({ sectionLabel: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Title</label>
+                  <input
+                    type="text"
+                    value={getStr("title", "Delivery Address")}
+                    placeholder="Delivery Address"
+                    onChange={(e) => updateProps({ title: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Subtitle</label>
+                <input
+                  type="text"
+                  value={getStr("subtitle", "Choose address or add new")}
+                  placeholder="Choose address or add new"
+                  onChange={(e) => updateProps({ subtitle: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Action Buttons & Empty State */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Buttons & Empty State
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Add Button</label>
+                  <input
+                    type="text"
+                    value={getStr("add_address_button_label", "+ Add New")}
+                    placeholder="+ Add New"
+                    onChange={(e) => updateProps({ add_address_button_label: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Continue Button</label>
+                  <input
+                    type="text"
+                    value={getStr("continue_button_label", "Deliver to this address")}
+                    placeholder="Deliver to this address"
+                    onChange={(e) => updateProps({ continue_button_label: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Empty Title</label>
+                  <input
+                    type="text"
+                    value={getStr("empty_title", "No address saved")}
+                    placeholder="No address saved"
+                    onChange={(e) => updateProps({ empty_title: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Empty Text</label>
+                  <input
+                    type="text"
+                    value={getStr("empty_message", "Add address to continue")}
+                    placeholder="Add address to continue"
+                    onChange={(e) => updateProps({ empty_message: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Address Form Titles & Placeholders */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Address Form Modal
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Add Title</label>
+                  <input
+                    type="text"
+                    value={getStr("form_title_add", "Add Address")}
+                    placeholder="Add Address"
+                    onChange={(e) => updateProps({ form_title_add: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Edit Title</label>
+                  <input
+                    type="text"
+                    value={getStr("form_title_edit", "Edit Address")}
+                    placeholder="Edit Address"
+                    onChange={(e) => updateProps({ form_title_edit: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Subtitle</label>
+                  <input
+                    type="text"
+                    value={getStr("form_subtitle", "Enter delivery details")}
+                    placeholder="Enter delivery details"
+                    onChange={(e) => updateProps({ form_subtitle: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Save Button</label>
+                  <input
+                    type="text"
+                    value={getStr("form_save_button_label", "Save & Deliver")}
+                    placeholder="Save & Deliver"
+                    onChange={(e) => updateProps({ form_save_button_label: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Name Hint</label>
+                  <input
+                    type="text"
+                    value={getStr("form_name_placeholder", "Full name")}
+                    placeholder="Full name"
+                    onChange={(e) => updateProps({ form_name_placeholder: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Phone Hint</label>
+                  <input
+                    type="text"
+                    value={getStr("form_phone_placeholder", "Phone number")}
+                    placeholder="Phone number"
+                    onChange={(e) => updateProps({ form_phone_placeholder: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Address Hint</label>
+                <input
+                  type="text"
+                  value={getStr("form_address_placeholder", "Flat, building, street")}
+                  placeholder="Flat, building, street"
+                  onChange={(e) => updateProps({ form_address_placeholder: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>City Hint</label>
+                  <input
+                    type="text"
+                    value={getStr("form_city_placeholder", "City / Area")}
+                    placeholder="City / Area"
+                    onChange={(e) => updateProps({ form_city_placeholder: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Pincode Hint</label>
+                  <input
+                    type="text"
+                    value={getStr("form_pincode_placeholder", "Postal code")}
+                    placeholder="Postal code"
+                    onChange={(e) => updateProps({ form_pincode_placeholder: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Map Location Picker */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Map Location Picker
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Modal Title</label>
+                  <input
+                    type="text"
+                    value={getStr("map_modal_title", "Pick Location")}
+                    placeholder="Pick Location"
+                    onChange={(e) => updateProps({ map_modal_title: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Confirm Button</label>
+                  <input
+                    type="text"
+                    value={getStr("map_confirm_button_label", "Confirm Location")}
+                    placeholder="Confirm Location"
+                    onChange={(e) => updateProps({ map_confirm_button_label: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Search Hint</label>
+                <input
+                  type="text"
+                  value={getStr("map_search_placeholder", "Search address or area")}
+                  placeholder="Search address or area"
+                  onChange={(e) => updateProps({ map_search_placeholder: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Instructions</label>
+                <input
+                  type="text"
+                  value={getStr("map_helper_text", "Drag map to position pin")}
+                  placeholder="Drag map to position pin"
+                  onChange={(e) => updateProps({ map_helper_text: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 3. COLORS TAB */}
+      {/* ========================================================================= */}
+      {activeTab === "colors" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Card & Background Colors */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Card & Background Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Container Background"
+                value={p.background_color || (siteDefinition.theme?.mode === "dark" ? "#0f172a" : "#ffffff")}
+                onChange={(val) => updateProps({ background_color: val })}
+              />
+              <CompactColorRow
+                label="Card Background"
+                value={p.card_color || (siteDefinition.theme?.mode === "dark" ? "#1e293b" : "#ffffff")}
+                onChange={(val) => updateProps({ card_color: val })}
+              />
+              <CompactColorRow
+                label="Selected Card Background"
+                value={p.selected_card_bg || (siteDefinition.theme?.mode === "dark" ? "#1e3a8a" : "#eff6ff")}
+                onChange={(val) => updateProps({ selected_card_bg: val })}
+              />
+              <CompactColorRow
+                label="Card Border Color"
+                value={p.border_color || (siteDefinition.theme?.mode === "dark" ? "#334155" : "#e2e8f0")}
+                onChange={(val) => updateProps({ border_color: val })}
+              />
+              <CompactColorRow
+                label="Container Border Color"
+                value={p.soft_border_color || (siteDefinition.theme?.mode === "dark" ? "#1e293b" : "#f1f5f9")}
+                onChange={(val) => updateProps({ soft_border_color: val })}
+              />
+            </div>
+          </section>
+
+          {/* Action Buttons & Accent */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Buttons & Accent
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Accent Color"
+                value={p.accentColor || siteDefinition.theme?.accent_color || ADMIN_BLUE}
+                onChange={(val) => updateProps({ accentColor: val })}
+              />
+              <CompactColorRow
+                label="Continue Button Background"
+                value={p.button_bg_color || p.accentColor || ADMIN_BLUE}
+                onChange={(val) => updateProps({ button_bg_color: val })}
+              />
+              <CompactColorRow
+                label="Continue Button Text Color"
+                value={p.button_text_color || "#ffffff"}
+                onChange={(val) => updateProps({ button_text_color: val })}
+              />
+              <CompactColorRow
+                label="Form Save Button Background"
+                value={p.form_save_btn_bg || p.accentColor || ADMIN_BLUE}
+                onChange={(val) => updateProps({ form_save_btn_bg: val })}
+              />
+              <CompactColorRow
+                label="Form Save Button Text Color"
+                value={p.form_save_btn_text || "#ffffff"}
+                onChange={(val) => updateProps({ form_save_btn_text: val })}
+              />
+            </div>
+          </section>
+
+          {/* Text Typography */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Typography Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Text Color"
+                value={p.text_color || siteDefinition.theme?.text_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                onChange={(val) => updateProps({ text_color: val })}
+              />
+              <CompactColorRow
+                label="Muted Text Color"
+                value={p.muted_text_color || siteDefinition.theme?.muted_text_color || (siteDefinition.theme?.mode === "dark" ? "#94a3b8" : "#64748b")}
+                onChange={(val) => updateProps({ muted_text_color: val })}
+              />
+            </div>
+          </section>
+
+          {/* Form & Map Backgrounds */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Modals & Inputs Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Form Panel Background"
+                value={p.form_panel_bg || (siteDefinition.theme?.mode === "dark" ? "#1e293b" : "#ffffff")}
+                onChange={(val) => updateProps({ form_panel_bg: val })}
+              />
+              <CompactColorRow
+                label="Inputs Background"
+                value={p.form_input_bg || (siteDefinition.theme?.mode === "dark" ? "#0f172a" : "#f8fafc")}
+                onChange={(val) => updateProps({ form_input_bg: val })}
+              />
+              <CompactColorRow
+                label="Inputs Text Color"
+                value={p.form_input_text || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                onChange={(val) => updateProps({ form_input_text: val })}
+              />
+              <CompactColorRow
+                label="Field Labels Color"
+                value={p.form_label_color || (siteDefinition.theme?.mode === "dark" ? "#94a3b8" : "#64748b")}
+                onChange={(val) => updateProps({ form_label_color: val })}
+              />
+              <CompactColorRow
+                label="Placeholder Color"
+                value={p.form_placeholder_color || "#94a3b8"}
+                onChange={(val) => updateProps({ form_placeholder_color: val })}
+              />
+              <CompactColorRow
+                label="Fields Border Color"
+                value={p.form_border_color || (siteDefinition.theme?.mode === "dark" ? "#334155" : "#cbd5e1")}
+                onChange={(val) => updateProps({ form_border_color: val })}
+              />
+              <CompactColorRow
+                label="Map Modal Background"
+                value={p.map_modal_bg || (siteDefinition.theme?.mode === "dark" ? "#0f172a" : "#ffffff")}
+                onChange={(val) => updateProps({ map_modal_bg: val })}
+              />
+              <CompactColorRow
+                label="Map Search Background"
+                value={p.map_search_bg || (siteDefinition.theme?.mode === "dark" ? "#1e293b" : "#f8fafc")}
+                onChange={(val) => updateProps({ map_search_bg: val })}
+              />
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function isProductDetailBlock(block?: any): boolean {
   if (!block) return false;
   const rawType = String(block.type || "").toLowerCase().trim();
@@ -7156,7 +8319,10 @@ export default function EditorSidebar({
 
   const textColor = "#0f172a";
   const accentColor = siteDefinition.theme?.accent_color || "#2563eb";
-  const selectedBlock = findBlockById(siteDefinition, selectedBlockId);
+  const selectedBlock =
+    (selectedBlockId === "checkout_steps" || selectedBlockId === "checkoutsteps" || selectedBlockId === "checkout_stepper")
+      ? (findBlockById(siteDefinition, selectedBlockId) || { id: "checkout_steps", type: "checkout_steps", props: {} })
+      : findBlockById(siteDefinition, selectedBlockId);
   const editableConfig = selectedBlock
     ? getEditableConfigForBlock(selectedBlock.type)
     : null;
@@ -7180,8 +8346,11 @@ export default function EditorSidebar({
       t === "footer" ||
       t === "cart" || t === "cart_view" || t === "cartview" ||
       t === "cart_sidebar" || t === "cartsidebar" ||
-      t === "cart_items" || t === "cartitems" ||
-      t === "order_summary" || t === "ordersummary"
+      isCheckoutStepsBlock(selectedBlock) ||
+      t === "checkout_steps" || t === "checkoutsteps" ||
+      isDeliveryBlock(selectedBlock) ||
+      t === "delivery_form" || t === "deliveryform" ||
+      t === "delivery_map_picker" || t === "delivery_address_form"
     );
   })();
   const currentSearchDisplayMode = siteDefinition.theme?.search_display_mode || "bar";
@@ -7916,6 +9085,18 @@ export default function EditorSidebar({
                       : isProductDetailBlock(selectedBlock) ||
                         editableConfig?.displayName === "Product Detail"
                       ? "Product Detail"
+                      : isCheckoutStepsBlock(selectedBlock) ||
+                        selectedBlock.id === "checkout_steps" ||
+                        selectedBlock.type === "checkout_steps" ||
+                        selectedBlockId === "checkout_steps"
+                      ? "Checkout Steps"
+                      : isDeliveryBlock(selectedBlock) ||
+                        editableConfig?.displayName === "Delivery Form"
+                      ? (selectedBlock.type === "delivery_map_picker"
+                          ? "Map Location Picker"
+                          : selectedBlock.type === "delivery_address_form"
+                          ? "Add / Edit Address Form"
+                          : "Delivery Form")
                       : selectedBlock.type.toUpperCase())
                   : activePageTitle}
               </span>
@@ -8029,6 +9210,33 @@ export default function EditorSidebar({
               ) : isProductDetailBlock(selectedBlock) ||
                 editableConfig?.displayName === "Product Detail" ? (
                 <ProductDetailEditor
+                  selectedBlock={selectedBlock}
+                  isLightMode={isLightMode}
+                  textColor={textColor}
+                  accentColor={accentColor}
+                  onSiteDefinitionChange={onSiteDefinitionChange}
+                  siteDefinition={siteDefinition}
+                />
+              ) : isCheckoutStepsBlock(selectedBlock) ||
+                selectedBlock.id === "checkout_steps" ||
+                selectedBlock.type === "checkout_steps" ||
+                selectedBlock.type === "checkoutsteps" ||
+                selectedBlockId === "checkout_steps" ? (
+                <CheckoutStepsEditor
+                  selectedBlock={selectedBlock}
+                  isLightMode={isLightMode}
+                  textColor={textColor}
+                  accentColor={accentColor}
+                  onSiteDefinitionChange={onSiteDefinitionChange}
+                  siteDefinition={siteDefinition}
+                />
+              ) : isDeliveryBlock(selectedBlock) ||
+                editableConfig?.displayName === "Delivery Form" ||
+                selectedBlock.type === "delivery_form" ||
+                selectedBlock.type === "deliveryform" ||
+                selectedBlock.type === "delivery_map_picker" ||
+                selectedBlock.type === "delivery_address_form" ? (
+                <DeliveryFormEditor
                   selectedBlock={selectedBlock}
                   isLightMode={isLightMode}
                   textColor={textColor}

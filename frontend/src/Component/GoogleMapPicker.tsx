@@ -28,6 +28,19 @@ export type GoogleMapPickerProps = {
   initialLat?: number;
   initialLng?: number;
   mode?: "customer" | "store"; // 'store' = configuring store/warehouse dispatch pin (skips deliverability validation)
+  map_modal_title?: string;
+  map_search_placeholder?: string;
+  map_confirm_button_label?: string;
+  map_helper_text?: string;
+  map_modal_radius?: number;
+  map_button_radius?: number;
+  map_search_radius?: number;
+  map_modal_bg?: string;
+  map_header_text_color?: string;
+  map_search_bg?: string;
+  map_search_text_color?: string;
+  map_confirm_btn_bg?: string;
+  map_confirm_btn_text?: string;
 };
 
 const MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
@@ -161,6 +174,19 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
   initialLat,
   initialLng,
   mode = "customer",
+  map_modal_title,
+  map_search_placeholder,
+  map_confirm_button_label,
+  map_helper_text,
+  map_modal_radius,
+  map_button_radius,
+  map_search_radius,
+  map_modal_bg,
+  map_header_text_color,
+  map_search_bg,
+  map_search_text_color,
+  map_confirm_btn_bg,
+  map_confirm_btn_text,
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
@@ -210,14 +236,17 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
 
   const resolvedAccent = accentColor || "#2563eb";
   const palette = {
-    modalBg: isDark ? backgroundColor || "#0f172a" : "#ffffff",
+    modalBg: map_modal_bg || (isDark ? backgroundColor || "#0f172a" : "#ffffff"),
     cardBg: isDark ? "rgba(17, 24, 39, 0.95)" : "rgba(255, 255, 255, 0.95)",
     surfaceBg: isDark ? "rgba(30, 41, 59, 0.8)" : "rgba(241, 245, 249, 0.9)",
-    inputBg: isDark ? inputColor || "#1e293b" : "#f8fafc",
-    text: isDark ? textColor || "#f8fafc" : "#0f172a",
+    inputBg: map_search_bg || (isDark ? inputColor || "#1e293b" : "#f8fafc"),
+    text: map_search_text_color || (isDark ? textColor || "#f8fafc" : "#0f172a"),
+    headerText: map_header_text_color || (isDark ? textColor || "#f8fafc" : "#0f172a"),
     textMuted: isDark ? mutedTextColor || "#94a3b8" : "#64748b",
     border: isDark ? borderColor || "#334155" : "#e2e8f0",
     accent: resolvedAccent,
+    confirmBtnBg: map_confirm_btn_bg || resolvedAccent,
+    confirmBtnText: map_confirm_btn_text || "#ffffff",
     dropdownBg: isDark ? "#1e293b" : "#ffffff",
     dropdownHover: isDark ? "rgba(51, 65, 85, 0.6)" : "#f1f5f9",
   };
@@ -533,7 +562,7 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
           maxWidth: "760px",
           height: isMobile ? "86vh" : "min(88vh, 680px)",
           background: palette.modalBg,
-          borderRadius: "18px",
+          borderRadius: map_modal_radius !== undefined ? `${map_modal_radius}px` : "18px",
           border: `1px solid ${palette.border}`,
           overflow: "hidden",
           display: "flex",
@@ -588,7 +617,7 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
               onFocus={() => {
                 if (predictions.length > 0) setShowPredictionsDropdown(true);
               }}
-              placeholder="Search address, landmark, area..."
+              placeholder={map_search_placeholder || "Search address, landmark, area..."}
               style={{
                 width: "100%",
                 boxSizing: "border-box",
@@ -597,7 +626,7 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
                 fontSize: "13px",
                 fontWeight: 500,
                 border: `1px solid ${palette.border}`,
-                borderRadius: "10px",
+                borderRadius: map_search_radius !== undefined ? `${map_search_radius}px` : "10px",
                 background: palette.inputBg,
                 color: palette.text,
                 outline: "none",
@@ -981,16 +1010,16 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
                 flex: 1,
                 height: "42px",
                 border: "none",
-                borderRadius: "10px",
+                borderRadius: map_button_radius !== undefined ? `${map_button_radius}px` : "10px",
                 background:
                   !currentLat || isConfirming
                     ? isDark ? "#334155" : "#cbd5e1"
-                    : palette.accent,
-                color: "#ffffff",
+                    : palette.confirmBtnBg,
+                color: palette.confirmBtnText,
                 fontSize: "13.5px",
                 fontWeight: 700,
                 cursor: !currentLat || isConfirming ? "not-allowed" : "pointer",
-                boxShadow: !currentLat || isConfirming ? "none" : `0 4px 14px ${palette.accent}40`,
+                boxShadow: !currentLat || isConfirming ? "none" : `0 4px 14px ${palette.confirmBtnBg}40`,
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -999,9 +1028,10 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
             >
               {isConfirming
                 ? "Confirming..."
-                : mode === "store"
-                ? "✓ Confirm Origin Pin"
-                : "✓ Confirm This Location"}
+                : map_confirm_button_label ||
+                  (mode === "store"
+                    ? "✓ Confirm Origin Pin"
+                    : "✓ Confirm This Location")}
             </button>
           </div>
         </div>

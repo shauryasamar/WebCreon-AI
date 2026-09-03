@@ -7,6 +7,8 @@ import { API_BASE_URL } from "../config/api";
 import { ThemeProvider, resolveThemeTokens } from "../context/ThemeContext";
 import { normalizeStorefrontProduct } from "../utils/productNormalizer";
 import FestiveBackgroundOverlay from "../Component/FestiveBackgroundOverlay";
+import { getCheckoutAddresses, SavedAddress } from "../addressService";
+import { useCustomerAuth } from "../context/CustomerAuthContext";
 
 type Block = {
   id?: string;
@@ -96,12 +98,18 @@ type EditorBlockWrapperProps = {
 type CheckoutStep = "delivery" | "payment" | "review";
 
 type DeliveryData = {
+  id?: string;
+  label?: string;
+  isDefault?: boolean;
   fullName: string;
   phone: string;
   email: string;
   address: string;
   city: string;
   pincode: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  geoAccuracy?: string | null;
 };
 
 type PaymentData = {
@@ -173,13 +181,33 @@ const checkoutSteps: { key: CheckoutStep; label: string }[] = [
 ];
 
 const initialDeliveryData: DeliveryData = {
-  fullName: "Jane Doe",
-  phone: "+91 9876543210",
-  email: "jane.doe@example.com",
-  address: "42 Park Avenue, Bandra West",
-  city: "Mumbai",
-  pincode: "400050",
+  id: "",
+  label: "Home",
+  isDefault: false,
+  fullName: "",
+  phone: "",
+  email: "",
+  address: "",
+  city: "",
+  pincode: "",
 };
+
+function mapSavedAddressToDeliveryData(address: SavedAddress): DeliveryData {
+  return {
+    id: address.id,
+    label: address.addressType || "Home",
+    isDefault: address.isDefault,
+    fullName: address.fullName || "",
+    phone: address.mobileNumber || "",
+    email: address.email || "",
+    address: address.addressLine1 || "",
+    city: address.city || "",
+    pincode: address.postalCode || "",
+    latitude: address.latitude ?? null,
+    longitude: address.longitude ?? null,
+    geoAccuracy: address.geoAccuracy ?? null,
+  };
+}
 
 const initialPaymentData: PaymentData = {
   method: "COD",
@@ -532,20 +560,6 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
       .catch(() => { });
   }, [siteId]);
 
-  const [checkoutStep, setCheckoutStep] = useState<CheckoutStep>("delivery");
-  const [deliveryData, setDeliveryData] = useState<DeliveryData>(initialDeliveryData);
-  const [paymentData, setPaymentData] = useState<PaymentData>(initialPaymentData);
-
-  useEffect(() => {
-    const syncViewport = () => {
-      setIsCompactCheckout(window.innerWidth < 1024);
-    };
-
-    syncViewport();
-    window.addEventListener("resize", syncViewport);
-    return () => window.removeEventListener("resize", syncViewport);
-  }, []);
-
   const resolvedBlocks = page?.blocks ?? [];
 
   const isCheckoutPage =
@@ -569,6 +583,70 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
     resolvedBlocks.some((block) =>
       PRODUCT_DETAIL_TYPES.has(String(block.type || "").toLowerCase())
     );
+
+  const [checkoutStep, setCheckoutStep] = useState<CheckoutStep>("delivery");
+  const [deliveryData, setDeliveryData] = useState<DeliveryData>(initialDeliveryData);
+  const [paymentData, setPaymentData] = useState<PaymentData>(initialPaymentData);
+  const [savedAddresses, setSavedAddresses] = useState<DeliveryData[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [isAddressesLoading, setIsAddressesLoading] = useState(false);
+
+  const { isAuthenticated, loading: authLoading } = useCustomerAuth();
+
+  // Load customer's saved addresses for the checkout delivery step — same logic as RenderPage
+  useEffect(() => {
+    if (!siteId || !isCheckoutPage) return;
+    if (authLoading) return;
+
+    if (!isAuthenticated) {
+      setSavedAddresses([]);
+      setSelectedAddressId(null);
+      setDeliveryData(initialDeliveryData);
+      setIsAddressesLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const load = async () => {
+      try {
+        setIsAddressesLoading(true);
+        const addresses = await getCheckoutAddresses(siteId);
+        if (cancelled) return;
+        const mapped = addresses.map(mapSavedAddressToDeliveryData);
+        setSavedAddresses(mapped);
+        const selected =
+          mapped.find((addr) => addr.isDefault) || mapped[0] || null;
+        if (selected) {
+          setSelectedAddressId(selected.id || null);
+          setDeliveryData(selected);
+        } else {
+          setSelectedAddressId(null);
+          setDeliveryData(initialDeliveryData);
+        }
+      } catch (error) {
+        console.error("Failed to load checkout addresses in editor", error);
+        if (!cancelled) {
+          setSavedAddresses([]);
+          setSelectedAddressId(null);
+          setDeliveryData(initialDeliveryData);
+        }
+      } finally {
+        if (!cancelled) setIsAddressesLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [siteId, isCheckoutPage, isAuthenticated, authLoading]);
+
+  useEffect(() => {
+    const syncViewport = () => {
+      setIsCompactCheckout(window.innerWidth < 1024);
+    };
+
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+    return () => window.removeEventListener("resize", syncViewport);
+  }, []);
 
   const sectionTitleParam = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -1033,6 +1111,14 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
   // Auto switch checkout step if selected block belongs to a specific step
   useEffect(() => {
     if (!selectedBlockId || !isCheckoutPage) return;
+    if (
+      selectedBlockId.includes("delivery") ||
+      selectedBlockId === "delivery_map_picker" ||
+      selectedBlockId === "delivery_address_form"
+    ) {
+      setCheckoutStep("delivery");
+      return;
+    }
     const matched = blocksToRender.find((b) => (b.id || b.type) === selectedBlockId);
     if (!matched) return;
     const type = (matched.type || "").toLowerCase();
@@ -1263,6 +1349,13 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
     );
   }
 
+  const checkoutStepsBlock = blocksToRender.find((block) =>
+    block.type === "checkout_steps" ||
+    block.type === "checkoutsteps" ||
+    block.id === "checkout_steps" ||
+    block.id === "checkoutsteps"
+  );
+
   const deliveryBlock = blocksToRender.find((block) =>
     DELIVERY_TYPES.has(block.type.toLowerCase())
   );
@@ -1280,7 +1373,7 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
   );
 
   const usedBlockIds = new Set(
-    [deliveryBlock, paymentBlock, placeOrderBlock, summaryBlock]
+    [checkoutStepsBlock, deliveryBlock, paymentBlock, placeOrderBlock, summaryBlock]
       .filter(Boolean)
       .map((block) => block!.id || block!.type)
   );
@@ -1319,8 +1412,18 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
   const cardBorder = `1px solid ${resolvedBorderColor}`;
   const cardDivider = `1px solid ${resolvedBorderColor}`;
 
+  const selectedAddress =
+    savedAddresses.find((address) => address.id === selectedAddressId) ||
+    savedAddresses.find((address) => address.isDefault) ||
+    (deliveryData?.id ? deliveryData : null) ||
+    savedAddresses[0] ||
+    null;
+
   const currentStepIndex = checkoutSteps.findIndex((step) => step.key === checkoutStep);
-  const canContinueDelivery = isDeliveryValid(deliveryData);
+  const canContinueDelivery = Boolean(
+    (selectedAddress && isDeliveryValid(selectedAddress)) ||
+    (deliveryData && isDeliveryValid(deliveryData))
+  );
   const canContinuePayment = isPaymentValid(paymentData);
 
   const goToStep = (nextStep: CheckoutStep) => {
@@ -1501,6 +1604,67 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
     return <div style={{ padding: "24px" }}>Page not found.</div>;
   }
 
+  const configuredMaxWidth =
+    deliveryBlock?.props?.max_width ||
+    checkoutStepsBlock?.props?.max_width;
+
+  const isFullWidth =
+    configuredMaxWidth === "100%" ||
+    configuredMaxWidth === "full" ||
+    configuredMaxWidth === 100;
+
+  const checkoutOuterMaxWidth = isFullWidth
+    ? "100%"
+    : configuredMaxWidth
+    ? typeof configuredMaxWidth === "number"
+      ? `${configuredMaxWidth}px`
+      : String(configuredMaxWidth).endsWith("%") || String(configuredMaxWidth).endsWith("px")
+      ? String(configuredMaxWidth)
+      : `${configuredMaxWidth}px`
+    : "1240px";
+
+  const stepsProps = checkoutStepsBlock?.props || {};
+
+  const resolvedStep1 = stepsProps.step_1_label || stepsProps.delivery_label || "Delivery Address";
+  const resolvedStep2 = stepsProps.step_2_label || stepsProps.payment_label || "Payment";
+  const resolvedStep3 = stepsProps.step_3_label || stepsProps.review_label || "Review & Pay";
+
+  const resolvedCheckoutSteps: { key: CheckoutStep; label: string }[] = [
+    { key: "delivery", label: resolvedStep1 },
+    { key: "payment", label: resolvedStep2 },
+    { key: "review", label: resolvedStep3 },
+  ];
+
+  const stepsBg = stepsProps.background_color || shellBg;
+  const stepsBorder = stepsProps.border_color ? `1px solid ${stepsProps.border_color}` : shellBorder;
+  const stepsRadius = stepsProps.border_radius !== undefined ? `${stepsProps.border_radius}px` : "18px";
+  const rawStepRadius = stepsProps.step_radius !== undefined ? Number(stepsProps.step_radius) : 11;
+  const stepsBadgeRadius = `${rawStepRadius > 20 ? 11 : rawStepRadius}px`;
+  const stepsPadding = stepsProps.padding !== undefined ? `${stepsProps.padding}px` : (isCompactCheckout ? "14px" : "18px");
+  const stepsMarginBottom = stepsProps.gap !== undefined ? `${stepsProps.gap}px` : stepsProps.margin_bottom !== undefined ? `${stepsProps.margin_bottom}px` : (isCompactCheckout ? "14px" : "18px");
+
+  const stepsAlign = stepsProps.text_align || "left";
+  const stepsGap = stepsProps.step_gap !== undefined ? Number(stepsProps.step_gap) : (isCompactCheckout ? 10 : 16);
+
+  const stepsActiveBadgeBg = stepsProps.active_step_bg || accentColor;
+  const stepsActiveBadgeText = stepsProps.active_step_text || "#ffffff";
+  const stepsActiveTitle = stepsProps.active_text_color || textColor;
+  const stepsActiveLine = stepsProps.line_active_color || accentColor;
+
+  const stepsInactiveBadgeBg = stepsProps.inactive_step_bg || "transparent";
+  const stepsInactiveBadgeBorder = stepsProps.inactive_step_border || (isLight ? "#d5dbe4" : "rgba(255,255,255,0.16)");
+  const stepsInactiveBadgeText = stepsProps.inactive_step_text || subtleText;
+  const stepsInactiveTitle = stepsProps.inactive_text_color || subtleText;
+  const stepsInactiveLine = stepsProps.line_inactive_color || (isLight ? "#e5e7eb" : "rgba(255,255,255,0.12)");
+
+  const isStepperSelected = Boolean(
+    selectedBlockId &&
+    (selectedBlockId === "checkout_steps" ||
+     selectedBlockId === "checkoutsteps" ||
+     selectedBlockId === checkoutStepsBlock?.id ||
+     selectedBlockId === checkoutStepsBlock?.type)
+  );
+
   return (
     <ThemeProvider theme={theme as any}>
       <div
@@ -1512,118 +1676,140 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
       >
         <div
           style={{
-            maxWidth: "1240px",
+            maxWidth: checkoutOuterMaxWidth,
             margin: "0 auto",
             width: "100%",
+            boxSizing: "border-box",
+            transition: "max-width 0.2s ease",
           }}
         >
-          <div
-            style={{
-              borderRadius: "18px",
-              border: shellBorder,
-              background: shellBg,
-              boxShadow: isLight
-                ? "0 1px 2px rgba(16,24,40,0.04)"
-                : "0 18px 44px rgba(0,0,0,0.22)",
-              padding: isCompactCheckout ? "14px" : "18px",
-              marginBottom: isCompactCheckout ? "14px" : "18px",
-            }}
+          <EditorBlockWrapper
+            blockId="checkout_steps"
+            blockType="checkout_steps"
+            selected={isStepperSelected}
+            onSelect={() => onSelectBlock?.("checkout_steps")}
+            borderRadius={stepsProps.border_radius !== undefined ? Number(stepsProps.border_radius) : 18}
+            maxWidth={stepsProps.max_width}
           >
             <div
               style={{
-                display: "grid",
-                gridTemplateColumns: isCompactCheckout
-                  ? "minmax(0,1fr)"
-                  : "repeat(3, minmax(0, 1fr))",
-                gap: isCompactCheckout ? "10px" : "16px",
-                alignItems: "center",
+                borderRadius: stepsRadius,
+                border: stepsBorder,
+                background: stepsBg,
+                boxShadow: isLight
+                  ? "0 1px 2px rgba(16,24,40,0.04)"
+                  : "0 18px 44px rgba(0,0,0,0.22)",
+                padding: stepsPadding,
+                marginBottom: stepsMarginBottom,
+                boxSizing: "border-box",
+                cursor: "pointer",
               }}
+              onClick={() => onSelectBlock?.("checkout_steps")}
             >
-              {checkoutSteps.map((step, index) => {
-                const isCompleted = index < currentStepIndex;
-                const isCurrent = step.key === checkoutStep;
-                const isAccessible = true;
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isCompactCheckout
+                    ? "minmax(0,1fr)"
+                    : "repeat(3, minmax(0, 1fr))",
+                  gap: `${stepsGap}px`,
+                  alignItems: "center",
+                }}
+              >
+                {resolvedCheckoutSteps.map((step, index) => {
+                  const isCompleted = index < currentStepIndex;
+                  const isCurrent = step.key === checkoutStep;
+                  const isAccessible = true;
 
-                return (
-                  <div
-                    key={step.key}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns:
-                        !isCompactCheckout && index < checkoutSteps.length - 1
-                          ? "auto 1fr"
-                          : "auto",
-                      alignItems: "center",
-                      gap: "12px",
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => isAccessible && goToStep(step.key)}
+                  return (
+                    <div
+                      key={step.key}
                       style={{
-                        border: "none",
-                        background: "transparent",
-                        padding: 0,
-                        cursor: "pointer",
-                        textAlign: "left",
-                        display: "flex",
+                        display: "grid",
+                        gridTemplateColumns:
+                          !isCompactCheckout && index < resolvedCheckoutSteps.length - 1
+                            ? "1fr auto"
+                            : "1fr",
                         alignItems: "center",
-                        gap: "10px",
-                        opacity: 1,
+                        gap: `${Math.max(6, Math.round(stepsGap / 2))}px`,
                       }}
                     >
-                      <div
-                        style={{
-                          width: "22px",
-                          height: "22px",
-                          borderRadius: "999px",
-                          display: "grid",
-                          placeItems: "center",
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          border:
-                            isCurrent || isCompleted
-                              ? `1px solid ${accentColor}`
-                              : isLight
-                                ? "1px solid #d5dbe4"
-                                : "1px solid rgba(255,255,255,0.16)",
-                          background:
-                            isCurrent || isCompleted ? accentColor : "transparent",
-                          color:
-                            isCurrent || isCompleted ? "#ffffff" : subtleText,
-                          flexShrink: 0,
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          isAccessible && goToStep(step.key);
                         }}
-                      >
-                        {index + 1}
-                      </div>
-
-                      <div
                         style={{
-                          fontSize: "13px",
-                          fontWeight: isCurrent ? 700 : 600,
-                          color: isCurrent ? textColor : subtleText,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {step.label}
-                      </div>
-                    </button>
-
-                    {!isCompactCheckout && index < checkoutSteps.length - 1 ? (
-                      <div
-                        style={{
-                          height: "1px",
-                          background:
-                            index < currentStepIndex ? accentColor : "#e5e7eb",
+                          border: "none",
+                          background: "transparent",
+                          padding: 0,
+                          cursor: "pointer",
+                          textAlign: stepsAlign as any,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent:
+                            stepsAlign === "center"
+                              ? "center"
+                              : stepsAlign === "right"
+                              ? "flex-end"
+                              : "flex-start",
+                          gap: "10px",
+                          opacity: 1,
                           width: "100%",
                         }}
-                      />
-                    ) : null}
-                  </div>
-                );
-              })}
+                      >
+                        <div
+                          style={{
+                            width: "22px",
+                            height: "22px",
+                            borderRadius: stepsBadgeRadius,
+                            display: "grid",
+                            placeItems: "center",
+                            fontSize: "11px",
+                            fontWeight: 700,
+                            border:
+                              isCurrent || isCompleted
+                                ? `1px solid ${stepsActiveBadgeBg}`
+                                : `1px solid ${stepsInactiveBadgeBorder}`,
+                            background:
+                              isCurrent || isCompleted ? stepsActiveBadgeBg : stepsInactiveBadgeBg,
+                            color:
+                              isCurrent || isCompleted ? stepsActiveBadgeText : stepsInactiveBadgeText,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {index + 1}
+                        </div>
+
+                        <div
+                          style={{
+                            fontSize: "13px",
+                            fontWeight: isCurrent ? 700 : 600,
+                            color: isCurrent ? stepsActiveTitle : stepsInactiveTitle,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {step.label}
+                        </div>
+                      </button>
+
+                      {!isCompactCheckout && index < resolvedCheckoutSteps.length - 1 ? (
+                        <div
+                          style={{
+                            height: "1px",
+                            background:
+                              index < currentStepIndex ? stepsActiveLine : stepsInactiveLine,
+                            width: "100%",
+                          }}
+                        />
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          </EditorBlockWrapper>
 
           {checkoutStep === "delivery" ? (
             <div
@@ -1636,9 +1822,33 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
             >
               {deliveryBlock
                 ? renderBlock(deliveryBlock, blocksToRender.indexOf(deliveryBlock), {
+                  siteId,
                   compact: false,
                   currentStep: "delivery",
+                  selectedBlockId,
                   deliveryData,
+                  savedAddresses,
+                  selectedAddressId,
+                  isAuthenticated,
+                  isAddressesLoading,
+                  onSavedAddressesChange: (addresses: DeliveryData[]) => {
+                    setSavedAddresses(addresses);
+                    const stillSelected = addresses.find((a) => a.id === selectedAddressId);
+                    if (!stillSelected) {
+                      const next = addresses.find((a) => a.isDefault) || addresses[0] || null;
+                      if (next) {
+                        setSelectedAddressId(next.id || null);
+                        setDeliveryData(next);
+                      } else {
+                        setSelectedAddressId(null);
+                        setDeliveryData(initialDeliveryData);
+                      }
+                    }
+                  },
+                  onSelectAddress: (address: DeliveryData) => {
+                    setSelectedAddressId(address.id || null);
+                    setDeliveryData(address);
+                  },
                   onDeliveryDataChange: setDeliveryData,
                   onContinue: () => goToStep("payment"),
                   continueDisabled: false,
@@ -1794,14 +2004,14 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
                       }}
                     >
                       <div style={{ color: deliveryText, fontWeight: 700 }}>
-                        {deliveryData.fullName || "—"}
+                        {(selectedAddress || deliveryData).fullName || "—"}
                       </div>
-                      <div>{deliveryData.phone || "—"}</div>
-                      <div>{deliveryData.email || "—"}</div>
-                      <div>{deliveryData.address || "—"}</div>
+                      <div>{(selectedAddress || deliveryData).phone || "—"}</div>
+                      <div>{(selectedAddress || deliveryData).email || "—"}</div>
+                      <div>{(selectedAddress || deliveryData).address || "—"}</div>
                       <div>
-                        {deliveryData.city || "—"}{" "}
-                        {deliveryData.pincode ? `- ${deliveryData.pincode}` : ""}
+                        {(selectedAddress || deliveryData).city || "—"}{" "}
+                        {(selectedAddress || deliveryData).pincode ? `- ${(selectedAddress || deliveryData).pincode}` : ""}
                       </div>
                     </div>
                   </div>

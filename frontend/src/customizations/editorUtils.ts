@@ -526,8 +526,13 @@ const PRODUCT_DETAIL_BLOCK_TYPES = new Set([
 ]);
 
 const CHECKOUT_BLOCK_TYPES = new Set([
+  "checkout_steps",
+  "checkoutsteps",
+  "checkout_stepper",
   "delivery_form",
   "deliveryform",
+  "delivery_map_picker",
+  "delivery_address_form",
   "payment_methods",
   "paymentmethods",
   "place_order_cta",
@@ -635,6 +640,25 @@ export function findBlockById(
     return buildGlobalFooterBlock(siteDefinition);
   }
 
+  if (blockId === "checkout_steps" || blockId === "checkoutsteps" || blockId === "checkout_stepper") {
+    for (const page of siteDefinition.pages) {
+      const match = page.blocks?.find(
+        (block) =>
+          block.id === "checkout_steps" ||
+          block.type === "checkout_steps" ||
+          block.type === "checkoutsteps" ||
+          block.id === blockId ||
+          block.type === blockId
+      );
+      if (match) return match;
+    }
+    return {
+      id: "checkout_steps",
+      type: "checkout_steps",
+      props: {},
+    };
+  }
+
   for (const page of siteDefinition.pages) {
     const match = page.blocks.find(
       (block) => block.id === blockId || block.type === blockId
@@ -672,6 +696,44 @@ export function findBlockById(
         (p as any).slug === "checkout" ||
         isCheckoutPageRoute(p.route)
     );
+
+    const deliveryFormBlock = checkoutPage?.blocks.find(
+      (b) =>
+        String(b.type || "").toLowerCase() === "delivery_form" ||
+        String(b.id || "").toLowerCase() === "delivery_form" ||
+        String(b.type || "").toLowerCase() === "deliveryform"
+    );
+
+    if (blockId === "checkout_steps" || blockId === "checkoutsteps" || blockId === "checkout_stepper") {
+      const existing = checkoutPage?.blocks.find(
+        (b) =>
+          String(b.id || "").toLowerCase() === "checkout_steps" ||
+          String(b.type || "").toLowerCase() === "checkout_steps" ||
+          String(b.type || "").toLowerCase() === "checkoutsteps"
+      );
+      if (existing) return existing;
+      return {
+        id: "checkout_steps",
+        type: "checkout_steps",
+        props: {},
+      };
+    }
+
+    if (blockId === "delivery_map_picker") {
+      return {
+        id: "delivery_map_picker",
+        type: "delivery_map_picker",
+        props: deliveryFormBlock?.props || {},
+      };
+    }
+
+    if (blockId === "delivery_address_form") {
+      return {
+        id: "delivery_address_form",
+        type: "delivery_address_form",
+        props: deliveryFormBlock?.props || {},
+      };
+    }
 
     const existingBlock = checkoutPage?.blocks.find(
       (b) =>

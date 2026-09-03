@@ -664,6 +664,104 @@ const deliveryTitleField = {
   placeholder: "Delivery details",
 };
 
+const deliverySubtitleField = {
+  key: "subtitle",
+  label: "Subtitle description",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Select one of your saved delivery addresses or add a new one.",
+};
+
+const deliveryAddButtonLabelField = {
+  key: "add_address_button_label",
+  label: "Add address button label",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "+ Add New Address",
+};
+
+const deliveryContinueButtonLabelField = {
+  key: "continue_button_label",
+  label: "Continue button label",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Deliver to this address",
+};
+
+const deliveryEmptyTitleField = {
+  key: "empty_title",
+  label: "Empty state title",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "No address saved",
+};
+
+const deliveryEmptyMessageField = {
+  key: "empty_message",
+  label: "Empty state message",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Add your first delivery address to continue.",
+};
+
+const deliveryCardRadiusField = {
+  key: "card_radius",
+  label: "Address card radius (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 0,
+  max: 32,
+  step: 1,
+};
+
+const deliveryButtonRadiusField = {
+  key: "button_border_radius",
+  label: "Button corner radius (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 0,
+  max: 32,
+  step: 1,
+};
+
+const deliveryBadgeRadiusField = {
+  key: "badge_border_radius",
+  label: "Badge corner radius (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 0,
+  max: 24,
+  step: 1,
+};
+
+const deliveryCardColorField = {
+  key: "card_color",
+  label: "Address card background",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const deliverySelectedCardBgField = {
+  key: "selected_card_bg",
+  label: "Selected address card background",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const deliveryButtonBgColorField = {
+  key: "button_bg_color",
+  label: "Continue button background",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const deliveryButtonTextColorField = {
+  key: "button_text_color",
+  label: "Continue button text color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
 const deliveryAccentColorField = {
   key: "accentColor",
   label: "Accent color override",
@@ -675,6 +773,278 @@ const deliveryCompactField = {
   key: "compact",
   label: "Compact layout",
   type: "checkbox" as const,
+  target: "props" as const,
+};
+
+// --- Map Location Picker Fields ---
+const mapModalTitleField = {
+  key: "map_modal_title",
+  label: "Map modal title",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Select Delivery Location",
+};
+
+const mapSearchPlaceholderField = {
+  key: "map_search_placeholder",
+  label: "Location search placeholder",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Search address, landmark, area...",
+};
+
+const mapConfirmButtonLabelField = {
+  key: "map_confirm_button_label",
+  label: "Confirm button text",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Confirm This Location",
+};
+
+const mapHelperTextField = {
+  key: "map_helper_text",
+  label: "Map helper instructions",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Move the map to place the pin directly over your building or entrance.",
+};
+
+const mapModalRadiusField = {
+  key: "map_modal_radius",
+  label: "Modal corner radius (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 0,
+  max: 32,
+  step: 1,
+};
+
+const mapButtonRadiusField = {
+  key: "map_button_radius",
+  label: "Confirm button radius (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 0,
+  max: 24,
+  step: 1,
+};
+
+const mapSearchRadiusField = {
+  key: "map_search_radius",
+  label: "Search input radius (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 0,
+  max: 24,
+  step: 1,
+};
+
+const mapModalBgField = {
+  key: "map_modal_bg",
+  label: "Modal background color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const mapHeaderTextColorField = {
+  key: "map_header_text_color",
+  label: "Header text color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const mapSearchBgField = {
+  key: "map_search_bg",
+  label: "Search input background",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const mapSearchTextColorField = {
+  key: "map_search_text_color",
+  label: "Search input text color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const mapConfirmBtnBgField = {
+  key: "map_confirm_btn_bg",
+  label: "Confirm button background",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const mapConfirmBtnTextColorField = {
+  key: "map_confirm_btn_text",
+  label: "Confirm button text color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+// --- Address Details Form Fields ---
+const formTitleAddField = {
+  key: "form_title_add",
+  label: "Add form title",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Add New Address",
+};
+
+const formTitleEditField = {
+  key: "form_title_edit",
+  label: "Edit form title",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Edit Address",
+};
+
+const formSubtitleField = {
+  key: "form_subtitle",
+  label: "Form subtitle text",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Fill in the details below",
+};
+
+const formNamePlaceholderField = {
+  key: "form_name_placeholder",
+  label: "Full Name placeholder",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "e.g. Rahul Sharma",
+};
+
+const formPhonePlaceholderField = {
+  key: "form_phone_placeholder",
+  label: "Mobile Number placeholder",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "9876543210",
+};
+
+const formAddressPlaceholderField = {
+  key: "form_address_placeholder",
+  label: "Flat / Building placeholder",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "e.g. Flat 402, Block B, Green Heights",
+};
+
+const formCityPlaceholderField = {
+  key: "form_city_placeholder",
+  label: "City / Locality placeholder",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "City / Area",
+};
+
+const formPincodePlaceholderField = {
+  key: "form_pincode_placeholder",
+  label: "Pincode placeholder",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "e.g. 560102",
+};
+
+const formEmailPlaceholderField = {
+  key: "form_email_placeholder",
+  label: "Email placeholder",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "name@example.com",
+};
+
+const formSaveButtonLabelField = {
+  key: "form_save_button_label",
+  label: "Save address button label",
+  type: "text" as const,
+  target: "props" as const,
+  placeholder: "Save and Deliver Here",
+};
+
+const formCardRadiusField = {
+  key: "form_card_radius",
+  label: "Form panel corner radius (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 0,
+  max: 32,
+  step: 1,
+};
+
+const formButtonRadiusField = {
+  key: "form_button_radius",
+  label: "Save button corner radius (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 0,
+  max: 24,
+  step: 1,
+};
+
+const formPaddingField = {
+  key: "form_padding",
+  label: "Form inner padding (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 8,
+  max: 32,
+  step: 1,
+};
+
+const formPanelBgField = {
+  key: "form_panel_bg",
+  label: "Form panel background",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const formInputBgField = {
+  key: "form_input_bg",
+  label: "Form inputs background",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const formInputTextColorField = {
+  key: "form_input_text",
+  label: "Form inputs text color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const formLabelColorField = {
+  key: "form_label_color",
+  label: "Field labels color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const formPlaceholderColorField = {
+  key: "form_placeholder_color",
+  label: "Placeholder text color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const formBorderColorField = {
+  key: "form_border_color",
+  label: "Form fields border color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const formSaveBtnBgField = {
+  key: "form_save_btn_bg",
+  label: "Save button background",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const formSaveBtnTextColorField = {
+  key: "form_save_btn_text",
+  label: "Save button text color",
+  type: "color" as const,
   target: "props" as const,
 };
 
@@ -1453,6 +1823,74 @@ const productDetailFields = [
   },
 ];
 
+const deliveryFormFields = [
+  // --- Content & Headings ---
+  deliverySectionLabelField,
+  deliveryTitleField,
+  deliverySubtitleField,
+  deliveryAddButtonLabelField,
+  deliveryContinueButtonLabelField,
+  deliveryEmptyTitleField,
+  deliveryEmptyMessageField,
+  formTitleAddField,
+  formTitleEditField,
+  formSubtitleField,
+  formNamePlaceholderField,
+  formPhonePlaceholderField,
+  formAddressPlaceholderField,
+  formCityPlaceholderField,
+  formPincodePlaceholderField,
+  formEmailPlaceholderField,
+  formSaveButtonLabelField,
+  mapModalTitleField,
+  mapSearchPlaceholderField,
+  mapConfirmButtonLabelField,
+  mapHelperTextField,
+
+  // --- Layout & Spacing ---
+  styleBorderRadiusField,
+  deliveryCardRadiusField,
+  styleFieldRadiusField,
+  deliveryButtonRadiusField,
+  deliveryBadgeRadiusField,
+  formCardRadiusField,
+  formButtonRadiusField,
+  mapModalRadiusField,
+  mapButtonRadiusField,
+  mapSearchRadiusField,
+  stylePaddingField,
+  formPaddingField,
+  styleGapField,
+  styleMaxWidthField,
+
+  // --- Color Palette ---
+  deliveryAccentColorField,
+  styleBackgroundColorField,
+  deliveryCardColorField,
+  deliverySelectedCardBgField,
+  deliveryButtonBgColorField,
+  deliveryButtonTextColorField,
+  formPanelBgField,
+  formInputBgField,
+  formInputTextColorField,
+  formLabelColorField,
+  formPlaceholderColorField,
+  formBorderColorField,
+  formSaveBtnBgField,
+  formSaveBtnTextColorField,
+  mapModalBgField,
+  mapHeaderTextColorField,
+  mapSearchBgField,
+  mapSearchTextColorField,
+  mapConfirmBtnBgField,
+  mapConfirmBtnTextColorField,
+  styleTextColorField,
+  styleMutedTextColorField,
+  styleSoftTextColorField,
+  styleBorderColorField,
+  styleSoftBorderColorField,
+];
+
 export const editorRegistry: EditorRegistry = {
   product_grid: {
     displayName: "Product Grid",
@@ -1683,20 +2121,66 @@ export const editorRegistry: EditorRegistry = {
 
   delivery_form: {
     displayName: "Delivery Form",
-    fields: [
-      deliveryTitleField,
-      deliveryCompactField,
-      deliveryAccentColorField,
-      ...checkoutStyleFields,
-    ],
+    fields: deliveryFormFields,
   },
   deliveryform: {
     displayName: "Delivery Form",
+    fields: deliveryFormFields,
+  },
+
+  delivery_map_picker: {
+    displayName: "Map Location Picker",
     fields: [
-      deliveryTitleField,
-      deliveryCompactField,
-      deliveryAccentColorField,
-      ...checkoutStyleFields,
+      mapModalTitleField,
+      mapSearchPlaceholderField,
+      mapConfirmButtonLabelField,
+      mapHelperTextField,
+      mapModalRadiusField,
+      mapButtonRadiusField,
+      mapSearchRadiusField,
+      mapModalBgField,
+      mapHeaderTextColorField,
+      mapSearchBgField,
+      mapSearchTextColorField,
+      mapConfirmBtnBgField,
+      mapConfirmBtnTextColorField,
+    ],
+  },
+
+  checkout_steps: {
+    displayName: "Checkout Steps",
+    fields: [],
+  },
+  checkoutsteps: {
+    displayName: "Checkout Steps",
+    fields: [],
+  },
+
+  delivery_address_form: {
+    displayName: "Add / Edit Address Form",
+    fields: [
+      formTitleAddField,
+      formTitleEditField,
+      formSubtitleField,
+      formNamePlaceholderField,
+      formPhonePlaceholderField,
+      formAddressPlaceholderField,
+      formCityPlaceholderField,
+      formPincodePlaceholderField,
+      formEmailPlaceholderField,
+      formSaveButtonLabelField,
+      formCardRadiusField,
+      styleFieldRadiusField,
+      formButtonRadiusField,
+      formPaddingField,
+      formPanelBgField,
+      formInputBgField,
+      formInputTextColorField,
+      formLabelColorField,
+      formPlaceholderColorField,
+      formBorderColorField,
+      formSaveBtnBgField,
+      formSaveBtnTextColorField,
     ],
   },
 

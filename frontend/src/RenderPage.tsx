@@ -1194,6 +1194,13 @@ const RenderPage: React.FC<RenderPageProps> = ({
     );
   }
 
+  const checkoutStepsBlock = blocksToRender.find((block) =>
+    block.type === "checkout_steps" ||
+    block.type === "checkoutsteps" ||
+    block.id === "checkout_steps" ||
+    block.id === "checkoutsteps"
+  );
+
   const deliveryBlock = blocksToRender.find((block) =>
     DELIVERY_TYPES.has(block.type.toLowerCase())
   );
@@ -1575,6 +1582,48 @@ const RenderPage: React.FC<RenderPageProps> = ({
     );
   }
 
+  const configuredMaxWidth =
+    deliveryBlock?.props?.max_width ||
+    checkoutStepsBlock?.props?.max_width;
+
+  const isFullWidth =
+    configuredMaxWidth === "100%" ||
+    configuredMaxWidth === "full" ||
+    configuredMaxWidth === 100;
+
+  const checkoutOuterMaxWidth = isFullWidth
+    ? "100%"
+    : configuredMaxWidth
+    ? typeof configuredMaxWidth === "number"
+      ? `${configuredMaxWidth}px`
+      : String(configuredMaxWidth).endsWith("%") || String(configuredMaxWidth).endsWith("px")
+      ? String(configuredMaxWidth)
+      : `${configuredMaxWidth}px`
+    : "1240px";
+
+  const stepsProps = checkoutStepsBlock?.props || {};
+
+  const resolvedStep1 = stepsProps.step_1_label || stepsProps.delivery_label || "Delivery Address";
+  const resolvedStep2 = stepsProps.step_2_label || stepsProps.payment_label || "Payment";
+  const resolvedStep3 = stepsProps.step_3_label || stepsProps.review_label || "Review & Pay";
+
+  const resolvedCheckoutSteps: { key: CheckoutStep; label: string }[] = [
+    { key: "delivery", label: resolvedStep1 },
+    { key: "payment", label: resolvedStep2 },
+    { key: "review", label: resolvedStep3 },
+  ];
+
+  const stepsBg = stepsProps.background_color || shellBg;
+  const stepsBorder = stepsProps.border_color ? `1px solid ${stepsProps.border_color}` : shellBorder;
+  const stepsRadius = stepsProps.border_radius !== undefined ? `${stepsProps.border_radius}px` : "18px";
+  const rawStepRadius = stepsProps.step_radius !== undefined ? Number(stepsProps.step_radius) : 11;
+  const stepsBadgeRadius = `${rawStepRadius > 20 ? 11 : rawStepRadius}px`;
+  const stepsPadding = stepsProps.padding !== undefined ? `${stepsProps.padding}px` : (isCompactCheckout ? "14px" : "18px");
+  const stepsMarginBottom = stepsProps.gap !== undefined ? `${stepsProps.gap}px` : stepsProps.margin_bottom !== undefined ? `${stepsProps.margin_bottom}px` : (isCompactCheckout ? "14px" : "18px");
+
+  const stepsAlign = stepsProps.text_align || "left";
+  const stepsGap = stepsProps.step_gap !== undefined ? Number(stepsProps.step_gap) : (isCompactCheckout ? 8 : 14);
+
   return (
     <ThemeProvider theme={theme as any}>
       <div
@@ -1587,32 +1636,35 @@ const RenderPage: React.FC<RenderPageProps> = ({
       >
         <div
           style={{
-            maxWidth: "1240px",
+            maxWidth: checkoutOuterMaxWidth,
             margin: "0 auto",
             width: "100%",
+            boxSizing: "border-box",
+            transition: "max-width 0.2s ease",
           }}
         >
           <div
             style={{
-              borderRadius: "18px",
-              border: shellBorder,
-              background: shellBg,
+              borderRadius: stepsRadius,
+              border: stepsBorder,
+              background: stepsBg,
               boxShadow: isLight
                 ? "0 1px 2px rgba(16,24,40,0.04)"
                 : "0 18px 44px rgba(0,0,0,0.22)",
-              padding: isCompactCheckout ? "14px" : "18px",
-              marginBottom: isCompactCheckout ? "14px" : "18px",
+              padding: stepsPadding,
+              marginBottom: stepsMarginBottom,
+              boxSizing: "border-box",
             }}
           >
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: `repeat(${checkoutSteps.length}, minmax(0, 1fr))`,
-                gap: isCompactCheckout ? "8px" : "12px",
+                gridTemplateColumns: `repeat(${resolvedCheckoutSteps.length}, minmax(0, 1fr))`,
+                gap: `${stepsGap}px`,
                 alignItems: "center",
               }}
             >
-              {checkoutSteps.map((step, index) => {
+              {resolvedCheckoutSteps.map((step, index) => {
                 const isActive = step.key === checkoutStep;
                 const isCompleted = index < currentStepIndex;
                 const isDisabled =
@@ -1629,6 +1681,12 @@ const RenderPage: React.FC<RenderPageProps> = ({
                     style={{
                       display: "flex",
                       alignItems: "center",
+                      justifyContent:
+                        stepsAlign === "center"
+                          ? "center"
+                          : stepsAlign === "right"
+                          ? "flex-end"
+                          : "flex-start",
                       gap: "8px",
                       padding: isCompactCheckout ? "8px 10px" : "10px 14px",
                       borderRadius: "12px",
@@ -1648,7 +1706,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
                       cursor: isDisabled ? "not-allowed" : "pointer",
                       opacity: isDisabled ? 0.45 : 1,
                       transition: "all 0.15s ease",
-                      textAlign: "left",
+                      textAlign: stepsAlign as any,
                     }}
                   >
                     <div
