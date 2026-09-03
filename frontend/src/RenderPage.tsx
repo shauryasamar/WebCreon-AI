@@ -118,7 +118,7 @@ const CHECKOUT_SUMMARY_TYPES = new Set([
   "ordersummary",
 ]);
 
-const PLACE_ORDER_TYPES = new Set(["place_order_cta", "placeordercta"]);
+const PLACE_ORDER_TYPES = new Set(["place_order_cta", "placeordercta", "checkout_review", "review_and_pay"]);
 const PAYMENT_TYPES = new Set(["payment_methods", "paymentmethods"]);
 const DELIVERY_TYPES = new Set(["delivery_form", "deliveryform"]);
 
@@ -1158,7 +1158,8 @@ const RenderPage: React.FC<RenderPageProps> = ({
             minHeight: isCartPage ? "calc(100vh - 220px)" : "100%",
             display: isCartPage ? "flex" : undefined,
             flexDirection: isCartPage ? "column" : undefined,
-            justifyContent: isCartPage ? "center" : undefined,
+            justifyContent: isCartPage ? "flex-start" : undefined,
+            paddingTop: isCartPage ? "8px" : undefined,
             boxSizing: "border-box",
             background: isFullGlass ? glassBackground : (theme?.primary_bg || (isThemeDark ? "#0f172a" : "#ffffff")),
             color: theme?.text_color || (isThemeDark ? "#f8fafc" : "#0f172a"),
@@ -1217,8 +1218,14 @@ const RenderPage: React.FC<RenderPageProps> = ({
   };
 
   const placeOrderBlock = blocksToRender.find((block) =>
-    PLACE_ORDER_TYPES.has(block.type.toLowerCase())
-  );
+    PLACE_ORDER_TYPES.has(block.type.toLowerCase()) ||
+    block.id === "place_order_cta" ||
+    block.id === "checkout_review"
+  ) || {
+    id: "place_order_cta",
+    type: "place_order_cta",
+    props: {},
+  };
 
   const summaryBlock = blocksToRender.find((block) =>
     block.id === "checkout_order_summary" ||
@@ -1292,17 +1299,29 @@ const RenderPage: React.FC<RenderPageProps> = ({
     ? "minmax(0, 1fr)"
     : "minmax(0, 1.2fr) minmax(340px, 0.8fr)";
 
+  const reviewProps = (placeOrderBlock?.props ?? {}) as Record<string, any>;
   const deliveryCardBg = (theme as any)?.delivery_form_bg || (theme as any)?.checkout_card_bg || cardBg;
   const isDeliveryCardDark = isColorDarkHex(deliveryCardBg);
   const deliveryText = (theme as any)?.delivery_form_text || (isDeliveryCardDark ? "#f8fafc" : "#0f172a");
-  const reviewCardText = isDeliveryCardDark ? "#f8fafc" : "#0f172a";
-  const reviewCardMuted = isDeliveryCardDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)";
+
+  const reviewCardBg = reviewProps.card_bg || reviewProps.card_color || deliveryCardBg;
+  const isReviewCardDark = isColorDarkHex(reviewCardBg);
+  const reviewCardText = reviewProps.title_color || reviewProps.text_color || (isReviewCardDark ? "#f8fafc" : "#0f172a");
+  const reviewCardMuted = reviewProps.muted_text_color || (isReviewCardDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)");
+  const reviewCardRadius = reviewProps.card_radius !== undefined ? `${reviewProps.card_radius}px` : "14px";
+  const reviewCardPadding = reviewProps.card_padding !== undefined ? `${reviewProps.card_padding}px` : (isCompactCheckout ? "14px" : "16px");
+  const reviewCardBorder = reviewProps.border_color ? `1px solid ${reviewProps.border_color}` : cardBorder;
+  const reviewAccentColor = reviewProps.accent_color || accentColor;
+  const reviewChangeLabel = reviewProps.change_label || "Change";
+  const reviewItemsTitle = reviewProps.items_title || "Selected items";
+  const reviewDeliveryTitle = reviewProps.delivery_title || "Delivery address";
+  const reviewPaymentTitle = reviewProps.payment_title || "Payment method";
 
   const infoCardStyle: React.CSSProperties = {
-    borderRadius: "14px",
-    border: cardBorder,
-    background: deliveryCardBg,
-    padding: isCompactCheckout ? "14px" : "16px",
+    borderRadius: reviewCardRadius,
+    border: reviewCardBorder,
+    background: reviewCardBg,
+    padding: reviewCardPadding,
     boxShadow: isLight
       ? "0 1px 2px rgba(16,24,40,0.04)"
       : "0 10px 24px rgba(0,0,0,0.14)",
@@ -1327,7 +1346,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
             color: reviewCardText,
           }}
         >
-          Selected items
+          {reviewItemsTitle}
         </h4>
       </div>
 
@@ -1881,13 +1900,19 @@ const RenderPage: React.FC<RenderPageProps> = ({
         {checkoutStep === "review" ? (
           <div
             style={{
-              borderRadius: "16px",
-              border: shellBorder,
-              background: shellBg,
+              borderRadius: reviewProps.border_radius !== undefined ? `${reviewProps.border_radius}px` : "16px",
+              border: reviewProps.soft_border_color ? `1px solid ${reviewProps.soft_border_color}` : shellBorder,
+              background: reviewProps.background_color || shellBg,
               boxShadow: isLight
                 ? "0 1px 2px rgba(16,24,40,0.04)"
                 : "0 10px 24px rgba(0,0,0,0.16)",
-              padding: isCompactCheckout ? "16px" : "18px",
+              padding: reviewProps.padding !== undefined ? `${reviewProps.padding}px` : (isCompactCheckout ? "16px" : "18px"),
+              maxWidth: reviewProps.max_width && reviewProps.max_width !== "100%"
+                ? (String(reviewProps.max_width).endsWith("px") ? reviewProps.max_width : `${reviewProps.max_width}px`)
+                : "100%",
+              margin: "0 auto",
+              boxSizing: "border-box",
+              width: "100%",
             }}
           >
             <div
@@ -1902,11 +1927,11 @@ const RenderPage: React.FC<RenderPageProps> = ({
                   margin: 0,
                   fontSize: "24px",
                   lineHeight: 1.1,
-                  color: isColorDarkHex(shellBg) ? "#f8fafc" : "#0f172a",
+                  color: reviewProps.section_title_color || (isColorDarkHex(reviewProps.background_color || shellBg) ? "#f8fafc" : "#0f172a"),
                   fontWeight: 700,
                 }}
               >
-                Review & Pay
+                {reviewProps.section_title || "Review & Pay"}
               </h3>
             </div>
 
@@ -1914,14 +1939,14 @@ const RenderPage: React.FC<RenderPageProps> = ({
               style={{
                 display: "grid",
                 gridTemplateColumns: reviewLayoutColumns,
-                gap: "16px",
+                gap: reviewProps.gap !== undefined ? `${reviewProps.gap}px` : "16px",
                 alignItems: "start",
               }}
             >
               <div
                 style={{
                   display: "grid",
-                  gap: "14px",
+                  gap: reviewProps.gap !== undefined ? `${reviewProps.gap}px` : "14px",
                 }}
               >
                 {selectedItemsCard}
@@ -1944,7 +1969,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
                         color: deliveryText,
                       }}
                     >
-                      Delivery address
+                      {reviewDeliveryTitle}
                     </h4>
 
                     <button
@@ -1953,14 +1978,14 @@ const RenderPage: React.FC<RenderPageProps> = ({
                       style={{
                         border: "none",
                         background: "transparent",
-                        color: accentColor,
+                        color: reviewAccentColor,
                         fontSize: "12px",
                         fontWeight: 700,
                         cursor: "pointer",
                         padding: 0,
                       }}
                     >
-                      Change
+                      {reviewChangeLabel}
                     </button>
                   </div>
 
@@ -2004,7 +2029,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
                         color: reviewCardText,
                       }}
                     >
-                      Payment method
+                      {reviewPaymentTitle}
                     </h4>
 
                     <button
@@ -2013,14 +2038,14 @@ const RenderPage: React.FC<RenderPageProps> = ({
                       style={{
                         border: "none",
                         background: "transparent",
-                        color: accentColor,
+                        color: reviewAccentColor,
                         fontSize: "12px",
                         fontWeight: 700,
                         cursor: "pointer",
                         padding: 0,
                       }}
                     >
-                      Change
+                      {reviewChangeLabel}
                     </button>
                   </div>
 
@@ -2045,7 +2070,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
                     <div>
                       {paymentData.method.toUpperCase() === "COD"
                         ? "Pay in cash upon package delivery."
-                        : "You will complete payment securely on the next step."}
+                        : (reviewProps.helper_text || "You will complete payment securely on the next step.")}
                     </div>
                   </div>
                 </div>
@@ -2077,12 +2102,20 @@ const RenderPage: React.FC<RenderPageProps> = ({
 
                 {placeOrderBlock
                   ? renderBlock(placeOrderBlock, blocksToRender.indexOf(placeOrderBlock), {
+                      ...reviewProps,
                       compact: false,
                       buttonLabel:
+                        reviewProps.button_label ||
                         placeOrderBlock.props?.buttonLabel ||
                         (paymentData.method.toUpperCase() === "COD"
-                          ? "Place Order"
-                          : "Pay Now"),
+                          ? (reviewProps.button_label || "Place Order")
+                          : (reviewProps.pay_now_button_label || "Pay Now")),
+                      accentColor: reviewProps.button_bg_color || accentColor,
+                      text_color: reviewProps.button_text_color,
+                      border_radius: reviewProps.button_border_radius ?? reviewProps.button_radius,
+                      button_border_radius: reviewProps.button_border_radius ?? reviewProps.button_radius,
+                      button_height: reviewProps.button_height,
+                      helperText: reviewProps.helper_text,
                       reviewMode: true,
                       disabled: !(
                         canContinueDelivery &&

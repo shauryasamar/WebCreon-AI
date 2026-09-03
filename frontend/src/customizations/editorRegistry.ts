@@ -2206,7 +2206,7 @@ export const editorRegistry: EditorRegistry = {
   },
 
   place_order_cta: {
-    displayName: "Place Order Button",
+    displayName: "Review & Pay",
     fields: [
       placeOrderLabelField,
       placeOrderCompactField,
@@ -2218,7 +2218,7 @@ export const editorRegistry: EditorRegistry = {
     ],
   },
   placeordercta: {
-    displayName: "Place Order Button",
+    displayName: "Review & Pay",
     fields: [
       placeOrderLabelField,
       placeOrderCompactField,

@@ -126,11 +126,9 @@ function PageBlocksTreeView({
       blocks: [
         { id: "checkout_steps", type: "checkout_steps", name: "Checkout Steps" },
         { id: "delivery_form", type: "delivery_form", name: "Delivery Form" },
-        { id: "delivery_map_picker", type: "delivery_map_picker", name: "Map Location Picker" },
         { id: "delivery_address_form", type: "delivery_address_form", name: "Add / Edit Address Form" },
         { id: "payment_methods", type: "payment_methods", name: "Payment Methods" },
-        { id: "checkout_order_summary", type: "checkout_order_summary", name: "Order Summary" },
-        { id: "place_order_cta", type: "place_order_cta", name: "Place Order" },
+        { id: "place_order_cta", type: "place_order_cta", name: "Review & Pay" },
       ],
     },
     {
@@ -4837,6 +4835,14 @@ function CartEditor({
   const parsedWidthRatio = parseWidthRatio(p.max_width, 94);
   const parsedMinHeight = Math.max(280, Math.min(650, parseNumProp(p.min_height, 380)));
 
+  const currentCartMaxWidth = p.max_width ? String(p.max_width) : "1280px";
+  const normalizedCartWidth =
+    currentCartMaxWidth === "100%" || currentCartMaxWidth === "full" || currentCartMaxWidth === "100"
+      ? "100%"
+      : currentCartMaxWidth.endsWith("px")
+      ? currentCartMaxWidth
+      : `${currentCartMaxWidth}px`;
+
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
       {/* 3 Modern Clean Navigation Tabs */}
@@ -4894,15 +4900,21 @@ function CartEditor({
               Container Dimensions & Radii
             </div>
             <div style={{ display: "grid", gap: "6px" }}>
-              <NumberStepperField
-                label="Container Width"
-                value={parsedWidthRatio}
-                min={70}
-                max={100}
-                step={2}
-                unit="%"
-                onChange={(val) => updateProps({ max_width: `${Math.max(70, Math.min(100, val))}%` })}
-              />
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Max Width
+                </label>
+                <SegmentedRow
+                  value={normalizedCartWidth}
+                  onChange={(val) => updateProps({ max_width: val })}
+                  options={[
+                    { label: "100% Full", value: "100%" },
+                    { label: "1440px", value: "1440px" },
+                    { label: "1280px", value: "1280px" },
+                    { label: "1200px", value: "1200px" },
+                  ]}
+                />
+              </div>
 
               <NumberStepperField
                 label="Minimum Height"
@@ -6398,6 +6410,507 @@ function PaymentMethodsEditor({
                 label="Back Button Text"
                 value={p.back_button_text || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
                 onChange={(val) => updateProps({ back_button_text: val })}
+              />
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function isPlaceOrderBlock(block?: any): boolean {
+  if (!block) return false;
+  const rawType = String(block.type || "").toLowerCase().trim();
+  const rawId = String(block.id || "").toLowerCase().trim();
+  const normType = rawType.replace(/[-_\s]/g, "");
+  const normId = rawId.replace(/[-_\s]/g, "");
+
+  return (
+    normType === "placeordercta" ||
+    normType === "placeorder" ||
+    normId === "placeordercta" ||
+    normId === "placeorder" ||
+    rawType === "place_order_cta" ||
+    rawId === "place_order_cta" ||
+    rawType === "checkout_review" ||
+    rawId === "checkout_review" ||
+    rawType === "review_and_pay" ||
+    rawId === "review_and_pay"
+  );
+}
+
+function PlaceOrderEditor({
+  selectedBlock,
+  isLightMode,
+  textColor: _textColor,
+  accentColor: _accentColor,
+  onSiteDefinitionChange,
+  siteDefinition,
+}: {
+  selectedBlock: any;
+  isLightMode: boolean;
+  textColor: string;
+  accentColor: string;
+  onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
+  siteDefinition: EditorSiteDefinition;
+}) {
+  const [activeTab, setActiveTab] = useState<"layout" | "content" | "colors">("layout");
+  const p = selectedBlock?.props ?? {};
+
+  const updateProps = (patch: Record<string, any>) => {
+    const nextDef = JSON.parse(JSON.stringify(siteDefinition));
+    let updated = false;
+
+    if (Array.isArray(nextDef.pages)) {
+      nextDef.pages = nextDef.pages.map((page: any) => {
+        const isCheckoutP =
+          page.role === "checkout" ||
+          page.page_type === "checkout" ||
+          page.slug === "checkout" ||
+          page.route === "/checkout" ||
+          page.route === "checkout";
+
+        if (isCheckoutP) {
+          let found = false;
+          const blocks = (page.blocks ?? []).map((block: any) => {
+            if (
+              block.id === "place_order_cta" ||
+              block.type === "place_order_cta" ||
+              block.type === "placeordercta" ||
+              block.id === "checkout_review" ||
+              block.id === selectedBlock.id ||
+              block.type === selectedBlock.type
+            ) {
+              found = true;
+              updated = true;
+              return {
+                ...block,
+                props: {
+                  ...(block.props ?? {}),
+                  ...patch,
+                },
+              };
+            }
+            return block;
+          });
+
+          if (!found) {
+            updated = true;
+            blocks.push({
+              id: "place_order_cta",
+              type: "place_order_cta",
+              props: { ...(selectedBlock.props ?? {}), ...patch },
+            });
+          }
+
+          return { ...page, blocks };
+        }
+        return page;
+      });
+    }
+
+    if (!updated) {
+      if (!Array.isArray(nextDef.pages)) nextDef.pages = [];
+      nextDef.pages.push({
+        id: "page-checkout",
+        name: "Checkout",
+        route: "/checkout",
+        role: "checkout",
+        page_type: "checkout",
+        show_in_nav: false,
+        blocks: [
+          {
+            id: "place_order_cta",
+            type: "place_order_cta",
+            props: { ...(selectedBlock.props ?? {}), ...patch },
+          },
+        ],
+      });
+    }
+
+    onSiteDefinitionChange(nextDef);
+  };
+
+  const getStr = (key: string, fallback = "") =>
+    p[key] !== undefined && p[key] !== null ? String(p[key]) : fallback;
+
+  const parseNumProp = (val: any, fallback: number) => {
+    if (val === undefined || val === null || val === "") return fallback;
+    const n = Number(val);
+    return isNaN(n) ? fallback : n;
+  };
+
+  const textInputStyle: React.CSSProperties = {
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+    boxSizing: "border-box",
+    height: "26px",
+    padding: "2px 6px",
+    borderRadius: "4px",
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    fontSize: "11px",
+    color: "#0f172a",
+  };
+
+  const fieldLabelStyle: React.CSSProperties = {
+    fontSize: "9px",
+    fontWeight: 700,
+    color: "#64748b",
+    textTransform: "uppercase",
+  };
+
+  const currentMaxWidth = p.max_width ? String(p.max_width) : "100%";
+  const normalizedWidth =
+    currentMaxWidth === "100%" || currentMaxWidth === "full"
+      ? "100%"
+      : currentMaxWidth.endsWith("px")
+      ? currentMaxWidth
+      : `${currentMaxWidth}px`;
+
+  return (
+    <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
+      {/* 3 Standard Tabs: Layout, Content, Colors */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: "2px",
+          padding: "2px",
+          background: "#f1f5f9",
+          borderRadius: "6px",
+          width: "100%",
+          maxWidth: "100%",
+          boxSizing: "border-box",
+          minWidth: 0,
+        }}
+      >
+        {[
+          { id: "layout", label: "Layout" },
+          { id: "content", label: "Content" },
+          { id: "colors", label: "Colors" },
+        ].map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as any)}
+              style={{
+                padding: "5px 1px",
+                border: "none",
+                borderRadius: "4px",
+                background: isActive ? "#ffffff" : "transparent",
+                color: isActive ? ADMIN_BLUE : "#64748b",
+                fontWeight: isActive ? 800 : 600,
+                fontSize: "10px",
+                cursor: "pointer",
+                textAlign: "center",
+                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 1. LAYOUT TAB */}
+      {activeTab === "layout" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Dimensions */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Container Dimensions
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Max Width</label>
+                <SegmentedRow
+                  value={normalizedWidth}
+                  onChange={(val) => updateProps({ max_width: val })}
+                  options={[
+                    { label: "100% Full", value: "100%" },
+                    { label: "1440px", value: "1440px" },
+                    { label: "1280px", value: "1280px" },
+                    { label: "1200px", value: "1200px" },
+                  ]}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Card Padding"
+                  value={parseNumProp(p.card_padding || p.padding, 16)}
+                  min={8}
+                  max={36}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ card_padding: val, padding: val })}
+                />
+                <NumberStepperField
+                  label="Card Gap"
+                  value={parseNumProp(p.gap, 14)}
+                  min={4}
+                  max={32}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ gap: val })}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Radii */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Corner Radii & Dimensions
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Review Card Radius"
+                  value={parseNumProp(p.card_radius, 14)}
+                  min={0}
+                  max={32}
+                  step={1}
+                  unit="px"
+                  onChange={(val) => updateProps({ card_radius: val })}
+                />
+                <NumberStepperField
+                  label="Button Radius"
+                  value={parseNumProp(p.button_border_radius ?? p.button_radius, 12)}
+                  min={0}
+                  max={32}
+                  step={1}
+                  unit="px"
+                  onChange={(val) => updateProps({ button_border_radius: val, button_radius: val })}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Button Height"
+                  value={parseNumProp(p.button_height, 56)}
+                  min={44}
+                  max={64}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ button_height: val })}
+                />
+                <NumberStepperField
+                  label="Outer Radius"
+                  value={parseNumProp(p.border_radius, 14)}
+                  min={0}
+                  max={36}
+                  step={1}
+                  unit="px"
+                  onChange={(val) => updateProps({ border_radius: val })}
+                />
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* 2. CONTENT TAB */}
+      {activeTab === "content" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Main Section Header */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Section Header
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Section Title</label>
+                <input
+                  type="text"
+                  value={getStr("section_title", "Review & Pay")}
+                  placeholder="Review & Pay"
+                  onChange={(e) => updateProps({ section_title: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Card Headings */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Review Card Headings
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Selected Items Card</label>
+                <input
+                  type="text"
+                  value={getStr("items_title", "Selected items")}
+                  placeholder="Selected items"
+                  onChange={(e) => updateProps({ items_title: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Delivery Card</label>
+                  <input
+                    type="text"
+                    value={getStr("delivery_title", "Delivery address")}
+                    placeholder="Delivery address"
+                    onChange={(e) => updateProps({ delivery_title: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Payment Card</label>
+                  <input
+                    type="text"
+                    value={getStr("payment_title", "Payment method")}
+                    placeholder="Payment method"
+                    onChange={(e) => updateProps({ payment_title: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Change Link Label</label>
+                <input
+                  type="text"
+                  value={getStr("change_label", "Change")}
+                  placeholder="Change"
+                  onChange={(e) => updateProps({ change_label: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Action Button Labels */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Place Order Button & Notes
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Button Label (COD)</label>
+                  <input
+                    type="text"
+                    value={getStr("button_label", "Place Order")}
+                    placeholder="Place Order"
+                    onChange={(e) => updateProps({ button_label: e.target.value, buttonLabel: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Button Label (Online)</label>
+                  <input
+                    type="text"
+                    value={getStr("pay_now_button_label", "Pay Now")}
+                    placeholder="Pay Now"
+                    onChange={(e) => updateProps({ pay_now_button_label: e.target.value })}
+                    style={textInputStyle}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Security / Helper Text</label>
+                <input
+                  type="text"
+                  value={getStr("helper_text", "")}
+                  placeholder="e.g. 100% Secure Checkout | Safe & Encrypted"
+                  onChange={(e) => updateProps({ helper_text: e.target.value })}
+                  style={textInputStyle}
+                />
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* 3. COLORS TAB */}
+      {activeTab === "colors" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Outer Shell & Header Colors */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Outer Shell & Header Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Outer Background"
+                value={p.background_color || (siteDefinition.theme?.mode === "dark" ? "#0f172a" : "#ffffff")}
+                onChange={(val) => updateProps({ background_color: val })}
+              />
+              <CompactColorRow
+                label="Outer Border"
+                value={p.soft_border_color || (siteDefinition.theme?.mode === "dark" ? "#334155" : "#e2e8f0")}
+                onChange={(val) => updateProps({ soft_border_color: val })}
+              />
+              <CompactColorRow
+                label="Section Header Title"
+                value={p.section_title_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                onChange={(val) => updateProps({ section_title_color: val })}
+              />
+            </div>
+          </section>
+
+          {/* Card Colors */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Review Cards Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Card Background"
+                value={p.card_bg || p.card_color || (siteDefinition.theme?.mode === "dark" ? "#1e293b" : "#ffffff")}
+                onChange={(val) => updateProps({ card_bg: val, card_color: val })}
+              />
+              <CompactColorRow
+                label="Card Border"
+                value={p.border_color || (siteDefinition.theme?.mode === "dark" ? "#334155" : "#e2e8f0")}
+                onChange={(val) => updateProps({ border_color: val })}
+              />
+              <CompactColorRow
+                label="Card Headings Text"
+                value={p.title_color || p.text_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                onChange={(val) => updateProps({ title_color: val, text_color: val })}
+              />
+              <CompactColorRow
+                label="Body / Muted Text"
+                value={p.muted_text_color || (siteDefinition.theme?.mode === "dark" ? "#94a3b8" : "#64748b")}
+                onChange={(val) => updateProps({ muted_text_color: val })}
+              />
+              <CompactColorRow
+                label="Change Link Color"
+                value={p.accent_color || siteDefinition.theme?.accent_color || ADMIN_BLUE}
+                onChange={(val) => updateProps({ accent_color: val })}
+              />
+            </div>
+          </section>
+
+          {/* Button Colors */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Place Order Button Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Button Background"
+                value={p.button_bg_color || siteDefinition.theme?.accent_color || ADMIN_BLUE}
+                onChange={(val) => updateProps({ button_bg_color: val })}
+              />
+              <CompactColorRow
+                label="Button Text Color"
+                value={p.button_text_color || "#ffffff"}
+                onChange={(val) => updateProps({ button_text_color: val })}
               />
             </div>
           </section>
@@ -8993,6 +9506,8 @@ export default function EditorSidebar({
       ? (_rawSelectedBlock || { id: "checkout_steps", type: "checkout_steps", props: {} })
       : (selectedBlockId === "checkout_order_summary")
         ? { id: "checkout_order_summary", type: "checkout_order_summary", props: _rawSelectedBlock?.props ?? {} }
+      : (selectedBlockId === "place_order_cta" || selectedBlockId === "checkout_review")
+        ? (_rawSelectedBlock || { id: "place_order_cta", type: "place_order_cta", props: {} })
       : _rawSelectedBlock;
   const editableConfig = selectedBlock
     ? getEditableConfigForBlock(selectedBlock.type)
@@ -9025,7 +9540,10 @@ export default function EditorSidebar({
       t === "checkout_order_summary" || t === "checkoutordersummary" ||
       isDeliveryBlock(selectedBlock) ||
       t === "delivery_form" || t === "deliveryform" ||
-      t === "delivery_map_picker" || t === "delivery_address_form"
+      t === "delivery_map_picker" || t === "delivery_address_form" ||
+      isPlaceOrderBlock(selectedBlock) ||
+      t === "place_order_cta" || t === "placeordercta" ||
+      t === "checkout_review"
     );
   })();
   const currentSearchDisplayMode = siteDefinition.theme?.search_display_mode || "bar";
@@ -9740,39 +10258,16 @@ export default function EditorSidebar({
               <span style={{ fontSize: "9px", color: "#cbd5e1" }}>/</span>
               <span style={{ fontSize: "11px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {selectedBlock
-                  ? editableConfig?.displayName ||
-                    (selectedBlock.type === "product_grid" || selectedBlock.type === "productgrid"
-                      ? "Product Grid"
-                      : selectedBlock.type === "hero_banner" || selectedBlock.type === "herobanner" || selectedBlock.type === "hero"
-                      ? "Hero Banner"
-                      : selectedBlock.type === "navbar" || selectedBlock.type === "header"
-                      ? "Navbar"
-                      : selectedBlock.type === "footer"
-                      ? "Footer"
-                      : selectedBlock.type === "cart" ||
-                        selectedBlock.type === "cart_view" ||
-                        selectedBlock.type === "cartview" ||
-                        selectedBlock.type === "cart_sidebar" ||
-                        selectedBlock.type === "cartsidebar" ||
-                        selectedBlock.type === "cart_items" ||
-                        selectedBlock.type === "cartitems"
-                      ? "Shopping Cart"
-                      : isProductDetailBlock(selectedBlock) ||
-                        editableConfig?.displayName === "Product Detail"
-                      ? "Product Detail"
-                      : isCheckoutStepsBlock(selectedBlock) ||
-                        selectedBlock.id === "checkout_steps" ||
-                        selectedBlock.type === "checkout_steps" ||
-                        selectedBlockId === "checkout_steps"
-                      ? "Checkout Steps"
-                      : isCheckoutSummaryBlock(selectedBlock) ||
-                        selectedBlock.id === "checkout_order_summary" ||
-                        selectedBlock.type === "checkout_order_summary" ||
-                        selectedBlock.type === "checkoutordersummary" ||
-                        selectedBlockId === "checkout_order_summary"
-                      ? "Order Summary"
-                      : isDeliveryBlock(selectedBlock) ||
-                        editableConfig?.displayName === "Delivery Form"
+                  ? (isPlaceOrderBlock(selectedBlock) ||
+                     selectedBlock.id === "place_order_cta" ||
+                     selectedBlock.type === "place_order_cta" ||
+                     selectedBlock.type === "placeordercta" ||
+                     selectedBlock.id === "checkout_review" ||
+                     selectedBlock.type === "checkout_review" ||
+                     selectedBlockId === "place_order_cta" ||
+                     selectedBlockId === "checkout_review"
+                      ? "Review & Pay"
+                      : isDeliveryBlock(selectedBlock) || editableConfig?.displayName === "Delivery Form"
                       ? (selectedBlock.type === "delivery_map_picker"
                           ? "Map Location Picker"
                           : selectedBlock.type === "delivery_address_form"
@@ -9784,7 +10279,38 @@ export default function EditorSidebar({
                         selectedBlock.type === "paymentmethods" ||
                         selectedBlockId === "payment_methods"
                       ? "Payment Methods"
-                      : selectedBlock.type.toUpperCase())
+                      : isCheckoutStepsBlock(selectedBlock) ||
+                        selectedBlock.id === "checkout_steps" ||
+                        selectedBlock.type === "checkout_steps" ||
+                        selectedBlockId === "checkout_steps"
+                      ? "Checkout Steps"
+                      : isCheckoutSummaryBlock(selectedBlock) ||
+                        selectedBlock.id === "checkout_order_summary" ||
+                        selectedBlock.type === "checkout_order_summary" ||
+                        selectedBlock.type === "checkoutordersummary" ||
+                        selectedBlockId === "checkout_order_summary"
+                      ? "Order Summary"
+                      : editableConfig?.displayName ||
+                        (selectedBlock.type === "product_grid" || selectedBlock.type === "productgrid"
+                          ? "Product Grid"
+                          : selectedBlock.type === "hero_banner" || selectedBlock.type === "herobanner" || selectedBlock.type === "hero"
+                          ? "Hero Banner"
+                          : selectedBlock.type === "navbar" || selectedBlock.type === "header"
+                          ? "Navbar"
+                          : selectedBlock.type === "footer"
+                          ? "Footer"
+                          : selectedBlock.type === "cart" ||
+                            selectedBlock.type === "cart_view" ||
+                            selectedBlock.type === "cartview" ||
+                            selectedBlock.type === "cart_sidebar" ||
+                            selectedBlock.type === "cartsidebar" ||
+                            selectedBlock.type === "cart_items" ||
+                            selectedBlock.type === "cartitems"
+                          ? "Shopping Cart"
+                          : isProductDetailBlock(selectedBlock) ||
+                            editableConfig?.displayName === "Product Detail"
+                          ? "Product Detail"
+                          : selectedBlock.type.toUpperCase()))
                   : activePageTitle}
               </span>
             </div>
@@ -9947,6 +10473,22 @@ export default function EditorSidebar({
                 selectedBlock.type === "paymentmethods" ||
                 selectedBlockId === "payment_methods" ? (
                 <PaymentMethodsEditor
+                  selectedBlock={selectedBlock}
+                  isLightMode={isLightMode}
+                  textColor={textColor}
+                  accentColor={accentColor}
+                  onSiteDefinitionChange={onSiteDefinitionChange}
+                  siteDefinition={siteDefinition}
+                />
+              ) : isPlaceOrderBlock(selectedBlock) ||
+                selectedBlock.id === "place_order_cta" ||
+                selectedBlock.type === "place_order_cta" ||
+                selectedBlock.type === "placeordercta" ||
+                selectedBlock.id === "checkout_review" ||
+                selectedBlock.type === "checkout_review" ||
+                selectedBlockId === "place_order_cta" ||
+                selectedBlockId === "checkout_review" ? (
+                <PlaceOrderEditor
                   selectedBlock={selectedBlock}
                   isLightMode={isLightMode}
                   textColor={textColor}

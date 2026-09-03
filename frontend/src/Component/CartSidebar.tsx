@@ -37,7 +37,7 @@ type CartSidebarProps = {
   show_items?: boolean;
   show_gift_card?: boolean;
   review_mode?: boolean;
-  max_width?: number;
+  max_width?: number | string;
   min_height?: number;
   border_radius?: number;
   card_radius?: number;
@@ -604,18 +604,21 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     return isNaN(n) ? fallback : n;
   };
 
-  const resolveWidthRatio = (val: any) => {
-    if (val === undefined || val === null || val === "") return 94;
+  const resolveMaxWidthStyle = (val: any, fallback = "1280px") => {
+    if (!val) return fallback;
     const str = String(val).trim();
-    const n = Number(str.replace(/[^0-9.]/g, ""));
-    if (isNaN(n)) return 94;
-    if (n <= 100) return clamp(Math.round(n), 70, 100);
-    return clamp(Math.round((n / 1240) * 94), 70, 100);
+    if (str === "100%" || str === "full" || str === "100") return "100%";
+    if (str.endsWith("px") || str.endsWith("%")) return str;
+    const num = Number(str);
+    if (!isNaN(num)) {
+      return num <= 100 ? `${num}%` : `${num}px`;
+    }
+    return fallback;
   };
 
   const outerRadius = clamp(parseSafeNum(border_radius, 24), 0, 40);
   const innerRadius = clamp(parseSafeNum(card_radius, 18), 0, 32);
-  const resolvedWidthPercent = resolveWidthRatio(max_width);
+  const resolvedMaxWidth = resolveMaxWidthStyle(max_width, "1280px");
   const resolvedMinHeight = clamp(
     parseSafeNum(min_height, 380),
     280,
@@ -1411,8 +1414,8 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
           : isMobile
           ? "16px 0 28px"
           : "24px 0 36px",
-        width: embeddedInEditorWrapper ? "100%" : `${resolvedWidthPercent}%`,
-        maxWidth: "1280px",
+        width: "100%",
+        maxWidth: resolvedMaxWidth,
         minHeight: resolvedMinHeight ? `${resolvedMinHeight}px` : undefined,
         margin: "0 auto",
         background: "transparent",

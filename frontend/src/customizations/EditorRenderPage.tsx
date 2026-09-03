@@ -126,7 +126,7 @@ const CHECKOUT_SUMMARY_TYPES = new Set([
   "ordersummary",
 ]);
 
-const PLACE_ORDER_TYPES = new Set(["place_order_cta", "placeordercta"]);
+const PLACE_ORDER_TYPES = new Set(["place_order_cta", "placeordercta", "checkout_review", "review_and_pay"]);
 const PAYMENT_TYPES = new Set(["payment_methods", "paymentmethods"]);
 const DELIVERY_TYPES = new Set(["delivery_form", "deliveryform"]);
 
@@ -258,9 +258,12 @@ function EditorBlockWrapper({
     }
   }, [selected]);
 
-  const readableName = (blockType || "")
-    .replace(/[-_]/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  const readableName =
+    blockType === "place_order_cta" || blockType === "placeordercta" || blockId === "place_order_cta" || blockType === "checkout_review"
+      ? "Review & Pay"
+      : (blockType || "")
+          .replace(/[-_]/g, " ")
+          .replace(/\b\w/g, (c) => c.toUpperCase());
 
   const isCart = Boolean(isCartBlock);
   const parseNumSafe = (val: any, fallback: number) => {
@@ -277,9 +280,20 @@ function EditorBlockWrapper({
     return Math.max(70, Math.min(100, Math.round((n / 1240) * 94)));
   };
 
+  const resolveCartMaxWidth = (val: any) => {
+    if (!val) return "1280px";
+    const str = String(val).trim();
+    if (str === "100%" || str === "full" || str === "100") return "100%";
+    if (str.endsWith("px") || str.endsWith("%")) return str;
+    const num = Number(str);
+    if (!isNaN(num)) {
+      return num <= 100 ? `${num}%` : `${num}px`;
+    }
+    return "1280px";
+  };
+
   const containerRadius = isCart ? parseNumSafe(borderRadius, 24) : 10;
   const outlineRadius = containerRadius;
-  const cartWidthPercent = isCart ? resolveWidthRatio(maxWidth) : undefined;
 
   // Shared outline overlay styles
   const outlineStyle: React.CSSProperties = {
@@ -395,10 +409,10 @@ function EditorBlockWrapper({
         // as the customer view, with clean balanced side margins.
         <div
           style={{
-            width: `${cartWidthPercent}%`,
-            maxWidth: "1280px",
+            width: "100%",
+            maxWidth: resolveCartMaxWidth(maxWidth),
             margin: "0 auto",
-            padding: "24px 0 36px",
+            padding: "24px 16px 36px",
             boxSizing: "border-box",
           }}
         >
@@ -597,6 +611,33 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
   const [savedAddresses, setSavedAddresses] = useState<DeliveryData[]>(SAMPLE_EDITOR_ADDRESSES);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(SAMPLE_EDITOR_ADDRESSES[0].id || null);
   const [isAddressesLoading, setIsAddressesLoading] = useState(false);
+
+  // Automatically switch the canvas checkout step when a checkout block is selected in sidebar/tree
+  useEffect(() => {
+    if (!isCheckoutPage || !selectedBlockId) return;
+    const norm = String(selectedBlockId).toLowerCase().replace(/[-_\s]/g, "");
+    if (
+      norm === "placeordercta" ||
+      norm === "placeorder" ||
+      norm === "checkoutreview" ||
+      norm === "reviewandpay"
+    ) {
+      setCheckoutStep("review");
+    } else if (
+      norm === "paymentmethods" ||
+      norm === "paymentmethod" ||
+      norm === "payment"
+    ) {
+      setCheckoutStep("payment");
+    } else if (
+      norm === "deliveryform" ||
+      norm === "deliveryaddressform" ||
+      norm === "deliverymappicker" ||
+      norm === "delivery"
+    ) {
+      setCheckoutStep("delivery");
+    }
+  }, [isCheckoutPage, selectedBlockId]);
 
   const { isAuthenticated, loading: authLoading } = useCustomerAuth();
 
@@ -1328,7 +1369,8 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
             minHeight: isCartPage ? "calc(100vh - 220px)" : "100%",
             display: isCartPage ? "flex" : undefined,
             flexDirection: isCartPage ? "column" : undefined,
-            justifyContent: isCartPage ? "center" : undefined,
+            justifyContent: isCartPage ? "flex-start" : undefined,
+            paddingTop: isCartPage ? "8px" : undefined,
             boxSizing: "border-box",
             background: isFullGlass ? glassBackground : (theme?.primary_bg || (isThemeDark ? "#0f172a" : "#ffffff")),
             color: theme?.text_color || (isThemeDark ? "#f8fafc" : "#0f172a"),
@@ -1387,8 +1429,14 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
   };
 
   const placeOrderBlock = blocksToRender.find((block) =>
-    PLACE_ORDER_TYPES.has(block.type.toLowerCase())
-  );
+    PLACE_ORDER_TYPES.has(block.type.toLowerCase()) ||
+    block.id === "place_order_cta" ||
+    block.id === "checkout_review"
+  ) || {
+    id: "place_order_cta",
+    type: "place_order_cta",
+    props: {},
+  };
 
   const summaryBlock = blocksToRender.find((block) =>
     block.id === "checkout_order_summary" ||
@@ -1467,17 +1515,29 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
     ? "minmax(0, 1fr)"
     : "minmax(0, 1.2fr) minmax(340px, 0.8fr)";
 
+  const reviewProps = (placeOrderBlock?.props ?? {}) as Record<string, any>;
   const deliveryCardBg = (theme as any)?.delivery_form_bg || (theme as any)?.checkout_card_bg || cardBg;
   const isDeliveryCardDark = isColorDarkHex(deliveryCardBg);
   const deliveryText = (theme as any)?.delivery_form_text || (isDeliveryCardDark ? "#f8fafc" : "#0f172a");
-  const reviewCardText = isDeliveryCardDark ? "#f8fafc" : "#0f172a";
-  const reviewCardMuted = isDeliveryCardDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)";
+
+  const reviewCardBg = reviewProps.card_bg || reviewProps.card_color || deliveryCardBg;
+  const isReviewCardDark = isColorDarkHex(reviewCardBg);
+  const reviewCardText = reviewProps.title_color || reviewProps.text_color || (isReviewCardDark ? "#f8fafc" : "#0f172a");
+  const reviewCardMuted = reviewProps.muted_text_color || (isReviewCardDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)");
+  const reviewCardRadius = reviewProps.card_radius !== undefined ? `${reviewProps.card_radius}px` : "14px";
+  const reviewCardPadding = reviewProps.card_padding !== undefined ? `${reviewProps.card_padding}px` : (isCompactCheckout ? "14px" : "16px");
+  const reviewCardBorder = reviewProps.border_color ? `1px solid ${reviewProps.border_color}` : cardBorder;
+  const reviewAccentColor = reviewProps.accent_color || accentColor;
+  const reviewChangeLabel = reviewProps.change_label || "Change";
+  const reviewItemsTitle = reviewProps.items_title || "Selected items";
+  const reviewDeliveryTitle = reviewProps.delivery_title || "Delivery address";
+  const reviewPaymentTitle = reviewProps.payment_title || "Payment method";
 
   const infoCardStyle: React.CSSProperties = {
-    borderRadius: "14px",
-    border: cardBorder,
-    background: deliveryCardBg,
-    padding: isCompactCheckout ? "14px" : "16px",
+    borderRadius: reviewCardRadius,
+    border: reviewCardBorder,
+    background: reviewCardBg,
+    padding: reviewCardPadding,
     boxShadow: isLight
       ? "0 1px 2px rgba(16,24,40,0.04)"
       : "0 10px 24px rgba(0,0,0,0.14)",
@@ -1519,7 +1579,7 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
             color: reviewCardText,
           }}
         >
-          Selected items
+          {reviewItemsTitle}
         </h4>
       </div>
 
@@ -1941,175 +2001,189 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
           ) : null}
 
           {checkoutStep === "review" ? (
-            <div
-              style={{
-                borderRadius: "16px",
-                border: shellBorder,
-                background: shellBg,
-                boxShadow: isLight
-                  ? "0 1px 2px rgba(16,24,40,0.04)"
-                  : "0 10px 24px rgba(0,0,0,0.16)",
-                padding: isCompactCheckout ? "16px" : "18px",
-              }}
+            <EditorBlockWrapper
+              blockId="place_order_cta"
+              blockType="place_order_cta"
+              selected={selectedBlockId === "place_order_cta" || selectedBlockId === "checkout_review"}
+              onSelect={() => onSelectBlock?.("place_order_cta")}
+              maxWidth={reviewProps.max_width}
+              borderRadius={reviewProps.border_radius !== undefined ? Number(reviewProps.border_radius) : 16}
             >
               <div
                 style={{
-                  marginBottom: "18px",
-                  paddingBottom: "12px",
-                  borderBottom: cardDivider,
-                }}
-              >
-                <h3
-                  style={{
-                    margin: 0,
-                    fontSize: "24px",
-                    lineHeight: 1.1,
-                    color: isColorDarkHex(shellBg) ? "#f8fafc" : "#0f172a",
-                    fontWeight: 700,
-                  }}
-                >
-                  Review & Pay
-                </h3>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: reviewLayoutColumns,
-                  gap: "16px",
-                  alignItems: "start",
+                  borderRadius: reviewProps.border_radius !== undefined ? `${reviewProps.border_radius}px` : "16px",
+                  border: reviewProps.soft_border_color ? `1px solid ${reviewProps.soft_border_color}` : shellBorder,
+                  background: reviewProps.background_color || shellBg,
+                  boxShadow: isLight
+                    ? "0 1px 2px rgba(16,24,40,0.04)"
+                    : "0 10px 24px rgba(0,0,0,0.16)",
+                  padding: reviewProps.padding !== undefined ? `${reviewProps.padding}px` : (isCompactCheckout ? "16px" : "18px"),
+                  maxWidth: reviewProps.max_width && reviewProps.max_width !== "100%"
+                    ? (String(reviewProps.max_width).endsWith("px") ? reviewProps.max_width : `${reviewProps.max_width}px`)
+                    : "100%",
+                  margin: "0 auto",
+                  boxSizing: "border-box",
+                  width: "100%",
                 }}
               >
                 <div
                   style={{
-                    display: "grid",
-                    gap: "14px",
+                    marginBottom: "18px",
+                    paddingBottom: "12px",
+                    borderBottom: cardDivider,
                   }}
                 >
-                  {selectedItemsCard}
-
-                  <div style={infoCardStyle}>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "12px",
-                        alignItems: "center",
-                        marginBottom: "10px",
-                      }}
-                    >
-                      <h4
-                        style={{
-                          margin: 0,
-                          fontSize: "15px",
-                          fontWeight: 700,
-                          color: deliveryText,
-                        }}
-                      >
-                        Delivery address
-                      </h4>
-
-                      <button
-                        type="button"
-                        onClick={() => goToStep("delivery")}
-                        style={{
-                          border: "none",
-                          background: "transparent",
-                          color: accentColor,
-                          fontSize: "12px",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          padding: 0,
-                        }}
-                      >
-                        Change
-                      </button>
-                    </div>
-
-                    <div
-                      style={{
-                        color: reviewCardMuted,
-                        fontSize: "14px",
-                        lineHeight: 1.65,
-                      }}
-                    >
-                      <div style={{ color: deliveryText, fontWeight: 700 }}>
-                        {(selectedAddress || deliveryData).fullName || "—"}
-                      </div>
-                      <div>{(selectedAddress || deliveryData).phone || "—"}</div>
-                      <div>{(selectedAddress || deliveryData).email || "—"}</div>
-                      <div>{(selectedAddress || deliveryData).address || "—"}</div>
-                      <div>
-                        {(selectedAddress || deliveryData).city || "—"}{" "}
-                        {(selectedAddress || deliveryData).pincode ? `- ${(selectedAddress || deliveryData).pincode}` : ""}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={infoCardStyle}>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "12px",
-                        alignItems: "center",
-                        marginBottom: "10px",
-                      }}
-                    >
-                      <h4
-                        style={{
-                          margin: 0,
-                          fontSize: "15px",
-                          fontWeight: 700,
-                          color: reviewCardText,
-                        }}
-                      >
-                        Payment method
-                      </h4>
-
-                      <button
-                        type="button"
-                        onClick={() => goToStep("payment")}
-                        style={{
-                          border: "none",
-                          background: "transparent",
-                          color: accentColor,
-                          fontSize: "12px",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          padding: 0,
-                        }}
-                      >
-                        Change
-                      </button>
-                    </div>
-
-                    <div
-                      style={{
-                        color: reviewCardMuted,
-                        fontSize: "14px",
-                        lineHeight: 1.65,
-                      }}
-                    >
-                      <div style={{ color: reviewCardText, fontWeight: 700 }}>
-                        {paymentData.method.toUpperCase() === "UPI"
-                          ? "UPI (Google Pay, PhonePe, Paytm, QR)"
-                          : paymentData.method.toUpperCase() === "CARD"
-                            ? "Credit / Debit Card"
-                            : paymentData.method.toUpperCase() === "NETBANKING"
-                              ? "Netbanking"
-                              : paymentData.method.toUpperCase() === "COD"
-                                ? "Cash on Delivery (COD)"
-                                : paymentData.method || "—"}
-                      </div>
-                      <div>
-                        {paymentData.method.toUpperCase() === "COD"
-                          ? "Pay in cash upon package delivery."
-                          : "You will complete payment securely on the next step."}
-                      </div>
-                    </div>
-                  </div>
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize: "24px",
+                      lineHeight: 1.1,
+                      color: reviewProps.section_title_color || (isColorDarkHex(reviewProps.background_color || shellBg) ? "#f8fafc" : "#0f172a"),
+                      fontWeight: 700,
+                    }}
+                  >
+                    {reviewProps.section_title || "Review & Pay"}
+                  </h3>
                 </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: reviewLayoutColumns,
+                    gap: reviewProps.gap !== undefined ? `${reviewProps.gap}px` : "16px",
+                    alignItems: "start",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: reviewProps.gap !== undefined ? `${reviewProps.gap}px` : "14px",
+                    }}
+                  >
+                    {selectedItemsCard}
+
+                    <div style={infoCardStyle}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: "12px",
+                          alignItems: "center",
+                          marginBottom: "10px",
+                        }}
+                      >
+                        <h4
+                          style={{
+                            margin: 0,
+                            fontSize: "15px",
+                            fontWeight: 700,
+                            color: reviewCardText,
+                          }}
+                        >
+                          {reviewDeliveryTitle}
+                        </h4>
+
+                        <button
+                          type="button"
+                          onClick={() => goToStep("delivery")}
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            color: reviewAccentColor,
+                            fontSize: "12px",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            padding: 0,
+                          }}
+                        >
+                          {reviewChangeLabel}
+                        </button>
+                      </div>
+
+                      <div
+                        style={{
+                          color: reviewCardMuted,
+                          fontSize: "14px",
+                          lineHeight: 1.65,
+                        }}
+                      >
+                        <div style={{ color: reviewCardText, fontWeight: 700 }}>
+                          {(selectedAddress || deliveryData).fullName || "—"}
+                        </div>
+                        <div>{(selectedAddress || deliveryData).phone || "—"}</div>
+                        <div>{(selectedAddress || deliveryData).email || "—"}</div>
+                        <div>{(selectedAddress || deliveryData).address || "—"}</div>
+                        <div>
+                          {(selectedAddress || deliveryData).city || "—"}{" "}
+                          {(selectedAddress || deliveryData).pincode ? `- ${(selectedAddress || deliveryData).pincode}` : ""}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={infoCardStyle}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: "12px",
+                          alignItems: "center",
+                          marginBottom: "10px",
+                        }}
+                      >
+                        <h4
+                          style={{
+                            margin: 0,
+                            fontSize: "15px",
+                            fontWeight: 700,
+                            color: reviewCardText,
+                          }}
+                        >
+                          {reviewPaymentTitle}
+                        </h4>
+
+                        <button
+                          type="button"
+                          onClick={() => goToStep("payment")}
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            color: reviewAccentColor,
+                            fontSize: "12px",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            padding: 0,
+                          }}
+                        >
+                          {reviewChangeLabel}
+                        </button>
+                      </div>
+
+                      <div
+                        style={{
+                          color: reviewCardMuted,
+                          fontSize: "14px",
+                          lineHeight: 1.65,
+                        }}
+                      >
+                        <div style={{ color: reviewCardText, fontWeight: 700 }}>
+                          {paymentData.method.toUpperCase() === "UPI"
+                            ? "UPI (Google Pay, PhonePe, Paytm, QR)"
+                            : paymentData.method.toUpperCase() === "CARD"
+                              ? "Credit / Debit Card"
+                              : paymentData.method.toUpperCase() === "NETBANKING"
+                                ? "Netbanking"
+                                : paymentData.method.toUpperCase() === "COD"
+                                  ? "Cash on Delivery (COD)"
+                                  : paymentData.method || "—"}
+                        </div>
+                        <div>
+                          {paymentData.method.toUpperCase() === "COD"
+                            ? "Pay in cash upon package delivery."
+                            : (reviewProps.helper_text || "You will complete payment securely on the next step.")}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
                 <div
                   style={{
@@ -2136,12 +2210,20 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
 
                   {placeOrderBlock
                     ? renderBlock(placeOrderBlock, blocksToRender.indexOf(placeOrderBlock), {
+                      ...reviewProps,
                       compact: false,
                       buttonLabel:
+                        reviewProps.button_label ||
                         placeOrderBlock.props?.buttonLabel ||
                         (paymentData.method.toUpperCase() === "COD"
-                          ? "Place Order"
-                          : "Pay Now"),
+                          ? (reviewProps.button_label || "Place Order")
+                          : (reviewProps.pay_now_button_label || "Pay Now")),
+                      accentColor: reviewProps.button_bg_color || accentColor,
+                      text_color: reviewProps.button_text_color,
+                      border_radius: reviewProps.button_border_radius ?? reviewProps.button_radius,
+                      button_border_radius: reviewProps.button_border_radius ?? reviewProps.button_radius,
+                      button_height: reviewProps.button_height,
+                      helperText: reviewProps.helper_text,
                       reviewMode: true,
                       disabled: false,
                     })
@@ -2149,6 +2231,7 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
                 </div>
               </div>
             </div>
+          </EditorBlockWrapper>
           ) : null}
 
           {extraBlocks.length > 0 ? (

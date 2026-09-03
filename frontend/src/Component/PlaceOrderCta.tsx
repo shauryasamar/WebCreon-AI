@@ -59,12 +59,15 @@ type PlaceOrderCtaProps = {
   theme?: ThemeInput;
   text_color?: string;
   border_radius?: number;
+  button_border_radius?: number;
+  button_height?: number;
   padding?: number;
   max_width?: number;
   reviewMode?: boolean;
   selectedAddressId?: string | null;
   paymentData?: PaymentData;
   promoCode?: string;
+  helperText?: string;
   onOrderPlaced?: (payload: OrderPlacedPayload) => void;
 };
 
@@ -103,12 +106,15 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
   theme,
   text_color,
   border_radius,
+  button_border_radius,
+  button_height,
   padding,
   max_width,
   reviewMode = false,
   selectedAddressId,
   paymentData,
   promoCode,
+  helperText: customHelperText,
   onOrderPlaced,
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -129,7 +135,8 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
     (typeof theme === "object" && (theme as any)?.place_order_btn_text) ||
     (isColorDarkHex(resolvedAccent) ? "#ffffff" : "#0f172a");
 
-  const resolvedRadius = border_radius ?? 14;
+  const resolvedRadius = button_border_radius ?? border_radius ?? 14;
+  const resolvedMinHeight = button_height ? `${button_height}px` : (compact ? "52px" : "56px");
   const resolvedPaddingY = padding ?? (compact ? 14 : 16);
   const resolvedPaddingX = compact ? 18 : 22;
   const helperTextColor =
@@ -148,12 +155,14 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
 
     if (errorMessage) return errorMessage;
 
+    if (customHelperText) return customHelperText;
+
     if (reviewMode) {
       return "Review the delivery and payment details, then complete the order.";
     }
 
     return "";
-  }, [errorMessage, isSubmitting, paymentData?.method, reviewMode]);
+  }, [errorMessage, isSubmitting, paymentData?.method, reviewMode, customHelperText]);
 
   const handlePlaceOrder = async () => {
     if (finalDisabled) return;
@@ -468,7 +477,7 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
           disabled={finalDisabled}
           style={{
             width: "100%",
-            minHeight: compact ? "52px" : "56px",
+            minHeight: resolvedMinHeight,
             padding: `${resolvedPaddingY}px ${resolvedPaddingX}px`,
             borderRadius: `${resolvedRadius}px`,
             border: "none",
