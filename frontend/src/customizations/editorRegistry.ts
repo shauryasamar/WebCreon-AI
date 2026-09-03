@@ -1303,179 +1303,154 @@ const sectionGroupFields = [
   sectionGroupShowSubtitleField,
 ];
 
-const productDetailAddToCartLabelField = {
-  key: "add_to_cart_label",
-  label: "Add to Cart button text",
-  type: "text" as const,
-  target: "props" as const,
-  placeholder: "Add to Bag",
-};
-
-const productDetailButtonBgColorField = {
-  key: "button_bg_color",
-  label: "Primary button background",
-  type: "color" as const,
-  target: "props" as const,
-};
-
-const productDetailButtonTextColorField = {
-  key: "button_text_color",
-  label: "Primary button text color",
-  type: "color" as const,
-  target: "props" as const,
-};
-
-const productDetailShowDeliveryInfoField = {
-  key: "show_delivery_info",
-  label: "Show Delivery Info Badge",
-  type: "checkbox" as const,
-  target: "props" as const,
-};
-
-const productDetailDeliveryTextField = {
-  key: "delivery_text",
-  label: "Delivery badge text",
-  type: "text" as const,
-  target: "props" as const,
-  placeholder: "Free Express Delivery on orders over ₹499",
-};
-
-const productDetailShowReturnPolicyField = {
-  key: "show_return_policy",
-  label: "Show Return Policy Badge",
-  type: "checkbox" as const,
-  target: "props" as const,
-};
-
-const productDetailReturnPolicyTextField = {
-  key: "return_policy_text",
-  label: "Return policy badge text",
-  type: "text" as const,
-  target: "props" as const,
-  placeholder: "7-Day Easy Returns & Exchange",
-};
-
-const productDetailShowQualityGuaranteeField = {
-  key: "show_quality_guarantee",
-  label: "Show Quality Guarantee Badge",
-  type: "checkbox" as const,
-  target: "props" as const,
-};
-
-const productDetailQualityTextField = {
-  key: "quality_text",
-  label: "Quality guarantee text",
-  type: "text" as const,
-  target: "props" as const,
-  placeholder: "100% Authentic & Quality Assured",
-};
-
-const productDetailShowDiscountBadgeField = {
-  key: "show_discount_badge",
-  label: "Show Discount Badge (% OFF)",
-  type: "checkbox" as const,
-  target: "props" as const,
-};
-
-const productDetailShowStockBadgeField = {
-  key: "show_stock_badge",
-  label: "Show Stock Status Badge",
-  type: "checkbox" as const,
-  target: "props" as const,
-};
-
-const productDetailShowRatingsField = {
-  key: "show_ratings",
-  label: "Show Customer Ratings",
-  type: "checkbox" as const,
-  target: "props" as const,
-};
-
-const productDetailShowOriginalPriceField = {
-  key: "show_original_price",
-  label: "Show Original / Compare Price",
-  type: "checkbox" as const,
-  target: "props" as const,
-};
-
-const productDetailShowBrandNameField = {
-  key: "show_brand_name",
-  label: "Show Brand / Category Tag",
-  type: "checkbox" as const,
-  target: "props" as const,
-};
-
-const productDetailShowReviewsSectionField = {
-  key: "show_reviews_section",
-  label: "Show Reviews Section",
-  type: "checkbox" as const,
-  target: "props" as const,
-};
-
-const productDetailShowDetailedSectionField = {
-  key: "show_detailed_section",
-  label: "Show Product Description Block",
-  type: "checkbox" as const,
-  target: "props" as const,
-};
-
-const productDetailMaxWidthField = {
-  key: "max_width",
-  label: "Max Container Width (px)",
-  type: "select" as const,
-  target: "props" as const,
-  options: [
-    { label: "Default (1160px)", value: "1160" },
-    { label: "Compact (1000px)", value: "1000" },
-    { label: "Wide (1280px)", value: "1280" },
-    { label: "Full Width (100%)", value: "full" },
-  ],
-};
-
-const productDetailImageAspectRatioField = {
-  key: "image_aspect_ratio",
-  label: "Product Image Aspect Ratio",
-  type: "select" as const,
-  target: "props" as const,
-  options: [
-    { label: "Square (1 : 1)", value: "1 / 1" },
-    { label: "Portrait (4 : 5)", value: "4 / 5" },
-    { label: "Tall (2 : 3)", value: "2 / 3" },
-    { label: "Landscape (4 : 3)", value: "4 / 3" },
-  ],
-};
-
-const productDetailImageFitField = {
-  key: "image_fit",
-  label: "Product Image Fit Mode",
-  type: "select" as const,
-  target: "props" as const,
-  options: [
-    { label: "Cover (Fill Frame)", value: "cover" },
-    { label: "Contain (Fit Inside)", value: "contain" },
-  ],
-};
-
 const productDetailFields = [
-  productDetailAddToCartLabelField,
-  productDetailButtonBgColorField,
-  productDetailButtonTextColorField,
-  productDetailShowDeliveryInfoField,
-  productDetailDeliveryTextField,
-  productDetailShowReturnPolicyField,
-  productDetailReturnPolicyTextField,
-  productDetailShowQualityGuaranteeField,
-  productDetailQualityTextField,
-  productDetailShowDiscountBadgeField,
-  productDetailShowStockBadgeField,
-  productDetailShowRatingsField,
-  productDetailShowOriginalPriceField,
-  productDetailShowBrandNameField,
-  productDetailShowDetailedSectionField,
-  productDetailShowReviewsSectionField,
-  productDetailMaxWidthField,
-  productDetailImageAspectRatioField,
-  productDetailImageFitField,
+  {
+    key: "image_aspect_ratio",
+    label: "Image Aspect Ratio",
+    type: "select" as const,
+    target: "props" as const,
+    options: [
+      { label: "Square (1:1)", value: "1 / 1" },
+      { label: "Portrait (3:4)", value: "3 / 4" },
+      { label: "Tall (4:5)", value: "4 / 5" },
+      { label: "Wide (16:9)", value: "16 / 9" },
+    ],
+  },
+  {
+    key: "image_fit",
+    label: "Image Fit",
+    type: "select" as const,
+    target: "props" as const,
+    options: [
+      { label: "Cover (Fill area)", value: "cover" },
+      { label: "Contain (Show full image)", value: "contain" },
+    ],
+  },
+  {
+    key: "image_border_radius",
+    label: "Image Corner Radius",
+    type: "number" as const,
+    target: "props" as const,
+  },
+  {
+    key: "title_font_size",
+    label: "Title Font Size (px)",
+    type: "number" as const,
+    target: "props" as const,
+  },
+  {
+    key: "description_font_size",
+    label: "Description Font Size (px)",
+    type: "number" as const,
+    target: "props" as const,
+  },
+  {
+    key: "color_variant_layout",
+    label: "Color Variant Display",
+    type: "select" as const,
+    target: "props" as const,
+    options: [
+      { label: "Carousel (Horizontal strip)", value: "carousel" },
+      { label: "Grid (Wrap rows)", value: "grid" },
+    ],
+  },
+  {
+    key: "add_to_cart_label",
+    label: "Add to Cart Button Text",
+    type: "text" as const,
+    target: "props" as const,
+    placeholder: "Add to cart",
+  },
+  {
+    key: "show_brand_name",
+    label: "Show Brand & Category",
+    type: "checkbox" as const,
+    target: "props" as const,
+  },
+  {
+    key: "show_ratings",
+    label: "Show Customer Ratings",
+    type: "checkbox" as const,
+    target: "props" as const,
+  },
+  {
+    key: "show_discount_badge",
+    label: "Show Discount Badge",
+    type: "checkbox" as const,
+    target: "props" as const,
+  },
+  {
+    key: "show_stock_badge",
+    label: "Show Stock Status",
+    type: "checkbox" as const,
+    target: "props" as const,
+  },
+  {
+    key: "show_original_price",
+    label: "Show Original Strikethrough Price",
+    type: "checkbox" as const,
+    target: "props" as const,
+  },
+  {
+    key: "show_description_accordion",
+    label: "Show Description Accordion",
+    type: "checkbox" as const,
+    target: "props" as const,
+  },
+  {
+    key: "show_specs_accordion",
+    label: "Show Specifications Accordion",
+    type: "checkbox" as const,
+    target: "props" as const,
+  },
+  {
+    key: "show_reviews_section",
+    label: "Show Customer Reviews Section",
+    type: "checkbox" as const,
+    target: "props" as const,
+  },
+  {
+    key: "panel_color",
+    label: "Card Background Color",
+    type: "color" as const,
+    target: "props" as const,
+  },
+  {
+    key: "text_color",
+    label: "Text Color",
+    type: "color" as const,
+    target: "props" as const,
+  },
+  {
+    key: "button_bg_color",
+    label: "Button Background Color",
+    type: "color" as const,
+    target: "props" as const,
+  },
+  {
+    key: "button_text_color",
+    label: "Button Text Color",
+    type: "color" as const,
+    target: "props" as const,
+  },
+  {
+    key: "card_border_radius",
+    label: "Card Border Radius (px)",
+    type: "number" as const,
+    target: "props" as const,
+  },
+  {
+    key: "button_border_radius",
+    label: "Button Border Radius (px)",
+    type: "number" as const,
+    target: "props" as const,
+  },
+  {
+    key: "badge_border_radius",
+    label: "Badge Border Radius (px)",
+    type: "number" as const,
+    target: "props" as const,
+  },
 ];
 
 export const editorRegistry: EditorRegistry = {
@@ -1865,4 +1840,4 @@ export const editorRegistry: EditorRegistry = {
       },
     ],
   },
-};
+};

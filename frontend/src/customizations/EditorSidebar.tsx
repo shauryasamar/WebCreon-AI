@@ -109,7 +109,6 @@ function PageBlocksTreeView({
       route: "/products/:slug",
       blocks: [
         { id: "product_detail", type: "product_detail", name: "Product Detail" },
-        { id: "related_products", type: "related_products", name: "Related Products" },
       ],
     },
     {
@@ -5421,6 +5420,833 @@ function CartEditor({
   );
 }
 
+function isProductDetailBlock(block?: any): boolean {
+  if (!block) return false;
+  const rawType = String(block.type || "").toLowerCase().trim();
+  const rawId = String(block.id || "").toLowerCase().trim();
+  const normType = rawType.replace(/[-_\s]/g, "");
+  const normId = rawId.replace(/[-_\s]/g, "");
+
+  if (
+    normType === "productdetail" ||
+    normType === "productdetails" ||
+    normType === "productinfo" ||
+    normType === "productgallery" ||
+    normType === "purchasepanel" ||
+    normType === "detail" ||
+    normType === "product"
+  ) {
+    return true;
+  }
+
+  if (
+    rawType.includes("product_detail") ||
+    rawType.includes("product-detail") ||
+    rawType.includes("productdetail") ||
+    rawType.includes("product_info") ||
+    rawType.includes("purchase_panel")
+  ) {
+    return true;
+  }
+
+  if (
+    normId === "productdetail" ||
+    normId === "productdetails" ||
+    normId === "productinfo" ||
+    normId === "productgallery" ||
+    normId === "purchasepanel" ||
+    rawId.includes("product-detail") ||
+    rawId.includes("product_detail") ||
+    rawId.includes("productdetail")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function ProductDetailEditor({
+  selectedBlock,
+  isLightMode,
+  textColor,
+  accentColor,
+  onSiteDefinitionChange,
+  siteDefinition,
+}: {
+  selectedBlock: any;
+  isLightMode: boolean;
+  textColor: string;
+  accentColor: string;
+  onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
+  siteDefinition: EditorSiteDefinition;
+}) {
+  const [activeTab, setActiveTab] = useState<"design" | "colors">("design");
+  const p = selectedBlock.props ?? {};
+  const theme = siteDefinition.theme || {};
+
+  const updateProps = (patch: Record<string, any>) => {
+    let nextDef = JSON.parse(JSON.stringify(siteDefinition));
+
+    // Mirror block colors to theme so saveThemeSnapshot and theme switcher preserve them
+    if (patch.badge_bg_color) {
+      nextDef.theme = { ...(nextDef.theme || {}), badge_bg_color: patch.badge_bg_color, product_detail_badge_bg: patch.badge_bg_color };
+    }
+    if (patch.badge_border_color) {
+      nextDef.theme = { ...(nextDef.theme || {}), badge_border_color: patch.badge_border_color, product_detail_badge_border: patch.badge_border_color };
+    }
+    if (patch.panel_color) {
+      nextDef.theme = { ...(nextDef.theme || {}), product_detail_bg: patch.panel_color };
+    }
+    if (patch.text_color) {
+      nextDef.theme = { ...(nextDef.theme || {}), product_detail_text: patch.text_color };
+    }
+    if (patch.button_bg_color) {
+      nextDef.theme = { ...(nextDef.theme || {}), product_detail_btn_bg: patch.button_bg_color };
+    }
+    if (patch.button_text_color) {
+      nextDef.theme = { ...(nextDef.theme || {}), product_detail_btn_text: patch.button_text_color };
+    }
+
+    let updated = false;
+    if (Array.isArray(nextDef.pages)) {
+      nextDef.pages = nextDef.pages.map((page: any) => {
+        const isDetailP =
+          page.role === "product" ||
+          page.role === "product_detail" ||
+          page.page_type === "product" ||
+          page.page_type === "product_detail" ||
+          page.route?.includes("/product");
+
+        const hasMatchingBlock = (page.blocks ?? []).some(
+          (b: any) =>
+            b.id === selectedBlock.id ||
+            b.type === selectedBlock.type ||
+            isProductDetailBlock(b)
+        );
+
+        if (hasMatchingBlock || isDetailP) {
+          const blocks = (page.blocks ?? []).map((block: any) => {
+            if (
+              block.id === selectedBlock.id ||
+              block.type === selectedBlock.type ||
+              isProductDetailBlock(block)
+            ) {
+              updated = true;
+              return {
+                ...block,
+                props: {
+                  ...(block.props ?? {}),
+                  ...patch,
+                },
+              };
+            }
+            return block;
+          });
+
+          return { ...page, blocks };
+        }
+        return page;
+      });
+    }
+
+    if (!updated && selectedBlock?.id) {
+      const bKey = Object.keys(patch)[0];
+      const updatedSite = updateBlockFieldValue(
+        nextDef,
+        selectedBlock.id,
+        { key: bKey, target: "props" } as any,
+        patch[bKey]
+      );
+      onSiteDefinitionChange(updatedSite);
+      return;
+    }
+
+    onSiteDefinitionChange(nextDef);
+  };
+
+  const parseNumProp = (val: any, fallback: number) => {
+    if (val === undefined || val === null || val === "") return fallback;
+    const n = Number(val);
+    return isNaN(n) ? fallback : n;
+  };
+
+  const getStr = (key: string, fallback: string) => {
+    const val = p[key];
+    if (val !== undefined && val !== null && String(val).trim() !== "") {
+      return String(val);
+    }
+    return fallback;
+  };
+
+  const isReturnsActive = p.show_return_policy !== false;
+
+  const currentTrustBadges = useMemo(() => {
+    const raw = Array.isArray(p.trust_badges) && p.trust_badges.length > 0
+      ? [...p.trust_badges]
+      : [
+          { id: "delivery", title: "Delivery", subtitle: p.delivery_text || "Fast ship" },
+          { id: "returns", title: "Returns", subtitle: "Auto Policy" },
+          { id: "quality", title: "Quality", subtitle: p.quality_text || "Curated pick" },
+        ];
+
+    // Ensure Returns badge is always present and never lost
+    const hasReturns = raw.some((b: any) => b.id === "returns" || (b.title || "").trim().toLowerCase() === "returns");
+    if (!hasReturns) {
+      raw.splice(1, 0, { id: "returns", title: "Returns", subtitle: "Auto Policy" });
+    }
+    return raw;
+  }, [p.trust_badges, p.delivery_text, p.quality_text]);
+
+  const handleToggleReturns = (enabled: boolean) => {
+    updateProps({ show_return_policy: enabled });
+  };
+
+  const handleUpdateBadge = (index: number, field: "title" | "subtitle", value: string) => {
+    const updated = currentTrustBadges.map((b: any, idx: number) =>
+      idx === index ? { ...b, [field]: value } : b
+    );
+    updateProps({ trust_badges: updated });
+  };
+
+  const handleAddBadge = () => {
+    const newBadge = {
+      id: `badge-${Date.now()}`,
+      title: "Service",
+      subtitle: "Service details",
+    };
+    updateProps({ trust_badges: [...currentTrustBadges, newBadge] });
+  };
+
+  const handleDeleteBadge = (index: number) => {
+    const target = currentTrustBadges[index];
+    if (target && (target.id === "returns" || (target.title || "").trim().toLowerCase() === "returns")) {
+      handleToggleReturns(false);
+      return;
+    }
+    const updated = currentTrustBadges.filter((_: any, idx: number) => idx !== index);
+    updateProps({ trust_badges: updated });
+  };
+
+  const renderToggle = (label: string, propKey: string, defaultVal = true) => {
+    const isChecked = p[propKey] !== undefined ? Boolean(p[propKey]) : defaultVal;
+    return (
+      <div
+        key={propKey}
+        onClick={() => updateProps({ [propKey]: !isChecked })}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "4px 0",
+          cursor: "pointer",
+          userSelect: "none",
+        }}
+      >
+        <span style={{ fontSize: "10px", fontWeight: 600, color: "#334155" }}>
+          {label}
+        </span>
+        <div
+          style={{
+            position: "relative",
+            width: "22px",
+            height: "13px",
+            borderRadius: "999px",
+            background: isChecked ? ADMIN_BLUE : "#cbd5e1",
+            transition: "background 0.15s ease",
+            flexShrink: 0,
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              top: "2px",
+              left: isChecked ? "11px" : "2px",
+              width: "9px",
+              height: "9px",
+              borderRadius: "999px",
+              background: "#ffffff",
+              transition: "left 0.15s ease",
+            }}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
+      {/* 2 Modern Clean Navigation Tabs */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "2px",
+          background: "#f1f5f9",
+          padding: "2px",
+          borderRadius: "6px",
+          width: "100%",
+          maxWidth: "100%",
+          boxSizing: "border-box",
+          minWidth: 0,
+        }}
+      >
+        {[
+          { id: "design", label: "Design" },
+          { id: "colors", label: "Colors" },
+        ].map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as any)}
+              style={{
+                padding: "6px 2px",
+                border: "none",
+                borderRadius: "4px",
+                background: isActive ? "#ffffff" : "transparent",
+                color: isActive ? ADMIN_BLUE : "#64748b",
+                fontWeight: isActive ? 800 : 600,
+                fontSize: "10px",
+                cursor: "pointer",
+                textAlign: "center",
+                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                transition: "all 0.12s ease",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                minWidth: 0,
+              }}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 1. DESIGN & CONTENT TAB */}
+      {activeTab === "design" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Section 1: Media Gallery (Left Column) */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Media Gallery (Image)
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Aspect Ratio</label>
+                <SegmentedRow
+                  value={getStr("image_aspect_ratio", "1 / 1")}
+                  onChange={(val) => updateProps({ image_aspect_ratio: val })}
+                  options={[
+                    { label: "1:1 Square", value: "1 / 1" },
+                    { label: "3:4 Portrait", value: "3 / 4" },
+                    { label: "4:5 Tall", value: "4 / 5" },
+                    { label: "16:9 Wide", value: "16 / 9" },
+                  ]}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Image Fit</label>
+                  <SegmentedRow
+                    value={getStr("image_fit", "cover")}
+                    onChange={(val) => updateProps({ image_fit: val })}
+                    options={[
+                      { label: "Cover", value: "cover" },
+                      { label: "Contain", value: "contain" },
+                    ]}
+                  />
+                </div>
+                <NumberStepperField
+                  label="Image Radius"
+                  value={parseNumProp(p.image_border_radius, 16)}
+                  min={0}
+                  max={40}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ image_border_radius: val })}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Section 2: Typography & Sibling Variants */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Title Typography & Sibling Variants
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Title Size"
+                  value={parseNumProp(p.title_font_size, 26)}
+                  min={18}
+                  max={44}
+                  step={1}
+                  unit="px"
+                  onChange={(val) => updateProps({ title_font_size: val })}
+                />
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Font Family</label>
+                  <CustomSelectDropdown
+                    value={getStr("title_font_family", "inherit")}
+                    placeholder="Font"
+                    options={[
+                      { label: "Default Theme", value: "inherit" },
+                      { label: "Inter", value: "'Inter', sans-serif" },
+                      { label: "Outfit", value: "'Outfit', sans-serif" },
+                      { label: "Playfair Display", value: "'Playfair Display', serif" },
+                      { label: "Poppins", value: "'Poppins', sans-serif" },
+                      { label: "Plus Jakarta", value: "'Plus Jakarta Sans', sans-serif" },
+                      { label: "Space Grotesk", value: "'Space Grotesk', sans-serif" },
+                      { label: "Cinzel", value: "'Cinzel', serif" },
+                    ]}
+                    onChange={(val) => updateProps({ title_font_family: val })}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Title Weight</label>
+                  <CustomSelectDropdown
+                    value={String(p.title_font_weight || "800")}
+                    placeholder="Weight"
+                    options={[
+                      { label: "Medium (500)", value: "500" },
+                      { label: "Semi-Bold (600)", value: "600" },
+                      { label: "Bold (700)", value: "700" },
+                      { label: "Heavy (800)", value: "800" },
+                      { label: "Black (900)", value: "900" },
+                    ]}
+                    onChange={(val) => updateProps({ title_font_weight: val })}
+                  />
+                </div>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Title Style</label>
+                  <SegmentedRow
+                    value={p.title_font_style || "normal"}
+                    onChange={(val) => updateProps({ title_font_style: val })}
+                    options={[
+                      { label: "Normal", value: "normal" },
+                      { label: "Italic", value: "italic" },
+                    ]}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Desc. Size"
+                  value={parseNumProp(p.description_font_size, 14)}
+                  min={11}
+                  max={22}
+                  step={1}
+                  unit="px"
+                  onChange={(val) => updateProps({ description_font_size: val })}
+                />
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>CTA Button Text</label>
+                  <input
+                    type="text"
+                    value={getStr("add_to_cart_label", "Add to cart")}
+                    placeholder="Add to cart"
+                    onChange={(e) => updateProps({ add_to_cart_label: e.target.value })}
+                    style={{
+                      width: "100%",
+                      height: "26px",
+                      padding: "0 6px",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      color: "#0f172a",
+                      borderRadius: "4px",
+                      border: "1px solid #cbd5e1",
+                      background: "#ffffff",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: "2px", marginTop: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Color Variants Display</label>
+                <SegmentedRow
+                  value={p.color_variant_layout || "carousel"}
+                  onChange={(val) => updateProps({ color_variant_layout: val })}
+                  options={[
+                    { label: "Carousel (Scroll)", value: "carousel" },
+                    { label: "Grid (Wrap)", value: "grid" },
+                  ]}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Section 3: Trust & Service Badges */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+                Trust & Service Badges ({currentTrustBadges.length})
+              </div>
+              <button
+                type="button"
+                onClick={handleAddBadge}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "3px",
+                  padding: "2px 6px",
+                  borderRadius: "4px",
+                  border: "1px solid #bfdbfe",
+                  background: "#eff6ff",
+                  color: ADMIN_BLUE,
+                  fontSize: "9.5px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                <span>Add Badge</span>
+              </button>
+            </div>
+            <div style={{ display: "grid", gap: "6px", marginTop: "4px" }}>
+              {currentTrustBadges.map((badge: any, bIdx: number) => {
+                const isReturns = badge.id === "returns" || (badge.title || "").trim().toLowerCase() === "returns";
+                return (
+                  <div
+                    key={badge.id || bIdx}
+                    style={{
+                      display: "grid",
+                      gap: "4px",
+                      padding: "6px 8px",
+                      background: isReturns ? "#f8fafc" : "#ffffff",
+                      border: isReturns ? "1px solid #cbd5e1" : "1px solid #e2e8f0",
+                      borderRadius: "5px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                        {isReturns ? (
+                          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="#0284c7" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="23 4 23 10 17 10" />
+                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                          </svg>
+                        ) : null}
+                        <span style={{ fontSize: "9px", fontWeight: 700, color: isReturns ? (isReturnsActive ? "#0369a1" : "#64748b") : "#475569" }}>
+                          {isReturns ? "Returns Policy" : `Badge #${bIdx + 1}`}
+                        </span>
+                      </div>
+
+                      {isReturns ? (
+                        <div
+                          onClick={() => handleToggleReturns(!isReturnsActive)}
+                          title={isReturnsActive ? "Click to disable Returns badge" : "Click to enable Returns badge"}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            cursor: "pointer",
+                            userSelect: "none",
+                          }}
+                        >
+                          <span style={{ fontSize: "8.5px", fontWeight: 700, color: isReturnsActive ? "#16a34a" : "#94a3b8" }}>
+                            {isReturnsActive ? "Enabled" : "Disabled"}
+                          </span>
+                          <div
+                            style={{
+                              position: "relative",
+                              width: "22px",
+                              height: "13px",
+                              borderRadius: "999px",
+                              background: isReturnsActive ? ADMIN_BLUE : "#cbd5e1",
+                              transition: "background 0.15s ease",
+                              flexShrink: 0,
+                            }}
+                          >
+                            <div
+                              style={{
+                                position: "absolute",
+                                top: "2px",
+                                left: isReturnsActive ? "11px" : "2px",
+                                width: "9px",
+                                height: "9px",
+                                borderRadius: "999px",
+                                background: "#ffffff",
+                                transition: "left 0.15s ease",
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteBadge(bIdx)}
+                          title="Remove badge"
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "#ef4444",
+                            cursor: "pointer",
+                            padding: "2px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+
+                    {isReturns ? (
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr", gap: "4px", alignItems: "center", opacity: isReturnsActive ? 1 : 0.6 }}>
+                        <input
+                          type="text"
+                          value="Returns"
+                          disabled
+                          style={{
+                            width: "100%",
+                            height: "24px",
+                            padding: "0 5px",
+                            fontSize: "10.5px",
+                            fontWeight: 700,
+                            color: "#64748b",
+                            borderRadius: "4px",
+                            border: "1px solid #e2e8f0",
+                            background: "#f1f5f9",
+                            boxSizing: "border-box",
+                            cursor: "not-allowed",
+                          }}
+                        />
+                        <div
+                          style={{
+                            height: "24px",
+                            padding: "0 6px",
+                            fontSize: "9px",
+                            fontWeight: 600,
+                            color: isReturnsActive ? "#0369a1" : "#64748b",
+                            background: isReturnsActive ? "#f0f9ff" : "#f1f5f9",
+                            borderRadius: "4px",
+                            border: isReturnsActive ? "1px dashed #7dd3fc" : "1px dashed #cbd5e1",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            boxSizing: "border-box",
+                            overflow: "hidden",
+                            whiteSpace: "nowrap",
+                            textOverflow: "ellipsis",
+                          }}
+                          title="Automatically determined by store & product return window settings (e.g. 7 Days Return or No Returns)"
+                        >
+                          <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                            <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
+                          </svg>
+                          <span>Auto: Store Policy</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px" }}>
+                        <input
+                          type="text"
+                          placeholder="Title (e.g. Delivery)"
+                          value={badge.title || ""}
+                          onChange={(e) => handleUpdateBadge(bIdx, "title", e.target.value)}
+                          style={{
+                            width: "100%",
+                            height: "24px",
+                            padding: "0 5px",
+                            fontSize: "10.5px",
+                            fontWeight: 600,
+                            color: "#0f172a",
+                            borderRadius: "4px",
+                            border: "1px solid #cbd5e1",
+                            background: "#ffffff",
+                            boxSizing: "border-box",
+                          }}
+                        />
+                        <input
+                          type="text"
+                          placeholder="Subtitle (e.g. Fast ship)"
+                          value={badge.subtitle || ""}
+                          onChange={(e) => handleUpdateBadge(bIdx, "subtitle", e.target.value)}
+                          style={{
+                            width: "100%",
+                            height: "24px",
+                            padding: "0 5px",
+                            fontSize: "10.5px",
+                            fontWeight: 600,
+                            color: "#0f172a",
+                            borderRadius: "4px",
+                            border: "1px solid #cbd5e1",
+                            background: "#ffffff",
+                            boxSizing: "border-box",
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <NumberStepperField
+                label="Badge Radius"
+                value={parseNumProp(p.badge_border_radius, 14)}
+                min={0}
+                max={30}
+                step={1}
+                unit="px"
+                onChange={(val) => updateProps({ badge_border_radius: val })}
+              />
+            </div>
+          </section>
+
+          {/* Section 4: Component Visibility */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Visibility Toggles
+            </div>
+            <div style={{ display: "grid", gap: "2px" }}>
+              {renderToggle("Brand & Category", "show_brand_name", true)}
+              {renderToggle("Customer Ratings", "show_ratings", true)}
+              {renderToggle("Discount Badge", "show_discount_badge", true)}
+              {renderToggle("Stock Status Badge", "show_stock_badge", true)}
+              {renderToggle("Original Strikethrough Price", "show_original_price", true)}
+              {renderToggle("Description Accordion", "show_description_accordion", true)}
+              {renderToggle("Specifications Accordion", "show_specs_accordion", true)}
+              {renderToggle("Customer Reviews Section", "show_reviews_section", true)}
+            </div>
+          </section>
+
+          {/* Section 5: Layout & Border Radii */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Layout & Border Radii
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Max Container Width
+                </label>
+                <CustomSelectDropdown
+                  value={
+                    p.max_width === "full" || p.max_width === "100%"
+                      ? "full"
+                      : p.max_width === "1440" || p.max_width === "1440px"
+                      ? "1440px"
+                      : p.max_width === "1280" || p.max_width === "1280px"
+                      ? "1280px"
+                      : p.max_width === "1200" || p.max_width === "1200px"
+                      ? "1200px"
+                      : p.max_width === "1000" || p.max_width === "1000px"
+                      ? "1000px"
+                      : p.max_width
+                      ? String(p.max_width)
+                      : "full"
+                  }
+                  placeholder="Max Width"
+                  options={[
+                    { label: "Full Width (100%)", value: "full" },
+                    { label: "Extra Wide (1440px)", value: "1440px" },
+                    { label: "Wide (1280px)", value: "1280px" },
+                    { label: "Standard (1200px)", value: "1200px" },
+                    { label: "Compact (1000px)", value: "1000px" },
+                  ]}
+                  onChange={(val) => updateProps({ max_width: val })}
+                />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Card Radius"
+                  value={parseNumProp(p.card_border_radius, 22)}
+                  min={0}
+                  max={36}
+                  step={1}
+                  unit="px"
+                  onChange={(val) => updateProps({ card_border_radius: val })}
+                />
+                <NumberStepperField
+                  label="Button Radius"
+                  value={parseNumProp(p.button_border_radius, 15)}
+                  min={0}
+                  max={30}
+                  step={1}
+                  unit="px"
+                  onChange={(val) => updateProps({ button_border_radius: val })}
+                />
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* 2. COLORS TAB */}
+      {activeTab === "colors" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Card & Background Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Card Panel Background"
+                value={p.panel_color || p.background_color || theme.card_bg || (siteDefinition.theme?.mode === "dark" ? "#1e293b" : "#ffffff")}
+                onChange={(val) => updateProps({ panel_color: val, background_color: val })}
+              />
+              <CompactColorRow
+                label="Primary Text Color"
+                value={p.text_color || theme.text_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                onChange={(val) => updateProps({ text_color: val })}
+              />
+            </div>
+          </section>
+
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Action Button Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Button Background"
+                value={p.button_bg_color || theme.accent_color || ADMIN_BLUE}
+                onChange={(val) => updateProps({ button_bg_color: val })}
+              />
+              <CompactColorRow
+                label="Button Text Color"
+                value={p.button_text_color || "#ffffff"}
+                onChange={(val) => updateProps({ button_text_color: val })}
+              />
+            </div>
+          </section>
+
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Trust Badge Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Badge Background"
+                value={p.badge_bg_color || theme.badge_bg_color || theme.product_detail_badge_bg || (siteDefinition.theme?.mode === "dark" ? "rgba(255,255,255,0.04)" : "#f8fafc")}
+                onChange={(val) => updateProps({ badge_bg_color: val })}
+              />
+              <CompactColorRow
+                label="Badge Border"
+                value={p.badge_border_color || theme.badge_border_color || theme.product_detail_badge_border || (siteDefinition.theme?.mode === "dark" ? "rgba(255,255,255,0.08)" : "#e2e8f0")}
+                onChange={(val) => updateProps({ badge_border_color: val })}
+              />
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NavbarEditor({
   selectedBlock,
   isLightMode,
@@ -6338,6 +7164,7 @@ export default function EditorSidebar({
   // Block types that have dedicated custom editors and bypass editableConfig
   const hasSpecialEditor = (() => {
     if (!selectedBlock) return false;
+    if (isProductDetailBlock(selectedBlock) || editableConfig?.displayName === "Product Detail") return true;
     const t = selectedBlock.type?.toLowerCase?.() ?? "";
     return (
       t === "hero_banner" || t === "herobanner" || t === "hero" || t === "banner" ||
@@ -7086,6 +7913,9 @@ export default function EditorSidebar({
                         selectedBlock.type === "cart_items" ||
                         selectedBlock.type === "cartitems"
                       ? "Shopping Cart"
+                      : isProductDetailBlock(selectedBlock) ||
+                        editableConfig?.displayName === "Product Detail"
+                      ? "Product Detail"
                       : selectedBlock.type.toUpperCase())
                   : activePageTitle}
               </span>
@@ -7189,6 +8019,16 @@ export default function EditorSidebar({
                 selectedBlock.type === "order_summary" ||
                 selectedBlock.type === "ordersummary" ? (
                 <CartEditor
+                  selectedBlock={selectedBlock}
+                  isLightMode={isLightMode}
+                  textColor={textColor}
+                  accentColor={accentColor}
+                  onSiteDefinitionChange={onSiteDefinitionChange}
+                  siteDefinition={siteDefinition}
+                />
+              ) : isProductDetailBlock(selectedBlock) ||
+                editableConfig?.displayName === "Product Detail" ? (
+                <ProductDetailEditor
                   selectedBlock={selectedBlock}
                   isLightMode={isLightMode}
                   textColor={textColor}

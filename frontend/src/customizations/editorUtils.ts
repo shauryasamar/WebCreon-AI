@@ -387,7 +387,7 @@ function getFestivalThemeOverrides(
 export const ALL_COMPONENT_OVERRIDE_KEYS = [
   "delivery_form_bg", "delivery_form_text", "delivery_form_input_bg", "delivery_form_input_text", "delivery_form_border", "delivery_form_btn_bg", "delivery_form_btn_text",
   "order_history_bg", "order_history_card_bg", "order_history_text", "order_history_muted_text", "order_history_border",
-  "product_detail_bg", "product_detail_text", "product_detail_btn_bg", "product_detail_btn_text",
+  "product_detail_bg", "product_detail_text", "product_detail_btn_bg", "product_detail_btn_text", "badge_bg_color", "badge_border_color", "product_detail_badge_bg", "product_detail_badge_border",
   "cart_bg", "cart_text_color", "cart_card_bg", "cart_accent_color", "cart_border_color", "cart_panel_bg",
   "summary_bg", "summary_card_bg", "summary_text_color", "summary_accent_color", "summary_border_color",
   "payment_bg", "payment_card_bg", "payment_text_color", "payment_accent_color", "payment_border_color",
@@ -406,6 +406,16 @@ export function applyThemeToPages(pages: EditorPage[], targetTheme: any): Editor
       const isNav = btype === "navbar" || btype === "header";
       const isFooter = btype === "footer";
       const isHero = btype === "hero_banner" || btype === "hero" || btype === "banner";
+      const isProductDetail =
+        btype === "product_detail" ||
+        btype === "productdetail" ||
+        btype === "product_info" ||
+        btype === "productinfo" ||
+        btype === "purchase_panel" ||
+        btype === "purchasepanel" ||
+        btype === "product_gallery" ||
+        btype === "productgallery" ||
+        String(block.id || "").toLowerCase().includes("product-detail");
 
       const updatedProps = { ...(block.props || {}) };
 
@@ -442,6 +452,10 @@ export function applyThemeToPages(pages: EditorPage[], targetTheme: any): Editor
       delete updatedProps.button_text_color;
       delete updatedProps.card_color;
       delete updatedProps.active_bg_color;
+      delete updatedProps.badge_bg_color;
+      delete updatedProps.badge_border_color;
+      delete updatedProps.product_detail_badge_bg;
+      delete updatedProps.product_detail_badge_border;
 
       for (const k of ALL_COMPONENT_OVERRIDE_KEYS) {
         delete updatedProps[k];
@@ -476,6 +490,20 @@ export function applyThemeToPages(pages: EditorPage[], targetTheme: any): Editor
             return nextSlide;
           });
         }
+      } else if (isProductDetail) {
+        if (targetTheme.badge_bg_color || targetTheme.product_detail_badge_bg) {
+          updatedProps.badge_bg_color = targetTheme.badge_bg_color || targetTheme.product_detail_badge_bg;
+        }
+        if (targetTheme.badge_border_color || targetTheme.product_detail_badge_border) {
+          updatedProps.badge_border_color = targetTheme.badge_border_color || targetTheme.product_detail_badge_border;
+        }
+        if (targetTheme.product_detail_bg) {
+          updatedProps.panel_color = targetTheme.product_detail_bg;
+          updatedProps.background_color = targetTheme.product_detail_bg;
+        }
+        if (targetTheme.product_detail_text) updatedProps.text_color = targetTheme.product_detail_text;
+        if (targetTheme.product_detail_btn_bg) updatedProps.button_bg_color = targetTheme.product_detail_btn_bg;
+        if (targetTheme.product_detail_btn_text) updatedProps.button_text_color = targetTheme.product_detail_btn_text;
       }
 
       return {
@@ -1638,10 +1666,17 @@ export function saveThemeSnapshot(
     }
   });
 
-  // Capture hero block overrides into theme object for snapshot
+  // Capture hero and product detail block overrides into theme object for snapshot
   let heroBlockBg: string | undefined;
   let heroBlockText: string | undefined;
   let heroBlockAccent: string | undefined;
+
+  let pdBadgeBg: string | undefined;
+  let pdBadgeBorder: string | undefined;
+  let pdPanelBg: string | undefined;
+  let pdTextColor: string | undefined;
+  let pdBtnBg: string | undefined;
+  let pdBtnText: string | undefined;
 
   (siteDefinition.pages || []).forEach((page) => {
     (page.blocks || []).forEach((block) => {
@@ -1662,6 +1697,26 @@ export function saveThemeSnapshot(
         if (props.accent_color) heroBlockAccent = props.accent_color;
         else if (activeSlide?.accent_color) heroBlockAccent = activeSlide.accent_color;
       }
+
+      if (
+        btype === "product_detail" ||
+        btype === "productdetail" ||
+        btype === "product_info" ||
+        btype === "productinfo" ||
+        btype === "purchase_panel" ||
+        btype === "purchasepanel" ||
+        btype === "product_gallery" ||
+        btype === "productgallery" ||
+        String(block.id || "").toLowerCase().includes("product-detail")
+      ) {
+        const props = block.props || {};
+        if (props.badge_bg_color) pdBadgeBg = props.badge_bg_color;
+        if (props.badge_border_color) pdBadgeBorder = props.badge_border_color;
+        if (props.panel_color) pdPanelBg = props.panel_color;
+        if (props.text_color) pdTextColor = props.text_color;
+        if (props.button_bg_color) pdBtnBg = props.button_bg_color;
+        if (props.button_text_color) pdBtnText = props.button_text_color;
+      }
     });
   });
 
@@ -1680,6 +1735,12 @@ export function saveThemeSnapshot(
     ...(heroBlockBg ? { hero_bg: heroBlockBg } : {}),
     ...(heroBlockText ? { hero_text_color: heroBlockText } : {}),
     ...(heroBlockAccent ? { hero_accent: heroBlockAccent } : {}),
+    ...(pdBadgeBg ? { badge_bg_color: pdBadgeBg, product_detail_badge_bg: pdBadgeBg } : {}),
+    ...(pdBadgeBorder ? { badge_border_color: pdBadgeBorder, product_detail_badge_border: pdBadgeBorder } : {}),
+    ...(pdPanelBg ? { product_detail_bg: pdPanelBg } : {}),
+    ...(pdTextColor ? { product_detail_text: pdTextColor } : {}),
+    ...(pdBtnBg ? { product_detail_btn_bg: pdBtnBg } : {}),
+    ...(pdBtnText ? { product_detail_btn_text: pdBtnText } : {}),
     ...cleanCustomPatch,
   };
 

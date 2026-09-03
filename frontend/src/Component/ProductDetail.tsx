@@ -58,6 +58,13 @@ type SiblingProduct = {
   is_current?: boolean;
 };
 
+export type ProductTrustBadge = {
+  id: string;
+  title: string;
+  subtitle: string;
+  icon?: string;
+};
+
 type ProductDetailProps = {
   siteId?: string;
   product?: Product | null;
@@ -70,12 +77,34 @@ type ProductDetailProps = {
   panel_color?: string;
   text_color?: string;
 
+  // Dynamic Trust Badges
+  trust_badges?: ProductTrustBadge[];
+  badge_bg_color?: string;
+  badge_border_color?: string;
+
+  // Legacy fallback trust badges
   show_delivery_info?: boolean;
   delivery_text?: string;
   show_return_policy?: boolean;
   return_policy_text?: string;
   show_quality_guarantee?: boolean;
   quality_text?: string;
+
+  // Variant Layout: Carousel vs Grid
+  color_variant_layout?: "carousel" | "grid";
+
+  // Typography
+  title_font_size?: number;
+  title_font_family?: string;
+  title_font_weight?: string;
+  title_font_style?: "normal" | "italic";
+  description_font_size?: number;
+
+  // Component Border Radii
+  image_border_radius?: number;
+  card_border_radius?: number;
+  button_border_radius?: number;
+  badge_border_radius?: number;
 
   show_discount_badge?: boolean;
   show_stock_badge?: boolean;
@@ -196,10 +225,17 @@ function parseInlineMarkdown(text: string): React.ReactNode {
   return parts.length > 0 ? parts : text;
 }
 
-function renderHeroHighlights(highlights: any, textColor: string, mutedColor: string) {
+function renderHeroHighlights(
+  highlights: any,
+  textColor: string,
+  mutedColor: string,
+  fontSize?: number
+) {
   if (!highlights) return null;
   const rawText = Array.isArray(highlights) ? highlights.join("\n") : String(highlights);
   if (!rawText.trim()) return null;
+
+  const resolvedSize = fontSize ? `${fontSize}px` : "13.5px";
 
   const lines = rawText.split("\n").map((l) => l.trim()).filter(Boolean);
   if (lines.length === 0) return null;
@@ -218,13 +254,13 @@ function renderHeroHighlights(highlights: any, textColor: string, mutedColor: st
                 display: "flex",
                 alignItems: "flex-start",
                 gap: "8px",
-                fontSize: "13.5px",
+                fontSize: resolvedSize,
                 color: mutedColor,
                 lineHeight: 1.55,
               }}
             >
-              <span style={{ color: "#16a34a", fontSize: "13px", fontWeight: 800, lineHeight: 1.3, flexShrink: 0 }}>✓</span>
-              <div style={{ flex: 1 }}>{parseInlineMarkdown(cleanLine)}</div>
+              <span style={{ color: "#16a34a", fontSize: `calc(${resolvedSize} - 0.5px)`, fontWeight: 800, lineHeight: 1.3, flexShrink: 0 }}>✓</span>
+              <div style={{ flex: 1, fontSize: resolvedSize }}>{parseInlineMarkdown(cleanLine)}</div>
             </div>
           );
         }
@@ -235,7 +271,7 @@ function renderHeroHighlights(highlights: any, textColor: string, mutedColor: st
             key={idx}
             style={{
               margin: 0,
-              fontSize: "13.5px",
+              fontSize: resolvedSize,
               color: mutedColor,
               lineHeight: 1.6,
             }}
@@ -248,10 +284,10 @@ function renderHeroHighlights(highlights: any, textColor: string, mutedColor: st
   );
 }
 
-function renderFormattedDescription(content: string, textColor: string) {
+function renderFormattedDescription(content: string, textColor: string, fontSize = 14) {
   if (!content || !content.trim()) {
     return (
-      <p style={{ margin: 0, fontSize: "14px", color: textColor, opacity: 0.7 }}>
+      <p style={{ margin: 0, fontSize: `${fontSize}px`, color: textColor, opacity: 0.7 }}>
         No detailed description provided for this product.
       </p>
     );
@@ -277,7 +313,7 @@ function renderFormattedDescription(content: string, textColor: string) {
           }}
         >
           {items.map((item, i) => (
-            <li key={i} style={{ fontSize: "14px", lineHeight: 1.6 }}>
+            <li key={i} style={{ fontSize: `${fontSize}px`, lineHeight: 1.6 }}>
               {parseInlineMarkdown(item)}
             </li>
           ))}
@@ -444,7 +480,7 @@ function renderFormattedDescription(content: string, textColor: string) {
         key={`p-${i}`}
         style={{
           margin: "0 0 8px",
-          fontSize: "14px",
+          fontSize: `${fontSize}px`,
           lineHeight: 1.75,
           color: textColor,
         }}
@@ -540,6 +576,13 @@ const slugify = (text: string) =>
 
 const MAX_GALLERY_IMAGES = 5;
 
+const resolveContainerWidth = (val?: string | number) => {
+  if (!val || val === "full" || val === "100%") return "100%";
+  const str = String(val).trim();
+  if (str.endsWith("px") || str.endsWith("%")) return str;
+  return `${str}px`;
+};
+
 const ProductDetail: React.FC<ProductDetailProps> = ({
   siteId: propSiteId,
   product: propProduct,
@@ -550,12 +593,25 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   background_color,
   panel_color,
   text_color,
+  trust_badges,
+  badge_bg_color,
+  badge_border_color,
   show_delivery_info = true,
   delivery_text,
   show_return_policy = true,
   return_policy_text,
   show_quality_guarantee = true,
   quality_text,
+  color_variant_layout = "carousel",
+  title_font_size,
+  title_font_family,
+  title_font_weight,
+  title_font_style,
+  description_font_size,
+  image_border_radius,
+  card_border_radius,
+  button_border_radius,
+  badge_border_radius,
   show_discount_badge = true,
   show_stock_badge = true,
   show_ratings = true,
@@ -974,13 +1030,13 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
         ? product.return_window_days
         : defaultReturnWindowDays;
 
-    if (days === 0) return "Non-Returnable (Final Sale)";
-    if (days === 1) return "1 Day Easy Return";
+    if (days === 0) return "No Returns";
+    if (days === 1) return "1 Day Return";
     if (days && days > 1) {
       return `${days} Days Easy Return`;
     }
-    return return_policy_text || `${defaultReturnWindowDays} Days Easy Return`;
-  }, [product?.return_window_days, defaultReturnWindowDays, return_policy_text]);
+    return "No Returns";
+  }, [product?.return_window_days, defaultReturnWindowDays]);
 
   const productHighlights = useMemo(() => {
     if (Array.isArray(anyProduct?.highlights) && anyProduct.highlights.length > 0) {
@@ -1333,7 +1389,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     return (
       <section
         style={{
-          maxWidth: max_width ? `${max_width}px` : "1180px",
+          maxWidth: resolveContainerWidth(max_width),
           margin: "0 auto",
           padding: isMobile ? "12px 12px 32px" : "16px 20px 48px",
           fontFamily: theme?.font_family || "inherit",
@@ -1474,7 +1530,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     return (
       <section
         style={{
-          maxWidth: max_width ? `${max_width}px` : "1180px",
+          maxWidth: resolveContainerWidth(max_width),
           margin: "0 auto",
           padding: isMobile ? "32px 16px" : "64px 20px",
           fontFamily: theme?.font_family || "inherit",
@@ -1886,7 +1942,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   const supportGridColumns = isMobile ? "repeat(3, minmax(0, 1fr))" : "repeat(3, minmax(0, 1fr))";
 
   const resolvedAddToCartText = add_to_cart_label || "Add to cart";
-  const resolvedMaxWidth = max_width === "full" ? "100%" : max_width ? `${max_width}px` : "1140px";
+  const resolvedMaxWidth = resolveContainerWidth(max_width);
   const resolvedImageAspect = image_aspect_ratio || "1 / 1";
   const resolvedImageFit = image_fit || "cover";
 
@@ -1920,7 +1976,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
           <div
             style={{
               ...shellCard,
-              borderRadius: isMobile ? "18px" : "22px",
+              borderRadius: image_border_radius != null ? `${Math.max(4, image_border_radius + 4)}px` : (isMobile ? "18px" : "22px"),
               boxShadow: softShadow,
               padding: isMobile ? "8px" : "10px",
               overflow: "hidden",
@@ -1930,7 +1986,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
               style={{
                 position: "relative",
                 width: "100%",
-                borderRadius: isMobile ? "14px" : "16px",
+                borderRadius: image_border_radius != null ? `${image_border_radius}px` : (isMobile ? "14px" : "16px"),
                 overflow: "hidden",
                 background: mediaBg,
                 aspectRatio: resolvedImageAspect,
@@ -2321,7 +2377,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
           <div
             style={{
               ...shellCard,
-              borderRadius: isMobile ? "18px" : "22px",
+              borderRadius: card_border_radius != null ? `${card_border_radius}px` : (isMobile ? "18px" : "22px"),
               boxShadow: panelShadow,
               padding: isMobile ? "14px 14px" : isTablet ? "16px 18px" : "18px 20px",
               display: "flex",
@@ -2450,8 +2506,11 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
               <h1
                 style={{
                   margin: 0,
-                  fontSize: isMobile ? "24px" : "clamp(22px, 2.5vw, 30px)",
-                  lineHeight: 1.08,
+                  fontSize: title_font_size ? `${title_font_size}px` : (isMobile ? "24px" : "clamp(22px, 2.5vw, 30px)"),
+                  fontFamily: title_font_family || "inherit",
+                  fontWeight: (title_font_weight || "800") as any,
+                  fontStyle: title_font_style || "normal",
+                  lineHeight: 1.12,
                   letterSpacing: "-0.04em",
                   color: pageText,
                 }}
@@ -2459,7 +2518,20 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 {product.name}
               </h1>
 
-              {renderHeroHighlights(product.highlights, pageText, mutedText)}
+              {renderHeroHighlights(
+                (Array.isArray(product?.highlights) && product.highlights.length > 0)
+                  ? product.highlights
+                  : (product as any)?.short_description
+                  ? (product as any).short_description
+                  : (productHighlights && productHighlights.length > 0)
+                  ? productHighlights
+                  : product?.description
+                  ? product.description.split("\n\n")[0] || product.description
+                  : null,
+                pageText,
+                mutedText,
+                description_font_size
+              )}
             </div>
 
             <div
@@ -2613,13 +2685,18 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
 
                 <div
                   style={{
-                    display: "flex",
-                    flexWrap: isMobile ? "nowrap" : "wrap",
-                    overflowX: isMobile ? "auto" : "visible",
+                    display: color_variant_layout === "grid" ? "grid" : "flex",
+                    gridTemplateColumns: color_variant_layout === "grid"
+                      ? isMobile
+                        ? "repeat(auto-fill, minmax(115px, 1fr))"
+                        : "repeat(auto-fill, minmax(135px, 1fr))"
+                      : undefined,
+                    flexWrap: color_variant_layout === "grid" ? "wrap" : "nowrap",
+                    overflowX: color_variant_layout === "grid" ? "visible" : "auto",
                     scrollbarWidth: "none",
                     gap: isMobile ? "8px" : "10px",
                     alignItems: "center",
-                    paddingBottom: isMobile ? "4px" : "0",
+                    paddingBottom: color_variant_layout === "grid" ? "0" : "6px",
                   }}
                 >
                   {resolvedSiblings.map((sib: SiblingProduct) => {
@@ -2674,8 +2751,9 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                           cursor: "pointer",
                           transition: "all 0.16s ease",
                           opacity: isOut ? 0.55 : 1,
-                          flex: "0 0 auto",
-                          maxWidth: isMobile ? "140px" : "160px",
+                          flex: color_variant_layout === "grid" ? "1 1 auto" : "0 0 auto",
+                          maxWidth: color_variant_layout === "grid" ? "100%" : isMobile ? "140px" : "160px",
+                          width: color_variant_layout === "grid" ? "100%" : "auto",
                         }}
                       >
                         {sib.cover_image && (
@@ -2963,7 +3041,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                     width: "100%",
                     minHeight: "46px",
                     padding: "12px 16px",
-                    borderRadius: "15px",
+                    borderRadius: button_border_radius != null ? `${button_border_radius}px` : "15px",
                     border: "none",
                     background: !finalCanAddToCart
                       ? "#94a3b8"
@@ -2999,77 +3077,140 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
               </div>
             </div>
 
-            {(show_delivery_info || show_return_policy || show_quality_guarantee) && (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: supportGridColumns,
-                  gap: isMobile ? "8px" : "10px",
-                  paddingTop: "14px",
-                  borderTop: subtleBorder,
-                }}
-              >
-                {show_delivery_info && (
-                  <div
-                    style={{
-                      padding: isMobile ? "10px 8px" : "12px 10px",
-                      borderRadius: "14px",
-                      background: softSectionBg,
-                      border: subtleBorder,
-                      textAlign: isMobile ? "center" : "left",
-                    }}
-                  >
-                    <p style={{ margin: "0 0 5px", ...tagText }}>Delivery</p>
-                    <p style={{ margin: 0, fontSize: "12px", fontWeight: 600, color: pageText }}>
-                      {delivery_text || "Fast ship"}
-                    </p>
-                  </div>
-                )}
-                {show_return_policy && (
-                  <div
-                    style={{
-                      padding: isMobile ? "10px 8px" : "12px 10px",
-                      borderRadius: "14px",
-                      background: softSectionBg,
-                      border: subtleBorder,
-                      textAlign: isMobile ? "center" : "left",
-                    }}
-                  >
-                    <p style={{ margin: "0 0 5px", ...tagText }}>Returns</p>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "12px",
-                        fontWeight: 600,
-                        color:
-                          product?.return_window_days === 0 ||
-                          (product?.return_window_days == null && defaultReturnWindowDays === 0)
-                            ? "#dc2626"
-                            : pageText,
-                      }}
-                    >
-                      {effectiveReturnPolicyText}
-                    </p>
-                  </div>
-                )}
-                {show_quality_guarantee && (
-                  <div
-                    style={{
-                      padding: isMobile ? "10px 8px" : "12px 10px",
-                      borderRadius: "14px",
-                      background: softSectionBg,
-                      border: subtleBorder,
-                      textAlign: isMobile ? "center" : "left",
-                    }}
-                  >
-                    <p style={{ margin: "0 0 5px", ...tagText }}>Quality</p>
-                    <p style={{ margin: 0, fontSize: "12px", fontWeight: 600, color: pageText }}>
-                      {quality_text || "Curated pick"}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
+            {(() => {
+              const badgesToRender: ProductTrustBadge[] = (() => {
+                const source: ProductTrustBadge[] =
+                  Array.isArray(trust_badges) && trust_badges.length > 0
+                    ? trust_badges
+                    : [
+                        ...(show_delivery_info !== false ? [{ id: "delivery", title: "Delivery", subtitle: delivery_text || "Fast ship" }] : []),
+                        ...(show_return_policy !== false ? [{ id: "returns", title: "Returns", subtitle: effectiveReturnPolicyText }] : []),
+                        ...(show_quality_guarantee !== false ? [{ id: "quality", title: "Quality", subtitle: quality_text || "Curated pick" }] : []),
+                      ];
+
+                return source
+                  .filter((b) => {
+                    const isReturns = b.id === "returns" || (b.title || "").trim().toLowerCase() === "returns";
+                    if (isReturns) {
+                      return show_return_policy !== false && (b as any).enabled !== false;
+                    }
+                    return (b as any).enabled !== false;
+                  })
+                  .map((b) => {
+                    const isReturns = b.id === "returns" || (b.title || "").trim().toLowerCase() === "returns";
+                    if (isReturns) {
+                      return {
+                        ...b,
+                        title: "Returns",
+                        subtitle: effectiveReturnPolicyText,
+                      };
+                    }
+                    return b;
+                  });
+              })();
+
+              if (!badgesToRender.length) return null;
+
+              const resolvedBadgeBg =
+                badge_bg_color ||
+                (theme as any)?.badge_bg_color ||
+                (theme as any)?.product_detail_badge_bg ||
+                softSectionBg;
+
+              const resolvedBadgeBorder =
+                badge_border_color
+                  ? `1px solid ${badge_border_color}`
+                  : (theme as any)?.badge_border_color
+                  ? `1px solid ${(theme as any).badge_border_color}`
+                  : (theme as any)?.product_detail_badge_border
+                  ? `1px solid ${(theme as any).product_detail_badge_border}`
+                  : subtleBorder;
+
+              // Symmetrical responsive layout:
+              // Mobile: 1 badge -> 1fr, 2 badges -> 2 cols, 3 badges -> 3 cols, 4+ badges -> 2 cols (clean 2x2 or 2x3 cards with ample width)
+              const mobileGridCols =
+                badgesToRender.length === 1
+                  ? "1fr"
+                  : badgesToRender.length === 2
+                  ? "repeat(2, minmax(0, 1fr))"
+                  : badgesToRender.length === 3
+                  ? "repeat(3, minmax(0, 1fr))"
+                  : "repeat(2, minmax(0, 1fr))";
+
+              const desktopGridCols = `repeat(${Math.min(badgesToRender.length, 4)}, minmax(0, 1fr))`;
+
+              return (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: isMobile ? mobileGridCols : desktopGridCols,
+                    gap: isMobile ? "8px" : "10px",
+                    paddingTop: "14px",
+                    borderTop: subtleBorder,
+                    boxSizing: "border-box",
+                    width: "100%",
+                  }}
+                >
+                  {badgesToRender.map((b) => {
+                    const isReturns = b.id === "returns" || (b.title || "").trim().toLowerCase() === "returns";
+                    const isNoReturn = isReturns && (product?.return_window_days === 0 || effectiveReturnPolicyText === "No Returns");
+
+                    return (
+                      <div
+                        key={b.id}
+                        style={{
+                          padding: isMobile
+                            ? badgesToRender.length === 3
+                              ? "8px 5px"
+                              : "10px 10px"
+                            : "12px 10px",
+                          borderRadius: badge_border_radius != null ? `${badge_border_radius}px` : "14px",
+                          background: resolvedBadgeBg,
+                          border: resolvedBadgeBorder,
+                          textAlign: isMobile ? "center" : "left",
+                          boxSizing: "border-box",
+                          minWidth: 0,
+                          minHeight: isMobile ? "54px" : "60px",
+                          display: "flex",
+                          flexDirection: "column",
+                          justifyContent: "center",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <p
+                          style={{
+                            margin: "0 0 4px",
+                            fontSize: isMobile && badgesToRender.length === 3 ? "9px" : "10px",
+                            fontWeight: 700,
+                            letterSpacing: "0.08em",
+                            textTransform: "uppercase",
+                            color: subtleText,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {b.title}
+                        </p>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: isMobile && badgesToRender.length === 3 ? "11px" : "12px",
+                            fontWeight: 600,
+                            lineHeight: 1.35,
+                            color: isNoReturn ? (isLight ? "#dc2626" : "#f87171") : pageText,
+                            overflowWrap: "break-word",
+                            wordBreak: "break-word",
+                          }}
+                        >
+                          {b.subtitle}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -3125,7 +3266,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
 
           {openDescription && (
             <div style={{ padding: isMobile ? "16px 18px 20px" : "20px 24px 24px" }}>
-              {renderFormattedDescription(product?.description || "", pageText)}
+              {renderFormattedDescription(product?.description || "", pageText, description_font_size)}
             </div>
           )}
         </div>
