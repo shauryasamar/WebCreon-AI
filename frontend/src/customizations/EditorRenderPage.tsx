@@ -180,17 +180,24 @@ const checkoutSteps: { key: CheckoutStep; label: string }[] = [
   { key: "review", label: "Review & Pay" },
 ];
 
-const initialDeliveryData: DeliveryData = {
-  id: "",
-  label: "Home",
-  isDefault: false,
-  fullName: "",
-  phone: "",
-  email: "",
-  address: "",
-  city: "",
-  pincode: "",
-};
+const SAMPLE_EDITOR_ADDRESSES: DeliveryData[] = [
+  {
+    id: "sample_addr_1",
+    label: "Home",
+    isDefault: true,
+    fullName: "Priya Sharma",
+    phone: "9876543210",
+    email: "priya.sharma@example.com",
+    address: "Flat 402, Lotus Heights, MG Road",
+    city: "Mumbai",
+    pincode: "400001",
+    latitude: 19.076,
+    longitude: 72.8777,
+    geoAccuracy: "pinned",
+  },
+];
+
+const initialDeliveryData: DeliveryData = SAMPLE_EDITOR_ADDRESSES[0];
 
 function mapSavedAddressToDeliveryData(address: SavedAddress): DeliveryData {
   return {
@@ -587,21 +594,21 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
   const [checkoutStep, setCheckoutStep] = useState<CheckoutStep>("delivery");
   const [deliveryData, setDeliveryData] = useState<DeliveryData>(initialDeliveryData);
   const [paymentData, setPaymentData] = useState<PaymentData>(initialPaymentData);
-  const [savedAddresses, setSavedAddresses] = useState<DeliveryData[]>([]);
-  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [savedAddresses, setSavedAddresses] = useState<DeliveryData[]>(SAMPLE_EDITOR_ADDRESSES);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(SAMPLE_EDITOR_ADDRESSES[0].id || null);
   const [isAddressesLoading, setIsAddressesLoading] = useState(false);
 
   const { isAuthenticated, loading: authLoading } = useCustomerAuth();
 
-  // Load customer's saved addresses for the checkout delivery step — same logic as RenderPage
+  // Load customer's saved addresses for the checkout delivery step — fallback to sample in editor
   useEffect(() => {
     if (!siteId || !isCheckoutPage) return;
     if (authLoading) return;
 
     if (!isAuthenticated) {
-      setSavedAddresses([]);
-      setSelectedAddressId(null);
-      setDeliveryData(initialDeliveryData);
+      setSavedAddresses(SAMPLE_EDITOR_ADDRESSES);
+      setSelectedAddressId(SAMPLE_EDITOR_ADDRESSES[0].id || null);
+      setDeliveryData(SAMPLE_EDITOR_ADDRESSES[0]);
       setIsAddressesLoading(false);
       return;
     }
@@ -612,7 +619,7 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
         setIsAddressesLoading(true);
         const addresses = await getCheckoutAddresses(siteId);
         if (cancelled) return;
-        const mapped = addresses.map(mapSavedAddressToDeliveryData);
+        const mapped = addresses.length > 0 ? addresses.map(mapSavedAddressToDeliveryData) : SAMPLE_EDITOR_ADDRESSES;
         setSavedAddresses(mapped);
         const selected =
           mapped.find((addr) => addr.isDefault) || mapped[0] || null;
@@ -626,9 +633,9 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
       } catch (error) {
         console.error("Failed to load checkout addresses in editor", error);
         if (!cancelled) {
-          setSavedAddresses([]);
-          setSelectedAddressId(null);
-          setDeliveryData(initialDeliveryData);
+          setSavedAddresses(SAMPLE_EDITOR_ADDRESSES);
+          setSelectedAddressId(SAMPLE_EDITOR_ADDRESSES[0].id || null);
+          setDeliveryData(SAMPLE_EDITOR_ADDRESSES[0]);
         }
       } finally {
         if (!cancelled) setIsAddressesLoading(false);
@@ -1899,12 +1906,13 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
                 }}
               >
                 {summaryBlock
-                  ? renderBlock(summaryBlock, blocksToRender.indexOf(summaryBlock), {
+                  ? renderBlock({ ...summaryBlock, id: "checkout_order_summary" }, blocksToRender.indexOf(summaryBlock), {
                     mode: "checkout_summary",
                     compact: false,
                     paymentMethod: paymentData.method,
                     show_promo: true,
                     show_summary: true,
+                    review_mode: true,
                   })
                   : null}
               </aside>
@@ -2114,7 +2122,7 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
                   }}
                 >
                   {summaryBlock
-                    ? renderBlock(summaryBlock, blocksToRender.indexOf(summaryBlock), {
+                    ? renderBlock({ ...summaryBlock, id: "checkout_order_summary" }, blocksToRender.indexOf(summaryBlock), {
                       mode: "checkout_summary",
                       compact: false,
                       paymentMethod: paymentData.method,

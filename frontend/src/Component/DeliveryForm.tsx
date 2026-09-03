@@ -362,24 +362,11 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
       setFormMode("add");
     } else if (selectedBlockId === "delivery_form") {
       setShowMapPicker(false);
-      setFormMode("hidden");
     }
   }, [selectedBlockId]);
 
   useEffect(() => {
     setAddresses(savedAddresses);
-
-    if (!isAuthenticated) {
-      setFormMode((prev) => (prev === "hidden" ? prev : "hidden"));
-      setEditingAddressId((prev) => (prev === null ? prev : null));
-      return;
-    }
-
-    if (savedAddresses.length === 0) {
-      setEditingAddressId((prev) => (prev === null ? prev : null));
-      setFormMode((prev) => (prev === "add" ? prev : "hidden"));
-      return;
-    }
 
     const selectedStillExists = savedAddresses.some(
       (address: DeliveryFormData) => address.id === selectedAddressId
@@ -397,7 +384,6 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
   }, [
     savedAddresses,
     selectedAddressId,
-    isAuthenticated,
   ]);
 
   useEffect(() => {
@@ -626,11 +612,6 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
   };
 
   const handleAddNew = () => {
-    if (!isAuthenticated) {
-      setErrorMessage("Please sign in or signup to continue shopping.");
-      return;
-    }
-
     const hasDefault = addresses.some(
       (address: DeliveryFormData) => address.isDefault
     );
@@ -645,8 +626,18 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
     setDraftAddress(nextDraft);
     onDeliveryDataChange?.(nextDraft);
     setEditingAddressId(null);
-    // Industry standard: Open map picker first when adding a new address
+    // Keep form hidden until user selects & confirms their location on the map
+    setFormMode("hidden");
     setShowMapPicker(true);
+  };
+
+  const handleCloseMap = () => {
+    setShowMapPicker(false);
+    // If map is closed without a pinned location, ensure the address form is hidden
+    if (!draftAddress.latitude || !draftAddress.longitude) {
+      setFormMode("hidden");
+      setDraftAddress(emptyDeliveryData);
+    }
   };
 
   const handleEdit = (address: DeliveryFormData) => {
@@ -1064,9 +1055,9 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                 color: palette.textMuted,
               }}
             >
-              {subtitle || (isAuthenticated
+              {subtitle || (addresses.length > 0
                 ? "Select one of your saved delivery addresses or add a new one."
-                : "Please sign in or signup to continue shopping.")}
+                : "Enter your delivery address to proceed with checkout.")}
             </p>
           </div>
 
@@ -1346,9 +1337,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                     color: palette.textMuted,
                   }}
                 >
-                  {empty_message || (isAuthenticated
-                    ? "Add your first delivery address to continue."
-                    : "Please sign in or signup to continue shopping.")}
+                  {empty_message || "Add your delivery address to continue."}
                 </p>
               </div>
             )}
@@ -1932,7 +1921,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
       <GoogleMapPicker
         siteId={siteId}
         isOpen={showMapPicker}
-        onClose={() => setShowMapPicker(false)}
+        onClose={handleCloseMap}
         onConfirm={handleMapConfirm}
         accentColor={resolvedAccent}
         theme={isDark ? "dark" : "light"}

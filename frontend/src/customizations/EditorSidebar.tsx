@@ -6450,20 +6450,20 @@ function CheckoutOrderSummaryNotice({
           </div>
           <div>
             <div style={{ fontSize: "12px", fontWeight: 800, color: "#0f172a" }}>
-              Order Summary (Inherited)
+              Order Summary
             </div>
             <span style={{ fontSize: "9px", fontWeight: 700, padding: "1px 5px", borderRadius: "3px", background: "#e0f2fe", color: "#0369a1" }}>
-              SYNCS WITH CART
+              SHARED WITH CART
             </span>
           </div>
         </div>
 
-        <p style={{ margin: "0 0 10px", fontSize: "11px", color: "#475569", lineHeight: 1.5 }}>
-          This Order Summary component is inherited directly from your <strong>Shopping Cart</strong> settings to ensure consistent pricing, promo rules, and labels between the Cart and Checkout pages.
+        <p style={{ margin: "0 0 10px", fontSize: "11px", color: "#475569", lineHeight: 1.6 }}>
+          This block is shared with your <strong>Shopping Cart</strong> — keeping pricing, promo logic, and labels perfectly in sync across the cart and every checkout step.
         </p>
 
-        <p style={{ margin: "0 0 14px", fontSize: "10.5px", color: "#64748b", lineHeight: 1.4 }}>
-          To customize this component's text labels, promo input, border radii, or colors, please edit it on the <strong>Cart</strong> page.
+        <p style={{ margin: "0 0 14px", fontSize: "10.5px", color: "#64748b", lineHeight: 1.5 }}>
+          To adjust text labels, promo code input, border styles, or colors, head to the <strong>Cart</strong> page and edit the component there.
         </p>
 
         <button
@@ -6490,7 +6490,7 @@ function CheckoutOrderSummaryNotice({
             transition: "all 0.15s ease",
           }}
         >
-          Go to Cart Page to Edit →
+          Edit on Cart Page →
         </button>
       </section>
     </div>
@@ -8987,10 +8987,13 @@ export default function EditorSidebar({
 
   const textColor = "#0f172a";
   const accentColor = siteDefinition.theme?.accent_color || "#2563eb";
+  const _rawSelectedBlock = findBlockById(siteDefinition, selectedBlockId);
   const selectedBlock =
     (selectedBlockId === "checkout_steps" || selectedBlockId === "checkoutsteps" || selectedBlockId === "checkout_stepper")
-      ? (findBlockById(siteDefinition, selectedBlockId) || { id: "checkout_steps", type: "checkout_steps", props: {} })
-      : findBlockById(siteDefinition, selectedBlockId);
+      ? (_rawSelectedBlock || { id: "checkout_steps", type: "checkout_steps", props: {} })
+      : (selectedBlockId === "checkout_order_summary")
+        ? { id: "checkout_order_summary", type: "checkout_order_summary", props: _rawSelectedBlock?.props ?? {} }
+      : _rawSelectedBlock;
   const editableConfig = selectedBlock
     ? getEditableConfigForBlock(selectedBlock.type)
     : null;
@@ -9762,6 +9765,12 @@ export default function EditorSidebar({
                         selectedBlock.type === "checkout_steps" ||
                         selectedBlockId === "checkout_steps"
                       ? "Checkout Steps"
+                      : isCheckoutSummaryBlock(selectedBlock) ||
+                        selectedBlock.id === "checkout_order_summary" ||
+                        selectedBlock.type === "checkout_order_summary" ||
+                        selectedBlock.type === "checkoutordersummary" ||
+                        selectedBlockId === "checkout_order_summary"
+                      ? "Order Summary"
                       : isDeliveryBlock(selectedBlock) ||
                         editableConfig?.displayName === "Delivery Form"
                       ? (selectedBlock.type === "delivery_map_picker"
@@ -9775,12 +9784,6 @@ export default function EditorSidebar({
                         selectedBlock.type === "paymentmethods" ||
                         selectedBlockId === "payment_methods"
                       ? "Payment Methods"
-                      : isCheckoutSummaryBlock(selectedBlock) ||
-                        selectedBlock.id === "checkout_order_summary" ||
-                        selectedBlock.type === "checkout_order_summary" ||
-                        selectedBlock.type === "checkoutordersummary" ||
-                        selectedBlockId === "checkout_order_summary"
-                      ? "Order Summary"
                       : selectedBlock.type.toUpperCase())
                   : activePageTitle}
               </span>
@@ -9914,6 +9917,16 @@ export default function EditorSidebar({
                   onSiteDefinitionChange={onSiteDefinitionChange}
                   siteDefinition={siteDefinition}
                 />
+              ) : isCheckoutSummaryBlock(selectedBlock) ||
+                selectedBlock.id === "checkout_order_summary" ||
+                selectedBlock.type === "checkout_order_summary" ||
+                selectedBlock.type === "checkoutordersummary" ||
+                selectedBlockId === "checkout_order_summary" ? (
+                <CheckoutOrderSummaryNotice
+                  isLightMode={isLightMode}
+                  onSelectPage={onSelectPage}
+                  onSelectBlock={onSelectBlock}
+                />
               ) : isDeliveryBlock(selectedBlock) ||
                 editableConfig?.displayName === "Delivery Form" ||
                 selectedBlock.type === "delivery_form" ||
@@ -9940,16 +9953,6 @@ export default function EditorSidebar({
                   accentColor={accentColor}
                   onSiteDefinitionChange={onSiteDefinitionChange}
                   siteDefinition={siteDefinition}
-                />
-              ) : isCheckoutSummaryBlock(selectedBlock) ||
-                selectedBlock.id === "checkout_order_summary" ||
-                selectedBlock.type === "checkout_order_summary" ||
-                selectedBlock.type === "checkoutordersummary" ||
-                selectedBlockId === "checkout_order_summary" ? (
-                <CheckoutOrderSummaryNotice
-                  isLightMode={isLightMode}
-                  onSelectPage={onSelectPage}
-                  onSelectBlock={onSelectBlock}
                 />
               ) : (
                 fieldGroups.map((group) => (
