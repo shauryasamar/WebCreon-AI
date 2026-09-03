@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   ReactNode,
@@ -572,6 +573,60 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
   }, [user]);
+
+  // Sync customer authentication across tabs automatically
+  useEffect(() => {
+    // Snapshot the token at the time we last checked so we can detect real changes on focus.
+    let lastSeenToken: string | null = null;
+
+    const getCurrentTenant = (): string | null => {
+      if (user?.siteSlug) return user.siteSlug;
+      if (user?.siteId) return user.siteId;
+      const path = window.location.pathname;
+      if (path.startsWith("/store/")) return path.split("/")[2] || null;
+      if (path.startsWith("/builder/")) return path.split("/")[2] || null;
+      return null;
+    };
+
+    // Initialize snapshot
+    const initTenant = getCurrentTenant();
+    if (initTenant) lastSeenToken = getTenantToken(initTenant);
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key && event.key.startsWith("wc_customer_token_")) {
+        const tenantKey = event.key.replace("wc_customer_token_", "");
+        lastSeenToken = event.newValue;
+        if (event.newValue) {
+          refreshMe(tenantKey);
+        } else {
+          clearUser(tenantKey);
+        }
+      }
+    };
+
+    const handleFocus = () => {
+      // Only re-validate if the token in localStorage has actually changed
+      // since we last checked — avoids unnecessary /me calls on every focus.
+      const tenant = getCurrentTenant();
+      if (!tenant) return;
+      const currentToken = getTenantToken(tenant);
+      if (currentToken !== lastSeenToken) {
+        lastSeenToken = currentToken;
+        if (currentToken) {
+          refreshMe(tenant);
+        } else {
+          clearUser(tenant);
+        }
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [user?.siteSlug, user?.siteId, refreshMe, clearUser]);
 
   const value = useMemo(
     () => ({

@@ -924,8 +924,6 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
   }, [isProductDetailPageContext, resolvedBlocks, page]);
 
   const blocksToRender = useMemo(() => {
-    if (isCheckoutPage) return detailRelevantBlocks;
-
     let blocks = detailRelevantBlocks;
 
     // Filter out navbar and footer as they are rendered globally by StorefrontShell
@@ -933,6 +931,20 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
       const type = String(b.type || "").toLowerCase();
       return type !== "navbar" && type !== "footer";
     });
+
+    if (isCheckoutPage) {
+      // Checkout flow only renders checkout components (delivery, payment, order summary, place order)
+      // Never render hero banners, promotional banners, carousels, or product grids
+      return blocks.filter((b) => {
+        const type = String(b.type || "").toLowerCase();
+        return (
+          !type.includes("banner") &&
+          !type.includes("hero") &&
+          !type.includes("carousel") &&
+          !type.includes("grid")
+        );
+      });
+    }
 
     // If searching OR viewing an expanded section (via "View All >" or Banner Link):
     // HIDE ALL other hero banners, carousels, category grids, brand grids!
@@ -1275,6 +1287,17 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
 
   const extraBlocks = blocksToRender.filter((block) => {
     const key = block.id || block.type;
+    const type = String(block.type || "").toLowerCase();
+    if (
+      type.includes("banner") ||
+      type.includes("hero") ||
+      type.includes("carousel") ||
+      type.includes("grid") ||
+      type === "navbar" ||
+      type === "footer"
+    ) {
+      return false;
+    }
     return !usedBlockIds.has(key);
   });
 

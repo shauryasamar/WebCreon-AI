@@ -264,7 +264,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { siteId, slug } = useParams<{ siteId?: string; slug?: string }>();
-  const { isAuthenticated, refreshMe, clearUser, logout } = useCustomerAuth();
+  const { isAuthenticated, refreshMe, logout } = useCustomerAuth();
 
 
   const viewportMode = useViewportMode();
@@ -1079,15 +1079,10 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
 
   useEffect(() => {
-    if (!siteSlug) return;
-    // In builder workspace (any /builder/ route) or admin panel, the user is
-    // an admin previewing/editing. Customer auth should never run here.
-    if (!isStoreRoute) {
-      clearUser(siteSlug);
-      return;
-    }
-    refreshMe(siteSlug);
-  }, [siteSlug, isStoreRoute, refreshMe, clearUser]);
+    const tenant = siteSlug || (siteId ? String(siteId) : "");
+    if (!tenant) return;
+    refreshMe(tenant);
+  }, [siteSlug, siteId, refreshMe]);
 
 
   useEffect(() => {
@@ -1194,7 +1189,10 @@ const Navbar: React.FC<NavbarProps> = (props) => {
       console.error("Customer logout failed:", error);
     } finally {
       closeAccountMenu();
-      navigate(`/store/${siteSlug}/login`, { replace: true });
+      if (isStoreRoute && siteSlug) {
+        navigate(`/store/${siteSlug}/login`, { replace: true });
+      }
+      // In builder context, just stay on the page — auth state updates via context
     }
   };
 
@@ -1236,7 +1234,14 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   const handleAccountClick = () => {
     setMobileSearchOpen(false);
     setSearchActive(false);
-    if (isAuthenticated || isBuilderAdminRoute || isBuilderContext) {
+    if (isAuthenticated) {
+      // Always open the account dropdown when the customer is logged in
+      setAccountMenuOpen((prev) => !prev);
+      return;
+    }
+    if (isBuilderAdminRoute || isBuilderContext) {
+      // In the builder/admin preview, open the dropdown so the admin can see the
+      // UI state — but only show placeholder content (not authenticated links).
       setAccountMenuOpen((prev) => !prev);
       return;
     }

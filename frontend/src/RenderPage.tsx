@@ -894,8 +894,6 @@ const RenderPage: React.FC<RenderPageProps> = ({
   }, [isProductDetailPageContext, resolvedBlocks]);
 
   const blocksToRender = useMemo(() => {
-    if (isCheckoutPage) return detailRelevantBlocks;
-
     let blocks = detailRelevantBlocks;
 
     // Filter out navbar and footer as they are rendered globally by StorefrontShell
@@ -903,6 +901,20 @@ const RenderPage: React.FC<RenderPageProps> = ({
       const type = String(b.type || "").toLowerCase();
       return type !== "navbar" && type !== "footer";
     });
+
+    if (isCheckoutPage) {
+      // Checkout flow only renders checkout components (delivery, payment, order summary, place order)
+      // Never render hero banners, promotional banners, carousels, or product grids
+      return blocks.filter((b) => {
+        const type = String(b.type || "").toLowerCase();
+        return (
+          !type.includes("banner") &&
+          !type.includes("hero") &&
+          !type.includes("carousel") &&
+          !type.includes("grid")
+        );
+      });
+    }
 
     // If searching OR viewing an expanded section (via "View All >" or Banner Link):
     // HIDE ALL other hero banners, carousels, category grids, brand grids!

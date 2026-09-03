@@ -8,7 +8,7 @@ import React, {
 } from "react";
 import { API_BASE_URL } from "./config/api";
 import { getThumbnailUrl } from "./utils/imageOptimizer";
-import { getCustomerAuthHeaders } from "./utils/customerAuthFetch";
+import { getCustomerAuthHeaders, getCustomerToken } from "./utils/customerAuthFetch";
 
 export type ProductVariantValue = {
   value: string;
@@ -323,12 +323,16 @@ export function CartProvider({
       return;
     }
 
-    // In admin/builder preview mode there is no customer session for this site.
-    // Skip the authenticated fetch entirely (prevents a guaranteed cross-site 403)
-    // and operate from the local guest-cart instead.
+    // In admin/builder preview mode, skip the backend fetch only if there is
+    // no customer token. If the user is logged in (token exists in localStorage)
+    // we should still fetch their real cart from the backend so the admin
+    // preview reflects the same cart as the customer storefront.
     if (isAdminMode) {
-      loadGuestCartIntoState();
-      return;
+      const hasToken = Boolean(getCustomerToken(resolvedSiteId));
+      if (!hasToken) {
+        loadGuestCartIntoState();
+        return;
+      }
     }
 
     setIsCartLoading(true);
@@ -358,9 +362,50 @@ export function CartProvider({
     }
   }, [applyCartResponse, isAdminMode, loadGuestCartIntoState, resolvedSiteId]);
 
+  // Initial cart load
   useEffect(() => {
     refreshCart();
   }, [refreshCart]);
+
+  // Cross-tab cart sync: re-fetch whenever the customer token changes in
+  // another tab (e.g. they log in on the storefront tab) or when this tab
+  // regains focus after such a change.
+  useEffect(() => {
+    // Snapshot the token so we only re-fetch when it actually changes.
+    let lastSeenToken: string | null = resolvedSiteId
+      ? getCustomerToken(resolvedSiteId)
+      : null;
+
+    const handleStorage = (event: StorageEvent) => {
+      if (
+        event.key &&
+        event.key.startsWith("wc_customer_token_") &&
+        resolvedSiteId
+      ) {
+        // A login/logout happened in another tab — re-fetch the cart so this
+        // tab (admin or store) reflects the correct state.
+        lastSeenToken = event.newValue;
+        refreshCart();
+      }
+    };
+
+    const handleFocus = () => {
+      if (!resolvedSiteId) return;
+      const currentToken = getCustomerToken(resolvedSiteId);
+      // Only re-fetch if the token actually changed since last check
+      if (currentToken !== lastSeenToken) {
+        lastSeenToken = currentToken;
+        refreshCart();
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [refreshCart, resolvedSiteId]);
 
   const addToCart = useCallback(
     async (product: Product, quantity = 1) => {

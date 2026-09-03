@@ -211,6 +211,7 @@ Page planning:
 - For every page in frontend_plan.pages, create a matching page_plans entry.
 - Each page_plan must include:
   page_key, page_type, title, goal, sections, generation_prompt
+- For checkout page, sections MUST strictly be limited to: delivery_form, payment_methods, order_summary, place_order_cta. NEVER include hero, hero_banner, product grids, or carousels on checkout.
 - generation_prompt must be clear enough that a renderer/content generator can build the page automatically.
 - generation_prompt should mention:
   domain, brand tone, visual style, theme, target audience when available, and the page's purpose.

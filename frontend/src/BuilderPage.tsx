@@ -1836,7 +1836,27 @@ function BuilderPageContent() {
     const exact = activeSiteDefinition.pages.find(
       (p) => p.route === "/checkout" || p.route === "checkout" || p.role === "checkout"
     );
-    if (exact) return exact;
+    if (exact) {
+      const cleanBlocks = (exact.blocks || []).filter((b) => {
+        const type = String(b.type || "").toLowerCase();
+        return (
+          !type.includes("banner") &&
+          !type.includes("hero") &&
+          !type.includes("carousel") &&
+          !type.includes("grid") &&
+          type !== "navbar" &&
+          type !== "footer"
+        );
+      });
+      return {
+        ...exact,
+        blocks: cleanBlocks.length > 0 ? cleanBlocks : [
+          { id: "delivery_form", type: "delivery_form", props: {} },
+          { id: "payment_methods", type: "payment_methods", props: {} },
+          { id: "place_order_cta", type: "place_order_cta", props: {} },
+        ],
+      };
+    }
     return {
       id: "fallback-checkout-page",
       name: "Checkout",
