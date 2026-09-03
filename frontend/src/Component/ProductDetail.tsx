@@ -1906,7 +1906,17 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
           alignItems: "start",
         }}
       >
-        <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: "10px" }}>
+        <div
+          style={{
+            minWidth: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+            position: isMobile ? "static" : "sticky",
+            top: isMobile ? "0px" : "14px",
+            alignSelf: "start",
+          }}
+        >
           <div
             style={{
               ...shellCard,
@@ -2300,7 +2310,14 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
           </div>
         </div>
 
-        <div style={{ minWidth: 0, position: isMobile ? "static" : "sticky", top: "20px" }}>
+        <div
+          style={{
+            minWidth: 0,
+            position: isMobile ? "static" : "sticky",
+            top: isMobile ? "0px" : "14px",
+            alignSelf: "start",
+          }}
+        >
           <div
             style={{
               ...shellCard,

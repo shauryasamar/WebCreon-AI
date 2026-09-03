@@ -557,7 +557,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
     boxSizing: "border-box",
     flexShrink: 0,
     background: slideCustomBgColor,
-    cursor: activeSlides.length > 1 ? (isDragging ? "grabbing" : "grab") : "default",
+    cursor: isDragging ? "grabbing" : "default",
     userSelect: isDragging ? "none" : "auto",
     touchAction: "pan-y",
     boxShadow: isDarkMode
