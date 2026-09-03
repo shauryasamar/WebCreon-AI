@@ -7,6 +7,7 @@ import {
   Outlet,
   useNavigate,
   useLocation,
+  useParams,
 } from "react-router-dom";
 import { CustomerAuthProvider } from "./context/CustomerAuthContext";
 import { AdminAuthProvider, useAdminAuth } from "./context/AdminAuthContext";
