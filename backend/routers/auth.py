@@ -129,6 +129,25 @@ def clear_auth_cookie(response: Response, key: str):
     )
 
 
+def set_customer_tenant_cookies(
+    response: Response,
+    site: Site,
+    website_name: str,
+    token: str,
+):
+    set_auth_cookie(response, CUSTOMER_COOKIE_NAME, token)
+    targets = {
+        str(site.id).lower(),
+        site.slug.lower(),
+        website_name.lower().strip(),
+        website_name.lower().strip().replace("-", ""),
+        site.slug.lower().split("-")[0],
+    }
+    for t in targets:
+        if t:
+            set_auth_cookie(response, f"customer_token_{t}", token)
+
+
 def validate_password_or_400(password: str):
     if not password or not password.strip():
         raise HTTPException(status_code=400, detail="Password is required")
@@ -610,9 +629,7 @@ def customer_signup(
             "token": token,
         }
     )
-    set_auth_cookie(response, CUSTOMER_COOKIE_NAME, token)
-    set_auth_cookie(response, f"customer_token_{site.id}", token)
-    set_auth_cookie(response, f"customer_token_{site.slug.lower()}", token)
+    set_customer_tenant_cookies(response, site, website_name, token)
     return response
 
 
@@ -652,9 +669,7 @@ def customer_login(
             "token": token,
         }
     )
-    set_auth_cookie(response, CUSTOMER_COOKIE_NAME, token)
-    set_auth_cookie(response, f"customer_token_{site.id}", token)
-    set_auth_cookie(response, f"customer_token_{site.slug.lower()}", token)
+    set_customer_tenant_cookies(response, site, website_name, token)
     return response
 
 
@@ -700,7 +715,9 @@ def customer_logout(
     target = website_name or request.headers.get("X-Site-Id")
     if target:
         clean_target = str(target).strip().lower()
+        clean_base = clean_target.split("-")[0]
         clear_auth_cookie(response, f"customer_token_{clean_target}")
+        clear_auth_cookie(response, f"customer_token_{clean_base}")
         clear_auth_cookie(response, f"customer_token_{target}")
     return {"message": "Customer logged out"}
 
@@ -852,9 +869,7 @@ def customer_google_auth(
             "token": token,
         }
     )
-    set_auth_cookie(response, CUSTOMER_COOKIE_NAME, token)
-    set_auth_cookie(response, f"customer_token_{site.id}", token)
-    set_auth_cookie(response, f"customer_token_{site.slug.lower()}", token)
+    set_customer_tenant_cookies(response, site, website_name, token)
     return response
 
 
@@ -966,7 +981,5 @@ def customer_reset_password(
             "token": token,
         }
     )
-    set_auth_cookie(response, CUSTOMER_COOKIE_NAME, token)
-    set_auth_cookie(response, f"customer_token_{site.id}", token)
-    set_auth_cookie(response, f"customer_token_{site.slug.lower()}", token)
+    set_customer_tenant_cookies(response, site, website_name, token)
     return response

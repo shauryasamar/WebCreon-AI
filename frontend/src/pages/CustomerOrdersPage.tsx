@@ -4,6 +4,7 @@ import { API_BASE_URL } from "../config/api";
 import { Pagination } from "../Component/Pagination";
 import { resolveThemeTokens } from "../context/ThemeContext";
 import { getThumbnailUrl } from "../utils/imageOptimizer";
+import { getCustomerAuthHeaders } from "../utils/customerAuthFetch";
 
 type RefundInfo = {
   status: string;
@@ -807,6 +808,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
     try {
       const response = await fetch(`${API_BASE_URL}/orders/${siteId}/my-orders`, {
         credentials: "include",
+        headers: getCustomerAuthHeaders(siteId),
       });
       if (!response.ok) throw new Error("Failed to load orders");
       const data = await response.json();
@@ -884,6 +886,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       setDetailLoadingId(orderId);
       const response = await fetch(`${API_BASE_URL}/orders/${siteId}/my-orders/${orderId}`, {
         credentials: "include",
+        headers: getCustomerAuthHeaders(siteId),
       });
 
       if (!response.ok) {
@@ -994,9 +997,9 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       const response = await fetch(`${API_BASE_URL}/orders/${siteId}/${orderId}/cancel`, {
         method: "POST",
         credentials: "include",
-        headers: {
+        headers: getCustomerAuthHeaders(siteId, {
           "Content-Type": "application/json",
-        },
+        }),
         body: JSON.stringify({
           cancel_reason: cancelReason || "Cancelled by customer",
         }),

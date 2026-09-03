@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "./config/api";
+import { getCustomerAuthHeaders } from "./utils/customerAuthFetch";
 
 export type SavedAddress = {
   id: string;
@@ -64,6 +65,7 @@ export async function getCheckoutAddresses(siteId: string): Promise<SavedAddress
     const response = await fetch(`${API_BASE_URL}/checkout/addresses/${siteId}`, {
       method: "GET",
       credentials: "include",
+      headers: getCustomerAuthHeaders(siteId),
     });
 
     if (response.status === 401 || response.status === 403) {
@@ -84,9 +86,9 @@ export async function createCheckoutAddress(
   const response = await fetch(`${API_BASE_URL}/checkout/addresses/${siteId}`, {
     method: "POST",
     credentials: "include",
-    headers: {
+    headers: getCustomerAuthHeaders(siteId, {
       "Content-Type": "application/json",
-    },
+    }),
     body: JSON.stringify(payload),
   });
 
@@ -103,9 +105,9 @@ export async function updateCheckoutAddress(
     {
       method: "PUT",
       credentials: "include",
-      headers: {
+      headers: getCustomerAuthHeaders(siteId, {
         "Content-Type": "application/json",
-      },
+      }),
       body: JSON.stringify(payload),
     }
   );
@@ -122,6 +124,7 @@ export async function deleteCheckoutAddress(
     {
       method: "DELETE",
       credentials: "include",
+      headers: getCustomerAuthHeaders(siteId),
     }
   );
 
@@ -140,6 +143,7 @@ export async function setDefaultCheckoutAddress(
     {
       method: "POST",
       credentials: "include",
+      headers: getCustomerAuthHeaders(siteId),
     }
   );
 
@@ -156,6 +160,7 @@ export async function checkDeliverability(
     {
       method: "GET",
       credentials: "include",
+      headers: getCustomerAuthHeaders(siteId),
     }
   );
 

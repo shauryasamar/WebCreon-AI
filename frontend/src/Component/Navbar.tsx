@@ -1083,7 +1083,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     // In builder workspace (any /builder/ route) or admin panel, the user is
     // an admin previewing/editing. Customer auth should never run here.
     if (!isStoreRoute) {
-      clearUser();
+      clearUser(siteSlug);
       return;
     }
     refreshMe(siteSlug);

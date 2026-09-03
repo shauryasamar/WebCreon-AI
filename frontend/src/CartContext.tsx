@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import { API_BASE_URL } from "./config/api";
 import { getThumbnailUrl } from "./utils/imageOptimizer";
+import { getCustomerAuthHeaders } from "./utils/customerAuthFetch";
 
 export type ProductVariantValue = {
   value: string;
@@ -335,6 +336,7 @@ export function CartProvider({
       const res = await fetch(`${API_BASE_URL}/cart/${resolvedSiteId}`, {
         method: "GET",
         credentials: "include",
+        headers: getCustomerAuthHeaders(resolvedSiteId),
       });
 
       if (res.status === 401 || res.status === 403) {
@@ -371,9 +373,9 @@ export function CartProvider({
         const res = await fetch(`${API_BASE_URL}/cart/${resolvedSiteId}/items`, {
           method: "POST",
           credentials: "include",
-          headers: {
+          headers: getCustomerAuthHeaders(resolvedSiteId, {
             "Content-Type": "application/json",
-          },
+          }),
           body: JSON.stringify({
             product_id: product.id,
             quantity: safeQuantity,
@@ -476,6 +478,7 @@ export function CartProvider({
           {
             method: "DELETE",
             credentials: "include",
+            headers: getCustomerAuthHeaders(resolvedSiteId),
           }
         );
 
@@ -541,9 +544,9 @@ export function CartProvider({
           {
             method: "PUT",
             credentials: "include",
-            headers: {
+            headers: getCustomerAuthHeaders(resolvedSiteId, {
               "Content-Type": "application/json",
-            },
+            }),
             body: JSON.stringify({ quantity }),
           }
         );
@@ -581,6 +584,7 @@ export function CartProvider({
       const res = await fetch(`${API_BASE_URL}/cart/${resolvedSiteId}/clear`, {
         method: "DELETE",
         credentials: "include",
+        headers: getCustomerAuthHeaders(resolvedSiteId),
       });
 
       if (res.status === 401 || res.status === 403) {

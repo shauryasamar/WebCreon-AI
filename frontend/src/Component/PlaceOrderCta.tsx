@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { API_BASE_URL } from "../config/api";
 import { isColorDarkHex } from "../context/ThemeContext";
 import { useRazorpay } from "../hooks/useRazorpay";
+import { getCustomerAuthHeaders } from "../utils/customerAuthFetch";
 
 type ThemeInput =
   | "dark"
@@ -187,7 +188,7 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
         const response = await fetch(`${API_BASE_URL}/orders/${siteId}/place`, {
           method: "POST",
           credentials: "include",
-          headers: { "Content-Type": "application/json" },
+          headers: getCustomerAuthHeaders(siteId, { "Content-Type": "application/json" }),
           body: JSON.stringify({
             address_id: selectedAddressId,
             payment_method: "cod",
@@ -221,7 +222,7 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
       const initResponse = await fetch(`${API_BASE_URL}/orders/${siteId}/create-payment-order`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: getCustomerAuthHeaders(siteId, { "Content-Type": "application/json" }),
         body: JSON.stringify({
           address_id: selectedAddressId,
           payment_method: normalizedMethod,
@@ -319,7 +320,7 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
                 const checkRes = await fetch(`${API_BASE_URL}/orders/${siteId}/verify-payment`, {
                   method: "POST",
                   credentials: "include",
-                  headers: { "Content-Type": "application/json" },
+                  headers: getCustomerAuthHeaders(siteId, { "Content-Type": "application/json" }),
                   body: JSON.stringify({
                     order_id: order_id,
                     razorpay_order_id: razorpay_order_id,
@@ -357,7 +358,7 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
             const verifyRes = await fetch(`${API_BASE_URL}/orders/${siteId}/verify-payment`, {
               method: "POST",
               credentials: "include",
-              headers: { "Content-Type": "application/json" },
+              headers: getCustomerAuthHeaders(siteId, { "Content-Type": "application/json" }),
               body: JSON.stringify({
                 order_id: order_id,
                 razorpay_order_id: paymentResponse.razorpay_order_id || razorpay_order_id,

@@ -2660,7 +2660,7 @@ export default function BuilderPage() {
       isProductsLoading={isProductsLoading}
       isAdminMode={!isStoreRoute}
     >
-      <BuilderPageContent />
+      <BuilderPageContent key={stableKey} />
     </CartProvider>
   );
 }

@@ -1293,6 +1293,16 @@ function ScrollToTop() {
   return null;
 }
 
+function StoreLoginWrapper() {
+  const { slug } = useParams<{ slug: string }>();
+  return <CustomerLoginPage key={slug || "default_login"} />;
+}
+
+function StoreSignupWrapper() {
+  const { slug } = useParams<{ slug: string }>();
+  return <CustomerSignupPage key={slug || "default_signup"} />;
+}
+
 function AppRoutes() {
   return (
     <Suspense fallback={<RouteLoadingFallback />}>
@@ -1302,8 +1312,8 @@ function AppRoutes() {
         <Route path="/admin/signup" element={<AdminSignupPage />} />
         <Route path="/admin/reset-password" element={<AdminResetPasswordPage />} />
 
-        <Route path="/store/:slug/login" element={<CustomerLoginPage />} />
-        <Route path="/store/:slug/signup" element={<CustomerSignupPage />} />
+        <Route path="/store/:slug/login" element={<StoreLoginWrapper />} />
+        <Route path="/store/:slug/signup" element={<StoreSignupWrapper />} />
         <Route path="/store/:slug/track/:orderId" element={<TrackOrderPage />} />
         <Route path="/store/:slug/rider/login" element={<RiderLoginPage />} />
         <Route path="/store/:slug/rider/dashboard" element={<AgentDeliveryPage />} />
