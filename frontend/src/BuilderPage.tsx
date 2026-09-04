@@ -2023,6 +2023,46 @@ function BuilderPageContent() {
     } as Page;
   }, [activeSiteDefinition]);
 
+  const ordersPage = useMemo(() => {
+    if (!activeSiteDefinition) return null;
+    const raw = activeSiteDefinition.pages.find(
+      (p) =>
+        p.role === "orders" ||
+        p.page_type === "orders" ||
+        p.route === "/orders" ||
+        p.route === "orders" ||
+        p.id === "orders" ||
+        p.id === "page-orders"
+    );
+    if (raw) {
+      const hasBlock = raw.blocks?.some(
+        (b) =>
+          b.type === "customer_orders" ||
+          b.type === "customerorders" ||
+          b.type === "order_history" ||
+          b.type === "order_history_list" ||
+          b.type === "orders"
+      );
+      if (hasBlock) return raw;
+      return {
+        ...raw,
+        blocks: [
+          ...(raw.blocks || []),
+          { id: "customer_orders", type: "customer_orders", props: {} },
+        ],
+      };
+    }
+    return {
+      id: "fallback-orders-page",
+      name: "Customer Order History",
+      route: "/orders",
+      show_in_nav: false,
+      blocks: [
+        { id: "customer_orders", type: "customer_orders", props: {} },
+      ],
+    } as Page;
+  }, [activeSiteDefinition]);
+
 
   /**
    * Note: this no longer bails out when `isAdminRoute` is true. Callers
@@ -2400,29 +2440,28 @@ function BuilderPageContent() {
               <Route path="track/:siteId/:orderId" element={<TrackOrderPage />} />
 
 
-              <Route
-                path="orders"
-                element={
-                  <StorefrontShell
-                    siteDefinition={activeSiteDefinition}
-                    siteId={resolvedSiteId || siteId || ""}
-                    siteSlug={siteSlug}
-                    editMode={editMode}
-                    adminTopbarVisible={showAdminTopbar}
-                    selectedBlockId={selectedBlockId}
-                    onSelectBlock={handleSelectBlock}
-                    storefrontNavbarMode={storefrontNavbarMode}
-                    navbarFixedBounds={navbarFixedBounds}
-                    appBase={appBase}
-                  >
-                    <CustomerOrdersPage
+              {ordersPage && (
+                <Route
+                  path="orders"
+                  element={
+                    <StorefrontPage
+                      page={ordersPage}
+                      siteDefinition={activeSiteDefinition}
                       siteId={resolvedSiteId || siteId || ""}
                       siteSlug={siteSlug}
-                      theme={activeSiteDefinition.theme}
+                      siteName={siteName}
+                      selectedProduct={undefined}
+                      editMode={editMode}
+                      adminTopbarVisible={showAdminTopbar}
+                      selectedBlockId={selectedBlockId}
+                      onSelectBlock={handleSelectBlock}
+                      storefrontNavbarMode={storefrontNavbarMode}
+                      navbarFixedBounds={navbarFixedBounds}
+                      appBase={appBase}
                     />
-                  </StorefrontShell>
-                }
-              />
+                  }
+                />
+              )}
 
               {profilePage && (
                 <Route

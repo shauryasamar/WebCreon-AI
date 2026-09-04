@@ -269,6 +269,8 @@ function EditorBlockWrapper({
       ? "Sign In Form"
       : blockType === "signup_form" || blockType === "signupform" || blockId === "signup_form" || blockType === "register_form" || blockType === "signup"
       ? "Sign Up Form"
+      : blockType === "customer_orders" || blockType === "customerorders" || blockId === "customer_orders" || blockType === "orders" || blockType === "order_history" || blockType === "order_history_list"
+      ? "Order History"
       : (blockType || "")
           .replace(/[-_]/g, " ")
           .replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1345,6 +1347,8 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
           (block.id === "signin_form" || block.type === "signin_form" || block.type === "login" || block.type === "signinform" || block.type === "login_form")) ||
         ((selectedBlockId === "signup_form" || selectedBlockId === "signup" || selectedBlockId === "signupform" || selectedBlockId === "register_form") &&
           (block.id === "signup_form" || block.type === "signup_form" || block.type === "signup" || block.type === "signupform" || block.type === "register_form")) ||
+        ((selectedBlockId === "customer_orders" || selectedBlockId === "orders" || selectedBlockId === "order_history" || selectedBlockId === "order_history_list" || selectedBlockId === "customerorders") &&
+          (block.id === "customer_orders" || block.type === "customer_orders" || block.type === "orders" || block.type === "order_history" || block.type === "order_history_list" || block.type === "customerorders")) ||
         ((selectedBlockId === "cart_view" || selectedBlockId === "cart" || selectedBlockId === "cart_sidebar") &&
           (CART_PAGE_TYPES.has(block.type.toLowerCase()) || isCartBlock)))
     );

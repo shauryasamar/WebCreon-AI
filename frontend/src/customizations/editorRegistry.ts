@@ -2288,6 +2288,39 @@ export const editorRegistry: EditorRegistry = {
     ],
   },
 
+  customer_orders: {
+    displayName: "Order History",
+    fields: [
+      styleMaxWidthField,
+      styleBorderRadiusField,
+      stylePaddingField,
+    ],
+  },
+  orders: {
+    displayName: "Order History",
+    fields: [
+      styleMaxWidthField,
+      styleBorderRadiusField,
+      stylePaddingField,
+    ],
+  },
+  order_history: {
+    displayName: "Order History",
+    fields: [
+      styleMaxWidthField,
+      styleBorderRadiusField,
+      stylePaddingField,
+    ],
+  },
+  order_history_list: {
+    displayName: "Order History",
+    fields: [
+      styleMaxWidthField,
+      styleBorderRadiusField,
+      stylePaddingField,
+    ],
+  },
+
   footer: {
     displayName: "Footer Settings",
     fields: [

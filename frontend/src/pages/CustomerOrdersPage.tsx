@@ -263,8 +263,9 @@ type ReturnDraft = {
 };
 
 type CustomerOrdersPageProps = {
-  siteId: string;
-  siteSlug: string;
+  siteId?: string;
+  siteSlug?: string;
+  siteName?: string;
   theme?: {
     mode?: string;
     primary_bg?: string;
@@ -274,6 +275,216 @@ type CustomerOrdersPageProps = {
     accent_color?: string;
     [key: string]: any;
   };
+  props?: Record<string, any>;
+  editMode?: boolean;
+  max_width?: number | string;
+  card_radius?: number | string;
+  card_padding?: number | string;
+  badge_radius?: number | string;
+  card_gap?: number | string;
+  title?: string;
+  page_title?: string;
+  subtitle?: string;
+  page_subtitle?: string;
+  show_search?: boolean;
+  show_filters?: boolean;
+  show_breadcrumb?: boolean;
+  empty_title?: string;
+  empty_description?: string;
+  start_shopping_label?: string;
+  card_bg?: string;
+  border_color?: string;
+  title_color?: string;
+  subtext_color?: string;
+  accent_color?: string;
+  filter_bar_bg?: string;
+  [key: string]: any;
+};
+
+const SAMPLE_PREVIEW_ORDERS: OrderListItem[] = [
+  {
+    id: "ORD-89421",
+    status: "shipped",
+    payment_status: "paid",
+    total: 2499,
+    payment_method: "upi",
+    razorpay_payment_id: "pay_preview_123",
+    created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    items: [
+      {
+        id: "item-1",
+        product_name: "Premium Oversized Cotton T-Shirt",
+        quantity: 1,
+        selected_variant_value: "Midnight Black / L",
+        returnable_quantity: 0,
+        is_returnable: false,
+      },
+      {
+        id: "item-2",
+        product_name: "Classic Minimalist Canvas Sneakers",
+        quantity: 1,
+        selected_variant_value: "White / EU 42",
+        returnable_quantity: 0,
+        is_returnable: false,
+      },
+    ],
+    shipment: {
+      id: "ship-1",
+      status: "shipped",
+      courier_name: "Bluedart Express",
+      tracking_number: "BD982410291",
+      awb_number: "7489201948",
+      shipped_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+      estimated_delivery_at: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+  },
+  {
+    id: "ORD-84192",
+    status: "delivered",
+    payment_status: "paid",
+    total: 1299,
+    payment_method: "card",
+    created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    delivered_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    has_returnable_items: true,
+    can_request_return: true,
+    items: [
+      {
+        id: "item-3",
+        product_name: "Aerolight Performance Running Cap",
+        quantity: 1,
+        selected_variant_value: "Slate Grey",
+        returnable_quantity: 1,
+        is_returnable: true,
+        max_returnable_quantity: 1,
+      },
+    ],
+    shipment: {
+      id: "ship-2",
+      status: "delivered",
+      delivery_partner_name: "Store Express Delivery",
+      delivered_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+  },
+  {
+    id: "ORD-78105",
+    status: "confirmed",
+    payment_status: "paid",
+    total: 849,
+    payment_method: "cod",
+    created_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+    items: [
+      {
+        id: "item-4",
+        product_name: "Matte Stainless Water Bottle (750ml)",
+        quantity: 1,
+        selected_variant_value: "Forest Green",
+        returnable_quantity: 0,
+        is_returnable: false,
+      },
+    ],
+  },
+];
+
+const SAMPLE_PREVIEW_DETAILS: Record<string, OrderDetail> = {
+  "ORD-89421": {
+    id: "ORD-89421",
+    status: "shipped",
+    payment_status: "paid",
+    total: 2499,
+    payment_method: "upi",
+    created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    confirmed_at: new Date(Date.now() - 40 * 60 * 60 * 1000).toISOString(),
+    shipped_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    items: [
+      {
+        id: "item-1",
+        product_id: "p1",
+        product_name: "Premium Oversized Cotton T-Shirt",
+        selected_variant_value: "Midnight Black / L",
+        unit_price: 999,
+        quantity: 1,
+        line_total: 999,
+        status: "shipped",
+        returnable_quantity: 0,
+      },
+      {
+        id: "item-2",
+        product_id: "p2",
+        product_name: "Classic Minimalist Canvas Sneakers",
+        selected_variant_value: "White / EU 42",
+        unit_price: 1500,
+        quantity: 1,
+        line_total: 1500,
+        status: "shipped",
+        returnable_quantity: 0,
+      },
+    ],
+    shipment: {
+      id: "ship-1",
+      status: "shipped",
+      courier_name: "Bluedart Express",
+      tracking_number: "BD982410291",
+      awb_number: "7489201948",
+      shipped_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    },
+  },
+  "ORD-84192": {
+    id: "ORD-84192",
+    status: "delivered",
+    payment_status: "paid",
+    total: 1299,
+    payment_method: "card",
+    created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    confirmed_at: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+    shipped_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    delivered_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    has_returnable_items: true,
+    can_request_return: true,
+    items: [
+      {
+        id: "item-3",
+        product_id: "p3",
+        product_name: "Aerolight Performance Running Cap",
+        selected_variant_value: "Slate Grey",
+        unit_price: 1299,
+        quantity: 1,
+        line_total: 1299,
+        status: "delivered",
+        returnable_quantity: 1,
+        max_returnable_quantity: 1,
+        is_returnable: true,
+      },
+    ],
+    shipment: {
+      id: "ship-2",
+      status: "delivered",
+      delivery_partner_name: "Store Express Delivery",
+      delivered_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+  },
+  "ORD-78105": {
+    id: "ORD-78105",
+    status: "confirmed",
+    payment_status: "paid",
+    total: 849,
+    payment_method: "cod",
+    created_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+    confirmed_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+    items: [
+      {
+        id: "item-4",
+        product_id: "p4",
+        product_name: "Matte Stainless Water Bottle (750ml)",
+        selected_variant_value: "Forest Green",
+        unit_price: 849,
+        quantity: 1,
+        line_total: 849,
+        status: "confirmed",
+        returnable_quantity: 0,
+      },
+    ],
+  },
 };
 
 function isColorDarkHex(colorHex?: string): boolean {
@@ -563,19 +774,46 @@ const getCachedCustomerOrders = (sId?: string): OrderListItem[] => {
 };
 
 const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
-  siteId,
-  siteSlug,
-  theme,
+  siteId: propSiteId,
+  siteSlug: propSiteSlug,
+  theme: propTheme,
+  ...restProps
 }) => {
+  const customProps = useMemo(() => ({
+    ...(propTheme || {}),
+    ...(restProps.props || {}),
+    ...restProps,
+  }), [propTheme, restProps]);
+
+  const siteId = propSiteId || customProps.siteId || "";
+  const siteSlug = propSiteSlug || customProps.siteSlug || "";
+  const theme = propTheme || customProps.theme;
   const navigate = useNavigate();
 
-  const initialCachedOrders = useMemo(() => getCachedCustomerOrders(siteId), [siteId]);
+  const isInsideEditor =
+    Boolean(restProps.editMode) ||
+    Boolean(customProps.editMode) ||
+    (typeof window !== "undefined" &&
+      (window.location.pathname.startsWith("/builder/") ||
+        window.location.search.includes("edit_mode=true")));
+
+  const initialCachedOrders = useMemo(() => {
+    const cached = getCachedCustomerOrders(siteId);
+    if (cached.length > 0) return cached;
+    if (isInsideEditor) return SAMPLE_PREVIEW_ORDERS;
+    return [];
+  }, [siteId, isInsideEditor]);
+
   const [orders, setOrders] = useState<OrderListItem[]>(initialCachedOrders);
   const [returns, setReturns] = useState<CustomerReturnListItem[]>([]);
   const [returnDetailMap, setReturnDetailMap] = useState<Record<string, CustomerReturnDetail>>({});
-  const [loading, setLoading] = useState(initialCachedOrders.length === 0);
-  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
-  const [detailMap, setDetailMap] = useState<Record<string, OrderDetail>>({});
+  const [loading, setLoading] = useState(initialCachedOrders.length === 0 && !isInsideEditor);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(
+    isInsideEditor ? (initialCachedOrders[0]?.id || "ORD-89421") : null
+  );
+  const [detailMap, setDetailMap] = useState<Record<string, OrderDetail>>(
+    isInsideEditor ? SAMPLE_PREVIEW_DETAILS : {}
+  );
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [submittingReturnOrderId, setSubmittingReturnOrderId] = useState<string | null>(null);
@@ -595,31 +833,104 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
     textColor: defaultTextPrimary,
     mutedTextColor: defaultTextMuted,
     borderColor: resolvedBorderColor,
-    accentColor,
+    accentColor: defaultAccentColor,
     panelBg,
     subtleBg: innerBg,
   } = resolveThemeTokens(theme);
+
+  const effectiveMaxWidth =
+    customProps.max_width !== undefined && customProps.max_width !== null && customProps.max_width !== ""
+      ? (typeof customProps.max_width === "number" ? `${customProps.max_width}px` : String(customProps.max_width))
+      : "100%";
+
+  const effectiveCardRadius =
+    customProps.card_radius !== undefined && customProps.card_radius !== null && customProps.card_radius !== ""
+      ? (typeof customProps.card_radius === "number" ? `${customProps.card_radius}px` : String(customProps.card_radius))
+      : "14px";
+
+  const effectiveCardPadding =
+    customProps.card_padding !== undefined && customProps.card_padding !== null && customProps.card_padding !== ""
+      ? (typeof customProps.card_padding === "number" ? `${customProps.card_padding}px` : String(customProps.card_padding))
+      : (viewportWidth <= 640 ? "14px" : "18px 20px");
+
+  const effectiveBadgeRadius =
+    customProps.badge_radius !== undefined && customProps.badge_radius !== null && customProps.badge_radius !== ""
+      ? (typeof customProps.badge_radius === "number" ? `${customProps.badge_radius}px` : String(customProps.badge_radius))
+      : "999px";
+
+  const effectiveCardGap =
+    customProps.card_gap !== undefined && customProps.card_gap !== null && customProps.card_gap !== ""
+      ? (typeof customProps.card_gap === "number" ? `${customProps.card_gap}px` : String(customProps.card_gap))
+      : "14px";
+
+  const effectiveInnerRadius =
+    customProps.inner_radius !== undefined && customProps.inner_radius !== null && customProps.inner_radius !== ""
+      ? (typeof customProps.inner_radius === "number" ? `${customProps.inner_radius}px` : String(customProps.inner_radius))
+      : (customProps.card_radius !== undefined && customProps.card_radius !== null && customProps.card_radius !== ""
+          ? (typeof customProps.card_radius === "number" ? `${Math.max(0, customProps.card_radius - 2)}px` : String(customProps.card_radius))
+          : "12px");
+
   const pageBg = (theme as any)?.order_history_bg || defaultPageBg;
-  const cardBg = (theme as any)?.order_history_card_bg || defaultCardBg;
+  const customCardBg = customProps.card_bg || (theme as any)?.order_history_card_bg;
+  const cardBg = customCardBg || defaultCardBg;
   const isCardDark = isColorDarkHex(cardBg);
   const isLight = !isCardDark;
 
+  const accentColor = customProps.accent_color || defaultAccentColor || "#2563eb";
+
   const rawTextPrimary = (theme as any)?.order_history_text;
+  const customTitleColor = customProps.title_color;
   const textPrimary =
-    rawTextPrimary && (isColorDarkHex(rawTextPrimary) !== isCardDark)
+    customTitleColor ||
+    (rawTextPrimary && (isColorDarkHex(rawTextPrimary) !== isCardDark)
       ? rawTextPrimary
-      : (isCardDark ? "#f8fafc" : "#0f172a");
+      : (isCardDark ? "#f8fafc" : "#0f172a"));
+  const titleColor = textPrimary;
 
   const rawTextMuted = (theme as any)?.order_history_muted_text;
+  const customSubtextColor = customProps.subtext_color;
   const textMuted =
-    rawTextMuted && (isColorDarkHex(rawTextMuted) !== isCardDark)
+    customSubtextColor ||
+    (rawTextMuted && (isColorDarkHex(rawTextMuted) !== isCardDark)
       ? rawTextMuted
-      : (isCardDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)");
+      : (isCardDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)"));
 
-  const cardBorder = `1px solid ${(theme as any)?.order_history_border || (isCardDark ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.10)")}`;
+  const customBorderColor = customProps.border_color || (theme as any)?.order_history_border;
+  const cardBorder = `1px solid ${customBorderColor || (isCardDark ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.10)")}`;
   const divider = cardBorder;
   const timelineRail = isCardDark ? "rgba(255,255,255,0.25)" : "rgba(15,23,42,0.18)";
   const pendingDot = isCardDark ? "rgba(255,255,255,0.35)" : "rgba(15,23,42,0.25)";
+
+  const pageTitle = customProps.title || customProps.page_title || "Orders & History";
+  const showBreadcrumb = customProps.show_breadcrumb !== false;
+  const showSearch = customProps.show_search !== false;
+  const showFilters = customProps.show_filters !== false;
+  const emptyTitle = customProps.empty_title || "No orders yet";
+  const emptyDescription = customProps.empty_description || "Orders placed from this account will show here.";
+  const startShoppingLabel = customProps.start_shopping_label || "Explore Store";
+
+  const customExpandedBg = customProps.expanded_bg;
+  const expandedBg = customExpandedBg || (isLight ? "#f8fafc" : "rgba(255,255,255,0.02)");
+
+  const customInnerBoxBg = customProps.inner_box_bg;
+  const effectiveInnerBoxBg = customInnerBoxBg || panelBg;
+
+  const customInnerBorderColor = customProps.inner_border_color || customProps.border_color;
+  const innerBoxBorder = `1px solid ${customInnerBorderColor || (isCardDark ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.10)")}`;
+
+  const customItemCardBg = customProps.item_card_bg;
+  const effectiveItemCardBg = customItemCardBg || innerBg;
+
+  const itemsHeading = customProps.items_heading || "Items";
+  const trackingHeading = customProps.tracking_heading || "Tracking";
+  const shippingHeading = customProps.shipping_heading || "Shipping address";
+  const paymentHeading = customProps.payment_heading || "Payment details";
+  const summaryHeading = customProps.summary_heading || "Summary";
+
+  const showTracking = customProps.show_tracking !== false;
+  const showShipping = customProps.show_shipping !== false;
+  const showPayment = customProps.show_payment !== false;
+  const showSummary = customProps.show_summary !== false;
 
   const isMobile = viewportWidth <= 640;
   const isTablet = viewportWidth > 640 && viewportWidth <= 1024;
@@ -804,7 +1115,16 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
   };
 
   const loadOrders = async () => {
-    if (!siteId) return;
+    if (!siteId) {
+      if (isInsideEditor) {
+        setOrders(SAMPLE_PREVIEW_ORDERS);
+        setTotalOrders(SAMPLE_PREVIEW_ORDERS.length);
+        setTotalPages(1);
+        setDetailMap(SAMPLE_PREVIEW_DETAILS);
+        setLoading(false);
+      }
+      return;
+    }
     try {
       const response = await fetch(`${API_BASE_URL}/orders/${siteId}/my-orders`, {
         credentials: "include",
@@ -813,14 +1133,27 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       if (!response.ok) throw new Error("Failed to load orders");
       const data = await response.json();
       const list = Array.isArray(data) ? data : (data && Array.isArray(data.orders) ? data.orders : []);
-      setOrders(list);
-      setTotalOrders(list.length);
-      setTotalPages(Math.ceil(list.length / pageSize) || 1);
-      try {
-        localStorage.setItem(`wc_customer_orders_${siteId}`, JSON.stringify(list));
-      } catch (_) {}
+      if (list.length === 0 && isInsideEditor) {
+        setOrders(SAMPLE_PREVIEW_ORDERS);
+        setTotalOrders(SAMPLE_PREVIEW_ORDERS.length);
+        setTotalPages(1);
+        setDetailMap(SAMPLE_PREVIEW_DETAILS);
+      } else {
+        setOrders(list);
+        setTotalOrders(list.length);
+        setTotalPages(Math.ceil(list.length / pageSize) || 1);
+        try {
+          localStorage.setItem(`wc_customer_orders_${siteId}`, JSON.stringify(list));
+        } catch (_) {}
+      }
     } catch (err) {
       console.error("Failed to load customer orders", err);
+      if (isInsideEditor) {
+        setOrders(SAMPLE_PREVIEW_ORDERS);
+        setTotalOrders(SAMPLE_PREVIEW_ORDERS.length);
+        setTotalPages(1);
+        setDetailMap(SAMPLE_PREVIEW_DETAILS);
+      }
     } finally {
       setLoading(false);
     }
@@ -856,8 +1189,17 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
 
   useEffect(() => {
     const bootstrap = async () => {
-      if (!siteId) return;
-      if (initialCachedOrders.length === 0) {
+      if (!siteId) {
+        if (isInsideEditor) {
+          setOrders(SAMPLE_PREVIEW_ORDERS);
+          setTotalOrders(SAMPLE_PREVIEW_ORDERS.length);
+          setTotalPages(1);
+          setDetailMap(SAMPLE_PREVIEW_DETAILS);
+          setLoading(false);
+        }
+        return;
+      }
+      if (initialCachedOrders.length === 0 && !isInsideEditor) {
         setLoading(true);
       }
       setError("");
@@ -866,7 +1208,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
     };
 
     bootstrap();
-  }, [siteId]);
+  }, [siteId, isInsideEditor]);
 
   useEffect(() => {
     window.scrollTo({
@@ -879,6 +1221,13 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
   }, []);
 
   const loadOrderDetail = async (orderId: string, force = false) => {
+    if (isInsideEditor && SAMPLE_PREVIEW_DETAILS[orderId]) {
+      setDetailMap((prev) => ({
+        ...prev,
+        [orderId]: SAMPLE_PREVIEW_DETAILS[orderId],
+      }));
+      return;
+    }
     if (!siteId) return;
     if (!force && detailMap[orderId]) return;
 
@@ -1456,10 +1805,10 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
     return (
       <div
         style={{
-          border: cardBorder,
-          borderRadius: "18px",
+          border: innerBoxBorder,
+          borderRadius: effectiveInnerRadius,
           padding: isCompact ? "16px" : "20px",
-          background: panelBg,
+          background: effectiveInnerBoxBg,
         }}
       >
         <div
@@ -1472,13 +1821,13 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
             color: textMuted,
           }}
         >
-          Tracking
+          {trackingHeading}
         </div>
 
         {isCancelled ? (
           <div
             style={{
-              borderRadius: "14px",
+              borderRadius: effectiveInnerRadius,
               border: "1px solid rgba(239,68,68,0.18)",
               background: "rgba(239,68,68,0.08)",
               padding: "14px 16px",
@@ -1809,7 +2158,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       <div
         style={{
           border: cardBorder,
-          borderRadius: "18px",
+          borderRadius: effectiveInnerRadius,
           background: panelBg,
           overflow: "hidden",
         }}
@@ -1869,7 +2218,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                     alignItems: "center",
                     gap: "8px",
                     padding: "8px 12px",
-                    borderRadius: "999px",
+                    borderRadius: effectiveBadgeRadius,
                     background: `${statusColor}18`,
                     border: `1px solid ${statusColor}30`,
                     color: statusColor,
@@ -1935,7 +2284,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
               <div style={{ display: "flex", flexDirection: "column", gap: "14px", paddingTop: "14px" }}>
                 <div
                   style={{
-                    borderRadius: "16px",
+                    borderRadius: effectiveInnerRadius,
                     background: innerBg,
                     border: cardBorder,
                     padding: isCompact ? "12px" : "14px",
@@ -2590,11 +2939,11 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
     >
       <div
         style={{
-          maxWidth: "1180px",
+          maxWidth: effectiveMaxWidth,
           margin: "0 auto",
         }}
       >
-        {/* Clean Minimalist E-Commerce Header with Store Breadcrumb */}
+        {/* Clean Minimalist E-Commerce Header with Store Breadcrumb & Title */}
         <div
           style={{
             display: "flex",
@@ -2604,60 +2953,79 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
           }}
         >
           {/* Breadcrumb back-link */}
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              fontSize: "13px",
-              color: textMuted,
-              fontWeight: 500,
-            }}
-          >
-            <span
-              onClick={() => {
-                const path = window.location.pathname;
-                if (path.startsWith("/builder/")) {
-                  const segments = path.split("/").filter(Boolean);
-                  const currentSiteId = segments[1] || siteId;
-                  navigate(`/builder/${currentSiteId}`);
-                } else if (siteSlug) {
-                  navigate(`/store/${siteSlug}`);
-                } else if (siteId) {
-                  navigate(`/builder/${siteId}`);
-                } else {
-                  navigate("/");
-                }
-              }}
+          {showBreadcrumb && (
+            <div
               style={{
-                cursor: "pointer",
-                transition: "color 0.15s ease",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "5px",
+                gap: "6px",
+                fontSize: "13px",
                 color: textMuted,
+                fontWeight: 500,
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = accentColor)}
-              onMouseLeave={(e) => (e.currentTarget.style.color = textMuted)}
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="19" y1="12" x2="5" y2="12" />
-                <polyline points="12 19 5 12 12 5" />
-              </svg>
-              <span>Store</span>
-            </span>
-            <span>/</span>
-            <span style={{ color: textPrimary, fontWeight: 700 }}>Orders</span>
-          </div>
+              <span
+                onClick={() => {
+                  const path = window.location.pathname;
+                  if (path.startsWith("/builder/")) {
+                    const segments = path.split("/").filter(Boolean);
+                    const currentSiteId = segments[1] || siteId;
+                    navigate(`/builder/${currentSiteId}`);
+                  } else if (siteSlug) {
+                    navigate(`/store/${siteSlug}`);
+                  } else if (siteId) {
+                    navigate(`/builder/${siteId}`);
+                  } else {
+                    navigate("/");
+                  }
+                }}
+                style={{
+                  cursor: "pointer",
+                  transition: "color 0.15s ease",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  color: textMuted,
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = accentColor)}
+                onMouseLeave={(e) => (e.currentTarget.style.color = textMuted)}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="19" y1="12" x2="5" y2="12" />
+                  <polyline points="12 19 5 12 12 5" />
+                </svg>
+                <span>Store</span>
+              </span>
+              <span>/</span>
+              <span style={{ color: textPrimary, fontWeight: 700 }}>Orders</span>
+            </div>
+          )}
+
+          {/* Heading */}
+          {pageTitle && (
+            <div style={{ marginTop: showBreadcrumb ? "4px" : "0" }}>
+              <h1
+                style={{
+                  margin: 0,
+                  fontSize: isMobile ? "22px" : "28px",
+                  fontWeight: 800,
+                  color: titleColor,
+                  letterSpacing: "-0.02em",
+                }}
+              >
+                {pageTitle}
+              </h1>
+            </div>
+          )}
         </div>
 
         {/* Industry-Level Themed Customer Orders Filter Bar */}
-        {!loading && orders.length > 0 && (
+        {(showSearch || showFilters) && !loading && orders.length > 0 && (
           <div
             style={{
               background: cardBg,
               border: cardBorder,
-              borderRadius: "16px",
+              borderRadius: effectiveCardRadius,
               padding: isMobile ? "14px" : "16px 20px",
               marginBottom: "20px",
               boxShadow: isLight ? "0 2px 10px rgba(15,23,42,0.03)" : "0 8px 24px rgba(2,6,23,0.20)",
@@ -2671,114 +3039,117 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
               style={{
                 display: "flex",
                 alignItems: "stretch",
-                justifyContent: "space-between",
+                justifyContent: showSearch && showFilters ? "space-between" : (showSearch ? "flex-start" : "flex-end"),
                 gap: "10px",
                 flexDirection: isMobile ? "column" : "row",
                 width: "100%",
               }}
             >
               {/* Search Form with Phone-Compatible Submit, Enter Key, Magnifier & Clear */}
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  setAppliedSearchQuery(searchInputValue.trim());
-                  setCurrentPage(1);
-                }}
-                style={{
-                  position: "relative",
-                  flex: isMobile ? "1 1 100%" : "1 1 280px",
-                  width: "100%",
-                  margin: 0,
-                }}
-              >
-                <button
-                  type="submit"
+              {showSearch && (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    setAppliedSearchQuery(searchInputValue.trim());
+                    setCurrentPage(1);
+                  }}
                   style={{
-                    position: "absolute",
-                    left: "10px",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    color: textMuted,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    background: "transparent",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: "4px",
-                  }}
-                  title="Search orders"
-                  aria-label="Search orders"
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="11" cy="11" r="8" />
-                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                  </svg>
-                </button>
-                <input
-                  type="search"
-                  enterKeyHint="search"
-                  inputMode="search"
-                  value={searchInputValue}
-                  onChange={(e) => {
-                    setSearchInputValue(e.target.value);
-                    if (e.target.value === "") {
-                      setAppliedSearchQuery("");
-                      setCurrentPage(1);
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      setAppliedSearchQuery(searchInputValue.trim());
-                      setCurrentPage(1);
-                    }
-                  }}
-                  placeholder="Search by order ID, item name, tracking..."
-                  style={{
+                    position: "relative",
+                    flex: isMobile ? "1 1 100%" : "1 1 280px",
                     width: "100%",
-                    padding: "9px 34px 9px 36px",
-                    borderRadius: "10px",
-                    border: `1px solid ${isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}`,
-                    background: isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)",
-                    color: textPrimary,
-                    fontSize: "13px",
-                    fontWeight: 500,
-                    outline: "none",
-                    boxSizing: "border-box",
-                    transition: "all 0.15s ease",
+                    margin: 0,
                   }}
-                />
-                {searchInputValue && (
+                >
                   <button
-                    type="button"
-                    onClick={() => {
-                      setSearchInputValue("");
-                      setAppliedSearchQuery("");
-                      setCurrentPage(1);
-                    }}
+                    type="submit"
                     style={{
                       position: "absolute",
-                      right: "10px",
+                      left: "10px",
                       top: "50%",
                       transform: "translateY(-50%)",
+                      color: textMuted,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
                       background: "transparent",
                       border: "none",
-                      color: textMuted,
-                      fontSize: "14px",
                       cursor: "pointer",
                       padding: "4px",
-                      lineHeight: 1,
                     }}
-                    title="Clear search"
-                    aria-label="Clear search"
+                    title="Search orders"
+                    aria-label="Search orders"
                   >
-                    ✕
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="11" cy="11" r="8" />
+                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
                   </button>
-                )}
-              </form>
+                  <input
+                    type="search"
+                    enterKeyHint="search"
+                    inputMode="search"
+                    value={searchInputValue}
+                    onChange={(e) => {
+                      setSearchInputValue(e.target.value);
+                      if (e.target.value === "") {
+                        setAppliedSearchQuery("");
+                        setCurrentPage(1);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        setAppliedSearchQuery(searchInputValue.trim());
+                        setCurrentPage(1);
+                      }
+                    }}
+                    placeholder="Search by order ID, item name, tracking..."
+                    style={{
+                      width: "100%",
+                      padding: "9px 34px 9px 36px",
+                      borderRadius: effectiveInnerRadius,
+                      border: `1px solid ${isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}`,
+                      background: isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)",
+                      color: textPrimary,
+                      fontSize: "13px",
+                      fontWeight: 500,
+                      outline: "none",
+                      boxSizing: "border-box",
+                      transition: "all 0.15s ease",
+                    }}
+                  />
+                  {searchInputValue && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchInputValue("");
+                        setAppliedSearchQuery("");
+                        setCurrentPage(1);
+                      }}
+                      style={{
+                        position: "absolute",
+                        right: "10px",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        background: "transparent",
+                        border: "none",
+                        color: textMuted,
+                        fontSize: "14px",
+                        cursor: "pointer",
+                        padding: "4px",
+                        lineHeight: 1,
+                      }}
+                      title="Clear search"
+                      aria-label="Clear search"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </form>
+              )}
 
               {/* Mobile Filter Controls: Status Dropdown + Date & Sort Dropdowns */}
-              {isMobile ? (
+              {showFilters && (
+                isMobile ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px", width: "100%" }}>
                   {/* Status Selector Dropdown */}
                   <div style={{ position: "relative", width: "100%" }}>
@@ -2955,11 +3326,12 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                     </div>
                   </div>
                 </div>
-              )}
-            </div>
+              )
+            )}
+          </div>
 
-            {/* Custom Date Range Pickers (Rendered when 'Custom date range' is active) */}
-            {dateFilter === "custom" && (
+            {/* Custom Date Range Pickers (Rendered when 'Custom date range' is active and filters enabled) */}
+            {showFilters && dateFilter === "custom" && (
               <div
                 style={{
                   display: "grid",
@@ -2967,7 +3339,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                   alignItems: "center",
                   gap: "8px",
                   padding: "10px 12px",
-                  borderRadius: "12px",
+                  borderRadius: effectiveInnerRadius,
                   border: `1px dashed ${isLight ? "rgba(15,23,42,0.18)" : "rgba(255,255,255,0.20)"}`,
                   background: isLight ? "rgba(15,23,42,0.01)" : "rgba(255,255,255,0.02)",
                   width: "100%",
@@ -2986,7 +3358,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                     style={{
                       width: "100%",
                       padding: "6px 8px",
-                      borderRadius: "8px",
+                      borderRadius: effectiveInnerRadius,
                       border: `1px solid ${isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}`,
                       background: isLight ? "#ffffff" : "rgba(255,255,255,0.06)",
                       color: textPrimary,
@@ -3010,7 +3382,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                     style={{
                       width: "100%",
                       padding: "6px 8px",
-                      borderRadius: "8px",
+                      borderRadius: effectiveInnerRadius,
                       border: `1px solid ${isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}`,
                       background: isLight ? "#ffffff" : "rgba(255,255,255,0.06)",
                       color: textPrimary,
@@ -3049,8 +3421,8 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
               </div>
             )}
 
-            {/* Desktop Status Filter Tabs (Rendered on wide screens for 1-click tab switching) */}
-            {!isMobile && (
+            {/* Desktop Status Filter Tabs (Rendered on wide screens for 1-click tab switching when filters enabled) */}
+            {showFilters && !isMobile && (
               <div
                 style={{
                   display: "flex",
@@ -3083,7 +3455,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                         alignItems: "center",
                         gap: "6px",
                         padding: "6px 13px",
-                        borderRadius: "999px",
+                        borderRadius: effectiveBadgeRadius,
                         border: isActive
                           ? `1px solid ${accentColor}`
                           : `1px solid ${isLight ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.10)"}`,
@@ -3105,7 +3477,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                           fontSize: "11px",
                           fontWeight: 700,
                           padding: "1px 6px",
-                          borderRadius: "8px",
+                          borderRadius: effectiveBadgeRadius,
                           background: isActive
                             ? "rgba(255,255,255,0.25)"
                             : (isLight ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.10)"),
@@ -3289,23 +3661,73 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
             style={{
               background: cardBg,
               border: cardBorder,
-              borderRadius: "24px",
-              padding: "32px",
+              borderRadius: effectiveCardRadius,
+              padding: isMobile ? "32px 20px" : "48px 32px",
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "14px",
             }}
           >
-            <div style={{ fontSize: "18px", fontWeight: 700, marginBottom: "8px" }}>
-              No orders yet
+            <div
+              style={{
+                width: "56px",
+                height: "56px",
+                borderRadius: "50%",
+                background: isLight ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
+                display: "grid",
+                placeItems: "center",
+                color: textMuted,
+              }}
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <path d="M16 10a4 4 0 0 1-8 0" />
+              </svg>
             </div>
-            <div style={{ color: textMuted, fontSize: "14px" }}>
-              Orders placed from this account will show here.
+            <div>
+              <div style={{ fontSize: "18px", fontWeight: 700, color: titleColor, marginBottom: "6px" }}>
+                {emptyTitle}
+              </div>
+              <div style={{ color: textMuted, fontSize: "14px", maxWidth: "420px" }}>
+                {emptyDescription}
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (siteSlug) {
+                  navigate(`/store/${siteSlug}`);
+                } else if (siteId) {
+                  navigate(`/builder/${siteId}`);
+                } else {
+                  navigate("/");
+                }
+              }}
+              style={{
+                marginTop: "6px",
+                background: accentColor,
+                color: isColorDarkHex(accentColor) ? "#ffffff" : "#0f172a",
+                border: "none",
+                borderRadius: effectiveBadgeRadius,
+                padding: "10px 24px",
+                fontSize: "14px",
+                fontWeight: 700,
+                cursor: "pointer",
+                boxShadow: `0 4px 14px ${accentColor}33`,
+              }}
+            >
+              {startShoppingLabel}
+            </button>
           </div>
         ) : filteredOrders.length === 0 ? (
           <div
             style={{
               background: cardBg,
               border: cardBorder,
-              borderRadius: "24px",
+              borderRadius: effectiveCardRadius,
               padding: "48px 24px",
               textAlign: "center",
               display: "flex",
@@ -3344,7 +3766,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                 background: accentColor,
                 color: isColorDarkHex(accentColor) ? "#ffffff" : "#0f172a",
                 border: "none",
-                borderRadius: "10px",
+                borderRadius: effectiveBadgeRadius,
                 padding: "8px 18px",
                 fontSize: "13px",
                 fontWeight: 700,
@@ -3360,7 +3782,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
             style={{
               display: "flex",
               flexDirection: "column",
-              gap: "14px",
+              gap: effectiveCardGap,
             }}
           >
             {paginatedOrders.map((order) => {
@@ -3383,7 +3805,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                   style={{
                     background: cardBg,
                     border: isExpanded ? `1px solid ${accentColor}55` : cardBorder,
-                    borderRadius: "20px",
+                    borderRadius: effectiveCardRadius,
                     overflow: "hidden",
                     boxShadow: isExpanded
                       ? (isLight ? "0 14px 32px rgba(15,23,42,0.10)" : "0 20px 44px rgba(2,6,23,0.40)")
@@ -3403,7 +3825,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                         : "transparent",
                       border: "none",
                       color: "inherit",
-                      padding: isMobile ? "14px 14px" : "18px 20px",
+                      padding: effectiveCardPadding,
                       cursor: "pointer",
                       display: "block",
                       transition: "background 0.15s ease",
@@ -3424,7 +3846,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                           style={{
                             width: "42px",
                             height: "42px",
-                            borderRadius: "12px",
+                            borderRadius: effectiveInnerRadius,
                             background: isLight ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)",
                             display: "grid",
                             placeItems: "center",
@@ -3457,7 +3879,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                   fontSize: "11px",
                                   fontWeight: 700,
                                   padding: "2px 8px",
-                                  borderRadius: "999px",
+                                  borderRadius: effectiveBadgeRadius,
                                   background: isLight ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.08)",
                                   color: textMuted,
                                 }}
@@ -3514,7 +3936,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                 alignItems: "center",
                                 gap: "6px",
                                 padding: "6px 12px",
-                                borderRadius: "999px",
+                                borderRadius: effectiveBadgeRadius,
                                 background: `${chipColor}14`,
                                 border: `1px solid ${chipColor}28`,
                                 color: chipColor,
@@ -3622,7 +4044,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                       style={{
                         borderTop: divider,
                         padding: isCompact ? "14px" : "18px",
-                        background: isLight ? "#f8fafc" : "rgba(255,255,255,0.02)",
+                        background: expandedBg,
                       }}
                     >
                       {detailLoadingId === order.id && !detail ? (
@@ -3645,7 +4067,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                 padding: isCompact ? "12px 14px" : "14px 18px",
                                 background: isLight ? "#f0fdf4" : "rgba(16, 185, 129, 0.08)",
                                 border: "1.5px solid rgba(16, 185, 129, 0.3)",
-                                borderRadius: "16px",
+                                borderRadius: effectiveInnerRadius,
                                 marginBottom: "16px",
                                 flexWrap: "wrap",
                                 gap: "12px",
@@ -3675,7 +4097,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                   color: "#059669",
                                   background: isLight ? "#ffffff" : "rgba(0,0,0,0.3)",
                                   padding: "4px 16px",
-                                  borderRadius: "10px",
+                                  borderRadius: effectiveInnerRadius,
                                   border: "2px dashed #10b981",
                                   fontFamily: "monospace",
                                   boxShadow: "0 2px 8px rgba(16, 185, 129, 0.12)",
@@ -3705,10 +4127,10 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                           >
                             <div
                               style={{
-                                border: cardBorder,
-                                borderRadius: "18px",
+                                border: innerBoxBorder,
+                                borderRadius: effectiveInnerRadius,
                                 padding: isCompact ? "14px" : "16px",
-                                background: panelBg,
+                                background: effectiveInnerBoxBg,
                               }}
                             >
                               <div
@@ -3721,7 +4143,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                   color: textMuted,
                                 }}
                               >
-                                Items
+                                {itemsHeading}
                               </div>
 
                               <div
@@ -3744,9 +4166,9 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                         flexDirection: "column",
                                         gap: "12px",
                                         padding: "12px",
-                                        borderRadius: "16px",
-                                        background: innerBg,
-                                        border: cardBorder,
+                                        borderRadius: effectiveInnerRadius,
+                                        background: effectiveItemCardBg,
+                                        border: innerBoxBorder,
                                       }}
                                     >
                                       <div
@@ -3771,7 +4193,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                               width: "72px",
                                               height: "72px",
                                               objectFit: "cover",
-                                              borderRadius: "14px",
+                                              borderRadius: effectiveInnerRadius,
                                               border: cardBorder,
                                             }}
                                           />
@@ -3994,70 +4416,73 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                 gap: "14px",
                               }}
                             >
-                              <div
-                                style={{
-                                  border: cardBorder,
-                                  borderRadius: "18px",
-                                  padding: isCompact ? "14px" : "16px",
-                                  background: panelBg,
-                                }}
-                              >
+                              {showShipping && (
                                 <div
                                   style={{
-                                    fontSize: "13px",
-                                    fontWeight: 800,
-                                    marginBottom: "10px",
-                                    letterSpacing: "0.04em",
-                                    textTransform: "uppercase",
-                                    color: textMuted,
+                                    border: innerBoxBorder,
+                                    borderRadius: effectiveInnerRadius,
+                                    padding: isCompact ? "14px" : "16px",
+                                    background: effectiveInnerBoxBg,
                                   }}
                                 >
-                                  Shipping address
+                                  <div
+                                    style={{
+                                      fontSize: "13px",
+                                      fontWeight: 800,
+                                      marginBottom: "10px",
+                                      letterSpacing: "0.04em",
+                                      textTransform: "uppercase",
+                                      color: textMuted,
+                                    }}
+                                  >
+                                    {shippingHeading}
+                                  </div>
+                                  <div style={{ fontSize: "14px", fontWeight: 700 }}>
+                                    {detail.shipping_address?.fullName || "—"}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: "14px",
+                                      color: textMuted,
+                                      marginTop: "6px",
+                                      lineHeight: 1.6,
+                                    }}
+                                  >
+                                    {detail.shipping_address?.addressLine1 || "—"}
+                                    <br />
+                                    {detail.shipping_address?.city || "—"} - {detail.shipping_address?.postalCode || "—"}
+                                    <br />
+                                    {detail.shipping_address?.mobileNumber || "—"}
+                                    {detail.shipping_address?.email ? ` • ${detail.shipping_address.email}` : ""}
+                                  </div>
                                 </div>
-                                <div style={{ fontSize: "14px", fontWeight: 700 }}>
-                                  {detail.shipping_address?.fullName || "—"}
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: "14px",
-                                    color: textMuted,
-                                    marginTop: "6px",
-                                    lineHeight: 1.6,
-                                  }}
-                                >
-                                  {detail.shipping_address?.addressLine1 || "—"}
-                                  <br />
-                                  {detail.shipping_address?.city || "—"} - {detail.shipping_address?.postalCode || "—"}
-                                  <br />
-                                  {detail.shipping_address?.mobileNumber || "—"}
-                                  {detail.shipping_address?.email ? ` • ${detail.shipping_address.email}` : ""}
-                                </div>
-                              </div>
+                              )}
 
-                              <div
-                                style={{
-                                  border: cardBorder,
-                                  borderRadius: "18px",
-                                  padding: isCompact ? "14px" : "16px",
-                                  background: panelBg,
-                                  display: "flex",
-                                  flexDirection: "column",
-                                  gap: "10px",
-                                }}
-                              >
+                              {showPayment && (
                                 <div
                                   style={{
-                                    fontSize: "13px",
-                                    fontWeight: 800,
-                                    letterSpacing: "0.04em",
-                                    textTransform: "uppercase",
-                                    color: textMuted,
+                                    border: innerBoxBorder,
+                                    borderRadius: effectiveInnerRadius,
+                                    padding: isCompact ? "14px" : "16px",
+                                    background: effectiveInnerBoxBg,
                                     display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "space-between",
+                                    flexDirection: "column",
+                                    gap: "10px",
                                   }}
                                 >
-                                  <span>Payment details</span>
+                                  <div
+                                    style={{
+                                      fontSize: "13px",
+                                      fontWeight: 800,
+                                      letterSpacing: "0.04em",
+                                      textTransform: "uppercase",
+                                      color: textMuted,
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "space-between",
+                                    }}
+                                  >
+                                    <span>{paymentHeading}</span>
                                   <span
                                     style={{
                                       fontSize: "11px",
@@ -4159,6 +4584,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                   </div>
                                 )}
                               </div>
+                            )}
 
                               {renderReturnAccordion(order.id)}
                             </div>
@@ -4479,7 +4905,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                       : (detail.refund_info.status === "processing"
                                         ? "1px solid rgba(245,158,11,0.30)"
                                         : cardBorder)),
-                                  borderRadius: "18px",
+                                  borderRadius: effectiveInnerRadius,
                                   padding: isCompact ? "14px" : "16px",
                                   background: detail.refund_info.status === "failed"
                                     ? (isLight ? "#fef2f2" : "rgba(239,68,68,0.08)")
@@ -4536,7 +4962,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                         fontSize: "11px",
                                         fontWeight: 800,
                                         padding: "3px 8px",
-                                        borderRadius: "6px",
+                                        borderRadius: effectiveBadgeRadius,
                                         background: detail.refund_info.status === "failed"
                                           ? "rgba(239,68,68,0.18)"
                                           : (detail.refund_info.status === "completed" ? "rgba(16,185,129,0.18)" : "rgba(245,158,11,0.18)"),
@@ -4571,67 +4997,32 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                               </div>
                             ) : null}
 
-                            {renderTrackingTimeline(detail)}
+                            {showTracking && renderTrackingTimeline(detail)}
 
-                            <div
-                              style={{
-                                border: cardBorder,
-                                borderRadius: "18px",
-                                padding: isCompact ? "14px" : "16px",
-                                background: panelBg,
-                              }}
-                            >
+                            {showSummary && (
                               <div
                                 style={{
-                                  fontSize: "13px",
-                                  fontWeight: 800,
-                                  marginBottom: "10px",
-                                  letterSpacing: "0.04em",
-                                  textTransform: "uppercase",
-                                  color: textMuted,
+                                  border: innerBoxBorder,
+                                  borderRadius: effectiveInnerRadius,
+                                  padding: isCompact ? "14px" : "16px",
+                                  background: effectiveInnerBoxBg,
                                 }}
                               >
-                                Summary
-                              </div>
-
-                              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                                 <div
                                   style={{
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    gap: "12px",
-                                    fontSize: "14px",
+                                    fontSize: "13px",
+                                    fontWeight: 800,
+                                    marginBottom: "10px",
+                                    letterSpacing: "0.04em",
+                                    textTransform: "uppercase",
+                                    color: textMuted,
                                   }}
                                 >
-                                  <span style={{ color: textMuted }}>Subtotal</span>
-                                  <span>{formatPrice(detail.pricing_snapshot?.subtotal)}</span>
-                                </div>
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    gap: "12px",
-                                    fontSize: "14px",
-                                  }}
-                                >
-                                  <span style={{ color: textMuted }}>Discount</span>
-                                  <span>-{formatPrice(detail.pricing_snapshot?.promoDiscount || 0)}</span>
-                                </div>
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    gap: "12px",
-                                    fontSize: "14px",
-                                  }}
-                                >
-                                  <span style={{ color: textMuted }}>Tax</span>
-                                  <span>{formatPrice(detail.pricing_snapshot?.tax?.amount || 0)}</span>
+                                  {summaryHeading}
                                 </div>
 
-                                {(detail.pricing_snapshot?.charges || []).map((charge: any) => (
+                                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                                   <div
-                                    key={charge.id || charge.code}
                                     style={{
                                       display: "flex",
                                       justifyContent: "space-between",
@@ -4639,27 +5030,64 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                       fontSize: "14px",
                                     }}
                                   >
-                                    <span style={{ color: textMuted }}>{charge.label}</span>
-                                    <span>{formatPrice(charge.finalAmount || 0)}</span>
+                                    <span style={{ color: textMuted }}>Subtotal</span>
+                                    <span>{formatPrice(detail.pricing_snapshot?.subtotal)}</span>
                                   </div>
-                                ))}
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      justifyContent: "space-between",
+                                      gap: "12px",
+                                      fontSize: "14px",
+                                    }}
+                                  >
+                                    <span style={{ color: textMuted }}>Discount</span>
+                                    <span>-{formatPrice(detail.pricing_snapshot?.promoDiscount || 0)}</span>
+                                  </div>
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      justifyContent: "space-between",
+                                      gap: "12px",
+                                      fontSize: "14px",
+                                    }}
+                                  >
+                                    <span style={{ color: textMuted }}>Tax</span>
+                                    <span>{formatPrice(detail.pricing_snapshot?.tax?.amount || 0)}</span>
+                                  </div>
 
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    gap: "12px",
-                                    fontSize: "16px",
-                                    fontWeight: 800,
-                                    paddingTop: "10px",
-                                    borderTop: divider,
-                                  }}
-                                >
-                                  <span>Total</span>
-                                  <span>{formatPrice(detail.total)}</span>
+                                  {(detail.pricing_snapshot?.charges || []).map((charge: any) => (
+                                    <div
+                                      key={charge.id || charge.code}
+                                      style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        gap: "12px",
+                                        fontSize: "14px",
+                                      }}
+                                    >
+                                      <span style={{ color: textMuted }}>{charge.label}</span>
+                                      <span>{formatPrice(charge.finalAmount || 0)}</span>
+                                    </div>
+                                  ))}
+
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      justifyContent: "space-between",
+                                      gap: "12px",
+                                      fontSize: "16px",
+                                      fontWeight: 800,
+                                      paddingTop: "10px",
+                                      borderTop: divider,
+                                    }}
+                                  >
+                                    <span>Total</span>
+                                    <span>{formatPrice(detail.total)}</span>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
+                            )}
 
                             <div
                               style={{

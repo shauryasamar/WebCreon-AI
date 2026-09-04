@@ -14,6 +14,7 @@ import { PlaceOrderCta } from "./Component/PlaceOrderCta";
 import CustomerProfilePage from "./pages/CustomerProfilePage";
 import CustomerLoginPage from "./pages/CustomerLoginPage";
 import CustomerSignupPage from "./pages/CustomerSignupPage";
+import CustomerOrdersPage from "./pages/CustomerOrdersPage";
 import { HeroBanner } from "./Component/HeroBanner";
 import { ProductCarousel } from "./Component/ProductCarousel";
 import { BrandStoreGrid } from "./Component/BrandStoreGrid";
@@ -101,6 +102,15 @@ export const componentRegistry: ComponentRegistry = {
   register_form: CustomerSignupPage,
   registerform: CustomerSignupPage,
   signup: CustomerSignupPage,
+
+  customer_orders: CustomerOrdersPage,
+  customerorders: CustomerOrdersPage,
+  orders_page: CustomerOrdersPage,
+  orderspage: CustomerOrdersPage,
+  order_history: CustomerOrdersPage,
+  orderhistory: CustomerOrdersPage,
+  order_history_list: CustomerOrdersPage,
+  orders: CustomerOrdersPage,
 };
 
 export default componentRegistry;

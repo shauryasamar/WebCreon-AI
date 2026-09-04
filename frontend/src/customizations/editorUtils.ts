@@ -801,6 +801,39 @@ export function findBlockById(
     };
   }
 
+  if (
+    blockId === "customer_orders" ||
+    blockId === "customerorders" ||
+    blockId === "orders" ||
+    blockId === "order_history" ||
+    blockId === "order_history_list"
+  ) {
+    const ordersP = siteDefinition.pages.find(
+      (p) =>
+        p.role === "orders" ||
+        p.page_type === "orders" ||
+        p.route === "/orders" ||
+        p.route === "orders" ||
+        p.id === "orders" ||
+        p.id === "page-orders"
+    );
+    const inOrders = ordersP?.blocks?.find(
+      (b) =>
+        b.id === "customer_orders" ||
+        b.type === "customer_orders" ||
+        b.type === "customerorders" ||
+        b.type === "orders" ||
+        b.type === "order_history" ||
+        b.type === "order_history_list"
+    );
+    if (inOrders) return inOrders;
+    return {
+      id: "customer_orders",
+      type: "customer_orders",
+      props: {},
+    };
+  }
+
   for (const page of siteDefinition.pages) {
     const match = page.blocks.find(
       (block) => block.id === blockId || block.type === blockId
@@ -954,6 +987,20 @@ export function findBlockById(
     return {
       id: blockId,
       type: "signup_form",
+      props: {},
+    };
+  }
+
+  if (
+    blockId === "customer_orders" ||
+    blockId === "customerorders" ||
+    blockId === "orders" ||
+    blockId === "order_history" ||
+    blockId === "order_history_list"
+  ) {
+    return {
+      id: blockId,
+      type: "customer_orders",
       props: {},
     };
   }
@@ -1836,6 +1883,62 @@ export function updateBlockProps(
         ],
       };
       return { ...siteDefinition, pages: [...siteDefinition.pages, newSignUpPage] };
+    }
+  }
+
+  const isOrdersFallbackId = (id: string) =>
+    id === "customer_orders" ||
+    id === "customerorders" ||
+    id === "orders" ||
+    id === "order_history" ||
+    id === "order_history_list";
+  if (!hasExistingBlockProps && isOrdersFallbackId(blockId)) {
+    const ordersPageIndex = siteDefinition.pages.findIndex(
+      (p) =>
+        p.role === "orders" ||
+        p.page_type === "orders" ||
+        p.route === "/orders" ||
+        p.route === "orders" ||
+        p.id === "orders" ||
+        p.id === "page-orders"
+    );
+    if (ordersPageIndex !== -1) {
+      const targetPage = siteDefinition.pages[ordersPageIndex];
+      const existingBlockIndex = targetPage.blocks.findIndex(
+        (b) => isOrdersFallbackId(b.id) || isOrdersFallbackId(b.type)
+      );
+      const updatedPages = [...siteDefinition.pages];
+      if (existingBlockIndex !== -1) {
+        const existingBlock = targetPage.blocks[existingBlockIndex];
+        const updatedBlocks = [...targetPage.blocks];
+        updatedBlocks[existingBlockIndex] = {
+          ...existingBlock,
+          props: { ...(existingBlock.props || {}), ...propsPatch },
+        };
+        updatedPages[ordersPageIndex] = { ...targetPage, blocks: updatedBlocks };
+      } else {
+        updatedPages[ordersPageIndex] = {
+          ...targetPage,
+          blocks: [
+            ...targetPage.blocks,
+            { id: "customer_orders", type: "customer_orders", props: { ...propsPatch } },
+          ],
+        };
+      }
+      return { ...siteDefinition, pages: updatedPages };
+    } else {
+      const newOrdersPage: EditorPage = {
+        id: "page-orders",
+        name: "Customer Order History",
+        route: "/orders",
+        role: "orders",
+        page_type: "orders",
+        show_in_nav: false,
+        blocks: [
+          { id: "customer_orders", type: "customer_orders", props: { ...propsPatch } },
+        ],
+      };
+      return { ...siteDefinition, pages: [...siteDefinition.pages, newOrdersPage] };
     }
   }
 
