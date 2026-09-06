@@ -22,9 +22,22 @@ from sqlalchemy import text
 
 
 def create_db_and_tables():
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                DROP INDEX IF EXISTS ix_support_tickets_site_id;
+                DROP INDEX IF EXISTS ix_support_tickets_customer_id;
+                DROP INDEX IF EXISTS ix_support_tickets_order_id;
+                DROP INDEX IF EXISTS ix_support_ticket_messages_ticket_id;
+                DROP INDEX IF EXISTS ix_support_agents_site_id;
+            """))
+            conn.commit()
+    except Exception:
+        pass
     SQLModel.metadata.create_all(engine)
     try:
         with engine.connect() as conn:
+
             conn.execute(text("""
                 ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_status VARCHAR(30) DEFAULT 'pending';
                 ALTER TABLE orders ADD COLUMN IF NOT EXISTS razorpay_order_id VARCHAR;
@@ -41,6 +54,8 @@ def create_db_and_tables():
                 ALTER TABLE return_requests ADD COLUMN IF NOT EXISTS customer_refund_account JSONB;
                 ALTER TABLE return_requests ADD COLUMN IF NOT EXISTS pickup_status VARCHAR(50);
                 ALTER TABLE return_requests ADD COLUMN IF NOT EXISTS pickup_details JSONB;
+                ALTER TABLE support_ticket_messages ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ;
+                ALTER TABLE order_status_history ADD COLUMN IF NOT EXISTS notes TEXT;
 
                 ALTER TABLE tenant_bank_accounts ADD COLUMN IF NOT EXISTS razorpay_account_id VARCHAR(64);
                 ALTER TABLE tenant_bank_accounts ADD COLUMN IF NOT EXISTS route_status VARCHAR(30) DEFAULT 'pending';

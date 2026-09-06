@@ -186,10 +186,21 @@ export default function CustomerProfilePage({
     ? "rgba(255, 255, 255, 0.16)"
     : "rgba(15, 23, 42, 0.16)";
 
+  const [viewportWidth, setViewportWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 1024
+  );
+
+  useEffect(() => {
+    const handleResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const isMobile = viewportWidth <= 768;
+
   const resolvedMaxWidth = useMemo(() => {
     const raw = customProps.max_width;
-    if (!raw) return "1180px";
-    if (raw === "100%" || raw === "full") return "100%";
+    if (!raw || raw === "100%" || raw === "full" || raw === "100") return "100%";
     if (typeof raw === "number") return `${raw}px`;
     return String(raw);
   }, [customProps.max_width]);
@@ -285,6 +296,7 @@ export default function CustomerProfilePage({
         style={{
           minHeight: "75vh",
           display: "flex",
+          flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
           padding: "32px 16px",
@@ -292,6 +304,54 @@ export default function CustomerProfilePage({
           color: textColor,
         }}
       >
+        <div style={{ maxWidth: "420px", width: "100%", marginBottom: "16px" }}>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              fontSize: "13px",
+              color: subtextColor,
+              fontWeight: 500,
+            }}
+          >
+            <span
+              onClick={() => {
+                const path = window.location.pathname;
+                if (path.startsWith("/builder/")) {
+                  const segments = path.split("/").filter(Boolean);
+                  const currentSiteId = segments[1] || propSiteId;
+                  navigate(`/builder/${currentSiteId}`);
+                } else if (activeSlug) {
+                  navigate(`/store/${activeSlug}`);
+                } else if (propSiteId) {
+                  navigate(`/builder/${propSiteId}`);
+                } else {
+                  navigate("/");
+                }
+              }}
+              style={{
+                cursor: "pointer",
+                transition: "color 0.15s ease",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                color: subtextColor,
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = accentColor)}
+              onMouseLeave={(e) => (e.currentTarget.style.color = subtextColor)}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="19" y1="12" x2="5" y2="12" />
+                <polyline points="12 19 5 12 12 5" />
+              </svg>
+              <span>Store</span>
+            </span>
+            <span>/</span>
+            <span style={{ color: textColor, fontWeight: 700 }}>Profile</span>
+          </div>
+        </div>
+
         <div
           style={{
             maxWidth: "420px",
@@ -355,8 +415,9 @@ export default function CustomerProfilePage({
         minHeight: "calc(100vh - 140px)",
         background: isLight ? primaryBg : "transparent",
         color: textColor,
-        padding: "24px 16px 48px",
+        padding: isMobile ? "16px 12px 36px" : "24px 16px 48px",
         boxSizing: "border-box",
+        width: "100%",
       }}
     >
       <div
@@ -366,10 +427,10 @@ export default function CustomerProfilePage({
           margin: "0 auto",
           display: "flex",
           flexDirection: "column",
-          gap: "20px",
+          gap: "16px",
         }}
       >
-        {/* EXACT SAME BREADCRUMB & HEADER STRUCTURE AS ORDERS PAGE */}
+        {/* Uniform Header Navigation Bar */}
         <div
           style={{
             display: "flex",
@@ -377,7 +438,8 @@ export default function CustomerProfilePage({
             alignItems: "center",
             flexWrap: "wrap",
             gap: "12px",
-            marginBottom: "4px",
+            minHeight: "38px",
+            width: "100%",
           }}
         >
           {/* Breadcrumb back-link */}
@@ -543,11 +605,15 @@ export default function CustomerProfilePage({
                 background: "rgba(34, 197, 94, 0.12)",
                 color: "#16a34a",
                 fontSize: "13.5px",
-                fontWeight: 600,
-                marginBottom: "20px",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
               }}
             >
-              ✓ {profileSuccess}
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              <span>{profileSuccess}</span>
             </div>
           )}
 
@@ -561,9 +627,17 @@ export default function CustomerProfilePage({
                 fontSize: "13.5px",
                 fontWeight: 600,
                 marginBottom: "20px",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
               }}
             >
-              ✕ {profileError}
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <span>{profileError}</span>
             </div>
           )}
 
@@ -847,9 +921,14 @@ export default function CustomerProfilePage({
                   color: subtextColor,
                   cursor: "pointer",
                   padding: "4px",
+                  display: "grid",
+                  placeItems: "center",
                 }}
               >
-                ✕
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
               </button>
             </div>
 
@@ -863,9 +942,15 @@ export default function CustomerProfilePage({
                   fontSize: "13px",
                   fontWeight: 600,
                   marginBottom: "16px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
                 }}
               >
-                ✓ {passSuccess}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span>{passSuccess}</span>
               </div>
             )}
 
@@ -879,9 +964,17 @@ export default function CustomerProfilePage({
                   fontSize: "13px",
                   fontWeight: 600,
                   marginBottom: "16px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
                 }}
               >
-                ✕ {passError}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <span>{passError}</span>
               </div>
             )}
 
@@ -1072,6 +1165,78 @@ export default function CustomerProfilePage({
             </form>
           </div>
         )}
+
+        {/* HELP & SUPPORT DESK CARD */}
+        <div
+          style={{
+            marginTop: "24px",
+            background: cardBg,
+            borderRadius: cardRadius,
+            border: `1px solid ${borderColor}`,
+            padding: cardPadding,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "16px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+            <div
+              style={{
+                width: "44px",
+                height: "44px",
+                borderRadius: "10px",
+                background: `${accentColor}15`,
+                color: accentColor,
+                display: "grid",
+                placeItems: "center",
+                flexShrink: 0,
+              }}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+            </div>
+            <div>
+              <div style={{ fontSize: "14.5px", fontWeight: 700, color: textColor }}>
+                Need Help or Have an Issue with an Order?
+              </div>
+              <div style={{ fontSize: "12.5px", color: subtextColor, marginTop: "2px" }}>
+                Chat with our support specialists, report order issues, or track existing inquiries.
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const isStore = typeof window !== "undefined" && window.location.pathname.startsWith("/store/");
+              const isBuilder = typeof window !== "undefined" && window.location.pathname.startsWith("/builder/");
+              const prefix = isStore
+                ? `/store/${activeSlug || propSiteSlug || ""}`
+                : isBuilder
+                ? `/builder/${propSiteId || activeSlug || propSiteSlug || ""}`
+                : (activeSlug || propSiteSlug ? `/store/${activeSlug || propSiteSlug}` : "");
+              const targetPath = `${prefix}/support`;
+              navigate(targetPath);
+            }}
+            style={{
+              padding: "10px 20px",
+              borderRadius: buttonRadius,
+              border: `1px solid ${accentColor}`,
+              background: "transparent",
+              color: accentColor,
+              fontSize: "13.5px",
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            Visit Support Desk →
+          </button>
+        </div>
       </div>
     </div>
   );

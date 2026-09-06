@@ -245,12 +245,12 @@ export default function CustomerSignupPage(props: CustomerSignupPageProps = {}) 
 
   const resolvedMaxWidth = (() => {
     const raw = customProps.max_width;
-    if (!raw) return isMobile ? "380px" : "450px";
+    if (!raw || raw === "100%" || raw === "full" || raw === "100") return "100%";
+    if (typeof raw === "number") return `${raw}px`;
     const str = String(raw).trim().toLowerCase();
-    if (str === "full" || str === "100%" || str === "100") return "100%";
     if (str.endsWith("px") || str.endsWith("%")) return str;
     const n = Number(str);
-    return isNaN(n) ? "450px" : `${n}px`;
+    return isNaN(n) ? "100%" : `${n}px`;
   })();
 
   const showGoogleAuth = customProps.show_google_auth !== false;
@@ -316,21 +316,30 @@ export default function CustomerSignupPage(props: CustomerSignupPageProps = {}) 
           width: "100%",
           maxWidth: resolvedMaxWidth,
           margin: "auto",
-          background: cardBg,
-          color: textColor,
-          borderRadius: cardRadius,
-          padding: cardPadding,
-          border: `1px solid ${borderColor}`,
-          boxShadow: isLight
-            ? "0 16px 40px rgba(15, 23, 42, 0.08)"
-            : "0 20px 48px rgba(0, 0, 0, 0.40)",
-          boxSizing: "border-box",
           display: "flex",
-          flexDirection: "column",
-          gap: isMobile ? (isShortScreen ? "8px" : "12px") : "16px",
-          transition: "all 0.2s ease",
+          justifyContent: "center",
         }}
       >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: isMobile ? "100%" : "480px",
+            margin: "auto",
+            background: cardBg,
+            color: textColor,
+            borderRadius: cardRadius,
+            padding: cardPadding,
+            border: `1px solid ${borderColor}`,
+            boxShadow: isLight
+              ? "0 16px 40px rgba(15, 23, 42, 0.08)"
+              : "0 20px 48px rgba(0, 0, 0, 0.40)",
+            boxSizing: "border-box",
+            display: "flex",
+            flexDirection: "column",
+            gap: isMobile ? (isShortScreen ? "8px" : "12px") : "16px",
+            transition: "all 0.2s ease",
+          }}
+        >
         {/* BACK TO STORE LINK */}
         <div style={{ display: "flex", alignItems: "center" }}>
           <button
@@ -392,10 +401,16 @@ export default function CustomerSignupPage(props: CustomerSignupPageProps = {}) 
               color: "#16a34a",
               fontSize: "13px",
               fontWeight: 600,
-              textAlign: "center",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "6px",
             }}
           >
-            ✓ {previewNotice}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            <span>{previewNotice}</span>
           </div>
         )}
 
@@ -704,5 +719,6 @@ export default function CustomerSignupPage(props: CustomerSignupPageProps = {}) 
         </div>
       </div>
     </div>
+  </div>
   );
 }

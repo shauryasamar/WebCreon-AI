@@ -296,8 +296,8 @@ export default function TrackOrderPage() {
               </div>
             </div>
 
-            {/* Delivery OTP Banner — strictly only for Own Fleet */}
-            {data.delivery_otp && isOwnAgent && (currentStatus === "out_for_delivery" || data.order_status === "out_for_delivery" || currentStatus === "shipped") ? (
+            {/* Delivery OTP Banner — strictly only for Own Fleet when actively OUT FOR DELIVERY */}
+            {data.delivery_otp && isOwnAgent && currentStatus === "out_for_delivery" && data.order_status !== "delivered" && data.status !== "delivered" && data.order_status !== "cancelled" && data.status !== "cancelled" ? (
               <div
                 style={{
                   background: "#f0fdf4",

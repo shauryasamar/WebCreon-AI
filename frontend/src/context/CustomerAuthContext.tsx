@@ -158,7 +158,10 @@ function clearTenantToken(websiteName?: string, siteId?: string, siteSlug?: stri
     keys.add(cleanSlug.split("-")[0]);
   }
   keys.forEach((k) => {
-    if (k) localStorage.removeItem(`wc_customer_token_${k}`);
+    if (k) {
+      localStorage.removeItem(`wc_customer_token_${k}`);
+      localStorage.removeItem(`wc_customer_orders_${k}`);
+    }
   });
 }
 

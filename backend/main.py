@@ -35,8 +35,9 @@ from models import (
     Shipment, InventoryMovement, OrderStatusHistory, User, UserAddress,
     DeliveryAgent, DeliverySettings,
 )
-from routers import auth, cart, categories, checkout, checkout_settings, collections, coupons, orders, payments, products, returns
+from routers import auth, cart, categories, checkout, checkout_settings, collections, coupons, orders, payments, products, returns, support
 from routers import delivery
+
 
 logger = logging.getLogger(__name__)
 
@@ -65,10 +66,24 @@ async def _mature_escrow_cron_task():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
+    try:
+        with Session(engine) as session:
+            repl_shipments = session.exec(select(Shipment).where(Shipment.awb_number.like("REPL-%"))).all()
+            if repl_shipments:
+                for s in repl_shipments:
+                    session.delete(s)
+                session.commit()
+    except Exception as cleanup_err:
+        logger.warning("Could not purge legacy REPL shipments: %s", cleanup_err)
     escrow_task = asyncio.create_task(_mature_escrow_cron_task())
     try:
         yield
     finally:
+        try:
+            from routers.support import ticket_hub
+            ticket_hub.stop()
+        except Exception:
+            pass
         escrow_task.cancel()
         try:
             await escrow_task
@@ -111,6 +126,9 @@ app.include_router(payments.router)
 app.include_router(returns.router)
 app.include_router(delivery.router)
 app.include_router(coupons.router)
+app.include_router(support.router)
+app.include_router(support.router, prefix="/api")
+
 
 # ---------------------------------------------------------------------------
 # Asset Upload Endpoint (brand logos, etc.)

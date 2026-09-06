@@ -340,27 +340,38 @@ const Navbar: React.FC<NavbarProps> = (props) => {
         ? window.scrollY
         : (container as Element).scrollTop;
 
+    let rAFId: number | null = null;
     const handleScroll = () => {
-      const currentY = getScrollY();
-      setIsScrolledPastTop(currentY > 10);
+      if (rAFId !== null) return;
+      rAFId = requestAnimationFrame(() => {
+        rAFId = null;
+        const currentY = getScrollY();
+        const pastTop = currentY > 10;
+        setIsScrolledPastTop((prev) => (prev !== pastTop ? pastTop : prev));
 
-      if (currentY <= 40) {
-        setIsStickyVisible(true);
-        lastScrollYRef.current = currentY;
-        return;
-      }
+        if (currentY <= 60) {
+          setIsStickyVisible((prev) => (!prev ? true : prev));
+          lastScrollYRef.current = currentY;
+          return;
+        }
 
-      if (currentY > lastScrollYRef.current + 8) {
-        setIsStickyVisible(false);
-      } else if (currentY < lastScrollYRef.current - 4) {
-        setIsStickyVisible(true);
-      }
-      lastScrollYRef.current = currentY;
+        const delta = currentY - lastScrollYRef.current;
+        if (delta > 40) {
+          setIsStickyVisible((prev) => (prev ? false : prev));
+          lastScrollYRef.current = currentY;
+        } else if (delta < -30) {
+          setIsStickyVisible((prev) => (!prev ? true : prev));
+          lastScrollYRef.current = currentY;
+        }
+      });
     };
 
     const target: EventTarget = container === window ? window : container;
     target.addEventListener("scroll", handleScroll, { passive: true });
-    return () => target.removeEventListener("scroll", handleScroll);
+    return () => {
+      if (rAFId !== null) cancelAnimationFrame(rAFId);
+      target.removeEventListener("scroll", handleScroll);
+    };
   }, [position]);
 
   const rawBrandName =
@@ -1182,6 +1193,12 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     navigate(isBuilderAdminRoute ? `${base}/admin/orders` : `${base}/orders`);
   };
 
+  const handleGoToSupport = () => {
+    closeAccountMenu();
+    setMobileMenuOpen(false);
+    navigate(`${base}/support`);
+  };
+
   const handleCustomerLogout = async () => {
     try {
       await logout();
@@ -1494,8 +1511,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
               right: 0,
               width: "100%",
               zIndex: 1000,
-              transform: isStickyVisible ? "translateY(0)" : "translateY(-100%)",
-              transition: "transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease",
+              willChange: "transform",
+              transform: isStickyVisible ? "translate3d(0, 0, 0)" : "translate3d(0, -100%, 0)",
+              transition: "transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease",
               boxShadow: isScrolledPastTop ? "0 4px 20px rgba(0, 0, 0, 0.08)" : "none",
             }
             : getNavbarPositionStyle(position, topOffset, fixedBounds)),
@@ -1512,7 +1530,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
         overflow: "visible",
       }}
     >
-      <style>{`
+      <style key="navbar-placeholder-style">{`
         #storefront-navbar input::placeholder {
           color: ${searchPlaceholderColor} !important;
           opacity: 0.85 !important;
@@ -1927,6 +1945,13 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                       >
                         Orders
                       </button>
+                      <button
+                        type="button"
+                        style={menuItemStyle}
+                        onClick={handleGoToSupport}
+                      >
+                        Help & Support
+                      </button>
                       {isAuthenticated ? (
                         <button
                           type="button"
@@ -2192,6 +2217,13 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         <div role="menu" style={dropdownPanelStyle}>
                           <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
                           <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
+                          <button
+                            type="button"
+                            style={menuItemStyle}
+                            onClick={handleGoToSupport}
+                          >
+                            Help & Support
+                          </button>
                           {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
                         </div>
                       )}
@@ -2410,6 +2442,13 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         <div role="menu" style={dropdownPanelStyle}>
                           <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
                           <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
+                          <button
+                            type="button"
+                            style={menuItemStyle}
+                            onClick={handleGoToSupport}
+                          >
+                            Help & Support
+                          </button>
                           {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
                         </div>
                       )}
@@ -2643,6 +2682,13 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         <div role="menu" style={dropdownPanelStyle}>
                           <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
                           <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
+                          <button
+                            type="button"
+                            style={menuItemStyle}
+                            onClick={handleGoToSupport}
+                          >
+                            Help & Support
+                          </button>
                           {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
                         </div>
                       )}
@@ -2893,6 +2939,13 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         <div role="menu" style={dropdownPanelStyle}>
                           <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
                           <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
+                          <button
+                            type="button"
+                            style={menuItemStyle}
+                            onClick={handleGoToSupport}
+                          >
+                            Help & Support
+                          </button>
                           {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
                         </div>
                       )}
@@ -3111,6 +3164,13 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                       <div role="menu" style={dropdownPanelStyle}>
                         <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
                         <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
+                        <button
+                          type="button"
+                          style={menuItemStyle}
+                          onClick={handleGoToSupport}
+                        >
+                          Help & Support
+                        </button>
                         {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
                       </div>
                     )}

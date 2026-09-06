@@ -2321,6 +2321,39 @@ export const editorRegistry: EditorRegistry = {
     ],
   },
 
+  customer_support: {
+    displayName: "Help & Support Desk",
+    fields: [
+      styleMaxWidthField,
+      styleBorderRadiusField,
+      stylePaddingField,
+    ],
+  },
+  customersupport: {
+    displayName: "Help & Support Desk",
+    fields: [
+      styleMaxWidthField,
+      styleBorderRadiusField,
+      stylePaddingField,
+    ],
+  },
+  support_desk: {
+    displayName: "Help & Support Desk",
+    fields: [
+      styleMaxWidthField,
+      styleBorderRadiusField,
+      stylePaddingField,
+    ],
+  },
+  support: {
+    displayName: "Help & Support Desk",
+    fields: [
+      styleMaxWidthField,
+      styleBorderRadiusField,
+      stylePaddingField,
+    ],
+  },
+
   footer: {
     displayName: "Footer Settings",
     fields: [

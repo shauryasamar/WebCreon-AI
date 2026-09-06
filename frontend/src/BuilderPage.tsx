@@ -31,7 +31,9 @@ import CheckoutChargesPage from "./Component/CheckoutChargesPage";
 import TenantPaymentSettingsPage from "./Component/TenantPaymentSettingsPage";
 import TenantEarningsPage from "./Component/TenantEarningsPage";
 import DeliverySettingsPage from "./Component/DeliverySettingsPage";
+import AdminSupportDesk from "./Component/AdminSupportDesk";
 import AdminProfileSettings from "./Component/AdminProfileSettings";
+
 import EditorRenderPage from "./customizations/EditorRenderPage";
 import EditorSidebar from "./customizations/EditorSidebar";
 import CustomerOrdersPage from "./pages/CustomerOrdersPage";
@@ -1362,7 +1364,9 @@ function BuilderPageContent() {
               ? "checkout-charges"
               : location.pathname.includes("/orders")
                 ? "orders"
-                : location.pathname.includes("/home-sections")
+                : location.pathname.includes("/support")
+                  ? "support"
+                  : location.pathname.includes("/home-sections")
                   ? "home-sections"
                   : "products"
     : null;
@@ -1748,6 +1752,7 @@ function BuilderPageContent() {
             currentPath.startsWith(`${freshAppBase}/products/`);
           const isOrdersRoute = currentPath === `${freshAppBase}/orders`;
           const isProfileRoute = currentPath === `${freshAppBase}/profile` || currentPath === `${freshAppBase}/account`;
+          const isSupportRoute = currentPath === `${freshAppBase}/support`;
           const isCartRoute = currentPath === `${freshAppBase}/cart`;
           const isCheckoutRoute = currentPath === `${freshAppBase}/checkout`;
           const isLoginRoute = currentPath === `${freshAppBase}/login`;
@@ -1760,6 +1765,7 @@ function BuilderPageContent() {
             !isDynamicProductRoute &&
             !isOrdersRoute &&
             !isProfileRoute &&
+            !isSupportRoute &&
             !isCartRoute &&
             !isCheckoutRoute &&
             !isLoginRoute &&
@@ -1806,10 +1812,9 @@ function BuilderPageContent() {
 
 
   const storefrontHomePath = useMemo(() => {
-    if (!activeSiteDefinition || activeSiteDefinition.pages.length === 0) {
+    if (!activeSiteDefinition || !Array.isArray(activeSiteDefinition.pages) || activeSiteDefinition.pages.length === 0) {
       return appBase;
     }
-
 
     const homePage =
       activeSiteDefinition.pages.find(
@@ -1817,14 +1822,11 @@ function BuilderPageContent() {
           page.route === "/" || page.route === "" || page.role === "home"
       ) || activeSiteDefinition.pages[0];
 
-
     return toFullAppPath(appBase, homePage.route);
   }, [activeSiteDefinition, appBase]);
 
-
   const productDetailPage = useMemo(() => {
-    if (!activeSiteDefinition) return null;
-
+    if (!activeSiteDefinition || !Array.isArray(activeSiteDefinition.pages)) return null;
 
     const exactProductPage = activeSiteDefinition.pages.find((page) => {
       if (page.role === "product_detail" || page.page_type === "product_detail") return true;
@@ -1832,9 +1834,7 @@ function BuilderPageContent() {
       return page.blocks.some((block) => isProductDetailBlockType(block.type));
     });
 
-
     if (exactProductPage) return exactProductPage;
-
 
     return {
       id: "fallback-product-detail",
@@ -1852,7 +1852,7 @@ function BuilderPageContent() {
   }, [activeSiteDefinition]);
 
   const checkoutPage = useMemo(() => {
-    if (!activeSiteDefinition) return null;
+    if (!activeSiteDefinition || !Array.isArray(activeSiteDefinition.pages)) return null;
     const exact = activeSiteDefinition.pages.find(
       (p) => p.route === "/checkout" || p.route === "checkout" || p.role === "checkout"
     );
@@ -1891,7 +1891,7 @@ function BuilderPageContent() {
   }, [activeSiteDefinition]);
 
   const cartPage = useMemo(() => {
-    if (!activeSiteDefinition) return null;
+    if (!activeSiteDefinition || !Array.isArray(activeSiteDefinition.pages)) return null;
     const exact = activeSiteDefinition.pages.find(
       (p) => p.route === "/cart" || p.route === "cart" || p.role === "cart"
     );
@@ -1908,7 +1908,7 @@ function BuilderPageContent() {
   }, [activeSiteDefinition]);
 
   const profilePage = useMemo(() => {
-    if (!activeSiteDefinition) return null;
+    if (!activeSiteDefinition || !Array.isArray(activeSiteDefinition.pages)) return null;
     const exact = activeSiteDefinition.pages.find(
       (p) =>
         p.route === "/profile" ||
@@ -1948,6 +1948,7 @@ function BuilderPageContent() {
   }, [activeSiteDefinition]);
 
   const loginPage = useMemo(() => {
+    if (!activeSiteDefinition || !Array.isArray(activeSiteDefinition.pages)) return null;
     const raw = activeSiteDefinition.pages.find(
       (p) =>
         p.role === "login" ||
@@ -1965,12 +1966,21 @@ function BuilderPageContent() {
           b.type === "login_form" ||
           b.type === "login"
       );
-      if (hasBlock) return raw;
+      if (hasBlock) {
+        return {
+          ...raw,
+          blocks: raw.blocks.map((b) =>
+            b.type === "signin_form" || b.type === "signinform" || b.type === "login_form" || b.type === "login"
+              ? { ...b, props: { max_width: "100%", ...(b.props || {}) } }
+              : b
+          ),
+        };
+      }
       return {
         ...raw,
         blocks: [
           ...(raw.blocks || []),
-          { id: "signin_form", type: "signin_form", props: {} },
+          { id: "signin_form", type: "signin_form", props: { max_width: "100%" } },
         ],
       };
     }
@@ -1980,12 +1990,13 @@ function BuilderPageContent() {
       route: "/login",
       show_in_nav: false,
       blocks: [
-        { id: "signin_form", type: "signin_form", props: {} },
+        { id: "signin_form", type: "signin_form", props: { max_width: "100%" } },
       ],
     } as Page;
   }, [activeSiteDefinition]);
 
   const signupPage = useMemo(() => {
+    if (!activeSiteDefinition || !Array.isArray(activeSiteDefinition.pages)) return null;
     const raw = activeSiteDefinition.pages.find(
       (p) =>
         p.role === "signup" ||
@@ -2003,12 +2014,21 @@ function BuilderPageContent() {
           b.type === "register_form" ||
           b.type === "signup"
       );
-      if (hasBlock) return raw;
+      if (hasBlock) {
+        return {
+          ...raw,
+          blocks: raw.blocks.map((b) =>
+            b.type === "signup_form" || b.type === "signupform" || b.type === "register_form" || b.type === "signup"
+              ? { ...b, props: { max_width: "100%", ...(b.props || {}) } }
+              : b
+          ),
+        };
+      }
       return {
         ...raw,
         blocks: [
           ...(raw.blocks || []),
-          { id: "signup_form", type: "signup_form", props: {} },
+          { id: "signup_form", type: "signup_form", props: { max_width: "100%" } },
         ],
       };
     }
@@ -2018,13 +2038,13 @@ function BuilderPageContent() {
       route: "/signup",
       show_in_nav: false,
       blocks: [
-        { id: "signup_form", type: "signup_form", props: {} },
+        { id: "signup_form", type: "signup_form", props: { max_width: "100%" } },
       ],
     } as Page;
   }, [activeSiteDefinition]);
 
   const ordersPage = useMemo(() => {
-    if (!activeSiteDefinition) return null;
+    if (!activeSiteDefinition || !Array.isArray(activeSiteDefinition.pages)) return null;
     const raw = activeSiteDefinition.pages.find(
       (p) =>
         p.role === "orders" ||
@@ -2043,12 +2063,21 @@ function BuilderPageContent() {
           b.type === "order_history_list" ||
           b.type === "orders"
       );
-      if (hasBlock) return raw;
+      if (hasBlock) {
+        return {
+          ...raw,
+          blocks: raw.blocks.map((b) =>
+            b.type === "customer_orders" || b.type === "customerorders" || b.type === "order_history" || b.type === "order_history_list" || b.type === "orders"
+              ? { ...b, props: { max_width: "100%", ...(b.props || {}) } }
+              : b
+          ),
+        };
+      }
       return {
         ...raw,
         blocks: [
           ...(raw.blocks || []),
-          { id: "customer_orders", type: "customer_orders", props: {} },
+          { id: "customer_orders", type: "customer_orders", props: { max_width: "100%" } },
         ],
       };
     }
@@ -2058,7 +2087,55 @@ function BuilderPageContent() {
       route: "/orders",
       show_in_nav: false,
       blocks: [
-        { id: "customer_orders", type: "customer_orders", props: {} },
+        { id: "customer_orders", type: "customer_orders", props: { max_width: "100%" } },
+      ],
+    } as Page;
+  }, [activeSiteDefinition]);
+
+  const supportPage = useMemo(() => {
+    if (!activeSiteDefinition || !Array.isArray(activeSiteDefinition.pages)) return null;
+    const raw = activeSiteDefinition.pages.find(
+      (p) =>
+        p.role === "support" ||
+        p.page_type === "support" ||
+        p.route === "/support" ||
+        p.route === "support" ||
+        p.id === "support" ||
+        p.id === "page-support"
+    );
+    if (raw) {
+      const hasBlock = raw.blocks?.some(
+        (b) =>
+          b.type === "customer_support" ||
+          b.type === "customersupport" ||
+          b.type === "support_desk" ||
+          b.type === "support"
+      );
+      if (hasBlock) {
+        return {
+          ...raw,
+          blocks: raw.blocks.map((b) =>
+            b.type === "customer_support" || b.type === "customersupport" || b.type === "support_desk" || b.type === "support"
+              ? { ...b, props: { max_width: "100%", ...(b.props || {}) } }
+              : b
+          ),
+        };
+      }
+      return {
+        ...raw,
+        blocks: [
+          ...(raw.blocks || []),
+          { id: "customer_support", type: "customer_support", props: { max_width: "100%" } },
+        ],
+      };
+    }
+    return {
+      id: "fallback-support-page",
+      name: "Help & Support",
+      route: "/support",
+      show_in_nav: false,
+      blocks: [
+        { id: "customer_support", type: "customer_support", props: { max_width: "100%" } },
       ],
     } as Page;
   }, [activeSiteDefinition]);
@@ -2094,6 +2171,34 @@ function BuilderPageContent() {
     setSelectedBlockId(blockId);
     setEditorTab("block");
   };
+
+  const lastAutoSelectedPathRef = useRef<string>("");
+  useEffect(() => {
+    if (!editMode || !adminAuthenticated) return;
+    const path = location.pathname;
+    if (lastAutoSelectedPathRef.current === path) return;
+    lastAutoSelectedPathRef.current = path;
+
+    if (path.endsWith("/support") || path.includes("/support")) {
+      setSelectedBlockId("customer_support");
+      setEditorTab("block");
+    } else if (path.endsWith("/profile") || path.includes("/profile") || path.endsWith("/account")) {
+      setSelectedBlockId("profile_details");
+      setEditorTab("block");
+    } else if (path.endsWith("/orders") || path.includes("/orders")) {
+      setSelectedBlockId("customer_orders");
+      setEditorTab("block");
+    } else if (path.endsWith("/login") || path.includes("/login") || path.endsWith("/signin")) {
+      setSelectedBlockId("signin_form");
+      setEditorTab("block");
+    } else if (path.endsWith("/signup") || path.includes("/signup") || path.endsWith("/register")) {
+      setSelectedBlockId("signup_form");
+      setEditorTab("block");
+    } else if (path.endsWith("/cart") || path.includes("/cart")) {
+      setSelectedBlockId("cart_view");
+      setEditorTab("block");
+    }
+  }, [location.pathname, editMode, adminAuthenticated]);
 
 
   const handleLogout = async () => {
@@ -2299,7 +2404,7 @@ function BuilderPageContent() {
             }
           }}
           onSelectPage={(targetRouteOrId) => {
-            const targetPage = activeSiteDefinition.pages.find(
+            const targetPage = activeSiteDefinition?.pages?.find(
               (p) => p.id === targetRouteOrId || p.route === targetRouteOrId
             );
             const route = targetPage ? targetPage.route : targetRouteOrId;
@@ -2416,7 +2521,9 @@ function BuilderPageContent() {
                     <Route path="products" element={<AdminProducts />} />
                     <Route path="home-sections" element={<AdminHomeSections />} />
                     <Route path="orders" element={<AdminOrders />} />
+                    <Route path="support" element={<AdminSupportDesk />} />
                     <Route path="discounts" element={<AdminCoupons />} />
+
                     <Route path="coupons" element={<AdminCoupons />} />
                     <Route path="delivery" element={<DeliverySettingsPage />} />
                     <Route path="earnings" element={<TenantEarningsPage />} />
@@ -2469,6 +2576,29 @@ function BuilderPageContent() {
                   element={
                     <StorefrontPage
                       page={profilePage}
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      siteName={siteName}
+                      selectedProduct={undefined}
+                      editMode={editMode}
+                      adminTopbarVisible={showAdminTopbar}
+                      selectedBlockId={selectedBlockId}
+                      onSelectBlock={handleSelectBlock}
+                      storefrontNavbarMode={storefrontNavbarMode}
+                      navbarFixedBounds={navbarFixedBounds}
+                      appBase={appBase}
+                    />
+                  }
+                />
+              )}
+
+              {supportPage && (
+                <Route
+                  path="support"
+                  element={
+                    <StorefrontPage
+                      page={supportPage}
                       siteDefinition={activeSiteDefinition}
                       siteId={resolvedSiteId || siteId || ""}
                       siteSlug={siteSlug}
@@ -2582,7 +2712,7 @@ function BuilderPageContent() {
               )}
 
 
-              {activeSiteDefinition.pages
+              {(activeSiteDefinition?.pages || [])
                 .filter((page) => {
                   if (page.flow === "admin") return false;
 

@@ -29,6 +29,7 @@ export type AdminNavKey =
   | "products"
   | "home-sections"
   | "orders"
+  | "support"
   | "discounts"
   | "delivery"
   | "earnings"
@@ -49,7 +50,9 @@ const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { key: "checkout-charges", label: "Checkout Charges" },
   { key: "earnings", label: "Earnings & Ledger" },
   { key: "payment-settings", label: "Payout Settings" },
+  { key: "support", label: "Support & CRM" },
 ];
+
 
 export type SettingsNavKey = "profile";
 
@@ -362,6 +365,13 @@ function AdminNavIcon({ navKey, isSelected }: { navKey: AdminNavKey; isSelected:
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={style}>
           <path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M8 10v11M12 10v11M16 10v11M20 10v11" />
+        </svg>
+      );
+    case "support":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
+          <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
         </svg>
       );
     case "checkout-charges":

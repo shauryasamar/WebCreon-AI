@@ -1,12 +1,22 @@
 export function getCustomerToken(siteIdOrSlug?: string): string | null {
-  if (typeof window === "undefined" || !siteIdOrSlug) return null;
-  const clean = siteIdOrSlug.trim().toLowerCase();
-  const base = clean.split("-")[0];
-  return (
-    localStorage.getItem(`wc_customer_token_${clean}`) ||
-    localStorage.getItem(`wc_customer_token_${base}`) ||
-    null
-  );
+  if (typeof window === "undefined") return null;
+  const clean = (siteIdOrSlug || "").trim().toLowerCase();
+  const base = clean ? clean.split("-")[0] : "";
+  if (clean) {
+    return (
+      localStorage.getItem(`wc_customer_token_${clean}`) ||
+      localStorage.getItem(`wc_customer_token_${base}`) ||
+      null
+    );
+  }
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith("wc_customer_token_")) {
+      const val = localStorage.getItem(key);
+      if (val) return val;
+    }
+  }
+  return null;
 }
 
 export function getCustomerAuthHeaders(

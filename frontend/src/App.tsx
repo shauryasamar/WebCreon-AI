@@ -33,6 +33,9 @@ import CustomerSignupPage from "./pages/CustomerSignupPage";
 const TrackOrderPage = React.lazy(() => import("./pages/TrackOrderPage"));
 const AgentDeliveryPage = React.lazy(() => import("./pages/AgentDeliveryPage"));
 const RiderLoginPage = React.lazy(() => import("./pages/RiderLoginPage"));
+const SupportAgentLoginPage = React.lazy(() => import("./pages/SupportAgentLoginPage"));
+const SupportAgentDashboard = React.lazy(() => import("./pages/SupportAgentDashboard"));
+
 
 function RouteLoadingFallback() {
   return (
@@ -1318,13 +1321,18 @@ function AppRoutes() {
         <Route path="/store/:slug/track/:orderId" element={<TrackOrderPage />} />
         <Route path="/store/:slug/rider/login" element={<RiderLoginPage />} />
         <Route path="/store/:slug/rider/dashboard" element={<AgentDeliveryPage />} />
+        <Route path="/store/:slug/support/login" element={<SupportAgentLoginPage />} />
+        <Route path="/store/:slug/support/dashboard" element={<SupportAgentDashboard />} />
         <Route path="/store/:slug/*" element={<BuilderPage />} />
 
-        {/* Global Rider & Tracking Routes */}
+        {/* Global Rider, Support & Tracking Routes */}
         <Route path="/rider/login" element={<RiderLoginPage />} />
         <Route path="/rider/dashboard" element={<AgentDeliveryPage />} />
+        <Route path="/support/login" element={<SupportAgentLoginPage />} />
+        <Route path="/support/dashboard" element={<SupportAgentDashboard />} />
         <Route path="/track/:siteId/:orderId" element={<TrackOrderPage />} />
         <Route path="/agent/delivery/:shipmentId" element={<AgentDeliveryPage />} />
+
 
         <Route element={<RequireAdminAuth />}>
           <Route path="/admin/sites" element={<AdminSitesPage />} />

@@ -15,6 +15,7 @@ import CustomerProfilePage from "./pages/CustomerProfilePage";
 import CustomerLoginPage from "./pages/CustomerLoginPage";
 import CustomerSignupPage from "./pages/CustomerSignupPage";
 import CustomerOrdersPage from "./pages/CustomerOrdersPage";
+import CustomerSupportPage from "./pages/CustomerSupportPage";
 import { HeroBanner } from "./Component/HeroBanner";
 import { ProductCarousel } from "./Component/ProductCarousel";
 import { BrandStoreGrid } from "./Component/BrandStoreGrid";
@@ -109,8 +110,14 @@ export const componentRegistry: ComponentRegistry = {
   orderspage: CustomerOrdersPage,
   order_history: CustomerOrdersPage,
   orderhistory: CustomerOrdersPage,
-  order_history_list: CustomerOrdersPage,
   orders: CustomerOrdersPage,
+  customer_support: CustomerSupportPage,
+  customersupport: CustomerSupportPage,
+  support_page: CustomerSupportPage,
+  supportpage: CustomerSupportPage,
+  support_desk: CustomerSupportPage,
+  supportdesk: CustomerSupportPage,
+  support: CustomerSupportPage,
 };
 
 export default componentRegistry;

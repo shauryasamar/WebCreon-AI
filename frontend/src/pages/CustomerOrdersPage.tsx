@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { Pagination } from "../Component/Pagination";
 import { resolveThemeTokens } from "../context/ThemeContext";
 import { getThumbnailUrl } from "../utils/imageOptimizer";
-import { getCustomerAuthHeaders } from "../utils/customerAuthFetch";
+import { getCustomerAuthHeaders, getCustomerToken } from "../utils/customerAuthFetch";
+
 
 type RefundInfo = {
   status: string;
@@ -41,6 +42,7 @@ type OrderListItem = {
   delivery_otp?: string | null;
   has_returnable_items?: boolean;
   can_request_return?: boolean;
+  cancel_reason?: string | null;
   refund_info?: RefundInfo | null;
   shipment?: Shipment | null;
   [key: string]: any;
@@ -105,6 +107,7 @@ type OrderDetail = {
   shipped_at?: string | null;
   delivered_at?: string | null;
   cancelled_at?: string | null;
+  cancel_reason?: string | null;
   items: OrderItem[];
   shipment?: Shipment | null;
   has_returnable_items?: boolean;
@@ -571,7 +574,7 @@ const PhoneIcon = () => (
 
 function labelize(value?: string | null) {
   if (!value) return "—";
-  return value.replaceAll("_", " ");
+  return String(value).replace(/_/g, " ");
 }
 
 function formatPaymentMethodName(method?: string | null): string {
@@ -597,13 +600,16 @@ function getPaymentMethodIcon(method?: string | null): React.ReactNode {
   if (m === "netbanking") {
     return (
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="3" y1="21" x2="21" y2="21" />
-        <line x1="3" y1="10" x2="21" y2="10" />
-        <polyline points="3 10 12 3 21 10" />
-        <line x1="6" y1="10" x2="6" y2="21" />
-        <line x1="10" y1="10" x2="10" y2="21" />
-        <line x1="14" y1="10" x2="14" y2="21" />
-        <line x1="18" y1="10" x2="18" y2="21" />
+        <rect x="2" y="5" width="20" height="14" rx="2" />
+        <line x1="2" y1="10" x2="22" y2="10" />
+      </svg>
+    );
+  }
+  if (m === "card") {
+    return (
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+        <line x1="1" y1="10" x2="23" y2="10" />
       </svg>
     );
   }
@@ -618,8 +624,8 @@ function getPaymentMethodIcon(method?: string | null): React.ReactNode {
   }
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
-      <line x1="1" y1="10" x2="23" y2="10" />
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="6" x2="12" y2="18" />
     </svg>
   );
 }
@@ -629,6 +635,8 @@ function getStatusColor(status?: string) {
     case "delivered":
     case "refunded":
       return "#16a34a";
+    case "replacement_dispatched":
+      return "#0284c7";
     case "returned":
       return "#7c3aed";
     case "cancelled":
@@ -707,10 +715,14 @@ function getStatusRank(status?: string) {
     case "placed":
       return 1;
     case "confirmed":
+    case "accepted":
+    case "processing":
       return 2;
     case "shipped":
+    case "in_transit":
       return 3;
     case "out_for_delivery":
+    case "picked_up":
     case "rescheduled":
       return 4;
     case "delivered":
@@ -765,6 +777,8 @@ const RETURN_REASONS: Array<{ value: ReturnReasonCode; label: string }> = [
 
 const getCachedCustomerOrders = (sId?: string): OrderListItem[] => {
   if (!sId || typeof window === "undefined") return [];
+  const token = getCustomerToken(sId);
+  if (!token) return [];
   try {
     const raw = localStorage.getItem(`wc_customer_orders_${sId}`);
     return raw ? JSON.parse(raw) : [];
@@ -779,11 +793,13 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
   theme: propTheme,
   ...restProps
 }) => {
+  const restPropsJson = JSON.stringify(restProps);
   const customProps = useMemo(() => ({
     ...(propTheme || {}),
     ...(restProps.props || {}),
     ...restProps,
-  }), [propTheme, restProps]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [propTheme, restPropsJson]);
 
   const siteId = propSiteId || customProps.siteId || "";
   const siteSlug = propSiteSlug || customProps.siteSlug || "";
@@ -808,6 +824,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
   const [returns, setReturns] = useState<CustomerReturnListItem[]>([]);
   const [returnDetailMap, setReturnDetailMap] = useState<Record<string, CustomerReturnDetail>>({});
   const [loading, setLoading] = useState(initialCachedOrders.length === 0 && !isInsideEditor);
+  const [isUnauthenticated, setIsUnauthenticated] = useState(false);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(
     isInsideEditor ? (initialCachedOrders[0]?.id || "ORD-89421") : null
   );
@@ -840,7 +857,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
 
   const effectiveMaxWidth =
     customProps.max_width !== undefined && customProps.max_width !== null && customProps.max_width !== ""
-      ? (typeof customProps.max_width === "number" ? `${customProps.max_width}px` : String(customProps.max_width))
+      ? (typeof customProps.max_width === "number" ? `${customProps.max_width}px` : (customProps.max_width === "100%" || customProps.max_width === "full" ? "100%" : String(customProps.max_width)))
       : "100%";
 
   const effectiveCardRadius =
@@ -901,7 +918,6 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
   const timelineRail = isCardDark ? "rgba(255,255,255,0.25)" : "rgba(15,23,42,0.18)";
   const pendingDot = isCardDark ? "rgba(255,255,255,0.35)" : "rgba(15,23,42,0.25)";
 
-  const pageTitle = customProps.title || customProps.page_title || "Orders & History";
   const showBreadcrumb = customProps.show_breadcrumb !== false;
   const showSearch = customProps.show_search !== false;
   const showFilters = customProps.show_filters !== false;
@@ -937,9 +953,21 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
   const isCompact = isMobile || isTablet;
 
   useEffect(() => {
-    const handleResize = () => setViewportWidth(window.innerWidth);
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    let rAFId: number | null = null;
+    const handleResize = () => {
+      if (rAFId !== null) cancelAnimationFrame(rAFId);
+      rAFId = requestAnimationFrame(() => {
+        setViewportWidth((prev) => {
+          const w = window.innerWidth;
+          return Math.abs(prev - w) >= 12 ? w : prev;
+        });
+      });
+    };
+    window.addEventListener("resize", handleResize, { passive: true });
+    return () => {
+      if (rAFId !== null) cancelAnimationFrame(rAFId);
+      window.removeEventListener("resize", handleResize);
+    };
   }, []);
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -1125,13 +1153,44 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       }
       return;
     }
+
+    const token = getCustomerToken(siteId || siteSlug);
+    if (!token && !isInsideEditor) {
+      setOrders([]);
+      setDetailMap({});
+      setTotalOrders(0);
+      setTotalPages(1);
+      setLoading(false);
+      setIsUnauthenticated(true);
+      try {
+        localStorage.removeItem(`wc_customer_orders_${siteId}`);
+        if (siteSlug) localStorage.removeItem(`wc_customer_orders_${siteSlug}`);
+      } catch (_) {}
+      return;
+    }
+
     try {
       const response = await fetch(`${API_BASE_URL}/orders/${siteId}/my-orders`, {
         credentials: "include",
         headers: getCustomerAuthHeaders(siteId),
       });
+
+      if (response.status === 401) {
+        setOrders([]);
+        setDetailMap({});
+        setTotalOrders(0);
+        setTotalPages(1);
+        setIsUnauthenticated(true);
+        try {
+          localStorage.removeItem(`wc_customer_orders_${siteId}`);
+          if (siteSlug) localStorage.removeItem(`wc_customer_orders_${siteSlug}`);
+        } catch (_) {}
+        return;
+      }
+
       if (!response.ok) throw new Error("Failed to load orders");
       const data = await response.json();
+      setIsUnauthenticated(false);
       const list = Array.isArray(data) ? data : (data && Array.isArray(data.orders) ? data.orders : []);
       if (list.length === 0 && isInsideEditor) {
         setOrders(SAMPLE_PREVIEW_ORDERS);
@@ -1142,8 +1201,27 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
         setOrders(list);
         setTotalOrders(list.length);
         setTotalPages(Math.ceil(list.length / pageSize) || 1);
+        const newDetails: Record<string, OrderDetail> = {};
+        list.forEach((ord: any) => {
+          if (ord && ord.id) {
+            newDetails[ord.id] = ord;
+          }
+        });
+        setDetailMap((prev) => ({ ...newDetails, ...prev }));
         try {
-          localStorage.setItem(`wc_customer_orders_${siteId}`, JSON.stringify(list));
+          if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+            (window as any).requestIdleCallback(() => {
+              try {
+                localStorage.setItem(`wc_customer_orders_${siteId}`, JSON.stringify(list));
+              } catch (_) {}
+            });
+          } else {
+            setTimeout(() => {
+              try {
+                localStorage.setItem(`wc_customer_orders_${siteId}`, JSON.stringify(list));
+              } catch (_) {}
+            }, 100);
+          }
         } catch (_) {}
       }
     } catch (err) {
@@ -1216,8 +1294,6 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       left: 0,
       behavior: "instant" as ScrollBehavior,
     });
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
   }, []);
 
   const loadOrderDetail = async (orderId: string, force = false) => {
@@ -1229,7 +1305,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       return;
     }
     if (!siteId) return;
-    if (!force && detailMap[orderId]) return;
+    if (!force && detailMap[orderId]?.shipping_address) return;
 
     try {
       setDetailLoadingId(orderId);
@@ -1251,7 +1327,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       setOrders((prev) =>
         prev.map((o) =>
           o.id === orderId
-            ? { ...o, refund_info: data.refund_info, payment_status: data.payment_status, status: data.status }
+            ? { ...o, ...data }
             : o
         )
       );
@@ -1264,18 +1340,26 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
         (data.items || []).forEach((item: OrderItem) => {
           const itemCanReturn =
             data.status === "delivered" &&
-            ((typeof item.is_returnable === "boolean" && item.is_returnable) ||
-              Number(item.returnable_quantity || 0) > 0);
+            (item.returnable_quantity || 0) > 0 &&
+            (item.return_window_days ?? 7) > 0;
 
-          if (itemCanReturn) {
+          if (!itemCanReturn) return;
+
+          const existingItem = currentItems[item.id];
+          if (existingItem) {
             nextItems[item.id] = {
-              selected: currentItems[item.id]?.selected || false,
+              ...existingItem,
               quantity: Math.min(
-                Math.max(currentItems[item.id]?.quantity || 1, 1),
-                Number(item.max_returnable_quantity || item.returnable_quantity || 1)
+                Math.max(1, existingItem.quantity || 1),
+                item.returnable_quantity || 1
               ),
-              reason_code: currentItems[item.id]?.reason_code || "damaged",
-              reason_note: currentItems[item.id]?.reason_note || "",
+            };
+          } else {
+            nextItems[item.id] = {
+              selected: true,
+              quantity: 1,
+              reason_code: "damaged",
+              reason_note: "",
             };
           }
         });
@@ -1284,48 +1368,49 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
           ...prev,
           [orderId]: {
             request_note: existingDraft?.request_note || "",
+            refund_account_type: existingDraft?.refund_account_type || "upi",
+            refund_upi_id: existingDraft?.refund_upi_id || "",
+            refund_account_holder: existingDraft?.refund_account_holder || "",
+            refund_account_number: existingDraft?.refund_account_number || "",
+            refund_ifsc_code: existingDraft?.refund_ifsc_code || "",
+            refund_bank_name: existingDraft?.refund_bank_name || "",
             items: nextItems,
           },
         };
       });
     } catch (err) {
-      console.error(err);
+      console.error("Failed to load customer order detail", err);
     } finally {
       setDetailLoadingId(null);
     }
   };
 
   const loadReturnDetail = async (returnId: string) => {
-    if (!siteId || returnDetailMap[returnId]) return;
+    if (!siteId) return;
     try {
       const response = await fetch(`${API_BASE_URL}/returns/${siteId}/my-returns/${returnId}`, {
         credentials: "include",
       });
-      if (!response.ok) throw new Error("Failed to load return detail");
-      const data = await response.json();
-      setReturnDetailMap((prev) => ({
-        ...prev,
-        [returnId]: data,
-      }));
+      if (response.ok) {
+        const data = await response.json();
+        setReturnDetailMap((prev) => ({
+          ...prev,
+          [returnId]: data,
+        }));
+      }
     } catch (err) {
-      console.error(err);
+      console.error("Failed to load customer return detail", err);
     }
   };
 
-  useEffect(() => {
-    returns.forEach((item) => {
-      if (!returnDetailMap[item.id]) {
-        loadReturnDetail(item.id);
-      }
-    });
-  }, [returns, siteId]);
+
 
   const handleToggle = async (orderId: string) => {
     const nextOrderId = expandedOrderId === orderId ? null : orderId;
     setExpandedOrderId(nextOrderId);
 
     if (nextOrderId) {
-      await loadOrderDetail(nextOrderId);
+      await loadOrderDetail(nextOrderId, true);
     }
   };
 
@@ -1601,27 +1686,29 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
   };
 
   const renderTrackingTimeline = (detail: OrderDetail) => {
-    const orderStatus = detail.status;
-    const isCancelled = orderStatus === "cancelled";
-    const currentRank = isCancelled ? 0 : getStatusRank(orderStatus);
-    const isDelivered = !isCancelled && (orderStatus === "delivered" || currentRank >= 5);
-    const isOutForDelivery = !isCancelled && (currentRank >= 4 || orderStatus === "out_for_delivery");
-    const isShipped = !isCancelled && (currentRank >= 3 || isOutForDelivery || isDelivered);
-    const isPacked = !isCancelled && (currentRank >= 2 || isShipped);
+    const orderStatus = detail.status || detail.shipment?.status || "placed";
+    const isCancelled = orderStatus === "cancelled" || detail.shipment?.status === "cancelled";
+    const currentRank = isCancelled ? 0 : Math.max(getStatusRank(orderStatus), getStatusRank(detail.shipment?.status));
+    const isDelivered = !isCancelled && (orderStatus === "delivered" || detail.shipment?.status === "delivered" || currentRank >= 5);
+    const isOutForDelivery = !isCancelled && (currentRank >= 4 || orderStatus === "out_for_delivery" || detail.shipment?.status === "out_for_delivery" || detail.shipment?.status === "picked_up");
+    const isShipped = !isCancelled && (currentRank >= 3 || isOutForDelivery || isDelivered || detail.shipment?.status === "shipped" || detail.shipment?.status === "in_transit");
+    const isPacked = !isCancelled && (currentRank >= 2 || isShipped || detail.shipment?.status === "assigned" || detail.shipment?.status === "accepted");
     const isPlaced = true;
-
-    const isShiprocket = Boolean(
-      detail.shipment?.delivery_mode === "shiprocket" ||
-      detail.shipment?.mode === "shiprocket" ||
-      (detail.shipment?.awb_number && !detail.shipment?.agent_id) ||
-      Boolean(detail.shipment?.courier_name && !detail.shipment?.agent_id)
-    );
+    const isActivelyOutForDelivery = !isCancelled && !isDelivered && (orderStatus === "out_for_delivery" || detail.shipment?.status === "out_for_delivery" || detail.shipment?.status === "picked_up");
 
     const isOwnAgent = Boolean(
-      !isShiprocket && (
-        detail.shipment?.delivery_mode === "own_agent" ||
-        detail.shipment?.mode === "own_agent" ||
-        Boolean(detail.shipment?.agent_id)
+      detail.shipment?.delivery_mode === "own_agent" ||
+      detail.shipment?.mode === "own_agent" ||
+      Boolean(detail.shipment?.agent_id) ||
+      Boolean(detail.shipment?.delivery_partner_name && !detail.shipment?.courier_name)
+    );
+
+    const isShiprocket = Boolean(
+      !isOwnAgent && (
+        detail.shipment?.delivery_mode === "shiprocket" ||
+        detail.shipment?.mode === "shiprocket" ||
+        Boolean(detail.shipment?.awb_number) ||
+        Boolean(detail.shipment?.courier_name)
       )
     );
 
@@ -1813,6 +1900,9 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       >
         <div
           style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
             fontSize: "13px",
             fontWeight: 800,
             marginBottom: "16px",
@@ -1821,7 +1911,13 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
             color: textMuted,
           }}
         >
-          {trackingHeading}
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="1" y="3" width="15" height="13"></rect>
+            <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+            <circle cx="5.5" cy="18.5" r="2.5"></circle>
+            <circle cx="18.5" cy="18.5" r="2.5"></circle>
+          </svg>
+          <span>{trackingHeading}</span>
         </div>
 
         {isCancelled ? (
@@ -1997,8 +2093,8 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
           })}
         </div>
 
-        {/* Own Fleet Rider Contact Card — below tracker, only when actively out for delivery and not delivered/cancelled */}
-        {isOwnAgent && !isCancelled && !isDelivered && (orderStatus === "out_for_delivery" || detail.shipment?.status === "out_for_delivery") && (detail.shipment?.delivery_partner_name || detail.shipment?.delivery_partner_phone) && (
+        {/* Own Fleet Rider Contact Card — strictly only shown when order is actively OUT FOR DELIVERY */}
+        {isOwnAgent && isActivelyOutForDelivery && (detail.shipment?.delivery_partner_name || detail.shipment?.delivery_partner_phone) && (
           <div
             style={{
               marginTop: "16px",
@@ -2069,6 +2165,48 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
           </div>
         )}
 
+        {/* Delivery Verification OTP banner for Customer — strictly only shown when actively OUT FOR DELIVERY */}
+        {isOwnAgent && isActivelyOutForDelivery && (detail.delivery_otp || detail.shipment?.delivery_otp) && (
+          <div
+            style={{
+              marginTop: "12px",
+              padding: "12px 16px",
+              borderRadius: "14px",
+              background: isLight ? "#eff6ff" : "rgba(37, 99, 235, 0.08)",
+              border: "1.5px solid rgba(37, 99, 235, 0.25)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: "10px",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: "11px", fontWeight: 800, color: "#2563eb", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Delivery Verification Code
+              </div>
+              <div style={{ fontSize: "12px", color: textMuted, marginTop: "2px" }}>
+                Share this 4-digit PIN with the delivery partner upon arrival.
+              </div>
+            </div>
+            <div
+              style={{
+                fontFamily: "monospace",
+                fontSize: "20px",
+                fontWeight: 900,
+                letterSpacing: "4px",
+                padding: "6px 14px",
+                borderRadius: "8px",
+                background: isLight ? "#ffffff" : "rgba(15, 23, 42, 0.6)",
+                border: "1px solid rgba(37, 99, 235, 0.3)",
+                color: "#2563eb",
+              }}
+            >
+              {detail.delivery_otp || detail.shipment?.delivery_otp}
+            </div>
+          </div>
+        )}
+
         {/* Manual Courier Partner Card — shows partner name and tracking/contact number */}
         {!isOwnAgent && !isShiprocket && !isCancelled && (isShipped || isOutForDelivery || isDelivered) && (detail.shipment?.delivery_partner_name || detail.shipment?.delivery_partner_phone) && (
           <div
@@ -2101,7 +2239,12 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                   flexShrink: 0,
                 }}
               >
-                🚚
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="1" y="3" width="15" height="13" />
+                  <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
+                  <circle cx="5.5" cy="18.5" r="2.5" />
+                  <circle cx="18.5" cy="18.5" r="2.5" />
+                </svg>
               </div>
               <div>
                 <div style={{ fontSize: "11px", fontWeight: 800, color: "#2563eb", textTransform: "uppercase", letterSpacing: "0.05em" }}>
@@ -2935,21 +3078,30 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
         background: isLight ? pageBg : "transparent",
         color: textPrimary,
         padding: isMobile ? "16px 12px 36px" : "24px 16px 48px",
+        boxSizing: "border-box",
+        width: "100%",
       }}
     >
       <div
         style={{
           maxWidth: effectiveMaxWidth,
+          width: "100%",
           margin: "0 auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: "16px",
         }}
       >
-        {/* Clean Minimalist E-Commerce Header with Store Breadcrumb & Title */}
+        {/* Uniform Header Navigation Bar */}
         <div
           style={{
             display: "flex",
-            flexDirection: "column",
-            gap: "8px",
-            marginBottom: "20px",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "12px",
+            minHeight: "38px",
+            width: "100%",
           }}
         >
           {/* Breadcrumb back-link */}
@@ -3001,22 +3153,6 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
             </div>
           )}
 
-          {/* Heading */}
-          {pageTitle && (
-            <div style={{ marginTop: showBreadcrumb ? "4px" : "0" }}>
-              <h1
-                style={{
-                  margin: 0,
-                  fontSize: isMobile ? "22px" : "28px",
-                  fontWeight: 800,
-                  color: titleColor,
-                  letterSpacing: "-0.02em",
-                }}
-              >
-                {pageTitle}
-              </h1>
-            </div>
-          )}
         </div>
 
         {/* Industry-Level Themed Customer Orders Filter Bar */}
@@ -3027,7 +3163,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
               border: cardBorder,
               borderRadius: effectiveCardRadius,
               padding: isMobile ? "14px" : "16px 20px",
-              marginBottom: "20px",
+              marginBottom: "0px",
               boxShadow: isLight ? "0 2px 10px rgba(15,23,42,0.03)" : "0 8px 24px rgba(2,6,23,0.20)",
               display: "flex",
               flexDirection: "column",
@@ -3114,7 +3250,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                       fontWeight: 500,
                       outline: "none",
                       boxSizing: "border-box",
-                      transition: "all 0.15s ease",
+                      transition: "border-color 0.15s ease, background 0.15s ease",
                     }}
                   />
                   {searchInputValue && (
@@ -3644,6 +3780,67 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
               </div>
             ))}
           </div>
+        ) : isUnauthenticated && !isInsideEditor ? (
+          <div
+            style={{
+              background: cardBg,
+              border: cardBorder,
+              borderRadius: effectiveCardRadius,
+              padding: isMobile ? "36px 18px" : "56px 24px",
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "16px",
+              boxShadow: isLight ? "0 4px 20px rgba(15,23,42,0.06)" : "0 8px 32px rgba(0,0,0,0.3)",
+            }}
+          >
+            <div
+              style={{
+                width: "60px",
+                height: "60px",
+                borderRadius: "50%",
+                background: isLight ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)",
+                display: "grid",
+                placeItems: "center",
+                color: accentColor,
+              }}
+            >
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+            </div>
+            <div>
+              <div style={{ fontSize: "20px", fontWeight: 800, color: titleColor, marginBottom: "8px" }}>
+                Sign in to view your orders
+              </div>
+              <div style={{ color: textMuted, fontSize: "14px", maxWidth: "440px", lineHeight: 1.5 }}>
+                Track your active shipments, view live delivery statuses and OTPs, request returns, and download invoices.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const targetPath = siteSlug ? `/store/${siteSlug}` : (siteId ? `/store/${siteId}` : "/");
+                navigate(targetPath);
+              }}
+              style={{
+                marginTop: "8px",
+                background: accentColor,
+                color: isColorDarkHex(accentColor) ? "#ffffff" : "#0f172a",
+                border: "none",
+                borderRadius: effectiveBadgeRadius,
+                padding: "12px 28px",
+                fontSize: "14px",
+                fontWeight: 700,
+                cursor: "pointer",
+                boxShadow: `0 4px 14px ${accentColor}33`,
+              }}
+            >
+              Sign In to Your Account
+            </button>
+          </div>
         ) : error ? (
           <div
             style={{
@@ -3786,7 +3983,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
             }}
           >
             {paginatedOrders.map((order) => {
-              const detail = detailMap[order.id];
+              const detail = detailMap[order.id] || (order.items && order.items.length > 0 ? (order as any) : null);
               const isExpanded = expandedOrderId === order.id;
               const canCancel = order.status !== "delivered" && order.status !== "returned" && order.status !== "cancelled";
               const isDelivered = order.status === "delivered";
@@ -3807,10 +4004,12 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                     border: isExpanded ? `1px solid ${accentColor}55` : cardBorder,
                     borderRadius: effectiveCardRadius,
                     overflow: "hidden",
+                    contentVisibility: "auto",
+                    containIntrinsicSize: isExpanded ? "0 400px" : "0 88px",
                     boxShadow: isExpanded
                       ? (isLight ? "0 14px 32px rgba(15,23,42,0.10)" : "0 20px 44px rgba(2,6,23,0.40)")
                       : (isLight ? "0 4px 16px rgba(15,23,42,0.04)" : "0 10px 24px rgba(2,6,23,0.20)"),
-                    transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                    transition: "border-color 0.2s ease, box-shadow 0.2s ease",
                   }}
                 >
                   <button
@@ -3915,19 +4114,33 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                       >
                         {/* Status chip */}
                         {(() => {
-                          const isFullyCancelledOrReturned = order.status === "cancelled" || order.status === "returned";
-                          const currentRefundInfo = isFullyCancelledOrReturned
-                            ? (detailMap[order.id]?.refund_info || order.refund_info)
-                            : null;
+                          const currentRefundInfo = (detailMap[order.id]?.refund_info || order.refund_info);
+                          const isFullyRefunded = order.status === "refunded" || order.payment_status === "refunded" || currentRefundInfo?.status === "completed" || currentRefundInfo?.status_label === "Refunded";
+                          const isPartiallyRefunded = order.payment_status === "partially_refunded" || currentRefundInfo?.status_label === "Partially Refunded";
                           const isRefundFailed = currentRefundInfo?.status === "failed";
                           const isRefundProcessing = currentRefundInfo?.status === "processing";
-                          const isRefundCompleted = currentRefundInfo?.status === "completed" && isFullyCancelledOrReturned;
-                          const chipColor = isRefundFailed
+                          const isRepl = Boolean(
+                            (order.cancel_reason || detailMap[order.id]?.cancel_reason || "").startsWith("Replacement Authorized")
+                          );
+                          const isReplDelivered = isRepl && order.status === "delivered";
+                          const chipColor = isRepl
+                            ? (isReplDelivered ? "#059669" : "#0284c7")
+                            : (isRefundFailed
                             ? "#ef4444"
-                            : (isRefundProcessing ? "#d97706" : (isRefundCompleted ? "#059669" : statusColor));
-                          const chipLabel = isRefundFailed
+                            : (isFullyRefunded
+                            ? "#059669"
+                            : (isPartiallyRefunded
+                            ? "#0284c7"
+                            : (isRefundProcessing ? "#d97706" : statusColor))));
+                          const chipLabel = isRepl
+                            ? (isReplDelivered ? "Replacement Delivered" : (order.status === "shipped" ? "Re-Dispatch Shipped" : (order.status === "out_for_delivery" ? "Re-Dispatch Out for Delivery" : "Re-Dispatch (In Progress)")))
+                            : (isRefundFailed
                             ? "Refund Failed"
-                            : (isRefundProcessing ? "Refund in progress" : (isRefundCompleted ? "Refunded" : order.status.replaceAll("_", " ")));
+                            : (isFullyRefunded
+                            ? "Refunded"
+                            : (isPartiallyRefunded
+                            ? "Partially Refunded"
+                            : (isRefundProcessing ? "Refund in progress" : order.status.replaceAll("_", " ")))));
 
                           return (
                             <div
@@ -3959,33 +4172,52 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                           );
                         })()}
 
-                        {/* Delivery OTP Badge on Card — only for Own Fleet */}
-                        {(order.status === "out_for_delivery" || order.status === "shipped") &&
-                        order.delivery_otp &&
-                        (order.shipment?.delivery_mode === "own_agent" ||
-                          order.shipment?.mode === "own_agent" ||
-                          Boolean(order.shipment?.agent_id)) ? (
-                          <div
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "6px",
-                              padding: "5px 12px",
-                              borderRadius: "999px",
-                              background: isLight ? "#ecfdf5" : "rgba(16, 185, 129, 0.12)",
-                              border: "1px dashed #10b981",
-                              color: "#059669",
-                              fontSize: "12px",
-                              fontWeight: 800,
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            <span>OTP:</span>
-                            <span style={{ letterSpacing: "2px", fontFamily: "monospace", fontWeight: 900 }}>
-                              {order.delivery_otp}
-                            </span>
-                          </div>
-                        ) : null}
+                        {/* Delivery OTP Badge on Card — only when OUT FOR DELIVERY for Own Fleet */}
+                        {(() => {
+                          const currentOtp = detail?.delivery_otp || order.delivery_otp || detail?.shipment?.delivery_otp || order.shipment?.delivery_otp;
+                          const isOwnFleet = Boolean(
+                            detail?.shipment?.delivery_mode === "own_agent" ||
+                            detail?.shipment?.mode === "own_agent" ||
+                            order.shipment?.delivery_mode === "own_agent" ||
+                            order.shipment?.mode === "own_agent" ||
+                            Boolean(detail?.shipment?.agent_id) ||
+                            Boolean(order.shipment?.agent_id) ||
+                            Boolean(detail?.shipment?.delivery_partner_name && !detail?.shipment?.courier_name) ||
+                            Boolean(order.shipment?.delivery_partner_name && !order.shipment?.courier_name)
+                          );
+                          const isOfd = Boolean(
+                            order.status === "out_for_delivery" ||
+                            detail?.status === "out_for_delivery" ||
+                            order.shipment?.status === "out_for_delivery" ||
+                            detail?.shipment?.status === "out_for_delivery" ||
+                            order.shipment?.status === "picked_up" ||
+                            detail?.shipment?.status === "picked_up"
+                          );
+                          if (!currentOtp || !isOwnFleet || !isOfd) return null;
+
+                          return (
+                            <div
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px",
+                                padding: "5px 12px",
+                                borderRadius: "999px",
+                                background: isLight ? "#ecfdf5" : "rgba(16, 185, 129, 0.12)",
+                                border: "1px dashed #10b981",
+                                color: "#059669",
+                                fontSize: "12px",
+                                fontWeight: 800,
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              <span>OTP:</span>
+                              <span style={{ letterSpacing: "2px", fontFamily: "monospace", fontWeight: 900 }}>
+                                {currentOtp}
+                              </span>
+                            </div>
+                          );
+                        })()}
 
                         {/* Price */}
                         <div
@@ -4053,67 +4285,154 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                         </div>
                       ) : detail ? (
                         <>
-                          {/* Delivery Verification Code (OTP) Banner — only for Own Fleet */}
-                          {detail.delivery_otp &&
-                          (detail.shipment?.delivery_mode === "own_agent" ||
-                            detail.shipment?.mode === "own_agent" ||
-                            Boolean(detail.shipment?.agent_id)) &&
-                          (detail.status === "out_for_delivery" || detail.status === "shipped") ? (
-                            <div
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "space-between",
-                                padding: isCompact ? "12px 14px" : "14px 18px",
-                                background: isLight ? "#f0fdf4" : "rgba(16, 185, 129, 0.08)",
-                                border: "1.5px solid rgba(16, 185, 129, 0.3)",
-                                borderRadius: effectiveInnerRadius,
-                                marginBottom: "16px",
-                                flexWrap: "wrap",
-                                gap: "12px",
-                              }}
-                            >
-                              <div>
-                                <div
-                                  style={{
-                                    fontSize: "12px",
-                                    fontWeight: 800,
-                                    color: "#059669",
-                                    textTransform: "uppercase",
-                                    letterSpacing: "0.5px",
-                                  }}
-                                >
-                                  Delivery Verification OTP
-                                </div>
-                                <div style={{ fontSize: "12px", color: textMuted, marginTop: "2px" }}>
-                                  Share this 4-digit code with the delivery partner upon receiving your order.
-                                </div>
-                              </div>
+                          {/* Delivery Verification Code (OTP) Banner — only when OUT FOR DELIVERY for Own Fleet */}
+                          {(() => {
+                            const currentOtp = detail?.delivery_otp || order.delivery_otp || detail?.shipment?.delivery_otp || order.shipment?.delivery_otp;
+                            const isOwnFleet = Boolean(
+                              detail?.shipment?.delivery_mode === "own_agent" ||
+                              detail?.shipment?.mode === "own_agent" ||
+                              order.shipment?.delivery_mode === "own_agent" ||
+                              order.shipment?.mode === "own_agent" ||
+                              Boolean(detail?.shipment?.agent_id) ||
+                              Boolean(order.shipment?.agent_id) ||
+                              Boolean(detail?.shipment?.delivery_partner_name && !detail?.shipment?.courier_name) ||
+                              Boolean(order.shipment?.delivery_partner_name && !order.shipment?.courier_name)
+                            );
+                            const isOfd = Boolean(
+                              order.status === "out_for_delivery" ||
+                              detail?.status === "out_for_delivery" ||
+                              order.shipment?.status === "out_for_delivery" ||
+                              detail?.shipment?.status === "out_for_delivery" ||
+                              order.shipment?.status === "picked_up" ||
+                              detail?.shipment?.status === "picked_up"
+                            );
+                            if (!currentOtp || !isOwnFleet || !isOfd) return null;
+
+                            return (
                               <div
                                 style={{
-                                  fontSize: "22px",
-                                  fontWeight: 900,
-                                  letterSpacing: "6px",
-                                  color: "#059669",
-                                  background: isLight ? "#ffffff" : "rgba(0,0,0,0.3)",
-                                  padding: "4px 16px",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  padding: isCompact ? "12px 14px" : "14px 18px",
+                                  background: isLight ? "#f0fdf4" : "rgba(16, 185, 129, 0.08)",
+                                  border: "1.5px solid rgba(16, 185, 129, 0.3)",
                                   borderRadius: effectiveInnerRadius,
-                                  border: "2px dashed #10b981",
-                                  fontFamily: "monospace",
-                                  boxShadow: "0 2px 8px rgba(16, 185, 129, 0.12)",
+                                  marginBottom: "16px",
+                                  flexWrap: "wrap",
+                                  gap: "12px",
                                 }}
                               >
-                                {detail.delivery_otp}
+                                <div>
+                                  <div
+                                    style={{
+                                      fontSize: "12px",
+                                      fontWeight: 800,
+                                      color: "#059669",
+                                      textTransform: "uppercase",
+                                      letterSpacing: "0.5px",
+                                    }}
+                                  >
+                                    Delivery Verification OTP
+                                  </div>
+                                  <div style={{ fontSize: "12px", color: textMuted, marginTop: "2px" }}>
+                                    Share this 4-digit code with the delivery partner upon receiving your order.
+                                  </div>
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "22px",
+                                    fontWeight: 900,
+                                    letterSpacing: "6px",
+                                    color: "#059669",
+                                    background: isLight ? "#ffffff" : "rgba(0,0,0,0.3)",
+                                    padding: "4px 16px",
+                                    borderRadius: effectiveInnerRadius,
+                                    border: "2px dashed #10b981",
+                                    fontFamily: "monospace",
+                                  }}
+                                >
+                                  {currentOtp}
+                                </div>
                               </div>
-                            </div>
-                          ) : null}
+                            );
+                          })()}
+                          {(() => {
+                            const isRepl = Boolean((detail?.cancel_reason || order.cancel_reason || "").startsWith("Replacement Authorized"));
+                            const isReplDelivered = isRepl && (order.status === "delivered" || detail?.status === "delivered");
+                            const isReplActive = isRepl && !isReplDelivered && order.status !== "cancelled" && detail?.status !== "cancelled";
+
+                            if (isReplActive) {
+                              return (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "12px",
+                                    padding: "12px 16px",
+                                    background: isLight ? "#f0f9ff" : "rgba(2, 132, 199, 0.08)",
+                                    border: "1.5px solid #7dd3fc",
+                                    borderRadius: effectiveInnerRadius,
+                                    marginBottom: "16px",
+                                    color: "#0369a1",
+                                  }}
+                                >
+                                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                                  </svg>
+                                  <div>
+                                    <div style={{ fontWeight: 800, color: isLight ? "#0c4a6e" : "#e0f2fe", fontSize: "13.5px" }}>
+                                      Replacement Order in Progress
+                                    </div>
+                                    <div style={{ fontSize: "12px", color: isLight ? "#0284c7" : "#7dd3fc", marginTop: "2px" }}>
+                                      Support authorized a replacement shipment for this order. We are preparing it for delivery.
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            if (isReplDelivered) {
+                              return (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "12px",
+                                    padding: "12px 16px",
+                                    background: isLight ? "#f0fdf4" : "rgba(16, 185, 129, 0.08)",
+                                    border: "1.5px solid #86efac",
+                                    borderRadius: effectiveInnerRadius,
+                                    marginBottom: "16px",
+                                    color: "#15803d",
+                                  }}
+                                >
+                                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                  </svg>
+                                  <div>
+                                    <div style={{ fontWeight: 800, color: isLight ? "#14532d" : "#bbf7d0", fontSize: "13.5px" }}>
+                                      Replacement Completed & Delivered
+                                    </div>
+                                    <div style={{ fontSize: "12px", color: isLight ? "#16a34a" : "#86efac", marginTop: "2px" }}>
+                                      The replacement shipment for this order has been successfully delivered.
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            return null;
+                          })()}
 
                           <div
                             style={{
                               display: "grid",
                               gridTemplateColumns: isTablet || isMobile
                                 ? "1fr"
-                                : "minmax(0, 1.4fr) minmax(320px, 1fr)",
+                                : "repeat(2, minmax(0, 1fr))",
                               gap: "18px",
                               alignItems: "start",
                             }}
@@ -4135,15 +4454,23 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                             >
                               <div
                                 style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "8px",
                                   fontSize: "13px",
                                   fontWeight: 800,
-                                  marginBottom: "12px",
+                                  marginBottom: "14px",
                                   letterSpacing: "0.04em",
                                   textTransform: "uppercase",
                                   color: textMuted,
                                 }}
                               >
-                                {itemsHeading}
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                                  <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                                  <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                                </svg>
+                                <span>{itemsHeading} ({detail.items?.length || 0})</span>
                               </div>
 
                               <div
@@ -4153,10 +4480,16 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                   gap: "12px",
                                 }}
                               >
-                                {detail.items.map((item) => {
+                                {(detail.items || []).map((item) => {
                                   const draftItem = draft?.items?.[item.id];
                                   const itemCanReturn = isItemReturnable(item, detail.delivered_at);
                                   const isEligible = itemCanReturn && isReturnFormOpen;
+                                  const isReplOrder = Boolean((detail?.cancel_reason || order.cancel_reason || "").startsWith("Replacement Authorized"));
+                                  const isReplDelivered = isReplOrder && (order.status === "delivered" || detail?.status === "delivered");
+                                  const isReplActive = isReplOrder && !isReplDelivered && order.status !== "cancelled" && detail?.status !== "cancelled";
+
+                                  const isItemReplInTransit = isReplActive && (item.status === "confirmed" || item.status === "shipped" || item.status === "out_for_delivery" || item.status === "placed");
+                                  const isItemDeliveredEarlier = isReplActive && item.status === "delivered";
 
                                   return (
                                     <div
@@ -4167,8 +4500,8 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                         gap: "12px",
                                         padding: "12px",
                                         borderRadius: effectiveInnerRadius,
-                                        background: effectiveItemCardBg,
-                                        border: innerBoxBorder,
+                                        background: isItemReplInTransit ? (isLight ? "#f0f9ff" : "rgba(2, 132, 199, 0.08)") : effectiveItemCardBg,
+                                        border: isItemReplInTransit ? "1.5px solid #7dd3fc" : innerBoxBorder,
                                       }}
                                     >
                                       <div
@@ -4186,15 +4519,19 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                         {item.product_image ? (
                                           <img
                                             src={getThumbnailUrl(item.product_image, 140, 140)}
-                                            alt={item.product_name}
-                                            loading="eager"
+                                            alt={item.product_name || "Product"}
+                                            width={72}
+                                            height={72}
+                                            loading="lazy"
                                             decoding="async"
                                             style={{
                                               width: "72px",
                                               height: "72px",
+                                              aspectRatio: "1/1",
                                               objectFit: "cover",
                                               borderRadius: effectiveInnerRadius,
                                               border: cardBorder,
+                                              flexShrink: 0,
                                             }}
                                           />
                                         ) : null}
@@ -4205,9 +4542,51 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                               fontSize: "14px",
                                               fontWeight: 700,
                                               marginBottom: "4px",
+                                              display: "flex",
+                                              alignItems: "center",
+                                              gap: "8px",
+                                              flexWrap: "wrap",
                                             }}
                                           >
-                                            {item.product_name}
+                                            <span>{item.product_name || "Product"}</span>
+                                            {isItemReplInTransit && (
+                                              <span
+                                                style={{
+                                                  fontSize: "11px",
+                                                  fontWeight: 700,
+                                                  color: "#0284c7",
+                                                  background: "#e0f2fe",
+                                                  border: "1px solid #7dd3fc",
+                                                  padding: "2px 7px",
+                                                  borderRadius: effectiveBadgeRadius,
+                                                  display: "inline-flex",
+                                                  alignItems: "center",
+                                                  gap: "4px",
+                                                }}
+                                              >
+                                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                                                <span>Replacement in Progress</span>
+                                              </span>
+                                            )}
+                                            {isItemDeliveredEarlier && (
+                                              <span
+                                                style={{
+                                                  fontSize: "11px",
+                                                  fontWeight: 600,
+                                                  color: "#15803d",
+                                                  background: "#f0fdf4",
+                                                  border: "1px solid #bbf7d0",
+                                                  padding: "2px 7px",
+                                                  borderRadius: effectiveBadgeRadius,
+                                                  display: "inline-flex",
+                                                  alignItems: "center",
+                                                  gap: "4px",
+                                                }}
+                                              >
+                                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                                <span>Delivered Earlier</span>
+                                              </span>
+                                            )}
                                           </div>
                                           <div style={{ fontSize: "13px", color: textMuted }}>
                                             Qty {item.quantity}
@@ -4215,9 +4594,11 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                               ? ` • ${item.selected_variant_label || "Variant"}: ${item.selected_variant_value}`
                                               : ""}
                                           </div>
-                                          <div style={{ fontSize: "12px", color: textMuted, marginTop: "4px" }}>
-                                            Item status: {item.status.replaceAll("_", " ")}
-                                          </div>
+                                          {!isReplDelivered && !isItemReplInTransit && !isItemDeliveredEarlier && item.status && item.status !== "delivered" && (
+                                            <div style={{ fontSize: "12px", color: textMuted, marginTop: "4px" }}>
+                                              Item status: {String(item.status).replace(/_/g, " ")}
+                                            </div>
+                                          )}
                                           {item.return_window_days === 0 ? (
                                             <div style={{ fontSize: "12px", color: "#dc2626", marginTop: "4px", fontWeight: 600 }}>
                                               Non-Returnable (Final Sale)
@@ -4237,6 +4618,43 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                               Already fully returned
                                             </div>
                                           ) : null}
+
+                                          <div style={{ marginTop: "6px" }}>
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                const isStore = typeof window !== "undefined" && window.location.pathname.startsWith("/store/");
+                                                const isBuilder = typeof window !== "undefined" && window.location.pathname.startsWith("/builder/");
+                                                const prefix = isStore
+                                                  ? `/store/${siteSlug || ""}`
+                                                  : isBuilder
+                                                  ? `/builder/${siteId || siteSlug || ""}`
+                                                  : (siteSlug ? `/store/${siteSlug}` : "");
+                                                const targetPath = `${prefix}/support?tab=new&orderId=${detail.id}&itemId=${item.id}`;
+                                                navigate(targetPath);
+                                              }}
+                                              style={{
+                                                background: "transparent",
+                                                border: "none",
+                                                color: accentColor,
+                                                fontSize: "11.5px",
+                                                fontWeight: 600,
+                                                cursor: "pointer",
+                                                padding: 0,
+                                                display: "inline-flex",
+                                                alignItems: "center",
+                                                gap: "4px",
+                                                textDecoration: "underline",
+                                                textUnderlineOffset: "2px",
+                                              }}
+                                            >
+                                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                                              </svg>
+                                              <span>Need help with this product?</span>
+                                            </button>
+                                          </div>
                                         </div>
 
                                         <div
@@ -4409,14 +4827,53 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                               </div>
                             </div>
 
-                            <div
-                              style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: "14px",
-                              }}
-                            >
-                              {showShipping && (
+                            {/* Shipping & Delivery Address */}
+                            {showShipping && (() => {
+                              const shipping = detail?.shipping_address || order?.shipping_address || (order as any)?.shipping_address || {};
+                              const fullName =
+                                shipping.fullName ||
+                                shipping.full_name ||
+                                shipping.name ||
+                                (order as any)?.customer_name ||
+                                (detail as any)?.customer_name ||
+                                "Customer";
+                              const address1 =
+                                shipping.addressLine1 ||
+                                shipping.address_line1 ||
+                                shipping.address ||
+                                shipping.street ||
+                                shipping.line1 ||
+                                shipping.address1 ||
+                                "";
+                              const address2 =
+                                shipping.addressLine2 ||
+                                shipping.address_line2 ||
+                                shipping.line2 ||
+                                shipping.address2 ||
+                                "";
+                              const city = shipping.city || "";
+                              const state = shipping.state || "";
+                              const postalCode =
+                                shipping.postalCode ||
+                                shipping.postal_code ||
+                                shipping.pincode ||
+                                shipping.zip ||
+                                shipping.zipcode ||
+                                "";
+                              const phone =
+                                shipping.mobileNumber ||
+                                shipping.mobile_number ||
+                                shipping.phone ||
+                                (order as any)?.customer_phone ||
+                                (detail as any)?.customer_phone ||
+                                "";
+                              const email =
+                                shipping.email ||
+                                (order as any)?.customer_email ||
+                                (detail as any)?.customer_email ||
+                                "";
+
+                              return (
                                 <div
                                   style={{
                                     border: innerBoxBorder,
@@ -4427,18 +4884,25 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                 >
                                   <div
                                     style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "8px",
                                       fontSize: "13px",
                                       fontWeight: 800,
-                                      marginBottom: "10px",
+                                      marginBottom: "12px",
                                       letterSpacing: "0.04em",
                                       textTransform: "uppercase",
                                       color: textMuted,
                                     }}
                                   >
-                                    {shippingHeading}
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                      <circle cx="12" cy="10" r="3"></circle>
+                                    </svg>
+                                    <span>{shippingHeading}</span>
                                   </div>
                                   <div style={{ fontSize: "14px", fontWeight: 700 }}>
-                                    {detail.shipping_address?.fullName || "—"}
+                                    {fullName}
                                   </div>
                                   <div
                                     style={{
@@ -4448,147 +4912,39 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                       lineHeight: 1.6,
                                     }}
                                   >
-                                    {detail.shipping_address?.addressLine1 || "—"}
-                                    <br />
-                                    {detail.shipping_address?.city || "—"} - {detail.shipping_address?.postalCode || "—"}
-                                    <br />
-                                    {detail.shipping_address?.mobileNumber || "—"}
-                                    {detail.shipping_address?.email ? ` • ${detail.shipping_address.email}` : ""}
+                                    {address1 ? (
+                                      <>
+                                        {address1}
+                                        {address2 ? <span>, {address2}</span> : null}
+                                        <br />
+                                      </>
+                                    ) : null}
+                                    {city || postalCode ? (
+                                      <>
+                                        {[city, state].filter(Boolean).join(", ")}
+                                        {postalCode ? (city ? ` - ${postalCode}` : postalCode) : ""}
+                                        <br />
+                                      </>
+                                    ) : null}
+                                    {phone ? (
+                                      <>
+                                        {formatPhoneDisplay(phone)}
+                                        {email ? ` • ${email}` : ""}
+                                      </>
+                                    ) : email ? (
+                                      email
+                                    ) : !address1 && !city ? (
+                                      "Address on file"
+                                    ) : null}
                                   </div>
                                 </div>
-                              )}
+                              );
+                            })()}
 
-                              {showPayment && (
-                                <div
-                                  style={{
-                                    border: innerBoxBorder,
-                                    borderRadius: effectiveInnerRadius,
-                                    padding: isCompact ? "14px" : "16px",
-                                    background: effectiveInnerBoxBg,
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    gap: "10px",
-                                  }}
-                                >
-                                  <div
-                                    style={{
-                                      fontSize: "13px",
-                                      fontWeight: 800,
-                                      letterSpacing: "0.04em",
-                                      textTransform: "uppercase",
-                                      color: textMuted,
-                                      display: "flex",
-                                      alignItems: "center",
-                                      justifyContent: "space-between",
-                                    }}
-                                  >
-                                    <span>{paymentHeading}</span>
-                                  <span
-                                    style={{
-                                      fontSize: "11px",
-                                      fontWeight: 800,
-                                      padding: "3px 9px",
-                                      borderRadius: "999px",
-                                      textTransform: "capitalize",
-                                      background:
-                                        detail.payment_status === "paid"
-                                          ? "rgba(16,185,129,0.14)"
-                                          : detail.payment_status === "refunded"
-                                          ? "rgba(139,92,246,0.14)"
-                                          : detail.payment_status === "failed"
-                                          ? "rgba(239,68,68,0.14)"
-                                          : "rgba(245,158,11,0.14)",
-                                      color:
-                                        detail.payment_status === "paid"
-                                          ? "#059669"
-                                          : detail.payment_status === "refunded"
-                                          ? "#7c3aed"
-                                          : detail.payment_status === "failed"
-                                          ? "#dc2626"
-                                          : "#d97706",
-                                    }}
-                                  >
-                                    {detail.payment_status === "paid"
-                                      ? (detail.payment_method?.toLowerCase() === "cod" ? "● Cash Collected (Paid)" : "● Paid")
-                                      : detail.payment_status === "refunded"
-                                      ? "● Refunded"
-                                      : detail.payment_status === "failed"
-                                      ? "● Payment Failed"
-                                      : (detail.payment_method?.toLowerCase() === "cod" ? "● Pay on Delivery (Pending)" : "● " + (labelize(detail.payment_status) || "Pending"))}
-                                  </span>
-                                </div>
+                            {/* Return History Accordion */}
+                            {renderReturnAccordion(order.id)}
 
-                                <div
-                                  style={{
-                                    display: "grid",
-                                    gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)",
-                                    gap: "10px",
-                                    marginTop: "2px",
-                                  }}
-                                >
-                                  <div>
-                                    <div style={{ fontSize: "12px", color: textMuted, marginBottom: "3px" }}>
-                                      Payment method
-                                    </div>
-                                    <div
-                                      style={{
-                                        fontSize: "13px",
-                                        fontWeight: 700,
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "6px",
-                                      }}
-                                    >
-                                      <span>{getPaymentMethodIcon(detail.payment_method)}</span>
-                                      <span>{formatPaymentMethodName(detail.payment_method)}</span>
-                                    </div>
-                                  </div>
-
-                                  <div>
-                                    <div style={{ fontSize: "12px", color: textMuted, marginBottom: "3px" }}>
-                                      Total amount
-                                    </div>
-                                    <div style={{ fontSize: "14px", fontWeight: 800, color: textPrimary }}>
-                                      {formatPrice(detail.total)}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {detail.razorpay_payment_id && (
-                                  <div
-                                    style={{
-                                      paddingTop: "8px",
-                                      borderTop: divider,
-                                      display: "flex",
-                                      flexDirection: "column",
-                                      gap: "4px",
-                                    }}
-                                  >
-                                    <div style={{ fontSize: "11px", color: textMuted, textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                                      Transaction reference
-                                    </div>
-                                    <code
-                                      style={{
-                                        fontSize: "12px",
-                                        fontWeight: 700,
-                                        padding: "4px 8px",
-                                        borderRadius: "6px",
-                                        background: isLight ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)",
-                                        wordBreak: "break-all",
-                                        color: textPrimary,
-                                        width: "fit-content",
-                                      }}
-                                    >
-                                      {detail.razorpay_payment_id}
-                                    </code>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-
-                              {renderReturnAccordion(order.id)}
-                            </div>
-
+                            {/* Return Request Form (Placed in Left Column under Return Accordion) */}
                             {isReturnFormOpen && canReturn ? (
                               <div
                                 style={{
@@ -4634,9 +4990,15 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                           border: (draft?.refund_account_type || "upi") === "upi" ? `1px solid ${accentColor}` : cardBorder,
                                           background: (draft?.refund_account_type || "upi") === "upi" ? `${accentColor}18` : "transparent",
                                           color: (draft?.refund_account_type || "upi") === "upi" ? accentColor : textMuted,
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          gap: "6px",
                                         }}
                                       >
-                                        ⚡ Instant UPI / QR
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                                        </svg>
+                                        <span>Instant UPI / QR</span>
                                       </button>
                                       <button
                                         type="button"
@@ -4650,9 +5012,16 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                           border: draft?.refund_account_type === "bank" ? `1px solid ${accentColor}` : cardBorder,
                                           background: draft?.refund_account_type === "bank" ? `${accentColor}18` : "transparent",
                                           color: draft?.refund_account_type === "bank" ? accentColor : textMuted,
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          gap: "6px",
                                         }}
                                       >
-                                        🏦 Bank Account (NEFT/IMPS)
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                          <rect x="2" y="5" width="20" height="14" rx="2" />
+                                          <line x1="2" y1="10" x2="22" y2="10" />
+                                        </svg>
+                                        <span>Bank Account (NEFT/IMPS)</span>
                                       </button>
                                     </div>
 
@@ -4888,6 +5257,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                             ) : null}
                           </div>
 
+                          {/* Column 2: Right Column (Tracking, Payment, Refund Info, Summary, Action Buttons) */}
                           <div
                             style={{
                               display: "flex",
@@ -4895,37 +5265,17 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                               gap: "14px",
                             }}
                           >
-                            {detail.refund_info ? (
-                              <div
-                                style={{
-                                  border: detail.refund_info.status === "failed"
-                                    ? "1px solid rgba(239,68,68,0.35)"
-                                    : (detail.refund_info.status === "completed"
-                                      ? "1px solid rgba(16,185,129,0.30)"
-                                      : (detail.refund_info.status === "processing"
-                                        ? "1px solid rgba(245,158,11,0.30)"
-                                        : cardBorder)),
-                                  borderRadius: effectiveInnerRadius,
-                                  padding: isCompact ? "14px" : "16px",
-                                  background: detail.refund_info.status === "failed"
-                                    ? (isLight ? "#fef2f2" : "rgba(239,68,68,0.08)")
-                                    : (detail.refund_info.status === "completed"
-                                      ? (isLight ? "#ecfdf5" : "rgba(16,185,129,0.08)")
-                                      : (detail.refund_info.status === "processing"
-                                        ? (isLight ? "#fffbeb" : "rgba(245,158,11,0.08)")
-                                        : panelBg)),
-                                  display: "flex",
-                                  flexDirection: "column",
-                                  gap: "8px",
-                                }}
-                              >
+                              {/* 1. Order Tracking Timeline (Top Priority) */}
+                              {showTracking && renderTrackingTimeline(detail)}
+
+                              {/* 2. Order Summary (Price Breakdown) */}
+                              {showSummary && (
                                 <div
                                   style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "space-between",
-                                    flexWrap: "wrap",
-                                    gap: "8px",
+                                    border: innerBoxBorder,
+                                    borderRadius: effectiveInnerRadius,
+                                    padding: isCompact ? "14px" : "16px",
+                                    background: effectiveInnerBoxBg,
                                   }}
                                 >
                                   <div
@@ -4933,132 +5283,26 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                       display: "flex",
                                       alignItems: "center",
                                       gap: "8px",
+                                      fontSize: "13px",
                                       fontWeight: 800,
-                                      fontSize: "14px",
-                                      color: detail.refund_info.status === "failed"
-                                        ? "#ef4444"
-                                        : (detail.refund_info.status === "completed"
-                                          ? "#059669"
-                                          : (detail.refund_info.status === "processing" ? "#d97706" : textPrimary)),
+                                      marginBottom: "12px",
+                                      letterSpacing: "0.04em",
+                                      textTransform: "uppercase",
+                                      color: textMuted,
                                     }}
                                   >
-                                    <span
-                                      style={{
-                                        width: "8px",
-                                        height: "8px",
-                                        borderRadius: "50%",
-                                        background: detail.refund_info.status === "failed"
-                                          ? "#ef4444"
-                                          : (detail.refund_info.status === "completed"
-                                            ? "#059669"
-                                            : (detail.refund_info.status === "processing" ? "#d97706" : textMuted)),
-                                      }}
-                                    />
-                                    <span>{detail.refund_info.status_label}</span>
-                                  </div>
-                                  {detail.refund_info.estimated_days && (
-                                    <span
-                                      style={{
-                                        fontSize: "11px",
-                                        fontWeight: 800,
-                                        padding: "3px 8px",
-                                        borderRadius: effectiveBadgeRadius,
-                                        background: detail.refund_info.status === "failed"
-                                          ? "rgba(239,68,68,0.18)"
-                                          : (detail.refund_info.status === "completed" ? "rgba(16,185,129,0.18)" : "rgba(245,158,11,0.18)"),
-                                        color: detail.refund_info.status === "failed"
-                                          ? "#dc2626"
-                                          : (detail.refund_info.status === "completed" ? "#047857" : "#b45309"),
-                                        textTransform: "uppercase",
-                                        letterSpacing: "0.02em",
-                                      }}
-                                    >
-                                      {detail.refund_info.estimated_days}
-                                    </span>
-                                  )}
-                                </div>
-
-                                <div style={{ fontSize: "13px", color: textMuted, lineHeight: 1.55 }}>
-                                  {detail.refund_info.note}
-                                </div>
-
-                                <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center", marginTop: "2px" }}>
-                                  {detail.refund_info.reference_id && (
-                                    <div style={{ fontSize: "12px", color: textMuted }}>
-                                      Gateway Ref: <code style={{ fontWeight: 700, padding: "2px 6px", borderRadius: "4px", background: isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.08)" }}>{detail.refund_info.reference_id}</code>
-                                    </div>
-                                  )}
-                                  {detail.refund_info.arn && (
-                                    <div style={{ fontSize: "12px", color: textMuted }}>
-                                      Bank ARN: <code style={{ fontWeight: 700, padding: "2px 6px", borderRadius: "4px", background: isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.08)" }}>{detail.refund_info.arn}</code>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            ) : null}
-
-                            {showTracking && renderTrackingTimeline(detail)}
-
-                            {showSummary && (
-                              <div
-                                style={{
-                                  border: innerBoxBorder,
-                                  borderRadius: effectiveInnerRadius,
-                                  padding: isCompact ? "14px" : "16px",
-                                  background: effectiveInnerBoxBg,
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    fontSize: "13px",
-                                    fontWeight: 800,
-                                    marginBottom: "10px",
-                                    letterSpacing: "0.04em",
-                                    textTransform: "uppercase",
-                                    color: textMuted,
-                                  }}
-                                >
-                                  {summaryHeading}
-                                </div>
-
-                                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      gap: "12px",
-                                      fontSize: "14px",
-                                    }}
-                                  >
-                                    <span style={{ color: textMuted }}>Subtotal</span>
-                                    <span>{formatPrice(detail.pricing_snapshot?.subtotal)}</span>
-                                  </div>
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      gap: "12px",
-                                      fontSize: "14px",
-                                    }}
-                                  >
-                                    <span style={{ color: textMuted }}>Discount</span>
-                                    <span>-{formatPrice(detail.pricing_snapshot?.promoDiscount || 0)}</span>
-                                  </div>
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      gap: "12px",
-                                      fontSize: "14px",
-                                    }}
-                                  >
-                                    <span style={{ color: textMuted }}>Tax</span>
-                                    <span>{formatPrice(detail.pricing_snapshot?.tax?.amount || 0)}</span>
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                      <polyline points="14 2 14 8 20 8"></polyline>
+                                      <line x1="16" y1="13" x2="8" y2="13"></line>
+                                      <line x1="16" y1="17" x2="8" y2="17"></line>
+                                      <polyline points="10 9 9 9 8 9"></polyline>
+                                    </svg>
+                                    <span>{summaryHeading}</span>
                                   </div>
 
-                                  {(detail.pricing_snapshot?.charges || []).map((charge: any) => (
+                                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                                     <div
-                                      key={charge.id || charge.code}
                                       style={{
                                         display: "flex",
                                         justifyContent: "space-between",
@@ -5066,140 +5310,465 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                         fontSize: "14px",
                                       }}
                                     >
-                                      <span style={{ color: textMuted }}>{charge.label}</span>
-                                      <span>{formatPrice(charge.finalAmount || 0)}</span>
+                                      <span style={{ color: textMuted }}>Subtotal</span>
+                                      <span>{formatPrice(detail.pricing_snapshot?.subtotal)}</span>
                                     </div>
-                                  ))}
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        gap: "12px",
+                                        fontSize: "14px",
+                                      }}
+                                    >
+                                      <span style={{ color: textMuted }}>Discount</span>
+                                      <span>-{formatPrice(detail.pricing_snapshot?.promoDiscount || 0)}</span>
+                                    </div>
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        gap: "12px",
+                                        fontSize: "14px",
+                                      }}
+                                    >
+                                      <span style={{ color: textMuted }}>Tax</span>
+                                      <span>{formatPrice(detail.pricing_snapshot?.tax?.amount || 0)}</span>
+                                    </div>
+
+                                    {(detail.pricing_snapshot?.charges || []).map((charge: any, cIdx: number) => (
+                                      <div
+                                        key={charge?.id || charge?.code || charge?.label || charge?.name || `charge-${cIdx}`}
+                                        style={{
+                                          display: "flex",
+                                          justifyContent: "space-between",
+                                          gap: "12px",
+                                          fontSize: "14px",
+                                        }}
+                                      >
+                                        <span style={{ color: textMuted }}>{charge?.label || charge?.name || "Fee"}</span>
+                                        <span>{formatPrice(charge?.finalAmount || charge?.amount || 0)}</span>
+                                      </div>
+                                    ))}
+
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        gap: "12px",
+                                        fontSize: "16px",
+                                        fontWeight: 800,
+                                        paddingTop: "10px",
+                                        borderTop: divider,
+                                      }}
+                                    >
+                                      <span>Total</span>
+                                      <span>{formatPrice(detail.total)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 3. Payment Details */}
+                              {showPayment && (
+                                <div
+                                  style={{
+                                    border: innerBoxBorder,
+                                    borderRadius: effectiveInnerRadius,
+                                    padding: isCompact ? "14px" : "16px",
+                                    background: effectiveInnerBoxBg,
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "10px",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      fontSize: "13px",
+                                      fontWeight: 800,
+                                      letterSpacing: "0.04em",
+                                      textTransform: "uppercase",
+                                      color: textMuted,
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "space-between",
+                                    }}
+                                  >
+                                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                                        <line x1="1" y1="10" x2="23" y2="10"></line>
+                                      </svg>
+                                      <span>{paymentHeading}</span>
+                                    </div>
+                                    <span
+                                      style={{
+                                        fontSize: "11px",
+                                        fontWeight: 800,
+                                        padding: "3px 9px",
+                                        borderRadius: "999px",
+                                        textTransform: "capitalize",
+                                        background:
+                                          detail.payment_status === "paid"
+                                            ? "rgba(16,185,129,0.14)"
+                                            : detail.payment_status === "refunded"
+                                            ? "rgba(139,92,246,0.14)"
+                                            : detail.payment_status === "failed"
+                                            ? "rgba(239,68,68,0.14)"
+                                            : "rgba(245,158,11,0.14)",
+                                        color:
+                                          detail.payment_status === "paid"
+                                            ? "#059669"
+                                            : detail.payment_status === "refunded"
+                                            ? "#7c3aed"
+                                            : detail.payment_status === "failed"
+                                            ? "#dc2626"
+                                            : "#d97706",
+                                      }}
+                                    >
+                                      {detail.payment_status === "paid"
+                                        ? (detail.payment_method?.toLowerCase() === "cod" ? "● Cash Collected (Paid)" : "● Paid")
+                                        : detail.payment_status === "refunded"
+                                        ? "● Refunded"
+                                        : detail.payment_status === "failed"
+                                        ? "● Payment Failed"
+                                        : (detail.payment_method?.toLowerCase() === "cod" ? "● Pay on Delivery (Pending)" : "● " + (labelize(detail.payment_status) || "Pending"))}
+                                    </span>
+                                  </div>
 
                                   <div
                                     style={{
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      gap: "12px",
-                                      fontSize: "16px",
-                                      fontWeight: 800,
-                                      paddingTop: "10px",
-                                      borderTop: divider,
+                                      display: "grid",
+                                      gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)",
+                                      gap: "10px",
+                                      marginTop: "2px",
                                     }}
                                   >
-                                    <span>Total</span>
-                                    <span>{formatPrice(detail.total)}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
+                                    <div>
+                                      <div style={{ fontSize: "12px", color: textMuted, marginBottom: "3px" }}>
+                                        Payment method
+                                      </div>
+                                      <div
+                                        style={{
+                                          fontSize: "13px",
+                                          fontWeight: 700,
+                                          display: "flex",
+                                          alignItems: "center",
+                                          gap: "6px",
+                                        }}
+                                      >
+                                        <span>{getPaymentMethodIcon(detail.payment_method)}</span>
+                                        <span>{formatPaymentMethodName(detail.payment_method)}</span>
+                                      </div>
+                                    </div>
 
-                            <div
-                              style={{
-                                display: "flex",
-                                flexWrap: "wrap",
-                                gap: "10px",
-                              }}
-                            >
-                              {canCancel ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleCancelOrder(order.id, order.status)}
-                                  disabled={cancellingOrderId === order.id}
+                                    <div>
+                                      <div style={{ fontSize: "12px", color: textMuted, marginBottom: "3px" }}>
+                                        Total amount
+                                      </div>
+                                      <div style={{ fontSize: "14px", fontWeight: 800, color: textPrimary }}>
+                                        {formatPrice(detail.total)}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {detail.razorpay_payment_id && (
+                                    <div
+                                      style={{
+                                        paddingTop: "8px",
+                                        borderTop: divider,
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        gap: "4px",
+                                      }}
+                                    >
+                                      <div style={{ fontSize: "11px", color: textMuted, textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                        Transaction reference
+                                      </div>
+                                      <code
+                                        style={{
+                                          fontSize: "12px",
+                                          fontWeight: 700,
+                                          padding: "4px 8px",
+                                          borderRadius: "6px",
+                                          background: isLight ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)",
+                                          wordBreak: "break-all",
+                                          color: textPrimary,
+                                          width: "fit-content",
+                                        }}
+                                      >
+                                        {detail.razorpay_payment_id}
+                                      </code>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* 4. Refund Information (Financial Lifecycle) */}
+                              {detail.refund_info ? (
+                                <div
                                   style={{
-                                    border: "1px solid rgba(239,68,68,0.26)",
-                                    background: "rgba(239,68,68,0.12)",
-                                    color: "#dc2626",
-                                    borderRadius: "14px",
-                                    padding: "12px 16px",
-                                    fontSize: "14px",
-                                    fontWeight: 700,
-                                    cursor: cancellingOrderId === order.id ? "not-allowed" : "pointer",
-                                    opacity: cancellingOrderId === order.id ? 0.7 : 1,
+                                    border: detail.refund_info.status === "failed"
+                                      ? "1px solid rgba(239,68,68,0.35)"
+                                      : (detail.refund_info.status === "completed"
+                                        ? "1px solid rgba(16,185,129,0.30)"
+                                        : (detail.refund_info.status === "processing"
+                                          ? "1px solid rgba(245,158,11,0.30)"
+                                          : cardBorder)),
+                                    borderRadius: effectiveInnerRadius,
+                                    padding: isCompact ? "14px" : "16px",
+                                    background: detail.refund_info.status === "failed"
+                                      ? (isLight ? "#fef2f2" : "rgba(239,68,68,0.08)")
+                                      : (detail.refund_info.status === "completed"
+                                        ? (isLight ? "#ecfdf5" : "rgba(16,185,129,0.08)")
+                                        : (detail.refund_info.status === "processing"
+                                          ? (isLight ? "#fffbeb" : "rgba(245,158,11,0.08)")
+                                          : panelBg)),
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "8px",
                                   }}
                                 >
-                                  {cancellingOrderId === order.id ? "Cancelling..." : "Cancel order"}
-                                </button>
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "space-between",
+                                      flexWrap: "wrap",
+                                      gap: "8px",
+                                    }}
+                                  >
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        fontWeight: 800,
+                                        fontSize: "14px",
+                                        color: detail.refund_info.status === "failed"
+                                          ? "#ef4444"
+                                          : (detail.refund_info.status === "completed"
+                                            ? "#059669"
+                                            : (detail.refund_info.status === "processing" ? "#d97706" : textPrimary)),
+                                      }}
+                                    >
+                                      <span
+                                        style={{
+                                          width: "8px",
+                                          height: "8px",
+                                          borderRadius: "50%",
+                                          background: detail.refund_info.status === "failed"
+                                            ? "#ef4444"
+                                            : (detail.refund_info.status === "completed"
+                                              ? "#059669"
+                                              : (detail.refund_info.status === "processing" ? "#d97706" : textMuted)),
+                                        }}
+                                      />
+                                      <span>{detail.refund_info.status_label}</span>
+                                    </div>
+                                    {detail.refund_info.estimated_days && (
+                                      <span
+                                        style={{
+                                          fontSize: "11px",
+                                          fontWeight: 800,
+                                          padding: "3px 8px",
+                                          borderRadius: effectiveBadgeRadius,
+                                          background: detail.refund_info.status === "failed"
+                                            ? "rgba(239,68,68,0.18)"
+                                            : (detail.refund_info.status === "completed" ? "rgba(16,185,129,0.18)" : "rgba(245,158,11,0.18)"),
+                                          color: detail.refund_info.status === "failed"
+                                            ? "#dc2626"
+                                            : (detail.refund_info.status === "completed" ? "#047857" : "#b45309"),
+                                          textTransform: "uppercase",
+                                          letterSpacing: "0.02em",
+                                        }}
+                                      >
+                                        {detail.refund_info.estimated_days}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div style={{ fontSize: "13px", color: textMuted, lineHeight: 1.55 }}>
+                                    {detail.refund_info.note}
+                                  </div>
+
+                                  <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center", marginTop: "2px" }}>
+                                    {detail.refund_info.reference_id && (
+                                      <div style={{ fontSize: "12px", color: textMuted }}>
+                                        Gateway Ref: <code style={{ fontWeight: 700, padding: "2px 6px", borderRadius: "4px", background: isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.08)" }}>{detail.refund_info.reference_id}</code>
+                                      </div>
+                                    )}
+                                    {detail.refund_info.arn && (
+                                      <div style={{ fontSize: "12px", color: textMuted }}>
+                                        Bank ARN: <code style={{ fontWeight: 700, padding: "2px 6px", borderRadius: "4px", background: isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.08)" }}>{detail.refund_info.arn}</code>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
                               ) : null}
 
-                              {isDelivered && canReturn ? (
+                              {/* 5. Order Action Buttons */}
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexWrap: "wrap",
+                                  gap: "10px",
+                                }}
+                              >
+                                {canCancel ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCancelOrder(order.id, order.status)}
+                                    disabled={cancellingOrderId === order.id}
+                                    style={{
+                                      border: "1px solid rgba(239,68,68,0.26)",
+                                      background: "rgba(239,68,68,0.12)",
+                                      color: "#dc2626",
+                                      borderRadius: "14px",
+                                      padding: "12px 16px",
+                                      fontSize: "14px",
+                                      fontWeight: 700,
+                                      cursor: cancellingOrderId === order.id ? "not-allowed" : "pointer",
+                                      opacity: cancellingOrderId === order.id ? 0.7 : 1,
+                                    }}
+                                  >
+                                    {cancellingOrderId === order.id ? "Cancelling..." : "Cancel order"}
+                                  </button>
+                                ) : null}
+
+                                {isDelivered && canReturn ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setShowReturnFormOrderId((prev) => (prev === order.id ? null : order.id))
+                                    }
+                                    style={{
+                                      border: `1px solid ${accentColor}33`,
+                                      background: `${accentColor}14`,
+                                      color: accentColor,
+                                      borderRadius: "14px",
+                                      padding: "12px 16px",
+                                      fontSize: "14px",
+                                      fontWeight: 700,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    {isReturnFormOpen ? "Hide return form" : "Request return"}
+                                  </button>
+                                ) : null}
+
+                                {isDelivered && !canReturn ? (
+                                  <button
+                                    type="button"
+                                    disabled
+                                    style={{
+                                      border: `1px solid ${accentColor}22`,
+                                      background: `${accentColor}10`,
+                                      color: accentColor,
+                                      borderRadius: "14px",
+                                      padding: "12px 16px",
+                                      fontSize: "14px",
+                                      fontWeight: 700,
+                                      cursor: "not-allowed",
+                                      opacity: 0.75,
+                                    }}
+                                  >
+                                    No returnable items left
+                                  </button>
+                                ) : null}
+
+                                {/* Customer Support & Help Button */}
                                 <button
                                   type="button"
-                                  onClick={() =>
-                                    setShowReturnFormOrderId((prev) => (prev === order.id ? null : order.id))
-                                  }
+                                  onClick={() => {
+                                    const isStore = typeof window !== "undefined" && window.location.pathname.startsWith("/store/");
+                                    const isBuilder = typeof window !== "undefined" && window.location.pathname.startsWith("/builder/");
+                                    const prefix = isStore
+                                      ? `/store/${siteSlug || ""}`
+                                      : isBuilder
+                                      ? `/builder/${siteId || siteSlug || ""}`
+                                      : (siteSlug ? `/store/${siteSlug}` : "");
+                                    const targetPath = `${prefix}/support?tab=new&orderId=${order.id}`;
+                                    navigate(targetPath);
+                                  }}
                                   style={{
-                                    border: `1px solid ${accentColor}33`,
-                                    background: `${accentColor}14`,
-                                    color: accentColor,
+                                    border: `1px solid ${customBorderColor || (isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)")}`,
+                                    background: isLight ? "#ffffff" : "rgba(255,255,255,0.05)",
+                                    color: textPrimary,
                                     borderRadius: "14px",
                                     padding: "12px 16px",
                                     fontSize: "14px",
                                     fontWeight: 700,
                                     cursor: "pointer",
-                                  }}
-                                >
-                                  {isReturnFormOpen ? "Hide return form" : "Request return"}
-                                </button>
-                              ) : null}
-
-                              {isDelivered && !canReturn ? (
-                                <button
-                                  type="button"
-                                  disabled
-                                  style={{
-                                    border: `1px solid ${accentColor}22`,
-                                    background: `${accentColor}10`,
-                                    color: accentColor,
-                                    borderRadius: "14px",
-                                    padding: "12px 16px",
-                                    fontSize: "14px",
-                                    fontWeight: 700,
-                                    cursor: "not-allowed",
-                                    opacity: 0.75,
-                                  }}
-                                >
-                                  No returnable items left
-                                </button>
-                              ) : null}
-
-                              {isDelivered && hasExistingReturn && canReturn ? (
-                                <div
-                                  style={{
-                                    display: "flex",
+                                    display: "inline-flex",
                                     alignItems: "center",
-                                    padding: "12px 14px",
-                                    borderRadius: "14px",
-                                    border: cardBorder,
-                                    background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)",
-                                    color: textMuted,
-                                    fontSize: "13px",
-                                    fontWeight: 600,
+                                    gap: "8px",
                                   }}
                                 >
-                                  Previous return requests exist. You can still return other eligible items.
-                                </div>
-                              ) : null}
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                  </svg>
+                                  Need Help with Order
+                                </button>
 
-                              {isDelivered && isReturnFormOpen && !hasSelectableReturnItems ? (
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    padding: "12px 14px",
-                                    borderRadius: "14px",
-                                    border: "1px solid rgba(239,68,68,0.18)",
-                                    background: "rgba(239,68,68,0.08)",
-                                    color: "#dc2626",
-                                    fontSize: "13px",
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  All items in this order have already been fully returned.
-                                </div>
-                              ) : null}
-                            </div>
+                                {isDelivered && hasExistingReturn && canReturn ? (
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      padding: "12px 14px",
+                                      borderRadius: "14px",
+                                      border: cardBorder,
+                                      background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)",
+                                      color: textMuted,
+                                      fontSize: "13px",
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    Previous return requests exist. You can still return other eligible items.
+                                  </div>
+                                ) : null}
+
+                                {isDelivered && isReturnFormOpen && !hasSelectableReturnItems ? (
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      padding: "12px 14px",
+                                      borderRadius: "14px",
+                                      border: "1px solid rgba(239,68,68,0.18)",
+                                      background: "rgba(239,68,68,0.08)",
+                                      color: "#dc2626",
+                                      fontSize: "13px",
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    All items in this order have already been fully returned.
+                                  </div>
+                                ) : null}
+                              </div>
                           </div>
                         </div>
                         </>
                       ) : (
-                        <div style={{ color: textMuted, fontSize: "14px" }}>
-                          Unable to load order details.
+                        <div style={{ padding: "14px", display: "flex", alignItems: "center", justifyContent: "space-between", background: isLight ? "#f8fafc" : "rgba(255,255,255,0.02)", borderRadius: "8px" }}>
+                          <span style={{ color: textMuted, fontSize: "13px" }}>Loading order items and tracking information...</span>
+                          <button
+                            type="button"
+                            onClick={() => loadOrderDetail(order.id, true)}
+                            style={{
+                              background: "none",
+                              border: `1px solid ${accentColor}`,
+                              color: accentColor,
+                              borderRadius: "6px",
+                              padding: "4px 12px",
+                              fontSize: "12px",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Reload Details
+                          </button>
                         </div>
                       )}
                     </div>
@@ -5235,4 +5804,4 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
   );
 };
 
-export default CustomerOrdersPage;
+export default React.memo(CustomerOrdersPage);

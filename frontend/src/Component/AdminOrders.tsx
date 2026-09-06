@@ -17,6 +17,8 @@ type OrderStatus =
   | "failed"
   | "partially_cancelled"
   | "cancelled"
+  | "refunded"
+  | "replacement_dispatched"
   | "returned";
 
 type TabKey =
@@ -589,10 +591,40 @@ const getPaymentMethodIcon = (method?: string | null): React.ReactNode => {
   return <CreditCardIcon />;
 };
 
-const getStatusLabel = (status: string) => status.replaceAll("_", " ");
+const isOrderReplacement = (order?: { status: string; cancel_reason?: string | null; items?: Array<{ status: string }> } | null) => {
+  if (!order) return false;
+  return Boolean(
+    order.cancel_reason?.toLowerCase().includes("replacement") ||
+    order.status === "replacement_dispatched" ||
+    order.status === "replacement_pending" ||
+    (order.status === "confirmed" && order.items?.some(i => i.status === "delivered") && order.items?.some(i => i.status === "confirmed"))
+  );
+};
 
+const getStatusLabel = (status: string, cancelReason?: string | null, isRepl?: boolean) => {
+  if (isRepl || cancelReason?.toLowerCase().includes("replacement")) {
+    if (status === "confirmed" || status === "accepted") return "Re-Dispatch (Pending)";
+    if (status === "shipped") return "Re-Dispatch Shipped";
+    if (status === "out_for_delivery") return "Re-Dispatch Out for Delivery";
+    if (status === "delivered") return "Re-Dispatch Delivered";
+  }
+  if (status === "failed") return "Returned to Hub";
+  if (status === "replacement_dispatched") return "Replacement Dispatched";
+  return status.replaceAll("_", " ");
+};
 
-const getStatusTone = (status: string) => {
+const getStatusTone = (status: string, isRepl?: boolean) => {
+  if (isRepl) {
+    if (status === "confirmed" || status === "accepted") {
+      return { bg: "#f0f9ff", text: "#0284c7", border: "1px solid #7dd3fc" };
+    }
+    if (status === "shipped" || status === "out_for_delivery") {
+      return { bg: "#e0f2fe", text: "#0369a1", border: "1px solid #38bdf8" };
+    }
+    if (status === "delivered") {
+      return { bg: "#f0fdf4", text: "#15803d", border: "1px solid #bbf7d0" };
+    }
+  }
   switch (status) {
     case "placed":
       return { bg: "#eff6ff", text: "#1d4ed8", border: "1px solid #bfdbfe" };
@@ -624,6 +656,8 @@ const getStatusTone = (status: string) => {
       return { bg: "#faf5ff", text: "#7c3aed", border: "1px solid #e9d5ff" };
     case "refunded":
       return { bg: "#f0fdf4", text: "#15803d", border: "1px solid #bbf7d0" };
+    case "replacement_dispatched":
+      return { bg: "#f0f9ff", text: "#0284c7", border: "1px solid #bae6fd" };
     case "closed":
       return { bg: "#f1f5f9", text: "#334155", border: "1px solid #e2e8f0" };
     case "rejected":
@@ -645,17 +679,30 @@ const matchesTab = (order: AdminOrderListItem, tab: TabKey) => {
         order.status === "shipped" ||
         order.status === "out_for_delivery" ||
         order.status === "rescheduled" ||
-        order.status === "failed"
+        order.status === "failed" ||
+        order.status === "replacement_dispatched"
       );
     case "delivered":
       return order.status === "delivered" || order.status === "returned";
     case "cancelled":
-      return order.status === "cancelled" || order.status === "partially_cancelled";
+      return order.status === "cancelled" || order.status === "partially_cancelled" || order.status === "refunded";
     default:
       return false;
   }
 };
-
+const ADMIN_CANCEL_PRESETS = [
+  "Parcel Returned to Hub - Customer unreachable / no response after multiple attempts",
+  "Parcel Returned to Hub - Customer refused delivery at doorstep",
+  "Parcel Returned to Hub - Incorrect / untraceable address",
+  "Parcel Returned to Hub - Customer requested order cancellation",
+  "No response from customer after multiple delivery attempts",
+  "Customer unreachable / phone switched off",
+  "Customer refused delivery at doorstep",
+  "Incorrect or untraceable delivery address",
+  "Customer requested order cancellation",
+  "Item lost or damaged during transit",
+  "Other admin cancellation reason",
+];
 
 type DeliveryAgentItem = {
   id: string;
@@ -701,29 +748,41 @@ const getCachedReturns = (id?: string): AdminReturnListItem[] => {
   }
 };
 
-const AdminOrders: React.FC = () => {
-  const { siteId } = useParams<{ siteId: string }>();
-  const [searchParams] = useSearchParams();
-  const [mode, setMode] = useState<AdminMode>("orders");
+type AdminOrdersProps = {
+  siteId?: string;
+  initialOrders?: AdminOrderListItem[];
+  initialReturns?: AdminReturnListItem[];
+};
 
-  const initialOrders = getCachedOrders(siteId);
-  const initialReturns = getCachedReturns(siteId);
+const AdminOrders: React.FC<AdminOrdersProps> = ({
+  siteId: propSiteId,
+  initialOrders = [],
+  initialReturns = [],
+}) => {
+  const params = useParams<{ siteId?: string; id?: string }>();
+  const siteId = propSiteId || params.siteId || params.id || "";
+  const [searchParams] = useSearchParams();
+  const [mode, setMode] = useState<"orders" | "returns">("orders");
+  const [activeTab, setActiveTab] = useState<TabKey>("yet_to_deliver");
   const [orders, setOrders] = useState<AdminOrderListItem[]>(initialOrders);
   const [detailsMap, setDetailsMap] = useState<Record<string, AdminOrderDetail>>({});
-  const [shipmentDrafts, setShipmentDrafts] = useState<Record<string, ShipmentDraft>>({});
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TabKey>("new");
-
-  // Delivery integration state
-  const [deliveryAgents, setDeliveryAgents] = useState<DeliveryAgentItem[]>([]);
-  const [deliverySettings, setDeliverySettings] = useState<DeliverySettingsSummary | null>(null);
   const [selectedAgentMap, setSelectedAgentMap] = useState<Record<string, string>>({});
+  const [packageWeightMap, setPackageWeightMap] = useState<Record<string, number>>({});
   const [selectedDispatchModeMap, setSelectedDispatchModeMap] = useState<Record<string, "own_agent" | "shiprocket" | "manual">>({});
-  const [copiedLinkMap, setCopiedLinkMap] = useState<Record<string, boolean>>({});
+  const [editingCourierOrderIdMap, setEditingCourierOrderIdMap] = useState<Record<string, boolean>>({});
   const [reassigningOrderIdMap, setReassigningOrderIdMap] = useState<Record<string, boolean>>({});
   const [reassignAgentIdMap, setReassignAgentIdMap] = useState<Record<string, string>>({});
-  const [packageWeightMap, setPackageWeightMap] = useState<Record<string, number>>({});
-  const [editingCourierOrderIdMap, setEditingCourierOrderIdMap] = useState<Record<string, boolean>>({});
+
+  const [deliveryAgents, setDeliveryAgents] = useState<DeliveryAgentItem[]>([]);
+  const [deliverySettings, setDeliverySettings] = useState<DeliverySettingsSummary | null>(null);
+
+  const [shipmentDrafts, setShipmentDrafts] = useState<Record<string, ShipmentDraft>>({});
+
+  const [adminCancelOrder, setAdminCancelOrder] = useState<AdminOrderListItem | null>(null);
+  const [adminCancelReason, setAdminCancelReason] = useState<string>(ADMIN_CANCEL_PRESETS[0]);
+  const [adminCancelCustomNote, setAdminCancelCustomNote] = useState<string>("");
+  const [copiedLinkMap, setCopiedLinkMap] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
   const showToast = (message: string, type: "success" | "error" | "info" = "info") => {
@@ -1243,10 +1302,14 @@ const AdminOrders: React.FC = () => {
 
 
   useEffect(() => {
-    if (!siteId) return;
+    if (!siteId) {
+      setLoading(false);
+      return;
+    }
 
     const loadByMode = async () => {
       setError("");
+      setLoading(true);
       try {
         if (mode === "orders") {
           await loadOrdersForSite(
@@ -1316,11 +1379,12 @@ const AdminOrders: React.FC = () => {
           found.status === "shipped" ||
           found.status === "out_for_delivery" ||
           found.status === "rescheduled" ||
-          found.status === "failed"
+          found.status === "failed" ||
+          found.status === "replacement_dispatched"
         )
           setActiveTab("yet_to_deliver");
         else if (found.status === "delivered" || found.status === "returned") setActiveTab("delivered");
-        else if (found.status === "cancelled" || found.status === "partially_cancelled") setActiveTab("cancelled");
+        else if (found.status === "cancelled" || found.status === "partially_cancelled" || found.status === "refunded") setActiveTab("cancelled");
 
         setDateFilter("all");
         setPaymentFilter("all");
@@ -1430,7 +1494,7 @@ const AdminOrders: React.FC = () => {
 
   const filteredOrders = useMemo(() => {
     if (Object.keys(serverTabCounts).length > 0) {
-      return orders;
+      return orders.filter((order) => matchesTab(order, activeTab));
     }
     return orders.filter((order) => {
       // 1. Tab match
@@ -1510,14 +1574,14 @@ const AdminOrders: React.FC = () => {
 
   const totalPages = Math.max(1, serverTotalPages || Math.ceil(filteredOrders.length / pageSize));
   const paginatedOrders = useMemo(() => {
-    if (Object.keys(serverTabCounts).length > 0) return orders;
+    if (Object.keys(serverTabCounts).length > 0) return filteredOrders;
     const start = (currentPage - 1) * pageSize;
     return filteredOrders.slice(start, start + pageSize);
-  }, [serverTabCounts, orders, filteredOrders, currentPage, pageSize]);
+  }, [serverTabCounts, filteredOrders, currentPage, pageSize]);
 
   const filteredReturns = useMemo(() => {
     if (Object.keys(serverReturnTabCounts).length > 0) {
-      return adminReturns;
+      return adminReturns.filter((item) => matchesReturnTab(item, activeReturnTab));
     }
     return adminReturns.filter((item) => {
       if (!matchesReturnTab(item, activeReturnTab)) return false;
@@ -1535,10 +1599,10 @@ const AdminOrders: React.FC = () => {
 
   const totalReturnPages = Math.max(1, serverTotalReturnPages || Math.ceil(filteredReturns.length / pageSize));
   const paginatedReturns = useMemo(() => {
-    if (Object.keys(serverReturnTabCounts).length > 0) return adminReturns;
+    if (Object.keys(serverReturnTabCounts).length > 0) return filteredReturns;
     const start = (currentPage - 1) * pageSize;
     return filteredReturns.slice(start, start + pageSize);
-  }, [serverReturnTabCounts, adminReturns, filteredReturns, currentPage, pageSize]);
+  }, [serverReturnTabCounts, filteredReturns, currentPage, pageSize]);
 
 
   const counts = useMemo(() => {
@@ -1670,32 +1734,42 @@ const AdminOrders: React.FC = () => {
   const syncOrderAfterAction = async (orderId: string) => {
     if (!siteId) return;
 
-
-    const [orderList, detail] = await Promise.all([
-      fetchJson(`${API_BASE}/orders/admin/${siteId}`),
-      fetchJson(`${API_BASE}/orders/admin/${siteId}/${orderId}`),
-    ]);
-
-
-    setOrders(Array.isArray(orderList) ? orderList : []);
-    setDetailsMap((prev) => ({ ...prev, [orderId]: detail }));
-    hydrateShipmentDraft(orderId, detail);
+    await loadOrdersForSite(
+      currentPage,
+      pageSize,
+      activeTab,
+      searchQuery,
+      paymentFilter,
+      dateFilter,
+      customFromDate,
+      customToDate
+    );
+    try {
+      const detail = await fetchJson(`${API_BASE}/orders/admin/${siteId}/${orderId}`);
+      setDetailsMap((prev) => ({ ...prev, [orderId]: detail }));
+      hydrateShipmentDraft(orderId, detail);
+    } catch {
+      // ignore
+    }
   };
 
 
   const syncReturnAfterAction = async (returnId: string) => {
     if (!siteId) return;
 
-
-    const [returnList, detail] = await Promise.all([
-      fetchJson(`${API_BASE}/returns/admin/${siteId}`),
-      fetchJson(`${API_BASE}/returns/admin/${siteId}/${returnId}`),
-    ]);
-
-
-    setAdminReturns(Array.isArray(returnList) ? returnList : []);
-    setReturnDetailsMap((prev) => ({ ...prev, [returnId]: detail }));
-    hydrateReturnDrafts(returnId, detail);
+    await loadReturnsForSite(
+      currentPage,
+      pageSize,
+      activeReturnTab,
+      searchQuery
+    );
+    try {
+      const detail = await fetchJson(`${API_BASE}/returns/admin/${siteId}/${returnId}`);
+      setReturnDetailsMap((prev) => ({ ...prev, [returnId]: detail }));
+      hydrateReturnDrafts(returnId, detail);
+    } catch {
+      // ignore
+    }
   };
 
 
@@ -1904,10 +1978,20 @@ const AdminOrders: React.FC = () => {
   };
 
 
-  const handleCancel = async (orderId: string) => {
-    const cancelReason = window.prompt("Enter cancel reason") || "";
+  const handleCancel = async (orderId: string, reason?: string) => {
+    let cancelReason = reason;
+    if (cancelReason === undefined) {
+      const order = orders.find((o) => o.id === orderId);
+      if (order) {
+        setAdminCancelOrder(order);
+        setAdminCancelReason(ADMIN_CANCEL_PRESETS[0]);
+        setAdminCancelCustomNote("");
+        return;
+      }
+      cancelReason = window.prompt("Enter cancel reason") || "";
+    }
     await updateStatus(orderId, "cancelled", {
-      cancel_reason: cancelReason || null,
+      cancel_reason: cancelReason || "Cancelled by admin",
     });
   };
 
@@ -2138,6 +2222,59 @@ const AdminOrders: React.FC = () => {
             }}
           >
             Reject
+          </button>
+        </div>
+      );
+    }
+
+    const isReturnedToHub = order.status === "failed" || order.shipment?.status === "returned_to_warehouse" || order.shipment?.status === "failed";
+    const canCancel = order.status !== "delivered" && order.status !== "cancelled" && order.status !== "returned";
+
+    if (isReturnedToHub && canCancel) {
+      return (
+        <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+          <button
+            disabled={actionLoadingId === order.id}
+            onClick={(e) => {
+              e.stopPropagation();
+              setAdminCancelOrder(order);
+              setAdminCancelReason("Parcel Returned to Hub - Customer unreachable / no response after multiple attempts");
+              setAdminCancelCustomNote(order.shipment?.notes ? cleanShipmentNotes(order.shipment.notes) : "");
+            }}
+            style={{
+              ...actionButtonStyle,
+              padding: "5px 10px",
+              background: "#fef2f2",
+              color: "#dc2626",
+              border: "1px solid #fecaca",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+            }}
+            title="Cancel this returned order and restock inventory"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="15" y1="9" x2="9" y2="15" />
+              <line x1="9" y1="9" x2="15" y2="15" />
+            </svg>
+            Cancel Order
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              const detail = detailsMap[order.id] || order;
+              generateBillPdf(detail);
+            }}
+            style={{
+              ...actionButtonStyle,
+              padding: "5px 10px",
+              background: "#ffffff",
+              color: "#475569",
+              border: "1px solid #e2e8f0",
+            }}
+          >
+            Invoice
           </button>
         </div>
       );
@@ -2892,8 +3029,11 @@ const AdminOrders: React.FC = () => {
 
                   {paginatedOrders.map((order) => {
                     const isExpanded = expandedOrderId === order.id;
-                    const tone = getStatusTone(order.status);
                     const detail = getExpandedOrder(order);
+                    const isRepl = isOrderReplacement(order) || isOrderReplacement(detail);
+                    const isReplDelivered = isRepl && (order.status === "delivered" || detail?.status === "delivered");
+                    const isReplActive = isRepl && !isReplDelivered && order.status !== "cancelled" && detail?.status !== "cancelled";
+                    const tone = getStatusTone(order.status, isRepl);
                     const shipmentDraft = getShipmentDraft(order);
                     const items = detail?.items || order.items || [];
                     const shippingAddress = detail?.shipping_address || order.shipping_address;
@@ -2933,6 +3073,7 @@ const AdminOrders: React.FC = () => {
                                 display: "flex",
                                 alignItems: "center",
                                 gap: "7px",
+                                flexWrap: "wrap",
                               }}
                             >
                               <span>{order.customer_name || shippingAddress?.fullName || "Guest Customer"}</span>
@@ -2950,6 +3091,25 @@ const AdminOrders: React.FC = () => {
                               >
                                 #{order.id.slice(0, 8).toUpperCase()}
                               </span>
+                              {isReplActive && (
+                                <span
+                                    style={{
+                                      fontSize: "10.5px",
+                                      fontWeight: 700,
+                                      color: "#0284c7",
+                                      background: "#f0f9ff",
+                                      border: "1px solid #bae6fd",
+                                      padding: "1px 6px",
+                                      borderRadius: "4px",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "3px",
+                                    }}
+                                  >
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                                    <span>Re-Dispatch</span>
+                                  </span>
+                              )}
                             </div>
                             <div
                               style={{
@@ -2961,9 +3121,26 @@ const AdminOrders: React.FC = () => {
                               }}
                             >
                               {shippingAddress?.city ? `${shippingAddress.city} • ` : ""}
-                              {items.length > 0
-                                ? items.map((i) => `${i.product_name} ×${i.quantity}`).slice(0, 2).join(", ")
-                                : `${order.item_count || 1} item`}
+                              {(() => {
+                                if (isReplActive) {
+                                  const replItems = items.filter((i) => i.status === "confirmed" || i.status === "shipped" || i.status === "out_for_delivery");
+                                  const deliveredItems = items.filter((i) => i.status === "delivered");
+                                  if (replItems.length > 0 && deliveredItems.length > 0) {
+                                    return (
+                                      <span>
+                                        <strong style={{ color: "#0369a1" }}>Replacing: </strong>
+                                        {replItems.map((i) => `${i.product_name} ×${i.quantity}`).join(", ")}
+                                        <span style={{ color: "#94a3b8", marginLeft: "5px" }}>
+                                          ({deliveredItems.length} item{deliveredItems.length > 1 ? "s" : ""} delivered earlier)
+                                        </span>
+                                      </span>
+                                    );
+                                  }
+                                }
+                                return items.length > 0
+                                  ? items.map((i) => `${i.product_name} ×${i.quantity}`).slice(0, 2).join(", ")
+                                  : `${order.item_count || 1} item`;
+                              })()}
                             </div>
                           </div>
 
@@ -3064,347 +3241,283 @@ const AdminOrders: React.FC = () => {
                           </div>
                         </div>
 
-
-                        {isExpanded ? (
-                          <div style={{ padding: "16px 18px 20px", background: "#f8fafc" }}>
+                        {isExpanded && (
+                          <div style={{ padding: "16px", borderTop: "1px solid #e2e8f0", background: "#f8fafc" }}>
                             <div
                               style={{
                                 display: "grid",
-                                gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
+                                gridTemplateColumns: "1fr 1fr",
                                 gap: "16px",
-                                alignItems: "start",
                               }}
                             >
-                              {/* Left Column: Customer Details, Delivery Destination & Items */}
-                              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                                {/* Card 1: Customer & Shipping Information */}
-                                <div style={{ ...plainCardStyle, padding: "16px" }}>
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      alignItems: "center",
-                                      marginBottom: "12px",
-                                      paddingBottom: "8px",
-                                      borderBottom: "1px solid #f1f5f9",
-                                    }}
-                                  >
-                                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                                      Customer & Destination
-                                    </span>
-                                    <span
+                                {/* Left Column: Destination, Items Breakdown & Pricing Snapshot */}
+                                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                                  {/* Card 1: Customer Destination & Notes */}
+                                  <div style={{ ...plainCardStyle, padding: "16px" }}>
+                                    <div
                                       style={{
-                                        fontSize: "11px",
-                                        fontWeight: 700,
-                                        padding: "2px 8px",
-                                        borderRadius: "4px",
-                                        background: (detail?.payment_status || order.payment_status) === "paid"
-                                          ? "#f0fdf4"
-                                          : (detail?.payment_status || order.payment_status) === "refunded"
-                                          ? "#faf5ff"
-                                          : "#fffbeb",
-                                        color: (detail?.payment_status || order.payment_status) === "paid"
-                                          ? "#15803d"
-                                          : (detail?.payment_status || order.payment_status) === "refunded"
-                                          ? "#7c3aed"
-                                          : "#b45309",
-                                        border: `1px solid ${(detail?.payment_status || order.payment_status) === "paid" ? "#bbf7d0" : (detail?.payment_status || order.payment_status) === "refunded" ? "#e9d5ff" : "#fde68a"}`,
-                                        textTransform: "capitalize",
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "center",
+                                        marginBottom: "12px",
+                                        paddingBottom: "8px",
+                                        borderBottom: "1px solid #f1f5f9",
                                       }}
                                     >
-                                      Payment: {(detail?.payment_status || order.payment_status) || "Pending"}
-                                    </span>
-                                  </div>
-
-                                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                    <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
-                                      {shippingAddress?.fullName || detail?.customer_name || order.customer_name || "Guest Customer"}
-                                    </div>
-
-                                    <div style={{ fontSize: "13px", color: "#475569", lineHeight: 1.6, background: "#f8fafc", padding: "10px 12px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-                                      <div style={{ fontWeight: 600, color: "#1e293b", marginBottom: "2px" }}>
-                                        Delivery Address:
-                                      </div>
-                                      <div>{shippingAddress?.addressLine1 || "—"}</div>
-                                      <div>
-                                        {[shippingAddress?.city, shippingAddress?.postalCode].filter(Boolean).join(" - ") || "—"}
-                                      </div>
-                                      {(shippingAddress?.latitude && shippingAddress?.longitude) ? (
-                                        <div style={{ marginTop: "6px", paddingTop: "4px" }}>
-                                          <a
-                                            href={`https://www.google.com/maps?q=${shippingAddress.latitude},${shippingAddress.longitude}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            style={{
-                                              display: "inline-flex",
-                                              alignItems: "center",
-                                              gap: "4px",
-                                              fontSize: "12px",
-                                              fontWeight: 600,
-                                              color: "#2563eb",
-                                              textDecoration: "none",
-                                              background: "#eff6ff",
-                                              border: "1px solid #bfdbfe",
-                                              borderRadius: "4px",
-                                              padding: "2px 8px",
-                                            }}
-                                          >
-                                            📍 Open Exact Pinned Location on Maps
-                                          </a>
-                                        </div>
-                                      ) : null}
-                                    </div>
-
-                                    <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", fontSize: "13px", color: "#475569", marginTop: "2px" }}>
-                                      {(shippingAddress?.mobileNumber || detail?.customer_phone || order.customer_phone) && (
-                                        <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                                          <PhoneIcon />
-                                          <a
-                                            href={`tel:${shippingAddress?.mobileNumber || detail?.customer_phone || order.customer_phone}`}
-                                            style={{ color: "#2563eb", fontWeight: 600, textDecoration: "none" }}
-                                          >
-                                            {formatPhoneDisplay(shippingAddress?.mobileNumber || detail?.customer_phone || order.customer_phone || "")}
-                                          </a>
-                                        </div>
-                                      )}
-                                      {(shippingAddress?.email || detail?.customer_email || order.customer_email) && (
-                                        <div style={{ color: "#64748b" }}>
-                                          {shippingAddress?.email || detail?.customer_email || order.customer_email}
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    <div style={{ marginTop: "6px", paddingTop: "8px", borderTop: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12.5px" }}>
-                                      <span style={{ color: "#64748b" }}>Payment Method:</span>
-                                      <span style={{ fontWeight: 700, color: "#0f172a", display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                                        <span>{getPaymentMethodIcon(detail?.payment_method || order.payment_method)}</span>
-                                        <span>{formatPaymentMethodName(detail?.payment_method || order.payment_method)}</span>
+                                      <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                        Customer & Destination
+                                      </span>
+                                      <span
+                                        style={{
+                                          fontSize: "11px",
+                                          fontWeight: 700,
+                                          padding: "3px 8px",
+                                          borderRadius: "4px",
+                                          background: (detail?.payment_status || order.payment_status) === "paid" ? "#f0fdf4" : (detail?.payment_status || order.payment_status) === "refunded" ? "#f0fdf4" : (detail?.payment_status || order.payment_status) === "partially_refunded" ? "#eff6ff" : "#fef2f2",
+                                          color: (detail?.payment_status || order.payment_status) === "paid" ? "#15803d" : (detail?.payment_status || order.payment_status) === "refunded" ? "#15803d" : (detail?.payment_status || order.payment_status) === "partially_refunded" ? "#1d4ed8" : "#b91c1c",
+                                          border: `1px solid ${(detail?.payment_status || order.payment_status) === "paid" ? "#bbf7d0" : (detail?.payment_status || order.payment_status) === "refunded" ? "#bbf7d0" : (detail?.payment_status || order.payment_status) === "partially_refunded" ? "#bfdbfe" : "#fecaca"}`,
+                                          textTransform: "capitalize",
+                                        }}
+                                      >
+                                        Payment: {detail?.payment_status || order.payment_status || "Pending"}
                                       </span>
                                     </div>
 
+                                    <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a", marginBottom: "4px" }}>
+                                      {order.customer_name || shippingAddress?.fullName || "Guest Customer"}
+                                    </div>
+                                    <div style={{ fontSize: "12.5px", color: "#475569", lineHeight: "1.5" }}>
+                                      <span style={{ fontWeight: 600, color: "#334155" }}>Delivery Address:</span><br />
+                                      {shippingAddress?.addressLine1 || shippingAddress?.street || "No address line"}<br />
+                                      {shippingAddress?.city ? `${shippingAddress.city} - ${shippingAddress.postalCode || ""}` : ""}
+                                    </div>
+
+                                    {(order.customer_phone || shippingAddress?.mobileNumber) && (
+                                      <div style={{ fontSize: "12.5px", color: "#475569", marginTop: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
+                                        <PhoneIcon />
+                                        <a href={`tel:${order.customer_phone || shippingAddress?.mobileNumber}`} style={{ color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>
+                                          {formatPhoneDisplay(order.customer_phone || shippingAddress?.mobileNumber || "")}
+                                        </a>
+                                      </div>
+                                    )}
+                                    {(order.customer_email || shippingAddress?.email) && (
+                                      <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                                        {order.customer_email || shippingAddress?.email}
+                                      </div>
+                                    )}
+
+                                    <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                      <span style={{ fontSize: "12px", color: "#64748b" }}>Payment Method:</span>
+                                      <span style={{ fontSize: "12.5px", fontWeight: 700, color: "#0f172a" }}>{formatPaymentMethodName(order.payment_method)}</span>
+                                    </div>
+
                                     {(detail?.razorpay_payment_id || order.razorpay_payment_id) && (
-                                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px" }}>
-                                        <span style={{ color: "#64748b" }}>Payment Reference:</span>
-                                        <code style={{ fontSize: "11px", fontWeight: 700, background: "#f8fafc", padding: "2px 6px", borderRadius: "4px", border: "1px solid #e2e8f0", color: "#0f172a" }}>
+                                      <div style={{ marginTop: "4px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                        <span style={{ fontSize: "11px", color: "#64748b" }}>Payment Reference:</span>
+                                        <code style={{ fontSize: "11px", color: "#334155", background: "#f1f5f9", padding: "1px 5px", borderRadius: "3px" }}>
                                           {detail?.razorpay_payment_id || order.razorpay_payment_id}
                                         </code>
                                       </div>
                                     )}
+                                  </div>
+
+                                  {/* Card 2: Order Items & Pricing Breakdown */}
+                                  <div style={{ ...plainCardStyle, padding: "16px" }}>
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "center",
+                                        marginBottom: "12px",
+                                        paddingBottom: "8px",
+                                        borderBottom: "1px solid #f1f5f9",
+                                      }}
+                                    >
+                                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                        <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                          Order Items ({items.length})
+                                        </span>
+                                        {isReplActive && (
+                                          <span style={{ fontSize: "11px", fontWeight: 700, color: "#0284c7", background: "#f0f9ff", border: "1px solid #bae6fd", padding: "1px 6px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                                            <span>Re-Dispatch</span>
+                                          </span>
+                                        )}
+                                      </div>
+                                      <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
+                                        Total: {formatPrice(order.total)}
+                                      </span>
+                                    </div>
+
+                                    {/* Re-Dispatch Alert Notice for Warehouse Packing */}
+                                    {(() => {
+                                      if (isReplActive) {
+                                        const replItems = items.filter((i) => i.status === "confirmed" || i.status === "shipped" || i.status === "out_for_delivery");
+                                        const deliveredItems = items.filter((i) => i.status === "delivered");
+                                        if (replItems.length > 0 && deliveredItems.length > 0) {
+                                          return (
+                                            <div style={{ padding: "10px 12px", borderRadius: "6px", background: "#f0f9ff", border: "1.5px solid #bae6fd", marginBottom: "12px", fontSize: "12px", color: "#0369a1", display: "flex", alignItems: "flex-start", gap: "8px" }}>
+                                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: "2px" }}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                                              <div>
+                                                <strong>Packing Instruction (Partial Re-Dispatch):</strong> Pack only <strong>{replItems.map((i) => `${i.quantity}x ${i.product_name}`).join(", ")}</strong> for this replacement shipment. The other {deliveredItems.length} item(s) were already delivered.
+                                              </div>
+                                            </div>
+                                          );
+                                        }
+                                      }
+                                      return null;
+                                    })()}
+
+                                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                                      {items.map((item) => {
+                                        const isItemBeingReplaced = isReplActive && (item.status === "confirmed" || item.status === "shipped" || item.status === "out_for_delivery");
+                                        const isItemDeliveredEarlier = isReplActive && item.status === "delivered";
+
+                                        return (
+                                          <div
+                                            key={item.id}
+                                            style={{
+                                              display: "flex",
+                                              justifyContent: "space-between",
+                                              alignItems: "flex-start",
+                                              gap: "12px",
+                                              padding: "10px 12px",
+                                              borderRadius: "6px",
+                                              background: isItemBeingReplaced ? "#f0f9ff" : isItemDeliveredEarlier ? "#f8fafc" : "#ffffff",
+                                              border: isItemBeingReplaced ? "1.5px solid #7dd3fc" : "1px solid #e2e8f0",
+                                              transition: "all 0.15s ease",
+                                            }}
+                                          >
+                                            <div style={{ minWidth: 0, flex: 1 }}>
+                                              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                                                <span style={{ fontSize: "13.5px", fontWeight: 700, color: "#0f172a" }}>
+                                                  {item.product_name}
+                                                </span>
+                                                {isItemBeingReplaced && (
+                                                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#0284c7", background: "#e0f2fe", border: "1px solid #7dd3fc", padding: "2px 7px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                                                    <span>Re-Dispatch Item</span>
+                                                  </span>
+                                                )}
+                                                {isItemDeliveredEarlier && (
+                                                  <span style={{ fontSize: "11px", fontWeight: 600, color: "#15803d", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "2px 7px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                                    <span>Delivered Earlier</span>
+                                                  </span>
+                                                )}
+                                              </div>
+                                              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px", flexWrap: "wrap" }}>
+                                                <span style={{ fontSize: "12.5px", fontWeight: 600, color: "#475569" }}>
+                                                  Qty: {item.quantity}
+                                                </span>
+                                                {item.selected_variant_value && (
+                                                  <span
+                                                    style={{
+                                                      fontSize: "11px",
+                                                      fontWeight: 600,
+                                                      color: "#2563eb",
+                                                      background: "#eff6ff",
+                                                      border: "1px solid #bfdbfe",
+                                                      padding: "1px 6px",
+                                                      borderRadius: "4px",
+                                                    }}
+                                                  >
+                                                    {item.selected_variant_value}
+                                                  </span>
+                                                )}
+                                                {!isReplDelivered && !isItemBeingReplaced && !isItemDeliveredEarlier && item.status && item.status !== "delivered" && (
+                                                  <span style={{ fontSize: "11.5px", color: "#94a3b8" }}>
+                                                    • {item.status.replaceAll("_", " ")}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </div>
+                                            <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap" }}>
+                                              {formatPrice(item.line_total)}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Right Column: Fulfillment Dispatch Control & Admin Timeline */}
+                                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                                  {/* Card 1: Delivery & Dispatch Control */}
+                                  <div style={{ ...plainCardStyle, padding: "16px" }}>
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "center",
+                                        marginBottom: "12px",
+                                        paddingBottom: "8px",
+                                        borderBottom: "1px solid #f1f5f9",
+                                      }}
+                                    >
+                                      <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                        Fulfillment & Dispatch
+                                      </span>
+                                      {(detail?.shipment || order.shipment) ? (
+                                        <span
+                                          style={{
+                                            fontSize: "11px",
+                                            fontWeight: 700,
+                                            padding: "3px 8px",
+                                            borderRadius: "4px",
+                                            background: (detail?.shipment?.status || order.shipment?.status) === "delivered" ? "#f0fdf4" : "#eff6ff",
+                                            color: (detail?.shipment?.status || order.shipment?.status) === "delivered" ? "#15803d" : "#1d4ed8",
+                                            border: `1px solid ${(detail?.shipment?.status || order.shipment?.status) === "delivered" ? "#bbf7d0" : "#bfdbfe"}`,
+                                            textTransform: "capitalize",
+                                          }}
+                                        >
+                                          {(detail?.shipment?.status || order.shipment?.status || "Pending").replaceAll("_", " ")}
+                                        </span>
+                                      ) : (
+                                        <span
+                                          style={{
+                                            fontSize: "11px",
+                                            fontWeight: 700,
+                                            padding: "3px 8px",
+                                            borderRadius: "4px",
+                                            background: "#fff7ed",
+                                            color: "#c2410c",
+                                            border: "1px solid #ffedd5",
+                                          }}
+                                        >
+                                          Pending Dispatch
+                                        </span>
+                                      )}
+                                    </div>
 
                                     {(() => {
                                       const currentShipment = detail?.shipment || order.shipment;
-                                      const isShiprocket = Boolean(
-                                        currentShipment && (
-                                          currentShipment.delivery_mode === "shiprocket" ||
-                                          currentShipment.mode === "shiprocket" ||
-                                          (Boolean(currentShipment.awb_number) && !currentShipment.agent_id && currentShipment.delivery_mode !== "manual")
-                                        )
-                                      );
-                                      const isManual = Boolean(
-                                        currentShipment && (
-                                          currentShipment.delivery_mode === "manual" ||
-                                          currentShipment.mode === "manual" ||
-                                          (Boolean(currentShipment.delivery_partner_name) && currentShipment.delivery_mode !== "own_agent" && currentShipment.mode !== "own_agent" && !currentShipment.agent_id) ||
-                                          ((order.status === "shipped" || order.status === "out_for_delivery") && !currentShipment.agent_id && currentShipment.delivery_mode !== "own_agent")
-                                        )
-                                      );
-                                      const isOwnAgent = !isShiprocket && !isManual && Boolean(
-                                        currentShipment && (
-                                          currentShipment.delivery_mode === "own_agent" ||
-                                          currentShipment.mode === "own_agent" ||
-                                          Boolean(currentShipment.agent_id)
-                                        )
-                                      );
+                                      const isFleetOn = deliverySettings?.enable_fleet !== undefined ? Boolean(deliverySettings.enable_fleet) : (deliverySettings?.delivery_mode === "own_agent" || deliverySettings?.delivery_mode === "hybrid");
+                                      const isShiprocketOn = deliverySettings?.enable_shiprocket !== undefined ? Boolean(deliverySettings.enable_shiprocket) : (deliverySettings?.delivery_mode === "shiprocket" || deliverySettings?.delivery_mode === "hybrid");
+                                      const isManualOn = deliverySettings?.enable_manual !== undefined ? Boolean(deliverySettings.enable_manual) : (deliverySettings?.delivery_mode === "manual");
 
-                                      if (!isOwnAgent || !(detail?.delivery_otp || order.delivery_otp) || order.status === "delivered" || order.status === "cancelled") {
-                                        return null;
+                                      const availableModes: Array<{ id: "own_agent" | "shiprocket" | "manual"; label: string }> = [];
+                                      if (isFleetOn) availableModes.push({ id: "own_agent", label: "Own Fleet" });
+                                      if (isShiprocketOn) availableModes.push({ id: "shiprocket", label: "Shiprocket" });
+                                      if (isManualOn) availableModes.push({ id: "manual", label: "Manual" });
+
+                                      if (availableModes.length === 0) {
+                                        availableModes.push({ id: "manual", label: "Manual" });
                                       }
 
+                                      const activeMode: "own_agent" | "shiprocket" | "manual" = (
+                                        selectedDispatchModeMap[order.id] && availableModes.some((m) => m.id === selectedDispatchModeMap[order.id])
+                                          ? selectedDispatchModeMap[order.id]
+                                          : availableModes[0].id
+                                      ) as "own_agent" | "shiprocket" | "manual";
+
+                                      const assignedRider = deliveryAgents.find((a) => a.id === currentShipment?.delivery_partner_phone || a.name === currentShipment?.delivery_partner_name);
+                                      const riderName = currentShipment?.delivery_partner_name || assignedRider?.name || "Assigned Rider";
+                                      const riderPhone = currentShipment?.delivery_partner_phone || assignedRider?.phone || "";
+                                      const isReassigning = Boolean(reassigningOrderIdMap[order.id]);
+
                                       return (
-                                        <div
-                                          style={{
-                                            marginTop: "6px",
-                                            padding: "8px 12px",
-                                            background: "#ecfdf5",
-                                            borderRadius: "6px",
-                                            border: "1px solid #a7f3d0",
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "space-between",
-                                          }}
-                                        >
-                                          <span style={{ fontSize: "12px", fontWeight: 700, color: "#065f46" }}>
-                                            Delivery OTP:
-                                          </span>
-                                          <code
-                                            style={{
-                                              fontSize: "13px",
-                                              fontWeight: 900,
-                                              letterSpacing: "3px",
-                                              fontFamily: "monospace",
-                                              color: "#047857",
-                                              background: "#ffffff",
-                                              padding: "2px 8px",
-                                              borderRadius: "4px",
-                                              border: "1px dashed #059669",
-                                            }}
-                                          >
-                                            {detail?.delivery_otp || order.delivery_otp}
-                                          </code>
-                                        </div>
-                                      );
-                                    })()}
-                                  </div>
-                                </div>
-
-                                {/* Card 2: Order Items & Pricing Breakdown */}
-                                <div style={{ ...plainCardStyle, padding: "16px" }}>
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      alignItems: "center",
-                                      marginBottom: "12px",
-                                      paddingBottom: "8px",
-                                      borderBottom: "1px solid #f1f5f9",
-                                    }}
-                                  >
-                                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                                      Order Items ({items.length})
-                                    </span>
-                                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
-                                      Total: {formatPrice(order.total)}
-                                    </span>
-                                  </div>
-
-                                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                    {items.map((item) => (
-                                      <div
-                                        key={item.id}
-                                        style={{
-                                          display: "flex",
-                                          justifyContent: "space-between",
-                                          alignItems: "flex-start",
-                                          gap: "12px",
-                                          padding: "10px 12px",
-                                          borderRadius: "6px",
-                                          background: "#f8fafc",
-                                          border: "1px solid #e2e8f0",
-                                        }}
-                                      >
-                                        <div style={{ minWidth: 0, flex: 1 }}>
-                                          <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#0f172a" }}>
-                                            {item.product_name}
-                                          </div>
-                                          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "3px", flexWrap: "wrap" }}>
-                                            <span style={{ fontSize: "12.5px", fontWeight: 600, color: "#475569" }}>
-                                              Qty: {item.quantity}
-                                            </span>
-                                            {item.selected_variant_value && (
-                                              <span
-                                                style={{
-                                                  fontSize: "11px",
-                                                  fontWeight: 600,
-                                                  color: "#2563eb",
-                                                  background: "#eff6ff",
-                                                  border: "1px solid #bfdbfe",
-                                                  padding: "1px 6px",
-                                                  borderRadius: "4px",
-                                                }}
-                                              >
-                                                {item.selected_variant_value}
-                                              </span>
-                                            )}
-                                            <span style={{ fontSize: "11.5px", color: "#94a3b8" }}>
-                                              • {item.status.replaceAll("_", " ")}
-                                            </span>
-                                          </div>
-                                        </div>
-                                        <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap" }}>
-                                          {formatPrice(item.line_total)}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Right Column: Fulfillment Dispatch Control & Admin Timeline */}
-                              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                                {/* Card 1: Delivery & Dispatch Control */}
-                                <div style={{ ...plainCardStyle, padding: "16px" }}>
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      alignItems: "center",
-                                      marginBottom: "12px",
-                                      paddingBottom: "8px",
-                                      borderBottom: "1px solid #f1f5f9",
-                                    }}
-                                  >
-                                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                                      Fulfillment & Dispatch
-                                    </span>
-                                    {(detail?.shipment || order.shipment) ? (
-                                      <span
-                                        style={{
-                                          fontSize: "11px",
-                                          fontWeight: 700,
-                                          padding: "3px 8px",
-                                          borderRadius: "4px",
-                                          background: (detail?.shipment?.status || order.shipment?.status) === "delivered" ? "#f0fdf4" : "#eff6ff",
-                                          color: (detail?.shipment?.status || order.shipment?.status) === "delivered" ? "#15803d" : "#1d4ed8",
-                                          border: `1px solid ${(detail?.shipment?.status || order.shipment?.status) === "delivered" ? "#bbf7d0" : "#bfdbfe"}`,
-                                          textTransform: "capitalize",
-                                        }}
-                                      >
-                                        {(detail?.shipment?.status || order.shipment?.status || "Pending").replaceAll("_", " ")}
-                                      </span>
-                                    ) : (
-                                      <span
-                                        style={{
-                                          fontSize: "11px",
-                                          fontWeight: 700,
-                                          padding: "3px 8px",
-                                          borderRadius: "4px",
-                                          background: "#fff7ed",
-                                          color: "#c2410c",
-                                          border: "1px solid #ffedd5",
-                                        }}
-                                      >
-                                        Pending Dispatch
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  {(() => {
-                                    const currentShipment = detail?.shipment || order.shipment;
-                                    const isFleetOn = deliverySettings?.enable_fleet !== undefined ? Boolean(deliverySettings.enable_fleet) : (deliverySettings?.delivery_mode === "own_agent" || deliverySettings?.delivery_mode === "hybrid");
-                                    const isShiprocketOn = deliverySettings?.enable_shiprocket !== undefined ? Boolean(deliverySettings.enable_shiprocket) : (deliverySettings?.delivery_mode === "shiprocket" || deliverySettings?.delivery_mode === "hybrid");
-                                    const isManualOn = deliverySettings?.enable_manual !== undefined ? Boolean(deliverySettings.enable_manual) : (deliverySettings?.delivery_mode === "manual");
-
-                                    const availableModes: Array<{ id: "own_agent" | "shiprocket" | "manual"; label: string }> = [];
-                                    if (isFleetOn) availableModes.push({ id: "own_agent", label: "Own Fleet" });
-                                    if (isShiprocketOn) availableModes.push({ id: "shiprocket", label: "Shiprocket" });
-                                    if (isManualOn) availableModes.push({ id: "manual", label: "Manual" });
-
-                                    if (availableModes.length === 0) {
-                                      availableModes.push({ id: "manual", label: "Manual" });
-                                    }
-
-                                    const activeMode: "own_agent" | "shiprocket" | "manual" = (
-                                      selectedDispatchModeMap[order.id] && availableModes.some((m) => m.id === selectedDispatchModeMap[order.id])
-                                        ? selectedDispatchModeMap[order.id]
-                                        : availableModes[0].id
-                                    ) as "own_agent" | "shiprocket" | "manual";
-
-                                    const assignedRider = deliveryAgents.find((a) => a.id === currentShipment?.delivery_partner_phone || a.name === currentShipment?.delivery_partner_name);
-                                    const riderName = currentShipment?.delivery_partner_name || assignedRider?.name || "Assigned Rider";
-                                    const riderPhone = currentShipment?.delivery_partner_phone || assignedRider?.phone || "";
-                                    const isReassigning = Boolean(reassigningOrderIdMap[order.id]);
-
-                                    return (
                                       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                                         {/* If Order is already dispatched via Shiprocket */}
                                         {Boolean(
@@ -3740,9 +3853,15 @@ const AdminOrders: React.FC = () => {
                                                   fontSize: "12px",
                                                   color: "#166534",
                                                   fontWeight: 600,
+                                                  display: "flex",
+                                                  alignItems: "center",
+                                                  gap: "6px",
                                                 }}
                                               >
-                                                ✓ Package delivered to customer.
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                  <polyline points="20 6 9 17 4 12" />
+                                                </svg>
+                                                Package delivered to customer.
                                               </div>
                                             ) : null}
                                           </div>
@@ -3853,6 +3972,88 @@ const AdminOrders: React.FC = () => {
                                                       Next Delivery Retry: {formatDate(currentShipment.estimated_delivery_at)}
                                                     </div>
                                                   )}
+                                                </div>
+                                              )}
+
+                                              {/* Returned to Hub Banner & Direct Actions */}
+                                              {(currentShipment?.status === "returned_to_warehouse" || currentShipment?.status === "failed" || order.status === "failed") && order.status !== "cancelled" && (
+                                                <div
+                                                  style={{
+                                                    marginTop: "12px",
+                                                    padding: "12px 14px",
+                                                    background: "#fef2f2",
+                                                    borderRadius: "8px",
+                                                    border: "1px solid #fecaca",
+                                                    display: "flex",
+                                                    flexDirection: "column",
+                                                    gap: "10px",
+                                                  }}
+                                                >
+                                                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+                                                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                                      <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#dc2626" }} />
+                                                      <span style={{ fontSize: "13px", fontWeight: 700, color: "#991b1b" }}>
+                                                        Parcel Returned to Warehouse / Hub
+                                                      </span>
+                                                    </div>
+                                                    <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "4px", background: "#fee2e2", color: "#b91c1c", border: "1px solid #fca5a5" }}>
+                                                      Action Required
+                                                    </span>
+                                                  </div>
+
+                                                  <div style={{ fontSize: "12px", color: "#7f1d1d", lineHeight: 1.45 }}>
+                                                    The delivery partner brought this parcel back to the store warehouse. You can cancel this order to restore inventory stock and process customer refund, or reassign it to another partner.
+                                                  </div>
+
+                                                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", paddingTop: "4px" }}>
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => {
+                                                        setAdminCancelOrder(order);
+                                                        setAdminCancelReason("Parcel Returned to Hub - Customer unreachable / no response after multiple attempts");
+                                                        setAdminCancelCustomNote(currentShipment?.notes ? cleanShipmentNotes(currentShipment.notes) : "");
+                                                      }}
+                                                      disabled={actionLoadingId === order.id}
+                                                      style={{
+                                                        padding: "7px 14px",
+                                                        borderRadius: "6px",
+                                                        background: "#dc2626",
+                                                        border: "none",
+                                                        color: "#ffffff",
+                                                        fontSize: "12.5px",
+                                                        fontWeight: 700,
+                                                        cursor: "pointer",
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        gap: "6px",
+                                                        boxShadow: "0 1px 2px rgba(220, 38, 38, 0.2)",
+                                                      }}
+                                                    >
+                                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                        <circle cx="12" cy="12" r="10" />
+                                                        <line x1="15" y1="9" x2="9" y2="15" />
+                                                        <line x1="9" y1="9" x2="15" y2="15" />
+                                                      </svg>
+                                                      Cancel Order & Restock
+                                                    </button>
+
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => setReassigningOrderIdMap((p) => ({ ...p, [order.id]: true }))}
+                                                      style={{
+                                                        padding: "7px 12px",
+                                                        borderRadius: "6px",
+                                                        background: "#ffffff",
+                                                        border: "1px solid #cbd5e1",
+                                                        color: "#334155",
+                                                        fontSize: "12.5px",
+                                                        fontWeight: 600,
+                                                        cursor: "pointer",
+                                                      }}
+                                                    >
+                                                      Reassign Rider / Courier
+                                                    </button>
+                                                  </div>
                                                 </div>
                                               )}
                                             </div>
@@ -4080,9 +4281,12 @@ const AdminOrders: React.FC = () => {
                                                        style={inputStyle}
                                                      />
                                                      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "5px", flexWrap: "wrap" }}>
-                                                       <span style={{ fontSize: "11px", color: "#059669", background: "rgba(16,185,129,0.1)", padding: "2px 7px", borderRadius: "4px", fontWeight: 600 }}>
-                                                         ✓ Auto-calculated from product details
-                                                       </span>
+                                                       <span style={{ fontSize: "11px", color: "#059669", background: "rgba(16,185,129,0.1)", padding: "2px 7px", borderRadius: "4px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                            <polyline points="20 6 9 17 4 12"></polyline>
+                                                          </svg>
+                                                          Auto-calculated from product details
+                                                        </span>
                                                        <span style={{ fontSize: "11px", color: "#64748b" }}>
                                                          (Editable before booking)
                                                        </span>
@@ -4225,13 +4429,45 @@ const AdminOrders: React.FC = () => {
                                       <strong>Cancel Reason:</strong> {detail.cancel_reason}
                                     </div>
                                   ) : null}
+
+                                  {order.status !== "delivered" && order.status !== "cancelled" && order.status !== "returned" && (
+                                    <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px solid #f1f5f9" }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setAdminCancelOrder(order);
+                                          setAdminCancelReason(ADMIN_CANCEL_PRESETS[0]);
+                                          setAdminCancelCustomNote("");
+                                        }}
+                                        disabled={actionLoadingId === order.id}
+                                        style={{
+                                          width: "100%",
+                                          padding: "8px 12px",
+                                          borderRadius: "6px",
+                                          background: "#fef2f2",
+                                          border: "1px solid #fecaca",
+                                          color: "#b91c1c",
+                                          fontSize: "12.5px",
+                                          fontWeight: 700,
+                                          cursor: "pointer",
+                                          display: "flex",
+                                          alignItems: "center",
+                                          justifyContent: "center",
+                                          gap: "6px",
+                                        }}
+                                      >
+                                        <XMarkIcon />
+                                        <span>Cancel Order with Reason</span>
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </div>
                           </div>
-                        ) : null}
-                    </div>
-                  );
+                        )}
+                      </div>
+                    );
                 })}
               </div>
             )}
@@ -4717,7 +4953,11 @@ const AdminOrders: React.FC = () => {
                                             padding: "2px 8px",
                                           }}
                                         >
-                                          📍 Open Exact Pinned Location on Maps
+                                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                            <circle cx="12" cy="10" r="3"></circle>
+                                          </svg>
+                                          Open Exact Pinned Location on Maps
                                         </a>
                                       </div>
                                     ) : null}
@@ -6400,6 +6640,181 @@ const AdminOrders: React.FC = () => {
             </div>
           )}
         </>
+      )}
+
+      {/* ADMIN ORDER CANCELLATION MODAL */}
+      {adminCancelOrder && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.6)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "16px",
+            boxSizing: "border-box",
+          }}
+          onClick={() => setAdminCancelOrder(null)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "520px",
+              background: "#ffffff",
+              borderRadius: "16px",
+              padding: "24px",
+              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
+              boxSizing: "border-box",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 800, color: "#991b1b" }}>
+                  Cancel Order #{adminCancelOrder.id.slice(0, 8).toUpperCase()}
+                </h3>
+                <p style={{ margin: "3px 0 0", fontSize: "12.5px", color: "#64748b" }}>
+                  Customer: {adminCancelOrder.customer_name || "Store Customer"} • Status: {adminCancelOrder.status}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAdminCancelOrder(null)}
+                style={{
+                  background: "#f1f5f9",
+                  border: "none",
+                  borderRadius: "50%",
+                  width: "32px",
+                  height: "32px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#64748b",
+                  cursor: "pointer",
+                }}
+              >
+                <XMarkIcon />
+              </button>
+            </div>
+
+            <div
+              style={{
+                background: "#fef2f2",
+                borderRadius: "8px",
+                border: "1px solid #fecaca",
+                padding: "12px",
+                marginBottom: "16px",
+                fontSize: "12.5px",
+                color: "#991b1b",
+                lineHeight: 1.45,
+              }}
+            >
+              Cancelling this order will restore reserved product inventory, release any assigned delivery riders, and initiate an automatic Razorpay refund if paid online.
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const combined = adminCancelCustomNote.trim()
+                  ? `${adminCancelReason}: ${adminCancelCustomNote.trim()}`
+                  : adminCancelReason;
+                const orderId = adminCancelOrder.id;
+                setAdminCancelOrder(null);
+                await handleCancel(orderId, combined);
+              }}
+              style={{ display: "flex", flexDirection: "column", gap: "14px" }}
+            >
+              <div>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#334155", marginBottom: "6px" }}>
+                  Cancellation Reason Preset
+                </label>
+                <select
+                  value={adminCancelReason}
+                  onChange={(e) => setAdminCancelReason(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "13px",
+                    color: "#0f172a",
+                    background: "#ffffff",
+                  }}
+                  required
+                >
+                  {ADMIN_CANCEL_PRESETS.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#334155", marginBottom: "6px" }}>
+                  Custom Admin Note / Attempt Details
+                </label>
+                <textarea
+                  rows={3}
+                  value={adminCancelCustomNote}
+                  onChange={(e) => setAdminCancelCustomNote(e.target.value)}
+                  placeholder="e.g. Rider visited premises 3 times and called phone 4 times with no response. Dropped parcel back at warehouse."
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "13px",
+                    color: "#0f172a",
+                    resize: "none",
+                    fontFamily: "inherit",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+                <button
+                  type="button"
+                  onClick={() => setAdminCancelOrder(null)}
+                  style={{
+                    flex: 1,
+                    padding: "12px",
+                    borderRadius: "8px",
+                    background: "#f1f5f9",
+                    border: "1px solid #cbd5e1",
+                    color: "#475569",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Keep Order Active
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    flex: 2,
+                    padding: "12px",
+                    borderRadius: "8px",
+                    background: "#dc2626",
+                    border: "none",
+                    color: "#ffffff",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    boxShadow: "0 2px 6px rgba(220, 38, 38, 0.25)",
+                  }}
+                >
+                  Confirm Cancellation
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

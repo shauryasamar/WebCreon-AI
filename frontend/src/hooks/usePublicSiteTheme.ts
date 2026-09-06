@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { API_BASE_URL } from "../config/api";
 
 export type PublicSiteData = {
+  id?: string;
+  site_id?: string;
   siteName: string;
   logo?: string;
   navbar?: {

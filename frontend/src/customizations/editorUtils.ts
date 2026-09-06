@@ -765,7 +765,7 @@ export function findBlockById(
     return {
       id: "signin_form",
       type: "signin_form",
-      props: {},
+      props: { max_width: "100%" },
     };
   }
 
@@ -797,7 +797,7 @@ export function findBlockById(
     return {
       id: "signup_form",
       type: "signup_form",
-      props: {},
+      props: { max_width: "100%" },
     };
   }
 
@@ -830,7 +830,40 @@ export function findBlockById(
     return {
       id: "customer_orders",
       type: "customer_orders",
-      props: {},
+      props: { max_width: "100%" },
+    };
+  }
+
+  if (
+    blockId === "customer_support" ||
+    blockId === "customersupport" ||
+    blockId === "support" ||
+    blockId === "support_desk" ||
+    blockId === "supportdesk"
+  ) {
+    const supportP = siteDefinition.pages.find(
+      (p) =>
+        p.role === "support" ||
+        p.page_type === "support" ||
+        p.route === "/support" ||
+        p.route === "support" ||
+        p.id === "support" ||
+        p.id === "page-support"
+    );
+    const inSupport = supportP?.blocks?.find(
+      (b) =>
+        b.id === "customer_support" ||
+        b.type === "customer_support" ||
+        b.type === "customersupport" ||
+        b.type === "support" ||
+        b.type === "support_desk" ||
+        b.type === "supportdesk"
+    );
+    if (inSupport) return inSupport;
+    return {
+      id: "customer_support",
+      type: "customer_support",
+      props: { max_width: "100%" },
     };
   }
 
@@ -1001,6 +1034,20 @@ export function findBlockById(
     return {
       id: blockId,
       type: "customer_orders",
+      props: {},
+    };
+  }
+
+  if (
+    blockId === "customer_support" ||
+    blockId === "customersupport" ||
+    blockId === "support" ||
+    blockId === "support_desk" ||
+    blockId === "supportdesk"
+  ) {
+    return {
+      id: blockId,
+      type: "customer_support",
       props: {},
     };
   }
@@ -1813,7 +1860,7 @@ export function updateBlockProps(
           ...targetPage,
           blocks: [
             ...targetPage.blocks,
-            { id: "signin_form", type: "signin_form", props: { ...propsPatch } },
+            { id: "signin_form", type: "signin_form", props: { max_width: "100%", ...propsPatch } },
           ],
         };
       }
@@ -1827,7 +1874,7 @@ export function updateBlockProps(
         page_type: "login",
         show_in_nav: false,
         blocks: [
-          { id: "signin_form", type: "signin_form", props: { ...propsPatch } },
+          { id: "signin_form", type: "signin_form", props: { max_width: "100%", ...propsPatch } },
         ],
       };
       return { ...siteDefinition, pages: [...siteDefinition.pages, newLoginPage] };
@@ -1865,7 +1912,7 @@ export function updateBlockProps(
           ...targetPage,
           blocks: [
             ...targetPage.blocks,
-            { id: "signup_form", type: "signup_form", props: { ...propsPatch } },
+            { id: "signup_form", type: "signup_form", props: { max_width: "100%", ...propsPatch } },
           ],
         };
       }
@@ -1879,7 +1926,7 @@ export function updateBlockProps(
         page_type: "signup",
         show_in_nav: false,
         blocks: [
-          { id: "signup_form", type: "signup_form", props: { ...propsPatch } },
+          { id: "signup_form", type: "signup_form", props: { max_width: "100%", ...propsPatch } },
         ],
       };
       return { ...siteDefinition, pages: [...siteDefinition.pages, newSignUpPage] };
@@ -1921,7 +1968,7 @@ export function updateBlockProps(
           ...targetPage,
           blocks: [
             ...targetPage.blocks,
-            { id: "customer_orders", type: "customer_orders", props: { ...propsPatch } },
+            { id: "customer_orders", type: "customer_orders", props: { max_width: "100%", ...propsPatch } },
           ],
         };
       }
@@ -1935,10 +1982,66 @@ export function updateBlockProps(
         page_type: "orders",
         show_in_nav: false,
         blocks: [
-          { id: "customer_orders", type: "customer_orders", props: { ...propsPatch } },
+          { id: "customer_orders", type: "customer_orders", props: { max_width: "100%", ...propsPatch } },
         ],
       };
       return { ...siteDefinition, pages: [...siteDefinition.pages, newOrdersPage] };
+    }
+  }
+
+  const isSupportFallbackId = (id: string) =>
+    id === "customer_support" ||
+    id === "customersupport" ||
+    id === "support" ||
+    id === "support_desk" ||
+    id === "supportdesk";
+  if (!hasExistingBlockProps && isSupportFallbackId(blockId)) {
+    const supportPageIndex = siteDefinition.pages.findIndex(
+      (p) =>
+        p.role === "support" ||
+        p.page_type === "support" ||
+        p.route === "/support" ||
+        p.route === "support" ||
+        p.id === "support" ||
+        p.id === "page-support"
+    );
+    if (supportPageIndex !== -1) {
+      const targetPage = siteDefinition.pages[supportPageIndex];
+      const existingBlockIndex = targetPage.blocks.findIndex(
+        (b) => isSupportFallbackId(b.id) || isSupportFallbackId(b.type)
+      );
+      const updatedPages = [...siteDefinition.pages];
+      if (existingBlockIndex !== -1) {
+        const existingBlock = targetPage.blocks[existingBlockIndex];
+        const updatedBlocks = [...targetPage.blocks];
+        updatedBlocks[existingBlockIndex] = {
+          ...existingBlock,
+          props: { ...(existingBlock.props || {}), ...propsPatch },
+        };
+        updatedPages[supportPageIndex] = { ...targetPage, blocks: updatedBlocks };
+      } else {
+        updatedPages[supportPageIndex] = {
+          ...targetPage,
+          blocks: [
+            ...targetPage.blocks,
+            { id: "customer_support", type: "customer_support", props: { max_width: "100%", ...propsPatch } },
+          ],
+        };
+      }
+      return { ...siteDefinition, pages: updatedPages };
+    } else {
+      const newSupportPage: EditorPage = {
+        id: "page-support",
+        name: "Help & Support",
+        route: "/support",
+        role: "support",
+        page_type: "support",
+        show_in_nav: false,
+        blocks: [
+          { id: "customer_support", type: "customer_support", props: { max_width: "100%", ...propsPatch } },
+        ],
+      };
+      return { ...siteDefinition, pages: [...siteDefinition.pages, newSupportPage] };
     }
   }
 

@@ -228,6 +228,58 @@ export default function DeliverySettingsPage() {
   const [agents, setAgents] = useState<Agent[]>(cachedAgents);
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [showAgentForm, setShowAgentForm] = useState(false);
+  const [copiedPortal, setCopiedPortal] = useState(false);
+  const [siteSlug, setSiteSlug] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const match = window.location.pathname.match(/\/store\/([^/]+)/);
+      if (match && match[1]) return match[1];
+      if (siteId) {
+        try {
+          const raw = localStorage.getItem(`wc_site_snapshot_${siteId}`);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed?.slug) return parsed.slug;
+          }
+        } catch (_) {}
+      }
+    }
+    return siteId || "";
+  });
+
+  useEffect(() => {
+    if (!siteId) return;
+    const resolveSlug = async () => {
+      try {
+        const match = window.location.pathname.match(/\/store\/([^/]+)/);
+        if (match && match[1]) {
+          setSiteSlug(match[1]);
+          return;
+        }
+        const raw = localStorage.getItem(`wc_site_snapshot_${siteId}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.slug) {
+            setSiteSlug(parsed.slug);
+            return;
+          }
+        }
+        const res = await fetch(`${API_BASE_URL}/admin/sites`, { credentials: "include" });
+        if (res.ok) {
+          const sites = await res.json();
+          if (Array.isArray(sites)) {
+            const matched = sites.find((s: any) => s.id === siteId || s.slug === siteId);
+            if (matched?.slug) {
+              setSiteSlug(matched.slug);
+            }
+          }
+        }
+      } catch (_) {}
+    };
+    resolveSlug();
+  }, [siteId]);
+
+  const riderPortalPath = siteSlug ? `/store/${siteSlug}/rider/login` : `/rider/login`;
+  const riderPortalFullUrl = typeof window !== "undefined" ? `${window.location.origin}${riderPortalPath}` : riderPortalPath;
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [activityFilter, setActivityFilter] = useState<string>("all");
@@ -1355,14 +1407,54 @@ export default function DeliverySettingsPage() {
                   </button>
                 </div>
 
-                {/* Right: Add Agent Button */}
-                <button
-                  type="button"
-                  onClick={() => setShowAgentForm(!showAgentForm)}
-                  style={{ ...primaryButtonStyle, height: "30px", padding: "0 12px", fontSize: "12px", whiteSpace: "nowrap" }}
-                >
-                  {showAgentForm ? "Cancel" : "+ Add delivery agent"}
-                </button>
+                {/* Right: Copy Portal Link & Add Agent Button */}
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(riderPortalFullUrl);
+                      setCopiedPortal(true);
+                      showFeedback(`Rider portal URL copied! (${riderPortalPath})`, "success");
+                      setTimeout(() => setCopiedPortal(false), 2000);
+                    }}
+                    style={{
+                      ...ghostButtonStyle,
+                      height: "30px",
+                      padding: "0 10px",
+                      fontSize: "12px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      whiteSpace: "nowrap",
+                    }}
+                    title={`Copy Delivery Rider Login Portal URL (${riderPortalFullUrl})`}
+                  >
+                    {copiedPortal ? (
+                      <>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        <span style={{ color: "#16a34a", fontWeight: 600 }}>Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                        <span>Copy Portal URL</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowAgentForm(!showAgentForm)}
+                    style={{ ...primaryButtonStyle, height: "30px", padding: "0 12px", fontSize: "12px", whiteSpace: "nowrap" }}
+                  >
+                    {showAgentForm ? "Cancel" : "+ Add delivery agent"}
+                  </button>
+                </div>
               </div>
 
               {/* Inline Add Agent Form Card */}
@@ -1749,14 +1841,16 @@ export default function DeliverySettingsPage() {
                                     alignItems: "center",
                                     justifyContent: "center",
                                     gap: "4px",
-                                    padding: "2px 7px",
+                                    padding: "2px 8px",
                                     borderRadius: "4px",
                                     fontSize: "11px",
                                     fontWeight: 600,
                                     background: agent.is_active ? "#f0fdf4" : "#fef2f2",
                                     color: agent.is_active ? "#15803d" : "#b91c1c",
                                     border: `1px solid ${agent.is_active ? "#bbf7d0" : "#fecaca"}`,
-                                    width: "68px",
+                                    width: "fit-content",
+                                    minWidth: "fit-content",
+                                    whiteSpace: "nowrap",
                                     boxSizing: "border-box",
                                   }}
                                 >
@@ -1766,9 +1860,10 @@ export default function DeliverySettingsPage() {
                                       height: "5px",
                                       borderRadius: "50%",
                                       background: agent.is_active ? "#16a34a" : "#dc2626",
+                                      flexShrink: 0,
                                     }}
                                   />
-                                  {agent.is_active ? "On Duty" : "Inactive"}
+                                  <span style={{ whiteSpace: "nowrap" }}>{agent.is_active ? "On Duty" : "Inactive"}</span>
                                 </span>
                                 <div style={{ fontSize: "11.5px", color: "#64748b" }}>
                                   <span style={{ color: (agent.current_order_count || 0) > 0 ? "#2563eb" : "#64748b", fontWeight: (agent.current_order_count || 0) > 0 ? 600 : 400 }}>

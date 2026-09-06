@@ -1105,15 +1105,21 @@ def get_admin_returns(
             | (ReturnRequest.reason_text.ilike(term))
         )
 
-    # Tab Counts
+    # Tab Counts respecting active search filter
     tab_counts = {}
     for t_key in RETURN_TABS:
-        cnt = session.exec(
-            select(func.count()).select_from(ReturnRequest).where(
-                ReturnRequest.site_id == site_id,
-                ReturnRequest.status == t_key,
+        cnt_q = select(func.count()).select_from(ReturnRequest).where(
+            ReturnRequest.site_id == site_id,
+            ReturnRequest.status == t_key,
+        )
+        if search and search.strip():
+            term = f"%{search.strip()}%"
+            cnt_q = cnt_q.where(
+                (cast(ReturnRequest.id, String).ilike(term))
+                | (cast(ReturnRequest.order_id, String).ilike(term))
+                | (ReturnRequest.reason_text.ilike(term))
             )
-        ).one() or 0
+        cnt = session.exec(cnt_q).one() or 0
         tab_counts[t_key] = cnt
 
     total_count = session.exec(
@@ -2009,16 +2015,44 @@ def refund_return_request(
                     )
                     if isinstance(refund_resp, dict):
                         snapshot = dict(order.pricing_snapshot or {})
-                        snapshot["refund_details"] = {
+                        rf_entry = {
                             "refund_id": refund_resp.get("id"),
                             "status": refund_resp.get("status", "processed"),
                             "amount": (refund_resp.get("amount") or refund_amount_paise) / 100,
                             "arn": refund_resp.get("acquirer_data", {}).get("arn") if isinstance(refund_resp.get("acquirer_data"), dict) else None,
-                            "created_at": refund_resp.get("created_at"),
+                            "created_at": refund_resp.get("created_at") or now.isoformat(),
+                            "source": "returns_desk",
+                            "return_id": str(return_request.id),
+                            "note": payload.admin_note or return_request.refund_override_reason or "Return Request Refund",
                         }
+                        refund_history = list(snapshot.get("refund_history") or [])
+                        if not refund_history and snapshot.get("refund_details"):
+                            refund_history.append(snapshot.get("refund_details"))
+                        refund_history.append(rf_entry)
+                        snapshot["refund_history"] = refund_history
+                        snapshot["refund_details"] = rf_entry
                         order.pricing_snapshot = snapshot
             except Exception as rerr:
                 print(f"Razorpay refund warning on return refund: {rerr}")
+        else:
+            # Record non-gateway or manual/COD return refund in history
+            snapshot = dict(order.pricing_snapshot or {})
+            rf_entry = {
+                "refund_id": f"rf_ret_{str(uuid4())[:8]}",
+                "status": "processed",
+                "amount": float(refund_amount_dec),
+                "created_at": now.isoformat(),
+                "source": "returns_desk",
+                "return_id": str(return_request.id),
+                "note": payload.admin_note or return_request.refund_override_reason or "Customer Return Refund",
+            }
+            refund_history = list(snapshot.get("refund_history") or [])
+            if not refund_history and snapshot.get("refund_details"):
+                refund_history.append(snapshot.get("refund_details"))
+            refund_history.append(rf_entry)
+            snapshot["refund_history"] = refund_history
+            snapshot["refund_details"] = rf_entry
+            order.pricing_snapshot = snapshot
 
         ledger_entry = session.exec(
             select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)

@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, Column, DateTime, Index, Integer, Numeric, String, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, Index, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
@@ -877,6 +877,7 @@ class OrderStatusHistory(SQLModel, table=True):
     status: str
     changed_by: Optional[UUID] = Field(default=None, index=True)
     changed_by_type: str = Field(default="admin", max_length=30, nullable=False)
+    notes: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     changed_at: datetime = Field(
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False),
@@ -1173,3 +1174,103 @@ class Payout(SQLModel, table=True):
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False),
     )
+
+
+class SupportAgent(SQLModel, table=True):
+    __tablename__ = "support_agents"
+    __table_args__ = (
+        UniqueConstraint("site_id", "email", name="uq_support_agents_site_email"),
+        Index("ix_support_agents_site_active", "site_id", "is_active"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    site_id: UUID = Field(foreign_key="sites.id", index=True, nullable=False)
+
+    name: str = Field(max_length=255, nullable=False)
+    email: str = Field(max_length=255, nullable=False)
+    phone: Optional[str] = Field(default=None, max_length=30, nullable=True)
+    password_hash: str = Field(max_length=255, nullable=False)
+    role: str = Field(default="agent", max_length=50, nullable=False)
+    is_active: bool = Field(default=True, sa_column=Column(Boolean, nullable=False, default=True))
+    assigned_ticket_count: int = Field(default=0, nullable=False)
+    total_resolved_count: int = Field(default=0, nullable=False)
+
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            onupdate=utc_now,
+        ),
+    )
+
+
+class SupportTicket(SQLModel, table=True):
+    __tablename__ = "support_tickets"
+    __table_args__ = (
+        Index("ix_support_tickets_status", "status"),
+        Index("ix_support_tickets_assigned_agent", "assigned_agent_id"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    ticket_number: str = Field(max_length=40, nullable=False, index=True)
+    site_id: UUID = Field(foreign_key="sites.id", index=True, nullable=False)
+    customer_id: UUID = Field(foreign_key="users.id", index=True, nullable=False)
+    order_id: Optional[UUID] = Field(default=None, foreign_key="orders.id", index=True, nullable=True)
+    assigned_agent_id: Optional[UUID] = Field(default=None, foreign_key="support_agents.id", nullable=True)
+
+    category: str = Field(default="other", max_length=50, nullable=False)
+    priority: str = Field(default="medium", max_length=30, nullable=False)
+    status: str = Field(default="open", max_length=40, nullable=False)
+
+    subject: str = Field(max_length=255, nullable=False)
+    order_items_summary: Optional[dict[str, Any]] = Field(default=None, sa_column=Column(JSONB, nullable=True))
+    customer_refund_account: Optional[dict[str, Any]] = Field(default=None, sa_column=Column(JSONB, nullable=True))
+
+    resolution_type: Optional[str] = Field(default=None, max_length=50, nullable=True)
+    resolution_note: Optional[str] = Field(default=None, nullable=True)
+    refund_amount: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(12, 2), nullable=True))
+
+    resolved_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    closed_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            onupdate=utc_now,
+        ),
+    )
+
+
+class SupportTicketMessage(SQLModel, table=True):
+    __tablename__ = "support_ticket_messages"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    ticket_id: UUID = Field(foreign_key="support_tickets.id", index=True, nullable=False)
+
+
+    sender_type: str = Field(max_length=30, nullable=False)
+    sender_id: Optional[UUID] = Field(default=None, nullable=True)
+    sender_name: str = Field(max_length=255, nullable=False)
+
+    message: str = Field(nullable=False)
+    attachments: Optional[list[str]] = Field(default=None, sa_column=Column(JSONB, nullable=True))
+    is_internal_note: bool = Field(default=False, sa_column=Column(Boolean, nullable=False, default=False))
+
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    read_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )

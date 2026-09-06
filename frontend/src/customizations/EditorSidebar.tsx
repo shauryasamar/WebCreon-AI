@@ -163,6 +163,14 @@ function PageBlocksTreeView({
         { id: "signup_form", type: "signup_form", name: "Sign Up Form" },
       ],
     },
+    {
+      id: "support",
+      name: "Help & Support",
+      route: "/support",
+      blocks: [
+        { id: "customer_support", type: "customer_support", name: "Help & Support Desk" },
+      ],
+    },
   ];
 
   const isRouteActive = (route: string) => {
@@ -174,7 +182,8 @@ function PageBlocksTreeView({
         !currentPath.includes("/profile") &&
         !currentPath.includes("/orders") &&
         !currentPath.includes("/login") &&
-        !currentPath.includes("/signup")
+        !currentPath.includes("/signup") &&
+        !currentPath.includes("/support")
       );
     }
     if (route.includes("products")) return currentPath.includes("/products/");
@@ -228,6 +237,8 @@ function PageBlocksTreeView({
                       if (onSelectBlock) onSelectBlock("cart_view");
                     } else if (p.id === "product_detail") {
                       if (onSelectBlock) onSelectBlock("product_detail");
+                    } else if (p.id === "support") {
+                      if (onSelectBlock) onSelectBlock("customer_support");
                     } else {
                       if (onSelectBlock) onSelectBlock(null);
                     }
@@ -2014,19 +2025,19 @@ function HeroSlidesEditor({
           />
         </div>
 
-        {/* Width Constraint */}
+        {/* Max Width */}
         <div style={{ display: "grid", gap: "2px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
           <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-            Width Constraint
+            Max Width
           </label>
           <SegmentedRow
             value={bannerWidthVal === "100%" || bannerWidthVal === "full" ? "100%" : bannerWidthVal}
             onChange={(val) => updateBlockProps(slides, { banner_width: val })}
             options={[
-              { label: "1100px", value: "1100px" },
-              { label: "1280px", value: "1280px" },
-              { label: "1440px", value: "1440px" },
               { label: "100% Full", value: "100%" },
+              { label: "1440px", value: "1440px" },
+              { label: "1280px", value: "1280px" },
+              { label: "1100px", value: "1100px" },
             ]}
           />
         </div>
@@ -4143,7 +4154,7 @@ function FooterEditor({
   onSiteDefinitionChange: (next: any) => void;
   siteDefinition: any;
 }) {
-  const [activeTab, setActiveTab] = useState<"content" | "social" | "design">("content");
+  const [activeTab, setActiveTab] = useState<"layout" | "content" | "colors">("layout");
 
   const f = siteDefinition.footer || {};
   const theme = siteDefinition.theme || {};
@@ -4243,8 +4254,8 @@ function FooterEditor({
   const tagline = getVal("tagline", defaultTagline);
   const copyrightText = getVal("copyrightText", `© ${new Date().getFullYear()} ${brandName}. All rights reserved.`);
 
-  const rawMaxWidth = getVal("max_width", theme.footer_max_width || "full");
-  const maxWidth = rawMaxWidth === "full" ? "full" : String(rawMaxWidth);
+  const rawMaxWidth = getVal("max_width", theme.footer_max_width || "100%");
+  const maxWidth = rawMaxWidth === "full" || rawMaxWidth === "100%" ? "100%" : String(rawMaxWidth);
 
   const marginTop = (() => {
     const v = getVal("margin_top", 32);
@@ -4328,9 +4339,9 @@ function FooterEditor({
         }}
       >
         {[
+          { id: "layout", label: "Layout" },
           { id: "content", label: "Content" },
-          { id: "social", label: "Social" },
-          { id: "design", label: "Design" },
+          { id: "colors", label: "Colors" },
         ].map((tab) => {
           const isActive = activeTab === tab.id;
           return (
@@ -4341,7 +4352,7 @@ function FooterEditor({
               style={{
                 border: "none",
                 background: isActive ? "#ffffff" : "transparent",
-                color: isActive ? "#0f172a" : "#64748b",
+                color: isActive ? ADMIN_BLUE : "#64748b",
                 fontSize: "11px",
                 fontWeight: isActive ? 800 : 600,
                 padding: "6px 4px",
@@ -4359,7 +4370,175 @@ function FooterEditor({
         })}
       </div>
 
-      {/* ── 1. Content Tab (Brand, Tagline, Copyright & Newsletter) ─────────── */}
+      {/* ── 1. Layout Tab (Dimensions, Spacing & Social Links) ─────────────── */}
+      {activeTab === "layout" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Spacing & Container Width */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Container & Spacing
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Max Width
+                </label>
+                <SegmentedRow
+                  value={maxWidth === "100%" || maxWidth === "full" ? "100%" : maxWidth}
+                  onChange={(val) => updateProps({ max_width: val })}
+                  options={[
+                    { label: "100% Full", value: "100%" },
+                    { label: "1440px", value: "1440px" },
+                    { label: "1280px", value: "1280px" },
+                    { label: "1200px", value: "1200px" },
+                  ]}
+                />
+              </div>
+
+              <NumberStepperField
+                label="Top Spacing Margin"
+                value={marginTop}
+                min={0}
+                max={120}
+                step={4}
+                unit="px"
+                onChange={(val) => updateProps({ margin_top: `${val}px` })}
+              />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Vertical Pad"
+                  value={paddingY}
+                  min={8}
+                  max={120}
+                  step={4}
+                  unit="px"
+                  onChange={(val) => updateProps({ padding_y: `${val}px` })}
+                />
+                <NumberStepperField
+                  label="Horiz. Pad"
+                  value={paddingX}
+                  min={4}
+                  max={60}
+                  step={4}
+                  unit="px"
+                  onChange={(val) => updateProps({ padding_x: `${val}px` })}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Social Media Display */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Social Media Display
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Show Social Icons</label>
+                <SegmentedRow
+                  value={showSocialLinks ? "on" : "off"}
+                  onChange={(v) => updateProps({ show_social_links: v === "on" })}
+                  options={[{ label: "On", value: "on" }, { label: "Off", value: "off" }]}
+                />
+              </div>
+
+              {showSocialLinks && (
+                <div style={{ display: "grid", gap: "2px", marginTop: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Icon Style Variant</label>
+                  <SegmentedRow
+                    value={socialIconVariant}
+                    onChange={(val) => updateProps({ social_icon_variant: val })}
+                    options={[
+                      { label: "Pills", value: "pill" },
+                      { label: "Circles", value: "circle" },
+                      { label: "Rounded", value: "rounded" },
+                      { label: "Minimal", value: "minimal" },
+                    ]}
+                  />
+                </div>
+              )}
+            </div>
+          </section>
+
+          {showSocialLinks && (
+            <section style={sectionCardStyle(isLightMode)}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+                  Platforms ({socialLinks.length})
+                </span>
+                <button
+                  type="button"
+                  onClick={handleAddSocial}
+                  style={{
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    color: ADMIN_BLUE,
+                    background: "rgba(37,99,235,0.08)",
+                    border: "none",
+                    padding: "3px 8px",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                  }}
+                >
+                  + Add Social
+                </button>
+              </div>
+
+              <div style={{ display: "grid", gap: "6px" }}>
+                {socialLinks.map((s, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1.3fr auto",
+                      gap: "4px",
+                      alignItems: "center",
+                      background: "#f8fafc",
+                      padding: "4px 6px",
+                      borderRadius: "6px",
+                      border: "1px solid #e2e8f0",
+                    }}
+                  >
+                    <input
+                      type="text"
+                      value={s.platform}
+                      placeholder="Platform"
+                      onChange={(e) => handleUpdateSocial(idx, "platform", e.target.value)}
+                      style={{ ...sharedInputStyle(), fontSize: "11px", padding: "4px 6px" }}
+                    />
+                    <input
+                      type="text"
+                      value={s.url}
+                      placeholder="https://..."
+                      onChange={(e) => handleUpdateSocial(idx, "url", e.target.value)}
+                      style={{ ...sharedInputStyle(), fontSize: "11px", padding: "4px 6px" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveSocial(idx)}
+                      title="Remove Social Link"
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: "#ef4444",
+                        cursor: "pointer",
+                        padding: "4px",
+                        borderRadius: "4px",
+                        display: "grid",
+                        placeItems: "center",
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      )}
+
+      {/* ── 2. Content Tab (Brand, Tagline, Copyright & Newsletter) ─────────── */}
       {activeTab === "content" && (
         <div style={{ display: "grid", gap: "8px" }}>
           {/* Brand Identity & Copy */}
@@ -4500,177 +4679,10 @@ function FooterEditor({
         </div>
       )}
 
-      {/* ── 2. Social Tab (Icons Toggle, Variants & Platform Links) ─────────── */}
-      {activeTab === "social" && (
+      {/* ── 3. Colors Tab (Theme Colors) ─────────────────────────────────── */}
+      {activeTab === "colors" && (
         <div style={{ display: "grid", gap: "8px" }}>
-          <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
-              Social Media Display
-            </div>
-            <div style={{ display: "grid", gap: "6px" }}>
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Show Social Icons</label>
-                <SegmentedRow
-                  value={showSocialLinks ? "on" : "off"}
-                  onChange={(v) => updateProps({ show_social_links: v === "on" })}
-                  options={[{ label: "On", value: "on" }, { label: "Off", value: "off" }]}
-                />
-              </div>
-
-              {showSocialLinks && (
-                <div style={{ display: "grid", gap: "2px", marginTop: "2px" }}>
-                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Icon Style Variant</label>
-                  <SegmentedRow
-                    value={socialIconVariant}
-                    onChange={(val) => updateProps({ social_icon_variant: val })}
-                    options={[
-                      { label: "Pills", value: "pill" },
-                      { label: "Circles", value: "circle" },
-                      { label: "Rounded", value: "rounded" },
-                      { label: "Minimal", value: "minimal" },
-                    ]}
-                  />
-                </div>
-              )}
-            </div>
-          </section>
-
-          {showSocialLinks && (
-            <section style={sectionCardStyle(isLightMode)}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
-                  Platforms ({socialLinks.length})
-                </span>
-                <button
-                  type="button"
-                  onClick={handleAddSocial}
-                  style={{
-                    fontSize: "10px",
-                    fontWeight: 700,
-                    color: ADMIN_BLUE,
-                    background: "rgba(37,99,235,0.08)",
-                    border: "none",
-                    padding: "3px 8px",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                  }}
-                >
-                  + Add Social
-                </button>
-              </div>
-
-              <div style={{ display: "grid", gap: "6px" }}>
-                {socialLinks.map((s, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1.3fr auto",
-                      gap: "4px",
-                      alignItems: "center",
-                      background: "#f8fafc",
-                      padding: "4px 6px",
-                      borderRadius: "6px",
-                      border: "1px solid #e2e8f0",
-                    }}
-                  >
-                    <input
-                      type="text"
-                      value={s.platform}
-                      placeholder="Platform"
-                      onChange={(e) => handleUpdateSocial(idx, "platform", e.target.value)}
-                      style={{ ...sharedInputStyle(), fontSize: "11px", padding: "4px 6px" }}
-                    />
-                    <input
-                      type="text"
-                      value={s.url}
-                      placeholder="https://..."
-                      onChange={(e) => handleUpdateSocial(idx, "url", e.target.value)}
-                      style={{ ...sharedInputStyle(), fontSize: "11px", padding: "4px 6px" }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveSocial(idx)}
-                      title="Remove Social Link"
-                      style={{
-                        border: "none",
-                        background: "transparent",
-                        color: "#ef4444",
-                        cursor: "pointer",
-                        padding: "4px",
-                        borderRadius: "4px",
-                        display: "grid",
-                        placeItems: "center",
-                      }}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-        </div>
-      )}
-
-      {/* ── 3. Design Tab (Spacing & Colors) ─────────────────────────────────── */}
-      {activeTab === "design" && (
-        <div style={{ display: "grid", gap: "8px" }}>
-          {/* Spacing & Container Width */}
-          <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
-              Container & Spacing
-            </div>
-            <div style={{ display: "grid", gap: "6px" }}>
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-                  Max Width
-                </label>
-                <SegmentedRow
-                  value={maxWidth}
-                  onChange={(val) => updateProps({ max_width: val })}
-                  options={[
-                    { label: "Full (100%)", value: "full" },
-                    { label: "1400px", value: "1400px" },
-                    { label: "1200px", value: "1200px" },
-                    { label: "1000px", value: "1000px" },
-                  ]}
-                />
-              </div>
-
-              <NumberStepperField
-                label="Top Spacing Margin"
-                value={marginTop}
-                min={0}
-                max={120}
-                step={4}
-                unit="px"
-                onChange={(val) => updateProps({ margin_top: `${val}px` })}
-              />
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-                <NumberStepperField
-                  label="Vertical Pad"
-                  value={paddingY}
-                  min={8}
-                  max={120}
-                  step={4}
-                  unit="px"
-                  onChange={(val) => updateProps({ padding_y: `${val}px` })}
-                />
-                <NumberStepperField
-                  label="Horiz. Pad"
-                  value={paddingX}
-                  min={4}
-                  max={60}
-                  step={4}
-                  unit="px"
-                  onChange={(val) => updateProps({ padding_x: `${val}px` })}
-                />
-              </div>
-            </div>
-          </section>
-
-          {/* Theme Colors */}
+          {/* Footer Theme Colors */}
           <section style={sectionCardStyle(isLightMode)}>
             <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
               Footer Theme Colors
@@ -4847,9 +4859,9 @@ function CartEditor({
   const parsedWidthRatio = parseWidthRatio(p.max_width, 94);
   const parsedMinHeight = Math.max(280, Math.min(650, parseNumProp(p.min_height, 380)));
 
-  const currentCartMaxWidth = p.max_width ? String(p.max_width) : "1280px";
+  const currentCartMaxWidth = p.max_width ? String(p.max_width) : "100%";
   const normalizedCartWidth =
-    currentCartMaxWidth === "100%" || currentCartMaxWidth === "full" || currentCartMaxWidth === "100"
+    currentCartMaxWidth === "100%" || currentCartMaxWidth === "full" || currentCartMaxWidth === "100" || !p.max_width
       ? "100%"
       : currentCartMaxWidth.endsWith("px")
       ? currentCartMaxWidth
@@ -6556,13 +6568,12 @@ function ProfileEditor({
 
   const normalizedWidth = (() => {
     const raw = p.max_width;
-    if (!raw) return "1180px";
+    if (!raw) return "100%";
     const str = String(raw).trim().toLowerCase();
     if (str === "full" || str === "100%" || str === "100") return "100%";
     if (str === "1440px" || str === "1440") return "1440px";
     if (str === "1280px" || str === "1280") return "1280px";
-    if (str === "1180px" || str === "1180") return "1180px";
-    if (str === "1000px" || str === "1000") return "1000px";
+    if (str === "1200px" || str === "1200" || str === "1180px" || str === "1180") return "1200px";
     return String(raw);
   })();
 
@@ -6613,11 +6624,13 @@ function ProfileEditor({
           {/* Dimensions */}
           <section style={sectionCardStyle(isLightMode)}>
             <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
-              Card Dimensions & Spacing
+              Container Dimensions & Radii
             </div>
             <div style={{ display: "grid", gap: "6px" }}>
               <div style={{ display: "grid", gap: "2px" }}>
-                <label style={fieldLabelStyle}>Max Width</label>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Max Width
+                </label>
                 <SegmentedRow
                   value={normalizedWidth}
                   onChange={(val) => updateProps({ max_width: val })}
@@ -6625,8 +6638,7 @@ function ProfileEditor({
                     { label: "100% Full", value: "100%" },
                     { label: "1440px", value: "1440px" },
                     { label: "1280px", value: "1280px" },
-                    { label: "1180px", value: "1180px" },
-                    { label: "1000px", value: "1000px" },
+                    { label: "1200px", value: "1200px" },
                   ]}
                 />
               </div>
@@ -6988,6 +7000,17 @@ function SignInEditor({
     textTransform: "uppercase",
   };
 
+  const normalizedWidth = (() => {
+    const raw = p.max_width;
+    if (!raw) return "100%";
+    const str = String(raw).trim().toLowerCase();
+    if (str === "full" || str === "100%" || str === "100") return "100%";
+    if (str === "1440px" || str === "1440") return "1440px";
+    if (str === "1280px" || str === "1280") return "1280px";
+    if (str === "1200px" || str === "1200") return "1200px";
+    return String(raw);
+  })();
+
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
       {/* 3 Navigation Tabs */}
@@ -7041,40 +7064,23 @@ function SignInEditor({
         <div style={{ display: "grid", gap: "8px" }}>
           <section style={sectionCardStyle(isLightMode)}>
             <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
-              Container Sizing
+              Container Dimensions & Radii
             </div>
             <div style={{ display: "grid", gap: "6px" }}>
               <div style={{ display: "grid", gap: "2px" }}>
-                <label style={fieldLabelStyle}>Max Width</label>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "4px" }}>
-                  {[
-                    { label: "450px", value: "450px" },
-                    { label: "480px", value: "480px" },
-                    { label: "520px", value: "520px" },
-                    { label: "100%", value: "100%" },
-                  ].map((opt) => {
-                    const isSelected = (p.max_width || "450px") === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => updateProps({ max_width: opt.value })}
-                        style={{
-                          padding: "4px 2px",
-                          fontSize: "9.5px",
-                          fontWeight: isSelected ? 800 : 600,
-                          borderRadius: "4px",
-                          border: `1px solid ${isSelected ? ADMIN_BLUE : "#cbd5e1"}`,
-                          background: isSelected ? ADMIN_BLUE : "#ffffff",
-                          color: isSelected ? "#ffffff" : "#0f172a",
-                          cursor: "pointer",
-                        }}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Max Width
+                </label>
+                <SegmentedRow
+                  value={normalizedWidth}
+                  onChange={(val) => updateProps({ max_width: val })}
+                  options={[
+                    { label: "100% Full", value: "100%" },
+                    { label: "1440px", value: "1440px" },
+                    { label: "1280px", value: "1280px" },
+                    { label: "1200px", value: "1200px" },
+                  ]}
+                />
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
@@ -7392,6 +7398,17 @@ function SignUpEditor({
     textTransform: "uppercase",
   };
 
+  const normalizedWidth = (() => {
+    const raw = p.max_width;
+    if (!raw) return "100%";
+    const str = String(raw).trim().toLowerCase();
+    if (str === "full" || str === "100%" || str === "100") return "100%";
+    if (str === "1440px" || str === "1440") return "1440px";
+    if (str === "1280px" || str === "1280") return "1280px";
+    if (str === "1200px" || str === "1200") return "1200px";
+    return String(raw);
+  })();
+
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
       {/* 3 Navigation Tabs */}
@@ -7445,40 +7462,23 @@ function SignUpEditor({
         <div style={{ display: "grid", gap: "8px" }}>
           <section style={sectionCardStyle(isLightMode)}>
             <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
-              Container Sizing
+              Container Dimensions & Radii
             </div>
             <div style={{ display: "grid", gap: "6px" }}>
               <div style={{ display: "grid", gap: "2px" }}>
-                <label style={fieldLabelStyle}>Max Width</label>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "4px" }}>
-                  {[
-                    { label: "450px", value: "450px" },
-                    { label: "480px", value: "480px" },
-                    { label: "520px", value: "520px" },
-                    { label: "100%", value: "100%" },
-                  ].map((opt) => {
-                    const isSelected = (p.max_width || "450px") === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => updateProps({ max_width: opt.value })}
-                        style={{
-                          padding: "4px 2px",
-                          fontSize: "9.5px",
-                          fontWeight: isSelected ? 800 : 600,
-                          borderRadius: "4px",
-                          border: `1px solid ${isSelected ? ADMIN_BLUE : "#cbd5e1"}`,
-                          background: isSelected ? ADMIN_BLUE : "#ffffff",
-                          color: isSelected ? "#ffffff" : "#0f172a",
-                          cursor: "pointer",
-                        }}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Max Width
+                </label>
+                <SegmentedRow
+                  value={normalizedWidth}
+                  onChange={(val) => updateProps({ max_width: val })}
+                  options={[
+                    { label: "100% Full", value: "100%" },
+                    { label: "1440px", value: "1440px" },
+                    { label: "1280px", value: "1280px" },
+                    { label: "1200px", value: "1200px" },
+                  ]}
+                />
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
@@ -7695,6 +7695,542 @@ function isOrdersBlock(block?: any): boolean {
   );
 }
 
+function isSupportBlock(block?: any): boolean {
+  if (!block) return false;
+  const rawType = String(block.type || "").toLowerCase().trim();
+  const rawId = String(block.id || "").toLowerCase().trim();
+  const normType = rawType.replace(/[-_\s]/g, "");
+  const normId = rawId.replace(/[-_\s]/g, "");
+
+  return (
+    normType === "customersupport" ||
+    normType === "support" ||
+    normType === "supportdesk" ||
+    normType === "helpdesk" ||
+    normType === "supportpage" ||
+    normId === "customersupport" ||
+    normId === "support" ||
+    normId === "supportdesk" ||
+    normId === "helpdesk" ||
+    rawType === "customer_support" ||
+    rawId === "customer_support" ||
+    rawType === "support_desk" ||
+    rawId === "support_desk"
+  );
+}
+
+function SupportEditor({
+  selectedBlock,
+  isLightMode,
+  textColor: _textColor,
+  accentColor: _accentColor,
+  onSiteDefinitionChange,
+  siteDefinition,
+}: {
+  selectedBlock: any;
+  isLightMode: boolean;
+  textColor: string;
+  accentColor: string;
+  onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
+  siteDefinition: EditorSiteDefinition;
+}) {
+  const [activeTab, setActiveTab] = useState<"layout" | "content" | "colors">("layout");
+  const p = selectedBlock?.props ?? {};
+
+  const updateProps = (patch: Record<string, any>) => {
+    const nextDef = JSON.parse(JSON.stringify(siteDefinition));
+    let updated = false;
+
+    if (Array.isArray(nextDef.pages)) {
+      for (const pg of nextDef.pages) {
+        if (Array.isArray(pg.blocks)) {
+          for (let i = 0; i < pg.blocks.length; i++) {
+            const b = pg.blocks[i];
+            if (
+              b.id === selectedBlock.id ||
+              b.type === selectedBlock.type ||
+              isSupportBlock(b)
+            ) {
+              pg.blocks[i] = {
+                ...b,
+                props: { ...(b.props ?? {}), ...patch },
+              };
+              updated = true;
+            }
+          }
+        }
+      }
+    }
+
+    if (!updated) {
+      if (!Array.isArray(nextDef.pages)) nextDef.pages = [];
+      let suppPg = nextDef.pages.find((pg: any) => pg.route === "/support" || pg.role === "support" || pg.id === "support");
+      if (!suppPg) {
+        suppPg = {
+          id: "page-support",
+          name: "Help & Support",
+          route: "/support",
+          role: "support",
+          page_type: "support",
+          show_in_nav: false,
+          blocks: [],
+        };
+        nextDef.pages.push(suppPg);
+      }
+      if (!Array.isArray(suppPg.blocks)) suppPg.blocks = [];
+      suppPg.blocks.push({
+        id: "customer_support",
+        type: "customer_support",
+        props: { ...(selectedBlock?.props ?? {}), ...patch },
+      });
+    }
+
+    onSiteDefinitionChange(nextDef);
+  };
+
+  const getStr = (key: string, fallback = "") =>
+    p[key] !== undefined && p[key] !== null ? String(p[key]) : fallback;
+
+  const parseNumProp = (val: any, fallback: number) => {
+    if (val === undefined || val === null || val === "") return fallback;
+    const n = Number(val);
+    return isNaN(n) ? fallback : n;
+  };
+
+  const textInputStyle: React.CSSProperties = {
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+    boxSizing: "border-box",
+    height: "28px",
+    padding: "4px 8px",
+    borderRadius: "4px",
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    fontSize: "11.5px",
+    color: "#0f172a",
+  };
+
+  const fieldLabelStyle: React.CSSProperties = {
+    fontSize: "9px",
+    fontWeight: 700,
+    color: "#64748b",
+    textTransform: "uppercase",
+  };
+
+  const normalizedWidth = (() => {
+    const raw = p.max_width;
+    if (!raw) return "100%";
+    const str = String(raw).trim().toLowerCase();
+    if (str === "full" || str === "100%" || str === "100") return "100%";
+    if (str === "1440px" || str === "1440") return "1440px";
+    if (str === "1280px" || str === "1280") return "1280px";
+    if (str === "1200px" || str === "1200" || str === "1180px" || str === "1180") return "1200px";
+    return String(raw);
+  })();
+
+  return (
+    <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
+      {/* 3 Navigation Tabs */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: "2px",
+          padding: "2px",
+          background: "#f1f5f9",
+          borderRadius: "6px",
+          width: "100%",
+          maxWidth: "100%",
+          boxSizing: "border-box",
+          minWidth: 0,
+        }}
+      >
+        {[
+          { id: "layout", label: "Layout" },
+          { id: "content", label: "Content" },
+          { id: "colors", label: "Colors" },
+        ].map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as any)}
+              style={{
+                padding: "5px 1px",
+                border: "none",
+                borderRadius: "4px",
+                background: isActive ? "#ffffff" : "transparent",
+                color: isActive ? ADMIN_BLUE : "#64748b",
+                fontWeight: isActive ? 800 : 600,
+                fontSize: "10.5px",
+                cursor: "pointer",
+                textAlign: "center",
+                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 1. LAYOUT TAB */}
+      {activeTab === "layout" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Container Dimensions & Radii
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Max Width
+                </label>
+                <SegmentedRow
+                  value={normalizedWidth}
+                  onChange={(val) => updateProps({ max_width: val })}
+                  options={[
+                    { label: "100% Full", value: "100%" },
+                    { label: "1440px", value: "1440px" },
+                    { label: "1280px", value: "1280px" },
+                    { label: "1200px", value: "1200px" },
+                  ]}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Card Padding"
+                  value={parseNumProp(p.card_padding, 24)}
+                  min={8}
+                  max={48}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ card_padding: val })}
+                />
+                <NumberStepperField
+                  label="Card Radius"
+                  value={parseNumProp(p.card_radius ?? p.border_radius, 14)}
+                  min={0}
+                  max={36}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ card_radius: val, border_radius: val })}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Chat Box Radius"
+                  value={parseNumProp(p.chat_radius, 12)}
+                  min={0}
+                  max={32}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ chat_radius: val })}
+                />
+                <NumberStepperField
+                  label="Chat Bubble Radius"
+                  value={parseNumProp(p.bubble_radius, 16)}
+                  min={0}
+                  max={28}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ bubble_radius: val })}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <NumberStepperField
+                  label="Ticket Box Radius"
+                  value={parseNumProp(p.inner_radius, 10)}
+                  min={0}
+                  max={28}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ inner_radius: val })}
+                />
+                <NumberStepperField
+                  label="Status Badge Radius"
+                  value={parseNumProp(p.badge_radius, 4)}
+                  min={0}
+                  max={24}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ badge_radius: val })}
+                />
+              </div>
+            </div>
+          </section>
+
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Input & Button Corners
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+              <NumberStepperField
+                label="Input Radius"
+                value={parseNumProp(p.input_radius, 8)}
+                min={0}
+                max={24}
+                step={2}
+                unit="px"
+                onChange={(val) => updateProps({ input_radius: val })}
+              />
+              <NumberStepperField
+                label="Button Radius"
+                value={parseNumProp(p.button_radius, 8)}
+                min={0}
+                max={24}
+                step={2}
+                unit="px"
+                onChange={(val) => updateProps({ button_radius: val })}
+              />
+            </div>
+          </section>
+
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Form Features & Toggles
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactToggleRow
+                label="Order & Product Selector"
+                checked={p.allowOrderSelection !== false}
+                onChange={(checked) => updateProps({ allowOrderSelection: checked })}
+              />
+              <CompactToggleRow
+                label="Allow Photo/Document Links"
+                checked={p.allowAttachments !== false}
+                onChange={(checked) => updateProps({ allowAttachments: checked })}
+              />
+              <CompactToggleRow
+                label="Show Contact Info Section"
+                checked={p.showContactInfo !== false}
+                onChange={(checked) => updateProps({ showContactInfo: checked })}
+              />
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* 2. CONTENT TAB */}
+      {activeTab === "content" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Titles & Labels
+            </div>
+            <div style={{ display: "grid", gap: "8px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Inquiries Tab Label</label>
+                  <input
+                    type="text"
+                    value={getStr("inquiriesTabLabel", "Inquiries")}
+                    onChange={(e) => updateProps({ inquiriesTabLabel: e.target.value })}
+                    style={textInputStyle}
+                    placeholder="Inquiries"
+                  />
+                </div>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>New Request Tab Label</label>
+                  <input
+                    type="text"
+                    value={getStr("newRequestTabLabel", "+ New Request")}
+                    onChange={(e) => updateProps({ newRequestTabLabel: e.target.value })}
+                    style={textInputStyle}
+                    placeholder="+ New Request"
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Submit Button Text</label>
+                <input
+                  type="text"
+                  value={getStr("submitButtonText", "Submit Request")}
+                  onChange={(e) => updateProps({ submitButtonText: e.target.value })}
+                  style={textInputStyle}
+                  placeholder="Submit Request"
+                />
+              </div>
+            </div>
+          </section>
+
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Store Support Contact Details
+            </div>
+            <div style={{ display: "grid", gap: "8px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Support Email</label>
+                <input
+                  type="email"
+                  value={getStr("supportEmail", "")}
+                  onChange={(e) => updateProps({ supportEmail: e.target.value })}
+                  style={textInputStyle}
+                  placeholder="support@yourstore.com"
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Support Phone</label>
+                <input
+                  type="text"
+                  value={getStr("supportPhone", "")}
+                  onChange={(e) => updateProps({ supportPhone: e.target.value })}
+                  style={textInputStyle}
+                  placeholder="+91 98765 43210"
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Operating Hours</label>
+                <input
+                  type="text"
+                  value={getStr("supportHours", "")}
+                  onChange={(e) => updateProps({ supportHours: e.target.value })}
+                  style={textInputStyle}
+                  placeholder="Mon - Sat, 9:00 AM - 7:00 PM"
+                />
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* 3. COLORS TAB */}
+      {activeTab === "colors" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Card & Page Surfaces */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Surfaces & Borders
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Page Background"
+                value={p.primary_bg || (siteDefinition.theme?.mode === "dark" ? "#0b0f19" : "#f8fafc")}
+                onChange={(val) => updateProps({ primary_bg: val })}
+              />
+              <CompactColorRow
+                label="Card Background"
+                value={p.card_bg || (siteDefinition.theme?.mode === "dark" ? "#1e293b" : "#ffffff")}
+                onChange={(val) => updateProps({ card_bg: val })}
+              />
+              <CompactColorRow
+                label="Card Border"
+                value={p.border_color || (siteDefinition.theme?.mode === "dark" ? "#334155" : "#e2e8f0")}
+                onChange={(val) => updateProps({ border_color: val })}
+              />
+              <CompactColorRow
+                label="Chat Window / Panel Bg"
+                value={p.chat_bg || (siteDefinition.theme?.mode === "dark" ? "rgba(255,255,255,0.03)" : "#f8fafc")}
+                onChange={(val) => updateProps({ chat_bg: val })}
+              />
+            </div>
+          </section>
+
+          {/* Typography */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Typography & Text
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Heading / Title Color"
+                value={p.title_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                onChange={(val) => updateProps({ title_color: val })}
+              />
+              <CompactColorRow
+                label="Subtitle & Muted Text"
+                value={p.subtext_color || (siteDefinition.theme?.mode === "dark" ? "#94a3b8" : "#64748b")}
+                onChange={(val) => updateProps({ subtext_color: val })}
+              />
+            </div>
+          </section>
+
+          {/* Buttons & Accents */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Buttons & Accents
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Primary Button / Accent"
+                value={p.accent_color || siteDefinition.theme?.accent_color || "#2563eb"}
+                onChange={(val) => updateProps({ accent_color: val })}
+              />
+              <CompactColorRow
+                label="Button Text Color"
+                value={p.button_text_color || "#ffffff"}
+                onChange={(val) => updateProps({ button_text_color: val })}
+              />
+            </div>
+          </section>
+
+          {/* Inputs & Form Fields */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Input Field Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Input Background"
+                value={p.input_bg || (siteDefinition.theme?.mode === "dark" ? "#0f172a" : "#ffffff")}
+                onChange={(val) => updateProps({ input_bg: val })}
+              />
+              <CompactColorRow
+                label="Input Border"
+                value={p.input_border || (siteDefinition.theme?.mode === "dark" ? "#334155" : "#cbd5e1")}
+                onChange={(val) => updateProps({ input_border: val })}
+              />
+              <CompactColorRow
+                label="Input Text Color"
+                value={p.input_text_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                onChange={(val) => updateProps({ input_text_color: val })}
+              />
+            </div>
+          </section>
+
+          {/* Chat Messages */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Chat Message Bubbles
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Customer Bubble Background"
+                value={p.customer_bubble_bg || p.accent_color || siteDefinition.theme?.accent_color || "#2563eb"}
+                onChange={(val) => updateProps({ customer_bubble_bg: val })}
+              />
+              <CompactColorRow
+                label="Customer Bubble Text"
+                value={p.customer_bubble_text || "#ffffff"}
+                onChange={(val) => updateProps({ customer_bubble_text: val })}
+              />
+              <CompactColorRow
+                label="Agent Bubble Background"
+                value={p.agent_bubble_bg || (siteDefinition.theme?.mode === "dark" ? "rgba(255,255,255,0.06)" : "#f1f5f9")}
+                onChange={(val) => updateProps({ agent_bubble_bg: val })}
+              />
+              <CompactColorRow
+                label="Agent Bubble Text"
+                value={p.agent_bubble_text || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                onChange={(val) => updateProps({ agent_bubble_text: val })}
+              />
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function OrdersEditor({
   selectedBlock,
   isLightMode,
@@ -7794,6 +8330,17 @@ function OrdersEditor({
     textTransform: "uppercase",
   };
 
+  const normalizedWidth = (() => {
+    const raw = p.max_width;
+    if (!raw) return "100%";
+    const str = String(raw).trim().toLowerCase();
+    if (str === "full" || str === "100%" || str === "100") return "100%";
+    if (str === "1440px" || str === "1440") return "1440px";
+    if (str === "1280px" || str === "1280") return "1280px";
+    if (str === "1200px" || str === "1200" || str === "1180px" || str === "1180") return "1200px";
+    return String(raw);
+  })();
+
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
       {/* 3 Navigation Tabs */}
@@ -7847,40 +8394,23 @@ function OrdersEditor({
         <div style={{ display: "grid", gap: "8px" }}>
           <section style={sectionCardStyle(isLightMode)}>
             <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
-              Container Dimensions
+              Container Dimensions & Radii
             </div>
             <div style={{ display: "grid", gap: "6px" }}>
               <div style={{ display: "grid", gap: "2px" }}>
-                <label style={fieldLabelStyle}>Container Max Width</label>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "4px" }}>
-                  {[
-                    { label: "100%", value: "100%" },
-                    { label: "1180px", value: "1180px" },
-                    { label: "1000px", value: "1000px" },
-                    { label: "880px", value: "880px" },
-                  ].map((opt) => {
-                    const isSelected = (p.max_width || "100%") === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => updateProps({ max_width: opt.value })}
-                        style={{
-                          padding: "4px 2px",
-                          fontSize: "9.5px",
-                          fontWeight: isSelected ? 800 : 600,
-                          borderRadius: "4px",
-                          border: `1px solid ${isSelected ? ADMIN_BLUE : "#cbd5e1"}`,
-                          background: isSelected ? ADMIN_BLUE : "#ffffff",
-                          color: isSelected ? "#ffffff" : "#0f172a",
-                          cursor: "pointer",
-                        }}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Max Width
+                </label>
+                <SegmentedRow
+                  value={normalizedWidth}
+                  onChange={(val) => updateProps({ max_width: val })}
+                  options={[
+                    { label: "100% Full", value: "100%" },
+                    { label: "1440px", value: "1440px" },
+                    { label: "1280px", value: "1280px" },
+                    { label: "1200px", value: "1200px" },
+                  ]}
+                />
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
@@ -7925,52 +8455,18 @@ function OrdersEditor({
                 />
               </div>
 
-              <div style={{ display: "grid", gap: "3px" }}>
-                <label style={fieldLabelStyle}>Status Badge Shape</label>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "4px", marginBottom: "4px" }}>
-                  {[
-                    { label: "Square (0)", value: 0 },
-                    { label: "Slight (4)", value: 4 },
-                    { label: "Soft (8)", value: 8 },
-                    { label: "Pill", value: 999 },
-                  ].map((opt) => {
-                    const raw = parseNumProp(p.badge_radius, 999);
-                    const isSelected =
-                      opt.value === 999 ? raw >= 50 : raw === opt.value;
-                    return (
-                      <button
-                        key={opt.label}
-                        type="button"
-                        onClick={() => updateProps({ badge_radius: opt.value })}
-                        style={{
-                          padding: "4px 2px",
-                          fontSize: "9px",
-                          fontWeight: isSelected ? 800 : 600,
-                          borderRadius: "4px",
-                          border: `1px solid ${isSelected ? ADMIN_BLUE : "#cbd5e1"}`,
-                          background: isSelected ? ADMIN_BLUE : "#ffffff",
-                          color: isSelected ? "#ffffff" : "#0f172a",
-                          cursor: "pointer",
-                        }}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <NumberStepperField
-                  label="Fine-tune Badge Radius"
-                  value={(() => {
-                    const n = parseNumProp(p.badge_radius, 999);
-                    return n >= 50 ? 20 : n;
-                  })()}
-                  min={0}
-                  max={20}
-                  step={2}
-                  unit="px"
-                  onChange={(val) => updateProps({ badge_radius: val })}
-                />
-              </div>
+              <NumberStepperField
+                label="Status Badge Radius"
+                value={(() => {
+                  const n = parseNumProp(p.badge_radius, 999);
+                  return n >= 50 ? 20 : n;
+                })()}
+                min={0}
+                max={20}
+                step={2}
+                unit="px"
+                onChange={(val) => updateProps({ badge_radius: val })}
+              />
             </div>
           </section>
 
@@ -8030,24 +8526,6 @@ function OrdersEditor({
       {/* 2. CONTENT TAB */}
       {activeTab === "content" && (
         <div style={{ display: "grid", gap: "8px" }}>
-          <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
-              Page Header
-            </div>
-            <div style={{ display: "grid", gap: "6px" }}>
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={fieldLabelStyle}>Page Heading</label>
-                <input
-                  type="text"
-                  value={getStr("title", getStr("page_title", "Orders & History"))}
-                  placeholder="Orders & History"
-                  onChange={(e) => updateProps({ title: e.target.value, page_title: e.target.value })}
-                  style={textInputStyle}
-                />
-              </div>
-            </div>
-          </section>
-
           <section style={sectionCardStyle(isLightMode)}>
             <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
               Opened Order Headings
@@ -8434,11 +8912,13 @@ function PlaceOrderEditor({
           {/* Dimensions */}
           <section style={sectionCardStyle(isLightMode)}>
             <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
-              Container Dimensions
+              Container Dimensions & Radii
             </div>
             <div style={{ display: "grid", gap: "6px" }}>
               <div style={{ display: "grid", gap: "2px" }}>
-                <label style={fieldLabelStyle}>Max Width</label>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Max Width
+                </label>
                 <SegmentedRow
                   value={normalizedWidth}
                   onChange={(val) => updateProps({ max_width: val })}
@@ -10919,13 +11399,13 @@ function NavbarEditor({
 
             <div style={{ display: "grid", gap: "2px" }}>
               <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-                Max Width Constraint
+                Max Width
               </label>
               <SegmentedRow
                 value={navbarMaxWidth}
                 onChange={(val) => updateField("navbar_max_width", val)}
                 options={[
-                  { label: "100%", value: "100%" },
+                  { label: "100% Full", value: "100%" },
                   { label: "1440px", value: "1440px" },
                   { label: "1280px", value: "1280px" },
                   { label: "1100px", value: "1100px" },
@@ -11326,6 +11806,8 @@ export default function EditorSidebar({
         ? (_rawSelectedBlock || { id: "signup_form", type: "signup_form", props: {} })
       : (selectedBlockId === "customer_orders" || selectedBlockId === "orders" || selectedBlockId === "order_history" || selectedBlockId === "order_history_list" || selectedBlockId === "customerorders")
         ? (_rawSelectedBlock || { id: "customer_orders", type: "customer_orders", props: {} })
+      : (selectedBlockId === "customer_support" || selectedBlockId === "support" || selectedBlockId === "customersupport" || selectedBlockId === "support_desk" || selectedBlockId === "helpdesk")
+        ? (_rawSelectedBlock || { id: "customer_support", type: "customer_support", props: {} })
       : _rawSelectedBlock;
   const editableConfig = selectedBlock
     ? getEditableConfigForBlock(selectedBlock.type)
@@ -11367,6 +11849,8 @@ export default function EditorSidebar({
       t === "signup_form" || t === "signupform" || t === "register_form" || t === "signup" ||
       isOrdersBlock(selectedBlock) ||
       t === "customer_orders" || t === "customerorders" || t === "orders" || t === "order_history" || t === "order_history_list" ||
+      isSupportBlock(selectedBlock) ||
+      t === "customer_support" || t === "customersupport" || t === "support" || t === "support_desk" ||
       isPlaceOrderBlock(selectedBlock) ||
       t === "place_order_cta" || t === "placeordercta" ||
       t === "checkout_review"
@@ -12129,6 +12613,15 @@ export default function EditorSidebar({
                         selectedBlockId === "customer_orders" ||
                         selectedBlockId === "orders"
                       ? "Order History"
+                      : isSupportBlock(selectedBlock) ||
+                        selectedBlock?.id === "customer_support" ||
+                        selectedBlock?.type === "customer_support" ||
+                        selectedBlock?.type === "customersupport" ||
+                        selectedBlock?.type === "support" ||
+                        selectedBlock?.type === "support_desk" ||
+                        selectedBlockId === "customer_support" ||
+                        selectedBlockId === "support"
+                      ? "Help & Support Desk"
                       : isDeliveryBlock(selectedBlock) || editableConfig?.displayName === "Delivery Form"
                       ? (selectedBlock.type === "delivery_map_picker"
                           ? "Map Location Picker"
@@ -12416,6 +12909,22 @@ export default function EditorSidebar({
                 selectedBlockId === "orders" ? (
                 <OrdersEditor
                   selectedBlock={selectedBlock}
+                  isLightMode={isLightMode}
+                  textColor={textColor}
+                  accentColor={accentColor}
+                  onSiteDefinitionChange={onSiteDefinitionChange}
+                  siteDefinition={siteDefinition}
+                />
+              ) : isSupportBlock(selectedBlock) ||
+                selectedBlock?.id === "customer_support" ||
+                selectedBlock?.type === "customer_support" ||
+                selectedBlock?.type === "customersupport" ||
+                selectedBlock?.type === "support" ||
+                selectedBlock?.type === "support_desk" ||
+                selectedBlockId === "customer_support" ||
+                selectedBlockId === "support" ? (
+                <SupportEditor
+                  selectedBlock={selectedBlock || { id: "customer_support", type: "customer_support", props: {} }}
                   isLightMode={isLightMode}
                   textColor={textColor}
                   accentColor={accentColor}

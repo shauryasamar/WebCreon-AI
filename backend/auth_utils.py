@@ -64,6 +64,14 @@ def create_rider_token(agent_id: str, site_id: str) -> str:
     )
 
 
+def create_support_agent_token(agent_id: str, site_id: str) -> str:
+    return _create_token(
+        {"agentId": agent_id, "siteId": site_id, "tokenType": "support_agent"},
+        CUSTOMER_TOKEN_EXPIRE_MINUTES,
+    )
+
+
+
 def decode_token(token: str) -> Optional[dict[str, Any]]:
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])

@@ -790,13 +790,12 @@ def dispatch_order(
     Supports own_agent, shiprocket, or manual mode.
     Idempotent: if a non-failed shipment already exists, returns it.
     """
-    # Check for existing active shipment
+    # Check for any existing shipment for this order
     existing = session.exec(
         select(Shipment)
         .where(
             Shipment.order_id == order_id,
             Shipment.site_id == site_id,
-            Shipment.status.not_in(["failed", "rto", "delivered", "cancelled"]),  # type: ignore[attr-defined]
         )
     ).first()
 
@@ -811,7 +810,7 @@ def dispatch_order(
     mode = body.mode or settings.delivery_mode or "manual"
 
     # If already dispatched and NOT a reassignment request (and mode hasn't changed)
-    if existing and not body.force_reassign and not body.agent_id and (body.mode == existing.mode or not body.mode):
+    if existing and not body.force_reassign and not body.agent_id and (body.mode == existing.mode or not body.mode) and existing.status not in ["failed", "rto", "cancelled"]:
         return {
             "shipment_id": str(existing.id),
             "mode": existing.mode,
@@ -825,7 +824,7 @@ def dispatch_order(
     if mode == "own_agent":
         return _dispatch_own_agent(order, site_id, body, settings, session, existing_shipment=existing)
     elif mode == "shiprocket":
-        return _dispatch_shiprocket(order, site_id, body, settings, session)
+        return _dispatch_shiprocket(order, site_id, body, settings, session, existing_shipment=existing)
     else:
         # Manual — admin just fills in the tracking info
         return _dispatch_manual(order, site_id, body, session, existing_shipment=existing)
@@ -885,8 +884,11 @@ def _dispatch_own_agent(
         existing_shipment.mode = "own_agent"
         existing_shipment.delivery_mode = "own_agent"
         existing_shipment.agent_token = _sign_agent_token(existing_shipment.id, agent.id)
-        if existing_shipment.status == "pending":
-            existing_shipment.status = "assigned"
+        existing_shipment.status = "assigned"
+        existing_shipment.agent_accepted_at = None
+        existing_shipment.agent_picked_up_at = None
+        existing_shipment.out_for_delivery_at = None
+        existing_shipment.delivered_at = None
         shipment = existing_shipment
         session.add(shipment)
         is_reassign = True
@@ -913,9 +915,9 @@ def _dispatch_own_agent(
         agent.current_order_count += 1
         session.add(agent)
 
-    # Update order status
-    if order.status == "placed":
-        order.status = "confirmed"
+    # Move order to yet to ship ('confirmed') upon dispatch/re-dispatch
+    order.status = "confirmed"
+    order.confirmed_at = order.confirmed_at or _utc_now()
     session.add(order)
     session.add(
         OrderStatusHistory(
@@ -949,6 +951,7 @@ def _dispatch_shiprocket(
     body: ManualDispatchRequest,
     settings: DeliverySettings,
     session: Session,
+    existing_shipment: Optional[Shipment] = None,
 ) -> dict:
     """Create a Shiprocket shipment and assign AWB automatically."""
     if not settings.shiprocket_email or not settings.shiprocket_password_encrypted:
@@ -1168,21 +1171,39 @@ def _dispatch_shiprocket(
             shipment_notes = f"[{test_awb_warning}]"
 
         # Save shipment record
-        shipment = Shipment(
-            order_id=order.id,
-            site_id=site_id,
-            delivery_mode="shiprocket",
-            status="in_transit",
-            courier_order_id=str(sr_order_id),
-            awb_number=awb,
-            label_url=label_url,
-            tracking_url=tracking_url,
-            courier_name=courier_name,
-            shipped_at=_utc_now(),
-            estimated_delivery_at=_utc_now() + timedelta(days=3),
-            notes=shipment_notes,
-        )
-        session.add(shipment)
+        if existing_shipment:
+            shipment = existing_shipment
+            shipment.delivery_mode = "shiprocket"
+            shipment.mode = "shiprocket"
+            shipment.status = "in_transit"
+            shipment.courier_order_id = str(sr_order_id)
+            shipment.awb_number = awb
+            shipment.label_url = label_url
+            shipment.tracking_url = tracking_url
+            shipment.courier_name = courier_name
+            shipment.shipped_at = _utc_now()
+            shipment.estimated_delivery_at = _utc_now() + timedelta(days=3)
+            shipment.notes = shipment_notes
+            shipment.agent_id = None
+            shipment.agent_token = None
+            session.add(shipment)
+        else:
+            shipment = Shipment(
+                order_id=order.id,
+                site_id=site_id,
+                delivery_mode="shiprocket",
+                mode="shiprocket",
+                status="in_transit",
+                courier_order_id=str(sr_order_id),
+                awb_number=awb,
+                label_url=label_url,
+                tracking_url=tracking_url,
+                courier_name=courier_name,
+                shipped_at=_utc_now(),
+                estimated_delivery_at=_utc_now() + timedelta(days=3),
+                notes=shipment_notes,
+            )
+            session.add(shipment)
 
         order.status = "shipped"
         order.shipped_at = _utc_now()
@@ -1559,7 +1580,7 @@ def track_order(
             # Generate structured checkpoints based on shipment state
             dt_created = (order.created_at or _utc_now()).strftime("%d %b %Y, %I:%M %p")
             dt_shipped = (shipment.shipped_at or order.shipped_at or _utc_now()).strftime("%d %b %Y, %I:%M %p")
-            courier_lbl = shipment.courier_name or "Delhivery Surface"
+            courier_lbl = shipment.courier_name or "Courier Partner"
 
             scans = [
                 {
@@ -1637,12 +1658,12 @@ def track_order(
             })
 
     current_status = (shipment.status if shipment else order.status) or "placed"
-    is_active_ofd = (current_status == "out_for_delivery")
+    is_active_ofd = (current_status == "out_for_delivery" and order.status == "out_for_delivery" and order.status != "delivered" and order.status != "cancelled")
 
     if is_own_agent:
         public_agent_name = agent_name if is_active_ofd else None
         public_agent_phone = agent_phone if is_active_ofd else None
-        public_delivery_otp = getattr(order, "delivery_otp", None) if (is_active_ofd or current_status == "shipped") else None
+        public_delivery_otp = getattr(order, "delivery_otp", None) if is_active_ofd else None
     elif is_shiprocket:
         public_agent_name = None
         public_agent_phone = None
@@ -2864,12 +2885,12 @@ def rider_update_task_status(
     # FIX: Enforce the same state-machine transitions as the token-based PWA endpoint.
     # Without this, a rider could call action=delivered on an assigned (unpicked) shipment.
     FORWARD_VALID_TRANSITIONS = {
-        "assigned": ["accept", "reject", "decline", "release", "failed"],
-        "accepted": ["picked_up", "out_for_delivery", "reject", "decline", "release", "reschedule", "attempt_failed", "failed"],
-        "out_for_delivery": ["delivered", "reschedule", "attempt_failed", "failed"],
-        "picked_up": ["delivered", "reschedule", "attempt_failed", "failed"],
-        "in_transit": ["delivered", "reschedule", "attempt_failed", "failed"],
-        "rescheduled": ["picked_up", "out_for_delivery", "delivered", "reschedule", "attempt_failed", "failed"],
+        "assigned": ["accept", "reject", "decline", "release", "failed", "return_to_warehouse"],
+        "accepted": ["picked_up", "out_for_delivery", "reject", "decline", "release", "reschedule", "attempt_failed", "failed", "return_to_warehouse"],
+        "out_for_delivery": ["delivered", "reschedule", "attempt_failed", "failed", "return_to_warehouse"],
+        "picked_up": ["delivered", "reschedule", "attempt_failed", "failed", "return_to_warehouse"],
+        "in_transit": ["picked_up", "out_for_delivery", "delivered", "reschedule", "attempt_failed", "failed", "accept", "return_to_warehouse"],
+        "rescheduled": ["picked_up", "out_for_delivery", "delivered", "reschedule", "attempt_failed", "failed", "return_to_warehouse"],
     }
 
     if shipment.status not in FORWARD_VALID_TRANSITIONS:
@@ -2976,10 +2997,15 @@ def rider_update_task_status(
         order.status = "rescheduled"
         session.add(order)
         session.add(OrderStatusHistory(order_id=order.id, status="rescheduled", changed_by_type="agent"))
-    elif action == "failed":
+    elif action in ["failed", "return_to_warehouse"]:
         shipment.status = "failed"
-        if body.notes:
-            shipment.notes = body.notes
+        return_reason = body.notes or body.reason or "Returned to warehouse by rider after failed delivery attempt(s)"
+        note_str = f"Returned to Warehouse by Rider: {return_reason}"
+        shipment.notes = note_str
+        order.status = "failed"
+        order.cancel_reason = note_str
+        session.add(order)
+        session.add(OrderStatusHistory(order_id=order.id, status="failed", changed_by_type="agent", notes=note_str))
         if agent:
             agent.current_order_count = max(0, agent.current_order_count - 1)
             session.add(agent)

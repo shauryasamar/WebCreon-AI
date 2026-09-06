@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy import cast, String
-from sqlmodel import Session, delete, func, select
+from sqlmodel import Session, delete, func, or_, select
 
 from auth_middleware import authenticate_admin, authenticate_customer, enforce_site_ownership
 from db.database import get_session
@@ -171,6 +171,76 @@ def serialize_address_snapshot(address: UserAddress) -> dict[str, Any]:
     }
 
 
+def get_effective_shipping_address(order: Order, session: Optional[Session] = None) -> dict[str, Any]:
+    """Retrieve or self-heal the shipping address snapshot for an order."""
+    addr = order.shipping_address if isinstance(order.shipping_address, dict) else {}
+    has_full_address = bool(
+        (addr.get("addressLine1") or addr.get("address_line1") or addr.get("address") or addr.get("street") or addr.get("line1"))
+        and (addr.get("city") or addr.get("postalCode") or addr.get("pincode"))
+    )
+    if has_full_address:
+        return addr
+
+    if not session:
+        return addr
+
+    # 1. Fallback to order.shipping_address_id
+    if getattr(order, "shipping_address_id", None):
+        user_addr = session.get(UserAddress, order.shipping_address_id)
+        if user_addr:
+            snapshot = serialize_address_snapshot(user_addr)
+            merged = {**snapshot, **{k: v for k, v in addr.items() if v}}
+            order.shipping_address = merged
+            session.add(order)
+            try:
+                session.commit()
+            except Exception:
+                session.rollback()
+            return merged
+
+    # 2. Fallback to customer's saved address in UserAddress
+    if getattr(order, "customer_id", None):
+        user_addr = session.exec(
+            select(UserAddress)
+            .where(UserAddress.user_id == order.customer_id)
+            .order_by(UserAddress.is_default.desc(), UserAddress.created_at.desc())
+        ).first()
+        if user_addr:
+            snapshot = serialize_address_snapshot(user_addr)
+            merged = {**snapshot, **{k: v for k, v in addr.items() if v}}
+            order.shipping_address = merged
+            session.add(order)
+            try:
+                session.commit()
+            except Exception:
+                session.rollback()
+            return merged
+
+        # 3. Fallback to User profile
+        user = session.get(User, order.customer_id)
+        if user:
+            snapshot = {
+                "fullName": user.name or addr.get("fullName") or "Customer",
+                "full_name": user.name or addr.get("fullName") or "Customer",
+                "mobileNumber": user.phone or addr.get("mobileNumber") or "",
+                "mobile_number": user.phone or addr.get("mobileNumber") or "",
+                "email": user.email or addr.get("email") or "",
+                "addressLine1": addr.get("addressLine1") or "",
+                "city": addr.get("city") or "",
+                "postalCode": addr.get("postalCode") or "",
+            }
+            merged = {**snapshot, **{k: v for k, v in addr.items() if v}}
+            order.shipping_address = merged
+            session.add(order)
+            try:
+                session.commit()
+            except Exception:
+                session.rollback()
+            return merged
+
+    return addr
+
+
 import secrets
 
 
@@ -220,34 +290,23 @@ def serialize_shipment(
                 delivery_partner_phone = agent.phone
             vehicle_type = getattr(agent, "vehicle_type", "bike")
 
-    is_manual = (
-        getattr(shipment, "delivery_mode", None) == "manual"
-        or getattr(shipment, "mode", None) == "manual"
-        or (
-            bool(getattr(shipment, "delivery_partner_name", None))
-            and getattr(shipment, "delivery_mode", None) != "own_agent"
-            and getattr(shipment, "mode", None) != "own_agent"
-            and not getattr(shipment, "agent_id", None)
+    mode_str = getattr(shipment, "delivery_mode", None) or getattr(shipment, "mode", None)
+    has_agent = bool(shipment.agent_id) or (bool(delivery_partner_name) and mode_str != "manual" and not getattr(shipment, "awb_number", None))
+
+    is_own_agent = bool(mode_str == "own_agent" or has_agent)
+    is_shiprocket = bool(
+        not is_own_agent and (
+            mode_str == "shiprocket"
+            or (bool(getattr(shipment, "awb_number", None)) and not delivery_partner_name)
+            or (bool(getattr(shipment, "courier_name", None)) and not delivery_partner_name)
         )
     )
-
-    is_shiprocket = (
-        getattr(shipment, "delivery_mode", None) == "shiprocket"
-        or getattr(shipment, "mode", None) == "shiprocket"
-        or bool(getattr(shipment, "courier_name", None))
-        or bool(getattr(shipment, "awb_number", None))
-    ) and not is_manual
-
-    is_own_agent = (
-        getattr(shipment, "delivery_mode", None) == "own_agent"
-        or getattr(shipment, "mode", None) == "own_agent"
-        or bool(shipment.agent_id)
-    ) and not is_shiprocket and not is_manual
+    is_manual = bool(not is_own_agent and not is_shiprocket)
 
     scans: list[dict[str, Any]] = []
     if is_shiprocket and getattr(shipment, "awb_number", None):
         dt_shipped = shipment.shipped_at.strftime("%d %b %Y, %I:%M %p") if shipment.shipped_at else None
-        courier_lbl = getattr(shipment, "courier_name", None) or "Delhivery Surface"
+        courier_lbl = getattr(shipment, "courier_name", None) or "Courier Partner"
         scans.append({
             "status": "Manifest Created",
             "activity": f"Courier AWB {shipment.awb_number} generated ({courier_lbl})",
@@ -303,13 +362,14 @@ def serialize_shipment(
                 "date": dt_del,
             })
 
-    # For Admin: ALWAYS expose assigned delivery partner info regardless of order status
-    # For Customer:
-    # - If own_agent: withhold direct phone/tracking token until out for delivery
-    # - If manual courier: ALWAYS expose delivery_partner_name and delivery_partner_phone (tracking/AWB)
-    is_active_ofd = (effective_status == "out_for_delivery")
+    is_active_ofd = (effective_status in ("out_for_delivery", "in_transit", "shipped") or order_status in ("out_for_delivery", "in_transit", "shipped", "replacement_dispatched"))
 
-    if is_manual:
+    if is_own_agent:
+        resolved_partner_name = delivery_partner_name
+        resolved_partner_phone = delivery_partner_phone
+        resolved_agent_id = agent_id_str
+        resolved_vehicle_type = vehicle_type
+    elif is_manual:
         resolved_partner_name = shipment.delivery_partner_name or getattr(shipment, "courier_name", None)
         resolved_partner_phone = shipment.delivery_partner_phone or getattr(shipment, "awb_number", None)
         resolved_agent_id = None
@@ -319,11 +379,6 @@ def serialize_shipment(
         resolved_partner_phone = delivery_partner_phone
         resolved_agent_id = agent_id_str
         resolved_vehicle_type = vehicle_type
-    elif is_own_agent:
-        resolved_partner_name = delivery_partner_name
-        resolved_partner_phone = delivery_partner_phone if is_active_ofd else None
-        resolved_agent_id = agent_id_str if is_active_ofd else None
-        resolved_vehicle_type = vehicle_type if is_active_ofd else None
     else:
         # Manual Courier / Shiprocket
         resolved_partner_name = delivery_partner_name or getattr(shipment, "courier_name", None)
@@ -331,7 +386,7 @@ def serialize_shipment(
         resolved_agent_id = None
         resolved_vehicle_type = None
 
-    resolved_mode = "shiprocket" if is_shiprocket else ("own_agent" if is_own_agent else "manual")
+    resolved_mode = "own_agent" if is_own_agent else ("shiprocket" if is_shiprocket else "manual")
 
     return {
         "id": str(shipment.id),
@@ -353,7 +408,7 @@ def serialize_shipment(
         "delivered_at": shipment.delivered_at.isoformat() if shipment.delivered_at else None,
         "notes": getattr(shipment, "notes", None),
         "scans": scans,
-        "delivery_otp": getattr(shipment, "delivery_otp", None) if (resolved_mode == "own_agent" and (is_admin or is_active_ofd or effective_status == "shipped")) else None,
+        "delivery_otp": getattr(shipment, "delivery_otp", None),
     }
 
 
@@ -984,10 +1039,14 @@ def build_order_item_pricing_snapshot(
 
 
 def serialize_customer_order_item(item: OrderItem, order_status: Optional[str] = None) -> dict[str, Any]:
-    returnable_quantity = max(int(item.returnable_quantity if item.returnable_quantity is not None else (item.quantity if order_status == "delivered" else 0)), 0)
+    qty = int(item.quantity or 1)
+    returnable_quantity = max(int(item.returnable_quantity if item.returnable_quantity is not None else (qty if order_status == "delivered" else 0)), 0)
 
-    effective_status = item.status
-    if order_status == "delivered":
+    effective_status = item.status or "placed"
+    if order_status in ("confirmed", "shipped", "out_for_delivery"):
+        if effective_status not in ("cancelled", "returned", "delivered"):
+            effective_status = order_status
+    elif order_status == "delivered":
         if returnable_quantity > 0:
             effective_status = "delivered"
         elif returnable_quantity == 0 and item.status == "returned":
@@ -996,22 +1055,27 @@ def serialize_customer_order_item(item: OrderItem, order_status: Optional[str] =
             effective_status = "delivered"
     elif order_status == "returned":
         effective_status = "returned"
+    elif order_status == "cancelled" and item.status != "cancelled":
+        effective_status = "cancelled"
 
     item_return_days = getattr(item, "return_window_days", 7)
     is_returnable = (order_status == "delivered" and returnable_quantity > 0 and item_return_days > 0)
 
+    unit_price = float(item.unit_price) if item.unit_price is not None else 0.0
+    line_total = float(item.line_total) if item.line_total is not None else (unit_price * qty)
+
     return {
         "id": str(item.id),
-        "product_id": str(item.product_id),
-        "product_name": item.product_name,
-        "product_slug": item.product_slug,
-        "product_image": item.product_image,
+        "product_id": str(item.product_id) if item.product_id else None,
+        "product_name": item.product_name or "Product",
+        "product_slug": item.product_slug or "",
+        "product_image": item.product_image or "",
         "selected_variant_label": item.selected_variant_label,
         "selected_variant_value": item.selected_variant_value,
-        "unit_price": float(item.unit_price),
+        "unit_price": unit_price,
         "compare_price": float(item.compare_price) if item.compare_price is not None else None,
-        "quantity": item.quantity,
-        "line_total": float(item.line_total),
+        "quantity": qty,
+        "line_total": line_total,
         "status": effective_status,
         "returnable_quantity": returnable_quantity,
         "return_window_days": item_return_days,
@@ -1241,10 +1305,10 @@ def get_admin_pending_counts(
 
 ORDER_TAB_STATUS_MAP = {
     "new": ["placed"],
-    "yet_to_ship": ["confirmed"],
-    "yet_to_deliver": ["shipped", "out_for_delivery"],
-    "delivered": ["delivered"],
-    "cancelled": ["cancelled", "partially_cancelled"],
+    "yet_to_ship": ["confirmed", "accepted"],
+    "yet_to_deliver": ["shipped", "out_for_delivery", "rescheduled", "failed", "replacement_dispatched"],
+    "delivered": ["delivered", "returned"],
+    "cancelled": ["cancelled", "partially_cancelled", "refunded"],
 }
 
 
@@ -1288,8 +1352,8 @@ def get_admin_orders(
 
     # 4. Date Filter
     now = datetime.now(timezone.utc)
+    start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
     if date_filter == "today":
-        start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
         base_query = base_query.where(Order.created_at >= start_of_today)
     elif date_filter == "last_7_days":
         from datetime import timedelta
@@ -1311,15 +1375,44 @@ def get_admin_orders(
             except Exception:
                 pass
 
-    # Compute Tab Counts directly in PostgreSQL
+    # Compute Tab Counts directly in PostgreSQL respecting active search and filters
     tab_counts = {}
     for t_key, statuses in ORDER_TAB_STATUS_MAP.items():
-        cnt = session.exec(
-            select(func.count()).select_from(Order).where(
-                Order.site_id == site_id,
-                Order.status.in_(statuses),
+        cnt_q = select(func.count()).select_from(Order).where(
+            Order.site_id == site_id,
+            Order.status.in_(statuses),
+        )
+        if payment_method and payment_method != "all":
+            cnt_q = cnt_q.where(Order.payment_method.ilike(f"%{payment_method}%"))
+        if search and search.strip():
+            term = f"%{search.strip()}%"
+            cnt_q = cnt_q.where(
+                (cast(Order.id, String).ilike(term))
+                | (cast(Order.shipping_address, String).ilike(term))
+                | (Order.payment_method.ilike(term))
             )
-        ).one() or 0
+        if date_filter == "today":
+            cnt_q = cnt_q.where(Order.created_at >= start_of_today)
+        elif date_filter == "last_7_days":
+            from datetime import timedelta
+            cnt_q = cnt_q.where(Order.created_at >= now - timedelta(days=7))
+        elif date_filter == "last_30_days":
+            from datetime import timedelta
+            cnt_q = cnt_q.where(Order.created_at >= now - timedelta(days=30))
+        elif date_filter == "custom":
+            if from_date:
+                try:
+                    dt_from = datetime.fromisoformat(from_date)
+                    cnt_q = cnt_q.where(Order.created_at >= dt_from)
+                except Exception:
+                    pass
+            if to_date:
+                try:
+                    dt_to = datetime.fromisoformat(to_date)
+                    cnt_q = cnt_q.where(Order.created_at <= dt_to)
+                except Exception:
+                    pass
+        cnt = session.exec(cnt_q).one() or 0
         tab_counts[t_key] = cnt
 
     # Total Count for active query
@@ -1576,6 +1669,10 @@ def update_order_status(
     try:
         if payload.status == "confirmed":
             order.confirmed_at = now
+            for item in items:
+                if item.status not in ("cancelled", "returned"):
+                    item.status = "confirmed"
+                    session.add(item)
 
         elif payload.status == "shipped":
             # Guard: ensure an agent or partner is assigned before moving to shipped
@@ -1590,6 +1687,11 @@ def update_order_status(
                 )
 
             order.shipped_at = now
+            for item in items:
+                if item.status not in ("cancelled", "returned"):
+                    item.status = "shipped"
+                    session.add(item)
+
             if not shipment:
                 shipment = Shipment(
                     order_id=order.id,
@@ -1607,12 +1709,6 @@ def update_order_status(
                 shipment.status = "shipped"
                 if payload.delivery_partner_name is not None:
                     shipment.delivery_partner_name = payload.delivery_partner_name
-                    shipment.courier_name = payload.delivery_partner_name
-                    shipment.mode = "manual"
-                    shipment.agent_id = None
-                    shipment.agent_token = None
-                    shipment.agent_accepted_at = None
-                    order.delivery_otp = None
                 if payload.delivery_partner_phone is not None:
                     shipment.delivery_partner_phone = payload.delivery_partner_phone
                     shipment.awb_number = payload.delivery_partner_phone
@@ -1634,6 +1730,11 @@ def update_order_status(
                 )
 
             order.shipped_at = order.shipped_at or now
+            for item in items:
+                if item.status not in ("cancelled", "returned"):
+                    item.status = "out_for_delivery"
+                    session.add(item)
+
             if not shipment:
                 shipment = Shipment(
                     order_id=order.id,
@@ -1651,12 +1752,6 @@ def update_order_status(
                 shipment.status = "out_for_delivery"
                 if payload.delivery_partner_name is not None:
                     shipment.delivery_partner_name = payload.delivery_partner_name
-                    shipment.courier_name = payload.delivery_partner_name
-                    shipment.mode = "manual"
-                    shipment.agent_id = None
-                    shipment.agent_token = None
-                    shipment.agent_accepted_at = None
-                    order.delivery_otp = None
                 if payload.delivery_partner_phone is not None:
                     shipment.delivery_partner_phone = payload.delivery_partner_phone
                     shipment.awb_number = payload.delivery_partner_phone
@@ -1813,6 +1908,11 @@ def update_order_status(
                 select(Shipment).where(Shipment.order_id == order.id)
             ).all()
             for sh in shipments:
+                if sh.agent_id and sh.status not in ("delivered", "failed", "returned_to_warehouse", "cancelled"):
+                    agent = session.get(DeliveryAgent, sh.agent_id)
+                    if agent:
+                        agent.current_order_count = max(0, agent.current_order_count - 1)
+                        session.add(agent)
                 sh.status = "cancelled"
                 sh.notes = f"{sh.notes or ''} [Cancelled by admin: {payload.cancel_reason or 'Admin cancelled'}]".strip()
                 session.add(sh)
@@ -2142,8 +2242,78 @@ def build_customer_refund_info(
     allow_live_check: bool = False,
     session: Optional[Session] = None,
 ) -> Optional[dict[str, Any]]:
-    if order.status == "cancelled" or getattr(order, "payment_status", None) == "refunded":
-        is_cod = (order.payment_method or "").lower() in {"cod", "cash_on_delivery"}
+    # Extract refund transactions from pricing_snapshot
+    snapshot = (order.pricing_snapshot or {}) if isinstance(order.pricing_snapshot, dict) else {}
+    refund_history = list(snapshot.get("refund_history") or [])
+    if not refund_history and snapshot.get("refund_details"):
+        refund_history.append(snapshot.get("refund_details"))
+
+    total_refunded_amount = 0.0
+    latest_tx: Optional[dict[str, Any]] = None
+    for rf in refund_history:
+        if isinstance(rf, dict) and rf.get("amount") is not None:
+            try:
+                amt = float(rf.get("amount") or 0)
+                total_refunded_amount += amt
+                latest_tx = rf
+            except (ValueError, TypeError):
+                pass
+
+    is_cod = (order.payment_method or "").lower() in {"cod", "cash_on_delivery", "cash on delivery"}
+    is_fully_refunded = (
+        order.status == "refunded"
+        or getattr(order, "payment_status", None) == "refunded"
+        or (total_refunded_amount > 0 and total_refunded_amount >= float(order.total or 0))
+    )
+    is_partially_refunded = (
+        getattr(order, "payment_status", None) == "partially_refunded"
+        or (total_refunded_amount > 0 and total_refunded_amount < float(order.total or 0))
+    )
+
+    now = utc_now()
+    initiated_dt = order.cancelled_at or order.updated_at or order.created_at
+
+    # CASE A: Refund transactions exist OR order is marked refunded/partially refunded
+    if total_refunded_amount > 0 or is_fully_refunded or is_partially_refunded:
+        display_amount = total_refunded_amount if total_refunded_amount > 0 else float(order.total or 0)
+        status_label = "Refunded" if is_fully_refunded else "Partially Refunded"
+        ref_id = (latest_tx.get("reference_id") or latest_tx.get("refund_id")) if latest_tx else getattr(order, "razorpay_payment_id", None)
+        payout_mode = latest_tx.get("payout_mode") if latest_tx else None
+
+        if is_cod:
+            payout_desc = payout_mode or "UPI / Bank Transfer"
+            return {
+                "status": "completed",
+                "status_label": status_label,
+                "badge_color": "emerald",
+                "amount": round(display_amount, 2),
+                "payment_method": f"Cash on Delivery ({payout_desc})",
+                "reference_id": ref_id,
+                "arn": None,
+                "estimated_days": "Completed",
+                "note": f"A refund of ₹{display_amount:.2f} has been disbursed via {payout_desc}." + (f" (Ref: {ref_id})" if ref_id else ""),
+                "initiated_at": (latest_tx.get("created_at") if latest_tx else None) or (initiated_dt.isoformat() if initiated_dt else None),
+            }
+        else:
+            refund_id = (latest_tx.get("refund_id") or latest_tx.get("reference_id") or order.razorpay_payment_id) if latest_tx else order.razorpay_payment_id
+            refund_arn = latest_tx.get("arn") if latest_tx else None
+            gateway_status = (latest_tx.get("status") if latest_tx else None) or "processed"
+
+            return {
+                "status": "completed",
+                "status_label": status_label,
+                "badge_color": "emerald",
+                "amount": round(display_amount, 2),
+                "payment_method": order.payment_method or "Online Payment",
+                "reference_id": refund_id,
+                "arn": refund_arn,
+                "estimated_days": "Completed",
+                "note": f"A refund of ₹{display_amount:.2f} has been processed and credited to your original payment source.",
+                "initiated_at": (latest_tx.get("created_at") if latest_tx else None) or (initiated_dt.isoformat() if initiated_dt else None),
+            }
+
+    # CASE B: Order is cancelled without monetary refund
+    if order.status == "cancelled":
         if is_cod:
             return {
                 "status": "not_applicable",
@@ -2158,119 +2328,63 @@ def build_customer_refund_info(
                 "initiated_at": None,
             }
         else:
-            now = utc_now()
-            initiated_dt = order.cancelled_at or order.updated_at or order.created_at
-            # Check elapsed days from initiation
-            days_elapsed = 0
-            if initiated_dt:
-                # Ensure offset-naive/aware compatibility
-                if initiated_dt.tzinfo is None:
-                    initiated_dt_aware = initiated_dt.replace(tzinfo=timezone.utc)
-                else:
-                    initiated_dt_aware = initiated_dt
-                days_elapsed = (now - initiated_dt_aware).days
+            return {
+                "status": "processing",
+                "status_label": "Refund in progress",
+                "badge_color": "amber",
+                "amount": float(order.total),
+                "payment_method": order.payment_method or "Online Payment",
+                "reference_id": order.razorpay_payment_id,
+                "arn": None,
+                "estimated_days": "2-4 business days",
+                "note": f"A refund of ₹{float(order.total):.2f} is being processed to your original payment source.",
+                "initiated_at": initiated_dt.isoformat() if initiated_dt else None,
+            }
 
-            refund_details = (order.pricing_snapshot or {}).get("refund_details", {}) if isinstance(order.pricing_snapshot, dict) else {}
-            refund_id = refund_details.get("refund_id") or order.razorpay_payment_id
-            refund_arn = refund_details.get("arn")
-            gateway_status = refund_details.get("status")
-
-            # Only do live network call if explicitly allowed AND refund_details is not yet cached
-            if allow_live_check and not refund_details.get("refund_id") and order.razorpay_payment_id and not order.razorpay_payment_id.startswith("pay_mock_"):
-                try:
-                    from routers.payments import get_razorpay_client
-                    client = get_razorpay_client()
-                    if client:
-                        refunds_res = client.refund.all({"payment_id": order.razorpay_payment_id})
-                        if refunds_res and isinstance(refunds_res, dict) and refunds_res.get("items"):
-                            first_rf = refunds_res["items"][0]
-                            refund_id = first_rf.get("id") or refund_id
-                            refund_arn = first_rf.get("acquirer_data", {}).get("arn")
-                            gateway_status = first_rf.get("status") or gateway_status
-
-                            # Cache in pricing_snapshot so subsequent calls are 0ms instant
-                            if session:
-                                snapshot = dict(order.pricing_snapshot or {})
-                                snapshot["refund_details"] = {
-                                    "refund_id": refund_id,
-                                    "status": gateway_status or "processed",
-                                    "arn": refund_arn,
-                                    "amount": (first_rf.get("amount") or 0) / 100,
-                                }
-                                order.pricing_snapshot = snapshot
-                                session.add(order)
-                except Exception:
-                    pass
-
-            # 1. If payment gateway explicitly reported failure
-            if gateway_status == "failed":
-                return {
-                    "status": "failed",
-                    "status_label": "Refund Failed",
-                    "badge_color": "rose",
-                    "amount": float(order.total),
-                    "payment_method": order.payment_method or "Online Payment",
-                    "reference_id": refund_id,
-                    "arn": refund_arn,
-                    "estimated_days": "Action Required",
-                    "note": f"The refund of ₹{float(order.total):.2f} could not be processed by your bank. Please contact customer support or provide an alternate UPI/bank account for manual settlement.",
-                    "initiated_at": initiated_dt.isoformat() if initiated_dt else None,
-                }
-
-            # 2. If gateway confirmed or settled
-            is_settled = (
-                getattr(order, "refund_settled", False)
-                or gateway_status in ("processed", "completed", "settled")
-                or refund_arn is not None
-                or (getattr(order, "payment_status", None) == "refunded" and bool(refund_id) and gateway_status != "failed")
-                or days_elapsed >= 5
-            )
-
-            if is_settled:
-                return {
-                    "status": "completed",
-                    "status_label": "Refunded",
-                    "badge_color": "emerald",
-                    "amount": float(order.total),
-                    "payment_method": order.payment_method or "Online Payment",
-                    "reference_id": refund_id,
-                    "arn": refund_arn,
-                    "estimated_days": "Completed",
-                    "note": f"A refund of ₹{float(order.total):.2f} has been successfully processed by the payment gateway and credited to your original payment source.",
-                    "initiated_at": initiated_dt.isoformat() if initiated_dt else None,
-                }
-            else:
-                return {
-                    "status": "processing",
-                    "status_label": "Refund in progress",
-                    "badge_color": "amber",
-                    "amount": float(order.total),
-                    "payment_method": order.payment_method or "Online Payment",
-                    "reference_id": refund_id,
-                    "arn": refund_arn,
-                    "estimated_days": "5-7 business days",
-                    "note": f"Your refund of ₹{float(order.total):.2f} has been initiated and will be credited to your account within 5-7 business days.",
-                    "initiated_at": initiated_dt.isoformat() if initiated_dt else None,
-                }
     return None
+
+
+def _resolve_site_uuid(site_id_or_slug: str, session: Session) -> UUID:
+    try:
+        return UUID(str(site_id_or_slug))
+    except (ValueError, TypeError):
+        site = session.exec(select(Site).where(Site.slug == str(site_id_or_slug))).first()
+        if site:
+            return site.id
+        raise HTTPException(status_code=404, detail="Store not found")
 
 
 @router.get("/{site_id}/my-orders")
 def get_my_orders(
-    site_id: UUID,
+    site_id: str,
     page: Optional[int] = Query(None, ge=1, description="Page number"),
     page_size: Optional[int] = Query(None, ge=1, le=100, description="Orders per page"),
     user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
+    resolved_site_id = _resolve_site_uuid(site_id, session)
     user_id_uuid = UUID(user["userId"])
     customer = session.get(User, user_id_uuid)
     if not customer:
         raise HTTPException(status_code=404, detail="Customer account not found")
 
+    user_addr_ids = session.exec(select(UserAddress.id).where(UserAddress.user_id == customer.id)).all()
+
+    conditions = [Order.customer_id == customer.id]
+    if user_addr_ids:
+        conditions.append(Order.shipping_address_id.in_(user_addr_ids))
+    if customer.email:
+        cust_e = customer.email.strip().lower()
+        conditions.append(cast(Order.shipping_address, String).ilike(f"%{cust_e}%"))
+    if customer.phone:
+        clean_phone = customer.phone.strip().replace(" ", "").replace("-", "")
+        if len(clean_phone) >= 10:
+            p10 = clean_phone[-10:]
+            conditions.append(cast(Order.shipping_address, String).ilike(f"%{p10}%"))
+
     base_query = select(Order).where(
-        Order.site_id == site_id,
-        Order.customer_id == customer.id,
+        Order.site_id == resolved_site_id,
+        or_(*conditions),
         Order.status != "pending",
     )
 
@@ -2315,38 +2429,74 @@ def get_my_orders(
 
     response = []
     for order in orders:
+        sh = shipment_map.get(order.id)
+        effective_order_status = order.status
+        if sh and order.status not in ("cancelled", "refunded", "returned"):
+            sh_st = getattr(sh, "status", None)
+            if sh_st == "delivered":
+                effective_order_status = "delivered"
+            elif sh_st in ("out_for_delivery", "picked_up"):
+                effective_order_status = "out_for_delivery"
+            elif sh_st in ("shipped", "in_transit"):
+                effective_order_status = "shipped"
+            elif sh_st in ("assigned", "accepted") and effective_order_status == "placed":
+                effective_order_status = "confirmed"
+
+            if order.status != effective_order_status:
+                order.status = effective_order_status
+                if effective_order_status == "out_for_delivery" and not order.shipped_at:
+                    order.shipped_at = sh.shipped_at or sh.out_for_delivery_at or order.confirmed_at or order.created_at
+                elif effective_order_status == "shipped" and not order.shipped_at:
+                    order.shipped_at = sh.shipped_at or order.confirmed_at or order.created_at
+                elif effective_order_status == "confirmed" and not order.confirmed_at:
+                    order.confirmed_at = order.created_at
+                session.add(order)
+                try:
+                    session.commit()
+                except Exception:
+                    session.rollback()
+
         serialized_items = [
-            serialize_customer_order_item(item, order.status)
+            serialize_customer_order_item(item, effective_order_status)
             for item in items_map.get(order.id, [])
         ]
         has_returnable_items = any(item["is_returnable"] for item in serialized_items)
-        sh = shipment_map.get(order.id)
+        sh_mode = getattr(sh, "delivery_mode", None) or getattr(sh, "mode", None)
         is_own_agent = bool(
             sh
             and (
-                getattr(sh, "delivery_mode", None) == "own_agent"
-                or getattr(sh, "mode", None) == "own_agent"
-                or getattr(sh, "agent_id", None)
+                sh_mode == "own_agent"
+                or bool(getattr(sh, "agent_id", None))
+                or (bool(getattr(sh, "delivery_partner_name", None)) and sh_mode != "manual" and not getattr(sh, "awb_number", None))
             )
-            and not (getattr(sh, "courier_name", None) or getattr(sh, "awb_number", None))
+        )
+        is_out_for_delivery = bool(
+            effective_order_status == "out_for_delivery"
+            or (sh and getattr(sh, "status", None) in ("out_for_delivery", "picked_up"))
         )
 
         response.append(
             {
                 "id": str(order.id),
-                "status": order.status,
+                "status": effective_order_status,
                 "payment_status": get_effective_payment_status(order),
                 "total": float(order.total),
                 "payment_method": order.payment_method,
                 "razorpay_payment_id": order.razorpay_payment_id,
                 "razorpay_order_id": order.razorpay_order_id,
+                "shipping_address": get_effective_shipping_address(order, session),
                 "created_at": order.created_at.isoformat() if order.created_at else None,
+                "confirmed_at": order.confirmed_at.isoformat() if order.confirmed_at else None,
+                "shipped_at": order.shipped_at.isoformat() if order.shipped_at else None,
+                "delivered_at": order.delivered_at.isoformat() if order.delivered_at else None,
+                "cancelled_at": order.cancelled_at.isoformat() if order.cancelled_at else None,
                 "items": serialized_items,
                 "pricing_snapshot": order.pricing_snapshot,
-                "delivery_otp": ensure_order_delivery_otp(order, session) if is_own_agent else None,
-                "shipment": serialize_shipment(sh, order.status, session=session),
+                "delivery_otp": ensure_order_delivery_otp(order, session) if (is_own_agent and is_out_for_delivery) else None,
+                "shipment": serialize_shipment(sh, effective_order_status, session=session),
                 "has_returnable_items": has_returnable_items,
-                "can_request_return": order.status == "delivered" and has_returnable_items,
+                "can_request_return": effective_order_status == "delivered" and has_returnable_items,
+                "cancel_reason": getattr(order, "cancel_reason", None),
                 "refund_info": build_customer_refund_info(order),
             }
         )
@@ -2418,36 +2568,57 @@ def get_my_delivered_orders(
 
 @router.get("/{site_id}/my-orders/{order_id}")
 def get_my_order_detail(
-    site_id: UUID,
+    site_id: str,
     order_id: UUID,
     user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
+    resolved_site_id = _resolve_site_uuid(site_id, session)
     user_id_uuid = UUID(user["userId"])
     customer = session.get(User, user_id_uuid)
     if not customer:
         raise HTTPException(status_code=404, detail="Customer account not found")
 
     order = session.get(Order, order_id)
-    if not order or order.site_id != site_id or order.customer_id != customer.id:
+    if not order or order.site_id != resolved_site_id:
         raise HTTPException(status_code=404, detail="Order not found")
+
+    shipping_addr = get_effective_shipping_address(order, session)
+    order_email = (shipping_addr.get("email") or "").strip().lower()
+    order_phone = (shipping_addr.get("mobileNumber") or shipping_addr.get("mobile_number") or shipping_addr.get("phone") or "").strip().replace(" ", "").replace("-", "")
+    cust_email = (customer.email or "").strip().lower()
+    cust_phone = (customer.phone or "").strip().replace(" ", "").replace("-", "")
+
+    user_addr_ids = session.exec(select(UserAddress.id).where(UserAddress.user_id == customer.id)).all()
+
+    is_owner = (
+        (order.customer_id == customer.id)
+        or (getattr(order, "shipping_address_id", None) in user_addr_ids)
+        or (cust_email and order_email and cust_email == order_email)
+        or (cust_phone and order_phone and (cust_phone == order_phone or cust_phone.endswith(order_phone[-10:]) or order_phone.endswith(cust_phone[-10:])))
+    )
+    if not is_owner:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if order.customer_id is None:
+        order.customer_id = customer.id
+        session.add(order)
+        try:
+            session.commit()
+        except Exception:
+            session.rollback()
 
     items = session.exec(
         select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.id.asc())
     ).all()
 
     # Self-heal items if order is delivered but individual items were never updated
-    # ONLY heal items that were never transitioned out of their original status.
-    # DO NOT touch returnable_quantity of items already in delivered/returned state
-    # as they may have had valid partial-return deductions applied.
     if order.status == "delivered":
         has_changes = False
         for item in items:
             if item.status not in ("delivered", "returned", "cancelled"):
-                # This item was never updated from its pre-delivery status
                 item.status = "delivered"
                 if item.returnable_quantity is None:
-                    # Uninitialized: no returns have ever been processed
                     item.returnable_quantity = item.quantity
                 has_changes = True
                 session.add(item)
@@ -2467,18 +2638,58 @@ def get_my_order_detail(
         select(Shipment).where(Shipment.order_id == order.id)
     ).first()
 
-    serialized_items = [serialize_customer_order_item(item, order.status) for item in items]
+    effective_order_status = order.status
+    if shipment and order.status not in ("cancelled", "refunded", "returned"):
+        sh_st = getattr(shipment, "status", None)
+        if sh_st == "delivered":
+            effective_order_status = "delivered"
+        elif sh_st in ("out_for_delivery", "picked_up"):
+            effective_order_status = "out_for_delivery"
+        elif sh_st in ("shipped", "in_transit"):
+            effective_order_status = "shipped"
+        elif sh_st in ("assigned", "accepted") and effective_order_status == "placed":
+            effective_order_status = "confirmed"
+
+        if order.status != effective_order_status:
+            order.status = effective_order_status
+            if effective_order_status == "out_for_delivery" and not order.shipped_at:
+                order.shipped_at = shipment.shipped_at or shipment.out_for_delivery_at or order.confirmed_at or order.created_at
+            elif effective_order_status == "shipped" and not order.shipped_at:
+                order.shipped_at = shipment.shipped_at or order.confirmed_at or order.created_at
+            elif effective_order_status == "confirmed" and not order.confirmed_at:
+                order.confirmed_at = order.created_at
+            session.add(order)
+            try:
+                session.commit()
+            except Exception:
+                session.rollback()
+
+    serialized_items = [serialize_customer_order_item(item, effective_order_status) for item in items]
     has_returnable_items = any(item["is_returnable"] for item in serialized_items)
+
+    sh_mode = getattr(shipment, "delivery_mode", None) or getattr(shipment, "mode", None)
+    is_own_agent = bool(
+        shipment
+        and (
+            sh_mode == "own_agent"
+            or bool(getattr(shipment, "agent_id", None))
+            or (bool(getattr(shipment, "delivery_partner_name", None)) and sh_mode != "manual" and not getattr(shipment, "awb_number", None))
+        )
+    )
+    is_out_for_delivery = bool(
+        effective_order_status == "out_for_delivery"
+        or (shipment and getattr(shipment, "status", None) in ("out_for_delivery", "picked_up"))
+    )
 
     return {
         "id": str(order.id),
-        "status": order.status,
+        "status": effective_order_status,
         "payment_status": get_effective_payment_status(order),
         "total": float(order.total),
         "payment_method": order.payment_method,
         "razorpay_payment_id": order.razorpay_payment_id,
         "razorpay_order_id": order.razorpay_order_id,
-        "shipping_address": order.shipping_address,
+        "shipping_address": shipping_addr,
         "pricing_snapshot": order.pricing_snapshot,
         "created_at": order.created_at.isoformat() if order.created_at else None,
         "confirmed_at": order.confirmed_at.isoformat() if order.confirmed_at else None,
@@ -2486,22 +2697,11 @@ def get_my_order_detail(
         "delivered_at": order.delivered_at.isoformat() if order.delivered_at else None,
         "cancelled_at": order.cancelled_at.isoformat() if order.cancelled_at else None,
         "items": serialized_items,
-        "shipment": serialize_shipment(shipment, order.status, session=session),
-        "delivery_otp": (
-            ensure_order_delivery_otp(order, session)
-            if bool(
-                shipment
-                and (
-                    getattr(shipment, "delivery_mode", None) == "own_agent"
-                    or getattr(shipment, "mode", None) == "own_agent"
-                    or getattr(shipment, "agent_id", None)
-                )
-                and not (getattr(shipment, "courier_name", None) or getattr(shipment, "awb_number", None))
-            )
-            else None
-        ),
+        "shipment": serialize_shipment(shipment, effective_order_status, session=session),
+        "delivery_otp": ensure_order_delivery_otp(order, session) if (is_own_agent and is_out_for_delivery) else None,
         "has_returnable_items": has_returnable_items,
-        "can_request_return": order.status == "delivered" and has_returnable_items,
+        "can_request_return": effective_order_status == "delivered" and has_returnable_items,
+        "cancel_reason": getattr(order, "cancel_reason", None),
         "refund_info": build_customer_refund_info(order, allow_live_check=True, session=session),
     }
 
