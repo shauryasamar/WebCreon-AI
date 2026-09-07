@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
@@ -391,6 +391,168 @@ export const AdminSupportDesk: React.FC = () => {
 
   // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // CRM Service Enable/Disable Toggle State
+  const [crmEnabled, setCrmEnabled] = useState(true);
+  const [togglingCrm, setTogglingCrm] = useState(false);
+
+  // Load CRM service status
+  const loadCrmSettings = useCallback(async () => {
+    if (!siteId) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/sites/${siteId}/support/settings`);
+      if (res.ok) {
+        const data = await res.json();
+        setCrmEnabled(data.crm_enabled !== false);
+      }
+    } catch (err) {
+      console.error("Failed to load CRM settings", err);
+    }
+  }, [siteId]);
+
+  useEffect(() => {
+    loadCrmSettings();
+  }, [loadCrmSettings]);
+
+  const handleToggleCrmService = async () => {
+    if (!siteId || togglingCrm) return;
+    const nextVal = !crmEnabled;
+    setTogglingCrm(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/sites/${siteId}/support/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ crm_enabled: nextVal }),
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const returnedSlug = data.slug || siteSlug;
+        const returnedSiteId = data.site_id || siteId;
+
+        setCrmEnabled(nextVal);
+        setToastMessage(nextVal ? "CRM & Support services enabled" : "CRM & Support services disabled");
+
+        // 1. Invalidate and update local storage snapshots
+        try {
+          const keys = Array.from(new Set([siteId, siteSlug, returnedSiteId, returnedSlug])).filter(Boolean) as string[];
+          keys.forEach((k) => {
+            const raw = localStorage.getItem(`wc_site_snapshot_${k}`);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (parsed && typeof parsed === "object") {
+                parsed.crm_enabled = nextVal;
+                if (parsed.site_definition) parsed.site_definition.crm_enabled = nextVal;
+                if (parsed.draft_definition) parsed.draft_definition.crm_enabled = nextVal;
+                localStorage.setItem(`wc_site_snapshot_${k}`, JSON.stringify(parsed));
+              }
+            }
+            localStorage.removeItem(`wc_site_theme_${k}`);
+          });
+        } catch (_) {}
+
+        // 2. Dispatch global event so Builder, Navbar, Customer Pages & Hooks update immediately without page refresh
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("wc_crm_status_changed", {
+              detail: {
+                siteId: returnedSiteId || siteId,
+                siteSlug: returnedSlug || siteSlug,
+                crm_enabled: nextVal,
+              },
+            })
+          );
+        }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setToastMessage(errData.detail || "Failed to update CRM service status");
+      }
+    } catch (err) {
+      console.error("Failed to toggle CRM service:", err);
+      setToastMessage("Failed to update CRM service status");
+    } finally {
+      setTogglingCrm(false);
+    }
+  };
+
+  // Clean, theme-aligned compact CRM Service Toggle
+  const renderCrmToggle = () => (
+    <div
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "7px",
+        padding: "3px 8px 3px 9px",
+        borderRadius: "6px",
+        background: crmEnabled ? "#f0fdf4" : "#ffffff",
+        border: `1px solid ${crmEnabled ? "#bbf7d0" : "#cbd5e1"}`,
+        marginBottom: "4px",
+        transition: "all 0.15s ease",
+        pointerEvents: "auto",
+        flexShrink: 0,
+        boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+      }}
+    >
+      <span
+        style={{
+          fontSize: "12px",
+          fontWeight: 600,
+          color: crmEnabled ? "#15803d" : "#64748b",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "5px",
+          userSelect: "none",
+          whiteSpace: "nowrap",
+        }}
+      >
+        <span
+          style={{
+            width: "6px",
+            height: "6px",
+            borderRadius: "50%",
+            background: crmEnabled ? "#16a34a" : "#94a3b8",
+          }}
+        />
+        CRM Service
+      </span>
+      <button
+        type="button"
+        onClick={handleToggleCrmService}
+        disabled={togglingCrm}
+        title={crmEnabled ? "CRM Service is Active — Click to Disable" : "CRM Service is Disabled — Click to Enable"}
+        style={{
+          position: "relative",
+          width: "28px",
+          height: "16px",
+          borderRadius: "999px",
+          background: crmEnabled ? "#16a34a" : "#cbd5e1",
+          border: "none",
+          cursor: togglingCrm ? "wait" : "pointer",
+          transition: "background 0.2s ease",
+          padding: 0,
+          outline: "none",
+          display: "inline-flex",
+          alignItems: "center",
+          flexShrink: 0,
+          pointerEvents: "auto",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            top: "1.5px",
+            left: crmEnabled ? "13.5px" : "1.5px",
+            width: "13px",
+            height: "13px",
+            borderRadius: "50%",
+            background: "#ffffff",
+            boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
+            transition: "left 0.18s cubic-bezier(0.4, 0, 0.2, 1)",
+          }}
+        />
+      </button>
+    </div>
+  );
 
   // Load Agents
   const loadAgents = async () => {
@@ -1531,68 +1693,86 @@ export const AdminSupportDesk: React.FC = () => {
 
       {mode === "tickets" ? (
         <>
-          {/* Tickets Subtabs (Underline Filter Bar with Count Badges matching AdminOrders.tsx) */}
+          {/* Tickets Subtabs with Right-aligned CRM Service Toggle (Always crisp and interactive) */}
           <div
             style={{
               display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
               flexWrap: "wrap",
-              gap: "4px",
+              gap: "8px",
               borderBottom: "1px solid #e2e8f0",
               marginBottom: "16px",
             }}
           >
-            {[
-              { key: "all", label: "All Active Tickets", count: counts.all },
-              { key: "unassigned", label: "Unassigned", count: counts.unassigned },
-              { key: "waiting_customer", label: "Waiting on Customer", count: counts.waiting_customer },
-              { key: "resolved", label: "Resolved / Done", count: counts.resolved },
-            ].map((tab) => {
-              const isActive = activeTab === tab.key;
-              return (
-                <button
-                  key={tab.key}
-                  onClick={() => {
-                    setActiveTab(tab.key as any);
-                    setSelectedTicketId(null);
-                    setCurrentPage(1);
-                  }}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "10px 14px",
-                    border: "none",
-                    borderBottom: isActive ? "2px solid #2563eb" : "2px solid transparent",
-                    background: "transparent",
-                    color: isActive ? "#2563eb" : "#64748b",
-                    fontSize: "13px",
-                    fontWeight: isActive ? 700 : 500,
-                    cursor: "pointer",
-                    whiteSpace: "nowrap",
-                    transition: "all 0.15s ease",
-                    marginBottom: "-1px",
-                  }}
-                >
-                  <span>{tab.label}</span>
-                  <span
+            {/* Left: Underline Filter Tabs Bar */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+              {[
+                { key: "all", label: "All Active Tickets", count: counts.all },
+                { key: "unassigned", label: "Unassigned", count: counts.unassigned },
+                { key: "waiting_customer", label: "Waiting on Customer", count: counts.waiting_customer },
+                { key: "resolved", label: "Resolved / Done", count: counts.resolved },
+              ].map((tab) => {
+                const isActive = activeTab === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    onClick={() => {
+                      setActiveTab(tab.key as any);
+                      setSelectedTicketId(null);
+                      setCurrentPage(1);
+                    }}
                     style={{
-                      fontSize: "11px",
-                      fontWeight: 700,
-                      padding: "1px 6px",
-                      borderRadius: "10px",
-                      background: isActive ? "#eff6ff" : "#f1f5f9",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      padding: "10px 14px",
+                      border: "none",
+                      borderBottom: isActive ? "2px solid #2563eb" : "2px solid transparent",
+                      background: "transparent",
                       color: isActive ? "#2563eb" : "#64748b",
-                      border: `1px solid ${isActive ? "#bfdbfe" : "#e2e8f0"}`,
+                      fontSize: "13px",
+                      fontWeight: isActive ? 700 : 500,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                      transition: "all 0.15s ease",
+                      marginBottom: "-1px",
                     }}
                   >
-                    {tab.count}
-                  </span>
-                </button>
-              );
-            })}
+                    <span>{tab.label}</span>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        padding: "1px 6px",
+                        borderRadius: "10px",
+                        background: isActive ? "#eff6ff" : "#f1f5f9",
+                        color: isActive ? "#2563eb" : "#64748b",
+                        border: `1px solid ${isActive ? "#bfdbfe" : "#e2e8f0"}`,
+                      }}
+                    >
+                      {tab.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Right: Clean CRM Service Toggle (Always crisp & interactive) */}
+            {renderCrmToggle()}
           </div>
 
-          {/* Tickets Cards List */}
+          {/* Tickets Content (Greyed out when CRM is disabled) */}
+          <div
+            style={{
+              opacity: crmEnabled ? 1 : 0.42,
+              filter: crmEnabled ? "none" : "grayscale(90%)",
+              pointerEvents: crmEnabled ? "auto" : "none",
+              userSelect: crmEnabled ? "auto" : "none",
+              transition: "opacity 0.2s ease, filter 0.2s ease",
+            }}
+          >
+            {/* Tickets Cards List */}
           {loading ? (
             <div style={{ ...plainCardStyle, padding: "32px 16px", textAlign: "center", color: "#64748b", fontSize: "14px" }}>
               Loading support tickets...
@@ -1775,56 +1955,49 @@ export const AdminSupportDesk: React.FC = () => {
                             gap: "4px",
                             background: "#2563eb",
                             color: "#ffffff",
-                            border: "none",
-                            borderRadius: "6px",
-                            padding: "6px 12px",
-                            fontSize: "12px",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                          }}
-                        >
-                          <span>Open Case</span>
-                          <ChevronRightIcon />
-                        </button>
+                              fontWeight: 700,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <span>Open Case</span>
+                            <ChevronRightIcon />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                  );
+                })}
+              </div>
+            )}
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div style={{ marginTop: "20px" }}>
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={(p) => setCurrentPage(p)}
-                totalItems={counts.all}
-              />
-            </div>
-          )}
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div style={{ marginTop: "20px" }}>
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={(p) => setCurrentPage(p)}
+                  totalItems={counts.all}
+                />
+              </div>
+            )}
+          </div>
         </>
       ) : (
-        /* Support Team Mode - Fleet UI Design */
-        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-          {/* Summary Stat Cards (4 columns) */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-              gap: "12px",
-              width: "100%",
-            }}
-          >
-            <StatCard label="Registered Agents" value={String(agents.length)} />
-            <StatCard label="Active on Duty" value={String(agents.filter((a) => a.is_active).length)} />
-            <StatCard label="Total Resolved Tickets" value={String(agents.reduce((acc, a) => acc + (a.total_resolved_count || 0), 0))} />
-            <StatCard label="Open / Assigned Cases" value={String(agents.reduce((acc, a) => acc + (a.assigned_ticket_count || 0), 0))} />
-          </div>
-
-          {/* Action Row: Copy Portal Link & Add Agent Button */}
+        /* Support Team Mode - Fleet UI Design (Greyed out if CRM is disabled) */
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "14px",
+            opacity: crmEnabled ? 1 : 0.42,
+            filter: crmEnabled ? "none" : "grayscale(90%)",
+            pointerEvents: crmEnabled ? "auto" : "none",
+            userSelect: crmEnabled ? "auto" : "none",
+            transition: "opacity 0.2s ease, filter 0.2s ease",
+          }}
+        >
+          {/* Action Row: Copy Portal Link & Add Agent (Right-aligned) */}
           <div
             style={{
               display: "flex",
@@ -1854,32 +2027,32 @@ export const AdminSupportDesk: React.FC = () => {
               }}
               title={`Copy Support Agent Login Portal URL (${supportPortalFullUrl})`}
             >
-                {copiedPortal ? (
-                  <>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="20 6 9 17 4 12"></polyline>
-                    </svg>
-                    <span style={{ color: "#16a34a", fontWeight: 600 }}>Copied!</span>
-                  </>
-                ) : (
-                  <>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                    </svg>
-                    <span>Copy Portal URL</span>
-                  </>
-                )}
-              </button>
+              {copiedPortal ? (
+                <>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                  <span style={{ color: "#16a34a", fontWeight: 600 }}>Copied!</span>
+                </>
+              ) : (
+                <>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                  <span>Copy Portal URL</span>
+                </>
+              )}
+            </button>
 
-              <button
-                type="button"
-                onClick={() => setShowAddAgentModal(!showAddAgentModal)}
-                style={{ ...primaryButtonStyle, height: "30px", padding: "0 14px", fontSize: "12px", whiteSpace: "nowrap" }}
-              >
-                {showAddAgentModal ? "Cancel" : "+ Add support agent"}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowAddAgentModal(!showAddAgentModal)}
+              style={{ ...primaryButtonStyle, height: "30px", padding: "0 14px", fontSize: "12px", whiteSpace: "nowrap" }}
+            >
+              {showAddAgentModal ? "Cancel" : "+ Add support agent"}
+            </button>
+          </div>
 
           {/* Inline Add Agent Form Card */}
           {showAddAgentModal && (
@@ -2136,199 +2309,214 @@ export const AdminSupportDesk: React.FC = () => {
             </div>
           )}
 
-          {/* Support Fleet Table (Responsive 4-Column Design) */}
+          {/* Summary Stat Cards (4 columns) */}
           <div
             style={{
-              background: "#ffffff",
-              borderRadius: "8px",
-              border: "1px solid #e2e8f0",
-              overflow: "hidden",
-              width: "100%",
-              boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
-            }}
-          >
-            <div style={{ overflowX: "auto", width: "100%" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", tableLayout: "auto" }}>
-                <thead>
-                  <tr style={{ background: "#f8fafc" }}>
-                    <th style={{ ...thStyle, width: "32%", minWidth: "150px" }}>Agent Details</th>
-                    <th style={{ ...thStyle, width: "24%", minWidth: "130px" }}>Duty & Tickets</th>
-                    <th style={{ ...thStyle, width: "18%", minWidth: "100px" }}>Cases Handled</th>
-                    <th style={{ ...thStyle, width: "26%", minWidth: "170px", textAlign: "right" }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {agents.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} style={{ ...tdStyle, textAlign: "center", padding: "32px", color: "#64748b" }}>
-                        No support agents registered yet. Click '+ Add support agent' above to register your first agent.
-                      </td>
+              display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                gap: "12px",
+                width: "100%",
+                marginBottom: "14px",
+              }}
+            >
+              <StatCard label="Registered Agents" value={String(agents.length)} />
+              <StatCard label="Active on Duty" value={String(agents.filter((a) => a.is_active).length)} />
+              <StatCard label="Total Resolved Tickets" value={String(agents.reduce((acc, a) => acc + (a.total_resolved_count || 0), 0))} />
+              <StatCard label="Open / Assigned Cases" value={String(agents.reduce((acc, a) => acc + (a.assigned_ticket_count || 0), 0))} />
+            </div>
+
+            <div
+              style={{
+                background: "#ffffff",
+                borderRadius: "8px",
+                border: "1px solid #e2e8f0",
+                overflow: "hidden",
+                width: "100%",
+                boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+              }}
+            >
+              <div style={{ overflowX: "auto", width: "100%" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", tableLayout: "auto" }}>
+                  <thead>
+                    <tr style={{ background: "#f8fafc" }}>
+                      <th style={{ ...thStyle, width: "32%", minWidth: "150px" }}>Agent Details</th>
+                      <th style={{ ...thStyle, width: "24%", minWidth: "130px" }}>Duty & Tickets</th>
+                      <th style={{ ...thStyle, width: "18%", minWidth: "100px" }}>Cases Handled</th>
+                      <th style={{ ...thStyle, width: "26%", minWidth: "170px", textAlign: "right" }}>Actions</th>
                     </tr>
-                  ) : (
-                    agents.map((agent) => (
-                      <tr key={agent.id}>
-                        {/* Column 1: Agent Details (Name, Phone, Email) */}
-                        <td style={tdStyle}>
-                          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                            <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "13px" }}>{agent.name}</div>
-                            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11.5px", color: "#64748b", flexWrap: "wrap" }}>
-                              {agent.phone && (
-                                <>
-                                  <span style={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
-                                    <PhoneIcon />
-                                    {agent.phone.startsWith("+91") ? agent.phone : `+91 ${agent.phone}`}
-                                  </span>
-                                  <span>•</span>
-                                </>
-                              )}
-                              <span>{agent.email}</span>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Column 2: Duty Status & Assigned/Resolved */}
-                        <td style={tdStyle}>
-                          <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-                            <span
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                gap: "4px",
-                                padding: "2px 8px",
-                                borderRadius: "4px",
-                                fontSize: "11px",
-                                fontWeight: 600,
-                                background: agent.is_active ? "#f0fdf4" : "#fef2f2",
-                                color: agent.is_active ? "#15803d" : "#b91c1c",
-                                border: `1px solid ${agent.is_active ? "#bbf7d0" : "#fecaca"}`,
-                                width: "fit-content",
-                                minWidth: "fit-content",
-                                whiteSpace: "nowrap",
-                                boxSizing: "border-box",
-                              }}
-                            >
-                              <span
-                                style={{
-                                  width: "5px",
-                                  height: "5px",
-                                  borderRadius: "50%",
-                                  background: agent.is_active ? "#16a34a" : "#dc2626",
-                                  flexShrink: 0,
-                                }}
-                              />
-                              <span style={{ whiteSpace: "nowrap" }}>{agent.is_active ? "On Duty" : "Inactive"}</span>
-                            </span>
-                            <div style={{ fontSize: "11.5px", color: "#64748b" }}>
-                              <span style={{ color: (agent.assigned_ticket_count || 0) > 0 ? "#2563eb" : "#64748b", fontWeight: (agent.assigned_ticket_count || 0) > 0 ? 600 : 400 }}>
-                                {agent.assigned_ticket_count || 0} active
-                              </span>
-                              <span> • </span>
-                              <span>{agent.total_resolved_count || 0} done</span>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Column 3: Cases Handled */}
-                        <td style={tdStyle}>
-                          {(agent.assigned_ticket_count || 0) > 0 ? (
-                            <span
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                padding: "3px 8px",
-                                borderRadius: "5px",
-                                background: "#fffbeb",
-                                border: "1px solid #fde68a",
-                                color: "#b45309",
-                                fontWeight: 700,
-                                fontSize: "12.5px",
-                              }}
-                            >
-                              {agent.assigned_ticket_count} Active
-                            </span>
-                          ) : (
-                            <span style={{ color: "#94a3b8", fontSize: "12.5px", fontWeight: 500 }}>
-                              {agent.total_resolved_count || 0} Resolved
-                            </span>
-                          )}
-                        </td>
-
-                        {/* Column 4: Actions */}
-                        <td style={{ ...tdStyle, textAlign: "right" }}>
-                          <div style={{ display: "inline-flex", gap: "5px", alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap" }}>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setResetPasswordAgent(agent);
-                                setResetPasswordValue("");
-                              }}
-                              style={{
-                                ...ghostButtonStyle,
-                                height: "28px",
-                                padding: "0 8px",
-                                fontSize: "11.5px",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "3px",
-                                borderRadius: "5px",
-                                whiteSpace: "nowrap",
-                              }}
-                              title="Reset Login Password"
-                            >
-                              <KeyIcon />
-                              <span>PIN</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => handleToggleAgent(agent)}
-                              style={{
-                                ...ghostButtonStyle,
-                                height: "28px",
-                                width: "76px",
-                                minWidth: "76px",
-                                padding: "0",
-                                fontSize: "11.5px",
-                                color: agent.is_active ? "#b45309" : "#15803d",
-                                borderColor: agent.is_active ? "#fde68a" : "#bbf7d0",
-                                background: agent.is_active ? "#fffbeb" : "#f0fdf4",
-                                borderRadius: "5px",
-                                whiteSpace: "nowrap",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                textAlign: "center",
-                              }}
-                              title={agent.is_active ? "Deactivate Agent" : "Activate Agent"}
-                            >
-                              {agent.is_active ? "Deactivate" : "Activate"}
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteAgent(agent.id)}
-                              style={{
-                                ...dangerButtonStyle,
-                                height: "28px",
-                                width: "28px",
-                                padding: "0",
-                              }}
-                              title="Remove Agent"
-                            >
-                              <TrashIcon />
-                            </button>
-                          </div>
+                  </thead>
+                  <tbody>
+                    {agents.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} style={{ ...tdStyle, textAlign: "center", padding: "32px", color: "#64748b" }}>
+                          No support agents registered yet. Click '+ Add support agent' above to register your first agent.
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    ) : (
+                      agents.map((agent) => (
+                        <tr key={agent.id}>
+                          {/* Column 1: Agent Details (Name, Phone, Email) */}
+                          <td style={tdStyle}>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                              <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "13px" }}>{agent.name}</div>
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11.5px", color: "#64748b", flexWrap: "wrap" }}>
+                                {agent.phone && (
+                                  <>
+                                    <span style={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                                      <PhoneIcon />
+                                      {agent.phone.startsWith("+91") ? agent.phone : `+91 ${agent.phone}`}
+                                    </span>
+                                    <span>•</span>
+                                  </>
+                                )}
+                                <span>{agent.email}</span>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Column 2: Duty Status & Assigned/Resolved */}
+                          <td style={tdStyle}>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  gap: "4px",
+                                  padding: "2px 8px",
+                                  borderRadius: "4px",
+                                  fontSize: "11px",
+                                  fontWeight: 600,
+                                  background: agent.is_active ? "#f0fdf4" : "#fef2f2",
+                                  color: agent.is_active ? "#15803d" : "#b91c1c",
+                                  border: `1px solid ${agent.is_active ? "#bbf7d0" : "#fecaca"}`,
+                                  width: "fit-content",
+                                  minWidth: "fit-content",
+                                  whiteSpace: "nowrap",
+                                  boxSizing: "border-box",
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    width: "5px",
+                                    height: "5px",
+                                    borderRadius: "50%",
+                                    background: agent.is_active ? "#16a34a" : "#dc2626",
+                                    flexShrink: 0,
+                                  }}
+                                />
+                                <span style={{ whiteSpace: "nowrap" }}>{agent.is_active ? "On Duty" : "Inactive"}</span>
+                              </span>
+                              <div style={{ fontSize: "11.5px", color: "#64748b" }}>
+                                <span style={{ color: (agent.assigned_ticket_count || 0) > 0 ? "#2563eb" : "#64748b", fontWeight: (agent.assigned_ticket_count || 0) > 0 ? 600 : 400 }}>
+                                  {agent.assigned_ticket_count || 0} active
+                                </span>
+                                <span> • </span>
+                                <span>{agent.total_resolved_count || 0} done</span>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Column 3: Cases Handled */}
+                          <td style={tdStyle}>
+                            {(agent.assigned_ticket_count || 0) > 0 ? (
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  padding: "3px 8px",
+                                  borderRadius: "5px",
+                                  background: "#fffbeb",
+                                  border: "1px solid #fde68a",
+                                  color: "#b45309",
+                                  fontWeight: 700,
+                                  fontSize: "12.5px",
+                                }}
+                              >
+                                {agent.assigned_ticket_count} Active
+                              </span>
+                            ) : (
+                              <span style={{ color: "#94a3b8", fontSize: "12.5px", fontWeight: 500 }}>
+                                {agent.total_resolved_count || 0} Resolved
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Column 4: Actions */}
+                          <td style={{ ...tdStyle, textAlign: "right" }}>
+                            <div style={{ display: "inline-flex", gap: "5px", alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap" }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setResetPasswordAgent(agent);
+                                  setResetPasswordValue("");
+                                }}
+                                style={{
+                                  ...ghostButtonStyle,
+                                  height: "28px",
+                                  padding: "0 8px",
+                                  fontSize: "11.5px",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px",
+                                  borderRadius: "5px",
+                                  whiteSpace: "nowrap",
+                                }}
+                                title="Reset Login Password"
+                              >
+                                <LockIcon />
+                                <span>PIN</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleToggleAgent(agent)}
+                                style={{
+                                  ...ghostButtonStyle,
+                                  height: "28px",
+                                  width: "76px",
+                                  minWidth: "76px",
+                                  padding: "0",
+                                  fontSize: "11.5px",
+                                  color: agent.is_active ? "#b45309" : "#15803d",
+                                  borderColor: agent.is_active ? "#fde68a" : "#bbf7d0",
+                                  background: agent.is_active ? "#fffbeb" : "#f0fdf4",
+                                  borderRadius: "5px",
+                                  whiteSpace: "nowrap",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  textAlign: "center",
+                                }}
+                                title={agent.is_active ? "Deactivate Agent" : "Activate Agent"}
+                              >
+                                {agent.is_active ? "Deactivate" : "Activate"}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAgent(agent.id)}
+                                style={{
+                                  ...dangerButtonStyle,
+                                  height: "28px",
+                                  width: "28px",
+                                  padding: "0",
+                                }}
+                                title="Remove Agent"
+                              >
+                                <TrashIcon />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* TICKET DETAIL DRAWER / MODAL */}
       {selectedTicketId && (

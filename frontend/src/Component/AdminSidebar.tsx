@@ -47,6 +47,10 @@ const AdminSidebar = () => {
       to: `/builder/${siteId}/admin/payment-settings`,
     },
     {
+      label: "Pages & Policies",
+      to: `/builder/${siteId}/admin/pages`,
+    },
+    {
       label: "Support & CRM",
       to: `/builder/${siteId}/admin/support`,
     },

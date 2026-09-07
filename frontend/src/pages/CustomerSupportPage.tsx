@@ -191,6 +191,29 @@ const STATUS_CONFIG: Record<
   },
 };
 
+function parseApiError(data: any, fallback: string = "Failed to process request"): string {
+  if (!data) return fallback;
+  if (typeof data === "string") return data;
+  if (typeof data.detail === "string") return data.detail;
+  if (Array.isArray(data.detail)) {
+    return data.detail
+      .map((item: any) => {
+        if (typeof item === "string") return item;
+        const field = Array.isArray(item.loc) ? item.loc.filter((x: any) => x !== "body").join(".") : "";
+        const msg = item.msg || JSON.stringify(item);
+        return field ? `${field}: ${msg}` : msg;
+      })
+      .join(", ") || fallback;
+  }
+  if (data.detail && typeof data.detail === "object") {
+    if (typeof data.detail.message === "string") return data.detail.message;
+    return JSON.stringify(data.detail);
+  }
+  if (typeof data.message === "string") return data.message;
+  if (typeof data.error === "string") return data.error;
+  return fallback;
+}
+
 export default function CustomerSupportPage({
   siteId: propSiteId,
   siteSlug: propSiteSlug,
@@ -231,6 +254,37 @@ export default function CustomerSupportPage({
   }, []);
 
   const { siteData } = usePublicSiteTheme(activeSlug);
+  const [liveCrmOverride, setLiveCrmOverride] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const handleCrmChange = (e: Event) => {
+      const ce = e as CustomEvent<{ siteId?: string; siteSlug?: string; crm_enabled: boolean }>;
+      if (!ce.detail) return;
+      const { siteId: targetSiteId, siteSlug: targetSiteSlug, crm_enabled } = ce.detail;
+      const curSlug = activeSlug;
+      if (
+        (targetSiteSlug && curSlug && targetSiteSlug.toLowerCase().trim() === curSlug.toLowerCase().trim()) ||
+        (targetSiteId && curSlug && targetSiteId.toLowerCase().trim() === curSlug.toLowerCase().trim())
+      ) {
+        setLiveCrmOverride(crm_enabled);
+      }
+    };
+    window.addEventListener("wc_crm_status_changed", handleCrmChange);
+    return () => window.removeEventListener("wc_crm_status_changed", handleCrmChange);
+  }, [activeSlug]);
+
+  const isCrmEnabled =
+    liveCrmOverride !== null
+      ? liveCrmOverride
+      : (restProps as any)?.crm_enabled !== undefined
+      ? Boolean((restProps as any).crm_enabled)
+      : (restProps as any)?.siteDefinition?.crm_enabled !== undefined
+      ? Boolean((restProps as any).siteDefinition.crm_enabled)
+      : (propTheme as any)?.crm_enabled !== undefined
+      ? Boolean((propTheme as any).crm_enabled)
+      : siteData?.crm_enabled !== undefined
+      ? Boolean(siteData.crm_enabled)
+      : true;
   const activeTheme = propTheme || siteData?.theme || {};
   const isLight = activeTheme.mode !== "dark";
 
@@ -1121,10 +1175,14 @@ export default function CustomerSupportPage({
         attachments.push(uploadedUrl);
       }
 
+      if (message.trim().length < 5) {
+        throw new Error("Please provide more details in your message (at least 5 characters).");
+      }
+
       const payload: any = {
         order_id: selectedOrderId || null,
         category: selectedCategory,
-        priority: "normal",
+        priority: "medium",
         subject: finalSubject,
         message: message.trim(),
         attachments,
@@ -1138,9 +1196,9 @@ export default function CustomerSupportPage({
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data.detail || "Failed to submit support request");
+        throw new Error(parseApiError(data, "Failed to submit support request"));
       }
 
       setSubject("");
@@ -1238,17 +1296,75 @@ export default function CustomerSupportPage({
           </div>
         )}
 
-        {/* Clean Header Bar */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: "10px",
-            width: "100%",
-          }}
-        >
+        {/* When CRM is disabled */}
+        {!isCrmEnabled ? (
+          <div
+            style={{
+              background: cardBg,
+              borderRadius: cardRadius,
+              border: `1px solid ${borderColor}`,
+              padding: isMobile ? "40px 20px" : "64px 32px",
+              textAlign: "center",
+              color: textColor,
+              marginTop: "20px",
+            }}
+          >
+            <div
+              style={{
+                width: "56px",
+                height: "56px",
+                borderRadius: "50%",
+                background: "rgba(239, 68, 68, 0.1)",
+                color: "#ef4444",
+                display: "grid",
+                placeItems: "center",
+                margin: "0 auto 16px auto",
+              }}
+            >
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            </div>
+            <h2 style={{ fontSize: "20px", fontWeight: 800, margin: "0 0 8px 0" }}>Customer Support Unavailable</h2>
+            <p style={{ color: textMuted, fontSize: "14px", maxWidth: "460px", margin: "0 auto 24px auto", lineHeight: 1.5 }}>
+              Customer care and CRM services are currently paused for this store. Please check back later or continue exploring our catalog.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                const homeTarget = activeSlug ? `/store/${activeSlug}` : "/";
+                navigate(homeTarget);
+              }}
+              style={{
+                padding: "10px 24px",
+                borderRadius: buttonRadius,
+                border: "none",
+                background: accentColor,
+                color: buttonTextColor,
+                fontSize: "13.5px",
+                fontWeight: 700,
+                cursor: "pointer",
+                transition: "opacity 0.15s ease",
+              }}
+            >
+              ← Back to Store
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Clean Header Bar */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "10px",
+                width: "100%",
+              }}
+            >
           {/* Breadcrumb */}
           <div
             style={{
@@ -2844,6 +2960,8 @@ export default function CustomerSupportPage({
             </form>
           </div>
         )}
+        </>
+      )}
 
         {/* Fullscreen Lightbox Zoom Modal */}
         <SupportImageZoomModal

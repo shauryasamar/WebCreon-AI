@@ -35,7 +35,7 @@ from models import (
     Shipment, InventoryMovement, OrderStatusHistory, User, UserAddress,
     DeliveryAgent, DeliverySettings,
 )
-from routers import auth, cart, categories, checkout, checkout_settings, collections, coupons, orders, payments, products, returns, support
+from routers import auth, cart, categories, checkout, checkout_settings, collections, coupons, orders, pages, payments, products, returns, support
 from routers import delivery
 
 
@@ -126,6 +126,8 @@ app.include_router(payments.router)
 app.include_router(returns.router)
 app.include_router(delivery.router)
 app.include_router(coupons.router)
+app.include_router(pages.router)
+app.include_router(pages.router, prefix="/api")
 app.include_router(support.router)
 app.include_router(support.router, prefix="/api")
 
@@ -951,9 +953,16 @@ def get_public_site_theme_fast(
         response.headers["ETag"] = cached.get("etag", f'"{cached["id"]}"')
         return cached["theme_payload"]
 
-    site = session.exec(
-        select(Site.id, Site.slug, Site.site_definition).where(Site.slug == slug)
-    ).first()
+    site = None
+    try:
+        uuid_val = UUID(slug)
+        site = session.exec(
+            select(Site.id, Site.slug, Site.site_definition).where((Site.slug == slug) | (Site.id == uuid_val))
+        ).first()
+    except Exception:
+        site = session.exec(
+            select(Site.id, Site.slug, Site.site_definition).where(Site.slug == slug)
+        ).first()
 
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
@@ -968,6 +977,7 @@ def get_public_site_theme_fast(
         "site_name": site_def.get("site_name") or site_def.get("site_title") or site_def.get("title") or site_def.get("name") or "",
         "logo": site_def.get("logo") or site_def.get("header", {}).get("logo") or site_def.get("theme", {}).get("logo"),
         "theme": site_def.get("theme") or {},
+        "crm_enabled": bool(site_def.get("crm_enabled", True)),
         "navbar": {
             "brandName": site_def.get("navbar", {}).get("brandName") or site_def.get("header", {}).get("brandName") or site_def.get("site_name") or "",
             "logoUrl": site_def.get("logo") or site_def.get("header", {}).get("logo") or site_def.get("theme", {}).get("logo"),
@@ -999,9 +1009,16 @@ def get_public_site_by_slug(
         response.headers["ETag"] = cached.get("etag", f'"{cached["id"]}"')
         return cached["full_site"]
 
-    site = session.exec(
-        select(Site).where(Site.slug == slug)
-    ).first()
+    site = None
+    try:
+        uuid_val = UUID(slug)
+        site = session.exec(
+            select(Site).where((Site.slug == slug) | (Site.id == uuid_val))
+        ).first()
+    except Exception:
+        site = session.exec(
+            select(Site).where(Site.slug == slug)
+        ).first()
 
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")

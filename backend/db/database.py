@@ -159,6 +159,30 @@ def create_db_and_tables():
                 ALTER TABLE orders ADD COLUMN IF NOT EXISTS coupon_code VARCHAR(50);
                 ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12, 2) DEFAULT 0.00;
 
+                CREATE TABLE IF NOT EXISTS store_pages (
+                    id UUID PRIMARY KEY,
+                    site_id UUID NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                    title VARCHAR(255) NOT NULL,
+                    slug VARCHAR(255) NOT NULL,
+                    subtitle VARCHAR(500),
+                    content TEXT NOT NULL DEFAULT '',
+                    page_type VARCHAR(50) NOT NULL DEFAULT 'custom',
+                    is_published BOOLEAN NOT NULL DEFAULT TRUE,
+                    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+                    meta_title VARCHAR(255),
+                    meta_description VARCHAR(1000),
+                    contact_email VARCHAR(255),
+                    contact_phone VARCHAR(100),
+                    contact_address VARCHAR(500),
+                    contact_hours VARCHAR(255),
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT uq_store_pages_site_slug UNIQUE (site_id, slug)
+                );
+                CREATE INDEX IF NOT EXISTS ix_store_pages_site_id ON store_pages(site_id);
+                CREATE INDEX IF NOT EXISTS ix_store_pages_slug ON store_pages(slug);
+                CREATE INDEX IF NOT EXISTS ix_store_pages_site_slug ON store_pages(site_id, slug);
+
                 UPDATE order_items SET return_window_days = 0, returnable_quantity = 0 WHERE order_id IN (SELECT id FROM orders WHERE id::text LIKE '2cd85585%');
                 UPDATE orders SET escrow_status = 'unheld', return_window_closes_at = delivered_at WHERE id::text LIKE '2cd85585%';
                 UPDATE tenant_ledger_entries SET escrow_status = 'unheld', status = 'paid', settled_at = CURRENT_TIMESTAMP WHERE order_id IN (SELECT id FROM orders WHERE id::text LIKE '2cd85585%');

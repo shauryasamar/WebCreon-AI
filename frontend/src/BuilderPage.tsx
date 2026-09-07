@@ -33,6 +33,8 @@ import TenantEarningsPage from "./Component/TenantEarningsPage";
 import DeliverySettingsPage from "./Component/DeliverySettingsPage";
 import AdminSupportDesk from "./Component/AdminSupportDesk";
 import AdminProfileSettings from "./Component/AdminProfileSettings";
+import AdminPages from "./Component/AdminPages";
+import StorefrontCustomPage from "./Component/StorefrontCustomPage";
 
 import EditorRenderPage from "./customizations/EditorRenderPage";
 import EditorSidebar from "./customizations/EditorSidebar";
@@ -503,8 +505,11 @@ function StorefrontShell({
           logoUrl={siteDefinition.theme?.logoUrl || siteDefinition.theme?.logo_url || ""}
           theme={{
             ...siteDefinition.theme,
+            crm_enabled: siteDefinition.crm_enabled !== false,
             navbar_position: storefrontNavbarMode,
           }}
+          crm_enabled={siteDefinition.crm_enabled !== false}
+          siteDefinition={siteDefinition}
           navigation={navbarProps.navigation}
           showSearch={navbarProps.showSearch}
           showAccount={navbarProps.showAccount}
@@ -676,6 +681,8 @@ function StorefrontShell({
         <Footer
           {...getFooterEditorProps(siteDefinition)}
           theme={siteDefinition.theme}
+          appBase={appBase}
+          siteSlug={siteSlug}
         />
       </div>
     </div>
@@ -764,6 +771,7 @@ function StorefrontPage({
             selectedBlockId={selectedBlockId}
             onSelectBlock={onSelectBlock}
             theme={siteDefinition.theme}
+            appBase={appBase}
           />
         </Suspense>
       ) : (
@@ -775,6 +783,7 @@ function StorefrontPage({
           siteName={resolvedSiteName}
           selectedProduct={selectedProduct ?? undefined}
           theme={siteDefinition.theme}
+          appBase={appBase}
         />
       )}
     </StorefrontShell>
@@ -1135,6 +1144,26 @@ function BuilderPageContent() {
     return JSON.stringify(draftSiteDefinition) !== JSON.stringify(siteDefinition);
   }, [draftSiteDefinition, siteDefinition]);
 
+  // Real-time synchronization when CRM is toggled from AdminSupportDesk
+  useEffect(() => {
+    const handleCrmChange = (e: Event) => {
+      const customEvent = e as CustomEvent<{ siteId?: string; siteSlug?: string; crm_enabled: boolean }>;
+      if (!customEvent.detail) return;
+      const { siteId: targetSiteId, siteSlug: targetSiteSlug, crm_enabled } = customEvent.detail;
+      const currentId = resolvedSiteId || siteId;
+      if (
+        (targetSiteId && (targetSiteId === currentId || targetSiteId === siteSlug || targetSiteId === siteSlugParam)) ||
+        (targetSiteSlug && (targetSiteSlug === currentId || targetSiteSlug === siteSlug || targetSiteSlug === siteSlugParam))
+      ) {
+        setSiteDefinition((prev) => (prev ? { ...prev, crm_enabled } : prev));
+        setDraftSiteDefinition((prev) => (prev ? { ...prev, crm_enabled } : prev));
+        setPublishedSiteDefinition((prev) => (prev ? { ...prev, crm_enabled } : prev));
+      }
+    };
+    window.addEventListener("wc_crm_status_changed", handleCrmChange);
+    return () => window.removeEventListener("wc_crm_status_changed", handleCrmChange);
+  }, [resolvedSiteId, siteId, siteSlug, siteSlugParam]);
+
   useEffect(() => {
     window.scrollTo({
       top: 0,
@@ -1364,11 +1393,13 @@ function BuilderPageContent() {
               ? "checkout-charges"
               : location.pathname.includes("/orders")
                 ? "orders"
-                : location.pathname.includes("/support")
-                  ? "support"
-                  : location.pathname.includes("/home-sections")
-                  ? "home-sections"
-                  : "products"
+                : location.pathname.includes("/pages")
+                  ? "pages"
+                  : location.pathname.includes("/support")
+                    ? "support"
+                    : location.pathname.includes("/home-sections")
+                    ? "home-sections"
+                    : "products"
     : null;
 
   const storefrontNavbarMode =
@@ -1736,6 +1767,12 @@ function BuilderPageContent() {
           } catch (_) { }
         }
 
+        if (data.slug || siteSlugParam) {
+          try {
+            localStorage.setItem("wc_last_visited_store", data.slug || siteSlugParam || "");
+          } catch (_) { }
+        }
+
         const freshAppBase = isStoreRoute
           ? `/store/${siteSlugParam ?? ""}`
           : `/builder/${data.id || siteId || ""}`;
@@ -1743,22 +1780,31 @@ function BuilderPageContent() {
 
         if (parsedSiteDefinition.pages?.length > 0) {
           const currentPath = window.location.pathname;
+          const normCurrentPath = currentPath.replace(/\/+$/, "");
+          const normAppBase = freshAppBase.replace(/\/+$/, "");
 
           const staticPageRoutes = parsedSiteDefinition.pages.map((page) =>
-            toFullAppPath(freshAppBase, page.route)
+            toFullAppPath(freshAppBase, page.route).replace(/\/+$/, "")
           );
-          const isKnownStaticRoute = staticPageRoutes.includes(currentPath);
+          const isKnownStaticRoute = staticPageRoutes.includes(normCurrentPath);
           const isDynamicProductRoute =
-            currentPath.startsWith(`${freshAppBase}/products/`);
-          const isOrdersRoute = currentPath === `${freshAppBase}/orders`;
-          const isProfileRoute = currentPath === `${freshAppBase}/profile` || currentPath === `${freshAppBase}/account`;
-          const isSupportRoute = currentPath === `${freshAppBase}/support`;
-          const isCartRoute = currentPath === `${freshAppBase}/cart`;
-          const isCheckoutRoute = currentPath === `${freshAppBase}/checkout`;
-          const isLoginRoute = currentPath === `${freshAppBase}/login`;
-          const isSignupRoute = currentPath === `${freshAppBase}/signup`;
+            normCurrentPath.startsWith(`${normAppBase}/products/`);
+          const isOrdersRoute = normCurrentPath === `${normAppBase}/orders`;
+          const isProfileRoute = normCurrentPath === `${normAppBase}/profile` || normCurrentPath === `${normAppBase}/account`;
+          const isSupportRoute = normCurrentPath === `${normAppBase}/support`;
+          const isCartRoute = normCurrentPath === `${normAppBase}/cart`;
+          const isCheckoutRoute = normCurrentPath === `${normAppBase}/checkout`;
+          const isLoginRoute = normCurrentPath === `${normAppBase}/login`;
+          const isSignupRoute = normCurrentPath === `${normAppBase}/signup`;
+          const isCustomPageRoute =
+            normCurrentPath === `${normAppBase}/about` ||
+            normCurrentPath === `${normAppBase}/contact` ||
+            normCurrentPath === `${normAppBase}/privacy` ||
+            normCurrentPath === `${normAppBase}/terms` ||
+            normCurrentPath === `${normAppBase}/story` ||
+            normCurrentPath.startsWith(`${normAppBase}/pages/`);
           const isAdminPath =
-            !isStoreRoute && currentPath.startsWith(`${freshBuilderBase}/admin`);
+            !isStoreRoute && normCurrentPath.startsWith(`${freshBuilderBase}/admin`);
 
           if (
             !isKnownStaticRoute &&
@@ -1770,6 +1816,7 @@ function BuilderPageContent() {
             !isCheckoutRoute &&
             !isLoginRoute &&
             !isSignupRoute &&
+            !isCustomPageRoute &&
             !isAdminPath
           ) {
             const homePage =
@@ -2521,6 +2568,7 @@ function BuilderPageContent() {
                     <Route path="products" element={<AdminProducts />} />
                     <Route path="home-sections" element={<AdminHomeSections />} />
                     <Route path="orders" element={<AdminOrders />} />
+                    <Route path="pages" element={<AdminPages siteId={resolvedSiteId || siteId} siteSlug={siteSlug} />} />
                     <Route path="support" element={<AdminSupportDesk />} />
                     <Route path="discounts" element={<AdminCoupons />} />
 
@@ -2711,6 +2759,167 @@ function BuilderPageContent() {
                 />
               )}
 
+              {/* Dynamic Store Pages & Policy CMS Storefront Routes */}
+              <Route
+                path="about"
+                element={
+                  <StorefrontShell
+                    siteDefinition={activeSiteDefinition}
+                    siteId={resolvedSiteId || siteId || ""}
+                    siteSlug={siteSlug}
+                    editMode={editMode}
+                    adminTopbarVisible={showAdminTopbar}
+                    selectedBlockId={selectedBlockId}
+                    onSelectBlock={handleSelectBlock}
+                    storefrontNavbarMode={storefrontNavbarMode}
+                    navbarFixedBounds={navbarFixedBounds}
+                    appBase={appBase}
+                  >
+                    <StorefrontCustomPage
+                      pageSlug="about"
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      appBase={appBase}
+                      siteName={siteName}
+                    />
+                  </StorefrontShell>
+                }
+              />
+
+              <Route
+                path="contact"
+                element={
+                  <StorefrontShell
+                    siteDefinition={activeSiteDefinition}
+                    siteId={resolvedSiteId || siteId || ""}
+                    siteSlug={siteSlug}
+                    editMode={editMode}
+                    adminTopbarVisible={showAdminTopbar}
+                    selectedBlockId={selectedBlockId}
+                    onSelectBlock={handleSelectBlock}
+                    storefrontNavbarMode={storefrontNavbarMode}
+                    navbarFixedBounds={navbarFixedBounds}
+                    appBase={appBase}
+                  >
+                    <StorefrontCustomPage
+                      pageSlug="contact"
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      appBase={appBase}
+                      siteName={siteName}
+                    />
+                  </StorefrontShell>
+                }
+              />
+
+              <Route
+                path="privacy"
+                element={
+                  <StorefrontShell
+                    siteDefinition={activeSiteDefinition}
+                    siteId={resolvedSiteId || siteId || ""}
+                    siteSlug={siteSlug}
+                    editMode={editMode}
+                    adminTopbarVisible={showAdminTopbar}
+                    selectedBlockId={selectedBlockId}
+                    onSelectBlock={handleSelectBlock}
+                    storefrontNavbarMode={storefrontNavbarMode}
+                    navbarFixedBounds={navbarFixedBounds}
+                    appBase={appBase}
+                  >
+                    <StorefrontCustomPage
+                      pageSlug="privacy"
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      appBase={appBase}
+                      siteName={siteName}
+                    />
+                  </StorefrontShell>
+                }
+              />
+
+              <Route
+                path="terms"
+                element={
+                  <StorefrontShell
+                    siteDefinition={activeSiteDefinition}
+                    siteId={resolvedSiteId || siteId || ""}
+                    siteSlug={siteSlug}
+                    editMode={editMode}
+                    adminTopbarVisible={showAdminTopbar}
+                    selectedBlockId={selectedBlockId}
+                    onSelectBlock={handleSelectBlock}
+                    storefrontNavbarMode={storefrontNavbarMode}
+                    navbarFixedBounds={navbarFixedBounds}
+                    appBase={appBase}
+                  >
+                    <StorefrontCustomPage
+                      pageSlug="terms"
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      appBase={appBase}
+                      siteName={siteName}
+                    />
+                  </StorefrontShell>
+                }
+              />
+
+              <Route
+                path="story"
+                element={
+                  <StorefrontShell
+                    siteDefinition={activeSiteDefinition}
+                    siteId={resolvedSiteId || siteId || ""}
+                    siteSlug={siteSlug}
+                    editMode={editMode}
+                    adminTopbarVisible={showAdminTopbar}
+                    selectedBlockId={selectedBlockId}
+                    onSelectBlock={handleSelectBlock}
+                    storefrontNavbarMode={storefrontNavbarMode}
+                    navbarFixedBounds={navbarFixedBounds}
+                    appBase={appBase}
+                  >
+                    <StorefrontCustomPage
+                      pageSlug="story"
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      appBase={appBase}
+                      siteName={siteName}
+                    />
+                  </StorefrontShell>
+                }
+              />
+
+              <Route
+                path="pages/:customSlug"
+                element={
+                  <StorefrontShell
+                    siteDefinition={activeSiteDefinition}
+                    siteId={resolvedSiteId || siteId || ""}
+                    siteSlug={siteSlug}
+                    editMode={editMode}
+                    adminTopbarVisible={showAdminTopbar}
+                    selectedBlockId={selectedBlockId}
+                    onSelectBlock={handleSelectBlock}
+                    storefrontNavbarMode={storefrontNavbarMode}
+                    navbarFixedBounds={navbarFixedBounds}
+                    appBase={appBase}
+                  >
+                    <StorefrontCustomPage
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      appBase={appBase}
+                      siteName={siteName}
+                    />
+                  </StorefrontShell>
+                }
+              />
 
               {(activeSiteDefinition?.pages || [])
                 .filter((page) => {
@@ -2734,7 +2943,12 @@ function BuilderPageContent() {
                     normalized === "profile" ||
                     normalized === "account" ||
                     normalized === "login" ||
-                    normalized === "signup"
+                    normalized === "signup" ||
+                    normalized === "about" ||
+                    normalized === "contact" ||
+                    normalized === "privacy" ||
+                    normalized === "terms" ||
+                    normalized === "story"
                   ) {
                     return false;
                   }

@@ -278,6 +278,37 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchActive, setSearchActive] = useState(false);
 
+  const [liveCrmOverride, setLiveCrmOverride] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const handleCrmChange = (e: Event) => {
+      const ce = e as CustomEvent<{ siteId?: string; siteSlug?: string; crm_enabled: boolean }>;
+      if (!ce.detail) return;
+      const { siteId: targetSiteId, siteSlug: targetSiteSlug, crm_enabled } = ce.detail;
+      const curSlug = props.siteSlug || slug;
+      const curId = props.siteId || siteId;
+      if (
+        (targetSiteId && (targetSiteId === curId || targetSiteId === curSlug)) ||
+        (targetSiteSlug && (targetSiteSlug === curId || targetSiteSlug === curSlug))
+      ) {
+        setLiveCrmOverride(crm_enabled);
+      }
+    };
+    window.addEventListener("wc_crm_status_changed", handleCrmChange);
+    return () => window.removeEventListener("wc_crm_status_changed", handleCrmChange);
+  }, [props.siteSlug, slug, props.siteId, siteId]);
+
+  const isCrmEnabled =
+    liveCrmOverride !== null
+      ? liveCrmOverride
+      : props.crm_enabled !== undefined
+      ? Boolean(props.crm_enabled)
+      : (theme as any)?.crm_enabled !== undefined
+      ? Boolean((theme as any)?.crm_enabled)
+      : (props.siteDefinition as any)?.crm_enabled !== undefined
+      ? Boolean((props.siteDefinition as any)?.crm_enabled)
+      : true;
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const q = params.get("search") || "";
@@ -1945,13 +1976,15 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                       >
                         Orders
                       </button>
-                      <button
-                        type="button"
-                        style={menuItemStyle}
-                        onClick={handleGoToSupport}
-                      >
-                        Help & Support
-                      </button>
+                      {isCrmEnabled && (
+                        <button
+                          type="button"
+                          style={menuItemStyle}
+                          onClick={handleGoToSupport}
+                        >
+                          Help & Support
+                        </button>
+                      )}
                       {isAuthenticated ? (
                         <button
                           type="button"
@@ -2217,13 +2250,15 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         <div role="menu" style={dropdownPanelStyle}>
                           <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
                           <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
-                          <button
-                            type="button"
-                            style={menuItemStyle}
-                            onClick={handleGoToSupport}
-                          >
-                            Help & Support
-                          </button>
+                          {isCrmEnabled && (
+                            <button
+                              type="button"
+                              style={menuItemStyle}
+                              onClick={handleGoToSupport}
+                            >
+                              Help & Support
+                            </button>
+                          )}
                           {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
                         </div>
                       )}
@@ -2442,13 +2477,15 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         <div role="menu" style={dropdownPanelStyle}>
                           <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
                           <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
-                          <button
-                            type="button"
-                            style={menuItemStyle}
-                            onClick={handleGoToSupport}
-                          >
-                            Help & Support
-                          </button>
+                          {isCrmEnabled && (
+                            <button
+                              type="button"
+                              style={menuItemStyle}
+                              onClick={handleGoToSupport}
+                            >
+                              Help & Support
+                            </button>
+                          )}
                           {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
                         </div>
                       )}
@@ -2682,13 +2719,15 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         <div role="menu" style={dropdownPanelStyle}>
                           <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
                           <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
-                          <button
-                            type="button"
-                            style={menuItemStyle}
-                            onClick={handleGoToSupport}
-                          >
-                            Help & Support
-                          </button>
+                          {isCrmEnabled && (
+                            <button
+                              type="button"
+                              style={menuItemStyle}
+                              onClick={handleGoToSupport}
+                            >
+                              Help & Support
+                            </button>
+                          )}
                           {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
                         </div>
                       )}
@@ -2939,13 +2978,15 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         <div role="menu" style={dropdownPanelStyle}>
                           <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
                           <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
-                          <button
-                            type="button"
-                            style={menuItemStyle}
-                            onClick={handleGoToSupport}
-                          >
-                            Help & Support
-                          </button>
+                          {isCrmEnabled && (
+                            <button
+                              type="button"
+                              style={menuItemStyle}
+                              onClick={handleGoToSupport}
+                            >
+                              Help & Support
+                            </button>
+                          )}
                           {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
                         </div>
                       )}
@@ -3164,13 +3205,15 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                       <div role="menu" style={dropdownPanelStyle}>
                         <button type="button" style={menuItemStyle} onClick={handleGoToProfile}>Profile</button>
                         <button type="button" style={menuItemStyle} onClick={handleGoToOrders}>Orders</button>
-                        <button
-                          type="button"
-                          style={menuItemStyle}
-                          onClick={handleGoToSupport}
-                        >
-                          Help & Support
-                        </button>
+                        {isCrmEnabled && (
+                          <button
+                            type="button"
+                            style={menuItemStyle}
+                            onClick={handleGoToSupport}
+                          >
+                            Help & Support
+                          </button>
+                        )}
                         {isAuthenticated && <button type="button" style={menuItemStyle} onClick={handleCustomerLogout}>Logout</button>}
                       </div>
                     )}

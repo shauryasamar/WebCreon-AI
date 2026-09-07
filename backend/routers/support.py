@@ -41,6 +41,7 @@ from auth_utils import (
 )
 from db.database import engine, get_session
 from models import (
+    AdminSite,
     Order,
     OrderItem,
     OrderStatusHistory,
@@ -1285,6 +1286,115 @@ def support_agent_execute_action(
 
 
 # ---------------------------------------------------------------------------
+# Support & CRM Service Settings
+# ---------------------------------------------------------------------------
+
+class SupportSettingsPayload(BaseModel):
+    crm_enabled: bool = True
+
+
+@router.get("/sites/{site_id}/support/settings")
+def get_support_settings(
+    site_id: str,
+    session: Session = Depends(get_session),
+):
+    """Retrieve whether CRM and customer support services are enabled for a store."""
+    site = None
+    try:
+        uuid_val = UUID(site_id)
+        site = session.get(Site, uuid_val)
+    except Exception:
+        pass
+
+    if not site:
+        site = session.exec(select(Site).where(Site.slug == site_id)).first()
+
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    site_def = site.site_definition if isinstance(site.site_definition, dict) else {}
+    crm_enabled = site_def.get("crm_enabled", True)
+
+    return {
+        "site_id": str(site.id),
+        "slug": site.slug,
+        "crm_enabled": bool(crm_enabled),
+    }
+
+
+@router.put("/admin/sites/{site_id}/support/settings")
+def update_support_settings(
+    site_id: str,
+    payload: SupportSettingsPayload,
+    admin=Depends(authenticate_admin),
+    session: Session = Depends(get_session),
+):
+    """Enable or disable CRM & Customer Support services for the store (supports UUID or slug)."""
+    site = None
+    try:
+        uuid_val = UUID(site_id)
+        site = session.get(Site, uuid_val)
+    except Exception:
+        pass
+
+    if not site:
+        site = session.exec(select(Site).where(Site.slug == site_id)).first()
+
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    # Verify admin ownership
+    admin_id = admin.get("adminId")
+    try:
+        admin_uuid = UUID(admin_id)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid admin token payload")
+
+    ownership = session.exec(
+        select(AdminSite).where(
+            AdminSite.admin_id == admin_uuid,
+            AdminSite.site_id == site.id,
+        )
+    ).first()
+
+    if not ownership:
+        raise HTTPException(status_code=403, detail="Admin does not have access to this site")
+
+    # Update site_definition
+    site_def = dict(site.site_definition) if isinstance(site.site_definition, dict) else {}
+    site_def["crm_enabled"] = bool(payload.crm_enabled)
+    site.site_definition = site_def
+    flag_modified(site, "site_definition")
+
+    # Update draft_definition if present
+    if site.draft_definition is not None and isinstance(site.draft_definition, dict):
+        draft_def = dict(site.draft_definition)
+        draft_def["crm_enabled"] = bool(payload.crm_enabled)
+        site.draft_definition = draft_def
+        flag_modified(site, "draft_definition")
+
+    site.updated_at = utc_now()
+    session.add(site)
+    session.commit()
+    session.refresh(site)
+
+    # Invalidate public cache
+    try:
+        from main import invalidate_public_site_cache
+        invalidate_public_site_cache(slug=site.slug, site_id=site.id)
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "site_id": str(site.id),
+        "slug": site.slug,
+        "crm_enabled": bool(payload.crm_enabled),
+        "message": f"CRM services {'enabled' if payload.crm_enabled else 'disabled'} successfully.",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Admin Support Agent Management Routes
 # ---------------------------------------------------------------------------
 
@@ -1476,6 +1586,16 @@ def create_customer_ticket(
     """Customer submits a new grievance or order inquiry ticket."""
     resolved_site_id = _resolve_site_uuid(site_id, session)
     customer_id = UUID(customer["userId"])
+
+    site = session.get(Site, resolved_site_id)
+    if not site:
+        raise HTTPException(status_code=404, detail="Store not found")
+    site_def = site.site_definition if isinstance(site.site_definition, dict) else {}
+    if not site_def.get("crm_enabled", True):
+        raise HTTPException(
+            status_code=403,
+            detail="Customer support and CRM services are currently disabled for this store.",
+        )
 
     # Optional order validation
     order = None

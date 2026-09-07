@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   DiwaliGraphics,
   HoliGraphics,
@@ -13,6 +14,8 @@ type FooterProps = {
   tagline?: string;
   copyrightText?: string;
   links?: Array<{ label: string; href: string }>;
+  appBase?: string;
+  siteSlug?: string;
   show_newsletter?: boolean;
   newsletter_title?: string;
   show_social_links?: boolean;
@@ -70,7 +73,7 @@ function isColorDarkHex(colorHex?: string): boolean {
 const Footer: React.FC<FooterProps> = (props) => {
   const {
     copyrightText,
-    links = [
+    links: rawLinks = [
       { label: "About Us", href: "/about" },
       { label: "Contact", href: "/contact" },
       { label: "Privacy Policy", href: "/privacy" },
@@ -95,6 +98,63 @@ const Footer: React.FC<FooterProps> = (props) => {
 
   const brandName = props.brandName || props.brand_name || theme?.brand_name || "Website";
   const tagline = props.tagline !== undefined ? props.tagline : "Your premium shopping destination.";
+
+  const appBase = props.appBase || (props.siteSlug ? `/store/${props.siteSlug}` : "");
+
+  const navigate = useNavigate();
+
+  const links = useMemo(() => {
+    return rawLinks.map((link) => {
+      const href = link.href || "#";
+      if (
+        href.startsWith("http://") ||
+        href.startsWith("https://") ||
+        href.startsWith("#") ||
+        href.startsWith("mailto:") ||
+        href.startsWith("tel:")
+      ) {
+        return link;
+      }
+      if (appBase) {
+        const cleanHref = href.startsWith("/") ? href : `/${href}`;
+        if (!cleanHref.startsWith(appBase)) {
+          return { ...link, href: `${appBase}${cleanHref}` };
+        }
+      }
+      return link;
+    });
+  }, [rawLinks, appBase]);
+
+  const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, href?: string) => {
+    if (!href || href === "#") {
+      e.preventDefault();
+      return;
+    }
+    if (
+      href.startsWith("http://") ||
+      href.startsWith("https://") ||
+      href.startsWith("mailto:") ||
+      href.startsWith("tel:")
+    ) {
+      return;
+    }
+    e.preventDefault();
+    let target = href;
+    if (appBase && !target.startsWith("http") && !target.startsWith(appBase)) {
+      const clean = target.startsWith("/") ? target : `/${target}`;
+      target = `${appBase}${clean}`;
+    }
+    navigate(target);
+    try {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch {
+      window.scrollTo(0, 0);
+    }
+    const preview = document.querySelector(".builder-preview-scroll");
+    if (preview) {
+      preview.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
 
   // Responsive state listener
   const [screenSize, setScreenSize] = useState<{ isMobile: boolean; isSmallMobile: boolean }>(() => {
@@ -579,6 +639,7 @@ const Footer: React.FC<FooterProps> = (props) => {
                 <a
                   key={idx}
                   href={link.href || "#"}
+                  onClick={(e) => handleLinkClick(e, link.href)}
                   style={{
                     fontSize: isMobile ? "12.5px" : "13.5px",
                     color: mutedText,
@@ -670,6 +731,7 @@ const Footer: React.FC<FooterProps> = (props) => {
               <a
                 key={idx}
                 href={link.href || "#"}
+                onClick={(e) => handleLinkClick(e, link.href)}
                 style={{
                   fontSize: isMobile ? "13px" : "13.5px",
                   color: textColor,
@@ -757,6 +819,7 @@ const Footer: React.FC<FooterProps> = (props) => {
                 <a
                   key={idx}
                   href={link.href || "#"}
+                  onClick={(e) => handleLinkClick(e, link.href)}
                   style={{
                     fontSize: "13px",
                     color: mutedText,
@@ -851,6 +914,7 @@ const Footer: React.FC<FooterProps> = (props) => {
               <a
                 key={idx}
                 href={link.href || "#"}
+                onClick={(e) => handleLinkClick(e, link.href)}
                 style={{
                   fontSize: isMobile ? "11px" : "11.5px",
                   color: textColor,
@@ -961,6 +1025,7 @@ const Footer: React.FC<FooterProps> = (props) => {
               <a
                 key={idx}
                 href={link.href || "#"}
+                onClick={(e) => handleLinkClick(e, link.href)}
                 style={{
                   fontSize: isMobile ? "12px" : "13px",
                   fontWeight: 600,

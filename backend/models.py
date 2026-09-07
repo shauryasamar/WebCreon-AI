@@ -1273,4 +1273,48 @@ class SupportTicketMessage(SQLModel, table=True):
     read_at: Optional[datetime] = Field(
         default=None,
         sa_column=Column(DateTime(timezone=True), nullable=True),
-    )
+    )
+
+
+class StorePage(SQLModel, table=True):
+    __tablename__ = "store_pages"
+    __table_args__ = (
+        UniqueConstraint("site_id", "slug", name="uq_store_pages_site_slug"),
+        Index("ix_store_pages_site_slug", "site_id", "slug"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    site_id: UUID = Field(foreign_key="sites.id", index=True, nullable=False)
+
+    title: str = Field(max_length=255, nullable=False)
+    slug: str = Field(max_length=255, index=True, nullable=False)
+    subtitle: Optional[str] = Field(default=None, max_length=500, nullable=True)
+    content: str = Field(sa_column=Column(Text, nullable=False, default=""))
+    page_type: str = Field(default="custom", max_length=50, nullable=False)  # "about", "contact", "policy", "terms", "story", "custom"
+
+    is_published: bool = Field(default=True, sa_column=Column(Boolean, nullable=False, default=True))
+    is_default: bool = Field(default=False, sa_column=Column(Boolean, nullable=False, default=False))
+
+    # SEO metadata
+    meta_title: Optional[str] = Field(default=None, max_length=255, nullable=True)
+    meta_description: Optional[str] = Field(default=None, max_length=1000, nullable=True)
+
+    # Contact details for contact/business pages
+    contact_email: Optional[str] = Field(default=None, max_length=255, nullable=True)
+    contact_phone: Optional[str] = Field(default=None, max_length=100, nullable=True)
+    contact_address: Optional[str] = Field(default=None, max_length=500, nullable=True)
+    contact_hours: Optional[str] = Field(default=None, max_length=255, nullable=True)
+
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            onupdate=utc_now,
+        ),
+    )
+

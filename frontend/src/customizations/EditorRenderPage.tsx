@@ -84,6 +84,7 @@ type EditorRenderPageProps = {
   selectedBlockId?: string | null;
   onSelectBlock?: (blockId: string) => void;
   theme?: Theme;
+  appBase?: string;
 };
 
 type EditorBlockWrapperProps = {
@@ -455,6 +456,7 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
   selectedBlockId = null,
   onSelectBlock,
   theme,
+  appBase,
 }) => {
   const { products, cartItems } = useCart();
   const location = useLocation();
@@ -1230,6 +1232,7 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
       siteId,
       siteSlug,
       siteName,
+      appBase,
       editMode: true,
       ...blockProps,
       theme: resolvedTheme,

@@ -1307,6 +1307,59 @@ function StoreSignupWrapper() {
   return <CustomerSignupPage key={slug || "default_signup"} />;
 }
 
+function StandaloneStorePageRedirect({ slug: propSlug }: { slug?: string }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const params = useParams<{ customSlug?: string }>();
+
+  useEffect(() => {
+    let activeSlug = "";
+    try {
+      activeSlug = localStorage.getItem("wc_last_visited_store") || "";
+    } catch (_) {}
+
+    if (!activeSlug && siteSlugMemoryCache.size > 0) {
+      for (const [, site] of siteSlugMemoryCache.entries()) {
+        if (site?.slug) {
+          activeSlug = site.slug;
+          break;
+        }
+      }
+    }
+
+    const targetSlug =
+      propSlug ||
+      params.customSlug ||
+      location.pathname.replace(/^\/pages\//, "").replace(/^\//, "");
+
+    if (activeSlug) {
+      navigate(`/store/${activeSlug}/${targetSlug}`, { replace: true });
+      return;
+    }
+
+    const resolveStore = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/admin/sites`, { credentials: "include" });
+        if (res.ok) {
+          const sites = await res.json();
+          if (Array.isArray(sites) && sites.length > 0) {
+            const chosen = sites[0]?.slug || sites[0]?.id;
+            if (chosen) {
+              navigate(`/store/${chosen}/${targetSlug}`, { replace: true });
+              return;
+            }
+          }
+        }
+      } catch (_) {}
+      navigate("/admin/login", { replace: true });
+    };
+
+    resolveStore();
+  }, [propSlug, params.customSlug, location.pathname, navigate]);
+
+  return <RouteLoadingFallback />;
+}
+
 function AppRoutes() {
   return (
     <Suspense fallback={<RouteLoadingFallback />}>
@@ -1333,6 +1386,13 @@ function AppRoutes() {
         <Route path="/track/:siteId/:orderId" element={<TrackOrderPage />} />
         <Route path="/agent/delivery/:shipmentId" element={<AgentDeliveryPage />} />
 
+        {/* Direct / Standalone Page Resolution for root-level URLs */}
+        <Route path="/about" element={<StandaloneStorePageRedirect slug="about" />} />
+        <Route path="/contact" element={<StandaloneStorePageRedirect slug="contact" />} />
+        <Route path="/privacy" element={<StandaloneStorePageRedirect slug="privacy" />} />
+        <Route path="/terms" element={<StandaloneStorePageRedirect slug="terms" />} />
+        <Route path="/story" element={<StandaloneStorePageRedirect slug="story" />} />
+        <Route path="/pages/:customSlug" element={<StandaloneStorePageRedirect />} />
 
         <Route element={<RequireAdminAuth />}>
           <Route path="/admin/sites" element={<AdminSitesPage />} />

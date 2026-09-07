@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   DiwaliGraphics,
   HoliGraphics,
@@ -96,6 +97,8 @@ export type HeroBannerProps = {
   slides?: HeroSlide[];
   auto_play_interval?: number; // In seconds (default: 3)
   auto_play?: boolean;
+  appBase?: string;
+  siteSlug?: string;
 };
 
 // Countdown Timer Helper Hook supporting both Starts In & Ends In
@@ -194,8 +197,36 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   slides,
   auto_play_interval = 3,
   auto_play = true,
+  appBase,
+  siteSlug,
   ...restProps
 }) => {
+  const navigate = useNavigate();
+
+  const handleCtaClick = (e: React.MouseEvent<HTMLAnchorElement>, href?: string) => {
+    if (!href || href === "#") {
+      e.preventDefault();
+      return;
+    }
+    if (
+      href.startsWith("http://") ||
+      href.startsWith("https://") ||
+      href.startsWith("mailto:") ||
+      href.startsWith("tel:")
+    ) {
+      return;
+    }
+    e.preventDefault();
+    let target = href;
+    const resolvedBase = appBase || (siteSlug ? `/store/${siteSlug}` : "");
+    if (resolvedBase && !target.startsWith("http") && !target.startsWith(resolvedBase)) {
+      const clean = target.startsWith("/") ? target : `/${target}`;
+      target = `${resolvedBase}${clean}`;
+    }
+    navigate(target);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const isDarkMode = theme?.mode === "dark";
 
   const [screenSize, setScreenSize] = useState<{ isMobile: boolean; isTablet: boolean }>(() => {
@@ -745,6 +776,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
         {showPrimaryCta && currentSlide.primary_cta && (
           <a
             href={currentSlide.primary_cta.href || "/products"}
+            onClick={(e) => handleCtaClick(e, currentSlide.primary_cta?.href || "/products")}
             style={getPrimaryButtonStyle()}
           >
             {currentSlide.primary_cta.label}
@@ -753,6 +785,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
         {showSecondaryCta && currentSlide.secondary_cta && (
           <a
             href={currentSlide.secondary_cta.href || "/categories"}
+            onClick={(e) => handleCtaClick(e, currentSlide.secondary_cta?.href || "/categories")}
             style={{
               padding: ctaPadding,
               borderRadius: "999px",

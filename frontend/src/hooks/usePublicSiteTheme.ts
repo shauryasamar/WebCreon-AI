@@ -6,6 +6,7 @@ export type PublicSiteData = {
   site_id?: string;
   siteName: string;
   logo?: string;
+  crm_enabled?: boolean;
   navbar?: {
     brandName?: string;
     logoUrl?: string;
@@ -91,6 +92,28 @@ export function usePublicSiteTheme(slug?: string) {
   const [loadingSite, setLoadingSite] = useState<boolean>(() => !getInitialCachedTheme(slug) && !!slug);
 
   useEffect(() => {
+    if (!slug) return;
+    const handleCrmChange = (e: Event) => {
+      const ce = e as CustomEvent<{ siteId?: string; siteSlug?: string; crm_enabled: boolean }>;
+      if (!ce.detail) return;
+      const { siteId: targetSiteId, siteSlug: targetSiteSlug, crm_enabled } = ce.detail;
+      const cleanSlug = slug.toLowerCase().trim();
+      if (
+        (targetSiteSlug && targetSiteSlug.toLowerCase().trim() === cleanSlug) ||
+        (targetSiteId && targetSiteId.toLowerCase().trim() === cleanSlug)
+      ) {
+        setSiteData((prev) => (prev ? { ...prev, crm_enabled } : prev));
+        const cached = siteThemeMemoryCache.get(slug);
+        if (cached) {
+          siteThemeMemoryCache.set(slug, { ...cached, crm_enabled });
+        }
+      }
+    };
+    window.addEventListener("wc_crm_status_changed", handleCrmChange);
+    return () => window.removeEventListener("wc_crm_status_changed", handleCrmChange);
+  }, [slug]);
+
+  useEffect(() => {
     if (!slug) {
       setLoadingSite(false);
       return;
@@ -115,6 +138,7 @@ export function usePublicSiteTheme(slug?: string) {
           finalSiteData = {
             siteName: cleanSiteName(tData?.site_name, slug),
             logo: tData?.logo,
+            crm_enabled: tData?.crm_enabled !== undefined ? Boolean(tData.crm_enabled) : true,
             navbar: {
               brandName: tData?.navbar?.brandName || cleanSiteName(tData?.site_name, slug),
               logoUrl: tData?.logo || tData?.navbar?.logoUrl,
@@ -152,6 +176,7 @@ export function usePublicSiteTheme(slug?: string) {
           finalSiteData = {
             siteName: formattedName,
             logo: extractedLogo,
+            crm_enabled: def.crm_enabled !== undefined ? Boolean(def.crm_enabled) : true,
             navbar: {
               brandName: extractedBrandName,
               logoUrl: extractedLogo,

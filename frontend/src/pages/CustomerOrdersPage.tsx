@@ -804,6 +804,36 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
   const siteId = propSiteId || customProps.siteId || "";
   const siteSlug = propSiteSlug || customProps.siteSlug || "";
   const theme = propTheme || customProps.theme;
+  const [liveCrmOverride, setLiveCrmOverride] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const handleCrmChange = (e: Event) => {
+      const ce = e as CustomEvent<{ siteId?: string; siteSlug?: string; crm_enabled: boolean }>;
+      if (!ce.detail) return;
+      const { siteId: targetSiteId, siteSlug: targetSiteSlug, crm_enabled } = ce.detail;
+      const curSlug = siteSlug;
+      const curId = siteId;
+      if (
+        (targetSiteSlug && curSlug && targetSiteSlug.toLowerCase().trim() === curSlug.toLowerCase().trim()) ||
+        (targetSiteId && curId && targetSiteId.toLowerCase().trim() === curId.toLowerCase().trim())
+      ) {
+        setLiveCrmOverride(crm_enabled);
+      }
+    };
+    window.addEventListener("wc_crm_status_changed", handleCrmChange);
+    return () => window.removeEventListener("wc_crm_status_changed", handleCrmChange);
+  }, [siteSlug, siteId]);
+
+  const isCrmEnabled =
+    liveCrmOverride !== null
+      ? liveCrmOverride
+      : (customProps as any)?.crm_enabled !== undefined
+      ? Boolean((customProps as any).crm_enabled)
+      : (restProps as any)?.siteDefinition?.crm_enabled !== undefined
+      ? Boolean((restProps as any).siteDefinition.crm_enabled)
+      : (propTheme as any)?.crm_enabled !== undefined
+      ? Boolean((propTheme as any).crm_enabled)
+      : true;
   const navigate = useNavigate();
 
   const isInsideEditor =
@@ -4619,42 +4649,44 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                             </div>
                                           ) : null}
 
-                                          <div style={{ marginTop: "6px" }}>
-                                            <button
-                                              type="button"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                const isStore = typeof window !== "undefined" && window.location.pathname.startsWith("/store/");
-                                                const isBuilder = typeof window !== "undefined" && window.location.pathname.startsWith("/builder/");
-                                                const prefix = isStore
-                                                  ? `/store/${siteSlug || ""}`
-                                                  : isBuilder
-                                                  ? `/builder/${siteId || siteSlug || ""}`
-                                                  : (siteSlug ? `/store/${siteSlug}` : "");
-                                                const targetPath = `${prefix}/support?tab=new&orderId=${detail.id}&itemId=${item.id}`;
-                                                navigate(targetPath);
-                                              }}
-                                              style={{
-                                                background: "transparent",
-                                                border: "none",
-                                                color: accentColor,
-                                                fontSize: "11.5px",
-                                                fontWeight: 600,
-                                                cursor: "pointer",
-                                                padding: 0,
-                                                display: "inline-flex",
-                                                alignItems: "center",
-                                                gap: "4px",
-                                                textDecoration: "underline",
-                                                textUnderlineOffset: "2px",
-                                              }}
-                                            >
-                                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                                              </svg>
-                                              <span>Need help with this product?</span>
-                                            </button>
-                                          </div>
+                                          {isCrmEnabled && (
+                                            <div style={{ marginTop: "6px" }}>
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  const isStore = typeof window !== "undefined" && window.location.pathname.startsWith("/store/");
+                                                  const isBuilder = typeof window !== "undefined" && window.location.pathname.startsWith("/builder/");
+                                                  const prefix = isStore
+                                                    ? `/store/${siteSlug || ""}`
+                                                    : isBuilder
+                                                    ? `/builder/${siteId || siteSlug || ""}`
+                                                    : (siteSlug ? `/store/${siteSlug}` : "");
+                                                  const targetPath = `${prefix}/support?tab=new&orderId=${detail.id}&itemId=${item.id}`;
+                                                  navigate(targetPath);
+                                                }}
+                                                style={{
+                                                  background: "transparent",
+                                                  border: "none",
+                                                  color: accentColor,
+                                                  fontSize: "11.5px",
+                                                  fontWeight: 600,
+                                                  cursor: "pointer",
+                                                  padding: 0,
+                                                  display: "inline-flex",
+                                                  alignItems: "center",
+                                                  gap: "4px",
+                                                  textDecoration: "underline",
+                                                  textUnderlineOffset: "2px",
+                                                }}
+                                              >
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                                                </svg>
+                                                <span>Need help with this product?</span>
+                                              </button>
+                                            </div>
+                                          )}
                                         </div>
 
                                         <div
@@ -5678,58 +5710,42 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                 ) : null}
 
                                 {/* Customer Support & Help Button */}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const isStore = typeof window !== "undefined" && window.location.pathname.startsWith("/store/");
-                                    const isBuilder = typeof window !== "undefined" && window.location.pathname.startsWith("/builder/");
-                                    const prefix = isStore
-                                      ? `/store/${siteSlug || ""}`
-                                      : isBuilder
-                                      ? `/builder/${siteId || siteSlug || ""}`
-                                      : (siteSlug ? `/store/${siteSlug}` : "");
-                                    const targetPath = `${prefix}/support?tab=new&orderId=${order.id}`;
-                                    navigate(targetPath);
-                                  }}
-                                  style={{
-                                    border: `1px solid ${customBorderColor || (isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)")}`,
-                                    background: isLight ? "#ffffff" : "rgba(255,255,255,0.05)",
-                                    color: textPrimary,
-                                    borderRadius: "14px",
-                                    padding: "12px 16px",
-                                    fontSize: "14px",
-                                    fontWeight: 700,
-                                    cursor: "pointer",
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "8px",
-                                  }}
-                                >
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                                  </svg>
-                                  Need Help with Order
-                                </button>
-
-                                {isDelivered && hasExistingReturn && canReturn ? (
-                                  <div
+                                {isCrmEnabled && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const isStore = typeof window !== "undefined" && window.location.pathname.startsWith("/store/");
+                                      const isBuilder = typeof window !== "undefined" && window.location.pathname.startsWith("/builder/");
+                                      const prefix = isStore
+                                        ? `/store/${siteSlug || ""}`
+                                        : isBuilder
+                                        ? `/builder/${siteId || siteSlug || ""}`
+                                        : (siteSlug ? `/store/${siteSlug}` : "");
+                                      const targetPath = `${prefix}/support?tab=new&orderId=${order.id}`;
+                                      navigate(targetPath);
+                                    }}
                                     style={{
-                                      display: "flex",
-                                      alignItems: "center",
-                                      padding: "12px 14px",
+                                      border: `1px solid ${customBorderColor || (isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)")}`,
+                                      background: isLight ? "#ffffff" : "rgba(255,255,255,0.05)",
+                                      color: textPrimary,
                                       borderRadius: "14px",
-                                      border: cardBorder,
-                                      background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)",
-                                      color: textMuted,
-                                      fontSize: "13px",
-                                      fontWeight: 600,
+                                      padding: "12px 16px",
+                                      fontSize: "14px",
+                                      fontWeight: 700,
+                                      cursor: "pointer",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "8px",
                                     }}
                                   >
-                                    Previous return requests exist. You can still return other eligible items.
-                                  </div>
-                                ) : null}
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                    </svg>
+                                    Need Help with Order
+                                  </button>
+                                )}
 
-                                {isDelivered && isReturnFormOpen && !hasSelectableReturnItems ? (
+                                {isDelivered && hasExistingReturn && canReturn ? (
                                   <div
                                     style={{
                                       display: "flex",

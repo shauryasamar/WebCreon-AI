@@ -198,6 +198,36 @@ export default function CustomerProfilePage({
 
   const isMobile = viewportWidth <= 768;
 
+  const [liveCrmOverride, setLiveCrmOverride] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const handleCrmChange = (e: Event) => {
+      const ce = e as CustomEvent<{ siteId?: string; siteSlug?: string; crm_enabled: boolean }>;
+      if (!ce.detail) return;
+      const { siteId: targetSiteId, siteSlug: targetSiteSlug, crm_enabled } = ce.detail;
+      const curSlug = activeSlug;
+      if (
+        (targetSiteSlug && targetSiteSlug.toLowerCase().trim() === curSlug.toLowerCase().trim()) ||
+        (targetSiteId && targetSiteId.toLowerCase().trim() === curSlug.toLowerCase().trim())
+      ) {
+        setLiveCrmOverride(crm_enabled);
+      }
+    };
+    window.addEventListener("wc_crm_status_changed", handleCrmChange);
+    return () => window.removeEventListener("wc_crm_status_changed", handleCrmChange);
+  }, [activeSlug]);
+
+  const isCrmEnabled =
+    liveCrmOverride !== null
+      ? liveCrmOverride
+      : siteData?.crm_enabled !== undefined
+      ? Boolean(siteData.crm_enabled)
+      : (activeTheme as any)?.crm_enabled !== undefined
+      ? Boolean((activeTheme as any).crm_enabled)
+      : (customProps as any)?.crm_enabled !== undefined
+      ? Boolean((customProps as any).crm_enabled)
+      : true;
+
   const resolvedMaxWidth = useMemo(() => {
     const raw = customProps.max_width;
     if (!raw || raw === "100%" || raw === "full" || raw === "100") return "100%";
@@ -1167,76 +1197,78 @@ export default function CustomerProfilePage({
         )}
 
         {/* HELP & SUPPORT DESK CARD */}
-        <div
-          style={{
-            marginTop: "24px",
-            background: cardBg,
-            borderRadius: cardRadius,
-            border: `1px solid ${borderColor}`,
-            padding: cardPadding,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: "16px",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-            <div
-              style={{
-                width: "44px",
-                height: "44px",
-                borderRadius: "10px",
-                background: `${accentColor}15`,
-                color: accentColor,
-                display: "grid",
-                placeItems: "center",
-                flexShrink: 0,
-              }}
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-            </div>
-            <div>
-              <div style={{ fontSize: "14.5px", fontWeight: 700, color: textColor }}>
-                Need Help or Have an Issue with an Order?
-              </div>
-              <div style={{ fontSize: "12.5px", color: subtextColor, marginTop: "2px" }}>
-                Chat with our support specialists, report order issues, or track existing inquiries.
-              </div>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              const isStore = typeof window !== "undefined" && window.location.pathname.startsWith("/store/");
-              const isBuilder = typeof window !== "undefined" && window.location.pathname.startsWith("/builder/");
-              const prefix = isStore
-                ? `/store/${activeSlug || propSiteSlug || ""}`
-                : isBuilder
-                ? `/builder/${propSiteId || activeSlug || propSiteSlug || ""}`
-                : (activeSlug || propSiteSlug ? `/store/${activeSlug || propSiteSlug}` : "");
-              const targetPath = `${prefix}/support`;
-              navigate(targetPath);
-            }}
+        {isCrmEnabled && (
+          <div
             style={{
-              padding: "10px 20px",
-              borderRadius: buttonRadius,
-              border: `1px solid ${accentColor}`,
-              background: "transparent",
-              color: accentColor,
-              fontSize: "13.5px",
-              fontWeight: 700,
-              cursor: "pointer",
-              display: "inline-flex",
+              marginTop: "24px",
+              background: cardBg,
+              borderRadius: cardRadius,
+              border: `1px solid ${borderColor}`,
+              padding: cardPadding,
+              display: "flex",
               alignItems: "center",
-              gap: "6px",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: "16px",
             }}
           >
-            Visit Support Desk →
-          </button>
-        </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+              <div
+                style={{
+                  width: "44px",
+                  height: "44px",
+                  borderRadius: "10px",
+                  background: `${accentColor}15`,
+                  color: accentColor,
+                  display: "grid",
+                  placeItems: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+              </div>
+              <div>
+                <div style={{ fontSize: "14.5px", fontWeight: 700, color: textColor }}>
+                  Need Help or Have an Issue with an Order?
+                </div>
+                <div style={{ fontSize: "12.5px", color: subtextColor, marginTop: "2px" }}>
+                  Chat with our support specialists, report order issues, or track existing inquiries.
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const isStore = typeof window !== "undefined" && window.location.pathname.startsWith("/store/");
+                const isBuilder = typeof window !== "undefined" && window.location.pathname.startsWith("/builder/");
+                const prefix = isStore
+                  ? `/store/${activeSlug || propSiteSlug || ""}`
+                  : isBuilder
+                  ? `/builder/${propSiteId || activeSlug || propSiteSlug || ""}`
+                  : (activeSlug || propSiteSlug ? `/store/${activeSlug || propSiteSlug}` : "");
+                const targetPath = `${prefix}/support`;
+                navigate(targetPath);
+              }}
+              style={{
+                padding: "10px 20px",
+                borderRadius: buttonRadius,
+                border: `1px solid ${accentColor}`,
+                background: "transparent",
+                color: accentColor,
+                fontSize: "13.5px",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              Visit Support Desk →
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

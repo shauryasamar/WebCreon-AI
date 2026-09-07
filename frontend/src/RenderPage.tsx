@@ -84,6 +84,7 @@ type RenderPageProps = {
   siteName?: string;
   selectedProduct?: Product | null;
   theme?: Theme;
+  appBase?: string;
 };
 
 type CheckoutStep = "delivery" | "payment" | "review";
@@ -227,6 +228,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
   siteName,
   selectedProduct = null,
   theme,
+  appBase,
 }) => {
   const { products, cartItems, appliedCoupon, setAppliedCoupon, clearAppliedCoupon } = useCart();
   const { isAuthenticated, loading: authLoading } = useCustomerAuth();
@@ -1021,6 +1023,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
       siteId,
       siteSlug,
       siteName,
+      appBase,
       ...blockProps,
       theme: resolvedTheme,
       ...(overrides ?? {}),
