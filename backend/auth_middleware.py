@@ -214,11 +214,51 @@ def resolve_site_by_slug_or_404(
     website_name: str,
     session: Session,
 ) -> Site:
-    site = session.exec(
-        select(Site).where(Site.slug == website_name)
-    ).first()
-
-    if not site:
+    if not website_name or not str(website_name).strip():
         raise HTTPException(status_code=404, detail="Site not found")
 
-    return site
+    target = str(website_name).strip()
+    clean_target = target.lower()
+
+    # 1. Try direct UUID lookup
+    try:
+        site_uuid = UUID(target)
+        site = session.get(Site, site_uuid)
+        if site:
+            return site
+    except (ValueError, TypeError):
+        pass
+
+    # 2. Try exact slug match
+    site = session.exec(
+        select(Site).where((Site.slug == target) | (Site.slug == clean_target))
+    ).first()
+    if site:
+        return site
+
+    # 3. Try timestamped/hyphenated slug match (e.g. greenharvest matching greenharvest-178692567758)
+    site = session.exec(
+        select(Site)
+        .where(Site.slug.startswith(f"{clean_target}-"))
+        .order_by(Site.created_at.desc())
+    ).first()
+    if site:
+        return site
+
+    # Fallback to general slug prefix
+    site = session.exec(
+        select(Site)
+        .where(Site.slug.startswith(clean_target))
+        .order_by(Site.created_at.desc())
+    ).first()
+    if site:
+        return site
+
+    # 4. Try short UUID prefix match (e.g. 30bcf7ca matching 30bcf7ca-cd8a-4938-8779-10aab5e95907)
+    if len(clean_target) >= 8 and all(c in "0123456789abcdef-" for c in clean_target):
+        all_sites = session.exec(select(Site)).all()
+        for s in all_sites:
+            if str(s.id).lower().startswith(clean_target):
+                return s
+
+    raise HTTPException(status_code=404, detail=f"Site '{website_name}' not found")

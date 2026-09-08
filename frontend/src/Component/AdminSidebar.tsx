@@ -15,12 +15,12 @@ const AdminSidebar = () => {
 
   const links = [
     {
-      label: "Products",
-      to: `/builder/${siteId}/admin/products`,
+      label: "Analytics",
+      to: `/builder/${siteId}/admin/analytics`,
     },
     {
-      label: "Home Sections",
-      to: `/builder/${siteId}/admin/home-sections`,
+      label: "Products",
+      to: `/builder/${siteId}/admin/products`,
     },
     {
       label: "Orders & Returns",
@@ -29,6 +29,18 @@ const AdminSidebar = () => {
     {
       label: "Discounts & Promo",
       to: `/builder/${siteId}/admin/discounts`,
+    },
+    {
+      label: "Support & CRM",
+      to: `/builder/${siteId}/admin/support`,
+    },
+    {
+      label: "Home Sections",
+      to: `/builder/${siteId}/admin/home-sections`,
+    },
+    {
+      label: "Pages & Policies",
+      to: `/builder/${siteId}/admin/pages`,
     },
     {
       label: "Delivery & Shipping",
@@ -45,14 +57,6 @@ const AdminSidebar = () => {
     {
       label: "Payout Settings",
       to: `/builder/${siteId}/admin/payment-settings`,
-    },
-    {
-      label: "Pages & Policies",
-      to: `/builder/${siteId}/admin/pages`,
-    },
-    {
-      label: "Support & CRM",
-      to: `/builder/${siteId}/admin/support`,
     },
   ];
 

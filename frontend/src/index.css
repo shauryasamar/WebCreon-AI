@@ -115,15 +115,48 @@ html {
   text-rendering: optimizeLegibility;
 }
 
-body {
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-}
-
 *,
 *::before,
 *::after {
   box-sizing: border-box;
+}
+
+/* ==========================================================================
+   Modern Minimal Theme Scrollbars (Replaces thick default OS scrollbars)
+   ========================================================================== */
+
+/* Modern CSS Standards (Firefox 64+, Chrome 121+, Safari 17.4+) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #e9edf2 transparent;
+}
+
+/* WebKit / Chromium Browsers (Chrome, Edge, Safari, Brave, Opera) */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #e9edf2;
+  border-radius: 9999px;
+  transition: background-color 0.15s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #dde3ec;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: #dde3ec;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* html,

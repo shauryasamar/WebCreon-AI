@@ -1317,4 +1317,24 @@ class StorePage(SQLModel, table=True):
             onupdate=utc_now,
         ),
     )
+
+
+class SiteTrafficEvent(SQLModel, table=True):
+    __tablename__ = "site_traffic_events"
+    __table_args__ = (
+        Index("ix_traffic_site_created", "site_id", "created_at"),
+        Index("ix_traffic_site_session", "site_id", "session_hash"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    site_id: UUID = Field(foreign_key="sites.id", index=True, nullable=False)
+    session_hash: str = Field(max_length=64, index=True, nullable=False)
+    page_path: str = Field(default="/", max_length=500, nullable=False)
+    referrer_source: str = Field(default="Direct", max_length=100, nullable=False)
+    device_type: str = Field(default="Desktop", max_length=50, nullable=False)
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), index=True, nullable=False),
+    )
+
 

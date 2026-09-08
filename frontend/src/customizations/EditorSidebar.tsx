@@ -11995,6 +11995,10 @@ export default function EditorSidebar({
           border-color: #94a3b8;
         }
 
+        .wc-editor-sidebar {
+          scrollbar-width: thin;
+          scrollbar-color: #cbd5e1 transparent;
+        }
         .wc-editor-sidebar::-webkit-scrollbar {
           width: 4px;
         }

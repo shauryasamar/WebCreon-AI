@@ -28,6 +28,7 @@ type SavedSite = {
 export type AdminNavKey =
   | "products"
   | "home-sections"
+  | "analytics"
   | "orders"
   | "pages"
   | "support"
@@ -43,16 +44,17 @@ type AdminNavItem = {
 };
 
 const ADMIN_NAV_ITEMS: AdminNavItem[] = [
+  { key: "analytics", label: "Analytics" },
   { key: "products", label: "Products" },
-  { key: "home-sections", label: "Home Sections" },
   { key: "orders", label: "Orders & Returns" },
   { key: "discounts", label: "Discounts & Promo" },
+  { key: "support", label: "Support & CRM" },
+  { key: "home-sections", label: "Home Sections" },
+  { key: "pages", label: "Pages & Policies" },
   { key: "delivery", label: "Delivery & Shipping" },
   { key: "checkout-charges", label: "Checkout Charges" },
   { key: "earnings", label: "Earnings & Ledger" },
   { key: "payment-settings", label: "Payout Settings" },
-  { key: "pages", label: "Pages & Policies" },
-  { key: "support", label: "Support & CRM" },
 ];
 
 
@@ -315,6 +317,14 @@ function AdminNavIcon({ navKey, isSelected }: { navKey: AdminNavKey; isSelected:
   const style = { width: 16, height: 16, flexShrink: 0 };
 
   switch (navKey) {
+    case "analytics":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <line x1="18" y1="20" x2="18" y2="10" />
+          <line x1="12" y1="20" x2="12" y2="4" />
+          <line x1="6" y1="20" x2="6" y2="14" />
+        </svg>
+      );
     case "products":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={style}>
@@ -1149,6 +1159,36 @@ export default function BuilderDrawerPanel({
         .builder-drawer-root h4 {
           font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
         }
+
+        /* Modern slim scrollbar for drawer panels */
+        .builder-drawer-root,
+        .builder-drawer-root * {
+          scrollbar-width: thin;
+          scrollbar-color: #e9edf2 transparent;
+        }
+
+        .builder-drawer-root *::-webkit-scrollbar {
+          width: 5px;
+          height: 5px;
+        }
+
+        .builder-drawer-root *::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        .builder-drawer-root *::-webkit-scrollbar-thumb {
+          background: #e9edf2;
+          border-radius: 9999px;
+          transition: background-color 0.15s ease;
+        }
+
+        .builder-drawer-root *::-webkit-scrollbar-thumb:hover {
+          background: #dde3ec;
+        }
+
+        .builder-drawer-root *::-webkit-scrollbar-thumb:active {
+          background: #dde3ec;
+        }
       `}</style>
       <div
         style={{
@@ -1185,6 +1225,7 @@ export default function BuilderDrawerPanel({
       </div>
 
       <div
+        className="builder-drawer-scroll-area"
         style={{
           padding: "12px",
           fontSize: 12,

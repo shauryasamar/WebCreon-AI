@@ -33,9 +33,9 @@ from models import (
     Admin, AdminSite, Site, Product, Category, Collection, Cart, CartItem, Order, OrderItem,
     ProductCollection, ProductReview, ReturnRequest, ReturnItem, ReturnStatusHistory,
     Shipment, InventoryMovement, OrderStatusHistory, User, UserAddress,
-    DeliveryAgent, DeliverySettings,
+    DeliveryAgent, DeliverySettings, SiteTrafficEvent,
 )
-from routers import auth, cart, categories, checkout, checkout_settings, collections, coupons, orders, pages, payments, products, returns, support
+from routers import analytics, auth, cart, categories, checkout, checkout_settings, collections, coupons, orders, pages, payments, products, returns, support
 from routers import delivery
 
 
@@ -130,6 +130,8 @@ app.include_router(pages.router)
 app.include_router(pages.router, prefix="/api")
 app.include_router(support.router)
 app.include_router(support.router, prefix="/api")
+app.include_router(analytics.router)
+app.include_router(analytics.router, prefix="/api")
 
 
 # ---------------------------------------------------------------------------

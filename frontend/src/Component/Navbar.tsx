@@ -1121,10 +1121,11 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
 
   useEffect(() => {
+    if (editMode || location.pathname.startsWith("/builder/")) return;
     const tenant = siteSlug || (siteId ? String(siteId) : "");
     if (!tenant) return;
     refreshMe(tenant);
-  }, [siteSlug, siteId, refreshMe]);
+  }, [siteSlug, siteId, refreshMe, editMode, location.pathname]);
 
 
   useEffect(() => {

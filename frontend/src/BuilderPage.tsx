@@ -34,6 +34,7 @@ import DeliverySettingsPage from "./Component/DeliverySettingsPage";
 import AdminSupportDesk from "./Component/AdminSupportDesk";
 import AdminProfileSettings from "./Component/AdminProfileSettings";
 import AdminPages from "./Component/AdminPages";
+import AdminAnalytics from "./Component/AdminAnalytics";
 import StorefrontCustomPage from "./Component/StorefrontCustomPage";
 
 import EditorRenderPage from "./customizations/EditorRenderPage";
@@ -1391,15 +1392,17 @@ function BuilderPageContent() {
             ? "discounts"
             : location.pathname.includes("/checkout-charges")
               ? "checkout-charges"
-              : location.pathname.includes("/orders")
-                ? "orders"
-                : location.pathname.includes("/pages")
-                  ? "pages"
-                  : location.pathname.includes("/support")
-                    ? "support"
-                    : location.pathname.includes("/home-sections")
-                    ? "home-sections"
-                    : "products"
+              : location.pathname.includes("/analytics")
+                ? "analytics"
+                : location.pathname.includes("/orders")
+                  ? "orders"
+                  : location.pathname.includes("/pages")
+                    ? "pages"
+                    : location.pathname.includes("/support")
+                      ? "support"
+                      : location.pathname.includes("/home-sections")
+                        ? "home-sections"
+                        : "products"
     : null;
 
   const storefrontNavbarMode =
@@ -1856,6 +1859,34 @@ function BuilderPageContent() {
       cancelled = true;
     };
   }, [siteId, siteSlugParam, isStoreRoute]);
+
+  // Real-time Storefront Traffic Tracking (Zero main-thread blocking)
+  useEffect(() => {
+    const targetSiteId = resolvedSiteId || siteId;
+    if (!isStoreRoute || !targetSiteId) return;
+
+    try {
+      const payload = JSON.stringify({
+        site_id: targetSiteId,
+        page_path: location.pathname,
+        referrer: typeof document !== "undefined" ? document.referrer || null : null,
+        screen_width: typeof window !== "undefined" ? window.innerWidth : null,
+        user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+      });
+
+      if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+        const blob = new Blob([payload], { type: "application/json" });
+        navigator.sendBeacon(`${API_BASE_URL}/analytics/collect`, blob);
+      } else {
+        fetch(`${API_BASE_URL}/analytics/collect`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: payload,
+          keepalive: true,
+        }).catch(() => {});
+      }
+    } catch (_) {}
+  }, [isStoreRoute, resolvedSiteId, siteId, location.pathname]);
 
 
   const storefrontHomePath = useMemo(() => {
@@ -2567,6 +2598,7 @@ function BuilderPageContent() {
                     <Route index element={<Navigate to="products" replace />} />
                     <Route path="products" element={<AdminProducts />} />
                     <Route path="home-sections" element={<AdminHomeSections />} />
+                    <Route path="analytics" element={<AdminAnalytics siteId={resolvedSiteId || siteId} siteName={siteName} />} />
                     <Route path="orders" element={<AdminOrders />} />
                     <Route path="pages" element={<AdminPages siteId={resolvedSiteId || siteId} siteSlug={siteSlug} />} />
                     <Route path="support" element={<AdminSupportDesk />} />
