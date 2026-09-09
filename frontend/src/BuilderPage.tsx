@@ -16,6 +16,7 @@ import type { EditorTab } from "./customizations/EditorSidebar";
 import { applyThemeToPages, type EditorSiteDefinition } from "./customizations/editorUtils";
 import { API_BASE_URL } from "./config/api";
 import BuilderShell from "./Component/BuilderShell";
+import { DeviceModeProvider } from "./context/DeviceModeContext";
 import BuilderTopControlBar from "./Component/BuilderTopControlBar";
 import BuilderControlPanel from "./Component/BuilderControlPanel";
 import type { AdminNavKey, SettingsNavKey } from "./Component/BuilderDrawerPanel";
@@ -337,7 +338,7 @@ async function resolveSiteBySlug(
     if (!adminResponse.ok) return null;
 
     const sites: SavedSite[] = await adminResponse.json();
-    const found = sites.find((site) => site.slug === siteSlugParam) ?? null;
+    const found = sites.find((site) => site.slug === siteSlugParam || site.id === siteSlugParam) ?? null;
     if (found) {
       siteSlugMemoryCache.set(siteSlugParam, found);
       if (found.id) siteSlugMemoryCache.set(found.id, found);
@@ -409,19 +410,29 @@ function StorefrontShell({
 
   useEffect(() => {
     if (navbarIsSelected && navbarBlockRef.current) {
-      navbarBlockRef.current.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
+      const scrollParent = navbarBlockRef.current.closest(".builder-preview-scroll");
+      if (scrollParent) {
+        scrollParent.scrollTo({ top: 0, behavior: "smooth" });
+      } else {
+        navbarBlockRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }
     }
   }, [navbarIsSelected]);
 
   useEffect(() => {
     if (footerIsSelected && footerBlockRef.current) {
-      footerBlockRef.current.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
+      const scrollParent = footerBlockRef.current.closest(".builder-preview-scroll");
+      if (scrollParent) {
+        scrollParent.scrollTo({ top: scrollParent.scrollHeight, behavior: "smooth" });
+      } else {
+        footerBlockRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }
     }
   }, [footerIsSelected]);
 
@@ -1089,6 +1100,10 @@ function BuilderPageContent() {
   const { admin: authAdmin, logoutAdmin: authLogoutAdmin } = useAdminAuth();
 
   const isStoreRoute = location.pathname.startsWith("/store/");
+  const isPreviewMode = isStoreRoute && (
+    location.search.includes("preview=mobile") ||
+    location.search.includes("preview=1")
+  );
   // Only use the cache when its slug/id exactly matches the current URL param.
   // A mismatch means a *different* site's data is cached (cross-site bleed or stale).
   const initialCachedSite = (() => {
@@ -1108,7 +1123,7 @@ function BuilderPageContent() {
   const isTargetSiteToHeal = (initialCachedSite?.id === "9e86e420-7776-4383-8cc1-fe3d9f6cf36a" || siteId === "9e86e420-7776-4383-8cc1-fe3d9f6cf36a");
   const [siteDefinition, setSiteDefinition] = useState<SiteDefinition | null>(
     initialCachedSite
-      ? (isStoreRoute || isTargetSiteToHeal
+      ? ((isStoreRoute && !isPreviewMode) || isTargetSiteToHeal
           ? (initialCachedSite.site_definition || null)
           : (initialCachedSite.draft_definition || initialCachedSite.site_definition))
       : null
@@ -1116,7 +1131,7 @@ function BuilderPageContent() {
   const [draftSiteDefinition, setDraftSiteDefinition] =
     useState<SiteDefinition | null>(
       initialCachedSite
-        ? (isStoreRoute || isTargetSiteToHeal
+        ? ((isStoreRoute && !isPreviewMode) || isTargetSiteToHeal
             ? (initialCachedSite.site_definition || null)
             : (initialCachedSite.draft_definition || initialCachedSite.site_definition))
         : null
@@ -1139,6 +1154,22 @@ function BuilderPageContent() {
     isStoreRoute || !!authAdmin
   );
   const [adminAuthenticated, setAdminAuthenticated] = useState(!!authAdmin);
+  const [deviceMode, setDeviceMode] = useState<"desktop" | "mobile">("desktop");
+
+  // When rendered inside a preview iframe, sync live definitions from parent window
+  useEffect(() => {
+    if (typeof window === "undefined" || window.self === window.top) return;
+
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data?.type === "WC_PREVIEW_SYNC_DEFINITION" && e.data.definition) {
+        setDraftSiteDefinition(e.data.definition);
+        setSiteDefinition(e.data.definition);
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
 
   const hasUnpublishedChanges = useMemo(() => {
     if (!draftSiteDefinition || !siteDefinition) return false;
@@ -1414,6 +1445,7 @@ function BuilderPageContent() {
 
 
   const showAdminTopbar = !isStoreRoute && adminAuthenticated;
+  const showDeviceSwitcher = showAdminTopbar && !isAdminRoute;
 
 
   useEffect(() => {
@@ -1699,7 +1731,7 @@ function BuilderPageContent() {
 
         setPublishedSiteDefinition(data.site_definition || null);
 
-        let parsedSiteDefinition: SiteDefinition = isStoreRoute
+        let parsedSiteDefinition: SiteDefinition = (isStoreRoute && !isPreviewMode)
           ? (data.site_definition || data.draft_definition)
           : (data.draft_definition || data.site_definition);
 
@@ -2362,6 +2394,27 @@ function BuilderPageContent() {
     : activeSiteDefinition?.theme?.text_color ||
     (isDarkSiteTheme ? "#f9fafb" : "#111827");
 
+  // When rendered in mobile deviceMode or inside preview iframe, eliminate scrollbar gutters and lock horizontal drift
+  useEffect(() => {
+    const isInsideFrame = typeof window !== "undefined" && (window.self !== window.top || isPreviewMode);
+    const shouldSuppress = isInsideFrame || deviceMode === "mobile";
+    
+    if (!shouldSuppress) return;
+
+    document.documentElement.classList.add("is-mobile-preview");
+    document.body.classList.add("is-mobile-preview");
+
+    if (pageBg && isInsideFrame) {
+      document.documentElement.style.backgroundColor = pageBg;
+      document.body.style.backgroundColor = pageBg;
+    }
+
+    return () => {
+      document.documentElement.classList.remove("is-mobile-preview");
+      document.body.classList.remove("is-mobile-preview");
+    };
+  }, [isPreviewMode, pageBg, deviceMode]);
+
 
   const topBar = showAdminTopbar ? (
     <BuilderTopControlBar
@@ -2375,6 +2428,9 @@ function BuilderPageContent() {
       userEmail={authAdmin?.email}
       avatarUrl={authAdmin?.avatarUrl}
       gender={authAdmin?.gender}
+      deviceMode={deviceMode}
+      onChangeDeviceMode={setDeviceMode}
+      showDeviceSwitcher={showDeviceSwitcher}
     />
   ) : null;
 
@@ -2552,20 +2608,24 @@ function BuilderPageContent() {
 
 
   return (
-    <BuilderShell
-      topBar={topBar}
-      leftPanel={leftPanel}
-      drawer={drawerNode}
-      rightPanel={rightPanel}
-      previewPaneRef={previewPaneRef}
-      plainCenter={isAdminRoute}
-    >
+    <DeviceModeProvider mode={deviceMode}>
+      <BuilderShell
+        topBar={topBar}
+        leftPanel={leftPanel}
+        drawer={drawerNode}
+        rightPanel={rightPanel}
+        previewPaneRef={previewPaneRef}
+        plainCenter={isAdminRoute}
+        deviceMode={deviceMode}
+        deviceBg={pageBg}
+      >
       <div
         style={{
           minHeight: "100%",
+          width: "100%",
+          maxWidth: "100%",
           background: pageBg,
           color: textColor,
-          overflow: "visible",
           position: "relative",
           zIndex: 1,
         }}
@@ -3081,7 +3141,8 @@ function BuilderPageContent() {
           {publishing ? "Publishing..." : publishSuccess ? "Published" : "Publish"}
         </button>
       )}
-    </BuilderShell>
+      </BuilderShell>
+    </DeviceModeProvider>
   );
 }
 

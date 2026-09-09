@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { useDeviceMode } from "../context/DeviceModeContext";
 import {
   DiwaliGraphics,
   HoliGraphics,
@@ -192,8 +193,9 @@ const Footer: React.FC<FooterProps> = (props) => {
     };
   }, []);
 
-  const isMobile = screenSize.isMobile;
-  const isSmallMobile = screenSize.isSmallMobile;
+  const deviceMode = useDeviceMode();
+  const isMobile = deviceMode === "mobile" || screenSize.isMobile;
+  const isSmallMobile = deviceMode === "mobile" ? true : screenSize.isSmallMobile;
 
   const layout = props.footer_layout || theme?.footer_layout || "apple_minimal";
 

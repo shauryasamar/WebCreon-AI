@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { checkDeliverability, DeliverabilityResult } from "../addressService";
+import { useDeviceMode } from "../context/DeviceModeContext";
 
 export type GeoPickerResult = {
   lat: number;
@@ -215,18 +216,21 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
   const [isCheckingDeliverability, setIsCheckingDeliverability] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
 
+  const deviceMode = useDeviceMode();
   // Responsive mobile detection
-  const [isMobile, setIsMobile] = useState<boolean>(() =>
+  const [innerIsMobile, setInnerIsMobile] = useState<boolean>(() =>
     typeof window !== "undefined" ? window.innerWidth < 680 : false
   );
 
   useEffect(() => {
     const handleResize = () => {
-      setIsMobile(window.innerWidth < 680);
+      setInnerIsMobile(window.innerWidth < 680);
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  const isMobile = deviceMode === "mobile" || innerIsMobile;
 
   // Theme resolution
   const isDark =

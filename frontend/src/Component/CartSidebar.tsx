@@ -5,6 +5,7 @@ import { API_BASE_URL } from "../config/api";
 import { isColorDarkHex } from "../context/ThemeContext";
 import { getThumbnailUrl } from "../utils/imageOptimizer";
 import PromoCodeInput, { ValidatedCoupon } from "./PromoCodeInput";
+import { useDeviceMode } from "../context/DeviceModeContext";
 
 type CartTheme = {
   name?: string;
@@ -535,8 +536,9 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     return () => controller.abort();
   }, [siteId, slug]);
 
-  const isMobile = screenSize.isMobile;
-  const isTablet = screenSize.isTablet;
+  const deviceMode = useDeviceMode();
+  const isMobile = deviceMode === "mobile" || screenSize.isMobile;
+  const isTablet = deviceMode === "mobile" ? false : screenSize.isTablet;
   const isCheckoutSummary = mode === "checkout_summary";
 
   const shouldShowItems = show_items && !review_mode;

@@ -99,20 +99,32 @@ code {
   background: var(--code-bg);
 } */
 
-html,
-body,
+html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
+  background: #f8fafc;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
+  background: #f8fafc;
+  position: relative;
+}
+
 #root {
   margin: 0;
   padding: 0;
   width: 100%;
   min-height: 100%;
-  background: #0f172a;
-}
-
-html {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
+  background: #f8fafc;
 }
 
 *,
@@ -157,6 +169,50 @@ html {
 
 ::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* ==========================================================================
+   Mobile & Smartphone Preview Scrollbar Elimination (No Blank Gutter)
+   ========================================================================== */
+.is-mobile-preview,
+.is-mobile-preview *,
+.builder-preview-scroll,
+.builder-preview-scroll *,
+html.is-mobile-preview,
+body.is-mobile-preview,
+body.is-mobile-preview #root,
+body.is-mobile-preview * {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.is-mobile-preview::-webkit-scrollbar,
+.is-mobile-preview *::-webkit-scrollbar,
+.builder-preview-scroll::-webkit-scrollbar,
+.builder-preview-scroll *::-webkit-scrollbar,
+html.is-mobile-preview::-webkit-scrollbar,
+body.is-mobile-preview::-webkit-scrollbar,
+body.is-mobile-preview *::-webkit-scrollbar {
+  display: none !important;
+  width: 0px !important;
+  height: 0px !important;
+  background: transparent !important;
+}
+
+@media (max-width: 768px) {
+  html,
+  body,
+  #root,
+  * {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
+  ::-webkit-scrollbar {
+    display: none !important;
+    width: 0px !important;
+    height: 0px !important;
+    background: transparent !important;
+  }
 }
 
 /* html,

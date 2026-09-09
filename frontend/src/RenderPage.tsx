@@ -11,6 +11,7 @@ import { normalizeStorefrontProduct } from "./utils/productNormalizer";
 import { getThumbnailUrl } from "./utils/imageOptimizer";
 import { ValidatedCoupon } from "./Component/PromoCodeInput";
 import FestiveBackgroundOverlay from "./Component/FestiveBackgroundOverlay";
+import { useDeviceMode } from "./context/DeviceModeContext";
 
 type Block = {
   id?: string;
@@ -232,6 +233,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
 }) => {
   const { products, cartItems, appliedCoupon, setAppliedCoupon, clearAppliedCoupon } = useCart();
   const { isAuthenticated, loading: authLoading } = useCustomerAuth();
+  const deviceMode = useDeviceMode();
 
   const location = useLocation();
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
@@ -383,13 +385,13 @@ const RenderPage: React.FC<RenderPageProps> = ({
 
   useEffect(() => {
     const syncViewport = () => {
-      setIsCompactCheckout(window.innerWidth < 1024);
+      setIsCompactCheckout(deviceMode === "mobile" || window.innerWidth < 1024);
     };
 
     syncViewport();
     window.addEventListener("resize", syncViewport);
     return () => window.removeEventListener("resize", syncViewport);
-  }, []);
+  }, [deviceMode]);
 
   useEffect(() => {
     window.scrollTo({

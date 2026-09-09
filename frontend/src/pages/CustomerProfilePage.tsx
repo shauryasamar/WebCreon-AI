@@ -8,6 +8,7 @@ import {
   getLuminance,
   usePublicSiteTheme,
 } from "../hooks/usePublicSiteTheme";
+import { useDeviceMode } from "../context/DeviceModeContext";
 
 interface CustomerProfilePageProps {
   siteId?: string;
@@ -103,10 +104,10 @@ export default function CustomerProfilePage({
 
   // Load user data into form
   useEffect(() => {
-    if (activeSlug && !isInsideEditor) {
+    if (activeSlug) {
       refreshMe(activeSlug);
     }
-  }, [activeSlug, refreshMe, isInsideEditor]);
+  }, [activeSlug, refreshMe]);
 
   useEffect(() => {
     if (user) {
@@ -172,20 +173,7 @@ export default function CustomerProfilePage({
     return s.endsWith("px") || s.endsWith("%") || s.endsWith("rem") ? s : `${s}px`;
   };
 
-  const cardBorder = `1px solid ${borderColor}`;
-  const cardRadius = parseDimension(customProps.card_radius, "16px");
-  const cardPadding = parseDimension(customProps.card_padding, "32px");
-  const inputRadius = parseDimension(customProps.input_radius, "10px");
-  const buttonRadius = parseDimension(customProps.button_radius, "10px");
-
-  const inputBg = customProps.input_bg || (isDarkCard ? "#0a0f1d" : "#ffffff");
-  const inputTextColor = customProps.input_text_color || (isDarkCard ? "#f8fafc" : "#0f172a");
-  const inputBorder = customProps.input_border
-    ? `1px solid ${customProps.input_border}`
-    : isDarkCard
-    ? "rgba(255, 255, 255, 0.16)"
-    : "rgba(15, 23, 42, 0.16)";
-
+  const deviceMode = useDeviceMode();
   const [viewportWidth, setViewportWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1024
   );
@@ -196,7 +184,21 @@ export default function CustomerProfilePage({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const isMobile = viewportWidth <= 768;
+  const isMobile = deviceMode === "mobile" || viewportWidth <= 768;
+
+  const cardBorder = `1px solid ${borderColor}`;
+  const cardRadius = parseDimension(customProps.card_radius, "16px");
+  const cardPadding = isMobile ? "18px 14px" : parseDimension(customProps.card_padding, "32px");
+  const inputRadius = parseDimension(customProps.input_radius, "10px");
+  const buttonRadius = parseDimension(customProps.button_radius, "10px");
+
+  const inputBg = customProps.input_bg || (isDarkCard ? "#0a0f1d" : "#ffffff");
+  const inputTextColor = customProps.input_text_color || (isDarkCard ? "#f8fafc" : "#0f172a");
+  const inputBorder = customProps.input_border
+    ? `1px solid ${customProps.input_border}`
+    : isDarkCard
+    ? "rgba(255, 255, 255, 0.16)"
+    : "rgba(15, 23, 42, 0.16)";
 
   const [liveCrmOverride, setLiveCrmOverride] = useState<boolean | null>(null);
 
@@ -673,7 +675,7 @@ export default function CustomerProfilePage({
 
           {/* PROFILE EDIT FORM - WIDE 2/3 COLUMN GRID */}
           <form onSubmit={handleSaveProfile} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "20px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(280px, 1fr))", gap: isMobile ? "14px" : "20px" }}>
               {/* FULL NAME */}
               <div>
                 <label
@@ -1065,7 +1067,7 @@ export default function CustomerProfilePage({
                 </div>
               )}
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
                 {/* NEW PASSWORD */}
                 <div>
                   <label

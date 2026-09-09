@@ -11,6 +11,7 @@ import {
 } from "../addressService";
 import { isColorDarkHex } from "../context/ThemeContext";
 import { GoogleMapPicker, GeoPickerResult, geocodeAddressText } from "./GoogleMapPicker";
+import { useDeviceMode } from "../context/DeviceModeContext";
 
 type ThemeInput =
   | "dark"
@@ -331,8 +332,12 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
   const [addresses, setAddresses] = useState<DeliveryFormData[]>(savedAddresses);
   const [formMode, setFormMode] = useState<"hidden" | "add" | "edit">("hidden");
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
-  const [draftAddress, setDraftAddress] = useState<DeliveryFormData>(emptyDeliveryData);
-  const [isMobile, setIsMobile] = useState(false);
+  const [draftAddress, setDraftAddress] = useState<DeliveryFormData>(
+    deliveryData || emptyDeliveryData
+  );
+  const deviceMode = useDeviceMode();
+  const [innerIsMobile, setInnerIsMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < 768 : false);
+  const isMobile = deviceMode === "mobile" || innerIsMobile;
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -344,7 +349,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
 
   useEffect(() => {
     const syncViewport = () => {
-      setIsMobile(window.innerWidth < 768);
+      setInnerIsMobile(window.innerWidth < 768);
     };
 
     syncViewport();
@@ -864,7 +869,13 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
 
     if (isMobile) {
       setTimeout(() => {
-        deliverySectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        const scrollContainer = deliverySectionRef.current?.closest(".builder-preview-scroll");
+        if (scrollContainer) {
+          const targetTop = (deliverySectionRef.current?.offsetTop || 0) - 10;
+          scrollContainer.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+        } else {
+          deliverySectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
       }, 100);
     }
   };

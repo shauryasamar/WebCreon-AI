@@ -1,4 +1,5 @@
 import React from "react";
+import { useDeviceMode } from "../context/DeviceModeContext";
 
 export type PaginationProps = {
   currentPage?: number;
@@ -102,9 +103,11 @@ export const Pagination: React.FC<PaginationProps> = ({
   const mutedText = isDarkCanvas ? "rgba(255, 255, 255, 0.85)" : "#475569";
   const disabledText = isDarkCanvas ? "rgba(255, 255, 255, 0.35)" : "#94a3b8";
 
+  const deviceMode = useDeviceMode();
   const [isMobile, setIsMobile] = React.useState(
     typeof window !== "undefined" ? window.innerWidth <= 640 : false
   );
+  const effectiveIsMobile = deviceMode === "mobile" || isMobile;
 
   React.useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 640);
@@ -113,7 +116,7 @@ export const Pagination: React.FC<PaginationProps> = ({
   }, []);
 
   const getPageNumbers = (): number[] => {
-    const WINDOW_SIZE = isMobile ? 3 : 10;
+    const WINDOW_SIZE = effectiveIsMobile ? 3 : 10;
     if (totalPages <= WINDOW_SIZE) {
       return Array.from({ length: Math.max(1, totalPages) }, (_, i) => i + 1);
     }
@@ -121,7 +124,7 @@ export const Pagination: React.FC<PaginationProps> = ({
     let start = 1;
     let end = WINDOW_SIZE;
 
-    if (isMobile) {
+    if (effectiveIsMobile) {
       if (currentPage <= 2) {
         start = 1;
         end = 3;

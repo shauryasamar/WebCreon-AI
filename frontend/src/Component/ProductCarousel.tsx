@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useCart, Product } from "../CartContext";
 import { optimizeImageUrl } from "../utils/imageOptimizer";
 import { resolveThemeTokens, isColorDarkHex } from "../context/ThemeContext";
+import { useDeviceMode } from "../context/DeviceModeContext";
 
 export interface ProductCarouselFilterRules {
   category?: string;
@@ -279,16 +280,18 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
     : `/builder/${siteId}`;
 
   // ── Mobile Viewport Detection ──────────────────────────────────────────────
-  const [isMobile, setIsMobile] = React.useState<boolean>(() => {
+  const deviceMode = useDeviceMode();
+  const [innerIsMobile, setInnerIsMobile] = React.useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return window.innerWidth <= 640;
   });
   React.useEffect(() => {
     if (typeof window === "undefined") return;
-    const check = () => setIsMobile(window.innerWidth <= 640);
+    const check = () => setInnerIsMobile(window.innerWidth <= 640);
     window.addEventListener("resize", check, { passive: true });
     return () => window.removeEventListener("resize", check);
   }, []);
+  const isMobile = deviceMode === "mobile" || innerIsMobile;
 
   // Theme Token Resolution (Identical to ProductGrid.tsx)
   const {

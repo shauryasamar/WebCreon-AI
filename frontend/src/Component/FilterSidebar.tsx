@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { isColorDarkHex } from "../context/ThemeContext";
+import { useDeviceMode } from "../context/DeviceModeContext";
 
 type SortOption = {
   value: string;
@@ -46,8 +48,56 @@ export const FilterSidebar = ({
   showFilterButton = true,
   theme,
 }: FilterSidebarProps) => {
+  const deviceMode = useDeviceMode();
+  const [innerIsMobile, setInnerIsMobile] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerWidth <= 640;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const check = () => setInnerIsMobile(window.innerWidth <= 640);
+    window.addEventListener("resize", check, { passive: true });
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  const isMobile = deviceMode === "mobile" || innerIsMobile;
   const [sortOpen, setSortOpen] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  const [isInsidePreviewStage, setIsInsidePreviewStage] = useState(false);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (!sortOpen) return;
+    // In builder admin preview, portal to the phone preview stage container if available
+    const previewStage = sortRef.current?.closest(".builder-preview-stage") as HTMLElement | null;
+    if (deviceMode === "mobile" && previewStage) {
+      setPortalTarget(previewStage);
+      setIsInsidePreviewStage(true);
+    } else {
+      setPortalTarget(document.body);
+      setIsInsidePreviewStage(false);
+    }
+  }, [deviceMode, sortOpen]);
+
+  useEffect(() => {
+    if (!sortOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSortOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [sortOpen]);
+
+  useEffect(() => {
+    if (!sortOpen || !isMobile || isInsidePreviewStage) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [sortOpen, isMobile, isInsidePreviewStage]);
 
   const isDark =
     ((theme as any)?.filter_bg ? isColorDarkHex((theme as any).filter_bg) : false) ||
@@ -72,7 +122,7 @@ export const FilterSidebar = ({
   const currentSort = SORT_OPTIONS.find((o) => o.value === sortBy) || SORT_OPTIONS[0];
 
   useEffect(() => {
-    if (!sortOpen) return;
+    if (!sortOpen || isMobile) return;
     const handleClickOutside = (e: MouseEvent) => {
       if (sortRef.current && !sortRef.current.contains(e.target as Node)) {
         setSortOpen(false);
@@ -80,7 +130,7 @@ export const FilterSidebar = ({
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [sortOpen]);
+  }, [sortOpen, isMobile]);
 
   const displayTitle =
     (title &&
@@ -91,52 +141,140 @@ export const FilterSidebar = ({
       : null) || "Newest Arrivals";
 
   return (
-    <div className="product-toolbar-wrapper">
+    <div className={`product-toolbar-wrapper ${isMobile ? "is-mobile" : ""}`}>
       <div className="product-toolbar-container">
         {/* Left: Subtitle & Title */}
         <div className="product-toolbar-title-group">
           <p className="product-toolbar-subtitle">
             {subtitle || "Browse Products"}
           </p>
-          <h2 className="product-toolbar-title">
+          <h2 className="product-toolbar-title" title={displayTitle}>
             {displayTitle}
+            {itemCount > 0 && (
+              <span className="product-toolbar-title-count">
+                ({itemCount.toLocaleString()})
+              </span>
+            )}
           </h2>
         </div>
 
-        {/* Right: Item Count + Filter Button + Sort Dropdown */}
+        {/* Right: Actions */}
         <div className="product-toolbar-actions">
-          {/* Item count */}
-          <span className="product-toolbar-count">
-            {itemCount.toLocaleString()} item{itemCount !== 1 ? "s" : ""}
-          </span>
-
-          {/* Filter & Categories button */}
-          {showFilterButton && (
-            <button
-              onClick={onFilterClick}
-              className="product-toolbar-btn"
-            >
-              <span>☰</span>
-              <span>Filter & Categories</span>
-              {activeFilterCount > 0 && (
-                <span className="product-toolbar-badge">
-                  {activeFilterCount}
-                </span>
-              )}
-            </button>
+          {/* Desktop-only Item count */}
+          {!isMobile && (
+            <span className="product-toolbar-count">
+              {itemCount.toLocaleString()} item{itemCount !== 1 ? "s" : ""}
+            </span>
           )}
 
-          {/* Sort by dropdown */}
-          <div ref={sortRef} style={{ position: "relative" }}>
-            <button
-              onClick={() => setSortOpen(!sortOpen)}
-              className="product-toolbar-btn"
-            >
-              <span>Sort by: <strong>{currentSort.label}</strong></span>
-              <span style={{ fontSize: "10px", transition: "transform 200ms", transform: sortOpen ? "rotate(180deg)" : "rotate(0)" }}>▾</span>
-            </button>
+          {/* Filter button */}
+          {showFilterButton && (
+            isMobile ? (
+              <button
+                type="button"
+                onClick={onFilterClick}
+                className="product-toolbar-icon-btn"
+                aria-label="Filter products and categories"
+                title="Filter & Categories"
+              >
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="4" y1="21" x2="4" y2="14" />
+                  <line x1="4" y1="10" x2="4" y2="3" />
+                  <line x1="12" y1="21" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12" y2="3" />
+                  <line x1="20" y1="21" x2="20" y2="16" />
+                  <line x1="20" y1="12" x2="20" y2="3" />
+                  <line x1="1" y1="14" x2="7" y2="14" />
+                  <line x1="9" y1="8" x2="15" y2="8" />
+                  <line x1="17" y1="16" x2="23" y2="16" />
+                </svg>
+                {activeFilterCount > 0 && (
+                  <span className="product-toolbar-icon-badge">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onFilterClick}
+                className="product-toolbar-btn product-toolbar-filter-btn"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <line x1="4" y1="21" x2="4" y2="14" />
+                  <line x1="4" y1="10" x2="4" y2="3" />
+                  <line x1="12" y1="21" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12" y2="3" />
+                  <line x1="20" y1="21" x2="20" y2="16" />
+                  <line x1="20" y1="12" x2="20" y2="3" />
+                  <line x1="1" y1="14" x2="7" y2="14" />
+                  <line x1="9" y1="8" x2="15" y2="8" />
+                  <line x1="17" y1="16" x2="23" y2="16" />
+                </svg>
+                <span>Filter & Categories</span>
+                {activeFilterCount > 0 && (
+                  <span className="product-toolbar-badge">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+            )
+          )}
 
-            {sortOpen && (
+          {/* Sort button */}
+          <div ref={sortRef} style={{ position: "relative" }}>
+            {isMobile ? (
+              <button
+                type="button"
+                onClick={() => setSortOpen(!sortOpen)}
+                className="product-toolbar-icon-btn"
+                aria-label={`Sort by: ${currentSort.label}`}
+                title={`Sort by: ${currentSort.label}`}
+                style={{
+                  borderColor: sortBy !== "newest" ? accentColor : borderColor,
+                  background: sortBy !== "newest" ? `${accentColor}16` : btnBg,
+                  color: sortBy !== "newest" ? accentColor : textPrimary,
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 5h10M11 9h7M11 13h4" />
+                  <path d="M3 17l3 3 3-3" />
+                  <path d="M6 18V4" />
+                </svg>
+                {sortBy !== "newest" && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: "5px",
+                      right: "5px",
+                      width: "6px",
+                      height: "6px",
+                      borderRadius: "999px",
+                      background: accentColor,
+                    }}
+                  />
+                )}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setSortOpen(!sortOpen)}
+                className="product-toolbar-btn product-toolbar-sort-btn"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <path d="M11 5h10M11 9h7M11 13h4" />
+                  <path d="M3 17l3 3 3-3" />
+                  <path d="M6 18V4" />
+                </svg>
+                <span>
+                  Sort by: <strong>{currentSort.label}</strong>
+                </span>
+                <span style={{ fontSize: "9px", marginLeft: "2px", transition: "transform 200ms", transform: sortOpen ? "rotate(180deg)" : "rotate(0)" }}>▼</span>
+              </button>
+            )}
+
+            {/* Desktop Popover Dropdown */}
+            {sortOpen && !isMobile && (
               <div className="product-sort-dropdown">
                 <div className="product-sort-header">
                   Sort by
@@ -146,6 +284,7 @@ export const FilterSidebar = ({
                   return (
                     <button
                       key={opt.value}
+                      type="button"
                       onClick={() => {
                         onSortChange?.(opt.value);
                         setSortOpen(false);
@@ -175,11 +314,180 @@ export const FilterSidebar = ({
         </div>
       </div>
 
+      {/* Modern Mobile Bottom Sheet (Both real mobile and in admin mobile preview chassis) */}
+      {sortOpen && isMobile && (
+        createPortal(
+          <div
+            className="mobile-sort-sheet-overlay"
+            onClick={() => setSortOpen(false)}
+            style={{
+              position: isInsidePreviewStage ? "absolute" : "fixed",
+              inset: 0,
+              zIndex: 999999,
+              background: "rgba(0, 0, 0, 0.6)",
+              backdropFilter: "blur(4px)",
+              WebkitBackdropFilter: "blur(4px)",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "flex-end",
+              animation: "sortFadeIn 200ms ease-out",
+              borderRadius: isInsidePreviewStage ? "30px" : undefined,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              className="mobile-sort-sheet"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: "100%",
+                maxHeight: "85%",
+                background: dropdownBg,
+                borderRadius: "24px 24px 0 0",
+                borderTop: `1px solid ${borderColor}`,
+                boxShadow: "0 -10px 40px rgba(0, 0, 0, 0.35)",
+                display: "flex",
+                flexDirection: "column",
+                animation: "sortSheetSlideUp 240ms cubic-bezier(0.16, 1, 0.3, 1)",
+                boxSizing: "border-box",
+              }}
+            >
+              {/* Grab Pill Handle */}
+              <div style={{ padding: "10px 0 4px", display: "flex", justifyContent: "center" }}>
+                <div
+                  style={{
+                    width: "36px",
+                    height: "4.5px",
+                    borderRadius: "999px",
+                    background: isDark ? "rgba(255, 255, 255, 0.22)" : "rgba(0, 0, 0, 0.18)",
+                  }}
+                />
+              </div>
+
+              {/* Sheet Header */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "8px 18px 14px",
+                  borderBottom: `1px solid ${borderColor}`,
+                }}
+              >
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 800, color: textPrimary, letterSpacing: "-0.01em" }}>
+                    Sort by
+                  </h3>
+                  <p style={{ margin: "2px 0 0", fontSize: "12px", color: textSecondary }}>
+                    Choose your preferred product order
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSortOpen(false)}
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "999px",
+                    background: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.05)",
+                    border: "none",
+                    display: "grid",
+                    placeItems: "center",
+                    cursor: "pointer",
+                    color: textSecondary,
+                    padding: 0,
+                  }}
+                  aria-label="Close sort menu"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Options List */}
+              <div
+                style={{
+                  padding: "10px 14px 28px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                  overflowY: "auto",
+                }}
+              >
+                {SORT_OPTIONS.map((opt) => {
+                  const isActive = sortBy === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => {
+                        onSortChange?.(opt.value);
+                        setSortOpen(false);
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "12px 14px",
+                        borderRadius: "14px",
+                        border: `1.5px solid ${isActive ? accentColor : borderColor}`,
+                        background: isActive ? `${accentColor}18` : (isDark ? "rgba(255, 255, 255, 0.04)" : "rgba(0, 0, 0, 0.02)"),
+                        cursor: "pointer",
+                        textAlign: "left",
+                        transition: "all 140ms ease",
+                        outline: "none",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: "14px", fontWeight: isActive ? 700 : 600, color: isActive ? accentColor : textPrimary }}>
+                          {opt.label}
+                        </div>
+                        <div style={{ fontSize: "11.5px", color: textSecondary, marginTop: "2px" }}>
+                          {opt.description}
+                        </div>
+                      </div>
+
+                      {/* Radio Indicator */}
+                      <div
+                        style={{
+                          width: "20px",
+                          height: "20px",
+                          borderRadius: "999px",
+                          border: `2px solid ${isActive ? accentColor : textSecondary}`,
+                          display: "grid",
+                          placeItems: "center",
+                          flexShrink: 0,
+                          marginLeft: "12px",
+                          background: isActive ? `${accentColor}20` : "transparent",
+                        }}
+                      >
+                        {isActive && (
+                          <div
+                            style={{
+                              width: "8px",
+                              height: "8px",
+                              borderRadius: "999px",
+                              background: accentColor,
+                            }}
+                          />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>,
+          portalTarget || document.body
+        )
+      )}
+
       <style>{`
         .product-toolbar-wrapper {
           width: 100%;
-          margin-bottom: 24px;
-          padding-bottom: 14px;
+          margin-bottom: 20px;
+          padding-bottom: 12px;
           border-bottom: 1px solid ${borderColor};
         }
         .product-toolbar-container {
@@ -190,7 +498,7 @@ export const FilterSidebar = ({
           flex-wrap: wrap;
         }
         .product-toolbar-title-group {
-          min-width: 200px;
+          min-width: 180px;
         }
         .product-toolbar-subtitle {
           margin: 0 0 2px;
@@ -202,10 +510,18 @@ export const FilterSidebar = ({
         }
         .product-toolbar-title {
           margin: 0;
-          font-size: 24px;
+          font-size: 22px;
           font-weight: 800;
           letter-spacing: -0.03em;
           color: ${textPrimary};
+          display: flex;
+          align-items: baseline;
+        }
+        .product-toolbar-title-count {
+          font-size: 13.5px;
+          font-weight: 600;
+          color: ${textSecondary};
+          margin-left: 6px;
         }
         .product-toolbar-actions {
           display: flex;
@@ -221,7 +537,7 @@ export const FilterSidebar = ({
         .product-toolbar-btn {
           display: inline-flex;
           align-items: center;
-          gap: 6px;
+          gap: 7px;
           padding: 9px 16px;
           border-radius: 999px;
           border: 1px solid ${borderColor};
@@ -241,9 +557,57 @@ export const FilterSidebar = ({
           color: #fff;
           font-size: 10px;
           font-weight: 800;
-          padding: 2px 7px;
+          padding: 1px 7px;
+          min-height: 16px;
           border-radius: 999px;
           margin-left: 2px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          line-height: 1;
+        }
+        .product-toolbar-icon-btn {
+          width: 38px;
+          height: 38px;
+          min-width: 38px;
+          padding: 0;
+          border-radius: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid ${borderColor};
+          background: ${btnBg};
+          color: ${textPrimary};
+          cursor: pointer;
+          position: relative;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+          transition: all 140ms ease;
+          outline: none;
+        }
+        .product-toolbar-icon-btn:hover {
+          transform: translateY(-1px);
+        }
+        .product-toolbar-icon-btn:active {
+          transform: scale(0.96);
+        }
+        .product-toolbar-icon-badge {
+          position: absolute;
+          top: -4px;
+          right: -4px;
+          background: ${accentColor};
+          color: #ffffff;
+          font-size: 10px;
+          font-weight: 800;
+          min-width: 17px;
+          height: 17px;
+          border-radius: 999px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          line-height: 1;
+          padding: 0 4px;
+          box-sizing: border-box;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.25);
         }
         .product-sort-dropdown {
           position: absolute;
@@ -280,34 +644,105 @@ export const FilterSidebar = ({
           text-align: left;
         }
 
+        /* Responsive Mobile Layout: Single row with Title on left & Icons on right */
         @media (max-width: 640px) {
           .product-toolbar-container {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 12px;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 10px !important;
+            flex-wrap: nowrap !important;
+          }
+          .product-toolbar-title-group {
+            min-width: 0 !important;
+            flex: 1 !important;
+          }
+          .product-toolbar-title {
+            font-size: 17px !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+          }
+          .product-toolbar-subtitle {
+            font-size: 10px !important;
+            letter-spacing: 0.1em !important;
+            margin-bottom: 1px !important;
           }
           .product-toolbar-actions {
-            width: 100%;
-            justify-content: space-between;
-          }
-          .product-toolbar-btn {
-            flex: 1;
-            justify-content: center;
-            padding: 10px 12px;
-            font-size: 12px;
+            display: flex !important;
+            align-items: center !important;
+            gap: 8px !important;
+            flex-shrink: 0 !important;
+            flex-wrap: nowrap !important;
+            width: auto !important;
           }
           .product-toolbar-count {
-            display: none;
-          }
-          .product-sort-dropdown {
-            right: 0;
-            left: auto;
-            width: min(280px, calc(100vw - 24px));
+            display: none !important;
           }
         }
+
+        /* Mobile Preview Chassis in Builder: Exact same Single Row with Icons */
+        .is-mobile-preview .product-toolbar-container,
+        .product-toolbar-wrapper.is-mobile .product-toolbar-container {
+          flex-direction: row !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          gap: 10px !important;
+          flex-wrap: nowrap !important;
+        }
+        .is-mobile-preview .product-toolbar-title-group,
+        .product-toolbar-wrapper.is-mobile .product-toolbar-title-group {
+          min-width: 0 !important;
+          flex: 1 !important;
+        }
+        .is-mobile-preview .product-toolbar-title,
+        .product-toolbar-wrapper.is-mobile .product-toolbar-title {
+          font-size: 17px !important;
+          white-space: nowrap !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+        }
+        .is-mobile-preview .product-toolbar-subtitle,
+        .product-toolbar-wrapper.is-mobile .product-toolbar-subtitle {
+          font-size: 10px !important;
+          letter-spacing: 0.1em !important;
+          margin-bottom: 1px !important;
+        }
+        .is-mobile-preview .product-toolbar-actions,
+        .product-toolbar-wrapper.is-mobile .product-toolbar-actions {
+          display: flex !important;
+          align-items: center !important;
+          gap: 8px !important;
+          flex-shrink: 0 !important;
+          flex-wrap: nowrap !important;
+          width: auto !important;
+        }
+        .is-mobile-preview .product-toolbar-count,
+        .product-toolbar-wrapper.is-mobile .product-toolbar-count {
+          display: none !important;
+        }
+
         @keyframes sortDropIn {
           from { opacity: 0; transform: translateY(-6px); }
           to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes sortSheetSlideUp {
+          from {
+            transform: translateY(100%);
+            opacity: 0.8;
+          }
+          to {
+            transform: translateY(0);
+            opacity: 1;
+          }
+        }
+        @keyframes sortFadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
         }
       `}</style>
     </div>

@@ -4,6 +4,7 @@ import { useCart, Product } from "../CartContext";
 import FilterSidebar from "./FilterSidebar";
 import { Pagination } from "./Pagination";
 import { resolveThemeTokens } from "../context/ThemeContext";
+import { useDeviceMode } from "../context/DeviceModeContext";
 import { optimizeImageUrl } from "../utils/imageOptimizer";
 import {
   DiwaliGraphics,
@@ -285,7 +286,10 @@ const ProductGrid: React.FC<ProductGridProps> = ({
     };
   }, []);
 
-  const { isMobile, isTablet, isLargePhone } = screenSize;
+  const deviceMode = useDeviceMode();
+  const isMobile = deviceMode === "mobile" || screenSize.isMobile;
+  const isTablet = deviceMode === "mobile" ? false : screenSize.isTablet;
+  const isLargePhone = deviceMode === "mobile" ? false : screenSize.isLargePhone;
 
 function isColorDarkHex(colorHex?: string): boolean {
   if (!colorHex || typeof colorHex !== "string") return false;

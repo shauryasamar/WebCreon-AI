@@ -9,6 +9,7 @@ import { normalizeStorefrontProduct } from "../utils/productNormalizer";
 import FestiveBackgroundOverlay from "../Component/FestiveBackgroundOverlay";
 import { getCheckoutAddresses, SavedAddress } from "../addressService";
 import { useCustomerAuth } from "../context/CustomerAuthContext";
+import { useDeviceMode } from "../context/DeviceModeContext";
 
 type Block = {
   id?: string;
@@ -254,10 +255,23 @@ function EditorBlockWrapper({
 
   useEffect(() => {
     if (selected && blockRef.current) {
-      blockRef.current.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
+      const scrollParent = blockRef.current.closest(".builder-preview-scroll");
+      if (scrollParent) {
+        const parentRect = scrollParent.getBoundingClientRect();
+        const blockRect = blockRef.current.getBoundingClientRect();
+        const currentScrollTop = scrollParent.scrollTop;
+        const relativeTop = blockRect.top - parentRect.top;
+        const targetScroll = currentScrollTop + relativeTop - parentRect.height / 2 + blockRect.height / 2;
+        scrollParent.scrollTo({
+          top: Math.max(0, targetScroll),
+          behavior: "smooth",
+        });
+      } else {
+        blockRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }
     }
   }, [selected]);
 
@@ -459,6 +473,7 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
   appBase,
 }) => {
   const { products, cartItems } = useCart();
+  const deviceMode = useDeviceMode();
   const location = useLocation();
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
 
@@ -704,13 +719,13 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
 
   useEffect(() => {
     const syncViewport = () => {
-      setIsCompactCheckout(window.innerWidth < 1024);
+      setIsCompactCheckout(deviceMode === "mobile" || window.innerWidth < 1024);
     };
 
     syncViewport();
     window.addEventListener("resize", syncViewport);
     return () => window.removeEventListener("resize", syncViewport);
-  }, []);
+  }, [deviceMode]);
 
   const sectionTitleParam = useMemo(() => {
     const params = new URLSearchParams(location.search);

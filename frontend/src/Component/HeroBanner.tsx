@@ -9,6 +9,7 @@ import {
   EidGraphics,
 } from "./FestiveGraphics";
 import { optimizeImageUrl } from "../utils/imageOptimizer";
+import { useDeviceMode } from "../context/DeviceModeContext";
 
 export type HeroSlide = {
   id?: string;
@@ -262,8 +263,9 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
     };
   }, []);
 
-  const isMobile = screenSize.isMobile;
-  const isTablet = screenSize.isTablet;
+  const deviceMode = useDeviceMode();
+  const isMobile = deviceMode === "mobile" || screenSize.isMobile;
+  const isTablet = deviceMode === "mobile" ? false : screenSize.isTablet;
 
   // Format Numeric Sizing
   const rawHeightNum =
@@ -277,8 +279,9 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   const computedHeight = `${responsiveHeight}px`;
 
   // Banner Width Computation
-  const computedWidth =
-    typeof banner_width === "number"
+  const computedWidth = isMobile
+    ? "100%"
+    : typeof banner_width === "number"
       ? `${banner_width}px`
       : !isNaN(Number(banner_width)) && Number(banner_width) > 0
         ? `${banner_width}px`
@@ -287,8 +290,9 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   // Height Scale Factor (hScale) relative to 380px standard height
   const hScale = Math.min(1.3, Math.max(0.42, responsiveHeight / 380));
 
-  const computedRadius =
-    typeof border_radius === "number" || (!isNaN(Number(border_radius)) && String(border_radius).indexOf("px") === -1)
+  const computedRadius = isMobile
+    ? "0px"
+    : typeof border_radius === "number" || (!isNaN(Number(border_radius)) && String(border_radius).indexOf("px") === -1)
       ? `${border_radius}px`
       : String(border_radius || "16px");
 
@@ -544,7 +548,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
     currentSlide.font_family ||
     (restProps as any).headline_font_family ||
     (restProps as any).font_family ||
-    theme?.brand_font_family
+    (theme as any)?.hero_font_family
   );
   const headlineFontWeight = String(
     currentSlide.headline_font_weight ||

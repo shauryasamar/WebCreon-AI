@@ -10,6 +10,9 @@ type BuilderTopControlBarProps = {
   userEmail?: string;
   avatarUrl?: string;
   gender?: string;
+  deviceMode?: "desktop" | "mobile";
+  onChangeDeviceMode?: (mode: "desktop" | "mobile") => void;
+  showDeviceSwitcher?: boolean;
 };
 
 export default function BuilderTopControlBar({
@@ -20,6 +23,9 @@ export default function BuilderTopControlBar({
   userEmail,
   avatarUrl,
   gender,
+  deviceMode = "desktop",
+  onChangeDeviceMode,
+  showDeviceSwitcher = false,
 }: BuilderTopControlBarProps) {
   const [logoutHovered, setLogoutHovered] = useState(false);
 
@@ -65,6 +71,9 @@ export default function BuilderTopControlBar({
         .builder-top-control-bar-root p {
           font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
         }
+        .builder-device-btn:hover {
+          color: #0f172a !important;
+        }
       `}</style>
       <button
         type="button"
@@ -104,6 +113,99 @@ export default function BuilderTopControlBar({
       </button>
 
       <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+        {showDeviceSwitcher && (
+          <>
+            <div
+              className="builder-device-switcher"
+              role="group"
+              aria-label="Device viewport switcher"
+              style={{
+                background: "#f1f5f9",
+                border: "1px solid #e2e8f0",
+                borderRadius: "8px",
+                padding: "3px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "2px",
+              }}
+            >
+              <button
+                type="button"
+                className="builder-device-btn"
+                onClick={() => onChangeDeviceMode?.("desktop")}
+                title="Desktop view"
+                aria-label="Desktop view"
+                style={{
+                  background: deviceMode === "desktop" ? "#ffffff" : "transparent",
+                  color: deviceMode === "desktop" ? "#2563eb" : "#64748b",
+                  borderRadius: "6px",
+                  boxShadow: deviceMode === "desktop" ? "0 1px 3px rgba(15, 23, 42, 0.1)" : "none",
+                  width: "32px",
+                  height: "30px",
+                  border: "none",
+                  cursor: "pointer",
+                  display: "grid",
+                  placeItems: "center",
+                  transition: "all 0.18s ease",
+                  padding: 0,
+                }}
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                  <line x1="8" y1="21" x2="16" y2="21" />
+                  <line x1="12" y1="17" x2="12" y2="21" />
+                </svg>
+              </button>
+
+              <button
+                type="button"
+                className="builder-device-btn"
+                onClick={() => onChangeDeviceMode?.("mobile")}
+                title="Mobile preview"
+                aria-label="Mobile preview"
+                style={{
+                  background: deviceMode === "mobile" ? "#ffffff" : "transparent",
+                  color: deviceMode === "mobile" ? "#2563eb" : "#64748b",
+                  borderRadius: "6px",
+                  boxShadow: deviceMode === "mobile" ? "0 1px 3px rgba(15, 23, 42, 0.1)" : "none",
+                  width: "32px",
+                  height: "30px",
+                  border: "none",
+                  cursor: "pointer",
+                  display: "grid",
+                  placeItems: "center",
+                  transition: "all 0.18s ease",
+                  padding: 0,
+                }}
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                  <line x1="12" y1="18" x2="12.01" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            <div style={{ width: "1px", height: "18px", background: "#e2e8f0", margin: "0 2px" }} />
+          </>
+        )}
         <div
           style={{
             display: "flex",

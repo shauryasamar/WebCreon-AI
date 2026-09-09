@@ -6,6 +6,7 @@ import { useCustomerAuth } from "../context/CustomerAuthContext";
 import { resolveThemeTokens } from "../context/ThemeContext";
 import { optimizeImageUrl, getThumbnailUrl, compressImageFile } from "../utils/imageOptimizer";
 import { normalizeStorefrontProduct } from "../utils/productNormalizer";
+import { useDeviceMode } from "../context/DeviceModeContext";
 
 const MAX_CACHE_ENTRIES = 150;
 const productDetailMemoryCache = new Map<string, Product>();
@@ -726,11 +727,15 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
       ? String((selectedProduct as any).site_id)
       : "");
 
+  const deviceMode = useDeviceMode();
   const [screenSize, setScreenSize] = useState<{ isMobile: boolean; isTablet: boolean }>(() => {
     if (typeof window === "undefined") return { isMobile: false, isTablet: false };
     const w = window.innerWidth;
     return { isMobile: w < 768, isTablet: w >= 768 && w < 1024 };
   });
+
+  const isMobile = deviceMode === "mobile" || screenSize.isMobile;
+  const isTablet = deviceMode === "mobile" ? false : screenSize.isTablet;
   const [reviews, setReviews] = useState<ProductReview[]>(
     Array.isArray(anyProduct?.reviews) ? (anyProduct.reviews as ProductReview[]) : []
   );
@@ -768,25 +773,37 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   const [showBottomSticky, setShowBottomSticky] = useState(true);
 
   useEffect(() => {
-    if (!screenSize.isMobile) return;
+    if (!isMobile) return;
 
     const checkSticky = () => {
       if (!inlineBuyRef.current) return;
       const rect = inlineBuyRef.current.getBoundingClientRect();
-      const windowHeight = window.innerHeight;
-      // Show sticky when the real button position is below the bottom of the viewport
-      setShowBottomSticky(rect.top > windowHeight - 50);
+      const scrollParent = inlineBuyRef.current.closest(".builder-preview-scroll") as HTMLElement | null;
+      if (scrollParent) {
+        const parentRect = scrollParent.getBoundingClientRect();
+        setShowBottomSticky(rect.top > parentRect.bottom - 40);
+      } else {
+        const windowHeight = window.innerHeight;
+        setShowBottomSticky(rect.top > windowHeight - 50);
+      }
     };
 
+    const scrollParent = inlineBuyRef.current?.closest(".builder-preview-scroll") as HTMLElement | null;
     window.addEventListener("scroll", checkSticky, { passive: true });
     window.addEventListener("resize", checkSticky, { passive: true });
+    if (scrollParent) {
+      scrollParent.addEventListener("scroll", checkSticky, { passive: true });
+    }
     checkSticky();
 
     return () => {
       window.removeEventListener("scroll", checkSticky);
       window.removeEventListener("resize", checkSticky);
+      if (scrollParent) {
+        scrollParent.removeEventListener("scroll", checkSticky);
+      }
     };
-  }, [screenSize.isMobile, product?.id]);
+  }, [isMobile, product?.id]);
 
   const getProductShareUrl = () => {
     if (typeof window === "undefined") return "";
@@ -1315,9 +1332,6 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
 
     loadEligibleOrderItem();
   }, [isAuthenticated, product, siteId]);
-
-  const isMobile = screenSize.isMobile;
-  const isTablet = screenSize.isTablet;
 
   const {
     isDark,
@@ -1931,7 +1945,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     (_, index) => normalizedImages[index] || null
   );
 
-  const pagePadding = isMobile ? "12px 12px 32px" : "16px 16px 40px";
+  const pagePadding = isMobile ? "12px 12px 96px" : "16px 16px 40px";
   const mainGridColumns = isMobile
     ? "1fr"
     : isTablet
@@ -1949,7 +1963,9 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   return (
     <section
       style={{
-        maxWidth: resolvedMaxWidth,
+        maxWidth: isMobile ? "100%" : resolvedMaxWidth,
+        width: "100%",
+        boxSizing: "border-box",
         margin: "0 auto",
         padding: pagePadding,
       }}

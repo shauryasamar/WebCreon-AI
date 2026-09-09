@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useCart } from "../CartContext";
 import { useCustomerAuth } from "../context/CustomerAuthContext";
+import { useDeviceMode } from "../context/DeviceModeContext";
 import { optimizeImageUrl } from "../utils/imageOptimizer";
 import {
   DiwaliGraphics,
@@ -267,8 +268,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   const { isAuthenticated, refreshMe, logout } = useCustomerAuth();
 
 
+  const deviceMode = useDeviceMode();
   const viewportMode = useViewportMode();
-  const isMobile = viewportMode === "mobile";
+  const isMobile = deviceMode === "mobile" || viewportMode === "mobile";
   const isCompact = isMobile;
 
 
@@ -1121,11 +1123,10 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
 
   useEffect(() => {
-    if (editMode || location.pathname.startsWith("/builder/")) return;
     const tenant = siteSlug || (siteId ? String(siteId) : "");
     if (!tenant) return;
     refreshMe(tenant);
-  }, [siteSlug, siteId, refreshMe, editMode, location.pathname]);
+  }, [siteSlug, siteId, refreshMe, location.pathname]);
 
 
   useEffect(() => {
@@ -2025,6 +2026,8 @@ const Navbar: React.FC<NavbarProps> = (props) => {
               const showLogo = brandDisplayMode === "both" || brandDisplayMode === "logo_only";
               if (!showLogo) return null;
 
+              const mobileLogoSize = isMobile ? Math.min(30, effectiveLogoSize) : effectiveLogoSize;
+
               if (resolvedLogoUrl) {
                 return (
                   <div
@@ -2032,8 +2035,8 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                       display: "inline-flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      height: `${effectiveLogoSize}px`,
-                      maxHeight: `${effectiveLogoSize}px`,
+                      height: `${mobileLogoSize}px`,
+                      maxHeight: `${mobileLogoSize}px`,
                       width: "auto",
                       maxWidth: "100%",
                       overflow: "hidden",
@@ -2047,8 +2050,8 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                       src={resolvedLogoUrl}
                       alt={brandName || "Logo"}
                       style={{
-                        height: `${effectiveLogoSize}px`,
-                        maxHeight: `${effectiveLogoSize}px`,
+                        height: `${mobileLogoSize}px`,
+                        maxHeight: `${mobileLogoSize}px`,
                         maxWidth: "100%",
                         width: "auto",
                         objectFit: logoFitStyle || "contain",
@@ -2067,8 +2070,8 @@ const Navbar: React.FC<NavbarProps> = (props) => {
               return customFallback || (
                 <div
                   style={{
-                    width: `${Math.min(36, effectiveLogoSize)}px`,
-                    height: `${Math.min(36, effectiveLogoSize)}px`,
+                    width: `${Math.min(mobileLogoSize, 36)}px`,
+                    height: `${Math.min(mobileLogoSize, 36)}px`,
                     borderRadius: "10px",
                     background: light ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)",
                     border: softBorder,
@@ -2097,14 +2100,17 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                 <span
                   style={{
                     fontFamily: resolvedBrandFontFamily,
-                    fontSize: isMobile ? `${Math.max(12, Math.round(brandFontSizeNum * 0.85))}px` : `${brandFontSizeNum}px`,
+                    fontSize: isMobile ? `${Math.max(13, Math.min(16, Math.round(brandFontSizeNum * 0.85)))}px` : `${brandFontSizeNum}px`,
                     fontWeight: Number(brandFontWeight) || brandFontWeight || 700,
                     fontStyle: brandFontStyle === "italic" ? "italic" : "normal",
                     letterSpacing: isCinzel ? "0.08em" : (isSerif ? "0.04em" : "normal"),
                     textTransform: isCinzel ? "uppercase" : "none",
                     color: brandTextColor,
                     whiteSpace: "nowrap",
-                    flexShrink: 0,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    maxWidth: isMobile ? "min(150px, 38vw)" : undefined,
+                    flexShrink: 1,
                     lineHeight: 1.2,
                     ...extraStyle,
                   }}
@@ -2128,14 +2134,14 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                       display: "inline-flex",
                       flexDirection: isColumn ? "column" : "row",
                       alignItems: "center",
-                      justifyContent: "center",
+                      justifyContent: "flex-start",
                       gap: isColumn ? "2px" : "8px",
                       background: "transparent",
                       border: "none",
                       cursor: "pointer",
-                      flexShrink: 0,
-                      flex: "0 0 auto",
-                      minWidth: "max-content",
+                      flexShrink: 1,
+                      minWidth: 0,
+                      maxWidth: isMobile ? "100%" : undefined,
                       padding: 0,
                       margin: 0,
                       textDecoration: "none",
@@ -2152,9 +2158,8 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                 <form
                   onSubmit={handleSearchSubmit}
                   style={{
-                    flex: `0 1 ${searchMaxWidthNum}px`,
                     width: "100%",
-                    maxWidth: `${searchMaxWidthNum}px`,
+                    maxWidth: "100%",
                     height: `${searchHeightNum}px`,
                     minWidth: 0,
                     display: "flex",
@@ -2305,24 +2310,15 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                 );
               }
 
-              if (searchPlacement === "left") {
-                return (
-                  <div style={glassContainerStyle}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: 1, minWidth: 0 }}>
-                      {renderGlassBrand()}
-                      {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderGlassSearch()}
-                    </div>
-                    {renderGlassActions()}
-                  </div>
-                );
-              }
 
-              if (searchPlacement === "right") {
+
+              if (isMobile) {
                 return (
-                  <div style={glassContainerStyle}>
-                    {renderGlassBrand()}
-                    <div style={{ display: "flex", alignItems: "center", gap: "16px", justifyContent: "flex-end", flex: 1, minWidth: 0 }}>
-                      {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderGlassSearch()}
+                  <div style={{ ...glassContainerStyle, padding: "8px 12px", gap: "6px" }}>
+                    <div style={{ display: "flex", alignItems: "center", flex: "1 1 auto", justifyContent: "flex-start", minWidth: 0, overflow: "hidden" }}>
+                      {renderGlassBrand()}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: "0 0 auto", marginLeft: "auto" }}>
                       {renderGlassActions()}
                     </div>
                   </div>
@@ -2331,13 +2327,13 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
               return (
                 <div style={glassContainerStyle}>
-                  <div style={{ display: "flex", alignItems: "center", flex: 1, justifyContent: "flex-start", minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", flex: "0 0 auto", justifyContent: "flex-start", flexShrink: 0 }}>
                     {renderGlassBrand()}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: `0 1 ${searchMaxWidthNum}px`, width: "100%", maxWidth: `${searchMaxWidthNum}px`, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: searchPlacement === "left" ? "flex-start" : searchPlacement === "right" ? "flex-end" : "center", flex: "0 1 auto", width: "100%", maxWidth: `${searchMaxWidthNum}px`, minWidth: 0, marginLeft: searchPlacement === "left" ? "16px" : "auto", marginRight: searchPlacement === "right" ? "16px" : "auto", boxSizing: "border-box" }}>
                     {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderGlassSearch()}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: "0 0 auto", flexShrink: 0 }}>
                     {renderGlassActions()}
                   </div>
                 </div>
@@ -2358,14 +2354,14 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                       display: "inline-flex",
                       flexDirection: isColumn ? "column" : "row",
                       alignItems: "center",
-                      justifyContent: "center",
+                      justifyContent: "flex-start",
                       gap: isColumn ? "2px" : "8px",
                       background: "transparent",
                       border: "none",
                       cursor: "pointer",
-                      flexShrink: 0,
-                      flex: "0 0 auto",
-                      minWidth: "max-content",
+                      flexShrink: 1,
+                      minWidth: 0,
+                      maxWidth: isMobile ? "100%" : undefined,
                       padding: 0,
                       margin: 0,
                       textDecoration: "none",
@@ -2382,9 +2378,8 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                 <form
                   onSubmit={handleSearchSubmit}
                   style={{
-                    flex: `0 1 ${searchMaxWidthNum}px`,
                     width: "100%",
-                    maxWidth: `${searchMaxWidthNum}px`,
+                    maxWidth: "100%",
                     height: `${searchHeightNum}px`,
                     minWidth: 0,
                     display: "flex",
@@ -2527,24 +2522,15 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                 );
               }
 
-              if (searchPlacement === "left") {
-                return (
-                  <div style={marketplaceContainerStyle}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: 1, minWidth: 0 }}>
-                      {renderMarketplaceBrand()}
-                      {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderMarketplaceSearch()}
-                    </div>
-                    {renderMarketplaceActions()}
-                  </div>
-                );
-              }
 
-              if (searchPlacement === "right") {
+
+              if (isMobile) {
                 return (
-                  <div style={marketplaceContainerStyle}>
-                    {renderMarketplaceBrand()}
-                    <div style={{ display: "flex", alignItems: "center", gap: "16px", justifyContent: "flex-end", flex: 1, minWidth: 0 }}>
-                      {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderMarketplaceSearch()}
+                  <div style={{ ...marketplaceContainerStyle, padding: "8px 12px", gap: "6px" }}>
+                    <div style={{ display: "flex", alignItems: "center", flex: "1 1 auto", justifyContent: "flex-start", minWidth: 0, overflow: "hidden" }}>
+                      {renderMarketplaceBrand()}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: "0 0 auto", marginLeft: "auto" }}>
                       {renderMarketplaceActions()}
                     </div>
                   </div>
@@ -2553,13 +2539,13 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
               return (
                 <div style={marketplaceContainerStyle}>
-                  <div style={{ display: "flex", alignItems: "center", flex: 1, justifyContent: "flex-start", minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", flex: "0 0 auto", justifyContent: "flex-start", flexShrink: 0 }}>
                     {renderMarketplaceBrand()}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: `0 1 ${searchMaxWidthNum}px`, width: "100%", maxWidth: `${searchMaxWidthNum}px`, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: searchPlacement === "left" ? "flex-start" : searchPlacement === "right" ? "flex-end" : "center", flex: "0 1 auto", width: "100%", maxWidth: `${searchMaxWidthNum}px`, minWidth: 0, marginLeft: searchPlacement === "left" ? "16px" : "auto", marginRight: searchPlacement === "right" ? "16px" : "auto", boxSizing: "border-box" }}>
                     {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderMarketplaceSearch()}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: "0 0 auto", flexShrink: 0 }}>
                     {renderMarketplaceActions()}
                   </div>
                 </div>
@@ -2580,14 +2566,14 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                       display: "inline-flex",
                       flexDirection: isColumn ? "column" : "row",
                       alignItems: "center",
-                      justifyContent: "center",
+                      justifyContent: "flex-start",
                       gap: isColumn ? "2px" : isMobile ? "8px" : "12px",
                       background: "transparent",
                       border: "none",
                       cursor: "pointer",
-                      flexShrink: 0,
-                      flex: "0 0 auto",
-                      minWidth: "max-content",
+                      flexShrink: 1,
+                      minWidth: 0,
+                      maxWidth: isMobile ? "100%" : undefined,
                       padding: 0,
                       margin: 0,
                       textDecoration: "none",
@@ -2622,9 +2608,8 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                 <form
                   onSubmit={handleSearchSubmit}
                   style={{
-                    flex: `0 1 ${searchMaxWidthNum}px`,
                     width: "100%",
-                    maxWidth: `${searchMaxWidthNum}px`,
+                    maxWidth: "100%",
                     height: `${searchHeightNum}px`,
                     minWidth: 0,
                     display: "flex",
@@ -2769,24 +2754,15 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                 );
               }
 
-              if (searchPlacement === "left") {
-                return (
-                  <div style={luxuryContainerStyle}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: 1, minWidth: 0 }}>
-                      {renderLuxuryBrand()}
-                      {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderLuxurySearch()}
-                    </div>
-                    {renderLuxuryActions()}
-                  </div>
-                );
-              }
 
-              if (searchPlacement === "right") {
+
+              if (isMobile) {
                 return (
-                  <div style={luxuryContainerStyle}>
-                    {renderLuxuryBrand()}
-                    <div style={{ display: "flex", alignItems: "center", gap: "16px", justifyContent: "flex-end", flex: 1, minWidth: 0 }}>
-                      {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderLuxurySearch()}
+                  <div style={{ ...luxuryContainerStyle, padding: "8px 12px", gap: "6px" }}>
+                    <div style={{ display: "flex", alignItems: "center", flex: "1 1 auto", justifyContent: "flex-start", minWidth: 0, overflow: "hidden" }}>
+                      {renderLuxuryBrand()}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: "0 0 auto", marginLeft: "auto" }}>
                       {renderLuxuryActions()}
                     </div>
                   </div>
@@ -2795,13 +2771,13 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
               return (
                 <div style={luxuryContainerStyle}>
-                  <div style={{ display: "flex", alignItems: "center", flex: 1, justifyContent: "flex-start", minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", flex: "0 0 auto", justifyContent: "flex-start", flexShrink: 0 }}>
                     {renderLuxuryBrand()}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: `0 1 ${searchMaxWidthNum}px`, width: "100%", maxWidth: `${searchMaxWidthNum}px`, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: searchPlacement === "left" ? "flex-start" : searchPlacement === "right" ? "flex-end" : "center", flex: "0 1 auto", width: "100%", maxWidth: `${searchMaxWidthNum}px`, minWidth: 0, marginLeft: searchPlacement === "left" ? "16px" : "auto", marginRight: searchPlacement === "right" ? "16px" : "auto", boxSizing: "border-box" }}>
                     {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderLuxurySearch()}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: "0 0 auto", flexShrink: 0 }}>
                     {renderLuxuryActions()}
                   </div>
                 </div>
@@ -2836,14 +2812,14 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                       display: "inline-flex",
                       flexDirection: isColumn ? "column" : "row",
                       alignItems: "center",
-                      justifyContent: "center",
+                      justifyContent: "flex-start",
                       gap: isColumn ? "2px" : "8px",
                       background: "transparent",
                       border: "none",
                       cursor: "pointer",
-                      flexShrink: 0,
-                      flex: "0 0 auto",
-                      minWidth: "max-content",
+                      flexShrink: 1,
+                      minWidth: 0,
+                      maxWidth: isMobile ? "100%" : undefined,
                       padding: 0,
                       margin: 0,
                       textDecoration: "none",
@@ -2880,9 +2856,8 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                 <form
                   onSubmit={handleSearchSubmit}
                   style={{
-                    flex: `0 1 ${searchMaxWidthNum}px`,
                     width: "100%",
-                    maxWidth: `${searchMaxWidthNum}px`,
+                    maxWidth: "100%",
                     height: `${searchHeightNum}px`,
                     minWidth: 0,
                     display: "flex",
@@ -3031,24 +3006,15 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                 );
               }
 
-              if (searchPlacement === "left") {
-                return (
-                  <div style={neoContainerStyle}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: 1, minWidth: 0 }}>
-                      {renderNeoBrand()}
-                      {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderNeoSearch()}
-                    </div>
-                    {renderNeoActions()}
-                  </div>
-                );
-              }
 
-              if (searchPlacement === "right") {
+
+              if (isMobile) {
                 return (
-                  <div style={neoContainerStyle}>
-                    {renderNeoBrand()}
-                    <div style={{ display: "flex", alignItems: "center", gap: "16px", justifyContent: "flex-end", flex: 1, minWidth: 0 }}>
-                      {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderNeoSearch()}
+                  <div style={{ ...neoContainerStyle, padding: "8px 12px", gap: "6px" }}>
+                    <div style={{ display: "flex", alignItems: "center", flex: "1 1 auto", justifyContent: "flex-start", minWidth: 0, overflow: "hidden" }}>
+                      {renderNeoBrand()}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: "0 0 auto", marginLeft: "auto" }}>
                       {renderNeoActions()}
                     </div>
                   </div>
@@ -3057,13 +3023,13 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
               return (
                 <div style={neoContainerStyle}>
-                  <div style={{ display: "flex", alignItems: "center", flex: 1, justifyContent: "flex-start", minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", flex: "0 0 auto", justifyContent: "flex-start", flexShrink: 0 }}>
                     {renderNeoBrand()}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: `0 1 ${searchMaxWidthNum}px`, width: "100%", maxWidth: `${searchMaxWidthNum}px`, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: searchPlacement === "left" ? "flex-start" : searchPlacement === "right" ? "flex-end" : "center", flex: "0 1 auto", width: "100%", maxWidth: `${searchMaxWidthNum}px`, minWidth: 0, marginLeft: searchPlacement === "left" ? "16px" : "auto", marginRight: searchPlacement === "right" ? "16px" : "auto", boxSizing: "border-box" }}>
                     {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderNeoSearch()}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: "0 0 auto", flexShrink: 0 }}>
                     {renderNeoActions()}
                   </div>
                 </div>
@@ -3084,14 +3050,14 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     display: "inline-flex",
                     flexDirection: isColumn ? "column" : "row",
                     alignItems: "center",
-                    justifyContent: "center",
+                    justifyContent: "flex-start",
                     gap: isColumn ? "2px" : "8px",
                     background: "transparent",
                     border: "none",
                     cursor: "pointer",
-                    flexShrink: 0,
-                    flex: "0 0 auto",
-                    minWidth: "max-content",
+                    flexShrink: 1,
+                    minWidth: 0,
+                    maxWidth: isMobile ? "100%" : undefined,
                     padding: 0,
                     margin: 0,
                     textDecoration: "none",
@@ -3108,9 +3074,8 @@ const Navbar: React.FC<NavbarProps> = (props) => {
               <form
                 onSubmit={handleSearchSubmit}
                 style={{
-                  flex: `0 1 ${searchMaxWidthNum}px`,
                   width: "100%",
-                  maxWidth: `${searchMaxWidthNum}px`,
+                  maxWidth: "100%",
                   height: `${searchHeightNum}px`,
                   minWidth: 0,
                   display: "flex",
@@ -3255,24 +3220,13 @@ const Navbar: React.FC<NavbarProps> = (props) => {
               );
             }
 
-            if (searchPlacement === "left") {
+            if (isMobile) {
               return (
-                <div style={defaultContainerStyle}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: 1, minWidth: 0 }}>
+                <div style={{ ...defaultContainerStyle, padding: "8px 12px", gap: "6px" }}>
+                  <div style={{ display: "flex", alignItems: "center", flex: "1 1 auto", justifyContent: "flex-start", minWidth: 0, overflow: "hidden" }}>
                     {renderDefaultBrand()}
-                    {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderDefaultSearch()}
                   </div>
-                  {renderDefaultActions()}
-                </div>
-              );
-            }
-
-            if (searchPlacement === "right") {
-              return (
-                <div style={defaultContainerStyle}>
-                  {renderDefaultBrand()}
-                  <div style={{ display: "flex", alignItems: "center", gap: "16px", justifyContent: "flex-end", flex: 1, minWidth: 0 }}>
-                    {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderDefaultSearch()}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: "0 0 auto", marginLeft: "auto" }}>
                     {renderDefaultActions()}
                   </div>
                 </div>
@@ -3281,13 +3235,13 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
             return (
               <div style={defaultContainerStyle}>
-                <div style={{ display: "flex", alignItems: "center", flex: 1, justifyContent: "flex-start", minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", flex: "0 0 auto", justifyContent: "flex-start", flexShrink: 0 }}>
                   {renderDefaultBrand()}
                 </div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: `0 1 ${searchMaxWidthNum}px`, width: "100%", maxWidth: `${searchMaxWidthNum}px`, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: searchPlacement === "left" ? "flex-start" : searchPlacement === "right" ? "flex-end" : "center", flex: "0 1 auto", width: "100%", maxWidth: `${searchMaxWidthNum}px`, minWidth: 0, marginLeft: searchPlacement === "left" ? "16px" : "auto", marginRight: searchPlacement === "right" ? "16px" : "auto", boxSizing: "border-box" }}>
                   {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderDefaultSearch()}
                 </div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: "0 0 auto", flexShrink: 0 }}>
                   {renderDefaultActions()}
                 </div>
               </div>

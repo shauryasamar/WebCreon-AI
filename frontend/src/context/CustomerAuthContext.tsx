@@ -192,7 +192,7 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshMe = useCallback(async (websiteName: string) => {
-    if (!websiteName || (typeof window !== "undefined" && window.location.pathname.startsWith("/builder/"))) {
+    if (!websiteName) {
       setUser(null);
       setLoading(false);
       return null;
@@ -592,10 +592,16 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
 
     const getCurrentTenant = (): string | null => {
       const path = window.location.pathname;
-      if (path.startsWith("/builder/")) return null;
       if (user?.siteSlug) return user.siteSlug;
       if (user?.siteId) return user.siteId;
-      if (path.startsWith("/store/")) return path.split("/")[2] || null;
+      if (path.startsWith("/builder/")) {
+        const parts = path.split("/");
+        return parts[2] || null;
+      }
+      if (path.startsWith("/store/")) {
+        const parts = path.split("/");
+        return parts[2] || null;
+      }
       return null;
     };
 

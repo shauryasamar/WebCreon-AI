@@ -8,6 +8,7 @@ import {
   getLuminance,
   usePublicSiteTheme,
 } from "../hooks/usePublicSiteTheme";
+import { useDeviceMode } from "../context/DeviceModeContext";
 
 type LocationState = {
   from?: string;
@@ -85,7 +86,8 @@ export default function CustomerSignupPage(props: CustomerSignupPageProps = {}) 
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const isMobile = windowWidth <= 640;
+  const deviceMode = useDeviceMode();
+  const isMobile = deviceMode === "mobile" || windowWidth <= 640;
   const isShortScreen = windowHeight <= 680;
 
   const websiteName = propSiteSlug || slug || siteId || "";

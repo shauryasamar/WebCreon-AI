@@ -5,6 +5,7 @@ import { Pagination } from "../Component/Pagination";
 import { resolveThemeTokens } from "../context/ThemeContext";
 import { getThumbnailUrl } from "../utils/imageOptimizer";
 import { getCustomerAuthHeaders, getCustomerToken } from "../utils/customerAuthFetch";
+import { useDeviceMode } from "../context/DeviceModeContext";
 
 
 type RefundInfo = {
@@ -978,8 +979,9 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
   const showPayment = customProps.show_payment !== false;
   const showSummary = customProps.show_summary !== false;
 
-  const isMobile = viewportWidth <= 640;
-  const isTablet = viewportWidth > 640 && viewportWidth <= 1024;
+  const deviceMode = useDeviceMode();
+  const isMobile = deviceMode === "mobile" || viewportWidth <= 640;
+  const isTablet = deviceMode === "mobile" ? false : (viewportWidth > 640 && viewportWidth <= 1024);
   const isCompact = isMobile || isTablet;
 
   useEffect(() => {

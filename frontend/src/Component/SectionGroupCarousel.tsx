@@ -3,6 +3,7 @@ import { Link, useLocation, useParams, useNavigate } from "react-router-dom";
 import { resolveThemeTokens } from "../context/ThemeContext";
 import { optimizeImageUrl } from "../utils/imageOptimizer";
 import { generateSectionFilterUrl } from "./ProductCarousel";
+import { useDeviceMode } from "../context/DeviceModeContext";
 
 export interface SectionGroupTile {
   id: string;
@@ -132,8 +133,9 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const deviceMode = useDeviceMode();
   // Mobile viewport detection
-  const [isMobile, setIsMobile] = useState<boolean>(() => {
+  const [innerIsMobile, setInnerIsMobile] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return window.innerWidth <= 640;
   });
@@ -141,11 +143,13 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
   useEffect(() => {
     if (typeof window === "undefined") return;
     const checkBreakpoint = () => {
-      setIsMobile(window.innerWidth <= 640);
+      setInnerIsMobile(window.innerWidth <= 640);
     };
     window.addEventListener("resize", checkBreakpoint, { passive: true });
     return () => window.removeEventListener("resize", checkBreakpoint);
   }, []);
+
+  const isMobile = deviceMode === "mobile" || innerIsMobile;
 
   const rawTiles: SectionGroupTile[] = useMemo(() => {
     return Array.isArray(items) && items.length > 0 ? items : Array.isArray(tiles) ? tiles : [];

@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { isColorDarkHex } from "../context/ThemeContext";
+import { useDeviceMode } from "../context/DeviceModeContext";
 
 type ThemeInput =
   | "dark"
@@ -209,7 +210,9 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
     paymentData.method || methodsToDisplay[0] || "COD"
   );
   const [upiId, setUpiId] = useState(paymentData.upiId || "");
-  const [isMobile, setIsMobile] = useState(false);
+  const deviceMode = useDeviceMode();
+  const [innerIsMobile, setInnerIsMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < 768 : false);
+  const isMobile = deviceMode === "mobile" || innerIsMobile;
 
   useEffect(() => {
     if (methodsToDisplay.length > 0 && !methodsToDisplay.includes(selectedMethod)) {
@@ -231,7 +234,7 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
 
   useEffect(() => {
     const syncViewport = () => {
-      setIsMobile(window.innerWidth < 768);
+      setInnerIsMobile(window.innerWidth < 768);
     };
 
     syncViewport();
