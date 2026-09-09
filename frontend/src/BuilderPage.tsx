@@ -36,6 +36,16 @@ import AdminSupportDesk from "./Component/AdminSupportDesk";
 import AdminProfileSettings from "./Component/AdminProfileSettings";
 import AdminPages from "./Component/AdminPages";
 import AdminAnalytics from "./Component/AdminAnalytics";
+import AdminUsersAndRoles from "./Component/AdminUsersAndRoles";
+import AdminAuditLogs from "./Component/AdminAuditLogs";
+import {
+  AdminGeneralSettings,
+  AdminDomainSettings,
+  AdminBillingSettings,
+  AdminIntegrationsSettings,
+  AdminHelpAndSupport,
+} from "./Component/AdminSettingsViews";
+import AccessDeniedView from "./Component/AccessDeniedView";
 import StorefrontCustomPage from "./Component/StorefrontCustomPage";
 
 import EditorRenderPage from "./customizations/EditorRenderPage";
@@ -1097,7 +1107,8 @@ function BuilderPageContent() {
 
   const navigate = useNavigate();
   const { products } = useCart();
-  const { admin: authAdmin, logoutAdmin: authLogoutAdmin } = useAdminAuth();
+  const { admin: authAdmin, logoutAdmin: authLogoutAdmin, hasPermission, isOwner } = useAdminAuth();
+  const canPublish = isOwner || hasPermission("customize:publish");
 
   const isStoreRoute = location.pathname.startsWith("/store/");
   const isPreviewMode = isStoreRoute && (
@@ -1208,7 +1219,7 @@ function BuilderPageContent() {
 
   const handlePublish = async () => {
     const currentSiteId = resolvedSiteId || siteId;
-    if (!currentSiteId || !draftSiteDefinition || publishing) return;
+    if (!currentSiteId || !draftSiteDefinition || publishing || !canPublish) return;
 
     setPublishing(true);
     try {
@@ -2437,13 +2448,37 @@ function BuilderPageContent() {
 
   const storeBadge = (pendingCounts?.total ?? 0) > 0 ? pendingCounts!.total : undefined;
 
+  const disabledControlKeys = useMemo(() => {
+    const keys: ("saved-sites" | "chat" | "customize" | "admin-panel" | "assets" | "settings" | "qr-link")[] = [];
+    if (!hasPermission("saved_sites:view")) keys.push("saved-sites");
+    if (!hasPermission("chat:access") && !hasPermission("chat:view")) keys.push("chat");
+    if (!hasPermission("customize:edit") && !hasPermission("customize:view")) keys.push("customize");
+    if (!hasPermission("assets:view")) keys.push("assets");
+    if (!hasPermission("qr_link:view")) keys.push("qr-link");
+    const hasAnySettingsPermission = [
+      "profile:view", "users_roles:view", "general_settings:view",
+      "domain_settings:view", "billing:view", "integrations:view", "settings:view"
+    ].some((p) => hasPermission(p));
+    if (!hasAnySettingsPermission) keys.push("settings");
+
+    const hasAnyStorePermission = [
+      "products:view", "orders:view", "home_sections:view", "analytics:view",
+      "support:view", "discounts:view", "delivery:view", "earnings:view",
+      "payout_settings:view", "checkout_charges:view"
+    ].some((p) => hasPermission(p));
+    if (!hasAnyStorePermission) keys.push("admin-panel");
+
+    return keys;
+  }, [hasPermission]);
 
   const leftPanel = showAdminTopbar ? (
     <BuilderControlPanel
       activeKey={(qrOpen ? "qr-link" : editMode ? "customize" : activeDrawer) as any}
       badgeCounts={storeBadge != null ? { "admin-panel": storeBadge } : {}}
+      disabledKeys={disabledControlKeys}
       onSelect={(key) => {
         if (!showAdminTopbar) return;
+        if (disabledControlKeys.includes(key)) return;
 
         if (key === "qr-link") {
           if (editMode) handleCloseEditMode();
@@ -2595,7 +2630,21 @@ function BuilderPageContent() {
         onSelectAdminNav={(key) => {
           navigate(`${builderBase}/admin/${key}`);
         }}
-        activeSettingsNavKey={location.pathname.includes("/settings/profile") ? "profile" : null}
+        activeSettingsNavKey={
+          location.pathname.includes("/settings/users-roles")
+            ? "users-roles"
+            : location.pathname.includes("/settings/profile")
+            ? "profile"
+            : location.pathname.includes("/settings/domain")
+            ? "domain"
+            : location.pathname.includes("/settings/billing")
+            ? "billing"
+            : location.pathname.includes("/settings/audit-logs")
+            ? "audit-logs"
+            : location.pathname.includes("/settings/help-support")
+            ? "help-support"
+            : null
+        }
         onSelectSettingsNav={(key) => {
           navigate(`${builderBase}/settings/${key}`);
         }}
@@ -2656,26 +2705,222 @@ function BuilderPageContent() {
                 <>
                   <Route path="admin" element={<AdminLayout />}>
                     <Route index element={<Navigate to="products" replace />} />
-                    <Route path="products" element={<AdminProducts />} />
-                    <Route path="home-sections" element={<AdminHomeSections />} />
-                    <Route path="analytics" element={<AdminAnalytics siteId={resolvedSiteId || siteId} siteName={siteName} />} />
-                    <Route path="orders" element={<AdminOrders />} />
-                    <Route path="pages" element={<AdminPages siteId={resolvedSiteId || siteId} siteSlug={siteSlug} />} />
-                    <Route path="support" element={<AdminSupportDesk />} />
-                    <Route path="discounts" element={<AdminCoupons />} />
+                    <Route
+                      path="products"
+                      element={
+                        hasPermission("products:view") ? (
+                          <AdminProducts />
+                        ) : (
+                          <AccessDeniedView requiredPermission="products:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="home-sections"
+                      element={
+                        hasPermission("home_sections:view") ? (
+                          <AdminHomeSections />
+                        ) : (
+                          <AccessDeniedView requiredPermission="home_sections:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="analytics"
+                      element={
+                        hasPermission("analytics:view") ? (
+                          <AdminAnalytics siteId={resolvedSiteId || siteId} siteName={siteName} />
+                        ) : (
+                          <AccessDeniedView requiredPermission="analytics:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="orders"
+                      element={
+                        hasPermission("orders:view") ? (
+                          <AdminOrders />
+                        ) : (
+                          <AccessDeniedView requiredPermission="orders:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="pages"
+                      element={
+                        hasPermission("pages:view") ? (
+                          <AdminPages siteId={resolvedSiteId || siteId} siteSlug={siteSlug} />
+                        ) : (
+                          <AccessDeniedView requiredPermission="pages:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="support"
+                      element={
+                        hasPermission("support:view") ? (
+                          <AdminSupportDesk />
+                        ) : (
+                          <AccessDeniedView requiredPermission="support:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="discounts"
+                      element={
+                        hasPermission("discounts:view") ? (
+                          <AdminCoupons />
+                        ) : (
+                          <AccessDeniedView requiredPermission="discounts:view" />
+                        )
+                      }
+                    />
 
-                    <Route path="coupons" element={<AdminCoupons />} />
-                    <Route path="delivery" element={<DeliverySettingsPage />} />
-                    <Route path="earnings" element={<TenantEarningsPage />} />
-                    <Route path="payment-settings" element={<TenantPaymentSettingsPage />} />
+                    <Route
+                      path="coupons"
+                      element={
+                        hasPermission("discounts:view") ? (
+                          <AdminCoupons />
+                        ) : (
+                          <AccessDeniedView requiredPermission="discounts:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="delivery"
+                      element={
+                        hasPermission("delivery:view") ? (
+                          <DeliverySettingsPage />
+                        ) : (
+                          <AccessDeniedView requiredPermission="delivery:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="earnings"
+                      element={
+                        hasPermission("earnings:view") ? (
+                          <TenantEarningsPage />
+                        ) : (
+                          <AccessDeniedView requiredPermission="earnings:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="payment-settings"
+                      element={
+                        hasPermission("payout_settings:view") ? (
+                          <TenantPaymentSettingsPage />
+                        ) : (
+                          <AccessDeniedView requiredPermission="payout_settings:view" />
+                        )
+                      }
+                    />
                     <Route
                       path="checkout-charges"
-                      element={<CheckoutChargesPage />}
+                      element={
+                        hasPermission("checkout_charges:view") ? (
+                          <CheckoutChargesPage />
+                        ) : (
+                          <AccessDeniedView requiredPermission="checkout_charges:view" />
+                        )
+                      }
                     />
                   </Route>
                   <Route path="settings" element={<AdminLayout />}>
-                    <Route index element={<Navigate to="profile" replace />} />
-                    <Route path="profile" element={<AdminProfileSettings />} />
+                    <Route
+                      index
+                      element={
+                        <Navigate
+                          to={
+                            hasPermission("profile:view")
+                              ? "profile"
+                              : hasPermission("general_settings:view")
+                              ? "general"
+                              : hasPermission("domain_settings:view")
+                              ? "domain"
+                              : hasPermission("users_roles:view")
+                              ? "users-roles"
+                              : hasPermission("billing:view")
+                              ? "billing"
+                              : hasPermission("integrations:view")
+                              ? "integrations"
+                              : "profile"
+                          }
+                          replace
+                        />
+                      }
+                    />
+                    <Route
+                      path="profile"
+                      element={
+                        hasPermission("profile:view") ? (
+                          <AdminProfileSettings />
+                        ) : (
+                          <AccessDeniedView requiredPermission="profile:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="general"
+                      element={
+                        hasPermission("general_settings:view") ? (
+                          <AdminGeneralSettings siteId={resolvedSiteId || siteId} />
+                        ) : (
+                          <AccessDeniedView requiredPermission="general_settings:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="domain"
+                      element={
+                        hasPermission("domain_settings:view") ? (
+                          <AdminDomainSettings siteId={resolvedSiteId || siteId} />
+                        ) : (
+                          <AccessDeniedView requiredPermission="domain_settings:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="users-roles"
+                      element={
+                        hasPermission("users_roles:view") ? (
+                          <AdminUsersAndRoles siteId={resolvedSiteId || siteId} />
+                        ) : (
+                          <AccessDeniedView requiredPermission="users_roles:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="billing"
+                      element={
+                        hasPermission("billing:view") ? (
+                          <AdminBillingSettings siteId={resolvedSiteId || siteId} />
+                        ) : (
+                          <AccessDeniedView requiredPermission="billing:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="audit-logs"
+                      element={
+                        hasPermission("audit_logs:view") ? (
+                          <AdminAuditLogs siteId={resolvedSiteId || siteId} />
+                        ) : (
+                          <AccessDeniedView requiredPermission="audit_logs:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="help-support"
+                      element={
+                        hasPermission("support:view") ? (
+                          <AdminHelpAndSupport siteId={resolvedSiteId || siteId} />
+                        ) : (
+                          <AccessDeniedView requiredPermission="support:view" />
+                        )
+                      }
+                    />
                   </Route>
                 </>
               )}
@@ -3112,8 +3357,8 @@ function BuilderPageContent() {
         }
       />
 
-      {/* Floating Bottom-Right Corner Publish Button (Appears only when changes exist) */}
-      {showAdminTopbar && !isStoreRoute && !isAdminRoute && (hasUnpublishedChanges || publishing || publishSuccess) && (
+      {/* Floating Bottom-Right Corner Publish Button (Appears only when changes exist and user has publish permission) */}
+      {showAdminTopbar && !isStoreRoute && !isAdminRoute && canPublish && (hasUnpublishedChanges || publishing || publishSuccess) && (
         <button
           type="button"
           onClick={handlePublish}

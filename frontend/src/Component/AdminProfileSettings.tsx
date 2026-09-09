@@ -3,6 +3,7 @@ import { API_BASE_URL } from "../config/api";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import { resolveAvatarUrl } from "./UserAvatar";
 import { GlassToast } from "./GlassToast";
+import { AccessDeniedView } from "./AccessDeniedView";
 
 // Predefined avatar presets for quick selection (Yellow Circle 3D Avatars)
 export const AVATAR_PRESETS = [
@@ -53,13 +54,23 @@ export function getDefaultAvatarForGender(gender?: string | null): string {
 }
 
 export default function AdminProfileSettings() {
-  const { admin, refreshAdmin } = useAdminAuth();
+  const { admin, refreshAdmin, hasPermission, isOwner } = useAdminAuth();
+  const canView = isOwner || hasPermission("profile:view");
+  const canEdit = isOwner || hasPermission("profile:edit");
 
   const [name, setName] = useState(admin?.name || "");
   const [phone, setPhone] = useState(admin?.phone || "");
   const [gender, setGender] = useState(admin?.gender || "Male");
-  const [role, setRole] = useState(admin?.role || "super_admin");
   const [timezone, setTimezone] = useState(admin?.timezone || "Asia/Kolkata");
+
+  const rawRole = admin?.role || "Staff";
+  const displayRole = isOwner
+    ? "Owner"
+    : rawRole === "super_admin"
+    ? "Super Admin"
+    : rawRole === "store_owner"
+    ? "Store Owner"
+    : rawRole;
   const [themeMode, setThemeMode] = useState<"light" | "dark" | "system">(
     (localStorage.getItem("app_theme_mode") as "light" | "dark" | "system") || "light"
   );
@@ -80,11 +91,20 @@ export default function AdminProfileSettings() {
       setName(admin.name || "");
       setPhone(admin.phone || "");
       setGender(admin.gender || "Male");
-      setRole(admin.role || "super_admin");
       setTimezone(admin.timezone || "Asia/Kolkata");
       setAvatarUrl(admin.avatarUrl || getDefaultAvatarForGender(admin.gender));
     }
   }, [admin]);
+
+  if (!canView) {
+    return (
+      <AccessDeniedView
+        title="Profile Access Restricted"
+        message="You do not have permission to view your workspace profile."
+        requiredPermission="profile:view"
+      />
+    );
+  }
 
   // Save theme mode to localStorage
   const handleThemeChange = (mode: "light" | "dark" | "system") => {
@@ -112,7 +132,6 @@ export default function AdminProfileSettings() {
     name.trim() !== (admin?.name || "").trim() ||
     phone.trim() !== (admin?.phone || "").trim() ||
     gender !== (admin?.gender || "Male") ||
-    role !== (admin?.role || "super_admin") ||
     timezone !== (admin?.timezone || "Asia/Kolkata") ||
     avatarUrl !== (admin?.avatarUrl || getDefaultAvatarForGender(admin?.gender));
 
@@ -176,7 +195,6 @@ export default function AdminProfileSettings() {
           gender,
           phone: phone.trim(),
           avatar_url: avatarUrl,
-          role,
           timezone,
         }),
       });
@@ -215,7 +233,7 @@ export default function AdminProfileSettings() {
         />
       )}
 
-      <form onSubmit={handleSaveProfile} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+      <form onSubmit={canEdit ? handleSaveProfile : (e) => e.preventDefault()} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
         {/* MAIN PROFILE CARD */}
         <div
           style={{
@@ -234,15 +252,14 @@ export default function AdminProfileSettings() {
             {/* Clickable Profile Picture */}
             <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
               <div
-                onClick={() => setIsAvatarModalOpen(true)}
-                title="Click to change avatar or upload photo"
+                onClick={() => canEdit && setIsAvatarModalOpen(true)}
+                title={canEdit ? "Click to change avatar or upload photo" : "View-only avatar"}
                 style={{
                   position: "relative",
-                  cursor: "pointer",
+                  cursor: canEdit ? "pointer" : "default",
                   borderRadius: "50%",
                   transition: "transform 0.15s ease",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.03)")}
                 onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
               >
                 <img
@@ -294,17 +311,29 @@ export default function AdminProfileSettings() {
                   </h3>
                   <span
                     style={{
-                      fontSize: "10px",
+                      fontSize: "10.5px",
                       fontWeight: 700,
-                      textTransform: "uppercase",
-                      padding: "2px 8px",
+                      textTransform: isOwner ? "none" : "capitalize",
+                      padding: "2.5px 9px",
                       borderRadius: "6px",
-                      background: "#eff6ff",
-                      color: "#2563eb",
-                      border: "1px solid #bfdbfe",
+                      background: isOwner ? "#fef3c7" : "#eff6ff",
+                      color: isOwner ? "#b45309" : "#2563eb",
+                      border: isOwner ? "1px solid #fde68a" : "1px solid #bfdbfe",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
                     }}
                   >
-                    {role === "super_admin" ? "Super Admin" : role === "store_owner" ? "Store Owner" : role}
+                    {isOwner ? (
+                      <>
+                        <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 12, height: 12, color: "#d97706" }}>
+                          <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z" />
+                        </svg>
+                        Owner
+                      </>
+                    ) : (
+                      displayRole
+                    )}
                   </span>
                 </div>
                 <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: "#64748b" }}>
@@ -514,30 +543,86 @@ export default function AdminProfileSettings() {
               </div>
             </div>
 
-            {/* Admin Role */}
+            {/* Admin Role (Read-only, assigned by owner) */}
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-              <label style={{ fontSize: "11px", fontWeight: 700, color: "#475569" }}>
-                Admin Role
-              </label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <label style={{ fontSize: "11px", fontWeight: 700, color: "#475569" }}>
+                  Workspace Role
+                </label>
+                <span style={{ fontSize: "10.5px", color: "#94a3b8", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 11, height: 11 }}>
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  Read-only
+                </span>
+              </div>
+              <div
                 style={{
                   height: "38px",
                   padding: "0 12px",
                   borderRadius: "8px",
-                  border: "1px solid #cbd5e1",
-                  fontSize: "13px",
-                  outline: "none",
-                  background: "#ffffff",
-                  color: "#0f172a",
-                  cursor: "pointer",
+                  border: isOwner ? "1px solid #fde68a" : "1px solid #e2e8f0",
+                  background: isOwner ? "#fffbeb" : "#f8fafc",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  boxSizing: "border-box",
                 }}
               >
-                <option value="super_admin">Super Admin</option>
-                <option value="store_owner">Store Owner</option>
-                <option value="manager">E-Commerce Manager</option>
-              </select>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  {isOwner ? (
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px",
+                        fontSize: "12.5px",
+                        fontWeight: 700,
+                        color: "#b45309",
+                      }}
+                    >
+                      <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 14, height: 14, color: "#d97706" }}>
+                        <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z" />
+                      </svg>
+                      Owner
+                    </span>
+                  ) : (
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontSize: "12.5px",
+                        fontWeight: 600,
+                        color: "#1e293b",
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: "7px",
+                          height: "7px",
+                          borderRadius: "50%",
+                          background: "#2563eb",
+                        }}
+                      />
+                      {displayRole}
+                    </span>
+                  )}
+                </div>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    padding: "2px 8px",
+                    borderRadius: "4px",
+                    background: isOwner ? "#fef3c7" : "#e2e8f0",
+                    color: isOwner ? "#92400e" : "#475569",
+                  }}
+                >
+                  {isOwner ? "Full Workspace Access" : "Assigned by Owner"}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -595,34 +680,34 @@ export default function AdminProfileSettings() {
             {/* Dynamic Save Button */}
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || !canEdit}
               style={{
                 height: "38px",
                 padding: "0 24px",
                 borderRadius: "8px",
                 border: "none",
-                background: isDirty ? "#2563eb" : "#0f172a",
+                background: !canEdit ? "#94a3b8" : isDirty ? "#2563eb" : "#0f172a",
                 color: "#ffffff",
                 fontSize: "13px",
                 fontWeight: 700,
-                cursor: saving ? "not-allowed" : "pointer",
-                boxShadow: isDirty
+                cursor: saving || !canEdit ? "not-allowed" : "pointer",
+                boxShadow: isDirty && canEdit
                   ? "0 2px 8px rgba(37, 99, 235, 0.3)"
                   : "0 1px 3px rgba(15, 23, 42, 0.15)",
                 transition: "all 0.15s ease",
               }}
               onMouseEnter={(e) => {
-                if (!saving) {
+                if (!saving && canEdit) {
                   e.currentTarget.style.background = isDirty ? "#1d4ed8" : "#1e293b";
                 }
               }}
               onMouseLeave={(e) => {
-                if (!saving) {
+                if (!saving && canEdit) {
                   e.currentTarget.style.background = isDirty ? "#2563eb" : "#0f172a";
                 }
               }}
             >
-              {saving ? "Saving Changes..." : "Save Profile"}
+              {saving ? "Saving Changes..." : !canEdit ? "View-Only" : "Save Profile"}
             </button>
           </div>
         </div>

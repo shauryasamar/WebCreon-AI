@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from sqlmodel import Session, delete, func, or_, select, update
 from sqlalchemy import case
 
-from auth_middleware import authenticate_customer, enforce_site_ownership
+from auth_middleware import authenticate_customer, check_admin_has_permission, enforce_site_ownership
 from db.database import get_session
 from models import (
     CartItem,
@@ -1276,6 +1276,9 @@ def export_products_csv(
     session: Session = Depends(get_session),
 ):
     get_site_or_404(session, site_id)
+
+    if not (check_admin_has_permission(ownership["adminId"], "products:edit", session) or check_admin_has_permission(ownership["adminId"], "products:create", session)):
+        raise HTTPException(status_code=403, detail="You do not have permission to export products.")
     
     if ids is not None and ids.strip():
         raw_uuid_list = []
@@ -1732,6 +1735,15 @@ def bulk_product_action(
     session: Session = Depends(get_session),
 ):
     get_site_or_404(session, site_id)
+    admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
+    if admin_id:
+        if payload.action in {"delete"} and not check_admin_has_permission(admin_id, "products:delete", session):
+            raise HTTPException(status_code=403, detail="You do not have permission to delete products")
+        elif payload.action in {"duplicate"} and not check_admin_has_permission(admin_id, "products:create", session):
+            raise HTTPException(status_code=403, detail="You do not have permission to duplicate or create products")
+        elif payload.action in {"activate", "make_active", "publish", "active", "deactivate", "make_draft", "draft"} and not check_admin_has_permission(admin_id, "products:edit", session):
+            raise HTTPException(status_code=403, detail="You do not have permission to edit products")
+
     if not payload.product_ids:
         return {"success": True, "count": 0}
 
@@ -1883,6 +1895,10 @@ async def import_products_csv(
     session: Session = Depends(get_session),
 ):
     get_site_or_404(session, site_id)
+    admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
+    if admin_id and not check_admin_has_permission(admin_id, "products:create", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to import or create products")
+
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="Only .csv files are supported")
 
@@ -2487,6 +2503,9 @@ def create_product(
     session: Session = Depends(get_session),
 ):
     get_site_or_404(session, site_id)
+    admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
+    if admin_id and not check_admin_has_permission(admin_id, "products:create", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to create products")
 
     slug_value = product_in.slug or make_slug(product_in.name)
 
@@ -2544,6 +2563,10 @@ def update_product(
     session: Session = Depends(get_session),
 ):
     get_site_or_404(session, site_id)
+    admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
+    if admin_id and not check_admin_has_permission(admin_id, "products:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to edit products")
+
     product = get_site_product_or_404(session, site_id, product_id)
 
     product.name = product_in.name
@@ -2599,6 +2622,14 @@ def bulk_action_products(
     session: Session = Depends(get_session),
 ):
     get_site_or_404(session, site_id)
+    admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
+    if admin_id:
+        act = payload.action.strip().lower()
+        if act == "delete" and not check_admin_has_permission(admin_id, "products:delete", session):
+            raise HTTPException(status_code=403, detail="You do not have permission to delete products")
+        elif act in ("make_active", "make_draft") and not check_admin_has_permission(admin_id, "products:edit", session):
+            raise HTTPException(status_code=403, detail="You do not have permission to edit products")
+
     if not payload.product_ids:
         raise HTTPException(status_code=400, detail="No product IDs provided")
 
@@ -2709,6 +2740,10 @@ def quick_edit_product(
     session: Session = Depends(get_session),
 ):
     get_site_or_404(session, site_id)
+    admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
+    if admin_id and not check_admin_has_permission(admin_id, "products:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to edit products")
+
     product = get_site_product_or_404(session, site_id, product_id)
     if payload.price is not None:
         product.price = payload.price
@@ -2763,6 +2798,10 @@ def delete_product(
     session: Session = Depends(get_session),
 ):
     get_site_or_404(session, site_id)
+    admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
+    if admin_id and not check_admin_has_permission(admin_id, "products:delete", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to delete products")
+
     product = get_site_product_or_404(session, site_id, product_id)
 
     # 1. Clean up transient cart items containing this product
@@ -2800,6 +2839,10 @@ def duplicate_product(
     session: Session = Depends(get_session),
 ):
     get_site_or_404(session, site_id)
+    admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
+    if admin_id and not check_admin_has_permission(admin_id, "products:create", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to duplicate or create products")
+
     product = get_site_product_or_404(session, site_id, product_id)
 
     cloned_product = Product(

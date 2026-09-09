@@ -377,9 +377,10 @@ export default function BuilderShell({
             gridColumn: "2 / 3",
             minWidth: 0,
             margin: "8px",
+            padding: "8px",
             border: "2px dashed #2563eb",
-            borderRadius: "8px",
-            background: deviceBg || "#ffffff",
+            borderRadius: "10px",
+            background: "#f8fafc",
             boxSizing: "border-box",
             overflow: "hidden",
           }}
@@ -396,11 +397,12 @@ export default function BuilderShell({
               width: "100%",
               height: "100%",
               minWidth: 0,
-              borderRadius: "6px",
+              borderRadius: "8px",
               overflow: "hidden",
               position: "relative",
               transform: "translateZ(0)",
               background: deviceBg || "#ffffff",
+              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
             }}
           >
             <main

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { API_BASE_URL } from "../config/api";
 import { AdminCopilotChat } from "./AdminCopilotChat";
 import AdminProfileSettings from "./AdminProfileSettings";
+import { useAdminAuth } from "../context/AdminAuthContext";
 import {
   COMPONENT_ASSETS,
   ComponentAsset,
@@ -58,7 +59,13 @@ const ADMIN_NAV_ITEMS: AdminNavItem[] = [
 ];
 
 
-export type SettingsNavKey = "profile";
+export type SettingsNavKey =
+  | "profile"
+  | "domain"
+  | "users-roles"
+  | "billing"
+  | "audit-logs"
+  | "help-support";
 
 export type SettingsNavItem = {
   key: SettingsNavKey;
@@ -69,6 +76,26 @@ const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
   {
     key: "profile",
     label: "Profile",
+  },
+  {
+    key: "domain",
+    label: "Domain & URLs",
+  },
+  {
+    key: "users-roles",
+    label: "Users & Roles",
+  },
+  {
+    key: "billing",
+    label: "Billing & Plans",
+  },
+  {
+    key: "audit-logs",
+    label: "Activity Logs",
+  },
+  {
+    key: "help-support",
+    label: "Help & Support",
   },
 ];
 
@@ -486,18 +513,92 @@ function SettingsNavCard({
         transition: "all 0.12s ease",
       }}
     >
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke={isSelected ? "#2563eb" : "#64748b"}
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        style={{ width: 18, height: 18, flexShrink: 0 }}
-      >
-        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-        <circle cx="12" cy="7" r="4" />
-      </svg>
+      {item.key === "users-roles" ? (
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={isSelected ? "#2563eb" : "#64748b"}
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ width: 18, height: 18, flexShrink: 0 }}
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+      ) : item.key === "domain" ? (
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={isSelected ? "#2563eb" : "#64748b"}
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ width: 18, height: 18, flexShrink: 0 }}
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="2" y1="12" x2="22" y2="12" />
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+        </svg>
+      ) : item.key === "billing" ? (
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={isSelected ? "#2563eb" : "#64748b"}
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ width: 18, height: 18, flexShrink: 0 }}
+        >
+          <rect width="20" height="14" x="2" y="5" rx="2" />
+          <line x1="2" y1="10" x2="22" y2="10" />
+        </svg>
+      ) : item.key === "audit-logs" ? (
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={isSelected ? "#2563eb" : "#64748b"}
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ width: 18, height: 18, flexShrink: 0 }}
+        >
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="16" y1="13" x2="8" y2="13" />
+          <line x1="16" y1="17" x2="8" y2="17" />
+          <polyline points="10 9 9 9 8 9" />
+        </svg>
+      ) : item.key === "help-support" ? (
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={isSelected ? "#2563eb" : "#64748b"}
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ width: 18, height: 18, flexShrink: 0 }}
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+          <line x1="12" y1="17" x2="12.01" y2="17" />
+        </svg>
+      ) : (
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={isSelected ? "#2563eb" : "#64748b"}
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ width: 18, height: 18, flexShrink: 0 }}
+        >
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </svg>
+      )}
       <span
         style={{
           fontSize: "13px",
@@ -942,6 +1043,41 @@ export default function BuilderDrawerPanel({
   siteDefinition,
   onSiteDefinitionChange,
 }: BuilderDrawerPanelProps) {
+  const { hasPermission, isOwner } = useAdminAuth();
+  const canDeleteSite = isOwner || hasPermission("saved_sites:delete");
+
+  const visibleAdminNavItems = isOwner
+    ? ADMIN_NAV_ITEMS
+    : ADMIN_NAV_ITEMS.filter((item) => {
+        const permMap: Record<AdminNavKey, string> = {
+          analytics: "analytics:view",
+          products: "products:view",
+          orders: "orders:view",
+          discounts: "discounts:view",
+          support: "support:view",
+          "home-sections": "home_sections:view",
+          pages: "pages:view",
+          delivery: "delivery:view",
+          "checkout-charges": "checkout_charges:view",
+          earnings: "earnings:view",
+          "payment-settings": "payout_settings:view",
+        };
+        return hasPermission(permMap[item.key]);
+      });
+
+  const visibleSettingsNavItems = isOwner
+    ? SETTINGS_NAV_ITEMS
+    : SETTINGS_NAV_ITEMS.filter((item) => {
+        if (item.key === "profile" || item.key === "help-support") return true;
+        const permMap: Record<string, string> = {
+          domain: "domain_settings:view",
+          "users-roles": "users_roles:view",
+          billing: "billing:view",
+          "audit-logs": "audit_logs:view",
+        };
+        return permMap[item.key] ? hasPermission(permMap[item.key]) : true;
+      });
+
   const [selectedAssetCategory, setSelectedAssetCategory] =
     useState<ComponentAssetCategory>("navbar");
   const [appliedAssetId, setAppliedAssetId] = useState<string | null>(null);
@@ -1285,12 +1421,12 @@ export default function BuilderDrawerPanel({
                     site={site}
                     isSelected={isSelected}
                     onClick={() => onSelectSite?.(site.id)}
-                    onDelete={() => {
+                    onDelete={canDeleteSite ? () => {
                       setDeleteSiteModal({
                         siteId: site.id,
                         brandName,
                       });
-                    }}
+                    } : undefined}
                   />
                 );
               })}
@@ -1298,7 +1434,7 @@ export default function BuilderDrawerPanel({
           )
         ) : activeDrawer === "admin-panel" ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            {ADMIN_NAV_ITEMS.map((item) => (
+            {visibleAdminNavItems.map((item) => (
               <AdminNavCard
                 key={item.key}
                 item={item}
@@ -1577,7 +1713,7 @@ export default function BuilderDrawerPanel({
           />
         ) : activeDrawer === "settings" ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            {SETTINGS_NAV_ITEMS.map((item) => (
+            {visibleSettingsNavItems.map((item) => (
               <SettingsNavCard
                 key={item.key}
                 item={item}
@@ -1749,6 +1885,7 @@ export default function BuilderDrawerPanel({
                   <button
                     type="button"
                     onClick={() => {
+                      if (!canDeleteSite) return;
                       const targetId = deleteSiteModal.siteId;
                       setDeleteSiteModal(null);
                       onDeleteSite?.(targetId);

@@ -18,7 +18,9 @@ from sqlalchemy import text, update
 from auth_middleware import (
     authenticate_admin,
     authenticate_customer,
+    check_admin_has_permission,
     enforce_site_ownership,
+    require_permission,
 )
 from routers.products import save_optimized_upload_image
 
@@ -1326,7 +1328,7 @@ def get_support_settings(
 def update_support_settings(
     site_id: str,
     payload: SupportSettingsPayload,
-    admin=Depends(authenticate_admin),
+    admin=Depends(require_permission("support:edit")),
     session: Session = Depends(get_session),
 ):
     """Enable or disable CRM & Customer Support services for the store (supports UUID or slug)."""
@@ -1405,6 +1407,9 @@ def list_support_agents(
     session: Session = Depends(get_session),
 ):
     """Store Admin lists all registered support agents for their site."""
+    if not check_admin_has_permission(admin["adminId"], "support:view", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to perform 'support:view'")
+
     agents = session.exec(
         select(SupportAgent)
         .where(SupportAgent.site_id == site_id)
@@ -1453,6 +1458,9 @@ def create_support_agent(
     session: Session = Depends(get_session),
 ):
     """Store Admin provisions a new support staff account."""
+    if not check_admin_has_permission(admin["adminId"], "support:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to perform 'support:edit'")
+
     clean_name = (payload.name or "").strip()
     if not clean_name:
         raise HTTPException(status_code=400, detail="Staff name is required")
@@ -1513,6 +1521,9 @@ def update_support_agent(
     session: Session = Depends(get_session),
 ):
     """Update support agent details, role, or active status."""
+    if not check_admin_has_permission(admin["adminId"], "support:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to perform 'support:edit'")
+
     agent = session.get(SupportAgent, agent_id)
     if not agent or agent.site_id != site_id:
         raise HTTPException(status_code=404, detail="Support agent not found")
@@ -1544,6 +1555,9 @@ def delete_support_agent(
     session: Session = Depends(get_session),
 ):
     """Deactivate and unassign tickets from a support agent."""
+    if not check_admin_has_permission(admin["adminId"], "support:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to perform 'support:edit'")
+
     agent = session.get(SupportAgent, agent_id)
     if not agent or agent.site_id != site_id:
         raise HTTPException(status_code=404, detail="Support agent not found")
@@ -2032,6 +2046,10 @@ def admin_list_support_tickets(
     session: Session = Depends(get_session),
 ):
     """Filterable, searchable list of tickets formatted identically to AdminOrders."""
+    if actor["actor_type"] == "admin":
+        if not check_admin_has_permission(actor["actor_id"], "support:view", session):
+            raise HTTPException(status_code=403, detail="You do not have permission to perform 'support:view'")
+
     query = select(SupportTicket).where(SupportTicket.site_id == site_id)
 
     is_agent = actor["actor_type"] == "agent"
@@ -2197,6 +2215,10 @@ def admin_get_ticket_detail(
     session: Session = Depends(get_session),
 ):
     """Full ticket detail with Order 360, Rider Context, Customer CRM Profile, and all messages."""
+    if actor["actor_type"] == "admin":
+        if not check_admin_has_permission(actor["actor_id"], "support:view", session):
+            raise HTTPException(status_code=403, detail="You do not have permission to perform 'support:view'")
+
     ticket = session.get(SupportTicket, ticket_id)
     if not ticket or ticket.site_id != site_id:
         raise HTTPException(status_code=404, detail="Ticket not found")
@@ -2468,6 +2490,10 @@ def admin_reply_ticket(
     session: Session = Depends(get_session),
 ):
     """Staff sends a public message to the customer or records an internal yellow note."""
+    if actor["actor_type"] == "admin":
+        if not (check_admin_has_permission(actor["actor_id"], "support:respond", session) or check_admin_has_permission(actor["actor_id"], "support:edit", session)):
+            raise HTTPException(status_code=403, detail="You do not have permission to perform 'support:respond'")
+
     ticket = session.get(SupportTicket, ticket_id)
     if not ticket or ticket.site_id != site_id:
         raise HTTPException(status_code=404, detail="Ticket not found")
@@ -2533,6 +2559,10 @@ def assign_ticket_agent(
     if actor["actor_type"] == "agent":
         raise HTTPException(status_code=403, detail="Only store administrators can assign or reassign tickets.")
 
+    if actor["actor_type"] == "admin":
+        if not check_admin_has_permission(actor["actor_id"], "support:edit", session):
+            raise HTTPException(status_code=403, detail="You do not have permission to perform 'support:edit'")
+
     ticket = session.get(SupportTicket, ticket_id)
     if not ticket or ticket.site_id != site_id:
         raise HTTPException(status_code=404, detail="Ticket not found")
@@ -2573,6 +2603,10 @@ def update_ticket_status(
     session: Session = Depends(get_session),
 ):
     """Update priority or status of ticket."""
+    if actor["actor_type"] == "admin":
+        if not check_admin_has_permission(actor["actor_id"], "support:edit", session):
+            raise HTTPException(status_code=403, detail="You do not have permission to perform 'support:edit'")
+
     ticket = session.get(SupportTicket, ticket_id)
     if not ticket or ticket.site_id != site_id:
         raise HTTPException(status_code=404, detail="Ticket not found")
@@ -2606,6 +2640,10 @@ def execute_ticket_resolution_action(
     session: Session = Depends(get_session),
 ):
     """Executes 1-click dispute resolution (Refund, Re-dispatch, Cancel, or Resolve)."""
+    if actor["actor_type"] == "admin":
+        if not check_admin_has_permission(actor["actor_id"], "support:edit", session):
+            raise HTTPException(status_code=403, detail="You do not have permission to perform 'support:edit'")
+
     ticket = session.get(SupportTicket, ticket_id)
     if not ticket or ticket.site_id != site_id:
         raise HTTPException(status_code=404, detail="Ticket not found")

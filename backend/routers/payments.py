@@ -31,7 +31,9 @@ from sqlmodel import Session, delete, func, select
 from auth_middleware import (
     authenticate_admin,
     authenticate_customer,
+    check_admin_has_permission,
     enforce_site_ownership,
+    require_permission,
 )
 from crypto_utils import decrypt_string, encrypt_string, mask_account_number
 from db.database import get_session
@@ -1395,7 +1397,7 @@ def release_mature_escrows(
 @router.get("/admin/{site_id}/payment-settings", response_model=BankAccountSettingsResponse)
 def get_payment_settings(
     site_id: UUID,
-    admin=Depends(authenticate_admin),
+    admin=Depends(require_permission("payout_settings:view")),
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
@@ -1444,7 +1446,7 @@ def get_payment_settings(
 def update_payment_settings(
     site_id: UUID,
     payload: BankAccountSettingsPayload,
-    admin=Depends(authenticate_admin),
+    admin=Depends(require_permission("payout_settings:edit")),
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
@@ -1534,7 +1536,7 @@ def get_earnings_summary(
     site_id: UUID,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
-    admin=Depends(authenticate_admin),
+    admin=Depends(require_permission("earnings:view")),
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
@@ -1657,7 +1659,7 @@ def get_earnings_summary(
 def record_payout(
     site_id: UUID,
     payload: CreatePayoutRecordRequest,
-    admin=Depends(authenticate_admin),
+    admin=Depends(require_permission("payout_settings:edit")),
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):

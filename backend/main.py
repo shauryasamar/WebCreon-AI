@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from langgraph.graph import END, StateGraph
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select, delete, func
+from sqlalchemy import text
 
 from agents.backend_exec import build_backend_config
 from agents.backend_runtime import register_backend_routes
@@ -26,6 +27,8 @@ from agents.understanding import extract_requirements
 from auth_middleware import (
     authenticate_admin,
     authenticate_customer,
+    check_admin_has_permission,
+    enforce_owner_role,
     enforce_site_ownership,
 )
 from db.database import create_db_and_tables, get_session, engine
@@ -35,7 +38,7 @@ from models import (
     Shipment, InventoryMovement, OrderStatusHistory, User, UserAddress,
     DeliveryAgent, DeliverySettings, SiteTrafficEvent,
 )
-from routers import analytics, auth, cart, categories, checkout, checkout_settings, collections, coupons, orders, pages, payments, products, returns, support
+from routers import analytics, auth, cart, categories, checkout, checkout_settings, collections, coupons, orders, pages, payments, products, returns, support, users_roles, audit_logs
 from routers import delivery
 
 
@@ -66,6 +69,14 @@ async def _mature_escrow_cron_task():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
+    try:
+        with Session(engine) as session:
+            users_roles.ensure_default_roles_and_users(session)
+            adms = session.exec(select(Admin.id, Admin.email, Admin.name, Admin.role, Admin.invited_by_admin_id, Admin.status)).all()
+            logger.info("DIAGNOSTIC - All admins in DB: %s", [(str(a[0]), a[1], a[2], a[3], str(a[4]), a[5]) for a in adms])
+            logger.info("Users & Roles system initialized successfully.")
+    except Exception as seed_err:
+        logger.warning("Could not seed default roles and users: %s", seed_err)
     try:
         with Session(engine) as session:
             repl_shipments = session.exec(select(Shipment).where(Shipment.awb_number.like("REPL-%"))).all()
@@ -132,6 +143,10 @@ app.include_router(support.router)
 app.include_router(support.router, prefix="/api")
 app.include_router(analytics.router)
 app.include_router(analytics.router, prefix="/api")
+app.include_router(users_roles.router)
+app.include_router(users_roles.router, prefix="/api")
+app.include_router(audit_logs.router)
+app.include_router(audit_logs.router, prefix="/api")
 
 
 # ---------------------------------------------------------------------------
@@ -372,7 +387,11 @@ class PublishSiteRequest(BaseModel):
 
 
 @app.post("/conversation/start")
-async def conversation_start_endpoint(req: StartConversationRequest, request: Request):
+async def conversation_start_endpoint(
+    req: StartConversationRequest,
+    request: Request,
+    owner=Depends(enforce_owner_role),
+):
     admin_name = "Creator"
     admin_email = None
     try:
@@ -391,7 +410,11 @@ async def conversation_start_endpoint(req: StartConversationRequest, request: Re
 
 
 @app.post("/conversation/start/stream")
-async def conversation_start_stream_endpoint(req: StartConversationRequest, request: Request):
+async def conversation_start_stream_endpoint(
+    req: StartConversationRequest,
+    request: Request,
+    owner=Depends(enforce_owner_role),
+):
     admin_name = "Creator"
     admin_email = None
     try:
@@ -423,7 +446,10 @@ async def conversation_start_stream_endpoint(req: StartConversationRequest, requ
 
 
 @app.post("/conversation/reply")
-async def conversation_reply_endpoint(req: ReplyConversationRequest):
+async def conversation_reply_endpoint(
+    req: ReplyConversationRequest,
+    owner=Depends(enforce_owner_role),
+):
     from agents.conversation_agent import reply_session
     try:
         session = await reply_session(session_id=req.session_id, user_reply=req.reply)
@@ -433,7 +459,10 @@ async def conversation_reply_endpoint(req: ReplyConversationRequest):
 
 
 @app.post("/conversation/reply/stream")
-async def conversation_reply_stream_endpoint(req: ReplyConversationRequest):
+async def conversation_reply_stream_endpoint(
+    req: ReplyConversationRequest,
+    owner=Depends(enforce_owner_role),
+):
     from agents.conversation_agent import reply_session_stream, SESSIONS
 
     session = SESSIONS.get(req.session_id)
@@ -457,7 +486,10 @@ async def conversation_reply_stream_endpoint(req: ReplyConversationRequest):
 
 
 @app.get("/conversation/{session_id}")
-async def conversation_get_endpoint(session_id: str):
+async def conversation_get_endpoint(
+    session_id: str,
+    owner=Depends(enforce_owner_role),
+):
     from agents.conversation_agent import SESSIONS
     session = SESSIONS.get(session_id)
     if not session:
@@ -473,7 +505,11 @@ class RehydrateConversationRequest(BaseModel):
 
 
 @app.post("/conversation/rehydrate")
-async def conversation_rehydrate_endpoint(req: RehydrateConversationRequest, request: Request):
+async def conversation_rehydrate_endpoint(
+    req: RehydrateConversationRequest,
+    request: Request,
+    owner=Depends(enforce_owner_role),
+):
     admin_name = "Creator"
     admin_email = None
     try:
@@ -507,7 +543,14 @@ class CoPilotChatRequest(BaseModel):
 
 
 @app.post("/copilot/chat")
-async def copilot_chat_endpoint(req: CoPilotChatRequest):
+async def copilot_chat_endpoint(
+    req: CoPilotChatRequest,
+    admin=Depends(authenticate_admin),
+    session: Session = Depends(get_session),
+):
+    if not (check_admin_has_permission(admin["adminId"], "chat:access", session) or check_admin_has_permission(admin["adminId"], "chat:send", session)):
+        raise HTTPException(status_code=403, detail="You do not have permission to access AI Copilot.")
+
     from agents.copilot_agent import process_copilot_request
     result = await process_copilot_request(
         message=req.message,
@@ -519,7 +562,13 @@ async def copilot_chat_endpoint(req: CoPilotChatRequest):
 
 
 @app.post("/copilot/chat/stream")
-async def copilot_chat_stream_endpoint(req: CoPilotChatRequest):
+async def copilot_chat_stream_endpoint(
+    req: CoPilotChatRequest,
+    admin=Depends(authenticate_admin),
+    session: Session = Depends(get_session),
+):
+    if not (check_admin_has_permission(admin["adminId"], "chat:access", session) or check_admin_has_permission(admin["adminId"], "chat:send", session)):
+        raise HTTPException(status_code=403, detail="You do not have permission to access AI Copilot.")
     from agents.copilot_agent import process_copilot_request_stream
 
     async def event_generator():
@@ -577,7 +626,10 @@ class CustomSiteDefinitionRequest(BaseModel):
 
 
 @app.post("/site-definition")
-async def generate_site_definition_endpoint(req: CustomSiteDefinitionRequest):
+async def generate_site_definition_endpoint(
+    req: CustomSiteDefinitionRequest,
+    owner=Depends(enforce_owner_role),
+):
     prompt_text = req.prompt or ""
     collected_reqs = {}
     session = None
@@ -655,7 +707,10 @@ async def generate_site_definition_endpoint(req: CustomSiteDefinitionRequest):
 
 
 @app.post("/site-definition/stream")
-async def generate_site_definition_stream_endpoint(req: CustomSiteDefinitionRequest):
+async def generate_site_definition_stream_endpoint(
+    req: CustomSiteDefinitionRequest,
+    owner=Depends(enforce_owner_role),
+):
     async def event_generator():
         try:
             yield f"data: {json.dumps({'step': 'start', 'progress': 10, 'message': 'Initializing AI generation pipeline...'})}\n\n"
@@ -762,6 +817,9 @@ def publish_site(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    if not check_admin_has_permission(ownership["adminId"], "customize:publish", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to publish changes to live storefront.")
+
     site = session.get(Site, site_id)
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
@@ -785,6 +843,9 @@ def save_site_draft(
     admin=Depends(authenticate_admin),
     session: Session = Depends(get_session),
 ):
+    if not (check_admin_has_permission(admin["adminId"], "customize:edit", session) or check_admin_has_permission(admin["adminId"], "assets:view", session) or check_admin_has_permission(admin["adminId"], "customize:view", session)):
+        raise HTTPException(status_code=403, detail="You do not have permission to edit storefront customizations.")
+
     admin_id = UUID(admin["adminId"])
 
     site = None
@@ -839,19 +900,8 @@ def admin_me(
     if not admin_obj:
         raise HTTPException(status_code=404, detail="Admin not found")
 
-    name = getattr(admin_obj, "name", None)
-    if not name and admin_obj.email:
-        prefix = admin_obj.email.split("@")[0]
-        parts = [p.capitalize() for p in prefix.replace(".", " ").replace("_", " ").split()]
-        name = " ".join(parts) if parts else "Admin"
-
-    return {
-        "admin": {
-            "id": str(admin_obj.id),
-            "email": admin_obj.email,
-            "name": name,
-        }
-    }
+    from routers.auth import serialize_admin
+    return {"admin": serialize_admin(admin_obj, session)}
 
 
 @app.get("/auth/customer/me")
@@ -864,6 +914,9 @@ def get_sites(
     admin=Depends(authenticate_admin),
     session: Session = Depends(get_session),
 ):
+    if not check_admin_has_permission(admin["adminId"], "saved_sites:view", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to view saved websites.")
+
     admin_id = UUID(admin["adminId"])
 
     sites = session.exec(
@@ -888,6 +941,26 @@ def get_session_token_metrics(session_id: str):
     """Internal backend monitoring endpoint to inspect token usage and costs for a specific session."""
     from agents.token_tracker import get_token_tracker
     return get_token_tracker().get_session_summary(session_id)
+
+
+@app.get("/api/debug-admins")
+def debug_admins():
+    with Session(engine) as session:
+        adms = session.exec(select(Admin)).all()
+        return [
+            {
+                "id": str(a.id),
+                "email": a.email,
+                "name": a.name,
+                "role": a.role,
+                "role_id": str(a.role_id) if a.role_id else None,
+                "status": a.status,
+                "invited_by": str(a.invited_by_admin_id) if a.invited_by_admin_id else None,
+            }
+            for a in adms
+        ]
+
+
 
 
 @app.get("/sites/{site_id}")
@@ -1041,7 +1114,7 @@ def get_public_site_by_slug(
 @app.post("/sites")
 def create_site(
     payload: SaveSiteRequest,
-    admin=Depends(authenticate_admin),
+    owner=Depends(enforce_owner_role),
     session: Session = Depends(get_session),
 ):
     existing_site = session.exec(
@@ -1060,7 +1133,7 @@ def create_site(
     session.refresh(site)
 
     admin_site = AdminSite(
-        admin_id=UUID(admin["adminId"]),
+        admin_id=UUID(owner["adminId"]),
         site_id=site.id,
         role_on_site="owner",
     )
@@ -1079,6 +1152,16 @@ def update_site(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    admin_id = ownership["adminId"]
+    if not (
+        check_admin_has_permission(admin_id, "home_sections:edit", session)
+        or check_admin_has_permission(admin_id, "customize:edit", session)
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to edit site layout or home sections",
+        )
+
     site = session.get(Site, site_id)
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
@@ -1113,6 +1196,9 @@ def update_site_default_return_policy(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    if not check_admin_has_permission(ownership["adminId"], "products:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to update store return policies.")
+
     site = session.get(Site, site_id)
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
@@ -1134,6 +1220,9 @@ def check_site_deletable(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    if not check_admin_has_permission(ownership["adminId"], "saved_sites:delete", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to delete websites.")
+
     site = session.get(Site, site_id)
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
@@ -1166,6 +1255,9 @@ def delete_site(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    if not check_admin_has_permission(ownership["adminId"], "saved_sites:delete", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to delete websites.")
+
     site = session.get(Site, site_id)
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")

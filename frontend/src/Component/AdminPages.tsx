@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { MarkdownContent } from "../utils/markdownRenderer";
+import { useAdminAuth } from "../context/AdminAuthContext";
+import AccessDeniedView from "./AccessDeniedView";
 
 export type StorePage = {
   id: string;
@@ -244,6 +246,13 @@ export interface AdminPagesProps {
 }
 
 const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: propSiteSlug }) => {
+  const { hasPermission, isOwner } = useAdminAuth();
+  const canViewPages = isOwner || hasPermission("pages:view");
+  const canCreatePages = isOwner || hasPermission("pages:create");
+  const canEditPages = isOwner || hasPermission("pages:edit");
+  const canDeletePages = isOwner || hasPermission("pages:delete");
+  const canPublishPages = isOwner || hasPermission("pages:publish");
+
   const params = useParams<{ siteId?: string; slug?: string }>();
   const [siteId, setSiteId] = useState<string>(() => {
     if (propSiteId) return propSiteId;
@@ -435,6 +444,10 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
 
   // Open Create Page Modal
   const handleOpenCreate = () => {
+    if (!canCreatePages) {
+      showToast("You do not have permission to create pages.", "error");
+      return;
+    }
     setEditingPage(null);
     setFormData({
       title: "",
@@ -457,6 +470,10 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
 
   // Open Create From Prebuilt Template
   const handleCreateFromTemplate = (templateKey: string) => {
+    if (!canCreatePages) {
+      showToast("You do not have permission to create pages.", "error");
+      return;
+    }
     const t = PREBUILT_TEMPLATES[templateKey];
     if (!t) return;
     setEditingPage(null);
@@ -481,6 +498,10 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
 
   // Open Edit Page Modal
   const handleOpenEdit = (page: StorePage) => {
+    if (!canEditPages) {
+      showToast("You do not have permission to edit pages.", "error");
+      return;
+    }
     setEditingPage(page);
     setFormData({
       title: page.title,
@@ -544,6 +565,10 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
 
   // Toggle active/inactive status inline
   const handleTogglePublish = async (page: StorePage) => {
+    if (!canPublishPages) {
+      showToast("You do not have permission to publish or unpublish pages.", "error");
+      return;
+    }
     try {
       const res = await fetch(`${API_BASE_URL}/sites/${siteId}/pages/${page.id}`, {
         method: "PUT",
@@ -563,6 +588,18 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
   // Save Page (Create or Update)
   const handleSavePage = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (editingPage && !canEditPages) {
+      setEditorError("You do not have permission to edit pages.");
+      return;
+    }
+    if (!editingPage && !canCreatePages) {
+      setEditorError("You do not have permission to create pages.");
+      return;
+    }
+    if (formData.is_published && !canPublishPages) {
+      setEditorError("You do not have permission to publish pages live. Please switch off Active status to save as a draft.");
+      return;
+    }
     if (!formData.title.trim()) {
       setEditorError("Page title is required");
       return;
@@ -634,6 +671,10 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
 
   // Delete Custom Page
   const handleDeletePage = async () => {
+    if (!canDeletePages) {
+      showToast("You do not have permission to delete pages.", "error");
+      return;
+    }
     if (!deleteTarget) return;
     setDeleteLoading(true);
     try {
@@ -681,6 +722,15 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
     const { relativePath } = getPagePublicUrls(page);
     window.open(relativePath, "_blank");
   };
+
+  if (!canViewPages) {
+    return (
+      <AccessDeniedView
+        title="Pages Access Restricted"
+        message="You do not have permission to view or manage store pages. Please contact your workspace administrator to request access."
+      />
+    );
+  }
 
   return (
     <div style={{ color: "#0f172a" }}>
@@ -1170,32 +1220,34 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
             </div>
 
             {/* Right: Action Button matching height, shape, and placement of other pages */}
-            <button
-              type="button"
-              onClick={handleOpenCreate}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                height: "34px",
-                padding: "0 14px",
-                borderRadius: "7px",
-                border: "none",
-                background: "#2563eb",
-                color: "#ffffff",
-                fontSize: "13px",
-                fontWeight: 600,
-                cursor: "pointer",
-                boxShadow: "0 1px 2px rgba(37,99,235,0.2)",
-                transition: "all 0.15s ease",
-                marginBottom: "4px",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "#1d4ed8")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "#2563eb")}
-            >
-              <PlusIcon />
-              <span>Create New Page</span>
-            </button>
+            {canCreatePages && (
+              <button
+                type="button"
+                onClick={handleOpenCreate}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  height: "34px",
+                  padding: "0 14px",
+                  borderRadius: "7px",
+                  border: "none",
+                  background: "#2563eb",
+                  color: "#ffffff",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  boxShadow: "0 1px 2px rgba(37,99,235,0.2)",
+                  transition: "all 0.15s ease",
+                  marginBottom: "4px",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#1d4ed8")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "#2563eb")}
+              >
+                <PlusIcon />
+                <span>Create New Page</span>
+              </button>
+            )}
           </div>
 
           {/* Pages Content List */}
@@ -1240,22 +1292,24 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
               <p style={{ margin: "0 0 12px 0", fontSize: "14px", fontWeight: 500 }}>
                 No pages found matching your filters.
               </p>
-              <button
-                type="button"
-                onClick={handleOpenCreate}
-                style={{
-                  padding: "7px 14px",
-                  background: "#2563eb",
-                  color: "#ffffff",
-                  borderRadius: "6px",
-                  border: "none",
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                Create a New Page
-              </button>
+              {canCreatePages && (
+                <button
+                  type="button"
+                  onClick={handleOpenCreate}
+                  style={{
+                    padding: "7px 14px",
+                    background: "#2563eb",
+                    color: "#ffffff",
+                    borderRadius: "6px",
+                    border: "none",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Create a New Page
+                </button>
+              )}
             </div>
           ) : (
             <div
@@ -1436,26 +1490,28 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                         <td style={{ padding: "14px 16px", textAlign: "right" }}>
                           <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
                             {/* Edit */}
-                            <button
-                              type="button"
-                              onClick={() => handleOpenEdit(page)}
-                              title="Edit page content"
-                              style={{
-                                padding: "5px 12px",
-                                background: "#eff6ff",
-                                border: "1px solid #bfdbfe",
-                                borderRadius: "6px",
-                                color: "#2563eb",
-                                fontSize: "12px",
-                                fontWeight: 600,
-                                cursor: "pointer",
-                                transition: "all 0.15s ease",
-                              }}
-                              onMouseEnter={(e) => (e.currentTarget.style.background = "#dbeafe")}
-                              onMouseLeave={(e) => (e.currentTarget.style.background = "#eff6ff")}
-                            >
-                              Edit
-                            </button>
+                            {canEditPages && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEdit(page)}
+                                title="Edit page content"
+                                style={{
+                                  padding: "5px 12px",
+                                  background: "#eff6ff",
+                                  border: "1px solid #bfdbfe",
+                                  borderRadius: "6px",
+                                  color: "#2563eb",
+                                  fontSize: "12px",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                  transition: "all 0.15s ease",
+                                }}
+                                onMouseEnter={(e) => (e.currentTarget.style.background = "#dbeafe")}
+                                onMouseLeave={(e) => (e.currentTarget.style.background = "#eff6ff")}
+                              >
+                                Edit
+                              </button>
+                            )}
 
                             {/* Copy Link (Beside Delete) */}
                             <button
@@ -1489,29 +1545,31 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
 
                             {/* Delete (Custom pages only) */}
                             {!page.is_default ? (
-                              <button
-                                type="button"
-                                onClick={() => setDeleteTarget(page)}
-                                title="Delete custom page"
-                                style={{
-                                  padding: "6px",
-                                  background: "transparent",
-                                  border: "1px solid #fee2e2",
-                                  borderRadius: "6px",
-                                  color: "#ef4444",
-                                  cursor: "pointer",
-                                  display: "grid",
-                                  placeItems: "center",
-                                  transition: "all 0.15s ease",
-                                }}
-                                onMouseEnter={(e) => (e.currentTarget.style.background = "#fef2f2")}
-                                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                              >
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <polyline points="3 6 5 6 21 6" />
-                                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                                </svg>
-                              </button>
+                              canDeletePages ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteTarget(page)}
+                                  title="Delete custom page"
+                                  style={{
+                                    padding: "6px",
+                                    background: "transparent",
+                                    border: "1px solid #fee2e2",
+                                    borderRadius: "6px",
+                                    color: "#ef4444",
+                                    cursor: "pointer",
+                                    display: "grid",
+                                    placeItems: "center",
+                                    transition: "all 0.15s ease",
+                                  }}
+                                  onMouseEnter={(e) => (e.currentTarget.style.background = "#fef2f2")}
+                                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                                >
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                  </svg>
+                                </button>
+                              ) : null
                             ) : (
                               <span
                                 title="Core default pages are protected from deletion"
@@ -1623,33 +1681,35 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                     </p>
                   </div>
 
-                  <div style={{ display: "flex", gap: "8px", borderTop: "1px solid #f1f5f9", paddingTop: "12px" }}>
-                    <button
-                      type="button"
-                      onClick={() => handleCreateFromTemplate(key)}
-                      style={{
-                        flex: 1,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "6px",
-                        height: "32px",
-                        padding: "0 12px",
-                        borderRadius: "6px",
-                        border: "none",
-                        background: "#2563eb",
-                        color: "#ffffff",
-                        fontSize: "12.5px",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "#1d4ed8")}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = "#2563eb")}
-                    >
-                      <PlusIcon />
-                      <span>Use Template</span>
-                    </button>
-                  </div>
+                  {canCreatePages && (
+                    <div style={{ display: "flex", gap: "8px", borderTop: "1px solid #f1f5f9", paddingTop: "12px" }}>
+                      <button
+                        type="button"
+                        onClick={() => handleCreateFromTemplate(key)}
+                        style={{
+                          flex: 1,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "6px",
+                          height: "32px",
+                          padding: "0 12px",
+                          borderRadius: "6px",
+                          border: "none",
+                          background: "#2563eb",
+                          color: "#ffffff",
+                          fontSize: "12.5px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = "#1d4ed8")}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = "#2563eb")}
+                      >
+                        <PlusIcon />
+                        <span>Use Template</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
           </div>

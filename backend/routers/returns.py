@@ -11,7 +11,12 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import cast, String
 from sqlmodel import Session, func, select
 
-from auth_middleware import authenticate_admin, authenticate_customer, enforce_site_ownership
+from auth_middleware import (
+    authenticate_admin,
+    authenticate_customer,
+    check_admin_has_permission,
+    enforce_site_ownership,
+)
 from db.database import get_session
 from models import (
     DeliveryAgent,
@@ -1092,6 +1097,9 @@ def get_admin_returns(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    if not check_admin_has_permission(admin["adminId"], "orders:view", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to view returns")
+
     base_query = select(ReturnRequest).where(ReturnRequest.site_id == site_id)
 
     if status and status != "all":
@@ -1192,6 +1200,9 @@ def get_admin_return_detail(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    if not check_admin_has_permission(admin["adminId"], "orders:view", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to view returns")
+
     return_request = get_return_request_or_404(session, site_id, return_id)
     order = get_order_or_404(session, site_id, return_request.order_id)
 
@@ -1225,6 +1236,9 @@ def review_return_request(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    if not check_admin_has_permission(admin["adminId"], "orders:update", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to review returns")
+
     return_request = get_return_request_or_404(session, site_id, return_id)
 
     if return_request.status != "requested":
@@ -1395,6 +1409,9 @@ def dispatch_return_pickup(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    if not (check_admin_has_permission(admin["adminId"], "orders:update", session) or check_admin_has_permission(admin["adminId"], "delivery:edit", session)):
+        raise HTTPException(status_code=403, detail="You do not have permission to schedule return pickups")
+
     return_request = get_return_request_or_404(session, site_id, return_id)
     if return_request.status in {"rejected", "refunded", "closed"}:
         raise HTTPException(
@@ -1675,6 +1692,9 @@ def receive_return_request(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    if not check_admin_has_permission(admin["adminId"], "orders:update", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to update return status")
+
     return_request = get_return_request_or_404(session, site_id, return_id)
 
     if return_request.status != "approved":
@@ -1793,6 +1813,9 @@ def inspect_return_request(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    if not check_admin_has_permission(admin["adminId"], "orders:update", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to inspect returns")
+
     return_request = get_return_request_or_404(session, site_id, return_id)
 
     if return_request.status != "received":
@@ -1911,6 +1934,9 @@ def refund_return_request(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    if not check_admin_has_permission(admin["adminId"], "orders:refund", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to process return refunds")
+
     return_request = get_return_request_or_404(session, site_id, return_id)
     order = get_order_or_404(session, site_id, return_request.order_id)
 
@@ -2137,6 +2163,9 @@ def close_return_request(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    if not check_admin_has_permission(admin["adminId"], "orders:update", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to close returns")
+
     return_request = get_return_request_or_404(session, site_id, return_id)
 
     if return_request.status not in {"refunded", "rejected"}:

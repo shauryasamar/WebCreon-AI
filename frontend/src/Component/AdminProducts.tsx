@@ -3,6 +3,8 @@ import { useParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { Pagination } from "./Pagination";
 import { optimizeImageUrl, getThumbnailUrl, compressImageFile } from "../utils/imageOptimizer";
+import { useAdminAuth } from "../context/AdminAuthContext";
+import { AccessDeniedView } from "./AccessDeniedView";
 
 
 type VariantValue = {
@@ -529,6 +531,12 @@ const errorStyle: React.CSSProperties = {
 
 const AdminProducts = () => {
   const { siteId } = useParams();
+  const { hasPermission, isOwner } = useAdminAuth();
+  const canViewProducts = isOwner || hasPermission("products:view");
+  const canCreateProducts = isOwner || hasPermission("products:create");
+  const canEditProducts = isOwner || hasPermission("products:edit");
+  const canDeleteProducts = isOwner || hasPermission("products:delete");
+
   const initialProducts = getCachedProducts(siteId);
   const [products, setProducts] = useState<Product[]>(() => {
     if (initialProducts.length > 0 && siteId) {
@@ -851,11 +859,13 @@ const AdminProducts = () => {
   };
 
   const openCreateForm = () => {
+    if (!canCreateProducts) return;
     resetForm();
     setShowForm(true);
   };
 
   const openEditForm = (product: Product) => {
+    if (!canEditProducts) return;
     const optionValues = product.variant_option?.optionValues ?? [];
     setEditingProduct(product);
     setErrors({});
@@ -1281,7 +1291,7 @@ const AdminProducts = () => {
   }, [showFilterPopover]);
 
   const handleUpdateDefaultReturnPolicy = async (days: number) => {
-    if (!siteId) return;
+    if (!siteId || !canEditProducts) return;
     setIsUpdatingReturnPolicy(true);
     try {
       const res = await fetch(`${API_BASE_URL}/sites/${siteId}/default-return-policy`, {
@@ -1431,6 +1441,9 @@ const AdminProducts = () => {
   // Bulk Actions
   const handleBulkAction = async (action: "make_active" | "make_draft" | "delete" | "duplicate") => {
     if (selectedProductIds.size === 0 || !siteId) return;
+    if (action === "delete" && !canDeleteProducts) return;
+    if (action === "duplicate" && !canCreateProducts) return;
+    if ((action === "make_active" || action === "make_draft") && !canEditProducts) return;
 
     if (action === "delete") {
       if (
@@ -1572,7 +1585,7 @@ const AdminProducts = () => {
   };
 
   const handleExportCSV = async () => {
-    if (!siteId) return;
+    if (!siteId || (!canEditProducts && !canCreateProducts)) return;
     setIsExportingCSV(true);
     try {
       const qParams = new URLSearchParams();
@@ -1616,7 +1629,7 @@ const AdminProducts = () => {
   };
 
   const handleExportSelectedCSV = async () => {
-    if (!siteId || selectedProductIds.size === 0) return;
+    if (!siteId || selectedProductIds.size === 0 || (!canEditProducts && !canCreateProducts)) return;
     setIsExportingCSV(true);
     try {
       const ids = Array.from(selectedProductIds).join(",");
@@ -1736,7 +1749,7 @@ const AdminProducts = () => {
   };
 
   const handleDuplicateProduct = async (productId: string) => {
-    if (!siteId) return;
+    if (!siteId || !canCreateProducts) return;
     try {
       const res = await fetch(`${API_BASE_URL}/sites/${siteId}/products/${productId}/duplicate`, {
         method: "POST",
@@ -1759,6 +1772,8 @@ const AdminProducts = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!siteId) return;
+    if (editingProduct && !canEditProducts) return;
+    if (!editingProduct && !canCreateProducts) return;
     if (!validateForm()) return;
 
     const hasVariantOptions =
@@ -1853,7 +1868,7 @@ const AdminProducts = () => {
   };
 
   const handleDelete = async (productId: string) => {
-    if (!siteId) return;
+    if (!siteId || !canDeleteProducts) return;
     if (!confirm("Are you sure you want to delete this product?")) return;
     try {
       const res = await fetch(
@@ -1870,6 +1885,18 @@ const AdminProducts = () => {
       console.error("Error deleting product", err);
     }
   };
+
+  if (!canViewProducts) {
+    return (
+      <div style={{ padding: "32px", display: "flex", justifyContent: "center" }}>
+        <AccessDeniedView
+          title="Products Catalog Restricted"
+          message="You do not have permission to view or manage store products."
+          requiredPermission="products:view"
+        />
+      </div>
+    );
+  }
 
   return (
     <div style={{ width: "100%", color: "#0f172a", display: "flex", flexDirection: "column", gap: "10px", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
@@ -4092,134 +4119,144 @@ const AdminProducts = () => {
               <div style={{ width: "1px", height: "16px", background: "#e2e8f0", margin: "0 2px" }} />
 
               {/* Bulk Publish */}
-              <button
-                type="button"
-                disabled={bulkActionLoading}
-                onClick={() => handleBulkAction("make_active")}
-                title="Publish selected products live to store"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  padding: "5px 10px",
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  borderRadius: "5px",
-                  border: "1px solid #bbf7d0",
-                  background: "#f0fdf4",
-                  color: "#166534",
-                  cursor: bulkActionLoading ? "not-allowed" : "pointer",
-                  whiteSpace: "nowrap",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                <CheckCircleIcon />
-                <span>{bulkActionLoading ? "Publishing..." : "Publish"}</span>
-              </button>
+              {canEditProducts && (
+                <button
+                  type="button"
+                  disabled={bulkActionLoading}
+                  onClick={() => handleBulkAction("make_active")}
+                  title="Publish selected products live to store"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "5px 10px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    borderRadius: "5px",
+                    border: "1px solid #bbf7d0",
+                    background: "#f0fdf4",
+                    color: "#166534",
+                    cursor: bulkActionLoading ? "not-allowed" : "pointer",
+                    whiteSpace: "nowrap",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <CheckCircleIcon />
+                  <span>{bulkActionLoading ? "Publishing..." : "Publish"}</span>
+                </button>
+              )}
 
               {/* Bulk Draft */}
-              <button
-                type="button"
-                disabled={bulkActionLoading}
-                onClick={() => handleBulkAction("make_draft")}
-                title="Hide selected products from store"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  padding: "5px 10px",
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  borderRadius: "5px",
-                  border: "1px solid #e2e8f0",
-                  background: "#f8fafc",
-                  color: "#334155",
-                  cursor: bulkActionLoading ? "not-allowed" : "pointer",
-                  whiteSpace: "nowrap",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                <EyeOffIcon />
-                <span>{bulkActionLoading ? "Drafting..." : "Draft"}</span>
-              </button>
+              {canEditProducts && (
+                <button
+                  type="button"
+                  disabled={bulkActionLoading}
+                  onClick={() => handleBulkAction("make_draft")}
+                  title="Hide selected products from store"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "5px 10px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    borderRadius: "5px",
+                    border: "1px solid #e2e8f0",
+                    background: "#f8fafc",
+                    color: "#334155",
+                    cursor: bulkActionLoading ? "not-allowed" : "pointer",
+                    whiteSpace: "nowrap",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <EyeOffIcon />
+                  <span>{bulkActionLoading ? "Drafting..." : "Draft"}</span>
+                </button>
+              )}
 
               {/* Bulk Duplicate */}
-              <button
-                type="button"
-                disabled={bulkActionLoading}
-                onClick={() => handleBulkAction("duplicate")}
-                title="Duplicate selected products"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  padding: "5px 10px",
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  borderRadius: "5px",
-                  border: "1px solid #e2e8f0",
-                  background: "#f8fafc",
-                  color: "#334155",
-                  cursor: bulkActionLoading ? "not-allowed" : "pointer",
-                  whiteSpace: "nowrap",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                <CopyIcon />
-                <span>{bulkActionLoading ? "Copying..." : "Duplicate"}</span>
-              </button>
+              {canCreateProducts && (
+                <button
+                  type="button"
+                  disabled={bulkActionLoading}
+                  onClick={() => handleBulkAction("duplicate")}
+                  title="Duplicate selected products"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "5px 10px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    borderRadius: "5px",
+                    border: "1px solid #e2e8f0",
+                    background: "#f8fafc",
+                    color: "#334155",
+                    cursor: bulkActionLoading ? "not-allowed" : "pointer",
+                    whiteSpace: "nowrap",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <CopyIcon />
+                  <span>{bulkActionLoading ? "Copying..." : "Duplicate"}</span>
+                </button>
+              )}
 
               {/* Bulk CSV Export */}
-              <button
-                type="button"
-                disabled={isExportingCSV}
-                onClick={handleExportSelectedCSV}
-                title="Export selected products to CSV"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  padding: "5px 10px",
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  borderRadius: "5px",
-                  border: "1px solid #e2e8f0",
-                  background: "#f8fafc",
-                  color: "#334155",
-                  cursor: isExportingCSV ? "not-allowed" : "pointer",
-                  whiteSpace: "nowrap",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                <DownloadIcon />
-                <span>{isExportingCSV ? "Exporting..." : "CSV"}</span>
-              </button>
+              {(canEditProducts || canCreateProducts) && (
+                <button
+                  type="button"
+                  disabled={isExportingCSV}
+                  onClick={handleExportSelectedCSV}
+                  title="Export selected products to CSV"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "5px 10px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    borderRadius: "5px",
+                    border: "1px solid #e2e8f0",
+                    background: "#f8fafc",
+                    color: "#334155",
+                    cursor: isExportingCSV ? "not-allowed" : "pointer",
+                    whiteSpace: "nowrap",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <DownloadIcon />
+                  <span>{isExportingCSV ? "Exporting..." : "CSV"}</span>
+                </button>
+              )}
 
               {/* Bulk Delete */}
-              <button
-                type="button"
-                disabled={bulkActionLoading}
-                onClick={() => handleBulkAction("delete")}
-                title="Permanently delete selected products"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  padding: "5px 10px",
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  borderRadius: "5px",
-                  border: "1px solid #fecaca",
-                  background: "#fef2f2",
-                  color: "#dc2626",
-                  cursor: bulkActionLoading ? "not-allowed" : "pointer",
-                  whiteSpace: "nowrap",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                <TrashIcon />
-                <span>Delete</span>
-              </button>
+              {canDeleteProducts && (
+                <button
+                  type="button"
+                  disabled={bulkActionLoading}
+                  onClick={() => handleBulkAction("delete")}
+                  title="Permanently delete selected products"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "5px 10px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    borderRadius: "5px",
+                    border: "1px solid #fecaca",
+                    background: "#fef2f2",
+                    color: "#dc2626",
+                    cursor: bulkActionLoading ? "not-allowed" : "pointer",
+                    whiteSpace: "nowrap",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <TrashIcon />
+                  <span>{bulkActionLoading ? "Deleting..." : "Delete"}</span>
+                </button>
+              )}
 
               <div style={{ width: "1px", height: "16px", background: "#e2e8f0", margin: "0 2px" }} />
 
@@ -4256,13 +4293,13 @@ const AdminProducts = () => {
             </div>
           ) : (
             <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0, flexWrap: "nowrap" }}>
-              {/* Default Return Selector (Compact) */}
+              {/* Store Default Return Policy Selector (Compact) */}
               <div
                 style={{
-                  display: "flex",
+                  display: "inline-flex",
                   alignItems: "center",
                   gap: "4px",
-                  background: "#ffffff",
+                  background: canEditProducts ? "#ffffff" : "#f8fafc",
                   border: "1px solid #cbd5e1",
                   borderRadius: "6px",
                   padding: "4px 8px",
@@ -4276,15 +4313,15 @@ const AdminProducts = () => {
                 </span>
                 <select
                   value={defaultReturnWindowDays}
-                  disabled={isUpdatingReturnPolicy}
+                  disabled={isUpdatingReturnPolicy || !canEditProducts}
                   onChange={(e) => handleUpdateDefaultReturnPolicy(Number(e.target.value))}
                   style={{
                     border: "none",
                     background: "transparent",
                     fontSize: "11.5px",
                     fontWeight: 700,
-                    color: "#1e293b",
-                    cursor: "pointer",
+                    color: canEditProducts ? "#1e293b" : "#64748b",
+                    cursor: canEditProducts ? "pointer" : "not-allowed",
                     outline: "none",
                     padding: 0,
                   }}
@@ -4299,128 +4336,134 @@ const AdminProducts = () => {
               </div>
 
               {/* Actions Dropdown (Compact) */}
-              <div style={{ position: "relative" }}>
+              {(canCreateProducts || canEditProducts) && (
+                <div style={{ position: "relative" }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowActionsMenu(!showActionsMenu)}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      padding: "4px 9px",
+                      height: "32px",
+                      borderRadius: "6px",
+                      border: "1px solid #cbd5e1",
+                      background: "#ffffff",
+                      color: "#334155",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                      transition: "all 0.15s ease",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    <span>Actions</span>
+                    <ChevronDownIcon />
+                  </button>
+
+                  {showActionsMenu && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        right: 0,
+                        top: "calc(100% + 4px)",
+                        background: "#ffffff",
+                        border: "1px solid #cbd5e1",
+                        borderRadius: "8px",
+                        boxShadow: "0 10px 25px -5px rgba(0,0,0,0.12), 0 8px 10px -6px rgba(0,0,0,0.08)",
+                        minWidth: "170px",
+                        zIndex: 50,
+                        padding: "4px 0",
+                      }}
+                    >
+                      {canCreateProducts && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowActionsMenu(false);
+                            setShowImportModal(true);
+                            setImportFile(null);
+                            setImportResult(null);
+                          }}
+                          style={{
+                            width: "100%",
+                            padding: "8px 14px",
+                            background: "none",
+                            border: "none",
+                            textAlign: "left",
+                            fontSize: "13px",
+                            color: "#1e293b",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                          }}
+                        >
+                          <UploadIcon /> Import CSV
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowActionsMenu(false);
+                          handleExportCSV();
+                        }}
+                        disabled={isExportingCSV}
+                        style={{
+                          width: "100%",
+                          padding: "8px 14px",
+                          background: "none",
+                          border: "none",
+                          textAlign: "left",
+                          fontSize: "13px",
+                          color: "#1e293b",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        <DownloadIcon />{" "}
+                        {isExportingCSV
+                          ? "Exporting..."
+                          : statusFilter !== "all" || searchQuery || activeFilterCount > 0
+                          ? "Export Filtered CSV"
+                          : "Export All CSV"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* + Add Product Primary Button (Blue) */}
+              {canCreateProducts && (
                 <button
-                  type="button"
-                  onClick={() => setShowActionsMenu(!showActionsMenu)}
+                  onClick={openCreateForm}
                   style={{
+                    background: "#2563eb",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: "6px",
+                    padding: "5px 13px",
+                    height: "32px",
+                    fontSize: "12.5px",
+                    fontWeight: 700,
+                    cursor: "pointer",
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: "4px",
-                    padding: "4px 9px",
-                    height: "32px",
-                    borderRadius: "6px",
-                    border: "1px solid #cbd5e1",
-                    background: "#ffffff",
-                    color: "#334155",
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    whiteSpace: "nowrap",
+                    gap: "5px",
+                    boxShadow: "0 1px 2px rgba(37,99,235,0.2)",
                     transition: "all 0.15s ease",
+                    whiteSpace: "nowrap",
                     boxSizing: "border-box",
                   }}
                 >
-                  <span>Actions</span>
-                  <ChevronDownIcon />
+                  <PlusIcon />
+                  <span>Add Product</span>
                 </button>
-
-                {showActionsMenu && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      right: 0,
-                      top: "calc(100% + 4px)",
-                      background: "#ffffff",
-                      border: "1px solid #cbd5e1",
-                      borderRadius: "8px",
-                      boxShadow: "0 10px 25px -5px rgba(0,0,0,0.12), 0 8px 10px -6px rgba(0,0,0,0.08)",
-                      minWidth: "170px",
-                      zIndex: 50,
-                      padding: "4px 0",
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowActionsMenu(false);
-                        setShowImportModal(true);
-                        setImportFile(null);
-                        setImportResult(null);
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "8px 14px",
-                        background: "none",
-                        border: "none",
-                        textAlign: "left",
-                        fontSize: "13px",
-                        color: "#1e293b",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                      }}
-                    >
-                      <UploadIcon /> Import CSV
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowActionsMenu(false);
-                        handleExportCSV();
-                      }}
-                      disabled={isExportingCSV}
-                      style={{
-                        width: "100%",
-                        padding: "8px 14px",
-                        background: "none",
-                        border: "none",
-                        textAlign: "left",
-                        fontSize: "13px",
-                        color: "#1e293b",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                      }}
-                    >
-                      <DownloadIcon />{" "}
-                      {isExportingCSV
-                        ? "Exporting..."
-                        : statusFilter !== "all" || searchQuery || activeFilterCount > 0
-                        ? "Export Filtered CSV"
-                        : "Export All CSV"}
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* + Add Product Primary Button (Blue) */}
-              <button
-                onClick={openCreateForm}
-                style={{
-                  background: "#2563eb",
-                  color: "#ffffff",
-                  border: "none",
-                  borderRadius: "6px",
-                  padding: "5px 13px",
-                  height: "32px",
-                  fontSize: "12.5px",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  boxShadow: "0 1px 2px rgba(37,99,235,0.2)",
-                  transition: "all 0.15s ease",
-                  whiteSpace: "nowrap",
-                  boxSizing: "border-box",
-                }}
-              >
-                <PlusIcon />
-                <span>Add Product</span>
-              </button>
+              )}
             </div>
           )}
         </div>
@@ -4988,104 +5031,112 @@ const AdminProducts = () => {
                       ) : (
                         <div style={{ display: "inline-flex", gap: "4px", alignItems: "center", justifyContent: "flex-end", flexWrap: "nowrap", whiteSpace: "nowrap" }}>
                           {/* Quick Edit */}
-                          <button
-                            type="button"
-                            title={hasVariants ? "Quick Edit Variant Prices & Stocks" : "Quick Edit Price & Stock"}
-                            style={{
-                              width: "28px",
-                              height: "28px",
-                              padding: 0,
-                              display: "inline-grid",
-                              placeItems: "center",
-                              color: "#2563eb",
-                              background: "#eff6ff",
-                              border: "1px solid #bfdbfe",
-                              borderRadius: "5px",
-                              cursor: "pointer",
-                              flexShrink: 0,
-                              transition: "all 0.15s ease",
-                            }}
-                            onClick={() => {
-                              if (hasVariants) {
-                                openVariantQuickEdit(product);
-                              } else {
-                                setInlineEditingId(product.id);
-                                setInlinePrice(String(displayPrice));
-                                setInlineStock(String(product.stock));
-                              }
-                            }}
-                          >
-                            <QuickEditIcon />
-                          </button>
+                          {canEditProducts && (
+                            <button
+                              type="button"
+                              title={hasVariants ? "Quick Edit Variant Prices & Stocks" : "Quick Edit Price & Stock"}
+                              style={{
+                                width: "28px",
+                                height: "28px",
+                                padding: 0,
+                                display: "inline-grid",
+                                placeItems: "center",
+                                color: "#2563eb",
+                                background: "#eff6ff",
+                                border: "1px solid #bfdbfe",
+                                borderRadius: "5px",
+                                cursor: "pointer",
+                                flexShrink: 0,
+                                transition: "all 0.15s ease",
+                              }}
+                              onClick={() => {
+                                if (hasVariants) {
+                                  openVariantQuickEdit(product);
+                                } else {
+                                  setInlineEditingId(product.id);
+                                  setInlinePrice(String(displayPrice));
+                                  setInlineStock(String(product.stock));
+                                }
+                              }}
+                            >
+                              <QuickEditIcon />
+                            </button>
+                          )}
 
                           {/* Full Edit Form */}
-                          <button
-                            type="button"
-                            title="Edit Product Details"
-                            style={{
-                              width: "28px",
-                              height: "28px",
-                              padding: 0,
-                              display: "inline-grid",
-                              placeItems: "center",
-                              color: "#334155",
-                              background: "#f8fafc",
-                              border: "1px solid #cbd5e1",
-                              borderRadius: "5px",
-                              cursor: "pointer",
-                              flexShrink: 0,
-                              transition: "all 0.15s ease",
-                            }}
-                            onClick={() => openEditForm(product)}
-                          >
-                            <PencilIcon />
-                          </button>
+                          {canEditProducts && (
+                            <button
+                              type="button"
+                              title="Edit Product Details"
+                              style={{
+                                width: "28px",
+                                height: "28px",
+                                padding: 0,
+                                display: "inline-grid",
+                                placeItems: "center",
+                                color: "#334155",
+                                background: "#f8fafc",
+                                border: "1px solid #cbd5e1",
+                                borderRadius: "5px",
+                                cursor: "pointer",
+                                flexShrink: 0,
+                                transition: "all 0.15s ease",
+                              }}
+                              onClick={() => openEditForm(product)}
+                            >
+                              <PencilIcon />
+                            </button>
+                          )}
 
                           {/* Duplicate Product */}
-                          <button
-                            type="button"
-                            title="Duplicate as new Draft product"
-                            style={{
-                              width: "28px",
-                              height: "28px",
-                              padding: 0,
-                              display: "inline-grid",
-                              placeItems: "center",
-                              color: "#4f46e5",
-                              background: "#eef2ff",
-                              border: "1px solid #c7d2fe",
-                              borderRadius: "5px",
-                              cursor: "pointer",
-                              flexShrink: 0,
-                              transition: "all 0.15s ease",
-                            }}
-                            onClick={() => handleDuplicateProduct(product.id)}
-                          >
-                            <CopyIcon />
-                          </button>
+                          {canCreateProducts && (
+                            <button
+                              type="button"
+                              title="Duplicate as new Draft product"
+                              style={{
+                                width: "28px",
+                                height: "28px",
+                                padding: 0,
+                                display: "inline-grid",
+                                placeItems: "center",
+                                color: "#4f46e5",
+                                background: "#eef2ff",
+                                border: "1px solid #c7d2fe",
+                                borderRadius: "5px",
+                                cursor: "pointer",
+                                flexShrink: 0,
+                                transition: "all 0.15s ease",
+                              }}
+                              onClick={() => handleDuplicateProduct(product.id)}
+                            >
+                              <CopyIcon />
+                            </button>
+                          )}
 
                           {/* Delete Product */}
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(product.id)}
-                            style={{
-                              width: "28px",
-                              height: "28px",
-                              padding: 0,
-                              display: "inline-grid",
-                              placeItems: "center",
-                              color: "#dc2626",
-                              background: "#fef2f2",
-                              border: "1px solid #fecaca",
-                              borderRadius: "5px",
-                              cursor: "pointer",
-                              flexShrink: 0,
-                              transition: "all 0.15s ease",
-                            }}
-                            title={`Delete ${product.name}`}
-                          >
-                            <TrashIcon />
-                          </button>
+                          {canDeleteProducts && (
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(product.id)}
+                              style={{
+                                width: "28px",
+                                height: "28px",
+                                padding: 0,
+                                display: "inline-grid",
+                                placeItems: "center",
+                                color: "#dc2626",
+                                background: "#fef2f2",
+                                border: "1px solid #fecaca",
+                                borderRadius: "5px",
+                                cursor: "pointer",
+                                flexShrink: 0,
+                                transition: "all 0.15s ease",
+                              }}
+                              title={`Delete ${product.name}`}
+                            >
+                              <TrashIcon />
+                            </button>
+                          )}
                         </div>
                       )}
                     </td>

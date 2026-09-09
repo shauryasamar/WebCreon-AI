@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { API_BASE_URL as API_BASE } from "../config/api";
 import GlassToast from "./GlassToast";
+import { useAdminAuth } from "../context/AdminAuthContext";
+import AccessDeniedView from "./AccessDeniedView";
 
 interface CouponItem {
   id: string;
@@ -160,6 +162,12 @@ const ErrorBadge = ({ message }: { message?: string }) => {
 };
 
 export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }) {
+  const { hasPermission } = useAdminAuth();
+  const canViewDiscounts = hasPermission("discounts:view");
+  const canCreateDiscounts = hasPermission("discounts:create");
+  const canEditDiscounts = hasPermission("discounts:edit");
+  const canDeleteDiscounts = hasPermission("discounts:delete");
+
   const { siteId: paramSiteId } = useParams<{ siteId: string }>();
   const activeSiteId = propSiteId || paramSiteId || "";
 
@@ -273,6 +281,10 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
   };
 
   const handleOpenCreateModal = () => {
+    if (!canCreateDiscounts) {
+      showToast("You do not have permission to create promo codes", "error");
+      return;
+    }
     setEditingCoupon(null);
     setFormCode("");
     setFormDescription("");
@@ -292,6 +304,10 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
   };
 
   const handleOpenEditModal = (coupon: CouponItem) => {
+    if (!canEditDiscounts) {
+      showToast("You do not have permission to edit promo codes", "error");
+      return;
+    }
     setEditingCoupon(coupon);
     setFormCode(coupon.code);
     setFormDescription(coupon.description || "");
@@ -370,6 +386,14 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
 
   const handleSaveCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (editingCoupon && !canEditDiscounts) {
+      showToast("You do not have permission to edit promo codes", "error");
+      return;
+    }
+    if (!editingCoupon && !canCreateDiscounts) {
+      showToast("You do not have permission to create promo codes", "error");
+      return;
+    }
     if (!validateForm()) return;
 
     setSaving(true);
@@ -418,6 +442,10 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
   };
 
   const handleToggleStatus = async (coupon: CouponItem) => {
+    if (!canEditDiscounts) {
+      showToast("You do not have permission to update promo codes", "error");
+      return;
+    }
     try {
       const res = await fetch(`${API_BASE}/coupons/admin/${activeSiteId}/${coupon.id}/toggle`, {
         method: "PATCH",
@@ -440,6 +468,10 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
   };
 
   const handleDeleteCoupon = async (coupon: CouponItem) => {
+    if (!canDeleteDiscounts) {
+      showToast("You do not have permission to delete promo codes", "error");
+      return;
+    }
     if (!window.confirm(`Are you sure you want to delete promo code '${coupon.code}'?`)) return;
     try {
       const res = await fetch(`${API_BASE}/coupons/admin/${activeSiteId}/${coupon.id}`, {
@@ -469,6 +501,10 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
 
   // Bulk Actions
   const handleBulkSetStatus = async (makeActive: boolean) => {
+    if (!canEditDiscounts) {
+      showToast("You do not have permission to update promo codes", "error");
+      return;
+    }
     if (selectedIds.size === 0) return;
     setBulkLoading(true);
     try {
@@ -494,6 +530,10 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
   };
 
   const handleBulkDelete = async () => {
+    if (!canDeleteDiscounts) {
+      showToast("You do not have permission to delete promo codes", "error");
+      return;
+    }
     if (selectedIds.size === 0) return;
     if (!window.confirm(`Are you sure you want to permanently delete ${selectedIds.size} promo codes?`)) return;
     setBulkLoading(true);
@@ -616,6 +656,15 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
     marginBottom: "4px",
     display: "block",
   };
+
+  if (!canViewDiscounts) {
+    return (
+      <AccessDeniedView
+        title="Discounts Access Restricted"
+        message="You do not have permission to view or manage discount coupons. Please contact your workspace administrator to request access."
+      />
+    );
+  }
 
   return (
     <div style={{ width: "100%", color: "#0f172a", display: "flex", flexDirection: "column", gap: "10px", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
@@ -1271,31 +1320,33 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
               </button>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={handleOpenCreateModal}
-              style={{
-                background: "#2563eb",
-                color: "#ffffff",
-                border: "none",
-                borderRadius: "6px",
-                padding: "5px 13px",
-                height: "32px",
-                fontSize: "12.5px",
-                fontWeight: 700,
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "5px",
-                boxShadow: "0 1px 2px rgba(37,99,235,0.2)",
-                transition: "all 0.15s ease",
-                whiteSpace: "nowrap",
-                boxSizing: "border-box",
-              }}
-            >
-              <PlusIcon />
-              <span>Add Promo Code</span>
-            </button>
+            canCreateDiscounts && (
+              <button
+                type="button"
+                onClick={handleOpenCreateModal}
+                style={{
+                  background: "#2563eb",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "6px",
+                  padding: "5px 13px",
+                  height: "32px",
+                  fontSize: "12.5px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  boxShadow: "0 1px 2px rgba(37,99,235,0.2)",
+                  transition: "all 0.15s ease",
+                  whiteSpace: "nowrap",
+                  boxSizing: "border-box",
+                }}
+              >
+                <PlusIcon />
+                <span>Add Promo Code</span>
+              </button>
+            )
           )}
         </div>
       </div>
@@ -1569,64 +1620,70 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                       <td style={{ ...tdStyle, textAlign: "right" }}>
                         <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
                           {/* Toggle Active Switch Button */}
-                          <button
-                            type="button"
-                            onClick={() => handleToggleStatus(coupon)}
-                            title={coupon.isActive ? "Pause discount" : "Activate discount"}
-                            style={{
-                              padding: "4px 8px",
-                              height: "28px",
-                              borderRadius: "5px",
-                              border: "1px solid #cbd5e1",
-                              background: coupon.isActive ? "#ffffff" : "#f1f5f9",
-                              color: coupon.isActive ? "#16a34a" : "#64748b",
-                              fontSize: "11.5px",
-                              fontWeight: 700,
-                              cursor: "pointer",
-                            }}
-                          >
-                            {coupon.isActive ? "Pause" : "Resume"}
-                          </button>
+                          {canEditDiscounts && (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleStatus(coupon)}
+                              title={coupon.isActive ? "Pause discount" : "Activate discount"}
+                              style={{
+                                padding: "4px 8px",
+                                height: "28px",
+                                borderRadius: "5px",
+                                border: "1px solid #cbd5e1",
+                                background: coupon.isActive ? "#ffffff" : "#f1f5f9",
+                                color: coupon.isActive ? "#16a34a" : "#64748b",
+                                fontSize: "11.5px",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                              }}
+                            >
+                              {coupon.isActive ? "Pause" : "Resume"}
+                            </button>
+                          )}
 
                           {/* Edit Button */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEditModal(coupon)}
-                            title="Edit discount"
-                            style={{
-                              width: "28px",
-                              height: "28px",
-                              borderRadius: "5px",
-                              border: "1px solid #cbd5e1",
-                              background: "#ffffff",
-                              color: "#334155",
-                              cursor: "pointer",
-                              display: "grid",
-                              placeItems: "center",
-                            }}
-                          >
-                            <EditIcon />
-                          </button>
+                          {canEditDiscounts && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditModal(coupon)}
+                              title="Edit discount"
+                              style={{
+                                width: "28px",
+                                height: "28px",
+                                borderRadius: "5px",
+                                border: "1px solid #cbd5e1",
+                                background: "#ffffff",
+                                color: "#334155",
+                                cursor: "pointer",
+                                display: "grid",
+                                placeItems: "center",
+                              }}
+                            >
+                              <EditIcon />
+                            </button>
+                          )}
 
                           {/* Delete Button */}
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteCoupon(coupon)}
-                            title="Delete discount"
-                            style={{
-                              width: "28px",
-                              height: "28px",
-                              borderRadius: "5px",
-                              border: "1px solid #fecaca",
-                              background: "#ffffff",
-                              color: "#dc2626",
-                              cursor: "pointer",
-                              display: "grid",
-                              placeItems: "center",
-                            }}
-                          >
-                            <TrashIcon />
-                          </button>
+                          {canDeleteDiscounts && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCoupon(coupon)}
+                              title="Delete discount"
+                              style={{
+                                width: "28px",
+                                height: "28px",
+                                borderRadius: "5px",
+                                border: "1px solid #fecaca",
+                                background: "#ffffff",
+                                color: "#dc2626",
+                                cursor: "pointer",
+                                display: "grid",
+                                placeItems: "center",
+                              }}
+                            >
+                              <TrashIcon />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

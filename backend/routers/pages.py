@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from auth_middleware import enforce_site_ownership
+from auth_middleware import check_admin_has_permission, enforce_site_ownership
 from db.database import get_session
 from models import AdminSite, Site, StorePage, SupportTicket, SupportTicketMessage, utc_now
 
@@ -298,6 +298,10 @@ def create_store_page(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
+    if admin_id and not check_admin_has_permission(admin_id, "pages:create", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to create store pages")
+
     site = session.get(Site, site_id)
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
@@ -317,6 +321,9 @@ def create_store_page(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"A page with URL slug '{slug_candidate}' already exists for this store. Please pick another title or slug.",
         )
+
+    if payload.is_published and admin_id and not check_admin_has_permission(admin_id, "pages:publish", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to publish pages directly")
 
     new_page = StorePage(
         site_id=site_id,
@@ -370,6 +377,10 @@ def update_store_page(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
+    if admin_id and not check_admin_has_permission(admin_id, "pages:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to edit store pages")
+
     page = session.get(StorePage, page_id)
     if not page or page.site_id != site_id:
         raise HTTPException(status_code=404, detail="Page not found")
@@ -400,7 +411,9 @@ def update_store_page(
         page.content = payload.content
     if payload.page_type is not None:
         page.page_type = payload.page_type
-    if payload.is_published is not None:
+    if payload.is_published is not None and payload.is_published != page.is_published:
+        if admin_id and not check_admin_has_permission(admin_id, "pages:publish", session):
+            raise HTTPException(status_code=403, detail="You do not have permission to publish or unpublish store pages")
         page.is_published = payload.is_published
 
     if payload.meta_title is not None:
@@ -431,6 +444,10 @@ def delete_store_page(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
+    if admin_id and not check_admin_has_permission(admin_id, "pages:delete", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to delete store pages")
+
     page = session.get(StorePage, page_id)
     if not page or page.site_id != site_id:
         raise HTTPException(status_code=404, detail="Page not found")

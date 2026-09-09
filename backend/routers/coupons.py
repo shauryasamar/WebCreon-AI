@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel import Session, func, select
 
-from auth_middleware import enforce_site_ownership
+from auth_middleware import check_admin_has_permission, enforce_site_ownership
 from db.database import get_session
 from models import Coupon, CouponUsage, Order, Site, User
 
@@ -158,6 +158,10 @@ def admin_create_coupon(
     admin=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    admin_id = admin.get("adminId") if isinstance(admin, dict) else None
+    if admin_id and not check_admin_has_permission(admin_id, "discounts:create", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to create promo codes")
+
     site = resolve_site(site_id, session)
     clean_code = payload.code.strip().upper()
 
@@ -208,6 +212,10 @@ def admin_update_coupon(
     admin=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    admin_id = admin.get("adminId") if isinstance(admin, dict) else None
+    if admin_id and not check_admin_has_permission(admin_id, "discounts:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to edit promo codes")
+
     site = resolve_site(site_id, session)
     coupon_uuid = UUID(coupon_id)
     coupon = session.get(Coupon, coupon_uuid)
@@ -257,6 +265,10 @@ def admin_toggle_coupon(
     admin=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    admin_id = admin.get("adminId") if isinstance(admin, dict) else None
+    if admin_id and not check_admin_has_permission(admin_id, "discounts:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to edit promo codes")
+
     site = resolve_site(site_id, session)
     coupon_uuid = UUID(coupon_id)
     coupon = session.get(Coupon, coupon_uuid)
@@ -282,6 +294,10 @@ def admin_delete_coupon(
     admin=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    admin_id = admin.get("adminId") if isinstance(admin, dict) else None
+    if admin_id and not check_admin_has_permission(admin_id, "discounts:delete", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to delete promo codes")
+
     site = resolve_site(site_id, session)
     coupon_uuid = UUID(coupon_id)
     coupon = session.get(Coupon, coupon_uuid)

@@ -4,6 +4,8 @@ import { useParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { Pagination } from "./Pagination";
 import GlassToast from "./GlassToast";
+import { useAdminAuth } from "../context/AdminAuthContext";
+import AccessDeniedView from "./AccessDeniedView";
 import {
   resolveMediaUrl,
   parseMessageWithMedia,
@@ -268,6 +270,11 @@ const SendIcon = () => (
 );
 
 export const AdminSupportDesk: React.FC = () => {
+  const { hasPermission, isOwner } = useAdminAuth();
+  const canView = isOwner || hasPermission("support:view");
+  const canRespond = isOwner || hasPermission("support:respond");
+  const canEdit = isOwner || hasPermission("support:edit");
+
   const { siteId } = useParams<{ siteId: string }>();
 
   const [mode, setMode] = useState<AdminMode>("tickets");
@@ -415,7 +422,7 @@ export const AdminSupportDesk: React.FC = () => {
   }, [loadCrmSettings]);
 
   const handleToggleCrmService = async () => {
-    if (!siteId || togglingCrm) return;
+    if (!canEdit || !siteId || togglingCrm) return;
     const nextVal = !crmEnabled;
     setTogglingCrm(true);
     try {
@@ -518,8 +525,8 @@ export const AdminSupportDesk: React.FC = () => {
       <button
         type="button"
         onClick={handleToggleCrmService}
-        disabled={togglingCrm}
-        title={crmEnabled ? "CRM Service is Active — Click to Disable" : "CRM Service is Disabled — Click to Enable"}
+        disabled={!canEdit || togglingCrm}
+        title={!canEdit ? "Permission required to toggle CRM service" : crmEnabled ? "CRM Service is Active — Click to Disable" : "CRM Service is Disabled — Click to Enable"}
         style={{
           position: "relative",
           width: "28px",
@@ -527,7 +534,8 @@ export const AdminSupportDesk: React.FC = () => {
           borderRadius: "999px",
           background: crmEnabled ? "#16a34a" : "#cbd5e1",
           border: "none",
-          cursor: togglingCrm ? "wait" : "pointer",
+          cursor: !canEdit ? "not-allowed" : togglingCrm ? "wait" : "pointer",
+          opacity: !canEdit ? 0.6 : 1,
           transition: "background 0.2s ease",
           padding: 0,
           outline: "none",
@@ -717,7 +725,7 @@ export const AdminSupportDesk: React.FC = () => {
 
   // Send Reply / Internal Note
   const handleSendMessage = async () => {
-    if (!siteId || !selectedTicketId) return;
+    if (!canRespond || !siteId || !selectedTicketId) return;
     const textToSend = composerMessage.trim();
     if (!textToSend && !composerImage) return;
     setComposerSending(true);
@@ -834,7 +842,7 @@ export const AdminSupportDesk: React.FC = () => {
 
   // Assign Agent
   const handleAssignAgent = async (ticketId: string, agentId: string | null) => {
-    if (!siteId) return;
+    if (!canEdit || !siteId) return;
     try {
       const res = await fetch(`${API_BASE_URL}/admin/sites/${siteId}/support/tickets/${ticketId}/assign`, {
         method: "PATCH",
@@ -936,6 +944,7 @@ export const AdminSupportDesk: React.FC = () => {
 
   // Open Refund Modal
   const openRefundModal = () => {
+    if (!canEdit) return;
     const initialItemsMap: Record<string, number> = {};
     let itemsCalc = 0;
     if (detailData?.order_360?.items && detailData.order_360.items.length > 0) {
@@ -972,6 +981,7 @@ export const AdminSupportDesk: React.FC = () => {
   };
 
   const openReplacementModal = () => {
+    if (!canEdit) return;
     if (detailData?.order_360?.items && detailData.order_360.items.length > 0) {
       const initialMap: Record<string, number> = {};
       detailData.order_360.items.forEach((it: any) => {
@@ -1055,7 +1065,7 @@ export const AdminSupportDesk: React.FC = () => {
 
   // Execute Resolution Action
   const handleExecuteAction = async (actionType: string) => {
-    if (!siteId || !selectedTicketId) return;
+    if (!canEdit || !siteId || !selectedTicketId) return;
     setActionProcessing(true);
     try {
       const payload: any = {
@@ -1128,7 +1138,7 @@ export const AdminSupportDesk: React.FC = () => {
   // Create Agent
   const handleCreateAgent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!siteId) return;
+    if (!canEdit || !siteId) return;
     setAddAgentLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/admin/sites/${siteId}/support-agents`, {
@@ -1172,7 +1182,7 @@ export const AdminSupportDesk: React.FC = () => {
 
   // Toggle Agent Active
   const handleToggleAgent = async (agent: SupportAgentItem) => {
-    if (!siteId) return;
+    if (!canEdit || !siteId) return;
     try {
       const res = await fetch(`${API_BASE_URL}/admin/sites/${siteId}/support-agents/${agent.id}`, {
         method: "PATCH",
@@ -1191,7 +1201,7 @@ export const AdminSupportDesk: React.FC = () => {
 
   // Delete Agent
   const handleDeleteAgent = async (agentId: string) => {
-    if (!siteId || !confirm("Are you sure you want to remove this support agent?")) return;
+    if (!canEdit || !siteId || !confirm("Are you sure you want to remove this support agent?")) return;
     try {
       const res = await fetch(`${API_BASE_URL}/admin/sites/${siteId}/support-agents/${agentId}`, {
         method: "DELETE",
@@ -1209,7 +1219,7 @@ export const AdminSupportDesk: React.FC = () => {
   // Reset Agent Password
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!siteId || !resetPasswordAgent || !resetPasswordValue.trim()) return;
+    if (!canEdit || !siteId || !resetPasswordAgent || !resetPasswordValue.trim()) return;
     setResettingPassword(true);
     try {
       const res = await fetch(`${API_BASE_URL}/admin/sites/${siteId}/support-agents/${resetPasswordAgent.id}`, {
@@ -1253,6 +1263,10 @@ export const AdminSupportDesk: React.FC = () => {
     setSearchQuery("");
     setCurrentPage(1);
   };
+
+  if (!canView) {
+    return <AccessDeniedView moduleName="Support & CRM" requiredPermission="support:view" />;
+  }
 
   return (
     <div style={{ color: "#0f172a" }}>
@@ -2045,13 +2059,15 @@ export const AdminSupportDesk: React.FC = () => {
               )}
             </button>
 
-            <button
-              type="button"
-              onClick={() => setShowAddAgentModal(!showAddAgentModal)}
-              style={{ ...primaryButtonStyle, height: "30px", padding: "0 14px", fontSize: "12px", whiteSpace: "nowrap" }}
-            >
-              {showAddAgentModal ? "Cancel" : "+ Add support agent"}
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => setShowAddAgentModal(!showAddAgentModal)}
+                style={{ ...primaryButtonStyle, height: "30px", padding: "0 14px", fontSize: "12px", whiteSpace: "nowrap" }}
+              >
+                {showAddAgentModal ? "Cancel" : "+ Add support agent"}
+              </button>
+            )}
           </div>
 
           {/* Inline Add Agent Form Card */}
@@ -2444,69 +2460,73 @@ export const AdminSupportDesk: React.FC = () => {
 
                           {/* Column 4: Actions */}
                           <td style={{ ...tdStyle, textAlign: "right" }}>
-                            <div style={{ display: "inline-flex", gap: "5px", alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap" }}>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setResetPasswordAgent(agent);
-                                  setResetPasswordValue("");
-                                }}
-                                style={{
-                                  ...ghostButtonStyle,
-                                  height: "28px",
-                                  padding: "0 8px",
-                                  fontSize: "11.5px",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "3px",
-                                  borderRadius: "5px",
-                                  whiteSpace: "nowrap",
-                                }}
-                                title="Reset Login Password"
-                              >
-                                <LockIcon />
-                                <span>PIN</span>
-                              </button>
+                            {canEdit ? (
+                              <div style={{ display: "inline-flex", gap: "5px", alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap" }}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setResetPasswordAgent(agent);
+                                    setResetPasswordValue("");
+                                  }}
+                                  style={{
+                                    ...ghostButtonStyle,
+                                    height: "28px",
+                                    padding: "0 8px",
+                                    fontSize: "11.5px",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "3px",
+                                    borderRadius: "5px",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                  title="Reset Login Password"
+                                >
+                                  <LockIcon />
+                                  <span>PIN</span>
+                                </button>
 
-                              <button
-                                type="button"
-                                onClick={() => handleToggleAgent(agent)}
-                                style={{
-                                  ...ghostButtonStyle,
-                                  height: "28px",
-                                  width: "76px",
-                                  minWidth: "76px",
-                                  padding: "0",
-                                  fontSize: "11.5px",
-                                  color: agent.is_active ? "#b45309" : "#15803d",
-                                  borderColor: agent.is_active ? "#fde68a" : "#bbf7d0",
-                                  background: agent.is_active ? "#fffbeb" : "#f0fdf4",
-                                  borderRadius: "5px",
-                                  whiteSpace: "nowrap",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  textAlign: "center",
-                                }}
-                                title={agent.is_active ? "Deactivate Agent" : "Activate Agent"}
-                              >
-                                {agent.is_active ? "Deactivate" : "Activate"}
-                              </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleAgent(agent)}
+                                  style={{
+                                    ...ghostButtonStyle,
+                                    height: "28px",
+                                    width: "76px",
+                                    minWidth: "76px",
+                                    padding: "0",
+                                    fontSize: "11.5px",
+                                    color: agent.is_active ? "#b45309" : "#15803d",
+                                    borderColor: agent.is_active ? "#fde68a" : "#bbf7d0",
+                                    background: agent.is_active ? "#fffbeb" : "#f0fdf4",
+                                    borderRadius: "5px",
+                                    whiteSpace: "nowrap",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    textAlign: "center",
+                                  }}
+                                  title={agent.is_active ? "Deactivate Agent" : "Activate Agent"}
+                                >
+                                  {agent.is_active ? "Deactivate" : "Activate"}
+                                </button>
 
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteAgent(agent.id)}
-                                style={{
-                                  ...dangerButtonStyle,
-                                  height: "28px",
-                                  width: "28px",
-                                  padding: "0",
-                                }}
-                                title="Remove Agent"
-                              >
-                                <TrashIcon />
-                              </button>
-                            </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteAgent(agent.id)}
+                                  style={{
+                                    ...dangerButtonStyle,
+                                    height: "28px",
+                                    width: "28px",
+                                    padding: "0",
+                                  }}
+                                  title="Remove Agent"
+                                >
+                                  <TrashIcon />
+                                </button>
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: "11.5px", color: "#94a3b8" }}>View only</span>
+                            )}
                           </td>
                         </tr>
                       ))
@@ -2881,6 +2901,7 @@ export const AdminSupportDesk: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => setIsInternalNote(false)}
+                            disabled={!canRespond}
                             style={{
                               padding: "4px 10px",
                               borderRadius: "4px",
@@ -2889,7 +2910,7 @@ export const AdminSupportDesk: React.FC = () => {
                               color: !isInternalNote ? "#0f172a" : "#64748b",
                               fontSize: "11.5px",
                               fontWeight: 600,
-                              cursor: "pointer",
+                              cursor: !canRespond ? "not-allowed" : "pointer",
                               boxShadow: !isInternalNote ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
                             }}
                           >
@@ -2898,6 +2919,7 @@ export const AdminSupportDesk: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => setIsInternalNote(true)}
+                            disabled={!canRespond}
                             style={{
                               padding: "4px 10px",
                               borderRadius: "4px",
@@ -2906,7 +2928,7 @@ export const AdminSupportDesk: React.FC = () => {
                               color: isInternalNote ? "#0f172a" : "#64748b",
                               fontSize: "11.5px",
                               fontWeight: 600,
-                              cursor: "pointer",
+                              cursor: !canRespond ? "not-allowed" : "pointer",
                               boxShadow: isInternalNote ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
                             }}
                           >
@@ -2916,6 +2938,7 @@ export const AdminSupportDesk: React.FC = () => {
 
                         {/* Compact Quick Templates Dropdown */}
                         <select
+                          disabled={!canRespond}
                           onChange={(e) => {
                             if (e.target.value) {
                               setComposerMessage(e.target.value);
@@ -2931,7 +2954,8 @@ export const AdminSupportDesk: React.FC = () => {
                             fontSize: "11.5px",
                             color: "#475569",
                             outline: "none",
-                            cursor: "pointer",
+                            cursor: !canRespond ? "not-allowed" : "pointer",
+                            opacity: !canRespond ? 0.6 : 1,
                           }}
                         >
                           <option value="">+ Quick Templates...</option>
@@ -2970,6 +2994,7 @@ export const AdminSupportDesk: React.FC = () => {
                           type="file"
                           accept="image/png,image/jpeg,image/webp,image/gif"
                           style={{ display: "none" }}
+                          disabled={!canRespond}
                           onChange={async (e) => {
                             const rawFile = e.target.files?.[0];
                             if (rawFile) {
@@ -2983,14 +3008,16 @@ export const AdminSupportDesk: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => composerFileInputRef.current?.click()}
-                          title="Attach screenshot or photo proof"
+                          disabled={!canRespond}
+                          title={!canRespond ? "Respond permission required" : "Attach screenshot or photo proof"}
                           style={{
                             height: "38px",
                             width: "38px",
                             background: "#ffffff",
                             border: "1px solid #cbd5e1",
                             borderRadius: "6px",
-                            cursor: "pointer",
+                            cursor: !canRespond ? "not-allowed" : "pointer",
+                            opacity: !canRespond ? 0.6 : 1,
                             display: "grid",
                             placeItems: "center",
                             color: "#64748b",
@@ -3008,13 +3035,14 @@ export const AdminSupportDesk: React.FC = () => {
                           rows={1}
                           value={composerMessage}
                           onChange={(e) => setComposerMessage(e.target.value)}
+                          disabled={!canRespond}
                           onKeyDown={(e) => {
                             if (e.key === "Enter" && !e.shiftKey) {
                               e.preventDefault();
                               handleSendMessage();
                             }
                           }}
-                          placeholder={isInternalNote ? "Write private internal note (Enter to save)..." : "Write reply (Enter to send, Shift+Enter for new line)..."}
+                          placeholder={!canRespond ? "You have read-only access (support:respond permission required to reply)" : isInternalNote ? "Write private internal note (Enter to save)..." : "Write reply (Enter to send, Shift+Enter for new line)..."}
                           style={{
                             flex: 1,
                             minHeight: "38px",
@@ -3022,20 +3050,21 @@ export const AdminSupportDesk: React.FC = () => {
                             padding: "9px 12px",
                             borderRadius: "6px",
                             border: "1px solid #cbd5e1",
-                            background: isInternalNote ? "#f8fafc" : "#ffffff",
+                            background: !canRespond ? "#f1f5f9" : isInternalNote ? "#f8fafc" : "#ffffff",
                             fontSize: "13px",
                             outline: "none",
                             fontFamily: "inherit",
                             boxSizing: "border-box",
                             resize: "none",
                             color: "#0f172a",
+                            cursor: !canRespond ? "not-allowed" : "text",
                           }}
                         />
 
                         <button
                           type="button"
                           onClick={handleSendMessage}
-                          disabled={composerSending || (!composerMessage.trim() && !composerImage)}
+                          disabled={!canRespond || composerSending || (!composerMessage.trim() && !composerImage)}
                           style={{
                             height: "38px",
                             padding: "0 18px",
@@ -3045,8 +3074,8 @@ export const AdminSupportDesk: React.FC = () => {
                             border: "none",
                             fontWeight: 600,
                             fontSize: "12.5px",
-                            cursor: composerSending || (!composerMessage.trim() && !composerImage) ? "not-allowed" : "pointer",
-                            opacity: composerSending || (!composerMessage.trim() && !composerImage) ? 0.5 : 1,
+                            cursor: !canRespond || composerSending || (!composerMessage.trim() && !composerImage) ? "not-allowed" : "pointer",
+                            opacity: !canRespond || composerSending || (!composerMessage.trim() && !composerImage) ? 0.5 : 1,
                             display: "inline-flex",
                             alignItems: "center",
                             gap: "6px",
@@ -3329,7 +3358,7 @@ export const AdminSupportDesk: React.FC = () => {
                           )}
                           <button
                             onClick={() => handleExecuteAction("reopen")}
-                            disabled={actionProcessing}
+                            disabled={!canEdit || actionProcessing}
                             style={{
                               background: "#ffffff",
                               color: "#166534",
@@ -3338,7 +3367,8 @@ export const AdminSupportDesk: React.FC = () => {
                               borderRadius: "6px",
                               fontSize: "12px",
                               fontWeight: 600,
-                              cursor: "pointer",
+                              cursor: !canEdit || actionProcessing ? "not-allowed" : "pointer",
+                              opacity: !canEdit ? 0.6 : 1,
                             }}
                           >
                             {actionProcessing ? "Re-opening..." : "Re-Open This Ticket"}
@@ -3372,6 +3402,7 @@ export const AdminSupportDesk: React.FC = () => {
                                   </p>
                                   <button
                                     onClick={openRefundModal}
+                                    disabled={!canEdit || detailData.order_360?.refund_summary?.is_fully_refunded}
                                     style={{
                                       background: detailData.order_360?.refund_summary?.is_fully_refunded ? "#94a3b8" : isCodOrder ? "#d97706" : "#16a34a",
                                       color: "#ffffff",
@@ -3380,7 +3411,8 @@ export const AdminSupportDesk: React.FC = () => {
                                       borderRadius: "6px",
                                       fontSize: "12px",
                                       fontWeight: 600,
-                                      cursor: "pointer",
+                                      cursor: !canEdit || detailData.order_360?.refund_summary?.is_fully_refunded ? "not-allowed" : "pointer",
+                                      opacity: !canEdit ? 0.6 : 1,
                                     }}
                                   >
                                     {detailData.order_360?.refund_summary?.is_fully_refunded ? "View Refund Status" : isCodOrder ? "Process COD Payout" : "Issue Refund"}
@@ -3394,8 +3426,18 @@ export const AdminSupportDesk: React.FC = () => {
                               <p style={{ margin: "0 0 10px", fontSize: "11.5px", color: "#64748b" }}>Authorize and dispatch a free replacement package.</p>
                               <button
                                 onClick={openReplacementModal}
-                                disabled={actionProcessing}
-                                style={{ background: "#0284c7", color: "#ffffff", border: "none", padding: "6px 14px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                disabled={!canEdit || actionProcessing}
+                                style={{
+                                  background: "#0284c7",
+                                  color: "#ffffff",
+                                  border: "none",
+                                  padding: "6px 14px",
+                                  borderRadius: "6px",
+                                  fontSize: "12px",
+                                  fontWeight: 600,
+                                  cursor: !canEdit || actionProcessing ? "not-allowed" : "pointer",
+                                  opacity: !canEdit ? 0.6 : 1,
+                                }}
                               >
                                 Re-Dispatch
                               </button>
@@ -3406,8 +3448,18 @@ export const AdminSupportDesk: React.FC = () => {
                               <p style={{ margin: "0 0 10px", fontSize: "11.5px", color: "#64748b" }}>Mark inquiry as resolved and archive this case.</p>
                               <button
                                 onClick={() => handleExecuteAction("close")}
-                                disabled={actionProcessing}
-                                style={{ background: "#0f172a", color: "#ffffff", border: "none", padding: "6px 16px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                disabled={!canEdit || actionProcessing}
+                                style={{
+                                  background: "#0f172a",
+                                  color: "#ffffff",
+                                  border: "none",
+                                  padding: "6px 16px",
+                                  borderRadius: "6px",
+                                  fontSize: "12px",
+                                  fontWeight: 600,
+                                  cursor: !canEdit || actionProcessing ? "not-allowed" : "pointer",
+                                  opacity: !canEdit ? 0.6 : 1,
+                                }}
                               >
                                 Close Case
                               </button>

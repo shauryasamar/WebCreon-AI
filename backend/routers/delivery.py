@@ -14,7 +14,12 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlmodel import Session, select
 
-from auth_middleware import authenticate_admin, authenticate_rider, enforce_site_ownership
+from auth_middleware import (
+    authenticate_admin,
+    authenticate_rider,
+    check_admin_has_permission,
+    enforce_site_ownership,
+)
 from auth_utils import hash_password, verify_password, create_rider_token
 from crypto_utils import decrypt_string, encrypt_string
 from db.database import get_session
@@ -297,6 +302,10 @@ def get_delivery_settings(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
+    if admin_id and not check_admin_has_permission(admin_id, "delivery:view", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to view delivery settings")
+
     settings = _get_settings_or_default(session, site_id)
     # Never expose the encrypted password or cached token
     is_verified = bool(
@@ -352,6 +361,10 @@ def update_delivery_settings(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
+    if admin_id and not check_admin_has_permission(admin_id, "delivery:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to edit delivery settings")
+
     settings = _get_settings_or_default(session, site_id)
 
     new_ef = bool(body.enable_fleet) if body.enable_fleet is not None else getattr(settings, "enable_fleet", True)
@@ -464,6 +477,10 @@ def test_shiprocket_connection(
     session: Session = Depends(get_session),
 ):
     """Test Shiprocket credentials by fetching a fresh token."""
+    admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
+    if admin_id and not check_admin_has_permission(admin_id, "delivery:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to test Shiprocket connection")
+
     settings = _get_settings_or_default(session, site_id)
     if not settings.shiprocket_email or not settings.shiprocket_password_encrypted:
         raise HTTPException(400, "Shiprocket credentials not configured")
@@ -545,6 +562,10 @@ def list_agents(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
+    if admin_id and not check_admin_has_permission(admin_id, "delivery:view", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to view delivery agents")
+
     agents = session.exec(
         select(DeliveryAgent)
         .where(DeliveryAgent.site_id == site_id)
@@ -577,6 +598,10 @@ def create_agent(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
+    if admin_id and not check_admin_has_permission(admin_id, "delivery:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to create delivery agents")
+
     clean_phone = "".join(filter(str.isdigit, body.phone or ""))
     if len(clean_phone) == 12 and clean_phone.startswith("91"):
         clean_phone = clean_phone[2:]
@@ -634,6 +659,10 @@ def update_agent(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
+    if admin_id and not check_admin_has_permission(admin_id, "delivery:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to edit delivery agents")
+
     agent = session.exec(
         select(DeliveryAgent)
         .where(DeliveryAgent.id == agent_id, DeliveryAgent.site_id == site_id)
@@ -666,6 +695,10 @@ def reset_agent_password(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
+    if admin_id and not check_admin_has_permission(admin_id, "delivery:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to reset delivery agent password")
+
     agent = session.exec(
         select(DeliveryAgent)
         .where(DeliveryAgent.id == agent_id, DeliveryAgent.site_id == site_id)
@@ -688,6 +721,10 @@ def settle_agent_cash(
     session: Session = Depends(get_session),
 ):
     """Admin collects and settles COD cash-in-hand collected by a rider."""
+    admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
+    if admin_id and not check_admin_has_permission(admin_id, "delivery:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to settle delivery agent cash")
+
     agent = session.exec(
         select(DeliveryAgent)
         .where(DeliveryAgent.id == agent_id, DeliveryAgent.site_id == site_id)
@@ -728,6 +765,10 @@ def delete_agent(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
+    if admin_id and not check_admin_has_permission(admin_id, "delivery:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to delete delivery agents")
+
     agent = session.exec(
         select(DeliveryAgent)
         .where(DeliveryAgent.id == agent_id, DeliveryAgent.site_id == site_id)
@@ -749,6 +790,10 @@ def list_shipments(
     status_filter: Optional[str] = Query(default=None, alias="status"),
     session: Session = Depends(get_session),
 ):
+    admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
+    if admin_id and not check_admin_has_permission(admin_id, "delivery:view", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to view shipments")
+
     q = select(Shipment).where(Shipment.site_id == site_id)
     if status_filter:
         q = q.where(Shipment.status == status_filter)
@@ -790,6 +835,10 @@ def dispatch_order(
     Supports own_agent, shiprocket, or manual mode.
     Idempotent: if a non-failed shipment already exists, returns it.
     """
+    admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
+    if admin_id and not check_admin_has_permission(admin_id, "delivery:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to dispatch orders")
+
     # Check for any existing shipment for this order
     existing = session.exec(
         select(Shipment)

@@ -14,6 +14,31 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class Role(SQLModel, table=True):
+    __tablename__ = "roles"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    name: str = Field(index=True, unique=True, nullable=False)
+    description: Optional[str] = Field(default=None, nullable=True)
+    is_system: bool = Field(default=False, nullable=False)
+    permissions: list[str] = Field(
+        default=[],
+        sa_column=Column(JSONB, nullable=False, default=[]),
+    )
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            onupdate=utc_now,
+        ),
+    )
+
+
 class Admin(SQLModel, table=True):
     __tablename__ = "admins"
 
@@ -24,6 +49,19 @@ class Admin(SQLModel, table=True):
     phone: Optional[str] = Field(default=None)
     avatar_url: Optional[str] = Field(default=None)
     role: str = Field(default="super_admin")
+    role_id: Optional[UUID] = Field(default=None, foreign_key="roles.id", nullable=True)
+    additional_permissions: Optional[list[str]] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+    )
+    website_access_type: str = Field(default="all")  # "all" | "specific"
+    status: str = Field(default="active")  # "active" | "inactive" | "pending"
+    invitation_token: Optional[str] = Field(default=None, nullable=True, index=True)
+    invitation_expires_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    invited_by_admin_id: Optional[UUID] = Field(default=None, foreign_key="admins.id", nullable=True)
     auth_provider: str = Field(default="email")
     google_id: Optional[str] = Field(default=None)
     is_verified: bool = Field(default=True)
@@ -1336,5 +1374,36 @@ class SiteTrafficEvent(SQLModel, table=True):
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), index=True, nullable=False),
     )
+
+
+class AuditLog(SQLModel, table=True):
+    __tablename__ = "audit_logs"
+    __table_args__ = (
+        Index("ix_audit_site_created", "site_id", "created_at"),
+        Index("ix_audit_category_created", "category", "created_at"),
+        Index("ix_audit_actor_created", "actor_email", "created_at"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    site_id: Optional[UUID] = Field(default=None, foreign_key="sites.id", nullable=True, index=True)
+    admin_id: Optional[UUID] = Field(default=None, foreign_key="admins.id", nullable=True, index=True)
+    actor_email: Optional[str] = Field(default=None, index=True)
+    actor_name: Optional[str] = Field(default=None)
+    actor_role: Optional[str] = Field(default=None)
+    action: str = Field(index=True)  # e.g. "auth.login", "order.status_update", "product.edit"
+    category: str = Field(default="general", index=True)  # "auth", "orders", "products", "settings", "security", "general"
+    description: str = Field(nullable=False)
+    ip_address: Optional[str] = Field(default=None)
+    user_agent: Optional[str] = Field(default=None)
+    status: str = Field(default="success")  # "success" | "warning" | "failure"
+    details: Optional[dict[str, Any]] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+    )
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), index=True, nullable=False),
+    )
+
 
 

@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import GlassToast from "./GlassToast";
+import { useAdminAuth } from "../context/AdminAuthContext";
+import AccessDeniedView from "./AccessDeniedView";
 
 export type ChargeCode =
   | "shipping_fee"
@@ -331,6 +333,9 @@ const getCachedCheckoutSettings = (id?: string): CheckoutSettingsResponse | null
 
 const CheckoutChargesPage: React.FC = () => {
   const { siteId } = useParams<{ siteId: string }>();
+  const { hasPermission, isOwner } = useAdminAuth();
+  const canView = isOwner || hasPermission("checkout_charges:view");
+  const canEdit = isOwner || hasPermission("checkout_charges:edit");
 
   const cachedSettings = getCachedCheckoutSettings(siteId);
 
@@ -401,6 +406,10 @@ const CheckoutChargesPage: React.FC = () => {
         setLoading(false);
         return;
       }
+      if (!canView) {
+        setLoading(false);
+        return;
+      }
 
       try {
         if (!cachedSettings) {
@@ -442,13 +451,17 @@ const CheckoutChargesPage: React.FC = () => {
     };
 
     loadCheckoutSettings();
-  }, [siteId]);
+  }, [siteId, canView]);
 
   const updateCharge = (
     id: string,
     field: keyof ChargeRule,
     value: string | boolean
   ) => {
+    if (!canEdit) {
+      showToast("error", "You do not have permission to modify checkout charges.");
+      return;
+    }
     setCharges((prev) =>
       prev.map((charge) =>
         charge.id === id ? { ...charge, [field]: value } : charge
@@ -457,6 +470,10 @@ const CheckoutChargesPage: React.FC = () => {
   };
 
   const addCustomCharge = () => {
+    if (!canEdit) {
+      showToast("error", "You do not have permission to create custom charges.");
+      return;
+    }
     const nextId = `custom_${Date.now()}`;
     const customCount = charges.filter((charge) => charge.code === "custom").length + 1;
 
@@ -483,6 +500,10 @@ const CheckoutChargesPage: React.FC = () => {
   };
 
   const removeCustomCharge = (id: string) => {
+    if (!canEdit) {
+      showToast("error", "You do not have permission to delete charges.");
+      return;
+    }
     const nextCustomCharges = customCharges.filter((charge) => charge.id !== id);
     setCharges((prev) => prev.filter((charge) => charge.id !== id));
     if (activeCustomTab === id) {
@@ -493,6 +514,10 @@ const CheckoutChargesPage: React.FC = () => {
   const handleSave = async () => {
     if (!siteId) {
       showToast("error", "Missing site id in route.");
+      return;
+    }
+    if (!canEdit) {
+      showToast("error", "You do not have permission to save checkout settings.");
       return;
     }
 
@@ -546,6 +571,15 @@ const CheckoutChargesPage: React.FC = () => {
       setSaving(false);
     }
   };
+
+  if (!canView) {
+    return (
+      <AccessDeniedView
+        moduleName="Checkout Charges"
+        requiredPermission="checkout_charges:view"
+      />
+    );
+  }
 
   if (loading) {
     return (
@@ -634,6 +668,7 @@ const CheckoutChargesPage: React.FC = () => {
           {mode === "custom" && (
             <button
               type="button"
+              disabled={!canEdit}
               onClick={addCustomCharge}
               style={{
                 display: "inline-flex",
@@ -646,7 +681,8 @@ const CheckoutChargesPage: React.FC = () => {
                 color: "#0f172a",
                 fontWeight: 600,
                 fontSize: "12.5px",
-                cursor: "pointer",
+                cursor: canEdit ? "pointer" : "not-allowed",
+                opacity: canEdit ? 1 : 0.6,
                 whiteSpace: "nowrap",
               }}
             >
@@ -658,7 +694,7 @@ const CheckoutChargesPage: React.FC = () => {
           <button
             type="button"
             onClick={handleSave}
-            disabled={saving}
+            disabled={!canEdit || saving}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -666,12 +702,12 @@ const CheckoutChargesPage: React.FC = () => {
               padding: "7px 16px",
               borderRadius: "6px",
               border: "none",
-              background: hasUnsavedChanges ? "#2563eb" : "#0f172a",
+              background: !canEdit ? "#94a3b8" : (hasUnsavedChanges ? "#2563eb" : "#0f172a"),
               color: "#ffffff",
               fontWeight: 700,
               fontSize: "13px",
-              cursor: saving ? "wait" : "pointer",
-              boxShadow: hasUnsavedChanges ? "0 1px 3px rgba(37,99,235,0.3)" : "none",
+              cursor: !canEdit ? "not-allowed" : saving ? "wait" : "pointer",
+              boxShadow: hasUnsavedChanges && canEdit ? "0 1px 3px rgba(37,99,235,0.3)" : "none",
               opacity: saving ? 0.7 : 1,
               whiteSpace: "nowrap",
             }}
@@ -800,7 +836,7 @@ const CheckoutChargesPage: React.FC = () => {
       {mode === "standard" && (
         <div>
           {activeStandardCharge ? (
-            <ChargeConfigCard charge={activeStandardCharge} onChange={updateCharge} />
+            <ChargeConfigCard charge={activeStandardCharge} onChange={updateCharge} canEdit={canEdit} />
           ) : (
             <div style={emptyCardStyle}>No charges match your filter.</div>
           )}
@@ -827,33 +863,36 @@ const CheckoutChargesPage: React.FC = () => {
               <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
                 Create optional or mandatory store charges tailored to your checkout flow.
               </p>
-              <button
-                type="button"
-                onClick={addCustomCharge}
-                style={{
-                  marginTop: "6px",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  padding: "7px 14px",
-                  borderRadius: "6px",
-                  background: "#2563eb",
-                  color: "#ffffff",
-                  fontWeight: 700,
-                  fontSize: "12.5px",
-                  border: "none",
-                  cursor: "pointer",
-                }}
-              >
-                <PlusIcon />
-                Add Custom Charge
-              </button>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={addCustomCharge}
+                  style={{
+                    marginTop: "6px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "7px 14px",
+                    borderRadius: "6px",
+                    background: "#2563eb",
+                    color: "#ffffff",
+                    fontWeight: 700,
+                    fontSize: "12.5px",
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  <PlusIcon />
+                  Add Custom Charge
+                </button>
+              )}
             </div>
           ) : activeCustomCharge ? (
             <ChargeConfigCard
               charge={activeCustomCharge}
               onChange={updateCharge}
               onRemove={() => removeCustomCharge(activeCustomCharge.id)}
+              canEdit={canEdit}
             />
           ) : (
             <div style={emptyCardStyle}>No custom charge selected.</div>
@@ -889,10 +928,13 @@ const CheckoutChargesPage: React.FC = () => {
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "8px",
-                cursor: "pointer",
+                cursor: canEdit ? "pointer" : "not-allowed",
                 userSelect: "none",
               }}
-              onClick={() => setTaxSettings((prev) => ({ ...prev, enabled: !prev.enabled }))}
+              onClick={() => {
+                if (!canEdit) return;
+                setTaxSettings((prev) => ({ ...prev, enabled: !prev.enabled }));
+              }}
             >
               <span
                 style={{
@@ -905,7 +947,11 @@ const CheckoutChargesPage: React.FC = () => {
               </span>
               <ToggleSwitch
                 checked={taxSettings.enabled}
-                onChange={(val) => setTaxSettings((prev) => ({ ...prev, enabled: val }))}
+                disabled={!canEdit}
+                onChange={(val) => {
+                  if (!canEdit) return;
+                  setTaxSettings((prev) => ({ ...prev, enabled: val }));
+                }}
               />
             </div>
           </div>
@@ -924,12 +970,18 @@ const CheckoutChargesPage: React.FC = () => {
                 <div style={labelStyle}>Tax Display Label</div>
                 <input
                   type="text"
+                  disabled={!canEdit}
                   value={taxSettings.label}
                   onChange={(e) => {
+                    if (!canEdit) return;
                     setTaxSettings((prev) => ({ ...prev, label: e.target.value }));
                   }}
                   placeholder="e.g. GST"
-                  style={inputStyle}
+                  style={{
+                    ...inputStyle,
+                    background: canEdit ? "#ffffff" : "#f8fafc",
+                    cursor: canEdit ? "text" : "not-allowed",
+                  }}
                 />
               </div>
 
@@ -940,24 +992,32 @@ const CheckoutChargesPage: React.FC = () => {
                   min="0"
                   max="100"
                   step="0.1"
+                  disabled={!canEdit}
                   value={taxSettings.rate}
                   onChange={(e) => {
+                    if (!canEdit) return;
                     setTaxSettings((prev) => ({ ...prev, rate: e.target.value }));
                   }}
                   placeholder="e.g. 5"
-                  style={inputStyle}
+                  style={{
+                    ...inputStyle,
+                    background: canEdit ? "#ffffff" : "#f8fafc",
+                    cursor: canEdit ? "text" : "not-allowed",
+                  }}
                 />
               </div>
 
               <div style={{ gridColumn: "1 / -1", paddingTop: "4px" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "13px", color: "#334155" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: canEdit ? "pointer" : "not-allowed", fontSize: "13px", color: "#334155" }}>
                   <input
                     type="checkbox"
+                    disabled={!canEdit}
                     checked={taxSettings.applyOnShipping}
                     onChange={(e) => {
+                      if (!canEdit) return;
                       setTaxSettings((prev) => ({ ...prev, applyOnShipping: e.target.checked }));
                     }}
-                    style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#2563eb" }}
+                    style={{ width: "15px", height: "15px", cursor: canEdit ? "pointer" : "not-allowed", accentColor: "#2563eb" }}
                   />
                   Apply tax on shipping fee as well
                 </label>
@@ -975,7 +1035,8 @@ const ChargeConfigCard: React.FC<{
   charge: ChargeRule;
   onChange: (id: string, field: keyof ChargeRule, value: string | boolean) => void;
   onRemove?: () => void;
-}> = ({ charge, onChange, onRemove }) => {
+  canEdit?: boolean;
+}> = ({ charge, onChange, onRemove, canEdit = true }) => {
   return (
     <div style={plainCardStyle}>
       {/* Card Header */}
@@ -1009,7 +1070,10 @@ const ChargeConfigCard: React.FC<{
           {onRemove && (
             <button
               type="button"
-              onClick={onRemove}
+              disabled={!canEdit}
+              onClick={() => {
+                if (canEdit && onRemove) onRemove();
+              }}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -1021,7 +1085,8 @@ const ChargeConfigCard: React.FC<{
                 color: "#64748b",
                 fontSize: "12px",
                 fontWeight: 600,
-                cursor: "pointer",
+                cursor: canEdit ? "pointer" : "not-allowed",
+                opacity: canEdit ? 1 : 0.5,
               }}
             >
               <TrashIcon />
@@ -1034,10 +1099,12 @@ const ChargeConfigCard: React.FC<{
               display: "inline-flex",
               alignItems: "center",
               gap: "8px",
-              cursor: "pointer",
+              cursor: canEdit ? "pointer" : "not-allowed",
               userSelect: "none",
             }}
-            onClick={() => onChange(charge.id, "enabled", !charge.enabled)}
+            onClick={() => {
+              if (canEdit) onChange(charge.id, "enabled", !charge.enabled);
+            }}
           >
             <span
               style={{
@@ -1050,7 +1117,10 @@ const ChargeConfigCard: React.FC<{
             </span>
             <ToggleSwitch
               checked={charge.enabled}
-              onChange={(val) => onChange(charge.id, "enabled", val)}
+              disabled={!canEdit}
+              onChange={(val) => {
+                if (canEdit) onChange(charge.id, "enabled", val);
+              }}
             />
           </div>
         </div>
@@ -1070,10 +1140,17 @@ const ChargeConfigCard: React.FC<{
             <div style={labelStyle}>Charge Label</div>
             <input
               type="text"
+              disabled={!canEdit}
               value={charge.label}
-              onChange={(e) => onChange(charge.id, "label", e.target.value)}
+              onChange={(e) => {
+                if (canEdit) onChange(charge.id, "label", e.target.value);
+              }}
               placeholder="Display label"
-              style={inputStyle}
+              style={{
+                ...inputStyle,
+                background: canEdit ? "#ffffff" : "#f8fafc",
+                cursor: canEdit ? "text" : "not-allowed",
+              }}
             />
           </div>
 
@@ -1081,9 +1158,16 @@ const ChargeConfigCard: React.FC<{
           <div>
             <div style={labelStyle}>Amount Type</div>
             <select
+              disabled={!canEdit}
               value={charge.amountType}
-              onChange={(e) => onChange(charge.id, "amountType", e.target.value as "fixed" | "percent")}
-              style={inputStyle}
+              onChange={(e) => {
+                if (canEdit) onChange(charge.id, "amountType", e.target.value as "fixed" | "percent");
+              }}
+              style={{
+                ...inputStyle,
+                background: canEdit ? "#ffffff" : "#f8fafc",
+                cursor: canEdit ? "pointer" : "not-allowed",
+              }}
             >
               <option value="fixed">Fixed (₹)</option>
               <option value="percent">Percentage (%)</option>
@@ -1099,9 +1183,16 @@ const ChargeConfigCard: React.FC<{
               type="number"
               min="0"
               step="1"
+              disabled={!canEdit}
               value={charge.amountValue}
-              onChange={(e) => onChange(charge.id, "amountValue", e.target.value)}
-              style={inputStyle}
+              onChange={(e) => {
+                if (canEdit) onChange(charge.id, "amountValue", e.target.value);
+              }}
+              style={{
+                ...inputStyle,
+                background: canEdit ? "#ffffff" : "#f8fafc",
+                cursor: canEdit ? "text" : "not-allowed",
+              }}
             />
           </div>
 
@@ -1109,9 +1200,16 @@ const ChargeConfigCard: React.FC<{
           <div>
             <div style={labelStyle}>Application Condition</div>
             <select
+              disabled={!canEdit}
               value={charge.applyConditionType}
-              onChange={(e) => onChange(charge.id, "applyConditionType", e.target.value as ChargeRule["applyConditionType"])}
-              style={inputStyle}
+              onChange={(e) => {
+                if (canEdit) onChange(charge.id, "applyConditionType", e.target.value as ChargeRule["applyConditionType"]);
+              }}
+              style={{
+                ...inputStyle,
+                background: canEdit ? "#ffffff" : "#f8fafc",
+                cursor: canEdit ? "pointer" : "not-allowed",
+              }}
             >
               <option value="none">Always Apply (Default)</option>
               <option value="subtotal_lt">Subtotal less than (&lt;)</option>
@@ -1130,10 +1228,17 @@ const ChargeConfigCard: React.FC<{
               </div>
               <input
                 type="text"
+                disabled={!canEdit}
                 value={charge.applyConditionValue}
-                onChange={(e) => onChange(charge.id, "applyConditionValue", e.target.value)}
+                onChange={(e) => {
+                  if (canEdit) onChange(charge.id, "applyConditionValue", e.target.value);
+                }}
                 placeholder={charge.applyConditionType === "payment_method" ? "cod" : "499"}
-                style={inputStyle}
+                style={{
+                  ...inputStyle,
+                  background: canEdit ? "#ffffff" : "#f8fafc",
+                  cursor: canEdit ? "text" : "not-allowed",
+                }}
               />
             </div>
           )}
@@ -1142,9 +1247,16 @@ const ChargeConfigCard: React.FC<{
           <div>
             <div style={labelStyle}>Free / Waiver Condition</div>
             <select
+              disabled={!canEdit}
               value={charge.waiveConditionType}
-              onChange={(e) => onChange(charge.id, "waiveConditionType", e.target.value as ChargeRule["waiveConditionType"])}
-              style={inputStyle}
+              onChange={(e) => {
+                if (canEdit) onChange(charge.id, "waiveConditionType", e.target.value as ChargeRule["waiveConditionType"]);
+              }}
+              style={{
+                ...inputStyle,
+                background: canEdit ? "#ffffff" : "#f8fafc",
+                cursor: canEdit ? "pointer" : "not-allowed",
+              }}
             >
               <option value="none">No Waiver</option>
               <option value="subtotal_gte">Free when Subtotal ≥</option>
@@ -1158,10 +1270,17 @@ const ChargeConfigCard: React.FC<{
               <input
                 type="number"
                 min="0"
+                disabled={!canEdit}
                 value={charge.waiveConditionValue}
-                onChange={(e) => onChange(charge.id, "waiveConditionValue", e.target.value)}
+                onChange={(e) => {
+                  if (canEdit) onChange(charge.id, "waiveConditionValue", e.target.value);
+                }}
                 placeholder="e.g. 999"
-                style={inputStyle}
+                style={{
+                  ...inputStyle,
+                  background: canEdit ? "#ffffff" : "#f8fafc",
+                  cursor: canEdit ? "text" : "not-allowed",
+                }}
               />
             </div>
           )}
@@ -1171,34 +1290,47 @@ const ChargeConfigCard: React.FC<{
             <div style={labelStyle}>Description</div>
             <input
               type="text"
+              disabled={!canEdit}
               value={charge.description}
-              onChange={(e) => onChange(charge.id, "description", e.target.value)}
+              onChange={(e) => {
+                if (canEdit) onChange(charge.id, "description", e.target.value);
+              }}
               placeholder="Short internal description"
-              style={inputStyle}
+              style={{
+                ...inputStyle,
+                background: canEdit ? "#ffffff" : "#f8fafc",
+                cursor: canEdit ? "text" : "not-allowed",
+              }}
             />
           </div>
 
           {/* Checkbox Options */}
           <div style={{ gridColumn: "1 / -1", display: "flex", flexWrap: "wrap", gap: "20px", paddingTop: "4px" }}>
-            <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "13px", color: "#334155" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: canEdit ? "pointer" : "not-allowed", fontSize: "13px", color: "#334155" }}>
               <input
                 type="checkbox"
+                disabled={!canEdit}
                 checked={charge.refundable}
-                onChange={(e) => onChange(charge.id, "refundable", e.target.checked)}
-                style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#2563eb" }}
+                onChange={(e) => {
+                  if (canEdit) onChange(charge.id, "refundable", e.target.checked);
+                }}
+                style={{ width: "15px", height: "15px", cursor: canEdit ? "pointer" : "not-allowed", accentColor: "#2563eb" }}
               />
               Refundable on return
             </label>
 
-            <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "13px", color: "#334155" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: canEdit ? "pointer" : "not-allowed", fontSize: "13px", color: "#334155" }}>
               <input
                 type="checkbox"
+                disabled={!canEdit}
                 checked={charge.customerSelectable}
                 onChange={(e) => {
-                  onChange(charge.id, "customerSelectable", e.target.checked);
-                  onChange(charge.id, "optional", e.target.checked);
+                  if (canEdit) {
+                    onChange(charge.id, "customerSelectable", e.target.checked);
+                    onChange(charge.id, "optional", e.target.checked);
+                  }
                 }}
-                style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#2563eb" }}
+                style={{ width: "15px", height: "15px", cursor: canEdit ? "pointer" : "not-allowed", accentColor: "#2563eb" }}
               />
               Customer-selectable add-on (e.g. Gift Wrap)
             </label>

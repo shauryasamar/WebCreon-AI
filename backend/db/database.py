@@ -40,6 +40,14 @@ def create_db_and_tables():
 
             conn.execute(text("""
                 ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_status VARCHAR(30) DEFAULT 'pending';
+                ALTER TABLE admins ADD COLUMN IF NOT EXISTS role_id UUID;
+                ALTER TABLE admins ADD COLUMN IF NOT EXISTS additional_permissions JSONB;
+                ALTER TABLE admins ADD COLUMN IF NOT EXISTS website_access_type VARCHAR(20) DEFAULT 'all';
+                ALTER TABLE admins ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active';
+                ALTER TABLE admins ADD COLUMN IF NOT EXISTS invitation_token VARCHAR(128);
+                ALTER TABLE admins ADD COLUMN IF NOT EXISTS invitation_expires_at TIMESTAMPTZ;
+                ALTER TABLE admins ADD COLUMN IF NOT EXISTS invited_by_admin_id UUID;
+                CREATE INDEX IF NOT EXISTS ix_admins_invitation_token ON admins(invitation_token);
                 ALTER TABLE orders ADD COLUMN IF NOT EXISTS razorpay_order_id VARCHAR;
                 ALTER TABLE orders ADD COLUMN IF NOT EXISTS razorpay_payment_id VARCHAR;
                 ALTER TABLE orders ADD COLUMN IF NOT EXISTS razorpay_signature VARCHAR;
@@ -74,7 +82,28 @@ def create_db_and_tables():
                 ALTER TABLE products ADD COLUMN IF NOT EXISTS sibling_label VARCHAR(100);
                 CREATE INDEX IF NOT EXISTS ix_products_sibling_group ON products(sibling_group);
 
-                ALTER TABLE shipments ADD COLUMN IF NOT EXISTS delivery_mode VARCHAR(30) DEFAULT 'manual';
+                CREATE TABLE IF NOT EXISTS audit_logs (
+                    id UUID PRIMARY KEY,
+                    site_id UUID,
+                    admin_id UUID,
+                    actor_email VARCHAR(255) NOT NULL,
+                    actor_name VARCHAR(255),
+                    actor_role VARCHAR(50),
+                    action VARCHAR(100) NOT NULL,
+                    category VARCHAR(50) NOT NULL DEFAULT 'general',
+                    description TEXT NOT NULL,
+                    ip_address VARCHAR(45),
+                    user_agent VARCHAR(500),
+                    status VARCHAR(20) NOT NULL DEFAULT 'success',
+                    details JSONB,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                CREATE INDEX IF NOT EXISTS ix_audit_logs_site_id ON audit_logs(site_id);
+                CREATE INDEX IF NOT EXISTS ix_audit_logs_admin_id ON audit_logs(admin_id);
+                CREATE INDEX IF NOT EXISTS ix_audit_logs_action ON audit_logs(action);
+                CREATE INDEX IF NOT EXISTS ix_audit_logs_category ON audit_logs(category);
+                CREATE INDEX IF NOT EXISTS ix_audit_logs_actor_email ON audit_logs(actor_email);
+                CREATE INDEX IF NOT EXISTS ix_audit_logs_created_at ON audit_logs(created_at);
                 ALTER TABLE shipments ADD COLUMN IF NOT EXISTS agent_id UUID;
                 ALTER TABLE shipments ADD COLUMN IF NOT EXISTS agent_token VARCHAR(128);
                 ALTER TABLE shipments ADD COLUMN IF NOT EXISTS agent_accepted_at TIMESTAMPTZ;

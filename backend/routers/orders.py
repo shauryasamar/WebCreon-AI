@@ -14,7 +14,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy import cast, String
 from sqlmodel import Session, delete, func, or_, select
 
-from auth_middleware import authenticate_admin, authenticate_customer, enforce_site_ownership
+from auth_middleware import authenticate_admin, authenticate_customer, check_admin_has_permission, enforce_site_ownership
 from db.database import get_session
 
 logger = logging.getLogger(__name__)
@@ -1280,6 +1280,9 @@ def get_admin_pending_counts(
     Returns the count of orders needing attention (placed) and
     returns needing attention (requested). Used for sidebar badge.
     """
+    if not check_admin_has_permission(admin["adminId"], "orders:view", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to view orders")
+
     from models import ReturnRequest
 
     new_orders = session.exec(
@@ -1329,6 +1332,9 @@ def get_admin_orders(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    if not check_admin_has_permission(admin["adminId"], "orders:view", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to view orders")
+
     base_query = select(Order).where(Order.site_id == site_id)
 
     # 1. Filter by Tab or Status
@@ -1540,6 +1546,9 @@ def get_admin_order_detail(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    if not check_admin_has_permission(admin["adminId"], "orders:view", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to view orders")
+
     order = session.get(Order, order_id)
     if not order or order.site_id != site_id:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -1644,6 +1653,13 @@ def update_order_status(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    if payload.status == "cancelled":
+        if not (check_admin_has_permission(admin["adminId"], "orders:cancel", session) or check_admin_has_permission(admin["adminId"], "orders:update", session)):
+            raise HTTPException(status_code=403, detail="You do not have permission to cancel orders")
+    else:
+        if not check_admin_has_permission(admin["adminId"], "orders:update", session):
+            raise HTTPException(status_code=403, detail="You do not have permission to update order status")
+
     order = session.get(Order, order_id)
     if not order or order.site_id != site_id:
         raise HTTPException(status_code=404, detail="Order not found")

@@ -10,6 +10,11 @@ export type AdminUser = {
   phone?: string | null;
   avatarUrl?: string | null;
   role?: string;
+  roleId?: string | null;
+  permissions?: string[];
+  websiteAccessType?: "all" | "specific";
+  status?: string;
+  isActive?: boolean;
   authProvider?: string;
   googleId?: string | null;
   timezone?: string;
@@ -20,6 +25,8 @@ export type AdminUser = {
 type AdminAuthContextType = {
   admin: AdminUser | null;
   loading: boolean;
+  isOwner: boolean;
+  hasPermission: (permissionKey: string) => boolean;
   setAdmin: (admin: AdminUser | null) => void;
   refreshAdmin: () => Promise<AdminUser | null>;
   logoutAdmin: () => Promise<void>;
@@ -130,8 +137,49 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [refreshAdmin]);
 
+  const isOwner = Boolean(
+    admin &&
+    (admin as any).isOwner !== false &&
+    (
+      (admin as any).isOwner === true ||
+      admin.role === "Owner" ||
+      (!admin.roleId && admin.role === "super_admin")
+    )
+  );
+
+  const hasPermission = useCallback(
+    (permissionKey: string): boolean => {
+      if (!admin) return false;
+      if (isOwner) {
+        return true;
+      }
+      if (!admin.permissions || !Array.isArray(admin.permissions)) return false;
+      if (admin.permissions.includes("*") || admin.permissions.includes("all")) return true;
+      if (admin.permissions.includes(permissionKey)) return true;
+      // Backward/forward compatibility aliases
+      if (permissionKey === "chat:access" && (admin.permissions.includes("chat:view") || admin.permissions.includes("chat:send"))) return true;
+      if (permissionKey === "chat:view" && admin.permissions.includes("chat:access")) return true;
+      if (permissionKey === "customize:edit" && admin.permissions.includes("customize:view")) return true;
+      if (permissionKey === "customize:view" && admin.permissions.includes("customize:edit")) return true;
+      const [cat] = permissionKey.split(":");
+      if (cat && admin.permissions.includes(`${cat}:*`)) return true;
+      return false;
+    },
+    [admin, isOwner]
+  );
+
   return (
-    <AdminAuthContext.Provider value={{ admin, loading, setAdmin, refreshAdmin, logoutAdmin }}>
+    <AdminAuthContext.Provider
+      value={{
+        admin,
+        loading,
+        isOwner,
+        hasPermission,
+        setAdmin,
+        refreshAdmin,
+        logoutAdmin,
+      }}
+    >
       {children}
     </AdminAuthContext.Provider>
   );

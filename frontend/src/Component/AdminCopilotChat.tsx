@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { saveThemeSnapshot, updateThemeValues, applyThemeToPages } from "../customizations/editorUtils";
 import { AiAvatar } from "./AiAvatar";
+import { useAdminAuth } from "../context/AdminAuthContext";
+import { AccessDeniedView } from "./AccessDeniedView";
 
 type DataCard = {
   type: "redirect_card" | "orders_card" | "returns_card" | "analytics_card" | "palette_suggestions_card" | "component_palette_suggestions_card" | "camouflage_warning_card" | "table_card";
@@ -49,6 +51,10 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
   onSiteDefinitionChange,
 }) => {
   const navigate = useNavigate();
+  const { hasPermission, isOwner } = useAdminAuth();
+  const canAccessCopilot = isOwner || hasPermission("chat:access") || hasPermission("chat:view");
+  const canSendCopilot = canAccessCopilot;
+  const canClearCopilot = canAccessCopilot;
   const [messages, setMessages] = useState<CopilotMessage[]>(() => {
     if (typeof window !== "undefined" && siteId) {
       try {
@@ -198,6 +204,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
   };
 
   const handleSend = async (textToSend?: string) => {
+    if (!canSendCopilot) return;
     const text = (textToSend || input).trim();
     if (!text || loading) return;
 
@@ -332,6 +339,10 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
       setLoading(false);
     }
   };
+
+  if (!canAccessCopilot) {
+    return <AccessDeniedView moduleName="AI Copilot" requiredPermission="chat:access" />;
+  }
 
   return (
     <div
@@ -814,8 +825,8 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          placeholder="Ask Co-Pilot (e.g. fix footer text, show sales...)"
-          disabled={loading}
+          placeholder={!canSendCopilot ? "Permission required to chat with Co-Pilot" : "Ask Co-Pilot (e.g. fix footer text, show sales...)"}
+          disabled={loading || !canSendCopilot}
           style={{
             flex: 1,
             padding: "8px 12px",
@@ -825,21 +836,23 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
             color: chatText,
             fontSize: "12px",
             outline: "none",
+            opacity: canSendCopilot ? 1 : 0.6,
+            cursor: canSendCopilot ? "text" : "not-allowed",
           }}
         />
         <button
           type="button"
           onClick={() => handleSend()}
-          disabled={loading || !input.trim()}
+          disabled={loading || !input.trim() || !canSendCopilot}
           style={{
             padding: "8px 14px",
             borderRadius: "8px",
             border: "none",
-            background: loading || !input.trim() ? "#cbd5e1" : userBubbleBg,
+            background: loading || !input.trim() || !canSendCopilot ? "#cbd5e1" : userBubbleBg,
             color: "#ffffff",
             fontSize: "12px",
             fontWeight: 700,
-            cursor: loading || !input.trim() ? "default" : "pointer",
+            cursor: loading || !input.trim() || !canSendCopilot ? "default" : "pointer",
           }}
         >
           Send

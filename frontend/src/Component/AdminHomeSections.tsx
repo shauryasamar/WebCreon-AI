@@ -5,6 +5,8 @@ import { API_BASE_URL } from "../config/api";
 import GlassToast from "./GlassToast";
 import { generateSectionFilterUrl } from "./ProductCarousel";
 import { optimizeImageUrl, getThumbnailUrl, compressImageFile } from "../utils/imageOptimizer";
+import { useAdminAuth } from "../context/AdminAuthContext";
+import AccessDeniedView from "./AccessDeniedView";
 
 export interface SectionGroupTileItem {
   id: string;
@@ -275,6 +277,10 @@ const ToggleSwitch = ({
 };
 
 export const AdminHomeSections: React.FC = () => {
+  const { hasPermission, isOwner } = useAdminAuth();
+  const canView = isOwner || hasPermission("home_sections:view");
+  const canEdit = isOwner || hasPermission("home_sections:edit");
+
   const { siteId } = useParams();
   const { products: cartProducts } = useCart();
   const [allProducts, setAllProducts] = useState<any[]>([]);
@@ -583,10 +589,12 @@ export const AdminHomeSections: React.FC = () => {
 
   // Drag and Drop Handler for Main Table Rows (Home Sections)
   const handleSectionDragStart = (index: number) => {
+    if (!canEdit) return;
     setDraggedSectionIndex(index);
   };
 
   const handleSectionDragOver = (e: React.DragEvent, index: number) => {
+    if (!canEdit) return;
     e.preventDefault();
     if (dragOverSectionIndex !== index) {
       setDragOverSectionIndex(index);
@@ -594,6 +602,7 @@ export const AdminHomeSections: React.FC = () => {
   };
 
   const handleSectionDrop = (targetIndex: number) => {
+    if (!canEdit) return;
     if (draggedSectionIndex === null || draggedSectionIndex === targetIndex) {
       setDraggedSectionIndex(null);
       setDragOverSectionIndex(null);
@@ -613,7 +622,7 @@ export const AdminHomeSections: React.FC = () => {
     updatedList: HomeSectionItem[],
     heroActive: boolean = heroBannerActive
   ) => {
-    if (!siteId) return;
+    if (!canEdit || !siteId) return;
     setSaving(true);
     try {
       const snapshotKey = `wc_site_snapshot_${siteId}`;
@@ -759,11 +768,13 @@ export const AdminHomeSections: React.FC = () => {
   };
 
   const handleToggleHeroBanner = async (newVal: boolean) => {
+    if (!canEdit) return;
     setHeroBannerActive(newVal);
     await handleSaveSections(sections, newVal);
   };
 
   const toggleActive = (id: string) => {
+    if (!canEdit) return;
     const next = sections.map((sec) =>
       sec.id === id ? { ...sec, isActive: !sec.isActive } : sec
     );
@@ -771,6 +782,7 @@ export const AdminHomeSections: React.FC = () => {
   };
 
   const deleteSection = (id: string) => {
+    if (!canEdit) return;
     if (!window.confirm("Are you sure you want to remove this section from the Home screen?")) return;
     const next = sections.filter((s) => s.id !== id);
     next.forEach((item, idx) => (item.order = idx + 1));
@@ -778,6 +790,7 @@ export const AdminHomeSections: React.FC = () => {
   };
 
   const handleAddNew = () => {
+    if (!canEdit) return;
     const newSection: HomeSectionItem = {
       id: `sec_${Date.now()}`,
       type: "product_carousel",
@@ -810,6 +823,7 @@ export const AdminHomeSections: React.FC = () => {
   };
 
   const handleSaveModal = () => {
+    if (!canEdit) return;
     if (!activeSection) return;
     if (activeSection.type === "product_carousel" && !activeSection.title.trim()) {
       alert("Please enter a section title");
@@ -935,6 +949,10 @@ export const AdminHomeSections: React.FC = () => {
     setFilterCardShape("all");
     setFilterLayout("all");
   };
+
+  if (!canView) {
+    return <AccessDeniedView moduleName="Home Sections" requiredPermission="home_sections:view" />;
+  }
 
   return (
     <div
@@ -1455,7 +1473,7 @@ export const AdminHomeSections: React.FC = () => {
             <ToggleSwitch
               checked={heroBannerActive}
               onChange={(val) => handleToggleHeroBanner(val)}
-              disabled={saving}
+              disabled={!canEdit || saving}
             />
             <span
               style={{
@@ -1472,31 +1490,33 @@ export const AdminHomeSections: React.FC = () => {
           </div>
 
           {/* + Add Section Primary Button */}
-          <button
-            type="button"
-            onClick={handleAddNew}
-            style={{
-              background: "#2563eb",
-              color: "#ffffff",
-              border: "none",
-              borderRadius: "6px",
-              padding: "5px 13px",
-              height: "32px",
-              fontSize: "12.5px",
-              fontWeight: 700,
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "5px",
-              boxShadow: "0 1px 2px rgba(37,99,235,0.2)",
-              transition: "all 0.15s ease",
-              whiteSpace: "nowrap",
-              boxSizing: "border-box",
-            }}
-          >
-            <PlusIcon />
-            <span>Add Section</span>
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={handleAddNew}
+              style={{
+                background: "#2563eb",
+                color: "#ffffff",
+                border: "none",
+                borderRadius: "6px",
+                padding: "5px 13px",
+                height: "32px",
+                fontSize: "12.5px",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                boxShadow: "0 1px 2px rgba(37,99,235,0.2)",
+                transition: "all 0.15s ease",
+                whiteSpace: "nowrap",
+                boxSizing: "border-box",
+              }}
+            >
+              <PlusIcon />
+              <span>Add Section</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1519,7 +1539,9 @@ export const AdminHomeSections: React.FC = () => {
             <p style={{ margin: "0 0 16px", fontSize: "13px", color: "#64748b" }}>
               {searchQuery || activeFilterCount > 0 || statusFilter !== "all"
                 ? "Try clearing search or filters to see all sections."
-                : "Click '+ Add Section' to build product rows or visual collection cards."}
+                : canEdit
+                ? "Click '+ Add Section' to build product rows or visual collection cards."
+                : "No home sections available."}
             </p>
             {searchQuery || activeFilterCount > 0 || statusFilter !== "all" ? (
               <button
@@ -1537,7 +1559,7 @@ export const AdminHomeSections: React.FC = () => {
               >
                 Clear Search & Filters
               </button>
-            ) : (
+            ) : canEdit ? (
               <button
                 type="button"
                 onClick={handleAddNew}
@@ -1549,7 +1571,7 @@ export const AdminHomeSections: React.FC = () => {
               >
                 + Add Section
               </button>
-            )}
+            ) : null}
           </div>
         ) : (
           <div style={{ overflowX: "auto", width: "100%" }}>
@@ -1596,7 +1618,7 @@ export const AdminHomeSections: React.FC = () => {
                   return (
                     <tr
                       key={sec.id}
-                      draggable
+                      draggable={canEdit}
                       onDragStart={() => handleSectionDragStart(index)}
                       onDragOver={(e) => handleSectionDragOver(e, index)}
                       onDrop={() => handleSectionDrop(index)}
@@ -1615,11 +1637,12 @@ export const AdminHomeSections: React.FC = () => {
                             style={{
                               display: "grid",
                               placeItems: "center",
-                              cursor: "grab",
+                              cursor: canEdit ? "grab" : "default",
+                              opacity: canEdit ? 1 : 0.4,
                               padding: "2px",
                               userSelect: "none",
                             }}
-                            title="Drag handle to reorder section on homepage"
+                            title={canEdit ? "Drag handle to reorder section on homepage" : "Reordering disabled"}
                           >
                             <GripIcon />
                           </div>
@@ -1703,7 +1726,7 @@ export const AdminHomeSections: React.FC = () => {
                           <ToggleSwitch
                             checked={sec.isActive}
                             onChange={() => toggleActive(sec.id)}
-                            disabled={saving}
+                            disabled={!canEdit || saving}
                           />
                           <span
                             style={{
@@ -1769,34 +1792,36 @@ export const AdminHomeSections: React.FC = () => {
                               cursor: "pointer",
                               transition: "all 0.15s ease",
                             }}
-                            title="Edit section"
+                            title={canEdit ? "Edit section" : "View section settings"}
                           >
                             <PencilIcon />
-                            <span>Edit</span>
+                            <span>{canEdit ? "Edit" : "View"}</span>
                           </button>
 
                           {/* Delete Button */}
-                          <button
-                            type="button"
-                            onClick={() => deleteSection(sec.id)}
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              width: "28px",
-                              height: "28px",
-                              borderRadius: "5px",
-                              border: "1px solid #fecaca",
-                              background: "#fef2f2",
-                              color: "#dc2626",
-                              cursor: "pointer",
-                              transition: "all 0.15s ease",
-                              padding: 0,
-                            }}
-                            title="Delete section"
-                          >
-                            <TrashIcon />
-                          </button>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              onClick={() => deleteSection(sec.id)}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                width: "28px",
+                                height: "28px",
+                                borderRadius: "5px",
+                                border: "1px solid #fecaca",
+                                background: "#fef2f2",
+                                color: "#dc2626",
+                                cursor: "pointer",
+                                transition: "all 0.15s ease",
+                                padding: 0,
+                              }}
+                              title="Delete section"
+                            >
+                              <TrashIcon />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -2894,13 +2919,15 @@ export const AdminHomeSections: React.FC = () => {
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                onClick={handleSaveModal}
-                style={primaryButtonStyle}
-              >
-                Save Section
-              </button>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={handleSaveModal}
+                  style={primaryButtonStyle}
+                >
+                  Save Section
+                </button>
+              )}
             </div>
           </div>
         </div>

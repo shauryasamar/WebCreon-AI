@@ -3,6 +3,8 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { API_BASE_URL as API_BASE } from "../config/api";
 import { Pagination } from "./Pagination";
 import GlassToast from "./GlassToast";
+import { useAdminAuth } from "../context/AdminAuthContext";
+import AccessDeniedView from "./AccessDeniedView";
 
 type AdminMode = "orders" | "returns";
 
@@ -759,6 +761,12 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
   initialOrders = [],
   initialReturns = [],
 }) => {
+  const { hasPermission, isOwner } = useAdminAuth();
+  const canViewOrders = isOwner || hasPermission("orders:view");
+  const canUpdateOrders = isOwner || hasPermission("orders:update");
+  const canCancelOrders = isOwner || hasPermission("orders:cancel");
+  const canRefundOrders = isOwner || hasPermission("orders:refund");
+
   const params = useParams<{ siteId?: string; id?: string }>();
   const siteId = propSiteId || params.siteId || params.id || "";
   const [searchParams] = useSearchParams();
@@ -1067,7 +1075,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
     customMode?: "own_agent" | "shiprocket" | "manual",
     overrideWeight?: number
   ) => {
-    if (!siteId) return;
+    if (!siteId || !canUpdateOrders) return;
     setActionLoadingId(orderId);
     try {
       const isFleet = deliverySettings?.enable_fleet !== undefined ? Boolean(deliverySettings.enable_fleet) : (deliverySettings?.delivery_mode === "own_agent" || deliverySettings?.delivery_mode === "hybrid");
@@ -1116,7 +1124,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
   };
 
   const handleReassignRider = async (orderId: string) => {
-    if (!siteId) return;
+    if (!siteId || !canUpdateOrders) return;
     const newAgentId = reassignAgentIdMap[orderId] || "";
     if (!newAgentId) {
       showToast("Please select a new delivery agent to reassign this order.", "error");
@@ -1163,7 +1171,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
   };
 
   const handleDispatchReturnPickup = async (returnId: string, customMode?: "own_agent" | "shiprocket" | "manual") => {
-    if (!siteId) return;
+    if (!siteId || !canUpdateOrders) return;
     setActionLoadingId(returnId);
     try {
       const isFleet = deliverySettings?.enable_fleet !== undefined ? Boolean(deliverySettings.enable_fleet) : (deliverySettings?.delivery_mode === "own_agent" || deliverySettings?.delivery_mode === "hybrid");
@@ -1228,7 +1236,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
   };
 
   const handleReassignReturnRider = async (returnId: string) => {
-    if (!siteId) return;
+    if (!siteId || !canUpdateOrders) return;
     const newAgentId = reassignReturnAgentIdMap[returnId] || "";
     if (!newAgentId) {
       showToast("Please select a new rider to reassign this return pickup.", "error");
@@ -1265,8 +1273,8 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
   };
 
   const handleSwitchReturnToManual = async (returnId: string) => {
-    if (!siteId) return;
-    const manualData = returnManualCourierMap[returnId] || { courierName: "", trackingNumber: "", notes: "" };
+    if (!siteId || !canUpdateOrders) return;
+    const draft = returnManualCourierMap[returnId] || { courierName: "", trackingNumber: "", notes: "" };
     setActionLoadingId(returnId);
     try {
       const res = await fetch(`${API_BASE}/returns/admin/${siteId}/${returnId}/dispatch-pickup`, {
@@ -1275,9 +1283,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
         credentials: "include",
         body: JSON.stringify({
           mode: "manual",
-          courier_name: manualData.courierName || "Manual Courier / Self Ship",
-          tracking_number: manualData.trackingNumber || "",
-          pickup_notes: manualData.notes || "",
+          courier_name: draft.courierName || "Manual Courier / Self Ship",
+          tracking_number: draft.trackingNumber || "",
+          pickup_notes: draft.notes || "",
         }),
       });
       if (!res.ok) {
@@ -1298,8 +1306,6 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
       setActionLoadingId(null);
     }
   };
-
-
 
   useEffect(() => {
     if (!siteId) {
@@ -1784,6 +1790,17 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
     } = {}
   ) => {
     if (!siteId) return;
+    if (status === "cancelled") {
+      if (!canCancelOrders && !canUpdateOrders) {
+        showToast("You do not have permission to cancel orders.", "error");
+        return;
+      }
+    } else {
+      if (!canUpdateOrders) {
+        showToast("You do not have permission to update order status.", "error");
+        return;
+      }
+    }
     setActionLoadingId(orderId);
     try {
       await fetchJson(`${API_BASE}/orders/admin/${siteId}/${orderId}/status`, {
@@ -1979,6 +1996,10 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
 
 
   const handleCancel = async (orderId: string, reason?: string) => {
+    if (!canCancelOrders) {
+      showToast("You do not have permission to cancel orders.", "error");
+      return;
+    }
     let cancelReason = reason;
     if (cancelReason === undefined) {
       const order = orders.find((o) => o.id === orderId);
@@ -2015,7 +2036,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
 
 
   const handleReviewReturn = async (returnId: string) => {
-    if (!siteId) return;
+    if (!siteId || !canUpdateOrders) return;
     const draft = reviewDrafts[returnId];
     if (!draft) return;
 
@@ -2055,7 +2076,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
 
 
   const handleReceiveReturn = async (returnId: string) => {
-    if (!siteId) return;
+    if (!siteId || !canUpdateOrders) return;
     const draft = receiveDrafts[returnId];
     if (!draft) return;
 
@@ -2085,7 +2106,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
 
 
   const handleInspectReturn = async (returnId: string) => {
-    if (!siteId) return;
+    if (!siteId || !canUpdateOrders) return;
     const detail = returnDetailsMap[returnId];
     const draft = inspectDrafts[returnId];
     const itemsList = detail?.items || [];
@@ -2122,7 +2143,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
 
 
   const handleRefundReturn = async (returnId: string) => {
-    if (!siteId) return;
+    if (!siteId || !canRefundOrders) return;
     const draft = refundDrafts[returnId];
     if (!draft) return;
 
@@ -2150,7 +2171,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
 
 
   const handleCloseReturn = async (returnId: string) => {
-    if (!siteId) return;
+    if (!siteId || !canUpdateOrders) return;
 
 
     setActionLoadingId(returnId);
@@ -2191,38 +2212,42 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
     if (activeTab === "new") {
       return (
         <div style={{ display: "flex", gap: "6px" }}>
-          <button
-            disabled={actionLoadingId === order.id}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleConfirmOrder(order.id);
-            }}
-            style={{
-              ...actionButtonStyle,
-              padding: "5px 10px",
-              background: "#eff6ff",
-              color: "#1d4ed8",
-              border: "1px solid #bfdbfe",
-            }}
-          >
-            Accept
-          </button>
-          <button
-            disabled={actionLoadingId === order.id}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleCancel(order.id);
-            }}
-            style={{
-              ...actionButtonStyle,
-              padding: "5px 10px",
-              background: "#fef2f2",
-              color: "#b91c1c",
-              border: "1px solid #fecaca",
-            }}
-          >
-            Reject
-          </button>
+          {canUpdateOrders && (
+            <button
+              disabled={actionLoadingId === order.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleConfirmOrder(order.id);
+              }}
+              style={{
+                ...actionButtonStyle,
+                padding: "5px 10px",
+                background: "#eff6ff",
+                color: "#1d4ed8",
+                border: "1px solid #bfdbfe",
+              }}
+            >
+              Accept
+            </button>
+          )}
+          {canCancelOrders && (
+            <button
+              disabled={actionLoadingId === order.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCancel(order.id);
+              }}
+              style={{
+                ...actionButtonStyle,
+                padding: "5px 10px",
+                background: "#fef2f2",
+                color: "#b91c1c",
+                border: "1px solid #fecaca",
+              }}
+            >
+              Reject
+            </button>
+          )}
         </div>
       );
     }
@@ -2231,6 +2256,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
     const canCancel = order.status !== "delivered" && order.status !== "cancelled" && order.status !== "returned";
 
     if (isReturnedToHub && canCancel) {
+      if (!canCancelOrders) return null;
       return (
         <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
           <button
@@ -2319,7 +2345,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
     if (returnItem.status === "requested") {
       return (
         <button
-          disabled={actionLoadingId === returnItem.id}
+          disabled={actionLoadingId === returnItem.id || !canUpdateOrders}
           onClick={(e) => {
             e.stopPropagation();
             handleReturnExpandToggle(returnItem.id);
@@ -2340,7 +2366,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
     if (returnItem.status === "approved") {
       return (
         <button
-          disabled={actionLoadingId === returnItem.id}
+          disabled={actionLoadingId === returnItem.id || !canUpdateOrders}
           onClick={(e) => {
             e.stopPropagation();
             handleReturnExpandToggle(returnItem.id);
@@ -2361,7 +2387,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
     if (returnItem.status === "received") {
       return (
         <button
-          disabled={actionLoadingId === returnItem.id}
+          disabled={actionLoadingId === returnItem.id || !canUpdateOrders}
           onClick={(e) => {
             e.stopPropagation();
             handleReturnExpandToggle(returnItem.id);
@@ -2382,7 +2408,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
     if (returnItem.status === "inspected") {
       return (
         <button
-          disabled={actionLoadingId === returnItem.id}
+          disabled={actionLoadingId === returnItem.id || !canRefundOrders}
           onClick={(e) => {
             e.stopPropagation();
             handleReturnExpandToggle(returnItem.id);
@@ -2400,7 +2426,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
     }
 
 
-    if (returnItem.status === "refunded" || returnItem.status === "rejected") {
+    if (canUpdateOrders && (returnItem.status === "refunded" || returnItem.status === "rejected")) {
       return (
         <button
           disabled={actionLoadingId === returnItem.id}
@@ -2424,6 +2450,15 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
     return null;
   };
 
+
+  if (!canViewOrders) {
+    return (
+      <AccessDeniedView
+        title="Orders Access Restricted"
+        message="You do not have permission to view or manage store orders. Please contact your workspace administrator to request access."
+      />
+    );
+  }
 
   return (
     <div style={{ color: "#0f172a" }}>
@@ -3707,63 +3742,65 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                   Admin Delivery Controls:
                                                 </div>
                                                 <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                                                  {order.status === "shipped" && (
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => handleOutForDelivery(order.id)}
-                                                      disabled={actionLoadingId === order.id}
-                                                      style={{
-                                                        padding: "7px 12px",
-                                                        borderRadius: "6px",
-                                                        background: "#d97706",
-                                                        color: "#ffffff",
-                                                        border: "none",
-                                                        fontSize: "12px",
-                                                        fontWeight: 700,
-                                                        cursor: actionLoadingId === order.id ? "wait" : "pointer",
-                                                      }}
-                                                    >
-                                                      {actionLoadingId === order.id ? "Updating..." : "Mark Out for Delivery"}
-                                                    </button>
-                                                  )}
+                                                   {canUpdateOrders && order.status === "shipped" && (
+                                                     <button
+                                                       type="button"
+                                                       onClick={() => handleOutForDelivery(order.id)}
+                                                       disabled={actionLoadingId === order.id}
+                                                       style={{
+                                                         padding: "7px 12px",
+                                                         borderRadius: "6px",
+                                                         background: "#d97706",
+                                                         color: "#ffffff",
+                                                         border: "none",
+                                                         fontSize: "12px",
+                                                         fontWeight: 700,
+                                                         cursor: actionLoadingId === order.id ? "wait" : "pointer",
+                                                       }}
+                                                     >
+                                                       {actionLoadingId === order.id ? "Updating..." : "Mark Out for Delivery"}
+                                                     </button>
+                                                   )}
 
-                                                  {(order.status === "shipped" || order.status === "out_for_delivery" || order.status === "rescheduled") && (
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => handleDelivered(order.id)}
-                                                      disabled={actionLoadingId === order.id}
-                                                      style={{
-                                                        padding: "7px 12px",
-                                                        borderRadius: "6px",
-                                                        background: "#16a34a",
-                                                        color: "#ffffff",
-                                                        border: "none",
-                                                        fontSize: "12px",
-                                                        fontWeight: 700,
-                                                        cursor: actionLoadingId === order.id ? "wait" : "pointer",
-                                                      }}
-                                                    >
-                                                      {actionLoadingId === order.id ? "Updating..." : "Mark Delivered"}
-                                                    </button>
-                                                  )}
+                                                   {canUpdateOrders && (order.status === "shipped" || order.status === "out_for_delivery" || order.status === "rescheduled") && (
+                                                     <button
+                                                       type="button"
+                                                       onClick={() => handleDelivered(order.id)}
+                                                       disabled={actionLoadingId === order.id}
+                                                       style={{
+                                                         padding: "7px 12px",
+                                                         borderRadius: "6px",
+                                                         background: "#16a34a",
+                                                         color: "#ffffff",
+                                                         border: "none",
+                                                         fontSize: "12px",
+                                                         fontWeight: 700,
+                                                         cursor: actionLoadingId === order.id ? "wait" : "pointer",
+                                                       }}
+                                                     >
+                                                       {actionLoadingId === order.id ? "Updating..." : "Mark Delivered"}
+                                                     </button>
+                                                   )}
 
-                                                  <button
-                                                    type="button"
-                                                    onClick={() => setEditingCourierOrderIdMap((p) => ({ ...p, [order.id]: !p[order.id] }))}
-                                                    style={{
-                                                      padding: "7px 12px",
-                                                      borderRadius: "6px",
-                                                      background: "#ffffff",
-                                                      color: "#475569",
-                                                      border: "1px solid #cbd5e1",
-                                                      fontSize: "12px",
-                                                      fontWeight: 600,
-                                                      cursor: "pointer",
-                                                    }}
-                                                  >
-                                                    {editingCourierOrderIdMap[order.id] ? "Close Form" : "Edit Courier / Tracking"}
-                                                  </button>
-                                                </div>
+                                                   {canUpdateOrders && (
+                                                     <button
+                                                       type="button"
+                                                       onClick={() => setEditingCourierOrderIdMap((p) => ({ ...p, [order.id]: !p[order.id] }))}
+                                                       style={{
+                                                         padding: "7px 12px",
+                                                         borderRadius: "6px",
+                                                         background: "#ffffff",
+                                                         color: "#475569",
+                                                         border: "1px solid #cbd5e1",
+                                                         fontSize: "12px",
+                                                         fontWeight: 600,
+                                                         cursor: "pointer",
+                                                       }}
+                                                     >
+                                                       {editingCourierOrderIdMap[order.id] ? "Close Form" : "Edit Courier / Tracking"}
+                                                     </button>
+                                                   )}
+                                                 </div>
 
                                                 {/* Edit Form */}
                                                 {editingCourierOrderIdMap[order.id] && (
@@ -3817,7 +3854,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                           border: "none",
                                                           fontSize: "12px",
                                                           fontWeight: 700,
-                                                          cursor: "pointer",
+                                                          cursor: actionLoadingId === order.id ? "wait" : "pointer",
                                                         }}
                                                       >
                                                         {actionLoadingId === order.id ? "Saving..." : "Save Changes"}
@@ -3901,7 +3938,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                 >
                                                   {currentShipment?.status === "returned_to_warehouse" ? "Returned to Warehouse" : "Cancelled"}
                                                 </span>
-                                              ) : (
+                                              ) : canUpdateOrders ? (
                                                 <button
                                                   type="button"
                                                   onClick={() => setReassigningOrderIdMap((p) => ({ ...p, [order.id]: !p[order.id] }))}
@@ -3918,7 +3955,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                 >
                                                   {isReassigning ? "Close" : "Reassign Rider / Courier"}
                                                 </button>
-                                              )}
+                                              ) : null}
                                             </div>
 
                                             <div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
@@ -4005,55 +4042,58 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                     The delivery partner brought this parcel back to the store warehouse. You can cancel this order to restore inventory stock and process customer refund, or reassign it to another partner.
                                                   </div>
 
-                                                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", paddingTop: "4px" }}>
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => {
-                                                        setAdminCancelOrder(order);
-                                                        setAdminCancelReason("Parcel Returned to Hub - Customer unreachable / no response after multiple attempts");
-                                                        setAdminCancelCustomNote(currentShipment?.notes ? cleanShipmentNotes(currentShipment.notes) : "");
-                                                      }}
-                                                      disabled={actionLoadingId === order.id}
-                                                      style={{
-                                                        padding: "7px 14px",
-                                                        borderRadius: "6px",
-                                                        background: "#dc2626",
-                                                        border: "none",
-                                                        color: "#ffffff",
-                                                        fontSize: "12.5px",
-                                                        fontWeight: 700,
-                                                        cursor: "pointer",
-                                                        display: "flex",
-                                                        alignItems: "center",
-                                                        gap: "6px",
-                                                        boxShadow: "0 1px 2px rgba(220, 38, 38, 0.2)",
-                                                      }}
-                                                    >
-                                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                        <circle cx="12" cy="12" r="10" />
-                                                        <line x1="15" y1="9" x2="9" y2="15" />
-                                                        <line x1="9" y1="9" x2="15" y2="15" />
-                                                      </svg>
-                                                      Cancel Order & Restock
-                                                    </button>
-
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => setReassigningOrderIdMap((p) => ({ ...p, [order.id]: true }))}
-                                                      style={{
-                                                        padding: "7px 12px",
-                                                        borderRadius: "6px",
-                                                        background: "#ffffff",
-                                                        border: "1px solid #cbd5e1",
-                                                        color: "#334155",
-                                                        fontSize: "12.5px",
-                                                        fontWeight: 600,
-                                                        cursor: "pointer",
-                                                      }}
-                                                    >
-                                                      Reassign Rider / Courier
-                                                    </button>
-                                                  </div>
+                                                  {(canCancelOrders || canUpdateOrders) && (
+                                                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", paddingTop: "4px" }}>
+                                                      {canCancelOrders && (
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => {
+                                                            setAdminCancelOrder(order);
+                                                            setAdminCancelReason("Parcel Returned to Hub - Customer unreachable / no response after multiple attempts");
+                                                            setAdminCancelCustomNote(currentShipment?.notes ? cleanShipmentNotes(currentShipment.notes) : "");
+                                                          }}
+                                                          disabled={actionLoadingId === order.id}
+                                                          style={{
+                                                            padding: "7px 14px",
+                                                            borderRadius: "6px",
+                                                            background: "#dc2626",
+                                                            border: "none",
+                                                            color: "#ffffff",
+                                                            fontSize: "12.5px",
+                                                            fontWeight: 700,
+                                                            cursor: "pointer",
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            gap: "6px",
+                                                            boxShadow: "0 1px 2px rgba(220, 38, 38, 0.2)",
+                                                          }}
+                                                        >
+                                                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                            <circle cx="12" cy="12" r="10" />
+                                                            <line x1="15" y1="9" x2="9" y2="15" />
+                                                            <line x1="9" y1="9" x2="15" y2="15" />
+                                                          </svg>
+                                                          Cancel Order & Restock
+                                                        </button>
+                                                      )}
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => setReassigningOrderIdMap((p) => ({ ...p, [order.id]: true }))}
+                                                        style={{
+                                                          padding: "7px 12px",
+                                                          borderRadius: "6px",
+                                                          background: "#ffffff",
+                                                          border: "1px solid #cbd5e1",
+                                                          color: "#334155",
+                                                          fontSize: "12.5px",
+                                                          fontWeight: 600,
+                                                          cursor: "pointer",
+                                                        }}
+                                                      >
+                                                        Reassign Rider / Courier
+                                                      </button>
+                                                    </div>
+                                                  )}
                                                 </div>
                                               )}
                                             </div>
@@ -4178,7 +4218,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                               </div>
                                             )}
                                           </div>
-                                        ) : (
+                                        ) : !canUpdateOrders ? null : (
                                           /* If Not yet dispatched — Dispatch Controller */
                                           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                                             {/* Mode Tabs: only rendered if more than 1 delivery mode is enabled */}
@@ -4430,7 +4470,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                     </div>
                                   ) : null}
 
-                                  {order.status !== "delivered" && order.status !== "cancelled" && order.status !== "returned" && (
+                                  {order.status !== "delivered" && order.status !== "cancelled" && order.status !== "returned" && canCancelOrders && (
                                     <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px solid #f1f5f9" }}>
                                       <button
                                         type="button"
@@ -5796,7 +5836,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                               </div>
 
                               {/* Card 2: Return Lifecycle Admin Action */}
-                              {returnItem.status === "requested" ? (
+                              {returnItem.status === "requested" && canUpdateOrders ? (
                                 <div style={{ ...plainCardStyle, padding: "16px" }}>
                                   <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "12px", color: "#0f172a" }}>
                                     Review Return Request
@@ -5986,6 +6026,8 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                     );
                                   }
 
+                                  if (!canUpdateOrders) return null;
+
                                   return (
                                     <div style={{ ...plainCardStyle, padding: "16px" }}>
                                       <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "4px", color: "#0f172a" }}>
@@ -6082,7 +6124,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                 })()
                               ) : null}
 
-                              {returnItem.status === "received" ? (
+                              {returnItem.status === "received" && canUpdateOrders ? (
                                 <div style={{ ...plainCardStyle, padding: "16px" }}>
                                   <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "6px", color: "#0f172a" }}>
                                     Product Quality Inspection & Stock Restock
@@ -6333,7 +6375,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                       borderRadius: "6px",
                                                       background: isChecked ? "#f0fdf4" : "#ffffff",
                                                       border: isChecked ? "1px solid #86efac" : "1px solid #e2e8f0",
-                                                      cursor: "pointer",
+                                                      cursor: canRefundOrders ? "pointer" : "not-allowed",
                                                       fontSize: "12px",
                                                       transition: "all 0.15s ease",
                                                     }}
@@ -6341,6 +6383,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                                                       <input
                                                         type="checkbox"
+                                                        disabled={!canRefundOrders}
                                                         checked={isChecked}
                                                         onChange={() =>
                                                           toggleExtraCharge(
@@ -6350,7 +6393,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                             detail.refund_breakdown!.charge_allocations
                                                           )
                                                         }
-                                                        style={{ cursor: "pointer", accentColor: "#16a34a" }}
+                                                        style={{ cursor: canRefundOrders ? "pointer" : "not-allowed", accentColor: "#16a34a" }}
                                                       />
                                                       <span style={{ fontWeight: 500, color: "#0f172a" }}>{charge.label}</span>
                                                     </div>
@@ -6446,6 +6489,8 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                     </div>
                                   )}
 
+                                  {!canRefundOrders ? null : (
+                                  <>
                                   <div style={{ display: "grid", gap: "10px", marginBottom: "14px" }}>
                                     <div>
                                       <div style={labelStyle}>Refund Method</div>
@@ -6546,6 +6591,8 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                       ? "Processing Refund..."
                                       : `Confirm & Issue Refund (${formatPrice(Number(refundDraft.finalRefundAmount || returnItem.final_refund_amount || returnItem.suggested_refund_amount))})`}
                                   </button>
+                                  </>
+                                  )}
                                 </div>
                               ) : null}
 
@@ -6643,7 +6690,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
       )}
 
       {/* ADMIN ORDER CANCELLATION MODAL */}
-      {adminCancelOrder && (
+      {adminCancelOrder && canCancelOrders && (
         <div
           style={{
             position: "fixed",

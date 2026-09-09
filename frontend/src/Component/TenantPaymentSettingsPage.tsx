@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import GlassToast from "./GlassToast";
+import { useAdminAuth } from "../context/AdminAuthContext";
+import AccessDeniedView from "./AccessDeniedView";
 
 type BankSettingsData = {
   id?: string;
@@ -32,6 +34,9 @@ const getCachedBankSettings = (id?: string): BankSettingsData | null => {
 
 export default function TenantPaymentSettingsPage() {
   const { siteId } = useParams<{ siteId: string }>();
+  const { hasPermission, isOwner } = useAdminAuth();
+  const canView = isOwner || hasPermission("payout_settings:view");
+  const canEdit = isOwner || hasPermission("payout_settings:edit");
 
   const cachedSettings = getCachedBankSettings(siteId);
   const [loading, setLoading] = useState(!cachedSettings);
@@ -173,6 +178,11 @@ export default function TenantPaymentSettingsPage() {
 
     if (!siteId) return;
 
+    if (!canEdit) {
+      setErrorMessage("You do not have permission to modify payout settings.");
+      return;
+    }
+
     if (!holderName.trim()) {
       setErrorMessage("Account holder name is required.");
       return;
@@ -288,7 +298,8 @@ export default function TenantPaymentSettingsPage() {
     border: "1px solid #cbd5e1",
     fontSize: "13px",
     color: "#0f172a",
-    background: "#ffffff",
+    background: canEdit ? "#ffffff" : "#f8fafc",
+    cursor: canEdit ? "text" : "not-allowed",
     outline: "none",
     boxSizing: "border-box",
   };
@@ -319,6 +330,15 @@ export default function TenantPaymentSettingsPage() {
     alignItems: "center",
     background: "#ffffff",
   };
+
+  if (!canView) {
+    return (
+      <AccessDeniedView
+        moduleName="Payout Settings"
+        requiredPermission="payout_settings:view"
+      />
+    );
+  }
 
   if (loading) {
     return (
@@ -422,19 +442,19 @@ export default function TenantPaymentSettingsPage() {
           <button
             type="button"
             onClick={() => handleSave()}
-            disabled={saving}
+            disabled={!canEdit || saving}
             style={{
               display: "inline-flex",
               alignItems: "center",
               gap: "6px",
               borderRadius: "6px",
               border: "none",
-              background: saving ? "#94a3b8" : hasUnsavedChanges ? "#2563eb" : "#0f172a",
+              background: !canEdit ? "#94a3b8" : saving ? "#94a3b8" : hasUnsavedChanges ? "#2563eb" : "#0f172a",
               color: "#ffffff",
               padding: "8px 18px",
               fontSize: "13px",
               fontWeight: 700,
-              cursor: saving ? "wait" : "pointer",
+              cursor: !canEdit ? "not-allowed" : saving ? "wait" : "pointer",
               transition: "background 0.15s ease",
               whiteSpace: "nowrap",
             }}
@@ -470,6 +490,7 @@ export default function TenantPaymentSettingsPage() {
                 <label style={labelStyle}>Account Holder Name *</label>
                 <input
                   type="text"
+                  disabled={!canEdit}
                   value={holderName}
                   onChange={(e) => setHolderName(e.target.value)}
                   placeholder="Full name as registered in bank records"
@@ -486,6 +507,7 @@ export default function TenantPaymentSettingsPage() {
                 </div>
                 <input
                   type="text"
+                  disabled={!canEdit}
                   maxLength={11}
                   value={ifscCode}
                   onChange={(e) => handleIfscLookup(e.target.value)}
@@ -500,6 +522,7 @@ export default function TenantPaymentSettingsPage() {
                 <label style={labelStyle}>Bank & Branch Name *</label>
                 <input
                   type="text"
+                  disabled={!canEdit}
                   value={bankName}
                   onChange={(e) => setBankName(e.target.value)}
                   placeholder="Auto-filled via IFSC or enter manually"
@@ -515,6 +538,7 @@ export default function TenantPaymentSettingsPage() {
                 </label>
                 <input
                   type="password"
+                  disabled={!canEdit}
                   value={accountNumber}
                   onChange={(e) => setAccountNumber(e.target.value)}
                   placeholder={settings.is_configured ? settings.account_number_masked : "Enter bank account number"}
@@ -529,6 +553,7 @@ export default function TenantPaymentSettingsPage() {
                 </label>
                 <input
                   type="text"
+                  disabled={!canEdit}
                   value={confirmAccountNumber}
                   onChange={(e) => setConfirmAccountNumber(e.target.value)}
                   placeholder={settings.is_configured ? "Re-enter if updating" : "Confirm bank account number"}
@@ -563,6 +588,7 @@ export default function TenantPaymentSettingsPage() {
                 <label style={labelStyle}>PAN Number (Optional)</label>
                 <input
                   type="text"
+                  disabled={!canEdit}
                   maxLength={10}
                   value={panNumber}
                   onChange={(e) => setPanNumber(e.target.value.toUpperCase())}
@@ -576,6 +602,7 @@ export default function TenantPaymentSettingsPage() {
                 <label style={labelStyle}>GST Number (Optional)</label>
                 <input
                   type="text"
+                  disabled={!canEdit}
                   maxLength={15}
                   value={gstNumber}
                   onChange={(e) => setGstNumber(e.target.value.toUpperCase())}

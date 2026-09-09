@@ -4,6 +4,8 @@ import { API_BASE_URL } from "../config/api";
 import { Pagination } from "./Pagination";
 import GlassToast from "./GlassToast";
 import { GoogleMapPicker, GeoPickerResult } from "./GoogleMapPicker";
+import { useAdminAuth } from "../context/AdminAuthContext";
+import AccessDeniedView from "./AccessDeniedView";
 
 export type DeliveryMode = "own_agent" | "shiprocket" | "hybrid" | "manual";
 
@@ -189,6 +191,9 @@ const getCachedAgents = (id?: string): Agent[] => {
 
 export default function DeliverySettingsPage() {
   const { siteId } = useParams<{ siteId: string }>();
+  const { hasPermission, isOwner } = useAdminAuth();
+  const canView = isOwner || hasPermission("delivery:view");
+  const canEdit = isOwner || hasPermission("delivery:edit");
 
   const cachedSettings = getCachedDeliverySettings(siteId);
   const cachedAgents = getCachedAgents(siteId);
@@ -220,15 +225,14 @@ export default function DeliverySettingsPage() {
   const [testingConnection, setTestingConnection] = useState(false);
   const [showStoreMapPicker, setShowStoreMapPicker] = useState(false);
 
-  // Top 3-Tab navigation: fleet | shiprocket | manual
   type DeliveryTab = "fleet" | "shiprocket" | "manual";
   const [activeTab, setActiveTab] = useState<DeliveryTab>("fleet");
 
-  // Agents state
   const [agents, setAgents] = useState<Agent[]>(cachedAgents);
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [showAgentForm, setShowAgentForm] = useState(false);
   const [copiedPortal, setCopiedPortal] = useState(false);
+  
   const [siteSlug, setSiteSlug] = useState<string>(() => {
     if (typeof window !== "undefined") {
       const match = window.location.pathname.match(/\/store\/([^/]+)/);
@@ -280,6 +284,7 @@ export default function DeliverySettingsPage() {
 
   const riderPortalPath = siteSlug ? `/store/${siteSlug}/rider/login` : `/rider/login`;
   const riderPortalFullUrl = typeof window !== "undefined" ? `${window.location.origin}${riderPortalPath}` : riderPortalPath;
+
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [activityFilter, setActivityFilter] = useState<string>("all");
@@ -290,55 +295,21 @@ export default function DeliverySettingsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
 
-  // Close filter popover on outside click
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (filterPopoverRef.current && !filterPopoverRef.current.contains(e.target as Node)) {
-        setIsFilterOpen(false);
-      }
-    };
-    if (isFilterOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isFilterOpen]);
-
-  const activeFilterCount = useMemo(() => {
-    let count = 0;
-    if (statusFilter !== "all") count++;
-    if (activityFilter !== "all") count++;
-    if (vehicleFilter !== "all") count++;
-    if (sortBy !== "default") count++;
-    return count;
-  }, [statusFilter, activityFilter, vehicleFilter, sortBy]);
-
-  const resetFilters = () => {
-    setStatusFilter("all");
-    setActivityFilter("all");
-    setVehicleFilter("all");
-    setSortBy("default");
-    setCurrentPage(1);
-  };
-
-  // New agent form
   const [newAgentName, setNewAgentName] = useState("");
   const [newAgentPhone, setNewAgentPhone] = useState("");
   const [newAgentPin, setNewAgentPin] = useState("");
   const [newAgentVehicle, setNewAgentVehicle] = useState("bike");
   const [addingAgent, setAddingAgent] = useState(false);
 
-  // Reset PIN modal
   const [resetPinAgent, setResetPinAgent] = useState<Agent | null>(null);
   const [resetPinValue, setResetPinValue] = useState("");
   const [resettingPin, setResettingPin] = useState(false);
 
-  // Settle Cash modal
   const [settleCashAgent, setSettleCashAgent] = useState<Agent | null>(null);
   const [settleCashAmount, setSettleCashAmount] = useState<string>("");
   const [settleCashNotes, setSettleCashNotes] = useState<string>("");
   const [settlingCash, setSettlingCash] = useState(false);
 
-  // Toast
   const [feedback, setFeedback] = useState<{ msg: string; type: "success" | "error" | "info" } | null>(null);
 
   const showFeedback = (msg: string, type: "success" | "error" | "info" = "success") => {
@@ -353,7 +324,7 @@ export default function DeliverySettingsPage() {
   }, [settings, srPassword, initialSnapshot]);
 
   const fetchSettings = useCallback(async () => {
-    if (!siteId) return;
+    if (!siteId || !canView) return;
     try {
       const res = await fetch(`${API_BASE_URL}/delivery/settings/${siteId}`, {
         credentials: "include",
@@ -371,10 +342,10 @@ export default function DeliverySettingsPage() {
     } finally {
       setLoadingSettings(false);
     }
-  }, [siteId]);
+  }, [siteId, canView]);
 
   const fetchAgents = useCallback(async (showLoader = true) => {
-    if (!siteId) return;
+    if (!siteId || !canView) return;
     try {
       if (showLoader && agents.length === 0) setLoadingAgents(true);
       const res = await fetch(`${API_BASE_URL}/delivery/agents/${siteId}`, {
@@ -393,16 +364,20 @@ export default function DeliverySettingsPage() {
     } finally {
       setLoadingAgents(false);
     }
-  }, [siteId, agents.length]);
+  }, [siteId, canView, agents.length]);
 
   useEffect(() => {
-    if (!siteId) return;
+    if (!siteId || !canView) return;
     fetchSettings();
     fetchAgents();
-  }, [siteId, fetchSettings, fetchAgents]);
+  }, [siteId, canView, fetchSettings, fetchAgents]);
 
   const saveSettings = async (overrides?: Partial<DeliverySettingsData>) => {
     if (!siteId) return;
+    if (!canEdit) {
+      showFeedback("You do not have permission to modify delivery settings.", "error");
+      return;
+    }
     setSavingSettings(true);
     try {
       const payload = {
@@ -476,6 +451,10 @@ export default function DeliverySettingsPage() {
 
   const testShiprocket = async () => {
     if (!siteId) return;
+    if (!canEdit) {
+      showFeedback("You do not have permission to test Shiprocket connection.", "error");
+      return;
+    }
     if (!settings.shiprocket_email || !settings.shiprocket_email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(settings.shiprocket_email.trim())) {
       showFeedback("Please enter and save a valid Shiprocket account email address first.", "error");
       return;
@@ -509,6 +488,10 @@ export default function DeliverySettingsPage() {
 
   const addAgent = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canEdit) {
+      showFeedback("You do not have permission to add delivery agents.", "error");
+      return;
+    }
     const cleanPhone = clean10DigitPhone(newAgentPhone);
     if (!siteId || !newAgentName.trim() || !cleanPhone) {
       showFeedback("Please provide both name and mobile number", "error");
@@ -556,6 +539,10 @@ export default function DeliverySettingsPage() {
   const handleResetPin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!siteId || !resetPinAgent || !resetPinValue.trim()) return;
+    if (!canEdit) {
+      showFeedback("You do not have permission to reset rider PIN.", "error");
+      return;
+    }
     setResettingPin(true);
     try {
       const res = await fetch(
@@ -585,6 +572,10 @@ export default function DeliverySettingsPage() {
   const handleSettleCash = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!siteId || !settleCashAgent) return;
+    if (!canEdit) {
+      showFeedback("You do not have permission to settle cash.", "error");
+      return;
+    }
     setSettlingCash(true);
     try {
       const amountNum = settleCashAmount ? parseFloat(settleCashAmount) : null;
@@ -619,8 +610,11 @@ export default function DeliverySettingsPage() {
 
   const toggleAgent = async (agent: Agent) => {
     if (!siteId) return;
+    if (!canEdit) {
+      showFeedback("You do not have permission to modify delivery agents.", "error");
+      return;
+    }
     const nextState = !agent.is_active;
-    // Optimistic UI update: instant change with zero lag and zero reload flicker
     setAgents((prev) =>
       prev.map((a) => (a.id === agent.id ? { ...a, is_active: nextState } : a))
     );
@@ -635,7 +629,6 @@ export default function DeliverySettingsPage() {
       showFeedback(`Agent ${nextState ? "activated" : "deactivated"}`, "success");
       await fetchAgents(false);
     } catch (err: any) {
-      // Revert optimistic update on failure
       setAgents((prev) =>
         prev.map((a) => (a.id === agent.id ? { ...a, is_active: agent.is_active } : a))
       );
@@ -645,6 +638,10 @@ export default function DeliverySettingsPage() {
 
   const deleteAgent = async (agent: Agent) => {
     if (!siteId) return;
+    if (!canEdit) {
+      showFeedback("You do not have permission to remove delivery agents.", "error");
+      return;
+    }
     if (!window.confirm(`Are you sure you want to remove ${agent.name}?`)) return;
     try {
       const res = await fetch(`${API_BASE_URL}/delivery/agents/${siteId}/${agent.id}`, {
@@ -659,24 +656,13 @@ export default function DeliverySettingsPage() {
     }
   };
 
-  // Fleet stats
-  const totalAgents = agents.length;
-  const activeAgents = agents.filter((a) => a.is_active).length;
-  const totalCompletedDeliveries = agents.reduce((sum, a) => sum + (a.total_deliveries || 0), 0);
-  const totalCashInHand = agents.reduce((sum, a) => sum + (a.cash_in_hand || 0), 0);
-
-  // Filtered agents
   const filteredAgents = useMemo(() => {
     let list = [...agents];
-
-    // Status filter
     if (statusFilter === "active") {
       list = list.filter((a) => a.is_active);
     } else if (statusFilter === "inactive") {
       list = list.filter((a) => !a.is_active);
     }
-
-    // Activity & Cash filter
     if (activityFilter === "cash_in_hand") {
       list = list.filter((a) => (a.cash_in_hand || 0) > 0);
     } else if (activityFilter === "zero_orders") {
@@ -684,34 +670,70 @@ export default function DeliverySettingsPage() {
     } else if (activityFilter === "active_orders") {
       list = list.filter((a) => (a.current_order_count || 0) > 0);
     }
-
-    // Vehicle Type filter
     if (vehicleFilter !== "all") {
       list = list.filter((a) => (a.vehicle_type || "bike").toLowerCase() === vehicleFilter);
     }
-
-    // Sort order
     if (sortBy === "most_deliveries") {
       list.sort((a, b) => (b.total_deliveries || 0) - (a.total_deliveries || 0));
     } else if (sortBy === "highest_cash") {
       list.sort((a, b) => (b.cash_in_hand || 0) - (a.cash_in_hand || 0));
     }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(
+        (a) =>
+          a.name.toLowerCase().includes(q) ||
+          a.phone.includes(q) ||
+          (a.vehicle_type && a.vehicle_type.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }, [agents, statusFilter, activityFilter, vehicleFilter, sortBy, searchQuery]);
 
-    // Search query
-    if (!searchQuery.trim()) return list;
-    const q = searchQuery.toLowerCase();
-    return list.filter(
-      (a) =>
-        a.name.toLowerCase().includes(q) ||
-        a.phone.includes(q) ||
-        (a.vehicle_type || "").toLowerCase().includes(q)
-    );
-  }, [agents, searchQuery, statusFilter, activityFilter, vehicleFilter, sortBy]);
-  const totalPages = Math.max(1, Math.ceil(filteredAgents.length / pageSize));
+  const totalPages = Math.ceil(filteredAgents.length / pageSize) || 1;
   const paginatedAgents = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filteredAgents.slice(start, start + pageSize);
   }, [filteredAgents, currentPage, pageSize]);
+
+  const totalAgents = agents.length;
+  const activeAgents = useMemo(() => agents.filter((a) => a.is_active).length, [agents]);
+  const totalCompletedDeliveries = useMemo(
+    () => agents.reduce((sum, a) => sum + (a.total_deliveries || 0), 0),
+    [agents]
+  );
+  const totalCashInHand = useMemo(
+    () => agents.reduce((sum, a) => sum + (a.cash_in_hand || 0), 0),
+    [agents]
+  );
+
+  const activeFilterCount =
+    (statusFilter !== "all" ? 1 : 0) +
+    (activityFilter !== "all" ? 1 : 0) +
+    (vehicleFilter !== "all" ? 1 : 0) +
+    (sortBy !== "default" ? 1 : 0);
+
+  const resetFilters = () => {
+    setStatusFilter("all");
+    setActivityFilter("all");
+    setVehicleFilter("all");
+    setSortBy("default");
+    setCurrentPage(1);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (filterPopoverRef.current && !filterPopoverRef.current.contains(e.target as Node)) {
+        setIsFilterOpen(false);
+      }
+    };
+    if (isFilterOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isFilterOpen]);
 
   const isFleetEnabled = settings.enable_fleet !== undefined ? Boolean(settings.enable_fleet) : (settings.delivery_mode === "own_agent" || settings.delivery_mode === "hybrid");
   const isShiprocketEnabled = settings.enable_shiprocket !== undefined ? Boolean(settings.enable_shiprocket) : (settings.delivery_mode === "shiprocket" || settings.delivery_mode === "hybrid");
@@ -723,6 +745,10 @@ export default function DeliverySettingsPage() {
     (isManualEnabled ? 1 : 0);
 
   const toggleFleet = (enabled: boolean) => {
+    if (!canEdit) {
+      showFeedback("You do not have permission to modify delivery settings.", "error");
+      return;
+    }
     if (!enabled && isFleetEnabled && activeOptionsCount <= 1) {
       showFeedback("At least one delivery method must remain active.", "info");
       return;
@@ -730,22 +756,20 @@ export default function DeliverySettingsPage() {
     setSettings((p) => {
       const nextFleet = enabled;
       const nextSr = p.enable_shiprocket !== undefined ? Boolean(p.enable_shiprocket) : (p.delivery_mode === "shiprocket" || p.delivery_mode === "hybrid");
-      
       let nextMode: DeliveryMode = "manual";
       if (nextFleet && nextSr) nextMode = "hybrid";
       else if (nextFleet) nextMode = "own_agent";
       else if (nextSr) nextMode = "shiprocket";
       else nextMode = "manual";
-
-      return {
-        ...p,
-        enable_fleet: nextFleet,
-        delivery_mode: nextMode,
-      };
+      return { ...p, enable_fleet: nextFleet, delivery_mode: nextMode };
     });
   };
 
   const toggleShiprocket = (enabled: boolean) => {
+    if (!canEdit) {
+      showFeedback("You do not have permission to modify delivery settings.", "error");
+      return;
+    }
     if (!enabled && isShiprocketEnabled && activeOptionsCount <= 1) {
       showFeedback("At least one delivery method must remain active.", "info");
       return;
@@ -753,33 +777,25 @@ export default function DeliverySettingsPage() {
     setSettings((p) => {
       const nextFleet = p.enable_fleet !== undefined ? Boolean(p.enable_fleet) : (p.delivery_mode === "own_agent" || p.delivery_mode === "hybrid");
       const nextSr = enabled;
-
       let nextMode: DeliveryMode = "manual";
       if (nextFleet && nextSr) nextMode = "hybrid";
       else if (nextFleet) nextMode = "own_agent";
       else if (nextSr) nextMode = "shiprocket";
       else nextMode = "manual";
-
-      return {
-        ...p,
-        enable_shiprocket: nextSr,
-        delivery_mode: nextMode,
-      };
+      return { ...p, enable_shiprocket: nextSr, delivery_mode: nextMode };
     });
   };
 
   const toggleManual = (enabled: boolean) => {
+    if (!canEdit) {
+      showFeedback("You do not have permission to modify delivery settings.", "error");
+      return;
+    }
     if (!enabled && isManualEnabled && activeOptionsCount <= 1) {
       showFeedback("At least one delivery method must remain active.", "info");
       return;
     }
-    setSettings((p) => {
-      const nextManual = enabled;
-      return {
-        ...p,
-        enable_manual: nextManual,
-      };
-    });
+    setSettings((p) => ({ ...p, enable_manual: enabled }));
   };
 
   const currentTabEnabled =
@@ -791,11 +807,14 @@ export default function DeliverySettingsPage() {
 
   const handleStoreMapConfirm = async (result: GeoPickerResult) => {
     setShowStoreMapPicker(false);
+    if (!canEdit) {
+      showFeedback("You do not have permission to update store location.", "error");
+      return;
+    }
     const updatedSettings = {
       ...settings,
       sender_latitude: result.lat,
       sender_longitude: result.lng,
-      // Auto-fill all warehouse / store pickup address fields from reverse geocode
       sender_address: result.addressLine || settings.sender_address,
       sender_city: result.city || settings.sender_city,
       sender_state: result.state || settings.sender_state,
@@ -812,6 +831,15 @@ export default function DeliverySettingsPage() {
     });
     showFeedback("Store & Warehouse location updated from Map!", "success");
   };
+
+  if (!canView) {
+    return (
+      <AccessDeniedView
+        moduleName="Delivery & Shipping"
+        requiredPermission="delivery:view"
+      />
+    );
+  }
 
   if (loadingSettings) {
     return (
@@ -929,6 +957,7 @@ export default function DeliverySettingsPage() {
             </span>
             <ToggleSwitch
               checked={currentTabEnabled}
+              disabled={!canEdit}
               onChange={(val) => {
                 if (activeTab === "fleet") toggleFleet(val);
                 else if (activeTab === "shiprocket") toggleShiprocket(val);
@@ -938,29 +967,31 @@ export default function DeliverySettingsPage() {
           </div>
 
           {/* Save Settings Button */}
-          <button
-            type="button"
-            onClick={() => saveSettings()}
-            disabled={savingSettings}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "7px 16px",
-              borderRadius: "6px",
-              border: "none",
-              background: hasUnsavedChanges ? "#2563eb" : "#0f172a",
-              color: "#ffffff",
-              fontWeight: 700,
-              fontSize: "13px",
-              cursor: savingSettings ? "wait" : "pointer",
-              boxShadow: hasUnsavedChanges ? "0 1px 3px rgba(37,99,235,0.3)" : "none",
-              opacity: savingSettings ? 0.7 : 1,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {savingSettings ? "Saving..." : "Save Settings"}
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => saveSettings()}
+              disabled={savingSettings}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "7px 16px",
+                borderRadius: "6px",
+                border: "none",
+                background: hasUnsavedChanges ? "#2563eb" : "#0f172a",
+                color: "#ffffff",
+                fontWeight: 700,
+                fontSize: "13px",
+                cursor: savingSettings ? "wait" : "pointer",
+                boxShadow: hasUnsavedChanges ? "0 1px 3px rgba(37,99,235,0.3)" : "none",
+                opacity: savingSettings ? 0.7 : 1,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {savingSettings ? "Saving..." : "Save Settings"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -1001,20 +1032,22 @@ export default function DeliverySettingsPage() {
                       display: "inline-block",
                       width: "36px",
                       height: "20px",
-                      cursor: "pointer",
+                      cursor: canEdit ? "pointer" : "not-allowed",
                       margin: 0,
                       flexShrink: 0,
                     }}
                   >
                     <input
                       type="checkbox"
+                      disabled={!canEdit}
                       checked={settings.allow_open_pickup}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        if (!canEdit) return;
                         setSettings((prev) => ({
                           ...prev,
                           allow_open_pickup: e.target.checked,
-                        }))
-                      }
+                        }));
+                      }}
                       style={{ opacity: 0, width: 0, height: 0 }}
                     />
                     <span
@@ -1337,14 +1370,16 @@ export default function DeliverySettingsPage() {
                       type="number"
                       min={1}
                       max={200}
+                      disabled={!canEdit}
                       placeholder="10"
                       value={settings.own_delivery_radius_km}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        if (!canEdit) return;
                         setSettings((p) => ({
                           ...p,
                           own_delivery_radius_km: Number(e.target.value) || 0,
-                        }))
-                      }
+                        }));
+                      }}
                       style={{
                         width: "48px",
                         height: "28px",
@@ -1354,7 +1389,8 @@ export default function DeliverySettingsPage() {
                         color: "#0f172a",
                         border: "1px solid #cbd5e1",
                         borderRadius: "5px 0 0 5px",
-                        background: "#ffffff",
+                        background: canEdit ? "#ffffff" : "#f8fafc",
+                        cursor: canEdit ? "text" : "not-allowed",
                         textAlign: "center",
                         outline: "none",
                         boxSizing: "border-box",
@@ -1385,7 +1421,11 @@ export default function DeliverySettingsPage() {
                   {/* Store Location Pin Button */}
                   <button
                     type="button"
-                    onClick={() => setShowStoreMapPicker(true)}
+                    disabled={!canEdit}
+                    onClick={() => {
+                      if (!canEdit) return;
+                      setShowStoreMapPicker(true);
+                    }}
                     style={{
                       height: "28px",
                       padding: "0 10px",
@@ -1395,11 +1435,12 @@ export default function DeliverySettingsPage() {
                       color: settings.sender_latitude ? "#1d4ed8" : "#475569",
                       fontSize: "12px",
                       fontWeight: 600,
-                      cursor: "pointer",
+                      cursor: canEdit ? "pointer" : "not-allowed",
                       display: "inline-flex",
                       alignItems: "center",
                       gap: "5px",
                       whiteSpace: "nowrap",
+                      opacity: canEdit ? 1 : 0.7,
                     }}
                     title="Pin your store location on the map for accurate delivery radius calculation"
                   >
@@ -1447,13 +1488,15 @@ export default function DeliverySettingsPage() {
                     )}
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setShowAgentForm(!showAgentForm)}
-                    style={{ ...primaryButtonStyle, height: "30px", padding: "0 12px", fontSize: "12px", whiteSpace: "nowrap" }}
-                  >
-                    {showAgentForm ? "Cancel" : "+ Add delivery agent"}
-                  </button>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAgentForm(!showAgentForm)}
+                      style={{ ...primaryButtonStyle, height: "30px", padding: "0 12px", fontSize: "12px", whiteSpace: "nowrap" }}
+                    >
+                      {showAgentForm ? "Cancel" : "+ Add delivery agent"}
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1902,99 +1945,105 @@ export default function DeliverySettingsPage() {
 
                             {/* Column 4: Actions */}
                             <td style={{ ...tdStyle, textAlign: "right" }}>
-                              <div style={{ display: "inline-flex", gap: "5px", alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap" }}>
-                                {(agent.cash_in_hand || 0) > 0 && (
+                              {canEdit ? (
+                                <div style={{ display: "inline-flex", gap: "5px", alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap" }}>
+                                  {(agent.cash_in_hand || 0) > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSettleCashAgent(agent);
+                                        setSettleCashAmount("");
+                                        setSettleCashNotes("");
+                                      }}
+                                      style={{
+                                        ...ghostButtonStyle,
+                                        height: "28px",
+                                        padding: "0 8px",
+                                        fontSize: "11.5px",
+                                        color: "#059669",
+                                        borderColor: "#a7f3d0",
+                                        background: "#ecfdf5",
+                                        borderRadius: "5px",
+                                        whiteSpace: "nowrap",
+                                        fontWeight: 600,
+                                      }}
+                                      title="Collect & Settle Cash in Hand"
+                                    >
+                                      <span>Settle</span>
+                                    </button>
+                                  )}
+
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      setSettleCashAgent(agent);
-                                      setSettleCashAmount("");
-                                      setSettleCashNotes("");
+                                      setResetPinAgent(agent);
+                                      setResetPinValue("");
                                     }}
                                     style={{
                                       ...ghostButtonStyle,
                                       height: "28px",
                                       padding: "0 8px",
                                       fontSize: "11.5px",
-                                      color: "#059669",
-                                      borderColor: "#a7f3d0",
-                                      background: "#ecfdf5",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "3px",
                                       borderRadius: "5px",
                                       whiteSpace: "nowrap",
-                                      fontWeight: 600,
                                     }}
-                                    title="Collect & Settle Cash in Hand"
+                                    title="Reset Login PIN"
                                   >
-                                    <span>Settle</span>
+                                    <KeyIcon />
+                                    <span>PIN</span>
                                   </button>
-                                )}
 
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setResetPinAgent(agent);
-                                    setResetPinValue("");
-                                  }}
-                                  style={{
-                                    ...ghostButtonStyle,
-                                    height: "28px",
-                                    padding: "0 8px",
-                                    fontSize: "11.5px",
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "3px",
-                                    borderRadius: "5px",
-                                    whiteSpace: "nowrap",
-                                  }}
-                                  title="Reset Login PIN"
-                                >
-                                  <KeyIcon />
-                                  <span>PIN</span>
-                                </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleAgent(agent)}
+                                    style={{
+                                      ...ghostButtonStyle,
+                                      height: "28px",
+                                      width: "76px",
+                                      minWidth: "76px",
+                                      padding: "0",
+                                      fontSize: "11.5px",
+                                      color: agent.is_active ? "#b45309" : "#15803d",
+                                      borderColor: agent.is_active ? "#fde68a" : "#bbf7d0",
+                                      background: agent.is_active ? "#fffbeb" : "#f0fdf4",
+                                      borderRadius: "5px",
+                                      whiteSpace: "nowrap",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      textAlign: "center",
+                                    }}
+                                    title={agent.is_active ? "Deactivate Rider" : "Activate Rider"}
+                                  >
+                                    {agent.is_active ? "Deactivate" : "Activate"}
+                                  </button>
 
-                                <button
-                                  type="button"
-                                  onClick={() => toggleAgent(agent)}
-                                  style={{
-                                    ...ghostButtonStyle,
-                                    height: "28px",
-                                    width: "76px",
-                                    minWidth: "76px",
-                                    padding: "0",
-                                    fontSize: "11.5px",
-                                    color: agent.is_active ? "#b45309" : "#15803d",
-                                    borderColor: agent.is_active ? "#fde68a" : "#bbf7d0",
-                                    background: agent.is_active ? "#fffbeb" : "#f0fdf4",
-                                    borderRadius: "5px",
-                                    whiteSpace: "nowrap",
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    textAlign: "center",
-                                  }}
-                                  title={agent.is_active ? "Deactivate Rider" : "Activate Rider"}
-                                >
-                                  {agent.is_active ? "Deactivate" : "Activate"}
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => deleteAgent(agent)}
-                                  style={{
-                                    ...dangerButtonStyle,
-                                    height: "28px",
-                                    padding: "0 7px",
-                                    fontSize: "11.5px",
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    borderRadius: "5px",
-                                    whiteSpace: "nowrap",
-                                  }}
-                                  title={`Remove ${agent.name}`}
-                                >
-                                  <TrashIcon />
-                                </button>
-                              </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => deleteAgent(agent)}
+                                    style={{
+                                      ...dangerButtonStyle,
+                                      height: "28px",
+                                      padding: "0 7px",
+                                      fontSize: "11.5px",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      borderRadius: "5px",
+                                      whiteSpace: "nowrap",
+                                    }}
+                                    title={`Remove ${agent.name}`}
+                                  >
+                                    <TrashIcon />
+                                  </button>
+                                </div>
+                              ) : (
+                                <span style={{ fontSize: "11.5px", color: "#94a3b8", fontWeight: 500 }}>
+                                  Read only
+                                </span>
+                              )}
                             </td>
                           </tr>
                         ))
@@ -2118,8 +2167,16 @@ export default function DeliverySettingsPage() {
                   <button
                     type="button"
                     onClick={testShiprocket}
-                    disabled={testingConnection}
-                    style={{ ...ghostButtonStyle, height: "28px", padding: "0 12px", fontSize: "11.5px", whiteSpace: "nowrap" }}
+                    disabled={testingConnection || !canEdit}
+                    style={{
+                      ...ghostButtonStyle,
+                      height: "28px",
+                      padding: "0 12px",
+                      fontSize: "11.5px",
+                      whiteSpace: "nowrap",
+                      cursor: canEdit && !testingConnection ? "pointer" : "not-allowed",
+                      opacity: canEdit ? 1 : 0.6,
+                    }}
                   >
                     {testingConnection ? "Verifying..." : "Test Connection"}
                   </button>
@@ -2136,10 +2193,19 @@ export default function DeliverySettingsPage() {
                     <span style={labelStyle}>Shiprocket Account Email</span>
                     <input
                       type="email"
+                      disabled={!canEdit}
                       placeholder="name@company.com"
                       value={settings.shiprocket_email}
-                      onChange={(e) => setSettings((p) => ({ ...p, shiprocket_email: e.target.value }))}
-                      style={{ ...inputStyle, height: "34px" }}
+                      onChange={(e) => {
+                        if (!canEdit) return;
+                        setSettings((p) => ({ ...p, shiprocket_email: e.target.value }));
+                      }}
+                      style={{
+                        ...inputStyle,
+                        height: "34px",
+                        background: canEdit ? "#ffffff" : "#f8fafc",
+                        cursor: canEdit ? "text" : "not-allowed",
+                      }}
                     />
                   </label>
 
@@ -2149,10 +2215,19 @@ export default function DeliverySettingsPage() {
                     </span>
                     <input
                       type="password"
+                      disabled={!canEdit}
                       placeholder={settings.shiprocket_connected ? "••••••••••••" : "Enter password"}
                       value={srPassword}
-                      onChange={(e) => setSrPassword(e.target.value)}
-                      style={{ ...inputStyle, height: "34px" }}
+                      onChange={(e) => {
+                        if (!canEdit) return;
+                        setSrPassword(e.target.value);
+                      }}
+                      style={{
+                        ...inputStyle,
+                        height: "34px",
+                        background: canEdit ? "#ffffff" : "#f8fafc",
+                        cursor: canEdit ? "text" : "not-allowed",
+                      }}
                     />
                   </label>
                 </div>
@@ -2183,7 +2258,11 @@ export default function DeliverySettingsPage() {
 
                   <button
                     type="button"
-                    onClick={() => setShowStoreMapPicker(true)}
+                    disabled={!canEdit}
+                    onClick={() => {
+                      if (!canEdit) return;
+                      setShowStoreMapPicker(true);
+                    }}
                     style={{
                       padding: "5px 10px",
                       borderRadius: "6px",
@@ -2193,10 +2272,11 @@ export default function DeliverySettingsPage() {
                       borderColor: settings.sender_latitude ? "#bbf7d0" : "#bfdbfe",
                       fontSize: "11.5px",
                       fontWeight: 600,
-                      cursor: "pointer",
+                      cursor: canEdit ? "pointer" : "not-allowed",
                       display: "inline-flex",
                       alignItems: "center",
                       gap: "5px",
+                      opacity: canEdit ? 1 : 0.7,
                     }}
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -2236,7 +2316,10 @@ export default function DeliverySettingsPage() {
                   </div>
                 ) : (
                   <div
-                    onClick={() => setShowStoreMapPicker(true)}
+                    onClick={() => {
+                      if (!canEdit) return;
+                      setShowStoreMapPicker(true);
+                    }}
                     style={{
                       padding: "10px",
                       borderRadius: "6px",
@@ -2247,11 +2330,11 @@ export default function DeliverySettingsPage() {
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "space-between",
-                      cursor: "pointer",
+                      cursor: canEdit ? "pointer" : "default",
                     }}
                   >
                     <span>No warehouse location pinned. Click to drop a pin on Google Maps.</span>
-                    <span style={{ fontWeight: 600, textDecoration: "underline" }}>Open Map &rarr;</span>
+                    {canEdit && <span style={{ fontWeight: 600, textDecoration: "underline" }}>Open Map &rarr;</span>}
                   </div>
                 )}
 
@@ -2267,10 +2350,20 @@ export default function DeliverySettingsPage() {
                     <span style={labelStyle}>Sender Name</span>
                     <input
                       type="text"
+                      disabled={!canEdit}
                       placeholder="Warehouse Manager"
                       value={settings.sender_name}
-                      onChange={(e) => setSettings((p) => ({ ...p, sender_name: e.target.value }))}
-                      style={{ ...inputStyle, height: "30px", fontSize: "12px" }}
+                      onChange={(e) => {
+                        if (!canEdit) return;
+                        setSettings((p) => ({ ...p, sender_name: e.target.value }));
+                      }}
+                      style={{
+                        ...inputStyle,
+                        height: "30px",
+                        fontSize: "12px",
+                        background: canEdit ? "#ffffff" : "#f8fafc",
+                        cursor: canEdit ? "text" : "not-allowed",
+                      }}
                     />
                   </label>
 
@@ -2298,15 +2391,24 @@ export default function DeliverySettingsPage() {
                       <input
                         type="tel"
                         maxLength={10}
+                        disabled={!canEdit}
                         placeholder="8825255108"
                         value={settings.sender_phone}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          if (!canEdit) return;
                           setSettings((p) => ({
                             ...p,
                             sender_phone: e.target.value.replace(/\D/g, "").slice(0, 10),
-                          }))
-                        }
-                        style={{ ...inputStyle, height: "30px", fontSize: "12px", borderRadius: "0 6px 6px 0" }}
+                          }));
+                        }}
+                        style={{
+                          ...inputStyle,
+                          height: "30px",
+                          fontSize: "12px",
+                          borderRadius: "0 6px 6px 0",
+                          background: canEdit ? "#ffffff" : "#f8fafc",
+                          cursor: canEdit ? "text" : "not-allowed",
+                        }}
                       />
                     </div>
                   </label>
@@ -2315,10 +2417,20 @@ export default function DeliverySettingsPage() {
                     <span style={labelStyle}>Unit / Building / Plot No.</span>
                     <input
                       type="text"
+                      disabled={!canEdit}
                       placeholder="e.g. Unit 4, Gate B"
                       value={settings.sender_address}
-                      onChange={(e) => setSettings((p) => ({ ...p, sender_address: e.target.value }))}
-                      style={{ ...inputStyle, height: "30px", fontSize: "12px" }}
+                      onChange={(e) => {
+                        if (!canEdit) return;
+                        setSettings((p) => ({ ...p, sender_address: e.target.value }));
+                      }}
+                      style={{
+                        ...inputStyle,
+                        height: "30px",
+                        fontSize: "12px",
+                        background: canEdit ? "#ffffff" : "#f8fafc",
+                        cursor: canEdit ? "text" : "not-allowed",
+                      }}
                     />
                   </label>
 
@@ -2329,21 +2441,31 @@ export default function DeliverySettingsPage() {
                         type="number"
                         min={50}
                         max={50000}
+                        disabled={!canEdit}
                         placeholder="500"
                         value={settings.default_weight_grams}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          if (!canEdit) return;
                           setSettings((p) => ({
                             ...p,
                             default_weight_grams: Number(e.target.value) || 0,
-                          }))
-                        }
-                        style={{ ...inputStyle, height: "30px", fontSize: "12px", borderRadius: "6px 0 0 6px" }}
+                          }));
+                        }}
+                        style={{
+                          ...inputStyle,
+                          height: "30px",
+                          fontSize: "12px",
+                          borderRadius: "6px 0 0 6px",
+                          background: canEdit ? "#ffffff" : "#f8fafc",
+                          cursor: canEdit ? "text" : "not-allowed",
+                        }}
                       />
                       <span
                         style={{
                           height: "30px",
                           display: "inline-flex",
                           alignItems: "center",
+                          justifyContent: "center",
                           padding: "0 7px",
                           background: "#f1f5f9",
                           border: "1px solid #cbd5e1",
@@ -2353,6 +2475,7 @@ export default function DeliverySettingsPage() {
                           fontWeight: 600,
                           color: "#475569",
                           boxSizing: "border-box",
+                          userSelect: "none",
                         }}
                       >
                         g
@@ -2387,22 +2510,30 @@ export default function DeliverySettingsPage() {
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <label style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", color: "#334155", cursor: "pointer" }}>
+                    <label style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", color: "#334155", cursor: canEdit ? "pointer" : "not-allowed" }}>
                       <input
                         type="radio"
+                        disabled={!canEdit}
                         name="sr_coverage_compact"
                         checked={!settings.shiprocket_delivery_radius_km}
-                        onChange={() => setSettings((p) => ({ ...p, shiprocket_delivery_radius_km: null }))}
+                        onChange={() => {
+                          if (!canEdit) return;
+                          setSettings((p) => ({ ...p, shiprocket_delivery_radius_km: null }));
+                        }}
                       />
                       Nationwide
                     </label>
 
-                    <label style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", color: "#334155", cursor: "pointer" }}>
+                    <label style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", color: "#334155", cursor: canEdit ? "pointer" : "not-allowed" }}>
                       <input
                         type="radio"
+                        disabled={!canEdit}
                         name="sr_coverage_compact"
                         checked={Boolean(settings.shiprocket_delivery_radius_km)}
-                        onChange={() => setSettings((p) => ({ ...p, shiprocket_delivery_radius_km: p.shiprocket_delivery_radius_km || 500 }))}
+                        onChange={() => {
+                          if (!canEdit) return;
+                          setSettings((p) => ({ ...p, shiprocket_delivery_radius_km: p.shiprocket_delivery_radius_km || 500 }));
+                        }}
                       />
                       Limit Radius:
                     </label>
@@ -2413,14 +2544,24 @@ export default function DeliverySettingsPage() {
                           type="number"
                           min={1}
                           max={5000}
+                          disabled={!canEdit}
                           value={settings.shiprocket_delivery_radius_km || 500}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            if (!canEdit) return;
                             setSettings((p) => ({
                               ...p,
                               shiprocket_delivery_radius_km: Math.max(1, Number(e.target.value) || 0),
-                            }))
-                          }
-                          style={{ ...inputStyle, width: "65px", height: "26px", fontSize: "11.5px", padding: "2px 6px" }}
+                            }));
+                          }}
+                          style={{
+                            ...inputStyle,
+                            width: "65px",
+                            height: "26px",
+                            fontSize: "11.5px",
+                            padding: "2px 6px",
+                            background: canEdit ? "#ffffff" : "#f8fafc",
+                            cursor: canEdit ? "text" : "not-allowed",
+                          }}
                         />
                         <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b" }}>KM</span>
                       </div>

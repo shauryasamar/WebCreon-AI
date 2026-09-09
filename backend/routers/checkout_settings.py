@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlmodel import Session, select
 
-from auth_middleware import enforce_site_ownership
+from auth_middleware import enforce_site_ownership, require_permission
 from db.database import get_session
 from models import Site
 
@@ -303,6 +303,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
 @router.get("/sites/{site_id}/checkout-settings", response_model=CheckoutSettingsResponse)
 def get_checkout_settings(
     site_id: UUID,
+    admin=Depends(require_permission("checkout_charges:view")),
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
@@ -315,6 +316,7 @@ def get_checkout_settings(
 def update_checkout_settings(
     site_id: UUID,
     payload: CheckoutSettingsPayload,
+    admin=Depends(require_permission("checkout_charges:edit")),
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):

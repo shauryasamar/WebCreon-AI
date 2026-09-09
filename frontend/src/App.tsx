@@ -18,6 +18,15 @@ import BuilderTopControlBar from "./Component/BuilderTopControlBar";
 import BuilderControlPanel from "./Component/BuilderControlPanel";
 import BuilderDrawerPanel, { SettingsNavKey } from "./Component/BuilderDrawerPanel";
 import AdminProfileSettings from "./Component/AdminProfileSettings";
+import AdminUsersAndRoles from "./Component/AdminUsersAndRoles";
+import AdminAuditLogs from "./Component/AdminAuditLogs";
+import {
+  AdminGeneralSettings,
+  AdminDomainSettings,
+  AdminBillingSettings,
+  AdminIntegrationsSettings,
+  AdminHelpAndSupport,
+} from "./Component/AdminSettingsViews";
 import { AiWebpageGeneratingAnimation } from "./Component/AiWebpageGeneratingAnimation";
 import { AiAvatar } from "./Component/AiAvatar";
 import { UserAvatar } from "./Component/UserAvatar";
@@ -26,6 +35,7 @@ import BuilderPage, { siteSlugMemoryCache } from "./BuilderPage";
 import AdminLoginPage from "./pages/AdminLoginPage";
 import AdminSignupPage from "./pages/AdminSignupPage";
 import AdminResetPasswordPage from "./pages/AdminResetPasswordPage";
+import AdminAcceptInvitePage from "./pages/AdminAcceptInvitePage";
 import CustomerLoginPage from "./pages/CustomerLoginPage";
 import CustomerSignupPage from "./pages/CustomerSignupPage";
 
@@ -167,7 +177,7 @@ function RequireAdminAuth() {
 
 function AdminSitesPage() {
   const navigate = useNavigate();
-  const { admin, logoutAdmin } = useAdminAuth();
+  const { admin, logoutAdmin, isOwner, hasPermission } = useAdminAuth();
 
   const ONBOARDING_CHAT_KEY = "webnirmaan_onboarding_chat";
   const ONBOARDING_SESSION_KEY = "webnirmaan_onboarding_session_id";
@@ -741,10 +751,11 @@ function AdminSitesPage() {
 
   const leftPanel = (
     <BuilderControlPanel
-      activeKey={activeDrawer || (activeSettingsNavKey ? "settings" : "chat")}
-      disabledKeys={["customize", "admin-panel", "assets", "qr-link"]}
+      activeKey={activeDrawer || (activeSettingsNavKey ? "settings" : !isOwner ? "saved-sites" : "chat")}
+      disabledKeys={!isOwner ? ["chat", "customize", "admin-panel", "assets", "qr-link"] : ["customize", "admin-panel", "assets", "qr-link"]}
       onSelect={(key) => {
         if (key === "chat") {
+          if (!isOwner) return;
           setActiveSettingsNavKey(null);
           setActiveDrawer(null);
           return;
@@ -790,6 +801,175 @@ function AdminSitesPage() {
       {activeSettingsNavKey === "profile" ? (
         <div style={{ height: "100%", overflowY: "auto", background: "#ffffff", padding: "24px", boxSizing: "border-box" }}>
           <AdminProfileSettings />
+        </div>
+      ) : activeSettingsNavKey === "users-roles" ? (
+        <div style={{ height: "100%", overflowY: "auto", background: "#ffffff", padding: "24px", boxSizing: "border-box" }}>
+          <AdminUsersAndRoles />
+        </div>
+      ) : activeSettingsNavKey === "domain" ? (
+        <div style={{ height: "100%", overflowY: "auto", background: "#ffffff", padding: "24px", boxSizing: "border-box" }}>
+          <AdminDomainSettings />
+        </div>
+      ) : activeSettingsNavKey === "billing" ? (
+        <div style={{ height: "100%", overflowY: "auto", background: "#ffffff", padding: "24px", boxSizing: "border-box" }}>
+          <AdminBillingSettings />
+        </div>
+      ) : activeSettingsNavKey === "audit-logs" ? (
+        <div style={{ height: "100%", overflowY: "auto", background: "#ffffff", padding: "24px", boxSizing: "border-box" }}>
+          <AdminAuditLogs />
+        </div>
+      ) : activeSettingsNavKey === "help-support" ? (
+        <div style={{ height: "100%", overflowY: "auto", background: "#ffffff", padding: "24px", boxSizing: "border-box" }}>
+          <AdminHelpAndSupport />
+        </div>
+      ) : !isOwner ? (
+        <div
+          style={{
+            height: "100%",
+            overflowY: "auto",
+            background: "#f8fafc",
+            padding: "36px 32px",
+            boxSizing: "border-box",
+            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+          }}
+        >
+          <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px", flexWrap: "wrap", gap: "16px" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                  <h1 style={{ fontSize: "24px", fontWeight: 700, color: "#0f172a", margin: 0, letterSpacing: "-0.02em" }}>
+                    Your Assigned Stores
+                  </h1>
+                  <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 8px", borderRadius: "12px", background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe" }}>
+                    {admin?.role || "Staff"}
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: "14px", color: "#64748b" }}>
+                  Select an assigned store below to manage products, orders, and storefront configuration.
+                </p>
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: "14px 18px",
+                borderRadius: "12px",
+                background: "#ffffff",
+                border: "1px solid #e2e8f0",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                marginBottom: "28px",
+              }}
+            >
+              <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#fef3c7", color: "#b45309", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>
+                🛡️
+              </div>
+              <div style={{ fontSize: "13px", color: "#475569", lineHeight: 1.5 }}>
+                <strong style={{ color: "#0f172a" }}>Store Creation Restricted:</strong> The AI Store Onboarding Agent is accessible strictly by workspace owners. As a team member, you have direct access to your assigned storefronts below.
+              </div>
+            </div>
+
+            {savedSites.length === 0 ? (
+              <div
+                style={{
+                  background: "#ffffff",
+                  borderRadius: "16px",
+                  border: "1px solid #e2e8f0",
+                  padding: "48px 24px",
+                  textAlign: "center",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+                }}
+              >
+                <div style={{ fontSize: "36px", marginBottom: "12px" }}>🏪</div>
+                <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 8px 0" }}>
+                  No Stores Currently Assigned
+                </h3>
+                <p style={{ fontSize: "13.5px", color: "#64748b", maxWidth: "420px", margin: "0 auto", lineHeight: 1.5 }}>
+                  Your account is active, but you have not been granted access to any store websites yet. Please contact your workspace owner.
+                </p>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))",
+                  gap: "18px",
+                }}
+              >
+                {savedSites.map((site) => {
+                  const brand = site.site_definition?.site?.brand_name || site.slug;
+                  const domain = site.site_definition?.site?.domain || "E-Commerce";
+                  return (
+                    <div
+                      key={site.id}
+                      style={{
+                        background: "#ffffff",
+                        borderRadius: "14px",
+                        border: "1px solid #e2e8f0",
+                        padding: "20px",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                        gap: "16px",
+                        transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = "translateY(-2px)";
+                        e.currentTarget.style.boxShadow = "0 8px 24px rgba(15,23,42,0.08)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = "translateY(0)";
+                        e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.04)";
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px", marginBottom: "8px" }}>
+                          <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {brand}
+                          </h3>
+                          <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 6px", borderRadius: "6px", background: "#f1f5f9", color: "#475569", textTransform: "uppercase" }}>
+                            {domain}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: "12px", color: "#64748b", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {site.slug}
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", gap: "8px", paddingTop: "12px", borderTop: "1px solid #f1f5f9" }}>
+                        <button
+                          type="button"
+                          onClick={() => openSite(site.id)}
+                          style={{
+                            flex: 1,
+                            padding: "8px 14px",
+                            borderRadius: "8px",
+                            background: "#2563eb",
+                            color: "#ffffff",
+                            border: "none",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "6px",
+                            boxShadow: "0 2px 6px rgba(37,99,235,0.25)",
+                          }}
+                        >
+                          <span>Open Store</span>
+                          <span>→</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       ) : (
       <div
@@ -1368,6 +1548,7 @@ function AppRoutes() {
         <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route path="/admin/signup" element={<AdminSignupPage />} />
         <Route path="/admin/reset-password" element={<AdminResetPasswordPage />} />
+        <Route path="/admin/accept-invite" element={<AdminAcceptInvitePage />} />
 
         <Route path="/store/:slug/login" element={<StoreLoginWrapper />} />
         <Route path="/store/:slug/signup" element={<StoreSignupWrapper />} />

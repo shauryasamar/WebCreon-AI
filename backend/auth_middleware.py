@@ -2,11 +2,11 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import Cookie, Depends, HTTPException, Path, Request, status
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
 
 from auth_utils import decode_token
 from db.database import get_session
-from models import AdminSite, Site
+from models import Admin, AdminSite, Role, Site
 
 
 def _unauthorized(detail: str = "Unauthorized") -> HTTPException:
@@ -43,6 +43,42 @@ def authenticate_admin(
 
     request.state.admin = {"adminId": admin_id}
     return request.state.admin
+
+
+def enforce_owner_role(
+    admin=Depends(authenticate_admin),
+    session: Session = Depends(get_session),
+):
+    admin_id = admin["adminId"]
+    try:
+        admin_uuid = UUID(str(admin_id))
+    except (ValueError, TypeError):
+        raise _unauthorized("Invalid admin token payload")
+
+    admin_obj = session.get(Admin, admin_uuid)
+    if not admin_obj or not admin_obj.is_active:
+        raise _forbidden("Admin account is inactive or not found")
+
+    role_obj = None
+    if admin_obj.role_id:
+        try:
+            r_uuid = UUID(str(admin_obj.role_id))
+            role_obj = session.get(Role, r_uuid)
+        except Exception:
+            role_obj = None
+
+    if not role_obj and admin_obj.role:
+        role_obj = session.exec(select(Role).where(func.lower(Role.name) == admin_obj.role.strip().lower())).first()
+
+    if role_obj:
+        is_owner = (role_obj.name == "Owner")
+    else:
+        is_owner = bool(admin_obj.role in ("Owner", "super_admin") and not admin_obj.role_id)
+
+    if not is_owner:
+        raise _forbidden("Access restricted: Only the workspace owner can access the onboarding agent or create new stores.")
+
+    return admin
 
 
 def authenticate_customer(
@@ -169,6 +205,53 @@ def authenticate_rider(
     return request.state.rider
 
 
+def check_admin_has_permission(admin_id: str | UUID, permission_key: str, session: Session) -> bool:
+    try:
+        a_uuid = UUID(str(admin_id))
+    except (ValueError, TypeError):
+        return False
+
+    admin_obj = session.get(Admin, a_uuid)
+    if not admin_obj or not admin_obj.is_active:
+        return False
+
+    role_obj = None
+    if admin_obj.role_id:
+        try:
+            r_uuid = UUID(str(admin_obj.role_id))
+            role_obj = session.get(Role, r_uuid)
+        except Exception:
+            role_obj = None
+
+    if not role_obj and admin_obj.role:
+        role_obj = session.exec(select(Role).where(func.lower(Role.name) == admin_obj.role.strip().lower())).first()
+
+    if role_obj:
+        if role_obj.name == "Owner":
+            return True
+        role_perms = role_obj.permissions if role_obj.permissions else []
+        user_perms = admin_obj.additional_permissions or []
+        all_perms = set(role_perms + user_perms)
+        return permission_key in all_perms
+
+    if admin_obj.role in ("Owner", "super_admin") and not admin_obj.role_id:
+        return True
+
+    user_perms = admin_obj.additional_permissions or []
+    return permission_key in set(user_perms)
+
+
+def require_permission(permission_key: str):
+    def _dependency(
+        admin=Depends(authenticate_admin),
+        session: Session = Depends(get_session),
+    ):
+        if not check_admin_has_permission(admin["adminId"], permission_key, session):
+            raise _forbidden(f"You do not have permission to perform '{permission_key}'")
+        return admin
+    return _dependency
+
+
 def enforce_site_ownership(
     site_id: UUID = Path(...),
     admin=Depends(authenticate_admin),
@@ -177,10 +260,42 @@ def enforce_site_ownership(
     admin_id = admin["adminId"]
 
     try:
-        admin_uuid = UUID(admin_id)
-    except ValueError:
+        admin_uuid = UUID(str(admin_id))
+    except (ValueError, TypeError):
         raise _unauthorized("Invalid admin token payload")
 
+    admin_obj = session.get(Admin, admin_uuid)
+    if not admin_obj or not admin_obj.is_active:
+        raise _forbidden("Admin account is inactive or not found")
+
+    role_obj = None
+    if admin_obj.role_id:
+        try:
+            r_uuid = UUID(str(admin_obj.role_id))
+            role_obj = session.get(Role, r_uuid)
+        except Exception:
+            role_obj = None
+
+    if not role_obj and admin_obj.role:
+        role_obj = session.exec(select(Role).where(func.lower(Role.name) == admin_obj.role.strip().lower())).first()
+
+    if role_obj:
+        is_owner = (role_obj.name == "Owner")
+    else:
+        is_owner = bool(admin_obj.role in ("Owner", "super_admin") and not admin_obj.role_id)
+
+    website_access_type = getattr(admin_obj, "website_access_type", "all") or "all"
+
+    # Owner or admin with "all" websites access has access to any site
+    if is_owner or website_access_type == "all":
+        role_on_site = "owner" if is_owner else (role_obj.name.lower().replace(" ", "_") if role_obj else "manager")
+        return {
+            "adminId": admin_id,
+            "siteId": str(site_id),
+            "roleOnSite": role_on_site,
+        }
+
+    # Otherwise specific access required
     ownership = session.exec(
         select(AdminSite).where(
             AdminSite.admin_id == admin_uuid,
@@ -189,7 +304,7 @@ def enforce_site_ownership(
     ).first()
 
     if not ownership:
-        raise _forbidden("Admin does not have access to this site")
+        raise _forbidden("You do not have access to this website")
 
     return {
         "adminId": admin_id,

@@ -1,14 +1,16 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
 
 from auth_middleware import (
     authenticate_admin,
     authenticate_customer,
+    check_admin_has_permission,
     resolve_site_by_slug_or_404,
 )
 from auth_utils import (
@@ -27,6 +29,7 @@ from services.email_service import (
     send_admin_password_reset_email,
     send_customer_password_reset_email,
 )
+from routers.audit_logs import log_audit_event
 
 
 router = APIRouter(
@@ -158,12 +161,74 @@ def validate_name_or_400(name: str):
         raise HTTPException(status_code=400, detail="Name is required")
 
 
-def serialize_admin(admin: Admin) -> dict:
+def serialize_admin(admin: Admin, session: Optional[Session] = None) -> dict:
     name = getattr(admin, "name", None)
     if not name and admin.email:
         prefix = admin.email.split("@")[0]
         parts = [p.capitalize() for p in prefix.replace(".", " ").replace("_", " ").split()]
         name = " ".join(parts) if parts else "Admin"
+
+    role_name = getattr(admin, "role", "Owner")
+    permissions = []
+    is_owner = False
+    role_obj = None
+
+    try:
+        from routers.users_roles import ALL_PERMISSION_IDS
+        from models import Role
+
+        # 1. Resolve role object by role_id if present
+        role_uuid = getattr(admin, "role_id", None)
+        if role_uuid:
+            try:
+                role_uuid = UUID(str(role_uuid))
+            except Exception:
+                role_uuid = None
+
+        if role_uuid:
+            if session:
+                role_obj = session.get(Role, role_uuid)
+            else:
+                from db.database import engine
+                from sqlmodel import Session as SQLSession
+                with SQLSession(engine) as s:
+                    role_obj = s.get(Role, role_uuid)
+
+        # 2. If no role_obj found by role_id, try finding by role name in Role table
+        if not role_obj and getattr(admin, "role", None):
+            raw_role = admin.role.strip()
+            if session:
+                role_obj = session.exec(select(Role).where(func.lower(Role.name) == raw_role.lower())).first()
+            else:
+                from db.database import engine
+                from sqlmodel import Session as SQLSession
+                with SQLSession(engine) as s:
+                    role_obj = s.exec(select(Role).where(func.lower(Role.name) == raw_role.lower())).first()
+
+        if role_obj:
+            role_name = role_obj.name
+            is_owner = (role_obj.name == "Owner")
+            if is_owner:
+                permissions = ALL_PERMISSION_IDS
+                role_name = "Owner"
+            else:
+                role_perms = role_obj.permissions if role_obj.permissions else []
+                user_perms = admin.additional_permissions or []
+                permissions = list(set(role_perms + user_perms))
+        else:
+            # Fallback for accounts with neither role_id nor matching role in DB
+            is_owner = bool(admin.role in ("Owner", "super_admin") and not admin.role_id)
+            if is_owner:
+                role_name = "Owner"
+                permissions = ALL_PERMISSION_IDS
+            else:
+                role_name = admin.role or "Team Member"
+                permissions = admin.additional_permissions or []
+    except Exception:
+        is_owner = bool(getattr(admin, "role", None) in ("Owner", "super_admin") and not getattr(admin, "role_id", None))
+        role_name = "Owner" if is_owner else (getattr(admin, "role", None) or "Team Member")
+        permissions = ALL_PERMISSION_IDS if is_owner else (getattr(admin, "additional_permissions", None) or [])
+
     return {
         "id": str(admin.id),
         "email": admin.email,
@@ -171,13 +236,20 @@ def serialize_admin(admin: Admin) -> dict:
         "gender": getattr(admin, "gender", None),
         "phone": getattr(admin, "phone", None),
         "avatarUrl": getattr(admin, "avatar_url", None),
-        "role": getattr(admin, "role", "super_admin"),
+        "role": role_name,
+        "roleId": str(admin.role_id) if getattr(admin, "role_id", None) else (str(role_obj.id) if role_obj else None),
+        "isOwner": is_owner,
+        "permissions": permissions,
+        "websiteAccessType": getattr(admin, "website_access_type", "all") or "all",
+        "status": getattr(admin, "status", "active") or "active",
+        "isActive": admin.is_active,
         "authProvider": getattr(admin, "auth_provider", "email"),
         "googleId": getattr(admin, "google_id", None),
         "timezone": getattr(admin, "timezone", "Asia/Kolkata"),
         "hasPassword": bool(getattr(admin, "password_hash", None)),
         "createdAt": admin.created_at.isoformat() if getattr(admin, "created_at", None) else None,
     }
+
 
 
 def serialize_customer(user: User, site: Site) -> dict:
@@ -246,23 +318,49 @@ def admin_signup(
 @router.post("/admin/login")
 def admin_login(
     payload: AdminLoginRequest,
+    request: Request,
     session: Session = Depends(get_session),
 ):
     validate_password_or_400(payload.password)
 
     email = payload.email.lower().strip()
+    client_ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
 
     admin = session.exec(
         select(Admin).where(Admin.email == email)
     ).first()
     
     if not admin:
+        log_audit_event(
+            session=session,
+            action="auth.login_failed",
+            category="security",
+            status="failure",
+            description=f"Failed login attempt for unknown email '{email}'",
+            actor_email=email,
+            ip_address=client_ip,
+            user_agent=user_agent,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
 
     if not getattr(admin, "is_active", True):
+        log_audit_event(
+            session=session,
+            action="auth.login_blocked",
+            category="security",
+            status="warning",
+            description=f"Blocked login attempt for inactive admin account '{email}'",
+            admin_id=admin.id,
+            actor_email=admin.email,
+            actor_name=admin.name,
+            actor_role=admin.role,
+            ip_address=client_ip,
+            user_agent=user_agent,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin account is inactive. Please contact support.",
@@ -275,6 +373,19 @@ def admin_login(
         )
 
     if not verify_password(payload.password, admin.password_hash or ""):
+        log_audit_event(
+            session=session,
+            action="auth.login_failed",
+            category="security",
+            status="failure",
+            description=f"Failed password login attempt for admin '{email}'",
+            admin_id=admin.id,
+            actor_email=admin.email,
+            actor_name=admin.name,
+            actor_role=admin.role,
+            ip_address=client_ip,
+            user_agent=user_agent,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -283,6 +394,20 @@ def admin_login(
     admin.last_login_at = datetime.now(timezone.utc)
     session.add(admin)
     session.commit()
+
+    log_audit_event(
+        session=session,
+        action="auth.login",
+        category="auth",
+        status="success",
+        description=f"Admin {admin.name or admin.email} logged in successfully",
+        admin_id=admin.id,
+        actor_email=admin.email,
+        actor_name=admin.name,
+        actor_role=admin.role,
+        ip_address=client_ip,
+        user_agent=user_agent,
+    )
 
     token = create_admin_token(str(admin.id))
 
@@ -294,7 +419,7 @@ def admin_login(
 
     response = JSONResponse(
         content={
-            "admin": serialize_admin(admin),
+            "admin": serialize_admin(admin, session),
             "sites": [
                 {
                     "id": str(s[0]),
@@ -312,6 +437,7 @@ def admin_login(
 @router.post("/admin/google")
 def admin_google_auth(
     payload: GoogleAuthRequest,
+    request: Request,
     session: Session = Depends(get_session),
 ):
     google_user = verify_google_id_token(payload.id_token)
@@ -322,6 +448,9 @@ def admin_google_auth(
         )
 
     email = google_user["email"].lower().strip()
+    client_ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+
     admin = session.exec(
         select(Admin).where(Admin.email == email)
     ).first()
@@ -357,6 +486,20 @@ def admin_google_auth(
         session.add(admin)
         session.commit()
         session.refresh(admin)
+
+    log_audit_event(
+        session=session,
+        action="auth.google_login",
+        category="auth",
+        status="success",
+        description=f"Admin {admin.name or admin.email} signed in via Google OAuth",
+        admin_id=admin.id,
+        actor_email=admin.email,
+        actor_name=admin.name,
+        actor_role=admin.role,
+        ip_address=client_ip,
+        user_agent=user_agent,
+    )
 
     token = create_admin_token(str(admin.id))
 
@@ -464,6 +607,9 @@ def update_admin_profile(
     session: Session = Depends(get_session),
 ):
     admin_id = admin["adminId"]
+    if not check_admin_has_permission(admin_id, "profile:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to edit profile information")
+
     admin_obj = session.get(Admin, admin_id)
     if not admin_obj:
         raise HTTPException(status_code=404, detail="Admin not found")
@@ -476,8 +622,6 @@ def update_admin_profile(
         admin_obj.phone = payload.phone.strip()
     if payload.avatar_url is not None:
         admin_obj.avatar_url = payload.avatar_url.strip()
-    if payload.role is not None:
-        admin_obj.role = payload.role.strip()
     if payload.timezone is not None:
         admin_obj.timezone = payload.timezone.strip()
 
@@ -485,7 +629,7 @@ def update_admin_profile(
     session.commit()
     session.refresh(admin_obj)
 
-    return {"admin": serialize_admin(admin_obj)}
+    return {"admin": serialize_admin(admin_obj, session)}
 
 
 from uuid import uuid4
@@ -503,6 +647,9 @@ async def upload_admin_avatar(
     session: Session = Depends(get_session),
 ):
     admin_id = admin["adminId"]
+    if not check_admin_has_permission(admin_id, "profile:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to update avatar")
+
     admin_obj = session.get(Admin, admin_id)
     if not admin_obj:
         raise HTTPException(status_code=404, detail="Admin not found")
@@ -556,14 +703,21 @@ def get_admin_me(
     session: Session = Depends(get_session),
 ):
     admin_id = admin["adminId"]
-    admin_obj = session.get(Admin, admin_id)
+    try:
+        a_uuid = UUID(str(admin_id))
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid admin ID in token",
+        )
+    admin_obj = session.get(Admin, a_uuid)
     if not admin_obj:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Admin not found",
         )
     return {
-        "admin": serialize_admin(admin_obj)
+        "admin": serialize_admin(admin_obj, session)
     }
 
 
