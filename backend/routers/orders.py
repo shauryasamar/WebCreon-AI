@@ -8,7 +8,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy import cast, String
@@ -16,6 +16,7 @@ from sqlmodel import Session, delete, func, or_, select
 
 from auth_middleware import authenticate_admin, authenticate_customer, check_admin_has_permission, enforce_site_ownership
 from db.database import get_session
+from routers.audit_logs import log_activity
 
 logger = logging.getLogger(__name__)
 from models import (
@@ -1649,6 +1650,7 @@ def update_order_status(
     site_id: UUID,
     order_id: UUID,
     payload: UpdateOrderStatusRequest,
+    request: Request = None,
     admin=Depends(authenticate_admin),
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
@@ -1968,6 +1970,42 @@ def update_order_status(
         )
 
         session.commit()
+
+        try:
+            action_name = "order.cancelled" if payload.status == "cancelled" else "order.status_changed"
+            summary_text = (
+                f"Cancelled order #{str(order.id)[:8]}" + (f": {payload.cancel_reason}" if payload.cancel_reason else "")
+                if payload.status == "cancelled"
+                else f"Changed status of order #{str(order.id)[:8]} from '{previous_status}' to '{payload.status}'"
+            )
+            admin_uuid = UUID(admin["adminId"]) if admin.get("adminId") else None
+            log_activity(
+                session=session,
+                admin_id=admin_uuid,
+                user_id=admin_uuid,
+                action=action_name,
+                category="orders",
+                site_id=site_id,
+                resource_type="order",
+                resource_id=str(order.id),
+                resource_name=f"Order #{str(order.id)[:8]}",
+                summary=summary_text,
+                description=summary_text,
+                details={
+                    "order_id": str(order.id),
+                    "before": {"status": previous_status},
+                    "after": {
+                        "status": payload.status,
+                        "cancel_reason": payload.cancel_reason if payload.status == "cancelled" else None,
+                    },
+                },
+                request=request,
+                actor_email=admin.get("email"),
+                actor_name=admin.get("name") or admin.get("email"),
+                actor_role=admin.get("role") or "Staff",
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to record activity log for order status update: {log_err}")
     except HTTPException:
         session.rollback()
         raise

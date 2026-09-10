@@ -91,7 +91,7 @@ const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
   },
   {
     key: "audit-logs",
-    label: "Activity Logs",
+    label: "Activity",
   },
   {
     key: "help-support",

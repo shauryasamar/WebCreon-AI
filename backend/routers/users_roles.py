@@ -12,6 +12,7 @@ from auth_middleware import authenticate_admin, check_admin_has_permission
 from auth_utils import hash_password, validate_password_strength, create_admin_token
 from db.database import get_session, engine
 from models import Admin, AdminSite, Role, Site, utc_now
+from routers.audit_logs import log_activity
 
 router = APIRouter(
     prefix="/users-roles",
@@ -206,10 +207,10 @@ PERMISSION_CATALOG = [
                 ],
             },
             {
-                "module": "Activity & Audit Logs",
+                "module": "Activity",
                 "key": "audit_logs",
                 "permissions": [
-                    {"id": "audit_logs:view", "name": "View", "description": "View system activity, admin login history and audit events", "sensitive": True},
+                    {"id": "audit_logs:view", "name": "View Activity", "description": "View important changes and actions made across your account and stores", "sensitive": True},
                 ],
             },
         ],
@@ -259,7 +260,6 @@ DEFAULT_SYSTEM_ROLES = [
             "delivery:view", "delivery:edit",
             "checkout_charges:view", "checkout_charges:edit",
             "earnings:view",
-            "audit_logs:view",
             "profile:view", "profile:edit",
         ],
     },
@@ -581,6 +581,7 @@ def list_roles(
 @router.post("/roles")
 def create_role(
     payload: CreateRoleRequest,
+    request: Request,
     current_admin=Depends(authenticate_admin),
     session: Session = Depends(get_session),
 ):
@@ -607,6 +608,19 @@ def create_role(
     session.commit()
     session.refresh(new_role)
 
+    log_activity(
+        session=session,
+        action="role.created",
+        category="user_access",
+        description=f"Created custom role '{new_role.name}' with {len(valid_perms)} permissions",
+        admin_id=current_admin.get("adminId"),
+        resource_type="Role",
+        resource_id=str(new_role.id),
+        resource_name=new_role.name,
+        changes={"permissions": {"after": valid_perms}},
+        request=request,
+    )
+
     return {"role": serialize_role(new_role, user_count=0), "message": f"Role '{name}' created successfully"}
 
 
@@ -614,6 +628,7 @@ def create_role(
 def update_role(
     role_id: UUID,
     payload: UpdateRoleRequest,
+    request: Request,
     current_admin=Depends(authenticate_admin),
     session: Session = Depends(get_session),
 ):
@@ -628,6 +643,7 @@ def update_role(
     if role.name == "Owner":
         raise HTTPException(status_code=400, detail="The Owner role is protected and cannot be modified")
 
+    diff_changes = {}
     if payload.name is not None and not role.is_system:
         trimmed_name = payload.name.strip()
         existing = session.exec(
@@ -635,20 +651,37 @@ def update_role(
         ).first()
         if existing:
             raise HTTPException(status_code=400, detail=f"A role named '{trimmed_name}' already exists")
+        if trimmed_name != role.name:
+            diff_changes["name"] = {"before": role.name, "after": trimmed_name}
         role.name = trimmed_name
 
     if payload.description is not None:
         role.description = payload.description.strip()
 
     if payload.permissions is not None:
-        # Validate permissions
-        role.permissions = [p for p in payload.permissions if p in ALL_PERMISSION_IDS]
+        new_perms = [p for p in payload.permissions if p in ALL_PERMISSION_IDS]
+        if set(new_perms) != set(role.permissions or []):
+            diff_changes["permissions_count"] = {"before": len(role.permissions or []), "after": len(new_perms)}
+        role.permissions = new_perms
         flag_modified(role, "permissions")
 
     role.updated_at = utc_now()
     session.add(role)
     session.commit()
     session.refresh(role)
+
+    log_activity(
+        session=session,
+        action="role.updated",
+        category="user_access",
+        description=f"Updated role '{role.name}'",
+        admin_id=current_admin.get("adminId"),
+        resource_type="Role",
+        resource_id=str(role.id),
+        resource_name=role.name,
+        changes=diff_changes if diff_changes else None,
+        request=request,
+    )
 
     # Count assigned users
     count = session.exec(select(func.count(Admin.id)).where(Admin.role_id == role.id)).one()
@@ -659,6 +692,7 @@ def update_role(
 @router.delete("/roles/{role_id}")
 def delete_role(
     role_id: UUID,
+    request: Request,
     current_admin=Depends(authenticate_admin),
     session: Session = Depends(get_session),
 ):
@@ -679,10 +713,23 @@ def delete_role(
             detail=f"This role is currently assigned to {user_count} user(s). Reassign these users before deleting the role.",
         )
 
+    deleted_role_name = role.name
     session.delete(role)
     session.commit()
 
-    return {"message": f"Role '{role.name}' deleted successfully"}
+    log_activity(
+        session=session,
+        action="role.deleted",
+        category="user_access",
+        description=f"Deleted custom role '{deleted_role_name}'",
+        admin_id=current_admin.get("adminId"),
+        resource_type="Role",
+        resource_id=str(role_id),
+        resource_name=deleted_role_name,
+        request=request,
+    )
+
+    return {"message": f"Role '{deleted_role_name}' deleted successfully"}
 
 
 # ---------------------------------------------------------------------------
@@ -748,8 +795,7 @@ def list_users(
         workspace_sites[site_obj.id] = site_obj
 
     if not workspace_sites:
-        for s in session.exec(select(Site)).all():
-            workspace_sites[s.id] = s
+        pass  # No sites in this workspace; team members will show with empty site list
 
     # Collect ALL team members belonging to this owner's workspace / team,
     # irrespective of which storefront is currently open in the admin builder!
@@ -903,10 +949,7 @@ def invite_user(
     owner_site_links = session.exec(select(AdminSite).where(AdminSite.admin_id == curr_adm_id)).all()
     owner_site_ids = {l.site_id for l in owner_site_links}
     workspace_sites = {s.id: s for s in session.exec(select(Site).where(Site.id.in_(list(owner_site_ids)))).all()}
-    if not workspace_sites:
-        workspace_sites = {s.id: s for s in session.exec(select(Site)).all()}
-    if not owner_site_ids:
-        owner_site_ids = set(workspace_sites.keys())
+    # No fallback to select(Site) — prevents cross-workspace site leakage
 
     # 3. Check if user already exists
     existing = session.exec(select(Admin).where(func.lower(Admin.email) == email)).first()
@@ -1046,6 +1089,19 @@ def invite_user(
     else:
         message = f"Invitation created for {target_admin.name or email}. Share the invitation link to complete setup."
 
+    log_activity(
+        session=session,
+        action="user.invited",
+        category="user_access",
+        description=f"Invited user '{target_admin.name or email}' ({email}) with role '{role.name}'",
+        admin_id=current_admin.get("adminId"),
+        resource_type="User",
+        resource_id=str(target_admin.id),
+        resource_name=target_admin.name or email,
+        changes={"role": {"after": role.name}, "email": {"after": email}, "access_type": {"after": payload.website_access_type}},
+        request=request,
+    )
+
     return {
         "user": serialize_user(target_admin, role, accessible_sites, request_origin=origin, is_owner_override=False),
         "invite_url": invite_url,
@@ -1072,7 +1128,15 @@ def update_user(
     current_role = roles_by_id.get(admin.role_id)
     is_owner = (current_role and current_role.name == "Owner") or admin.role == "Owner"
 
-    if payload.name is not None:
+    old_name = admin.name
+    old_role_name = current_role.name if current_role else admin.role
+    old_access_type = admin.website_access_type
+    old_status = admin.status
+    diff_changes: Dict[str, Any] = {}
+    primary_action = "user.details_changed"
+
+    if payload.name is not None and payload.name.strip() != old_name:
+        diff_changes["name"] = {"before": old_name, "after": payload.name.strip()}
         admin.name = payload.name.strip()
 
     # If changing role
@@ -1083,6 +1147,9 @@ def update_user(
         # Do not allow demoting primary owner
         if is_owner and new_role.name != "Owner":
             raise HTTPException(status_code=400, detail="The Owner account role cannot be changed")
+        if current_role and current_role.id != new_role.id:
+            diff_changes["role"] = {"before": old_role_name, "after": new_role.name}
+            primary_action = "user.role_changed"
         admin.role_id = new_role.id
         admin.role = new_role.name
         current_role = new_role
@@ -1091,6 +1158,10 @@ def update_user(
     if payload.website_access_type is not None:
         if is_owner and payload.website_access_type != "all":
             raise HTTPException(status_code=400, detail="The Owner must have access to all websites")
+        if payload.website_access_type != old_access_type:
+            diff_changes["website_access"] = {"before": old_access_type, "after": payload.website_access_type}
+            if primary_action == "user.details_changed":
+                primary_action = "user.website_access_changed"
         admin.website_access_type = payload.website_access_type
 
     # Determine workspace sites belonging to current admin
@@ -1098,8 +1169,8 @@ def update_user(
     owner_site_links = session.exec(select(AdminSite).where(AdminSite.admin_id == curr_adm_id)).all()
     owner_site_ids = {l.site_id for l in owner_site_links}
     workspace_sites = {s.id: s for s in session.exec(select(Site).where(Site.id.in_(list(owner_site_ids)))).all()}
-    if not workspace_sites:
-        workspace_sites = {s.id: s for s in session.exec(select(Site)).all()}
+    # NOTE: intentionally no fallback to select(Site) with no filter —
+    # if owner has no sites, workspace is empty (no site leakage to other workspaces)
 
     # Update specific site links
     if payload.site_ids is not None and admin.website_access_type == "specific":
@@ -1122,17 +1193,35 @@ def update_user(
     if payload.additional_permissions is not None:
         admin.additional_permissions = [p for p in payload.additional_permissions if p in ALL_PERMISSION_IDS]
         flag_modified(admin, "additional_permissions")
+        diff_changes["additional_permissions"] = {"after": admin.additional_permissions}
+        if primary_action == "user.details_changed":
+            primary_action = "user.permission_added"
 
     # Update status if provided
     if payload.status is not None:
         if is_owner and payload.status != "active":
             raise HTTPException(status_code=400, detail="The Owner account cannot be deactivated")
+        if payload.status != old_status:
+            diff_changes["status"] = {"before": old_status, "after": payload.status}
         admin.status = payload.status
         admin.is_active = (payload.status == "active")
 
     session.add(admin)
     session.commit()
     session.refresh(admin)
+
+    log_activity(
+        session=session,
+        action=primary_action,
+        category="user_access",
+        description=f"Updated team member '{admin.name}' ({admin.email})",
+        admin_id=current_admin.get("adminId"),
+        resource_type="User",
+        resource_id=str(admin.id),
+        resource_name=admin.name or admin.email,
+        changes=diff_changes if diff_changes else None,
+        request=request,
+    )
 
     # Gather assigned sites in current workspace
     if admin.website_access_type == "specific":
@@ -1147,7 +1236,13 @@ def update_user(
             if s_rec and s_rec not in assigned_sites:
                 assigned_sites.append(s_rec)
     else:
-        assigned_sites = list(workspace_sites.values())
+        # For "all" access type, return only sites within the owner's workspace
+        # (prevents cross-workspace site leakage)
+        user_links = session.exec(select(AdminSite).where(AdminSite.admin_id == admin.id)).all()
+        user_site_ids = [lnk.site_id for lnk in user_links]
+        assigned_sites = list(workspace_sites.values()) if not user_site_ids else [
+            s for s in workspace_sites.values() if s.id in set(user_site_ids)
+        ] or list(workspace_sites.values())
 
     origin = request.headers.get("origin", "http://localhost:5173")
     return {
@@ -1179,12 +1274,28 @@ def deactivate_user(
     session.commit()
     session.refresh(admin)
 
+    log_activity(
+        session=session,
+        action="user.deactivated",
+        category="user_access",
+        description=f"Deactivated team member '{admin.name}' ({admin.email})",
+        admin_id=current_admin.get("adminId"),
+        resource_type="User",
+        resource_id=str(admin.id),
+        resource_name=admin.name or admin.email,
+        changes={"status": {"before": "active", "after": "inactive"}},
+        request=request,
+    )
+
     role = session.get(Role, admin.role_id) if admin.role_id else None
-    all_sites = {s.id: s for s in session.exec(select(Site)).all()}
+    # Only return sites this user actually has access to
+    admin_site_links = session.exec(select(AdminSite).where(AdminSite.admin_id == admin.id)).all()
+    accessible_site_ids = [lnk.site_id for lnk in admin_site_links]
+    user_sites = session.exec(select(Site).where(Site.id.in_(accessible_site_ids))).all() if accessible_site_ids else []
     origin = request.headers.get("origin", "http://localhost:5173")
 
     return {
-        "user": serialize_user(admin, role, list(all_sites.values()), request_origin=origin),
+        "user": serialize_user(admin, role, user_sites, request_origin=origin),
         "message": f"User '{admin.name}' has been deactivated",
     }
 
@@ -1209,12 +1320,27 @@ def reactivate_user(
     session.commit()
     session.refresh(admin)
 
+    log_activity(
+        session=session,
+        action="user.activated",
+        category="user_access",
+        description=f"Reactivated team member '{admin.name}' ({admin.email})",
+        admin_id=current_admin.get("adminId"),
+        resource_type="User",
+        resource_id=str(admin.id),
+        resource_name=admin.name or admin.email,
+        changes={"status": {"before": "inactive", "after": "active"}},
+        request=request,
+    )
+
     role = session.get(Role, admin.role_id) if admin.role_id else None
-    all_sites = {s.id: s for s in session.exec(select(Site)).all()}
+    admin_site_links = session.exec(select(AdminSite).where(AdminSite.admin_id == admin.id)).all()
+    accessible_site_ids = [lnk.site_id for lnk in admin_site_links]
+    user_sites = session.exec(select(Site).where(Site.id.in_(accessible_site_ids))).all() if accessible_site_ids else []
     origin = request.headers.get("origin", "http://localhost:5173")
 
     return {
-        "user": serialize_user(admin, role, list(all_sites.values()), request_origin=origin),
+        "user": serialize_user(admin, role, user_sites, request_origin=origin),
         "message": f"User '{admin.name}' has been reactivated",
     }
 
@@ -1245,10 +1371,12 @@ def resend_invite(
     invite_url = f"{origin}/admin/accept-invite?token={new_token}"
 
     role = session.get(Role, admin.role_id) if admin.role_id else None
-    all_sites = {s.id: s for s in session.exec(select(Site)).all()}
+    admin_site_links = session.exec(select(AdminSite).where(AdminSite.admin_id == admin.id)).all()
+    accessible_site_ids = [lnk.site_id for lnk in admin_site_links]
+    user_sites = session.exec(select(Site).where(Site.id.in_(accessible_site_ids))).all() if accessible_site_ids else []
 
     return {
-        "user": serialize_user(admin, role, list(all_sites.values()), request_origin=origin),
+        "user": serialize_user(admin, role, user_sites, request_origin=origin),
         "invite_url": invite_url,
         "message": f"Fresh invitation link generated for {admin.name}",
     }
@@ -1278,8 +1406,7 @@ def remove_user(
     # Determine workspace sites belonging to current admin
     owner_site_links = session.exec(select(AdminSite).where(AdminSite.admin_id == curr_adm_id)).all()
     owner_site_ids = {l.site_id for l in owner_site_links}
-    if not owner_site_ids:
-        owner_site_ids = {s.id for s in session.exec(select(Site)).all()}
+    # No fallback to select(Site) — prevents cross-workspace site leakage
 
     # Remove site links for this workspace only
     member_site_links = session.exec(select(AdminSite).where(AdminSite.admin_id == admin.id)).all()
@@ -1306,6 +1433,17 @@ def remove_user(
             admin.invited_by_admin_id = None
             session.add(admin)
         session.commit()
+
+    log_activity(
+        session=session,
+        action="user.removed",
+        category="user_access",
+        description=f"Removed team member '{name}' from workspace",
+        admin_id=current_admin.get("adminId"),
+        resource_type="User",
+        resource_id=str(user_id),
+        resource_name=name,
+    )
 
     return {"message": f"Team member '{name}' has been removed from workspace"}
 
@@ -1365,6 +1503,20 @@ def accept_invitation(
     session.add(admin)
     session.commit()
     session.refresh(admin)
+
+    log_activity(
+        session=session,
+        action="user.invitation_accepted",
+        category="user_access",
+        description=f"Team member '{admin.name}' ({admin.email}) accepted team invitation",
+        admin_id=str(admin.id),
+        actor_email=admin.email,
+        actor_name=admin.name,
+        resource_type="User",
+        resource_id=str(admin.id),
+        resource_name=admin.name or admin.email,
+        changes={"status": {"before": "pending", "after": "active"}},
+    )
 
     # Set auth cookie for seamless instant login
     token = create_admin_token(str(admin.id))

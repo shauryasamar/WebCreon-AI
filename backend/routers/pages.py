@@ -13,6 +13,7 @@ from sqlmodel import Session, select
 from auth_middleware import check_admin_has_permission, enforce_site_ownership
 from db.database import get_session
 from models import AdminSite, Site, StorePage, SupportTicket, SupportTicketMessage, utc_now
+from services.audit_service import AuditService, ActorType, SourceType, AuditCategory
 
 router = APIRouter(tags=["store-pages"])
 
@@ -353,6 +354,29 @@ def create_store_page(
             detail="A database conflict occurred while creating the page.",
         )
 
+    try:
+        admin_uuid = UUID(str(admin_id)) if admin_id else None
+        AuditService.log_event(
+            session=session,
+            site_id=site_id,
+            actor_type=ActorType.OWNER if (ownership.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=admin_uuid,
+            actor_name=ownership.get("name"),
+            actor_email=ownership.get("email"),
+            actor_role=ownership.get("role") or "Staff",
+            category=AuditCategory.WEBSITE,
+            action="website.page_created",
+            source=SourceType.WEB_ADMIN,
+            resource_type="store_page",
+            resource_id=str(new_page.id),
+            resource_name=new_page.title,
+            summary=f"Created store page '{new_page.title}' ({'/p/' + new_page.slug})",
+            description=f"Created new page '{new_page.title}' with slug '/p/{new_page.slug}'. Published: {new_page.is_published}.",
+            metadata={"slug": new_page.slug, "page_type": new_page.page_type, "is_published": new_page.is_published},
+        )
+    except Exception as log_err:
+        pass
+
     return new_page
 
 
@@ -434,6 +458,30 @@ def update_store_page(
     session.add(page)
     session.commit()
     session.refresh(page)
+
+    try:
+        admin_uuid = UUID(str(admin_id)) if admin_id else None
+        AuditService.log_event(
+            session=session,
+            site_id=site_id,
+            actor_type=ActorType.OWNER if (ownership.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=admin_uuid,
+            actor_name=ownership.get("name"),
+            actor_email=ownership.get("email"),
+            actor_role=ownership.get("role") or "Staff",
+            category=AuditCategory.WEBSITE,
+            action="website.page_updated",
+            source=SourceType.WEB_ADMIN,
+            resource_type="store_page",
+            resource_id=str(page.id),
+            resource_name=page.title,
+            summary=f"Updated store page '{page.title}' ({'/p/' + page.slug})",
+            description=f"Updated page '{page.title}' content/settings. Published: {page.is_published}.",
+            metadata={"slug": page.slug, "page_type": page.page_type, "is_published": page.is_published},
+        )
+    except Exception as log_err:
+        pass
+
     return page
 
 
@@ -458,9 +506,33 @@ def delete_store_page(
             detail="Core system pages (About, Contact, Privacy, Terms, Story) cannot be deleted. You can set them to 'Draft' to hide them from the storefront.",
         )
 
+    page_title = page.title
+    page_id_str = str(page.id)
     session.delete(page)
     session.commit()
-    return {"success": True, "message": f"Page '{page.title}' deleted successfully."}
+
+    try:
+        admin_uuid = UUID(str(admin_id)) if admin_id else None
+        AuditService.log_event(
+            session=session,
+            site_id=site_id,
+            actor_type=ActorType.OWNER if (ownership.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=admin_uuid,
+            actor_name=ownership.get("name"),
+            actor_email=ownership.get("email"),
+            actor_role=ownership.get("role") or "Staff",
+            category=AuditCategory.WEBSITE,
+            action="website.page_deleted",
+            source=SourceType.WEB_ADMIN,
+            resource_type="store_page",
+            resource_id=page_id_str,
+            resource_name=page_title,
+            summary=f"Deleted store page '{page_title}'",
+        )
+    except Exception as log_err:
+        pass
+
+    return {"success": True, "message": f"Page '{page_title}' deleted successfully."}
 
 
 # ==============================================================================

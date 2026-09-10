@@ -2639,7 +2639,7 @@ function BuilderPageContent() {
             ? "domain"
             : location.pathname.includes("/settings/billing")
             ? "billing"
-            : location.pathname.includes("/settings/audit-logs")
+            : location.pathname.includes("/settings/audit-logs") || location.pathname.includes("/settings/activity")
             ? "audit-logs"
             : location.pathname.includes("/settings/help-support")
             ? "help-support"
@@ -2903,6 +2903,16 @@ function BuilderPageContent() {
                     />
                     <Route
                       path="audit-logs"
+                      element={
+                        hasPermission("audit_logs:view") ? (
+                          <AdminAuditLogs siteId={resolvedSiteId || siteId} />
+                        ) : (
+                          <AccessDeniedView requiredPermission="audit_logs:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="activity"
                       element={
                         hasPermission("audit_logs:view") ? (
                           <AdminAuditLogs siteId={resolvedSiteId || siteId} />

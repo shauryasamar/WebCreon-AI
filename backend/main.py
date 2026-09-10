@@ -61,10 +61,50 @@ async def _mature_escrow_cron_task():
                 released, total = process_mature_escrows(session)
                 if released > 0:
                     logger.info("Auto-escrow cron: Released %d mature escrow payout(s) totaling ₹%.2f", released, total)
+                    try:
+                        from services.audit_service import AuditService, ActorType, SourceType, AuditCategory
+                        AuditService.log_event(
+                            session=session,
+                            site_id=None,
+                            actor_type=ActorType.CRON_JOB,
+                            actor_name="Mature Escrow Cron",
+                            actor_role="System Scheduler",
+                            category=AuditCategory.EARNINGS_LEDGER,
+                            action="escrow.auto_released",
+                            source=SourceType.CRON_ESCROW_RELEASE,
+                            summary=f"Automated background cron released {released} mature escrow payout(s) totaling ₹{float(total):,.2f}",
+                            metadata={
+                                "financial": True,
+                                "amount": float(total),
+                                "currency": "INR",
+                                "released_count": released,
+                            },
+                        )
+                    except Exception as cron_log_err:
+                        logger.warning("Failed to log escrow.auto_released audit event: %s", cron_log_err)
         except asyncio.CancelledError:
             break
         except Exception as err:
             logger.error("Error in mature escrow background task: %s", err)
+
+
+async def _activity_retention_cron_task():
+    """Runs automatically at startup and once daily to permanently delete activity logs older than 90 days."""
+    while True:
+        try:
+            with Session(engine) as session:
+                from routers.audit_logs import cleanup_expired_activity_logs
+                deleted = cleanup_expired_activity_logs(session, retention_days=90)
+                if deleted > 0:
+                    logger.info("Daily Activity Retention Cron: Purged %d expired records older than 90 days", deleted)
+        except asyncio.CancelledError:
+            break
+        except Exception as err:
+            logger.error("Error in activity log retention background task: %s", err)
+        try:
+            await asyncio.sleep(86400)  # Run once every 24 hours
+        except asyncio.CancelledError:
+            break
 
 
 @asynccontextmanager
@@ -78,6 +118,81 @@ async def lifespan(app: FastAPI):
             logger.info("Users & Roles system initialized successfully.")
     except Exception as seed_err:
         logger.warning("Could not seed default roles and users: %s", seed_err)
+
+    try:
+        with Session(engine) as session:
+            # 1. Clean up any pytest test sites that leaked into production database
+            test_sites = session.exec(
+                select(Site).where(
+                    (Site.slug.like("store-ret-%")) |
+                    (Site.slug.like("store-charges-%")) |
+                    (Site.slug.like("stat-store-%")) |
+                    (Site.slug.like("inv-store-%")) |
+                    (Site.slug.like("sec-store-%")) |
+                    (Site.slug.like("test-store-%"))
+                )
+            ).all()
+            test_ids = [s.id for s in test_sites]
+            if test_ids:
+                stale_links = session.exec(
+                    select(AdminSite).where(AdminSite.site_id.in_(test_ids))
+                ).all()
+                for lk in stale_links:
+                    session.delete(lk)
+                for ts in test_sites:
+                    session.delete(ts)
+                session.commit()
+                logger.info(f"Purged {len(test_ids)} leftover pytest test sites and links.")
+
+            # 2. Scope team members strictly to their workspace owner
+            from models import Role
+            owner_admin = session.exec(
+                select(Admin)
+                .join(Role, Role.id == Admin.role_id, isouter=True)
+                .where((Role.name == "Owner") | (Admin.role == "Owner"))
+                .order_by(Admin.created_at.asc())
+            ).first()
+
+            if owner_admin:
+                owner_site_links = session.exec(
+                    select(AdminSite.site_id).where(AdminSite.admin_id == owner_admin.id)
+                ).all()
+                owner_site_ids = set(owner_site_links)
+
+                non_owners = session.exec(
+                    select(Admin).where(Admin.id != owner_admin.id)
+                ).all()
+                for no in non_owners:
+                    if not no.invited_by_admin_id:
+                        no.invited_by_admin_id = owner_admin.id
+                        session.add(no)
+
+                    # Delete any AdminSite records for this team member that are NOT in owner's workspace
+                    if owner_site_ids:
+                        bad_member_links = session.exec(
+                            select(AdminSite).where(
+                                AdminSite.admin_id == no.id,
+                                ~AdminSite.site_id.in_(list(owner_site_ids))
+                            )
+                        ).all()
+                        for bl in bad_member_links:
+                            session.delete(bl)
+
+                    # If team member has access "all", ensure they have AdminSite links for all owner's sites
+                    if getattr(no, "website_access_type", "all") == "all" and owner_site_ids:
+                        for osid in owner_site_ids:
+                            existing_link = session.exec(
+                                select(AdminSite).where(AdminSite.admin_id == no.id, AdminSite.site_id == osid)
+                            ).first()
+                            if not existing_link:
+                                role_site_str = (no.role or "store_manager").lower().replace(" ", "_")
+                                session.add(AdminSite(admin_id=no.id, site_id=osid, role_on_site=role_site_str))
+
+                session.commit()
+                logger.info("Workspace team members and AdminSite isolation verified and healed.")
+    except Exception as cleanup_err:
+        logger.warning("Could not complete workspace site isolation cleanup: %s", cleanup_err)
+
     try:
         with Session(engine) as session:
             repl_shipments = session.exec(select(Shipment).where(Shipment.awb_number.like("REPL-%"))).all()
@@ -88,6 +203,7 @@ async def lifespan(app: FastAPI):
     except Exception as cleanup_err:
         logger.warning("Could not purge legacy REPL shipments: %s", cleanup_err)
     escrow_task = asyncio.create_task(_mature_escrow_cron_task())
+    retention_task = asyncio.create_task(_activity_retention_cron_task())
     try:
         yield
     finally:
@@ -97,8 +213,13 @@ async def lifespan(app: FastAPI):
         except Exception:
             pass
         escrow_task.cancel()
+        retention_task.cancel()
         try:
             await escrow_task
+        except asyncio.CancelledError:
+            pass
+        try:
+            await retention_task
         except asyncio.CancelledError:
             pass
 
@@ -219,7 +340,7 @@ class GenerateSiteRequest(BaseModel):
 
 
 class SaveSiteRequest(BaseModel):
-    slug: str
+    slug: Optional[str] = None
     site_definition: dict[str, Any]
     draft_definition: Optional[dict[str, Any]] = None
 
@@ -820,6 +941,7 @@ async def generate_site_definition_stream_endpoint(
 def publish_site(
     site_id: UUID,
     payload: PublishSiteRequest,
+    request: Request = None,
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
@@ -830,6 +952,7 @@ def publish_site(
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
 
+    old_version = site.version
     site.site_definition = payload.draft_definition
     site.draft_definition = payload.draft_definition
     site.version = site.version + 1
@@ -837,6 +960,29 @@ def publish_site(
     session.add(site)
     session.commit()
     session.refresh(site)
+
+    try:
+        audit_logs.log_activity(
+            session=session,
+            user_id=UUID(ownership["adminId"]),
+            action="website_published",
+            category="website",
+            site_id=site.id,
+            resource_type="website",
+            resource_id=str(site.id),
+            resource_name=site.name or site.slug,
+            summary=f"Published storefront changes for {site.name or site.slug} (v{site.version})",
+            details={
+                "version": site.version,
+                "previous_version": old_version,
+                "slug": site.slug,
+            },
+            request=request,
+            user_email=ownership.get("email"),
+            user_name=ownership.get("name") or ownership.get("email"),
+        )
+    except Exception as log_err:
+        logger.warning(f"Failed to record website_published log: {log_err}")
 
     invalidate_public_site_cache(site.slug, site.id)
     return site
@@ -1159,35 +1305,69 @@ def update_site(
     session: Session = Depends(get_session),
 ):
     admin_id = ownership["adminId"]
-    if not (
-        check_admin_has_permission(admin_id, "home_sections:edit", session)
-        or check_admin_has_permission(admin_id, "customize:edit", session)
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail="You do not have permission to edit site layout or home sections",
+    # Owners always have full access; team members need at least one relevant permission
+    if not ownership.get("is_owner", False):
+        has_perm = (
+            check_admin_has_permission(admin_id, "home_sections:edit", session)
+            or check_admin_has_permission(admin_id, "home_sections:publish", session)
+            or check_admin_has_permission(admin_id, "customize:edit", session)
+            or check_admin_has_permission(admin_id, "customize:publish", session)
+            or check_admin_has_permission(admin_id, "website:edit", session)
+            or check_admin_has_permission(admin_id, "store:edit", session)
         )
+        if not has_perm:
+            raise HTTPException(
+                status_code=403,
+                detail="You do not have permission to edit site layout or home sections",
+            )
 
     site = session.get(Site, site_id)
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
 
-    slug_conflict = session.exec(
-        select(Site).where(Site.slug == payload.slug, Site.id != site_id)
-    ).first()
-    if slug_conflict:
-        raise HTTPException(status_code=400, detail="Site slug already exists")
+    # Only update slug if a valid, non-UUID, different slug is provided
+    if payload.slug and payload.slug != str(site_id) and payload.slug != site.slug:
+        slug_conflict = session.exec(
+            select(Site).where(Site.slug == payload.slug, Site.id != site_id)
+        ).first()
+        if slug_conflict:
+            raise HTTPException(status_code=400, detail="Site slug already exists")
+        site.slug = payload.slug
 
-    site.slug = payload.slug
     site.site_definition = payload.site_definition
-    site.draft_definition = payload.draft_definition
-    site.version = site.version + 1
+    site.draft_definition = payload.draft_definition or payload.site_definition
+    site.version = (site.version or 1) + 1
+    site.updated_at = datetime.now(timezone.utc)
 
     session.add(site)
     session.commit()
     session.refresh(site)
 
-    invalidate_public_site_cache(payload.slug, site_id)
+    invalidate_public_site_cache(site.slug, site_id)
+
+    try:
+        from services.audit_service import AuditService, ActorType, SourceType, AuditCategory
+        admin_uuid = UUID(str(admin_id)) if admin_id else None
+        AuditService.log_event(
+            session=session,
+            site_id=site_id,
+            actor_type=ActorType.OWNER if ownership.get("is_owner") else ActorType.TEAM_MEMBER,
+            actor_id=admin_uuid,
+            actor_name=ownership.get("name") or "Team Member",
+            actor_email=ownership.get("email") or "",
+            actor_role=ownership.get("role") or "Staff",
+            category=AuditCategory.WEBSITE,
+            action="website.home_sections_updated",
+            source=SourceType.WEB_ADMIN,
+            resource_type="website_sections",
+            resource_id=str(site_id),
+            resource_name=f"{site.name or site.slug} Home Sections",
+            summary=f"Updated home sections layout for '{site.name or site.slug}' (v{site.version})",
+            metadata={"version": site.version, "slug": site.slug},
+        )
+    except Exception as log_err:
+        logger.error("Audit log failed in update_site: %s", log_err)
+
     return site
 
 
@@ -1214,6 +1394,30 @@ def update_site_default_return_policy(
     session.add(site)
     session.commit()
     session.refresh(site)
+
+    try:
+        from services.audit_service import AuditService, ActorType, SourceType, AuditCategory
+        admin_uuid = UUID(str(ownership["adminId"])) if ownership.get("adminId") else None
+        AuditService.log_event(
+            session=session,
+            site_id=site_id,
+            actor_type=ActorType.OWNER if (ownership.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=admin_uuid,
+            actor_name=ownership.get("name"),
+            actor_email=ownership.get("email"),
+            actor_role=ownership.get("role") or "Staff",
+            category=AuditCategory.SETTINGS,
+            action="store.settings_changed",
+            source=SourceType.WEB_ADMIN,
+            resource_type="store_policy",
+            resource_id=str(site_id),
+            resource_name=f"{site.name or site.slug} Return Policy",
+            summary=f"Updated default store return window to {payload.default_return_window_days} days",
+            metadata={"default_return_window_days": payload.default_return_window_days},
+        )
+    except Exception as log_err:
+        pass
+
     return {
         "message": "Store default return policy updated",
         "default_return_window_days": site.default_return_window_days,

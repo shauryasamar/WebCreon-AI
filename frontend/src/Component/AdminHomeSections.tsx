@@ -417,8 +417,16 @@ export const AdminHomeSections: React.FC = () => {
           }
         }
 
+        if (typeof siteDef === "string") {
+          try {
+            siteDef = JSON.parse(siteDef);
+          } catch (_) {
+            siteDef = null;
+          }
+        }
+
         let loadedSections: HomeSectionItem[] = [];
-        if (siteDef) {
+        if (siteDef && typeof siteDef === "object") {
           const homePage = (siteDef.pages || []).find((p: any) => p.id === "home" || p.route === "/");
           if (homePage && Array.isArray(homePage.blocks)) {
             // Read Hero Banner status
@@ -625,16 +633,63 @@ export const AdminHomeSections: React.FC = () => {
     if (!canEdit || !siteId) return;
     setSaving(true);
     try {
+      let currentSlug = siteSlug;
       const snapshotKey = `wc_site_snapshot_${siteId}`;
       const rawSnapshot = localStorage.getItem(snapshotKey) || sessionStorage.getItem(snapshotKey);
-      let snapshot = rawSnapshot ? JSON.parse(rawSnapshot) : { site_definition: { pages: [] } };
-      let siteDef = snapshot.draft_definition || snapshot.site_definition || { pages: [] };
+      let snapshot: any = null;
+      if (rawSnapshot) {
+        try {
+          const parsed = JSON.parse(rawSnapshot);
+          if (parsed && typeof parsed === "object") {
+            snapshot = parsed;
+            if (parsed.slug && !currentSlug) {
+              currentSlug = parsed.slug;
+              setSiteSlug(parsed.slug);
+            }
+          }
+        } catch (_) {
+          try { localStorage.removeItem(snapshotKey); } catch (_) {}
+          try { sessionStorage.removeItem(snapshotKey); } catch (_) {}
+        }
+      }
+
+      // If snapshot is missing or currentSlug is missing, fetch fresh from API
+      if (!snapshot || !currentSlug) {
+        try {
+          const freshRes = await fetch(`${API_BASE_URL}/sites/${siteId}?t=${Date.now()}`, { credentials: "include" });
+          if (freshRes.ok) {
+            const data = await freshRes.json();
+            snapshot = data;
+            if (data.slug) {
+              currentSlug = data.slug;
+              setSiteSlug(data.slug);
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (!snapshot || typeof snapshot !== "object") {
+        snapshot = { site_definition: { pages: [] } };
+      }
+
+      let rawDef = snapshot.draft_definition || snapshot.site_definition || { pages: [] };
+      if (typeof rawDef === "string") {
+        try {
+          rawDef = JSON.parse(rawDef);
+        } catch (_) {
+          rawDef = { pages: [] };
+        }
+      }
+      let siteDef: any = (rawDef && typeof rawDef === "object") ? { ...rawDef } : { pages: [] };
 
       if (!Array.isArray(siteDef.pages)) {
         siteDef.pages = [];
+      } else {
+        siteDef.pages = [...siteDef.pages];
       }
 
-      let homePage = siteDef.pages.find((p: any) => p.id === "home" || p.route === "/");
+      let homePageIdx = siteDef.pages.findIndex((p: any) => p.id === "home" || p.route === "/");
+      let homePage: any = homePageIdx >= 0 ? { ...siteDef.pages[homePageIdx] } : null;
       if (!homePage) {
         homePage = {
           id: "home",
@@ -643,9 +698,11 @@ export const AdminHomeSections: React.FC = () => {
           blocks: [],
         };
         siteDef.pages.unshift(homePage);
+      } else {
+        siteDef.pages[homePageIdx] = homePage;
       }
 
-      const existingBlocks: any[] = Array.isArray(homePage.blocks) ? homePage.blocks : [];
+      const existingBlocks: any[] = Array.isArray(homePage.blocks) ? [...homePage.blocks] : [];
 
       const navbarBlock = existingBlocks.find((b: any) => b.type === "navbar") || {
         id: "navbar",
@@ -727,25 +784,32 @@ export const AdminHomeSections: React.FC = () => {
       snapshot.site_definition = siteDef;
       snapshot.updated_at = new Date().toISOString();
 
-      localStorage.setItem(`wc_site_snapshot_${siteId}`, JSON.stringify(snapshot));
-      if (siteSlug) {
-        localStorage.setItem(`wc_site_snapshot_${siteSlug}`, JSON.stringify(snapshot));
-      }
+      try {
+        localStorage.setItem(`wc_site_snapshot_${siteId}`, JSON.stringify(snapshot));
+        if (currentSlug) {
+          localStorage.setItem(`wc_site_snapshot_${currentSlug}`, JSON.stringify(snapshot));
+        }
+      } catch (_) {}
 
       // 1. Sync to backend database via PUT
-      try {
-        await fetch(`${API_BASE_URL}/sites/${siteId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            slug: siteSlug || siteId,
-            site_definition: siteDef,
-            draft_definition: siteDef,
-          }),
-        });
-      } catch (backendErr) {
-        console.warn("Backend sync notice:", backendErr);
+      const backendRes = await fetch(`${API_BASE_URL}/sites/${siteId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          slug: currentSlug || undefined,
+          site_definition: siteDef,
+          draft_definition: siteDef,
+        }),
+      });
+
+      if (!backendRes.ok) {
+        let errMsg = "Failed to save sections. Please try again.";
+        try {
+          const errData = await backendRes.json();
+          if (errData?.detail) errMsg = errData.detail;
+        } catch (_) {}
+        throw new Error(errMsg);
       }
 
       // 2. Broadcast realtime event to storefront preview
@@ -758,9 +822,9 @@ export const AdminHomeSections: React.FC = () => {
       setToastMessage("Home sections updated successfully!");
       setToastType("success");
       setSections(updatedList);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to save sections:", err);
-      setToastMessage("Failed to save sections. Please try again.");
+      setToastMessage(err?.message || "Failed to save sections. Please try again.");
       setToastType("error");
     } finally {
       setSaving(false);
@@ -778,6 +842,7 @@ export const AdminHomeSections: React.FC = () => {
     const next = sections.map((sec) =>
       sec.id === id ? { ...sec, isActive: !sec.isActive } : sec
     );
+    setSections(next);
     handleSaveSections(next);
   };
 

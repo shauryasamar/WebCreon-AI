@@ -12,7 +12,7 @@ from sqlmodel import Session, func, select
 from auth_middleware import check_admin_has_permission, enforce_site_ownership
 from db.database import get_session
 from models import Coupon, CouponUsage, Order, Site, User
-
+from services.audit_service import AuditService, ActorType, SourceType, AuditCategory
 
 router = APIRouter(prefix="/coupons", tags=["coupons"])
 
@@ -198,6 +198,33 @@ def admin_create_coupon(
     session.commit()
     session.refresh(coupon)
 
+    try:
+        admin_uuid = UUID(str(admin_id)) if admin_id else None
+        AuditService.log_event(
+            session=session,
+            site_id=site.id,
+            actor_type=ActorType.OWNER if (admin.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=admin_uuid,
+            actor_name=admin.get("name"),
+            actor_email=admin.get("email"),
+            actor_role=admin.get("role") or "Staff",
+            category=AuditCategory.DISCOUNTS,
+            action="coupon.created",
+            source=SourceType.WEB_ADMIN,
+            resource_type="coupon",
+            resource_id=str(coupon.id),
+            resource_name=coupon.code,
+            summary=f"Created promo code '{coupon.code}' ({coupon.discount_type}: {coupon.discount_value})",
+            metadata={
+                "code": coupon.code,
+                "discount_type": coupon.discount_type,
+                "discount_value": float(coupon.discount_value),
+                "min_order_value": float(coupon.min_order_value),
+            },
+        )
+    except Exception as log_err:
+        pass
+
     return {
         "message": f"Promo code '{coupon.code}' created successfully.",
         "coupon": serialize_coupon(coupon),
@@ -252,6 +279,28 @@ def admin_update_coupon(
     session.commit()
     session.refresh(coupon)
 
+    try:
+        admin_uuid = UUID(str(admin_id)) if admin_id else None
+        AuditService.log_event(
+            session=session,
+            site_id=site.id,
+            actor_type=ActorType.OWNER if (admin.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=admin_uuid,
+            actor_name=admin.get("name"),
+            actor_email=admin.get("email"),
+            actor_role=admin.get("role") or "Staff",
+            category=AuditCategory.DISCOUNTS,
+            action="coupon.updated",
+            source=SourceType.WEB_ADMIN,
+            resource_type="coupon",
+            resource_id=str(coupon.id),
+            resource_name=coupon.code,
+            summary=f"Updated promo code '{coupon.code}' details",
+            metadata={"code": coupon.code, "is_active": coupon.is_active},
+        )
+    except Exception as log_err:
+        pass
+
     return {
         "message": "Coupon updated successfully",
         "coupon": serialize_coupon(coupon),
@@ -281,6 +330,28 @@ def admin_toggle_coupon(
     session.commit()
     session.refresh(coupon)
 
+    try:
+        admin_uuid = UUID(str(admin_id)) if admin_id else None
+        AuditService.log_event(
+            session=session,
+            site_id=site.id,
+            actor_type=ActorType.OWNER if (admin.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=admin_uuid,
+            actor_name=admin.get("name"),
+            actor_email=admin.get("email"),
+            actor_role=admin.get("role") or "Staff",
+            category=AuditCategory.DISCOUNTS,
+            action="coupon.toggled",
+            source=SourceType.WEB_ADMIN,
+            resource_type="coupon",
+            resource_id=str(coupon.id),
+            resource_name=coupon.code,
+            summary=f"Promo code '{coupon.code}' is now {'active' if coupon.is_active else 'paused'}",
+            metadata={"code": coupon.code, "is_active": coupon.is_active},
+        )
+    except Exception as log_err:
+        pass
+
     return {
         "message": f"Coupon '{coupon.code}' is now {'active' if coupon.is_active else 'paused'}.",
         "coupon": serialize_coupon(coupon),
@@ -304,8 +375,31 @@ def admin_delete_coupon(
     if not coupon or coupon.site_id != site.id:
         raise HTTPException(status_code=404, detail="Coupon not found")
 
+    coupon_code = coupon.code
     session.delete(coupon)
     session.commit()
+
+    try:
+        admin_uuid = UUID(str(admin_id)) if admin_id else None
+        AuditService.log_event(
+            session=session,
+            site_id=site.id,
+            actor_type=ActorType.OWNER if (admin.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=admin_uuid,
+            actor_name=admin.get("name"),
+            actor_email=admin.get("email"),
+            actor_role=admin.get("role") or "Staff",
+            category=AuditCategory.DISCOUNTS,
+            action="coupon.deleted",
+            source=SourceType.WEB_ADMIN,
+            resource_type="coupon",
+            resource_id=coupon_id,
+            resource_name=coupon_code,
+            summary=f"Deleted promo code '{coupon_code}'",
+            metadata={"code": coupon_code},
+        )
+    except Exception as log_err:
+        pass
 
     return {"message": f"Coupon '{coupon.code}' deleted successfully."}
 

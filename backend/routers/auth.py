@@ -725,16 +725,137 @@ def get_admin_sites(
     admin=Depends(authenticate_admin),
     session: Session = Depends(get_session),
 ):
-    admin_id = admin["adminId"]
+    try:
+        admin_uuid = UUID(str(admin["adminId"]))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=401, detail="Invalid admin token")
 
-    sites = session.exec(
+    admin_obj = session.get(Admin, admin_uuid)
+    if not admin_obj or not admin_obj.is_active:
+        raise HTTPException(status_code=401, detail="Admin not found or inactive")
+
+    # Determine role
+    from models import Role
+    role_obj = None
+    if admin_obj.role_id:
+        try:
+            role_obj = session.get(Role, UUID(str(admin_obj.role_id)))
+        except Exception:
+            pass
+    if not role_obj and admin_obj.role:
+        role_obj = session.exec(select(Role).where(func.lower(Role.name) == admin_obj.role.strip().lower())).first()
+
+    is_owner = (
+        (role_obj and role_obj.name == "Owner")
+        or (admin_obj.role in ("Owner", "super_admin") and not admin_obj.role_id)
+    )
+
+    if is_owner:
+        # Owner: return only their own sites, excluding any leftover test sites
+        sites = session.exec(
+            select(Site)
+            .join(AdminSite, AdminSite.site_id == Site.id)
+            .where(
+                AdminSite.admin_id == admin_uuid,
+                ~Site.slug.like("store-ret-%"),
+                ~Site.slug.like("store-charges-%"),
+                ~Site.slug.like("stat-store-%"),
+                ~Site.slug.like("inv-store-%"),
+                ~Site.slug.like("sec-store-%"),
+                ~Site.slug.like("test-store-%"),
+            )
+            .order_by(Site.created_at.desc())
+        ).all()
+        return sites
+
+    # Team member: scope strictly to the workspace owner's storefronts
+    owner_id = getattr(admin_obj, "invited_by_admin_id", None)
+    if not owner_id:
+        owner_admin = session.exec(
+            select(Admin)
+            .join(Role, Role.id == Admin.role_id, isouter=True)
+            .where((Role.name == "Owner") | (Admin.role == "Owner"))
+            .order_by(Admin.created_at.asc())
+        ).first()
+        if owner_admin:
+            owner_id = owner_admin.id
+            admin_obj.invited_by_admin_id = owner_admin.id
+            session.add(admin_obj)
+            session.commit()
+
+    owner_uuid = None
+    if owner_id:
+        try:
+            owner_uuid = UUID(str(owner_id))
+        except Exception:
+            owner_uuid = None
+
+    owner_sites = []
+    if owner_uuid:
+        owner_sites = session.exec(
+            select(Site)
+            .join(AdminSite, AdminSite.site_id == Site.id)
+            .where(
+                AdminSite.admin_id == owner_uuid,
+                ~Site.slug.like("store-ret-%"),
+                ~Site.slug.like("store-charges-%"),
+                ~Site.slug.like("stat-store-%"),
+                ~Site.slug.like("inv-store-%"),
+                ~Site.slug.like("sec-store-%"),
+                ~Site.slug.like("test-store-%"),
+            )
+            .order_by(Site.created_at.desc())
+        ).all()
+
+    owner_site_ids = [s.id for s in owner_sites]
+    website_access_type = getattr(admin_obj, "website_access_type", "all") or "all"
+
+    if website_access_type == "all":
+        if owner_sites:
+            return owner_sites
+        # Fallback: only clean non-test sites explicitly linked to this admin
+        return session.exec(
+            select(Site)
+            .join(AdminSite, AdminSite.site_id == Site.id)
+            .where(
+                AdminSite.admin_id == admin_uuid,
+                ~Site.slug.like("store-ret-%"),
+                ~Site.slug.like("store-charges-%"),
+                ~Site.slug.like("stat-store-%"),
+                ~Site.slug.like("inv-store-%"),
+                ~Site.slug.like("sec-store-%"),
+                ~Site.slug.like("test-store-%"),
+            )
+            .order_by(Site.created_at.desc())
+        ).all()
+
+    # "specific" access: return only sites assigned to this member that belong to the owner's workspace
+    if owner_site_ids:
+        member_sites = session.exec(
+            select(Site)
+            .join(AdminSite, AdminSite.site_id == Site.id)
+            .where(
+                AdminSite.admin_id == admin_uuid,
+                Site.id.in_(owner_site_ids),
+            )
+            .order_by(Site.created_at.desc())
+        ).all()
+        return member_sites
+
+    return session.exec(
         select(Site)
         .join(AdminSite, AdminSite.site_id == Site.id)
-        .where(AdminSite.admin_id == admin_id)
+        .where(
+            AdminSite.admin_id == admin_uuid,
+            ~Site.slug.like("store-ret-%"),
+            ~Site.slug.like("store-charges-%"),
+            ~Site.slug.like("stat-store-%"),
+            ~Site.slug.like("inv-store-%"),
+            ~Site.slug.like("sec-store-%"),
+            ~Site.slug.like("test-store-%"),
+        )
         .order_by(Site.created_at.desc())
     ).all()
-
-    return sites
 
 
 @router.post("/admin/logout")

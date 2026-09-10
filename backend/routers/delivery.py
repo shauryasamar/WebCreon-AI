@@ -39,6 +39,7 @@ from models import (
     TenantLedgerEntry,
     User,
 )
+from services.audit_service import AuditService, ActorType, SourceType, AuditCategory
 
 logger = logging.getLogger(__name__)
 
@@ -456,6 +457,30 @@ def update_delivery_settings(
     session.add(settings)
     session.commit()
     session.refresh(settings)
+
+    try:
+        from services.audit_service import AuditService, ActorType, SourceType, AuditCategory
+        admin_uuid = UUID(str(admin_id)) if admin_id else None
+        AuditService.log_event(
+            session=session,
+            site_id=site_id,
+            actor_type=ActorType.OWNER if (ownership.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=admin_uuid,
+            actor_name=ownership.get("name"),
+            actor_email=ownership.get("email"),
+            actor_role=ownership.get("role") or "Staff",
+            category=AuditCategory.DELIVERY,
+            action="delivery.settings_changed",
+            source=SourceType.WEB_ADMIN,
+            resource_type="delivery_settings",
+            resource_id=str(settings.id),
+            resource_name="Delivery & Shipping Settings",
+            summary=f"Updated delivery settings: mode '{settings.delivery_mode}'",
+            metadata={"delivery_mode": settings.delivery_mode, "enable_fleet": settings.enable_fleet, "enable_shiprocket": settings.enable_shiprocket},
+        )
+    except Exception as log_err:
+        pass
+
     return {"ok": True, "delivery_mode": settings.delivery_mode}
 
 
@@ -638,6 +663,28 @@ def create_agent(
     session.add(agent)
     session.commit()
     session.refresh(agent)
+
+    try:
+        AuditService.log_event(
+            session=session,
+            site_id=site_id,
+            actor_type=ActorType.OWNER if (ownership.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=admin_id,
+            actor_name=ownership.get("name"),
+            actor_email=ownership.get("email"),
+            actor_role=ownership.get("role") or "Staff",
+            category=AuditCategory.DELIVERY,
+            action="rider.created",
+            source=SourceType.WEB_ADMIN,
+            resource_type="delivery_agent",
+            resource_id=str(agent.id),
+            resource_name=agent.name,
+            summary=f"Added delivery rider '{agent.name}' ({agent.phone})",
+            metadata={"phone": agent.phone, "vehicle_type": agent.vehicle_type},
+        )
+    except Exception as log_err:
+        logger.warning("Failed to log rider.created audit event: %s", log_err)
+
     return {
         "id": str(agent.id),
         "name": agent.name,
@@ -670,6 +717,7 @@ def update_agent(
     if not agent:
         raise HTTPException(404, "Agent not found")
 
+    old_active = agent.is_active
     if body.name is not None:
         agent.name = body.name.strip()
     if body.phone is not None:
@@ -684,6 +732,28 @@ def update_agent(
 
     session.add(agent)
     session.commit()
+
+    try:
+        AuditService.log_event(
+            session=session,
+            site_id=site_id,
+            actor_type=ActorType.OWNER if (ownership.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=admin_id,
+            actor_name=ownership.get("name"),
+            actor_email=ownership.get("email"),
+            actor_role=ownership.get("role") or "Staff",
+            category=AuditCategory.DELIVERY,
+            action="rider.updated",
+            source=SourceType.WEB_ADMIN,
+            resource_type="delivery_agent",
+            resource_id=str(agent.id),
+            resource_name=agent.name,
+            summary=f"Updated details for rider '{agent.name}'" + (f" (Status: {'Active' if agent.is_active else 'Disabled'})" if body.is_active is not None else ""),
+            metadata={"is_active": agent.is_active, "vehicle_type": agent.vehicle_type},
+        )
+    except Exception as log_err:
+        logger.warning("Failed to log rider.updated audit event: %s", log_err)
+
     return {"ok": True}
 
 
@@ -749,6 +819,33 @@ def settle_agent_cash(
     session.add(agent)
     session.commit()
 
+    try:
+        AuditService.log_event(
+            session=session,
+            site_id=site_id,
+            actor_type=ActorType.OWNER if (ownership.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=admin_id,
+            actor_name=ownership.get("name"),
+            actor_email=ownership.get("email"),
+            actor_role=ownership.get("role") or "Staff",
+            category=AuditCategory.EARNINGS_LEDGER,
+            action="rider.cash_settled",
+            source=SourceType.WEB_ADMIN,
+            resource_type="delivery_agent",
+            resource_id=str(agent.id),
+            resource_name=agent.name,
+            summary=f"Settled ₹{settle_amount:,.2f} COD cash collected by rider '{agent.name}' (Remaining: ₹{new_balance:,.2f})",
+            metadata={
+                "financial": True,
+                "amount": settle_amount,
+                "currency": "INR",
+                "remaining_cash": new_balance,
+                "notes": body.notes,
+            },
+        )
+    except Exception as log_err:
+        logger.warning("Failed to log rider.cash_settled audit event: %s", log_err)
+
     return {
         "ok": True,
         "message": f"Successfully collected & settled ₹{settle_amount:.2f} with {agent.name}.",
@@ -775,8 +872,30 @@ def delete_agent(
     ).first()
     if not agent:
         raise HTTPException(404, "Agent not found")
+
+    agent_name = agent.name
     session.delete(agent)
     session.commit()
+
+    try:
+        AuditService.log_event(
+            session=session,
+            site_id=site_id,
+            actor_type=ActorType.OWNER if (ownership.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=admin_id,
+            actor_name=ownership.get("name"),
+            actor_email=ownership.get("email"),
+            actor_role=ownership.get("role") or "Staff",
+            category=AuditCategory.DELIVERY,
+            action="rider.deleted",
+            source=SourceType.WEB_ADMIN,
+            resource_type="delivery_agent",
+            resource_id=str(agent_id),
+            resource_name=agent_name,
+            summary=f"Deleted delivery rider '{agent_name}'",
+        )
+    except Exception as log_err:
+        logger.warning("Failed to log rider.deleted audit event: %s", log_err)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -870,13 +989,39 @@ def dispatch_order(
             "label_url": existing.label_url,
         }
 
+    res = None
     if mode == "own_agent":
-        return _dispatch_own_agent(order, site_id, body, settings, session, existing_shipment=existing)
+        res = _dispatch_own_agent(order, site_id, body, settings, session, existing_shipment=existing)
     elif mode == "shiprocket":
-        return _dispatch_shiprocket(order, site_id, body, settings, session, existing_shipment=existing)
+        res = _dispatch_shiprocket(order, site_id, body, settings, session, existing_shipment=existing)
     else:
         # Manual — admin just fills in the tracking info
-        return _dispatch_manual(order, site_id, body, session, existing_shipment=existing)
+        res = _dispatch_manual(order, site_id, body, session, existing_shipment=existing)
+
+    try:
+        from services.audit_service import AuditService, ActorType, SourceType, AuditCategory
+        admin_uuid = UUID(str(admin_id)) if admin_id else None
+        AuditService.log_event(
+            session=session,
+            site_id=site_id,
+            actor_type=ActorType.OWNER if (ownership.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=admin_uuid,
+            actor_name=ownership.get("name"),
+            actor_email=ownership.get("email"),
+            actor_role=ownership.get("role") or "Staff",
+            category=AuditCategory.DELIVERY,
+            action="order.dispatched",
+            source=SourceType.WEB_ADMIN,
+            resource_type="shipment",
+            resource_id=str(res.get("shipment_id") or order.id),
+            resource_name=f"Order #{str(order.id)[:8]}",
+            summary=f"Dispatched Order #{str(order.id)[:8]} via {mode.replace('_', ' ').title()}",
+            metadata={"order_id": str(order.id), "mode": mode, "shipment_id": res.get("shipment_id") if isinstance(res, dict) else None},
+        )
+    except Exception as log_err:
+        pass
+
+    return res
 
 
 def _dispatch_own_agent(
@@ -979,6 +1124,27 @@ def _dispatch_own_agent(
 
     session.commit()
     session.refresh(shipment)
+
+    try:
+        AuditService.log_event(
+            session=session,
+            site_id=site_id,
+            actor_type=ActorType.OWNER if (ownership.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=admin_id,
+            actor_name=ownership.get("name"),
+            actor_email=ownership.get("email"),
+            actor_role=ownership.get("role") or "Staff",
+            category=AuditCategory.DELIVERY,
+            action="order.assigned_to_rider" if not is_reassign else "order.reassigned_to_rider",
+            source=SourceType.WEB_ADMIN,
+            resource_type="order",
+            resource_id=str(order.id),
+            resource_name=f"Order #{str(order.id)[:8].upper()}",
+            summary=f"Assigned order to delivery rider '{agent.name}' ({agent.phone})" if not is_reassign else f"Reassigned order to rider '{agent.name}' ({agent.phone})",
+            metadata={"shipment_id": str(shipment.id), "agent_id": str(agent.id), "agent_name": agent.name},
+        )
+    except Exception as log_err:
+        logger.warning("Failed to log dispatch order audit event: %s", log_err)
 
     agent_link = _build_agent_link(shipment)
 
@@ -2181,6 +2347,26 @@ async def shiprocket_webhook(
     session.add(shipment)
     session.commit()
 
+    try:
+        AuditService.log_event(
+            session=session,
+            site_id=shipment.site_id,
+            actor_type=ActorType.SHIPROCKET,
+            actor_name="Shiprocket Webhook",
+            actor_role="Integration",
+            category=AuditCategory.DELIVERY,
+            action="shiprocket.status_synced",
+            source=SourceType.WEBHOOK_SHIPROCKET,
+            idempotency_key=f"shiprocket_{awb}_{new_status}",
+            resource_type="shipment",
+            resource_id=str(shipment.id),
+            resource_name=f"AWB: {awb}",
+            summary=f"Shiprocket updated shipment {awb} to '{new_status}'",
+            metadata={"awb": awb, "new_status": new_status, "order_id": str(shipment.order_id)},
+        )
+    except Exception as log_err:
+        logger.warning("Failed to log Shiprocket webhook audit event: %s", log_err)
+
     return {"ok": True, "new_status": new_status}
 
 
@@ -2726,6 +2912,26 @@ def rider_claim_order(
         # Another rider won the race — surface a friendly error
         raise HTTPException(400, "Order was just claimed by another rider. Please refresh the list.")
 
+    try:
+        AuditService.log_event(
+            session=session,
+            site_id=site_id,
+            actor_type=ActorType.RIDER,
+            actor_id=agent.id,
+            actor_name=agent.name,
+            actor_role="Rider",
+            category=AuditCategory.DELIVERY,
+            action="order.rider_claimed",
+            source=SourceType.RIDER_PWA,
+            resource_type="order",
+            resource_id=str(order.id),
+            resource_name=f"Order #{str(order.id)[:8].upper()}",
+            summary=f"Rider '{agent.name}' claimed order #{str(order.id)[:8].upper()} for delivery",
+            metadata={"agent_id": str(agent.id), "phone": agent.phone},
+        )
+    except Exception as log_err:
+        logger.warning("Failed to log rider.claimed audit event: %s", log_err)
+
     return {"ok": True, "message": f"Order claimed successfully by {agent.name}"}
 
 
@@ -3061,6 +3267,51 @@ def rider_update_task_status(
 
     session.add(shipment)
     session.commit()
+
+    try:
+        if action == "delivered":
+            AuditService.log_event(
+                session=session,
+                site_id=site_id,
+                actor_type=ActorType.RIDER,
+                actor_id=agent.id if agent else None,
+                actor_name=agent.name if agent else "Rider",
+                actor_role="Rider",
+                category=AuditCategory.DELIVERY,
+                action="order.rider_delivered",
+                source=SourceType.RIDER_PWA,
+                resource_type="order",
+                resource_id=str(order.id),
+                resource_name=f"Order #{str(order.id)[:8].upper()}",
+                summary=f"Rider '{agent.name if agent else 'Partner'}' delivered order #{str(order.id)[:8].upper()}" + (f" (Collected ₹{float(order.total):,.2f} COD cash)" if order.payment_method == "cod" else ""),
+                metadata={
+                    "financial": order.payment_method == "cod",
+                    "amount": float(order.total) if order.payment_method == "cod" else None,
+                    "currency": "INR",
+                    "payment_method": order.payment_method,
+                    "proof_of_delivery_url": body.proof_url,
+                },
+            )
+        elif action in ["failed", "return_to_warehouse", "reschedule", "attempt_failed"]:
+            AuditService.log_event(
+                session=session,
+                site_id=site_id,
+                actor_type=ActorType.RIDER,
+                actor_id=agent.id if agent else None,
+                actor_name=agent.name if agent else "Rider",
+                actor_role="Rider",
+                category=AuditCategory.DELIVERY,
+                action="order.rider_failed" if action in ["failed", "return_to_warehouse"] else "order.rider_rescheduled",
+                source=SourceType.RIDER_PWA,
+                resource_type="order",
+                resource_id=str(order.id),
+                resource_name=f"Order #{str(order.id)[:8].upper()}",
+                summary=f"Rider '{agent.name if agent else 'Partner'}' delivery update: {action} ({body.reason or body.notes or 'No reason specified'})",
+                metadata={"action": action, "reason": body.reason, "notes": body.notes},
+            )
+    except Exception as log_err:
+        logger.warning("Failed to log rider delivery task status update: %s", log_err)
+
     return {
         "ok": True,
         "status": shipment.status,

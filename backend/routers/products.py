@@ -20,6 +20,7 @@ from sqlalchemy import case
 
 from auth_middleware import authenticate_customer, check_admin_has_permission, enforce_site_ownership
 from db.database import get_session
+from routers.audit_logs import log_activity
 from models import (
     CartItem,
     Category,
@@ -2551,6 +2552,24 @@ def create_product(
     session.commit()
     session.refresh(product)
     catalog_cache.invalidate_site(site_id)
+
+    log_activity(
+        session=session,
+        action="product.created",
+        category="products",
+        description=f"Created product '{product.name}' (₹{product.price})",
+        site_id=site_id,
+        admin_id=admin_id,
+        resource_type="Product",
+        resource_id=str(product.id),
+        resource_name=product.name,
+        changes={
+            "price": {"after": float(product.price)},
+            "stock": {"after": product.stock},
+            "status": {"after": "active" if product.is_active else "draft"},
+        },
+    )
+
     return to_product_response(product, session)
 
 
@@ -2569,6 +2588,14 @@ def update_product(
 
     product = get_site_product_or_404(session, site_id, product_id)
 
+    old_price = float(product.price) if product.price is not None else None
+    old_stock = product.stock
+    old_is_active = product.is_active
+    old_name = product.name
+    old_description = product.description
+    old_category_id = product.category_id
+    old_images = list(product.images or [])
+
     product.name = product_in.name
     product.brand = product_in.brand
     product.category = product_in.category
@@ -2576,7 +2603,6 @@ def update_product(
     product.description = product_in.description
     product.highlights = product_in.highlights or []
     product.slug = product_in.slug or make_slug(product_in.name)
-    product.price = product_in.price
     product.compare_price = product_in.compare_price
     product.stock = product_in.stock
     product.in_stock = product_in.in_stock
@@ -2593,11 +2619,58 @@ def update_product(
     product.height_cm = Decimal(str(product_in.height_cm)) if product_in.height_cm is not None else None
     product.return_window_days = product_in.return_window_days
     product.images = product_in.images
-    product.variant_option = (
+
+    # Handle variant options & ensure price sync between base price and variants
+    new_variant_opt = (
         json_safe(product_in.variant_option.model_dump())
         if product_in.variant_option
         else None
     )
+    if new_variant_opt and isinstance(new_variant_opt, dict):
+        option_values = new_variant_opt.get("optionValues", [])
+        if option_values:
+            target_price = float(product_in.price) if product_in.price is not None else None
+            # If base price was updated, sync any option value matching the old price or missing a price
+            if target_price is not None and old_price is not None and target_price != old_price:
+                for opt in option_values:
+                    p = opt.get("price")
+                    if p is None or float(p) == old_price:
+                        opt["price"] = target_price
+
+            # Compute min_price and total stock across variants
+            total_stock = 0
+            min_price = None
+            for opt in option_values:
+                qty = opt.get("stockQty")
+                if qty is not None:
+                    try:
+                        total_stock += int(qty)
+                    except Exception:
+                        pass
+                p = opt.get("price")
+                if p is not None:
+                    try:
+                        p_val = Decimal(str(p))
+                        if min_price is None or p_val < min_price:
+                            min_price = p_val
+                    except Exception:
+                        pass
+
+            if min_price is not None and min_price > 0:
+                product.price = min_price
+            elif product_in.price is not None:
+                product.price = product_in.price
+
+            if total_stock > 0 or any(opt.get("stockQty") is not None for opt in option_values):
+                product.stock = total_stock
+                product.in_stock = total_stock > 0
+        else:
+            product.price = product_in.price
+
+        product.variant_option = new_variant_opt
+    else:
+        product.variant_option = None
+        product.price = product_in.price
 
     sync_product_collections(session, product.id, product_in.collection_ids)
 
@@ -2605,6 +2678,55 @@ def update_product(
     session.commit()
     session.refresh(product)
     catalog_cache.invalidate_site(site_id)
+
+    diff_changes: Dict[str, Any] = {}
+    primary_action = "product.updated"
+    new_price = float(product.price) if product.price is not None else None
+    if old_price != new_price:
+        diff_changes["price"] = {"before": old_price, "after": new_price}
+        primary_action = "product.price_changed"
+    if old_stock != product.stock:
+        diff_changes["stock"] = {"before": old_stock, "after": product.stock}
+        if primary_action == "product.updated":
+            primary_action = "product.stock_changed"
+    if old_is_active != product.is_active:
+        diff_changes["status"] = {"before": "active" if old_is_active else "draft", "after": "active" if product.is_active else "draft"}
+        if primary_action == "product.updated":
+            primary_action = "product.status_changed"
+    if old_name != product.name:
+        diff_changes["name"] = {"before": old_name, "after": product.name}
+    if old_description != product.description:
+        diff_changes["description"] = {"changed": True}
+    if old_category_id != product.category_id:
+        diff_changes["category_id"] = {"before": str(old_category_id) if old_category_id else None, "after": str(product.category_id) if product.category_id else None}
+    if old_images != (product.images or []):
+        diff_changes["images"] = {"count": len(product.images or [])}
+
+    # Only log audit activity if fields were actually modified
+    if diff_changes:
+        if primary_action == "product.price_changed" and old_price is not None and new_price is not None:
+            activity_desc = f"Updated price of '{product.name}' from ₹{old_price:g} to ₹{new_price:g}"
+        elif primary_action == "product.stock_changed":
+            activity_desc = f"Updated stock of '{product.name}' to {product.stock}"
+        elif primary_action == "product.status_changed":
+            activity_desc = f"Marked '{product.name}' as {'Active' if product.is_active else 'Draft'}"
+        else:
+            activity_desc = f"Updated product '{product.name}'"
+
+        log_activity(
+            session=session,
+            action=primary_action,
+            category="products",
+            description=activity_desc,
+            summary=activity_desc,
+            site_id=site_id,
+            admin_id=admin_id,
+            resource_type="Product",
+            resource_id=str(product.id),
+            resource_name=product.name,
+            changes=diff_changes,
+        )
+
     return to_product_response(product, session)
 
 
@@ -2745,8 +2867,28 @@ def quick_edit_product(
         raise HTTPException(status_code=403, detail="You do not have permission to edit products")
 
     product = get_site_product_or_404(session, site_id, product_id)
+    old_price = float(product.price) if product.price is not None else None
+    old_stock = product.stock
+    old_is_active = product.is_active
+
     if payload.price is not None:
         product.price = payload.price
+        # If product has variant options and specific variant_option wasn't supplied, sync variant prices
+        if payload.variant_option is None and product.variant_option and isinstance(product.variant_option, dict):
+            existing_opts = product.variant_option.get("optionValues", [])
+            if existing_opts:
+                updated_opts = []
+                for opt in existing_opts:
+                    copy_opt = dict(opt)
+                    p = copy_opt.get("price")
+                    if p is None or (old_price is not None and float(p) == old_price) or len(existing_opts) == 1:
+                        copy_opt["price"] = float(payload.price)
+                    updated_opts.append(copy_opt)
+                product.variant_option = {
+                    "optionType": product.variant_option.get("optionType", "custom"),
+                    "optionName": product.variant_option.get("optionName", "Options"),
+                    "optionValues": updated_opts,
+                }
     if payload.compare_price is not None:
         product.compare_price = payload.compare_price
     if payload.stock is not None:
@@ -2769,7 +2911,10 @@ def quick_edit_product(
             for v in option_values:
                 qty = v.get("stockQty")
                 if qty is not None:
-                    total_stock += int(qty)
+                    try:
+                        total_stock += int(qty)
+                    except Exception:
+                        pass
                 p = v.get("price")
                 if p is not None:
                     try:
@@ -2787,6 +2932,47 @@ def quick_edit_product(
     session.commit()
     session.refresh(product)
     catalog_cache.invalidate_site(site_id)
+
+    diff_changes: Dict[str, Any] = {}
+    primary_action = "product.updated"
+    new_price = float(product.price) if product.price is not None else None
+    if old_price != new_price:
+        diff_changes["price"] = {"before": old_price, "after": new_price}
+        primary_action = "product.price_changed"
+    if old_stock != product.stock:
+        diff_changes["stock"] = {"before": old_stock, "after": product.stock}
+        if primary_action == "product.updated":
+            primary_action = "product.stock_changed"
+    if old_is_active != product.is_active:
+        diff_changes["status"] = {"before": "active" if old_is_active else "draft", "after": "active" if product.is_active else "draft"}
+        if primary_action == "product.updated":
+            primary_action = "product.status_changed"
+
+    # Only log audit activity if fields actually changed
+    if diff_changes:
+        if primary_action == "product.price_changed" and old_price is not None and new_price is not None:
+            activity_desc = f"Updated price of '{product.name}' from ₹{old_price:g} to ₹{new_price:g}"
+        elif primary_action == "product.stock_changed":
+            activity_desc = f"Updated stock of '{product.name}' to {product.stock}"
+        elif primary_action == "product.status_changed":
+            activity_desc = f"Marked '{product.name}' as {'Active' if product.is_active else 'Draft'}"
+        else:
+            activity_desc = f"Quick edited product '{product.name}'"
+
+        log_activity(
+            session=session,
+            action=primary_action,
+            category="products",
+            description=activity_desc,
+            summary=activity_desc,
+            site_id=site_id,
+            admin_id=admin_id,
+            resource_type="Product",
+            resource_id=str(product.id),
+            resource_name=product.name,
+            changes=diff_changes,
+        )
+
     return to_product_response(product, session)
 
 
@@ -2803,6 +2989,7 @@ def delete_product(
         raise HTTPException(status_code=403, detail="You do not have permission to delete products")
 
     product = get_site_product_or_404(session, site_id, product_id)
+    deleted_product_name = product.name
 
     # 1. Clean up transient cart items containing this product
     session.exec(delete(CartItem).where(CartItem.product_id == product_id))
@@ -2828,6 +3015,18 @@ def delete_product(
     session.delete(product)
     session.commit()
     catalog_cache.invalidate_site(site_id)
+
+    log_activity(
+        session=session,
+        action="product.deleted",
+        category="products",
+        description=f"Deleted product '{deleted_product_name}'",
+        site_id=site_id,
+        admin_id=admin_id,
+        resource_type="Product",
+        resource_id=str(product_id),
+        resource_name=deleted_product_name,
+    )
     return
 
 

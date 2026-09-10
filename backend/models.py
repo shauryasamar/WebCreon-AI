@@ -1382,20 +1382,31 @@ class AuditLog(SQLModel, table=True):
         Index("ix_audit_site_created", "site_id", "created_at"),
         Index("ix_audit_category_created", "category", "created_at"),
         Index("ix_audit_actor_created", "actor_email", "created_at"),
+        Index("ix_audit_actor_type_created", "actor_type", "created_at"),
+        Index("ix_audit_source_created", "source", "created_at"),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     site_id: Optional[UUID] = Field(default=None, foreign_key="sites.id", nullable=True, index=True)
     admin_id: Optional[UUID] = Field(default=None, foreign_key="admins.id", nullable=True, index=True)
+    actor_type: str = Field(default="USER", index=True)  # USER, OWNER, TEAM_MEMBER, RIDER, SHIPROCKET, PAYMENT_PROVIDER, SYSTEM, CRON_JOB, AI, etc.
+    source: str = Field(default="web_app", index=True)  # web_app, rider_app, webhook_razorpay, webhook_shiprocket, background_worker, cron, ai_agent
     actor_email: Optional[str] = Field(default=None, index=True)
     actor_name: Optional[str] = Field(default=None)
     actor_role: Optional[str] = Field(default=None)
-    action: str = Field(index=True)  # e.g. "auth.login", "order.status_update", "product.edit"
-    category: str = Field(default="general", index=True)  # "auth", "orders", "products", "settings", "security", "general"
+    action: str = Field(index=True)  # e.g. "order.status_changed", "product.price_changed", "rider.delivered"
+    category: str = Field(default="general", index=True)
     description: str = Field(nullable=False)
     ip_address: Optional[str] = Field(default=None)
     user_agent: Optional[str] = Field(default=None)
-    status: str = Field(default="success")  # "success" | "warning" | "failure"
+    resource_type: Optional[str] = Field(default=None, index=True)
+    resource_id: Optional[str] = Field(default=None, index=True)
+    resource_name: Optional[str] = Field(default=None)
+    summary: Optional[str] = Field(default=None)
+    request_id: Optional[str] = Field(default=None)
+    correlation_id: Optional[str] = Field(default=None, index=True)
+    idempotency_key: Optional[str] = Field(default=None, index=True)
+    status: str = Field(default="success")  # "success" | "warning" | "failure" | "partial" | "reversed"
     details: Optional[dict[str, Any]] = Field(
         default=None,
         sa_column=Column(JSONB, nullable=True),

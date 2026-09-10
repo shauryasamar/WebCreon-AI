@@ -6,7 +6,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import cast, String
 from sqlmodel import Session, func, select
@@ -18,6 +18,7 @@ from auth_middleware import (
     enforce_site_ownership,
 )
 from db.database import get_session
+from routers.audit_logs import log_activity
 from models import (
     DeliveryAgent,
     DeliverySettings,
@@ -1232,6 +1233,7 @@ def review_return_request(
     site_id: UUID,
     return_id: UUID,
     payload: ReviewReturnRequestPayload,
+    request: Request = None,
     admin=Depends(authenticate_admin),
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
@@ -1368,6 +1370,37 @@ def review_return_request(
             )
 
         session.commit()
+
+        try:
+            is_approved = payload.action == "approve"
+            admin_uuid = UUID(admin["adminId"]) if admin.get("adminId") else None
+            summary_txt = f"{'Approved' if is_approved else 'Rejected'} return request for Order #{str(return_request.order_id)[:8]}" + (f": {payload.rejection_reason}" if not is_approved and payload.rejection_reason else "")
+            log_activity(
+                session=session,
+                admin_id=admin_uuid,
+                user_id=admin_uuid,
+                action="return.approved" if is_approved else "return.rejected",
+                category="orders",
+                site_id=site_id,
+                resource_type="return",
+                resource_id=str(return_request.id),
+                resource_name=f"Return #{str(return_request.id)[:8]}",
+                summary=summary_txt,
+                description=summary_txt,
+                details={
+                    "return_id": str(return_request.id),
+                    "order_id": str(return_request.order_id),
+                    "action": payload.action,
+                    "rejection_reason": payload.rejection_reason if not is_approved else None,
+                    "admin_note": payload.admin_note,
+                },
+                request=request,
+                actor_email=admin.get("email"),
+                actor_name=admin.get("name") or admin.get("email"),
+                actor_role=admin.get("role") or "Staff",
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to record activity log for return review: {log_err}")
         session.refresh(return_request)
 
         order = get_order_or_404(session, site_id, return_request.order_id)
@@ -1659,6 +1692,28 @@ def dispatch_return_pickup(
     session.commit()
     session.refresh(return_request)
 
+    try:
+        admin_uuid = UUID(admin["adminId"]) if admin.get("adminId") else None
+        log_activity(
+            session=session,
+            admin_id=admin_uuid,
+            user_id=admin_uuid,
+            action="return.pickup_dispatched",
+            category="orders",
+            site_id=site_id,
+            resource_type="return",
+            resource_id=str(return_request.id),
+            resource_name=f"Return #{str(return_request.id)[:8]}",
+            summary=f"Dispatched return pickup for Order #{str(return_request.order_id)[:8]}: {history_note}",
+            description=history_note,
+            details={"return_id": str(return_request.id), "mode": mode, "order_id": str(return_request.order_id)},
+            actor_email=admin.get("email"),
+            actor_name=admin.get("name") or admin.get("email"),
+            actor_role=admin.get("role") or "Staff",
+        )
+    except Exception as log_err:
+        logger.warning(f"Failed to record activity log for return dispatch: {log_err}")
+
     order = get_order_or_404(session, site_id, return_request.order_id)
     items = session.exec(
         select(ReturnItem)
@@ -1773,6 +1828,28 @@ def receive_return_request(
 
         session.commit()
         session.refresh(return_request)
+
+        try:
+            admin_uuid = UUID(admin["adminId"]) if admin.get("adminId") else None
+            log_activity(
+                session=session,
+                admin_id=admin_uuid,
+                user_id=admin_uuid,
+                action="return.received",
+                category="orders",
+                site_id=site_id,
+                resource_type="return",
+                resource_id=str(return_request.id),
+                resource_name=f"Return #{str(return_request.id)[:8]}",
+                summary=f"Received returned items ({total_received} pcs) for Order #{str(return_request.order_id)[:8]}",
+                description=payload.admin_note or f"Return #{str(return_request.id)[:8]} items marked as received",
+                details={"return_id": str(return_request.id), "order_id": str(return_request.order_id), "total_received": total_received},
+                actor_email=admin.get("email"),
+                actor_name=admin.get("name") or admin.get("email"),
+                actor_role=admin.get("role") or "Staff",
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to record activity log for return receive: {log_err}")
 
         order = get_order_or_404(session, site_id, return_request.order_id)
         latest_items = session.exec(
@@ -1895,6 +1972,28 @@ def inspect_return_request(
         session.commit()
         session.refresh(return_request)
 
+        try:
+            admin_uuid = UUID(admin["adminId"]) if admin.get("adminId") else None
+            log_activity(
+                session=session,
+                admin_id=admin_uuid,
+                user_id=admin_uuid,
+                action="return.inspected",
+                category="orders",
+                site_id=site_id,
+                resource_type="return",
+                resource_id=str(return_request.id),
+                resource_name=f"Return #{str(return_request.id)[:8]}",
+                summary=f"Completed quality inspection for Return #{str(return_request.id)[:8]}",
+                description=payload.admin_note or f"Return #{str(return_request.id)[:8]} quality inspection completed",
+                details={"return_id": str(return_request.id), "order_id": str(return_request.order_id)},
+                actor_email=admin.get("email"),
+                actor_name=admin.get("name") or admin.get("email"),
+                actor_role=admin.get("role") or "Staff",
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to record activity log for return inspection: {log_err}")
+
         order = get_order_or_404(session, site_id, return_request.order_id)
         latest_items = session.exec(
             select(ReturnItem)
@@ -1930,6 +2029,7 @@ def refund_return_request(
     site_id: UUID,
     return_id: UUID,
     payload: RefundReturnRequestPayload,
+    request: Request = None,
     admin=Depends(authenticate_admin),
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
@@ -2123,6 +2223,38 @@ def refund_return_request(
         )
 
         session.commit()
+
+        try:
+            admin_uuid = UUID(admin["adminId"]) if admin.get("adminId") else None
+            summary_txt = f"Processed ₹{final_amount:,.2f} refund for Return #{str(return_request.id)[:8]} (Order #{str(return_request.order_id)[:8]}) via {payload.refund_method}"
+            log_activity(
+                session=session,
+                admin_id=admin_uuid,
+                user_id=admin_uuid,
+                action="return.refund_issued",
+                category="orders",
+                site_id=site_id,
+                resource_type="return",
+                resource_id=str(return_request.id),
+                resource_name=f"Return #{str(return_request.id)[:8]}",
+                summary=summary_txt,
+                description=summary_txt,
+                details={
+                    "return_id": str(return_request.id),
+                    "order_id": str(return_request.order_id),
+                    "final_refund_amount": str(final_amount),
+                    "refund_method": payload.refund_method,
+                    "is_full_refund": is_full_refund,
+                    "refund_override_reason": return_request.refund_override_reason,
+                    "admin_note": payload.admin_note,
+                },
+                request=request,
+                actor_email=admin.get("email"),
+                actor_name=admin.get("name") or admin.get("email"),
+                actor_role=admin.get("role") or "Staff",
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to record activity log for return refund: {log_err}")
         session.refresh(return_request)
 
         order = get_order_or_404(session, site_id, return_request.order_id)

@@ -218,6 +218,22 @@ def authenticate_rider(
     return request.state.rider
 
 
+def _normalize_perms(raw) -> list[str]:
+    if not raw:
+        return []
+    if isinstance(raw, str):
+        try:
+            import json
+            val = json.loads(raw)
+            if isinstance(val, list):
+                return [str(p).strip() for p in val if p]
+        except Exception:
+            return [p.strip() for p in raw.split(",") if p.strip()]
+    if isinstance(raw, (list, set, tuple)):
+        return [str(p).strip() for p in raw if p]
+    return []
+
+
 def check_admin_has_permission(admin_id: str | UUID, permission_key: str, session: Session) -> bool:
     try:
         a_uuid = UUID(str(admin_id))
@@ -242,15 +258,15 @@ def check_admin_has_permission(admin_id: str | UUID, permission_key: str, sessio
     if role_obj:
         if role_obj.name == "Owner":
             return True
-        role_perms = role_obj.permissions if role_obj.permissions else []
-        user_perms = admin_obj.additional_permissions or []
+        role_perms = _normalize_perms(role_obj.permissions)
+        user_perms = _normalize_perms(admin_obj.additional_permissions)
         all_perms = set(role_perms + user_perms)
         return permission_key in all_perms
 
     if admin_obj.role in ("Owner", "super_admin") and not admin_obj.role_id:
         return True
 
-    user_perms = admin_obj.additional_permissions or []
+    user_perms = _normalize_perms(admin_obj.additional_permissions)
     return permission_key in set(user_perms)
 
 
@@ -298,6 +314,7 @@ def enforce_site_ownership(
         is_owner = bool(admin_obj.role in ("Owner", "super_admin") and not admin_obj.role_id)
 
     website_access_type = getattr(admin_obj, "website_access_type", "all") or "all"
+    role_display = role_obj.name if role_obj else (admin_obj.role or "Staff")
 
     # Owner or admin with "all" websites access has access to any site
     if is_owner or website_access_type == "all":
@@ -306,6 +323,10 @@ def enforce_site_ownership(
             "adminId": admin_id,
             "siteId": str(site_id),
             "roleOnSite": role_on_site,
+            "name": admin_obj.name,
+            "email": admin_obj.email,
+            "role": role_display,
+            "is_owner": is_owner,
         }
 
     # Otherwise specific access required
@@ -323,6 +344,10 @@ def enforce_site_ownership(
         "adminId": admin_id,
         "siteId": str(site_id),
         "roleOnSite": ownership.role_on_site,
+        "name": admin_obj.name,
+        "email": admin_obj.email,
+        "role": role_display,
+        "is_owner": is_owner,
     }
 
 

@@ -695,10 +695,10 @@ const AdminProducts = () => {
 
   const imagePreviewList = useMemo(() => parseImages(formValues.imagesText), [formValues.imagesText]);
 
-  const buildVariantOption = (): ProductVariantOption | null => {
-    if (!formValues.optionName.trim() && variantRows.length === 0) return null;
+  const buildVariantOption = (rowsToUse: VariantRow[] = variantRows): ProductVariantOption | null => {
+    if (!formValues.optionName.trim() && rowsToUse.length === 0) return null;
 
-    const optionValues = variantRows
+    const optionValues = rowsToUse
       .map((row) => ({
         value: row.value.trim(),
         inStock: row.inStock,
@@ -1339,6 +1339,47 @@ const AdminProducts = () => {
 
     if (field === "optionValuesText" && typeof value === "string") {
       setVariantRows((prev) => buildVariantRowsFromText(value, prev));
+      return;
+    }
+
+    if (field === "price" && typeof value === "string") {
+      const newPriceStr = value.trim();
+      setVariantRows((prev) => {
+        if (prev.length === 0 || newPriceStr === "") return prev;
+        const oldPriceStr = formValues.price.trim();
+        const allSameOrEmpty = prev.every(
+          (r) => r.price.trim() === "" || r.price.trim() === oldPriceStr || r.price.trim() === prev[0]?.price.trim()
+        );
+        if (allSameOrEmpty) {
+          return prev.map((r) => ({ ...r, price: newPriceStr }));
+        }
+        return prev.map((r) =>
+          r.price.trim() === "" || r.price.trim() === oldPriceStr
+            ? { ...r, price: newPriceStr }
+            : r
+        );
+      });
+      return;
+    }
+
+    if (field === "compare_price" && typeof value === "string") {
+      const newCompareStr = value.trim();
+      setVariantRows((prev) => {
+        if (prev.length === 0) return prev;
+        const oldCompareStr = formValues.compare_price.trim();
+        const allSameOrEmpty = prev.every(
+          (r) => r.comparePrice.trim() === "" || r.comparePrice.trim() === oldCompareStr || r.comparePrice.trim() === prev[0]?.comparePrice.trim()
+        );
+        if (allSameOrEmpty) {
+          return prev.map((r) => ({ ...r, comparePrice: newCompareStr }));
+        }
+        return prev.map((r) =>
+          r.comparePrice.trim() === "" || r.comparePrice.trim() === oldCompareStr
+            ? { ...r, comparePrice: newCompareStr }
+            : r
+        );
+      });
+      return;
     }
   };
 
@@ -1779,11 +1820,27 @@ const AdminProducts = () => {
     const hasVariantOptions =
       variantRows.length > 0 && formValues.optionName.trim() !== "";
 
+    const userEnteredPrice = formValues.price.trim() !== "" ? Number(formValues.price) : null;
+    const userEnteredComparePrice = formValues.compare_price.trim() !== "" ? Number(formValues.compare_price) : null;
+
+    let finalVariantRows = variantRows;
+    if (hasVariantOptions && userEnteredPrice != null && userEnteredPrice > 0) {
+      const allRowsHavePrice = variantRows.every((r) => r.price.trim() !== "");
+      const allRowsSamePrice = variantRows.every((r) => r.price.trim() === variantRows[0]?.price.trim());
+      if (!allRowsHavePrice || allRowsSamePrice) {
+        finalVariantRows = variantRows.map((r) => ({
+          ...r,
+          price: String(userEnteredPrice),
+          comparePrice: userEnteredComparePrice != null ? String(userEnteredComparePrice) : r.comparePrice,
+        }));
+      }
+    }
+
     const effectivePrice = hasVariantOptions
-      ? getFallbackProductPrice()
+      ? (userEnteredPrice != null && userEnteredPrice > 0 ? userEnteredPrice : getFallbackProductPrice())
       : Number(formValues.price) || 0;
     const effectiveComparePrice = hasVariantOptions
-      ? getFallbackComparePrice()
+      ? (userEnteredComparePrice != null && userEnteredComparePrice > 0 ? userEnteredComparePrice : getFallbackComparePrice())
       : formValues.compare_price.trim()
       ? Number(formValues.compare_price)
       : null;
@@ -1810,7 +1867,7 @@ const AdminProducts = () => {
       compare_price: effectiveComparePrice,
       stock: effectiveStock,
       in_stock: hasVariantOptions
-        ? variantRows.some((row) => row.inStock && Number(row.stockQty || 0) > 0)
+        ? finalVariantRows.some((row) => row.inStock && Number(row.stockQty || 0) > 0)
         : effectiveStock > 0,
       is_active: formValues.is_active,
       sku: formValues.sku.trim() || null,
@@ -1825,7 +1882,7 @@ const AdminProducts = () => {
       height_cm: formValues.height_cm.trim() ? Number(formValues.height_cm) : null,
       slug: formValues.slug.trim() || null,
       images: parseImages(formValues.imagesText),
-      variant_option: hasVariantOptions ? buildVariantOption() : null,
+      variant_option: hasVariantOptions ? buildVariantOption(finalVariantRows) : null,
       return_window_days: formValues.return_window_days === "" ? null : Number(formValues.return_window_days),
     };
 
@@ -1841,9 +1898,15 @@ const AdminProducts = () => {
           }
         );
         if (res.ok) {
+          invalidateAdminProductsCache(siteId);
+          try {
+            localStorage.removeItem(`wc_admin_products_${siteId}`);
+          } catch (_) {}
           await loadProducts();
         } else {
           console.error("Failed to update product", res.status);
+          const errData = await res.json().catch(() => ({}));
+          alert(errData.detail || "Failed to update product");
         }
       } else {
         const res = await fetch(`${API_BASE_URL}/sites/${siteId}/products`, {
@@ -1854,9 +1917,14 @@ const AdminProducts = () => {
         });
         if (res.ok) {
           invalidateAdminProductsCache(siteId);
+          try {
+            localStorage.removeItem(`wc_admin_products_${siteId}`);
+          } catch (_) {}
           await loadProducts();
         } else {
           console.error("Failed to create product", res.status);
+          const errData = await res.json().catch(() => ({}));
+          alert(errData.detail || "Failed to create product");
         }
       }
     } catch (err) {

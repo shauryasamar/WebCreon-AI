@@ -37,6 +37,7 @@ from auth_middleware import (
 )
 from crypto_utils import decrypt_string, encrypt_string, mask_account_number
 from db.database import get_session
+from services.audit_service import AuditService, ActorType, SourceType, AuditCategory
 from models import (
     Admin,
     AdminSite,
@@ -1193,6 +1194,31 @@ async def razorpay_webhook(
                 payment_id=payment_entity.get("id"),
                 payment_method=payment_entity.get("method"),
             )
+            try:
+                AuditService.log_event(
+                    session=session,
+                    site_id=order.site_id,
+                    actor_type=ActorType.PAYMENT_PROVIDER,
+                    actor_name="Razorpay Webhook",
+                    actor_role="Payment Gateway",
+                    category=AuditCategory.PAYMENTS,
+                    action="payment.captured",
+                    source=SourceType.WEBHOOK_RAZORPAY,
+                    idempotency_key=f"razorpay_captured_{rzp_order_id}_{payment_entity.get('id', '')}",
+                    resource_type="order",
+                    resource_id=str(order.id),
+                    resource_name=f"Order #{str(order.id)[:8].upper()}",
+                    summary=f"Razorpay webhook verified payment of ₹{float(order.total):,.2f} for Order #{str(order.id)[:8].upper()}",
+                    metadata={
+                        "financial": True,
+                        "amount": float(order.total),
+                        "currency": "INR",
+                        "payment_id": payment_entity.get("id"),
+                        "payment_method": payment_entity.get("method"),
+                    },
+                )
+            except Exception as log_err:
+                logger.warning("Failed to log payment.captured audit event: %s", log_err)
 
     elif event_type == "payment.failed":
         if order.payment_status != "paid":
@@ -1200,6 +1226,30 @@ async def razorpay_webhook(
             order.updated_at = utc_now()
             session.add(order)
             session.commit()
+            try:
+                AuditService.log_event(
+                    session=session,
+                    site_id=order.site_id,
+                    actor_type=ActorType.PAYMENT_PROVIDER,
+                    actor_name="Razorpay Webhook",
+                    actor_role="Payment Gateway",
+                    category=AuditCategory.PAYMENTS,
+                    action="payment.failed",
+                    source=SourceType.WEBHOOK_RAZORPAY,
+                    idempotency_key=f"razorpay_failed_{rzp_order_id}_{payment_entity.get('id', '')}",
+                    resource_type="order",
+                    resource_id=str(order.id),
+                    resource_name=f"Order #{str(order.id)[:8].upper()}",
+                    summary=f"Razorpay webhook reported failed payment attempt for Order #{str(order.id)[:8].upper()}",
+                    metadata={
+                        "financial": True,
+                        "amount": float(order.total),
+                        "currency": "INR",
+                        "payment_id": payment_entity.get("id"),
+                    },
+                )
+            except Exception as log_err:
+                logger.warning("Failed to log payment.failed audit event: %s", log_err)
 
     elif event_type in {"refund.created", "refund.processed", "refund.failed", "refund.speed_changed"}:
         refund_entity = event_payload.get("payload", {}).get("refund", {}).get("entity", {})
@@ -1244,6 +1294,32 @@ async def razorpay_webhook(
             session.add(ledger)
 
         session.commit()
+
+        try:
+            ref_amt = float((refund_entity.get("amount") or 0) / 100) if refund_entity else float(order.total)
+            AuditService.log_event(
+                session=session,
+                site_id=order.site_id,
+                actor_type=ActorType.PAYMENT_PROVIDER,
+                actor_name="Razorpay Webhook",
+                actor_role="Payment Gateway",
+                category=AuditCategory.PAYMENTS,
+                action="payment.refunded",
+                source=SourceType.WEBHOOK_RAZORPAY,
+                idempotency_key=f"razorpay_refund_{incoming_refund_id}_{order.id}",
+                resource_type="order",
+                resource_id=str(order.id),
+                resource_name=f"Order #{str(order.id)[:8].upper()}",
+                summary=f"Razorpay webhook confirmed refund of ₹{ref_amt:,.2f} for Order #{str(order.id)[:8].upper()}",
+                metadata={
+                    "financial": True,
+                    "amount": ref_amt,
+                    "currency": "INR",
+                    "refund_id": incoming_refund_id,
+                },
+            )
+        except Exception as log_err:
+            logger.warning("Failed to log payment.refunded audit event: %s", log_err)
 
     elif event_type in {"transfer.processed", "settlement.processed"}:
         transfer_entity = event_payload.get("payload", {}).get("transfer", {}).get("entity", {}) or payment_entity
@@ -1386,6 +1462,29 @@ def release_mature_escrows(
         msg = "No mature escrows to release."
     else:
         msg = f"Released {released_count} escrow payout(s) (₹{float(total_amount_released):,.2f})."
+        try:
+            admin_id = UUID(admin["adminId"]) if isinstance(admin, dict) and admin.get("adminId") else None
+            AuditService.log_event(
+                session=session,
+                site_id=site_id,
+                actor_type=ActorType.OWNER if (admin.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+                actor_id=admin_id,
+                actor_name=admin.get("name"),
+                actor_email=admin.get("email"),
+                actor_role=admin.get("role") or "Staff",
+                category=AuditCategory.EARNINGS_LEDGER,
+                action="escrow.released",
+                source=SourceType.WEB_ADMIN,
+                summary=f"Manually triggered escrow release: {released_count} mature payout(s) (₹{float(total_amount_released):,.2f})",
+                metadata={
+                    "financial": True,
+                    "amount": float(total_amount_released),
+                    "currency": "INR",
+                    "released_count": released_count,
+                },
+            )
+        except Exception as log_err:
+            logger.warning("Failed to log escrow.released audit event: %s", log_err)
 
     return {
         "message": msg,
@@ -1512,6 +1611,32 @@ def update_payment_settings(
     session.add(bank_account)
     session.commit()
     session.refresh(bank_account)
+
+    try:
+        AuditService.log_event(
+            session=session,
+            site_id=site_id,
+            actor_type=ActorType.OWNER if (admin.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=admin_id,
+            actor_name=admin.get("name"),
+            actor_email=admin.get("email"),
+            actor_role=admin.get("role") or "Staff",
+            category=AuditCategory.FINANCIAL,
+            action="payout_account.updated",
+            source=SourceType.WEB_ADMIN,
+            resource_type="bank_account",
+            resource_id=str(bank_account.id),
+            resource_name=bank_account.bank_name,
+            summary=f"Updated merchant payout bank account: {bank_account.bank_name} ({mask_account_number(raw_account)})",
+            metadata={
+                "bank_name": bank_account.bank_name,
+                "ifsc_code": bank_account.ifsc_code,
+                "account_number_masked": mask_account_number(raw_account),
+                "holder_name": bank_account.account_holder_name,
+            },
+        )
+    except Exception as log_err:
+        logger.warning("Failed to log payout_account.updated audit event: %s", log_err)
 
     return {
         "id": str(bank_account.id),
@@ -1700,6 +1825,33 @@ def record_payout(
 
     session.commit()
     session.refresh(payout)
+
+    try:
+        AuditService.log_event(
+            session=session,
+            site_id=site_id,
+            actor_type=ActorType.OWNER if (admin.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=admin_id,
+            actor_name=admin.get("name"),
+            actor_email=admin.get("email"),
+            actor_role=admin.get("role") or "Staff",
+            category=AuditCategory.EARNINGS_LEDGER,
+            action="payout.initiated",
+            source=SourceType.WEB_ADMIN,
+            resource_type="payout",
+            resource_id=str(payout.id),
+            resource_name=f"Payout #{str(payout.id)[:8].upper()}",
+            summary=f"Recorded manual payout of ₹{float(payout.amount):,.2f} (UTR: {payload.utr_reference or 'N/A'})",
+            metadata={
+                "financial": True,
+                "amount": float(payout.amount),
+                "currency": "INR",
+                "reference_id": payload.utr_reference,
+                "payout_method": payout.payout_method,
+            },
+        )
+    except Exception as log_err:
+        logger.warning("Failed to log payout.initiated audit event: %s", log_err)
 
     return {
         "message": "Payout recorded successfully",

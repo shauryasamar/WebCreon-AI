@@ -58,6 +58,7 @@ from models import (
     User,
     utc_now,
 )
+from services.audit_service import AuditService, ActorType, SourceType, AuditCategory
 
 logger = logging.getLogger(__name__)
 
@@ -1387,6 +1388,27 @@ def update_support_settings(
     except Exception:
         pass
 
+    try:
+        AuditService.log_event(
+            session=session,
+            site_id=site.id,
+            actor_type=ActorType.OWNER if (admin.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=admin_uuid,
+            actor_name=admin.get("name"),
+            actor_email=admin.get("email"),
+            actor_role=admin.get("role") or "Staff",
+            category=AuditCategory.SUPPORT,
+            action="support.settings_updated",
+            source=SourceType.WEB_ADMIN,
+            resource_type="support_settings",
+            resource_id=str(site.id),
+            resource_name=f"{site.name or site.slug} Support Settings",
+            summary=f"{'Enabled' if payload.crm_enabled else 'Disabled'} CRM & Customer Support services",
+            metadata={"crm_enabled": bool(payload.crm_enabled)},
+        )
+    except Exception as log_err:
+        logger.warning(f"Failed to record audit log for support settings: {log_err}")
+
     return {
         "success": True,
         "site_id": str(site.id),
@@ -1499,6 +1521,28 @@ def create_support_agent(
     session.commit()
     session.refresh(agent)
 
+    try:
+        admin_id_val = UUID(str(admin["adminId"])) if admin.get("adminId") else None
+        AuditService.log_event(
+            session=session,
+            site_id=site_id,
+            actor_type=ActorType.OWNER if (admin.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=admin_id_val,
+            actor_name=admin.get("name"),
+            actor_email=admin.get("email"),
+            actor_role=admin.get("role") or "Staff",
+            category=AuditCategory.SUPPORT,
+            action="support.agent_created",
+            source=SourceType.WEB_ADMIN,
+            resource_type="support_agent",
+            resource_id=str(agent.id),
+            resource_name=agent.name,
+            summary=f"Created support agent '{agent.name}' ({agent.email})",
+            metadata={"email": agent.email, "role": agent.role},
+        )
+    except Exception as log_err:
+        logger.warning(f"Failed to record audit log for create support agent: {log_err}")
+
     return {
         "success": True,
         "message": f"Support Agent '{agent.name}' created successfully",
@@ -1544,6 +1588,28 @@ def update_support_agent(
     session.commit()
     session.refresh(agent)
 
+    try:
+        admin_id_val = UUID(str(admin["adminId"])) if admin.get("adminId") else None
+        AuditService.log_event(
+            session=session,
+            site_id=site_id,
+            actor_type=ActorType.OWNER if (admin.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=admin_id_val,
+            actor_name=admin.get("name"),
+            actor_email=admin.get("email"),
+            actor_role=admin.get("role") or "Staff",
+            category=AuditCategory.SUPPORT,
+            action="support.agent_updated",
+            source=SourceType.WEB_ADMIN,
+            resource_type="support_agent",
+            resource_id=str(agent.id),
+            resource_name=agent.name,
+            summary=f"Updated support agent '{agent.name}'" + (f" (Status: {'Active' if agent.is_active else 'Inactive'})" if payload.is_active is not None else ""),
+            metadata={"is_active": agent.is_active, "role": agent.role},
+        )
+    except Exception as log_err:
+        logger.warning(f"Failed to record audit log for update support agent: {log_err}")
+
     return {"success": True, "agent": {"id": str(agent.id), "name": agent.name, "is_active": agent.is_active}}
 
 
@@ -1574,8 +1640,31 @@ def delete_support_agent(
         t.assigned_agent_id = None
         session.add(t)
 
+    agent_name = agent.name
+    agent_id_str = str(agent.id)
     session.delete(agent)
     session.commit()
+
+    try:
+        admin_id_val = UUID(str(admin["adminId"])) if admin.get("adminId") else None
+        AuditService.log_event(
+            session=session,
+            site_id=site_id,
+            actor_type=ActorType.OWNER if (admin.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=admin_id_val,
+            actor_name=admin.get("name"),
+            actor_email=admin.get("email"),
+            actor_role=admin.get("role") or "Staff",
+            category=AuditCategory.SUPPORT,
+            action="support.agent_deleted",
+            source=SourceType.WEB_ADMIN,
+            resource_type="support_agent",
+            resource_id=agent_id_str,
+            resource_name=agent_name,
+            summary=f"Removed support agent '{agent_name}'",
+        )
+    except Exception as log_err:
+        logger.warning(f"Failed to record audit log for delete support agent: {log_err}")
 
     return {"success": True, "message": "Support agent removed successfully"}
 
@@ -2591,6 +2680,28 @@ def assign_ticket_agent(
     session.add(sys_msg)
     session.commit()
 
+    try:
+        actor_id_val = UUID(actor["actor_id"]) if actor.get("actor_id") else None
+        AuditService.log_event(
+            session=session,
+            site_id=site_id,
+            actor_type=ActorType.OWNER if (actor.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=actor_id_val,
+            actor_name=actor.get("name"),
+            actor_email=actor.get("email"),
+            actor_role=actor.get("role") or "Staff",
+            category=AuditCategory.SUPPORT,
+            action="ticket.assigned",
+            source=SourceType.WEB_ADMIN,
+            resource_type="support_ticket",
+            resource_id=str(ticket.id),
+            resource_name=ticket.ticket_number or f"Ticket #{str(ticket.id)[:8]}",
+            summary=f"Assigned support ticket {ticket.ticket_number or ''} to {agent_name}",
+            metadata={"ticket_number": ticket.ticket_number, "agent_name": agent_name, "agent_id": str(payload.agent_id) if payload.agent_id else None},
+        )
+    except Exception as log_err:
+        pass
+
     return {"success": True, "assigned_agent": {"id": str(payload.agent_id) if payload.agent_id else None, "name": agent_name}}
 
 
@@ -2614,6 +2725,7 @@ def update_ticket_status(
     if actor["actor_type"] == "agent" and ticket.assigned_agent_id != UUID(actor["actor_id"]):
         raise HTTPException(status_code=403, detail="Access restricted: You can only update cases assigned directly to you.")
 
+    old_status = ticket.status
     if payload.status:
         ticket.status = payload.status
         if payload.status in ["resolved", "closed"]:
@@ -2627,6 +2739,30 @@ def update_ticket_status(
     ticket.updated_at = utc_now()
     session.add(ticket)
     session.commit()
+
+    try:
+        actor_id_val = UUID(actor["actor_id"]) if actor.get("actor_id") else None
+        action_name = "ticket.closed" if payload.status == "closed" else "ticket.status_updated"
+        AuditService.log_event(
+            session=session,
+            site_id=site_id,
+            actor_type=ActorType.OWNER if (actor.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=actor_id_val,
+            actor_name=actor.get("name"),
+            actor_email=actor.get("email"),
+            actor_role=actor.get("role") or "Staff",
+            category=AuditCategory.SUPPORT,
+            action=action_name,
+            source=SourceType.WEB_ADMIN,
+            resource_type="support_ticket",
+            resource_id=str(ticket.id),
+            resource_name=ticket.ticket_number or f"Ticket #{str(ticket.id)[:8]}",
+            summary=f"Changed ticket {ticket.ticket_number or ''} status to '{ticket.status}'",
+            previous_state={"status": old_status},
+            new_state={"status": ticket.status, "priority": ticket.priority},
+        )
+    except Exception as log_err:
+        pass
 
     return {"success": True, "status": ticket.status, "priority": ticket.priority}
 
@@ -2983,6 +3119,41 @@ def execute_ticket_resolution_action(
     session.commit()
     session.refresh(res_msg)
     session.refresh(ticket)
+
+    try:
+        actor_id_val = UUID(actor["actor_id"]) if actor.get("actor_id") else None
+        act_name = f"ticket.{payload.action_type}"
+        if payload.action_type in ("refund",):
+            act_name = "ticket.refund_issued"
+        elif payload.action_type in ("replacement",):
+            act_name = "ticket.replacement_sent"
+        elif payload.action_type in ("cancel_order",):
+            act_name = "order.cancelled"
+        elif payload.action_type in ("resolve", "resolved", "close", "closed", "done"):
+            act_name = "ticket.closed"
+        elif payload.action_type in ("reopen", "open"):
+            act_name = "ticket.reopened"
+
+        AuditService.log_event(
+            session=session,
+            site_id=site_id,
+            actor_type=ActorType.OWNER if (actor.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=actor_id_val,
+            actor_name=actor.get("name"),
+            actor_email=actor.get("email"),
+            actor_role=actor.get("role") or "Staff",
+            category=AuditCategory.SUPPORT,
+            action=act_name,
+            source=SourceType.WEB_ADMIN,
+            resource_type="support_ticket",
+            resource_id=str(ticket.id),
+            resource_name=ticket.ticket_number or f"Ticket #{str(ticket.id)[:8]}",
+            summary=f"Resolved ticket {ticket.ticket_number or ''}: {payload.action_type.replace('_', ' ').title()}",
+            description=action_msg,
+            metadata={"ticket_number": ticket.ticket_number, "action_type": payload.action_type, "note": payload.note},
+        )
+    except Exception as log_err:
+        logger.warning(f"Failed to record audit log for support ticket action: {log_err}")
 
     msg_dict = {
         "id": str(res_msg.id),
