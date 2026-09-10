@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState, Suspense } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback, Suspense } from "react";
 import {
   Link,
   Navigate,
@@ -13,38 +13,70 @@ import { CartProvider, Product, useCart } from "./CartContext";
 import Navbar, { NavbarFixedBounds } from "./Component/Navbar";
 import Footer from "./Component/Footer";
 import type { EditorTab } from "./customizations/EditorSidebar";
-import type { EditorSiteDefinition } from "./customizations/editorUtils";
+import { applyThemeToPages, type EditorSiteDefinition } from "./customizations/editorUtils";
 import { API_BASE_URL } from "./config/api";
 import BuilderShell from "./Component/BuilderShell";
+import { DeviceModeProvider } from "./context/DeviceModeContext";
 import BuilderTopControlBar from "./Component/BuilderTopControlBar";
 import BuilderControlPanel from "./Component/BuilderControlPanel";
-import type { AdminNavKey } from "./Component/BuilderDrawerPanel";
+import type { AdminNavKey, SettingsNavKey } from "./Component/BuilderDrawerPanel";
 import { useAdminAuth } from "./context/AdminAuthContext";
 
-// Lazy-loaded Admin and Customizer chunks
-const AdminLayout = React.lazy(() => import("./Component/AdminLayout"));
-const AdminProducts = React.lazy(() => import("./Component/AdminProducts"));
-const AdminOrders = React.lazy(() => import("./Component/AdminOrders"));
-const CheckoutChargesPage = React.lazy(() => import("./Component/CheckoutChargesPage"));
-const TenantPaymentSettingsPage = React.lazy(() => import("./Component/TenantPaymentSettingsPage"));
-const TenantEarningsPage = React.lazy(() => import("./Component/TenantEarningsPage"));
-const DeliverySettingsPage = React.lazy(() => import("./Component/DeliverySettingsPage"));
+// Direct imports for instant, 60fps zero-jitter workspace interactions
+import AdminLayout from "./Component/AdminLayout";
+import AdminProducts from "./Component/AdminProducts";
+import AdminHomeSections from "./Component/AdminHomeSections";
+import AdminOrders from "./Component/AdminOrders";
+import AdminCoupons from "./Component/AdminCoupons";
+import CheckoutChargesPage from "./Component/CheckoutChargesPage";
+import TenantPaymentSettingsPage from "./Component/TenantPaymentSettingsPage";
+import TenantEarningsPage from "./Component/TenantEarningsPage";
+import DeliverySettingsPage from "./Component/DeliverySettingsPage";
+import AdminSupportDesk from "./Component/AdminSupportDesk";
+import AdminProfileSettings from "./Component/AdminProfileSettings";
+import AdminPages from "./Component/AdminPages";
+import AdminAnalytics from "./Component/AdminAnalytics";
+import AdminUsersAndRoles from "./Component/AdminUsersAndRoles";
+import AdminAuditLogs from "./Component/AdminAuditLogs";
+import {
+  AdminGeneralSettings,
+  AdminDomainSettings,
+  AdminBillingSettings,
+  AdminIntegrationsSettings,
+  AdminHelpAndSupport,
+} from "./Component/AdminSettingsViews";
+import AccessDeniedView from "./Component/AccessDeniedView";
+import StorefrontCustomPage from "./Component/StorefrontCustomPage";
+
+import EditorRenderPage from "./customizations/EditorRenderPage";
+import EditorSidebar from "./customizations/EditorSidebar";
+import CustomerOrdersPage from "./pages/CustomerOrdersPage";
+import CustomerProfilePage from "./pages/CustomerProfilePage";
+import CustomerLoginPage from "./pages/CustomerLoginPage";
+import CustomerSignupPage from "./pages/CustomerSignupPage";
+import QrLinkPopup from "./Component/QrLinkPopup";
+import BuilderDrawerPanel from "./Component/BuilderDrawerPanel";
+import { normalizeStorefrontProduct, slugify } from "./utils/productNormalizer";
+import { isColorDarkHex } from "./context/ThemeContext";
+import FestiveBackgroundOverlay from "./Component/FestiveBackgroundOverlay";
+import { cleanSiteName } from "./hooks/usePublicSiteTheme";
+
+// Standalone secondary routes remain lazy
 const AgentDeliveryPage = React.lazy(() => import("./pages/AgentDeliveryPage"));
 const TrackOrderPage = React.lazy(() => import("./pages/TrackOrderPage"));
-const EditorRenderPage = React.lazy(() => import("./customizations/EditorRenderPage"));
-const EditorSidebar = React.lazy(() => import("./customizations/EditorSidebar"));
-const CustomerOrdersPage = React.lazy(() => import("./pages/CustomerOrdersPage"));
-const QrLinkPopup = React.lazy(() => import("./Component/QrLinkPopup"));
-const BuilderDrawerPanel = React.lazy(() => import("./Component/BuilderDrawerPanel"));
 
 
 type Block = {
   id: string;
   type: string;
+  name?: string;
   props?: Record<string, any>;
   data_source?: string | null;
   datasource?: string | null;
   actions?: Record<string, any>;
+  isActive?: boolean;
+  hidden?: boolean;
+  [key: string]: any;
 };
 
 type Page = {
@@ -78,6 +110,7 @@ type SavedSite = {
   site_definition: SiteDefinition;
   draft_definition: SiteDefinition | null;
   version: number;
+  default_return_window_days?: number;
   created_at: string;
   updated_at: string;
 };
@@ -131,9 +164,24 @@ function isProductDetailRoute(route?: string | null) {
 
 
 function getNavbarEditorProps(siteDefinition: SiteDefinition) {
+  const t = (siteDefinition.theme || {}) as Record<string, any>;
+  const nav = (siteDefinition.navbar || {}) as Record<string, any>;
+  const f = (siteDefinition.footer || {}) as Record<string, any>;
+  const resolvedBrandName =
+    t.brandName ||
+    t.brand_name ||
+    nav.brandName ||
+    nav.brand_name ||
+    f.brandName ||
+    f.brand_name ||
+    siteDefinition.site?.brand_name ||
+    siteDefinition.site_name ||
+    siteDefinition.name ||
+    "Website";
+
   return {
-    brandName: siteDefinition.site?.brand_name || "Website",
-    tagline: siteDefinition.theme?.brand_tone || "",
+    brandName: resolvedBrandName,
+    tagline: t.brand_tone || "",
     navigation: siteDefinition.navigation || {
       storefront: [],
       admin: [],
@@ -144,160 +192,192 @@ function getNavbarEditorProps(siteDefinition: SiteDefinition) {
   };
 }
 
-
-function slugify(value: string) {
-  return String(value || "")
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .replace(/-{2,}/g, "-");
-}
-
-
-function normalizeStorefrontProduct(raw: any): Product {
-  const attributes = raw?.attributes ?? {};
-  const price = Number(raw?.price ?? 0);
-  const comparePrice =
-    raw?.compare_price != null
-      ? Number(raw.compare_price)
-      : raw?.comparePrice != null
-      ? Number(raw.comparePrice)
-      : raw?.original_price != null
-      ? Number(raw.original_price)
-      : raw?.originalPrice != null
-      ? Number(raw.originalPrice)
-      : null;
-  const images = Array.isArray(raw?.images)
-    ? raw.images.filter(
-        (img: unknown) => typeof img === "string" && img.trim() !== ""
-      )
-    : raw?.image
-    ? [raw.image]
-    : [];
-  const variantOption =
-    raw?.variant_option ??
-    raw?.variantOption ??
-    (Array.isArray(attributes?.sizes) || Array.isArray(raw?.sizes)
-      ? {
-          optionType: "size",
-          optionName: "Size",
-          optionValues: (
-            Array.isArray(attributes?.sizes) ? attributes.sizes : raw?.sizes || []
-          ).map((size: string) => ({
-            value: String(size),
-            inStock: true,
-            stockQty: null,
-          })),
-        }
-      : null);
-  const stock =
-    raw?.stock != null && !Number.isNaN(Number(raw.stock))
-      ? Number(raw.stock)
-      : 0;
-  const inStock =
-    typeof raw?.in_stock === "boolean"
-      ? raw.in_stock
-      : typeof raw?.inStock === "boolean"
-      ? raw.inStock
-      : stock > 0;
-  const originalPrice =
-    comparePrice != null && comparePrice > 0 ? comparePrice : price;
-  const discountPercent =
-    raw?.discountPercent != null
-      ? Number(raw.discountPercent)
-      : raw?.discount_percent != null
-      ? Number(raw.discount_percent)
-      : comparePrice != null && comparePrice > price
-      ? Math.round(((comparePrice - price) / comparePrice) * 100)
-      : 0;
-
+function getFooterEditorProps(siteDefinition: SiteDefinition) {
+  const f = (siteDefinition.footer || {}) as Record<string, any>;
+  const t = (siteDefinition.theme || {}) as Record<string, any>;
+  const nav = (siteDefinition.navbar || {}) as Record<string, any>;
+  const defaultBrand =
+    f.brandName ||
+    f.brand_name ||
+    t.brandName ||
+    t.brand_name ||
+    nav.brandName ||
+    nav.brand_name ||
+    siteDefinition.site?.brand_name ||
+    siteDefinition.site_name ||
+    siteDefinition.name ||
+    "Website";
+  const defaultTagline = (siteDefinition.site as any)?.description || siteDefinition.tagline || t.brand_tone || "Your premium shopping destination.";
 
   return {
-    id: raw?.id != null ? String(raw.id) : slugify(raw?.name || ""),
-    site_id: raw?.site_id != null ? String(raw.site_id) : undefined,
-    name: raw?.name ?? "",
-    brand: raw?.brand ?? "",
-    category: raw?.category ?? "",
-    category_id: raw?.category_id != null ? String(raw.category_id) : null,
-    category_name: raw?.category_name ?? null,
-    collections: Array.isArray(raw?.collections) ? raw.collections : [],
-    description: raw?.description ?? "",
-    slug: raw?.slug || slugify(raw?.name) || String(raw?.id ?? ""),
-    price,
-    compare_price: comparePrice,
-    images,
-    stock,
-    in_stock: inStock,
-    variant_option: variantOption,
-    originalPrice,
-    discountPercent,
-    image: images[0] || "",
-    sizes: Array.isArray(attributes?.sizes)
-      ? attributes.sizes
-      : Array.isArray(raw?.sizes)
-      ? raw.sizes
-      : [],
-    inStock,
-    average_rating:
-      typeof raw?.average_rating === "number"
-        ? raw.average_rating
-        : Number(raw?.average_rating ?? 0),
-    review_count:
-      typeof raw?.review_count === "number"
-        ? raw.review_count
-        : Number(raw?.review_count ?? 0),
-    reviews: Array.isArray(raw?.reviews) ? raw.reviews : undefined,
-    created_at: raw?.created_at ?? null,
-    updated_at: raw?.updated_at ?? null,
+    ...f,
+    brandName: f.brandName || f.brand_name || defaultBrand,
+    tagline: f.tagline !== undefined && f.tagline !== null ? f.tagline : defaultTagline,
+    copyrightText: f.copyrightText,
+    show_brand: f.show_brand !== false,
+    show_tagline: f.show_tagline !== false,
+    show_copyright: f.show_copyright !== false,
+    show_newsletter: f.show_newsletter !== false,
+    newsletter_title: f.newsletter_title || "Subscribe to Our Newsletter",
+    newsletter_subtitle: f.newsletter_subtitle || "",
+    newsletter_placeholder: f.newsletter_placeholder || "Enter your email...",
+    newsletter_button_text: f.newsletter_button_text || "Join",
+    show_social_links: f.show_social_links !== false,
+    social_links: Array.isArray(f.social_links) && f.social_links.length > 0
+      ? f.social_links
+      : [
+          { platform: "Instagram", url: "https://instagram.com" },
+          { platform: "Twitter / X", url: "https://x.com" },
+          { platform: "Facebook", url: "https://facebook.com" },
+        ],
+    social_icon_variant: f.social_icon_variant || "pill",
+    footer_bg: f.footer_bg || t.footer_bg,
+    footer_text_color: f.footer_text_color || t.footer_text_color,
+    footer_muted_color: f.footer_muted_color || t.footer_muted_color,
+    footer_border_color: f.footer_border_color || t.footer_border_color,
+    accent_color: f.accent_color || t.accent_color,
+    input_bg_color: f.input_bg_color,
+    padding_y: f.padding_y,
+    padding_x: f.padding_x,
+    margin_top: f.margin_top,
+    max_width: f.max_width || t.footer_max_width,
+    footer_layout: f.footer_layout || t.footer_layout,
   };
 }
 
 
-async function resolveSiteBySlug(
-  siteSlugParam: string
-): Promise<SavedSite | null> {
-  const publicCandidates = [
-    `${API_BASE_URL}/public/sites/slug/${siteSlugParam}`,
-    `${API_BASE_URL}/sites/slug/${siteSlugParam}`,
-  ];
+export const siteSlugMemoryCache = new Map<string, SavedSite>();
+
+import {
+  getSavedSitesMemoryCache,
+  setSavedSitesMemoryCache,
+  clearSavedSitesMemoryCache,
+} from "./utils/savedSitesCache";
+export { clearSavedSitesMemoryCache };
 
 
-  for (const url of publicCandidates) {
+function getInitialCachedSite(slugOrId?: string): SavedSite | null {
+  if (!slugOrId) return null;
+  if (siteSlugMemoryCache.has(slugOrId)) {
+    return siteSlugMemoryCache.get(slugOrId)!;
+  }
+  if (typeof window !== "undefined") {
     try {
-      const response = await fetch(url, {
-        credentials: "include",
-      });
-
-
-      if (response.ok) {
-        const data = await response.json();
-        if (
-          data?.id ||
-          data?.slug ||
-          data?.site_definition ||
-          data?.draft_definition
-        ) {
-          return data as SavedSite;
+      const raw = localStorage.getItem(`wc_site_snapshot_${slugOrId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw) as SavedSite;
+        if (parsed?.id || parsed?.site_definition) {
+          siteSlugMemoryCache.set(slugOrId, parsed);
+          if (parsed.id) siteSlugMemoryCache.set(parsed.id, parsed);
+          if (parsed.slug) siteSlugMemoryCache.set(parsed.slug, parsed);
+          return parsed;
         }
       }
-    } catch (error) {
-      console.warn("Site slug lookup failed:", url, error);
-    }
+    } catch (_) { }
+  }
+  return null;
+}
+
+async function resolveSiteBySlug(
+  siteSlugParam: string,
+  preferNetwork = true
+): Promise<SavedSite | null> {
+  if (!siteSlugParam) return null;
+  if (!preferNetwork && siteSlugMemoryCache.has(siteSlugParam)) {
+    return siteSlugMemoryCache.get(siteSlugParam)!;
   }
 
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/public/sites/slug/${siteSlugParam}?t=${Date.now()}`,
+      { credentials: "include", cache: "no-cache" }
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      if (
+        data?.id ||
+        data?.slug ||
+        data?.site_definition ||
+        data?.draft_definition
+      ) {
+        const res = data as SavedSite;
+        siteSlugMemoryCache.set(siteSlugParam, res);
+        if (res.id) siteSlugMemoryCache.set(res.id, res);
+        if (res.slug) siteSlugMemoryCache.set(res.slug, res);
+        const parsedDef = res.site_definition;
+        const targetSlug = res.slug || siteSlugParam;
+        if (targetSlug && typeof window !== "undefined") {
+          try {
+            const serialized = JSON.stringify(res);
+            localStorage.setItem(`wc_site_snapshot_${targetSlug}`, serialized);
+            if (res.id) {
+              localStorage.setItem(`wc_site_snapshot_${res.id}`, serialized);
+            }
+            if (parsedDef?.theme) {
+              localStorage.setItem(
+                `wc_theme_mode_${targetSlug}`,
+                parsedDef.theme.mode || "light"
+              );
+              if (parsedDef.theme.primary_bg) {
+                localStorage.setItem(
+                  `wc_theme_bg_${targetSlug}`,
+                  parsedDef.theme.primary_bg
+                );
+              }
+            }
+          } catch (_) { }
+        }
+        return res;
+      }
+    }
+  } catch (error) {
+    console.warn("Site slug lookup failed:", error);
+  }
+
+  // Fallback to cached copy if offline
+  if (siteSlugMemoryCache.has(siteSlugParam)) {
+    return siteSlugMemoryCache.get(siteSlugParam)!;
+  }
 
   try {
     const adminResponse = await fetch(`${API_BASE_URL}/auth/admin/sites`, {
       credentials: "include",
     });
 
-
     if (!adminResponse.ok) return null;
 
-
     const sites: SavedSite[] = await adminResponse.json();
-    return sites.find((site) => site.slug === siteSlugParam) ?? null;
+    const found = sites.find((site) => site.slug === siteSlugParam || site.id === siteSlugParam) ?? null;
+    if (found) {
+      siteSlugMemoryCache.set(siteSlugParam, found);
+      if (found.id) siteSlugMemoryCache.set(found.id, found);
+      if (found.slug) siteSlugMemoryCache.set(found.slug, found);
+      const parsedDef = found.site_definition;
+      const targetSlug = found.slug || siteSlugParam;
+      if (targetSlug && typeof window !== "undefined") {
+        try {
+          const serialized = JSON.stringify(found);
+          localStorage.setItem(`wc_site_snapshot_${targetSlug}`, serialized);
+          if (found.id) {
+            localStorage.setItem(`wc_site_snapshot_${found.id}`, serialized);
+          }
+          if (parsedDef?.theme) {
+            localStorage.setItem(
+              `wc_theme_mode_${targetSlug}`,
+              parsedDef.theme.mode || "light"
+            );
+            if (parsedDef.theme.primary_bg) {
+              localStorage.setItem(
+                `wc_theme_bg_${targetSlug}`,
+                parsedDef.theme.primary_bg
+              );
+            }
+          }
+        } catch (_) { }
+      }
+    }
+    return found;
   } catch (error) {
     console.warn("Admin site slug fallback failed:", error);
     return null;
@@ -331,17 +411,83 @@ function StorefrontShell({
   children: React.ReactNode;
 }) {
   const navbarProps = getNavbarEditorProps(siteDefinition);
-  const navbarIsSelected = selectedBlockId === NAVBAR_BLOCK_ID;
+  const navbarIsSelected = selectedBlockId === NAVBAR_BLOCK_ID || selectedBlockId === "navbar";
+  const footerIsSelected = selectedBlockId === FOOTER_BLOCK_ID || selectedBlockId === "footer";
 
+  const navbarBlockRef = useRef<HTMLDivElement | null>(null);
+  const footerBlockRef = useRef<HTMLDivElement | null>(null);
+  const [measuredNavbarHeight, setMeasuredNavbarHeight] = useState(118);
+
+  useEffect(() => {
+    if (navbarIsSelected && navbarBlockRef.current) {
+      const scrollParent = navbarBlockRef.current.closest(".builder-preview-scroll");
+      if (scrollParent) {
+        scrollParent.scrollTo({ top: 0, behavior: "smooth" });
+      } else {
+        navbarBlockRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }
+    }
+  }, [navbarIsSelected]);
+
+  useEffect(() => {
+    if (footerIsSelected && footerBlockRef.current) {
+      const scrollParent = footerBlockRef.current.closest(".builder-preview-scroll");
+      if (scrollParent) {
+        scrollParent.scrollTo({ top: scrollParent.scrollHeight, behavior: "smooth" });
+      } else {
+        footerBlockRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }
+    }
+  }, [footerIsSelected]);
+
+  useEffect(() => {
+    const updateHeight = () => {
+      const headerEl =
+        document.getElementById("storefront-navbar") ||
+        (navbarBlockRef.current ? navbarBlockRef.current.querySelector("header") : null);
+      if (headerEl) {
+        const h = headerEl.offsetHeight;
+        if (h > 0) {
+          setMeasuredNavbarHeight(h);
+        }
+      }
+    };
+
+    updateHeight();
+
+    const targetEl =
+      document.getElementById("storefront-navbar") ||
+      (navbarBlockRef.current ? navbarBlockRef.current.querySelector("header") : null) ||
+      navbarBlockRef.current;
+
+    if (typeof ResizeObserver !== "undefined" && targetEl) {
+      const resizeObserver = new ResizeObserver(() => {
+        updateHeight();
+      });
+      resizeObserver.observe(targetEl);
+      return () => resizeObserver.disconnect();
+    }
+  }, [siteDefinition, storefrontNavbarMode]);
+
+  const resolvedNavbarHeight =
+    measuredNavbarHeight > 0
+      ? measuredNavbarHeight
+      : Number(siteDefinition.theme?.navbar_height || 72);
 
   const contentTopOffset =
-    storefrontNavbarMode === "fixed" ? FIXED_NAVBAR_CONTENT_OFFSET : 0;
-
+    (storefrontNavbarMode === "fixed" || storefrontNavbarMode === "sticky")
+      ? resolvedNavbarHeight
+      : 0;
 
   const fixedNavbarTopOffset = adminTopbarVisible
     ? BUILDER_TOPBAR_HEIGHT
     : 0;
-
 
   return (
     <div
@@ -353,73 +499,56 @@ function StorefrontShell({
         overflow: "visible",
       }}
     >
+      <FestiveBackgroundOverlay
+        festivalTheme={siteDefinition.theme?.festival_theme}
+        backgroundColor={siteDefinition.theme?.primary_bg}
+        isDark={
+          siteDefinition.theme?.mode === "dark" ||
+          isColorDarkHex(siteDefinition.theme?.primary_bg)
+        }
+      />
+
+      {/* Global Navbar Block */}
       <div
+        ref={navbarBlockRef}
         data-editor-block-id={NAVBAR_BLOCK_ID}
         data-editor-block-type="navbar"
-        onClick={(e) => {
-          if (!editMode) return;
-          e.stopPropagation();
-          onSelectBlock(NAVBAR_BLOCK_ID);
-        }}
         style={{
-          position: "relative",
-          outline:
-            editMode && navbarIsSelected
-              ? "2px solid #2563eb"
-              : "1px dashed transparent",
-          outlineOffset: "4px",
-          borderRadius: "8px",
-          transition: "outline-color 0.15s ease",
-          cursor: editMode ? "pointer" : "default",
-          zIndex: storefrontNavbarMode === "fixed" ? FIXED_NAVBAR_Z_INDEX : 5,
-          isolation: "isolate",
+          position: (storefrontNavbarMode === "fixed" || storefrontNavbarMode === "sticky") ? "static" : "relative",
+          zIndex: 1000,
           overflow: "visible",
         }}
       >
-        <div
-          style={{
-            position: "absolute",
-            top: "6px",
-            left: "12px",
-            zIndex: 40,
-            padding: "2px 8px",
-            borderRadius: "999px",
-            background: "#2563eb",
-            color: "#ffffff",
-            fontSize: "11px",
-            fontWeight: 700,
-            letterSpacing: "0.02em",
-            pointerEvents: "none",
-            opacity: editMode && navbarIsSelected ? 1 : 0,
-            transform:
-              editMode && navbarIsSelected
-                ? "translateY(0)"
-                : "translateY(4px)",
-            transition: "all 0.15s ease",
-          }}
-        >
-          navbar
-        </div>
-
-
         <Navbar
+          {...navbarProps}
+          siteId={siteId}
           brandName={navbarProps.brandName}
-          logoUrl={siteDefinition.navbar?.logoUrl || siteDefinition.navbar?.logo_url || (navbarProps as any).logoUrl}
           tagline={navbarProps.tagline}
+          logoUrl={siteDefinition.theme?.logoUrl || siteDefinition.theme?.logo_url || ""}
           theme={{
             ...siteDefinition.theme,
+            crm_enabled: siteDefinition.crm_enabled !== false,
             navbar_position: storefrontNavbarMode,
           }}
+          crm_enabled={siteDefinition.crm_enabled !== false}
+          siteDefinition={siteDefinition}
           navigation={navbarProps.navigation}
           showSearch={navbarProps.showSearch}
           showAccount={navbarProps.showAccount}
           showCart={navbarProps.showCart}
           topOffset={fixedNavbarTopOffset}
           fixedBounds={
-            storefrontNavbarMode === "fixed" ? navbarFixedBounds : undefined
+            (storefrontNavbarMode === "fixed" || storefrontNavbarMode === "sticky") ? navbarFixedBounds : undefined
           }
           siteSlug={siteSlug}
           appBase={appBase}
+          editMode={editMode}
+          isSelected={editMode && navbarIsSelected}
+          onSelect={() => {
+            if (editMode) {
+              onSelectBlock(NAVBAR_BLOCK_ID);
+            }
+          }}
         />
       </div>
 
@@ -438,6 +567,7 @@ function StorefrontShell({
 
       {/* Global Footer Block */}
       <div
+        ref={footerBlockRef}
         data-editor-block-id={FOOTER_BLOCK_ID}
         data-editor-block-type="footer"
         onClick={(e) => {
@@ -447,15 +577,8 @@ function StorefrontShell({
         }}
         style={{
           position: "relative",
-          outline:
-            editMode && selectedBlockId === FOOTER_BLOCK_ID
-              ? "2px solid #2563eb"
-              : "1px dashed transparent",
-          outlineOffset: "4px",
-          borderRadius: "8px",
-          transition: "outline-color 0.15s ease",
           cursor: editMode ? "pointer" : "default",
-          zIndex: 5,
+          zIndex: editMode && footerIsSelected ? 50 : 5,
           isolation: "isolate",
           overflow: "visible",
         }}
@@ -463,39 +586,125 @@ function StorefrontShell({
         <div
           style={{
             position: "absolute",
-            top: "-24px",
-            left: "12px",
+            inset: "-2px",
+            border: editMode && footerIsSelected ? "2px solid #2563eb" : "1.5px dashed transparent",
+            borderRadius: "10px",
+            pointerEvents: "none",
             zIndex: 40,
-            padding: "2px 8px",
-            borderRadius: "999px",
-            background: "#2563eb",
-            color: "#ffffff",
+            transition: "all 0.15s ease",
+            boxShadow: editMode && footerIsSelected
+              ? "0 0 0 1px rgba(255, 255, 255, 0.9), 0 0 0 3.5px rgba(37, 99, 235, 0.22)"
+              : "none",
+          }}
+        />
+
+        {editMode && footerIsSelected && (
+          <>
+            <div
+              style={{
+                position: "absolute",
+                top: "-5px",
+                left: "-5px",
+                width: "7px",
+                height: "7px",
+                background: "#ffffff",
+                border: "1.5px solid #2563eb",
+                borderRadius: "2px",
+                zIndex: 42,
+                pointerEvents: "none",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                top: "-5px",
+                right: "-5px",
+                width: "7px",
+                height: "7px",
+                background: "#ffffff",
+                border: "1.5px solid #2563eb",
+                borderRadius: "2px",
+                zIndex: 42,
+                pointerEvents: "none",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                bottom: "-5px",
+                left: "-5px",
+                width: "7px",
+                height: "7px",
+                background: "#ffffff",
+                border: "1.5px solid #2563eb",
+                borderRadius: "2px",
+                zIndex: 42,
+                pointerEvents: "none",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                bottom: "-5px",
+                right: "-5px",
+                width: "7px",
+                height: "7px",
+                background: "#ffffff",
+                border: "1.5px solid #2563eb",
+                borderRadius: "2px",
+                zIndex: 42,
+                pointerEvents: "none",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+              }}
+            />
+          </>
+        )}
+
+        <div
+          style={{
+            position: "absolute",
+            top: "10px",
+            left: "14px",
+            zIndex: 41,
+            padding: "3px 10px 3px 8px",
+            borderRadius: "6px",
+            background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
+            border: "1px solid rgba(255, 255, 255, 0.12)",
+            color: "#f8fafc",
             fontSize: "11px",
-            fontWeight: 700,
+            fontWeight: 600,
             letterSpacing: "0.02em",
             pointerEvents: "none",
-            opacity: editMode && selectedBlockId === FOOTER_BLOCK_ID ? 1 : 0,
-            transform:
-              editMode && selectedBlockId === FOOTER_BLOCK_ID
-                ? "translateY(0)"
-                : "translateY(4px)",
-            transition: "all 0.15s ease",
+            opacity: editMode && footerIsSelected ? 1 : 0,
+            transform: editMode && footerIsSelected ? "translateY(0)" : "translateY(-4px)",
+            transition: "all 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
+            boxShadow: "0 4px 14px rgba(15, 23, 42, 0.22), 0 1px 3px rgba(0,0,0,0.12)",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
           }}
         >
-          footer
+          <span
+            style={{
+              width: "5.5px",
+              height: "5.5px",
+              borderRadius: "50%",
+              background: "#38bdf8",
+              boxShadow: "0 0 6px rgba(56, 189, 248, 0.7)",
+              flexShrink: 0,
+            }}
+          />
+          Footer
         </div>
 
         <Footer
-          {...(siteDefinition.footer || {})}
-          brandName={siteDefinition.site?.brand_name || (siteDefinition.footer as any)?.brandName}
-          tagline={siteDefinition.footer?.tagline}
-          copyrightText={siteDefinition.footer?.copyrightText}
-          links={siteDefinition.footer?.links}
-          show_newsletter={siteDefinition.footer?.show_newsletter}
-          newsletter_title={siteDefinition.footer?.newsletter_title}
-          show_social_links={siteDefinition.footer?.show_social_links}
-          social_links={siteDefinition.footer?.social_links}
+          {...getFooterEditorProps(siteDefinition)}
           theme={siteDefinition.theme}
+          appBase={appBase}
+          siteSlug={siteSlug}
         />
       </div>
     </div>
@@ -515,6 +724,7 @@ function StorefrontPage({
   onSelectBlock,
   storefrontNavbarMode,
   navbarFixedBounds,
+  siteName,
   appBase,
 }: {
   page: Page;
@@ -522,6 +732,7 @@ function StorefrontPage({
   selectedProduct?: Product | null;
   siteId: string;
   siteSlug: string;
+  siteName?: string;
   editMode: boolean;
   adminTopbarVisible: boolean;
   selectedBlockId: string | null;
@@ -530,6 +741,20 @@ function StorefrontPage({
   navbarFixedBounds?: NavbarFixedBounds;
   appBase: string;
 }) {
+  const location = useLocation();
+  const resolvedSiteName = useMemo(() => {
+    return (
+      siteName ||
+      (siteDefinition as any)?.site?.brand_name ||
+      (siteDefinition as any)?.site_name ||
+      (siteDefinition as any)?.site_title ||
+      (siteDefinition?.navbar as any)?.brandName ||
+      (siteDefinition?.navbar as any)?.brand_name ||
+      cleanSiteName("", siteSlug) ||
+      "Store"
+    );
+  }, [siteName, siteDefinition, siteSlug]);
+
   return (
     <StorefrontShell
       siteDefinition={siteDefinition}
@@ -559,23 +784,315 @@ function StorefrontPage({
           }
         >
           <EditorRenderPage
+            key={`editor-render-${page?.id || page?.route || "page"}-${location.search}`}
             page={page}
             siteId={siteId}
+            siteSlug={siteSlug}
+            siteName={resolvedSiteName}
             selectedProduct={selectedProduct ?? undefined}
             selectedBlockId={selectedBlockId}
             onSelectBlock={onSelectBlock}
             theme={siteDefinition.theme}
+            appBase={appBase}
           />
         </Suspense>
       ) : (
         <RenderPage
+          key={`storefront-render-${page?.id || page?.route || "page"}-${location.search}`}
           page={page}
           siteId={siteId}
+          siteSlug={siteSlug}
+          siteName={resolvedSiteName}
           selectedProduct={selectedProduct ?? undefined}
           theme={siteDefinition.theme}
+          appBase={appBase}
         />
       )}
     </StorefrontShell>
+  );
+}
+
+
+function StorefrontSkeleton({
+  isProductDetail,
+}: {
+  isProductDetail?: boolean;
+  siteSlug?: string;
+}) {
+  const bg = "#f8fafc";
+  const headerBg = "rgba(255,255,255,0.9)";
+  const border = "1px solid rgba(0,0,0,0.06)";
+  const cardBg = "#ffffff";
+  const cardBorder = "1px solid rgba(0,0,0,0.06)";
+
+  const skStyle: React.CSSProperties = {
+    backgroundImage: "linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%)",
+    backgroundSize: "200% 100%",
+    animation: "storeShimmer 1.5s infinite linear",
+    willChange: "background-position",
+    transform: "translateZ(0)",
+  };
+
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: bg,
+        color: "#0f172a",
+        overflow: "hidden",
+        fontFamily:
+          "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      }}
+    >
+      <style>{`
+        @keyframes storeShimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      `}</style>
+
+      {/* Navbar Skeleton */}
+      <header
+        style={{
+          height: "64px",
+          borderBottom: border,
+          padding: "0 24px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          background: headerBg,
+          backdropFilter: "blur(12px)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div
+            style={{
+              ...skStyle,
+              width: "36px",
+              height: "36px",
+              borderRadius: "10px",
+            }}
+          />
+          <div
+            style={{
+              ...skStyle,
+              width: "120px",
+              height: "18px",
+              borderRadius: "6px",
+            }}
+          />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
+          <div
+            style={{
+              ...skStyle,
+              width: "60px",
+              height: "14px",
+              borderRadius: "4px",
+            }}
+          />
+          <div
+            style={{
+              ...skStyle,
+              width: "60px",
+              height: "14px",
+              borderRadius: "4px",
+            }}
+          />
+          <div
+            style={{
+              ...skStyle,
+              width: "38px",
+              height: "38px",
+              borderRadius: "50%",
+            }}
+          />
+        </div>
+      </header>
+
+      {/* Main Body Skeleton */}
+      <main
+        style={{
+          maxWidth: "1200px",
+          margin: "0 auto",
+          padding: "32px 20px 64px",
+        }}
+      >
+        {isProductDetail ? (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+              gap: "40px",
+              alignItems: "start",
+            }}
+          >
+            <div
+              style={{
+                ...skStyle,
+                width: "100%",
+                aspectRatio: "1/1",
+                borderRadius: "24px",
+              }}
+            />
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "16px" }}
+            >
+              <div
+                style={{
+                  ...skStyle,
+                  width: "30%",
+                  height: "16px",
+                  borderRadius: "4px",
+                }}
+              />
+              <div
+                style={{
+                  ...skStyle,
+                  width: "85%",
+                  height: "32px",
+                  borderRadius: "8px",
+                }}
+              />
+              <div
+                style={{
+                  ...skStyle,
+                  width: "40%",
+                  height: "28px",
+                  borderRadius: "6px",
+                }}
+              />
+              <div
+                style={{
+                  ...skStyle,
+                  width: "100%",
+                  height: "100px",
+                  borderRadius: "12px",
+                  marginTop: "12px",
+                }}
+              />
+              <div
+                style={{
+                  ...skStyle,
+                  width: "100%",
+                  height: "48px",
+                  borderRadius: "14px",
+                  marginTop: "16px",
+                }}
+              />
+            </div>
+          </div>
+        ) : (
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: "36px" }}
+          >
+            {/* Hero Skeleton */}
+            <div
+              style={{
+                ...skStyle,
+                width: "100%",
+                height: "220px",
+                borderRadius: "24px",
+                border: cardBorder,
+              }}
+            />
+
+            {/* Section Header */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <div
+                style={{
+                  ...skStyle,
+                  width: "180px",
+                  height: "24px",
+                  borderRadius: "6px",
+                }}
+              />
+              <div
+                style={{
+                  ...skStyle,
+                  width: "100%",
+                  maxWidth: "100px",
+                  height: "20px",
+                  borderRadius: "6px",
+                }}
+              />
+            </div>
+
+            {/* Product Grid Skeleton (8 Cards) */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+                gap: "20px",
+              }}
+            >
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                <div
+                  key={i}
+                  style={{
+                    background: cardBg,
+                    border: cardBorder,
+                    borderRadius: "20px",
+                    padding: "14px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "12px",
+                  }}
+                >
+                  <div
+                    style={{
+                      ...skStyle,
+                      width: "100%",
+                      aspectRatio: "1/1",
+                      borderRadius: "14px",
+                    }}
+                  />
+                  <div
+                    style={{
+                      ...skStyle,
+                      width: "40%",
+                      height: "12px",
+                      borderRadius: "4px",
+                    }}
+                  />
+                  <div
+                    style={{
+                      ...skStyle,
+                      width: "80%",
+                      height: "16px",
+                      borderRadius: "6px",
+                    }}
+                  />
+                  <div
+                    style={{
+                      ...skStyle,
+                      width: "50%",
+                      height: "20px",
+                      borderRadius: "6px",
+                    }}
+                  />
+                  <div
+                    style={{
+                      ...skStyle,
+                      width: "100%",
+                      height: "36px",
+                      borderRadius: "10px",
+                      marginTop: "auto",
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
   );
 }
 
@@ -584,31 +1101,111 @@ function BuilderPageContent() {
   const params = useParams();
   const siteId = params.siteId;
   const siteSlugParam = params.slug;
-  const productSlug = params.productSlug;
+  const location = useLocation();
+  const pathMatch = location.pathname.match(/\/products\/([^/?#]+)/);
+  const productSlug = params.productSlug || (pathMatch ? decodeURIComponent(pathMatch[1]) : undefined);
 
   const navigate = useNavigate();
-  const location = useLocation();
   const { products } = useCart();
-  const { admin: authAdmin, logoutAdmin: authLogoutAdmin } = useAdminAuth();
+  const { admin: authAdmin, logoutAdmin: authLogoutAdmin, hasPermission, isOwner } = useAdminAuth();
+  const canPublish = isOwner || hasPermission("customize:publish");
 
-  const [resolvedSiteId, setResolvedSiteId] = useState("");
+  const isStoreRoute = location.pathname.startsWith("/store/");
+  const isPreviewMode = isStoreRoute && (
+    location.search.includes("preview=mobile") ||
+    location.search.includes("preview=1")
+  );
+  // Only use the cache when its slug/id exactly matches the current URL param.
+  // A mismatch means a *different* site's data is cached (cross-site bleed or stale).
+  const initialCachedSite = (() => {
+    const raw =
+      getInitialCachedSite(siteSlugParam) ||
+      getInitialCachedSite(siteId) ||
+      null;
+    if (!raw) return null;
+    if (siteSlugParam && raw.slug !== siteSlugParam && raw.id !== siteSlugParam) return null;
+    if (siteId && raw.id !== siteId) return null;
+    return raw;
+  })();
+
+  const [resolvedSiteId, setResolvedSiteId] = useState(
+    initialCachedSite?.id || siteId || ""
+  );
+  const isTargetSiteToHeal = (initialCachedSite?.id === "9e86e420-7776-4383-8cc1-fe3d9f6cf36a" || siteId === "9e86e420-7776-4383-8cc1-fe3d9f6cf36a");
   const [siteDefinition, setSiteDefinition] = useState<SiteDefinition | null>(
-    null
+    initialCachedSite
+      ? ((isStoreRoute && !isPreviewMode) || isTargetSiteToHeal
+          ? (initialCachedSite.site_definition || null)
+          : (initialCachedSite.draft_definition || initialCachedSite.site_definition))
+      : null
   );
   const [draftSiteDefinition, setDraftSiteDefinition] =
-    useState<SiteDefinition | null>(null);
-  const [siteName, setSiteName] = useState("");
-  const [siteSlug, setSiteSlug] = useState("");
-  const [loading, setLoading] = useState(true);
+    useState<SiteDefinition | null>(
+      initialCachedSite
+        ? ((isStoreRoute && !isPreviewMode) || isTargetSiteToHeal
+            ? (initialCachedSite.site_definition || null)
+            : (initialCachedSite.draft_definition || initialCachedSite.site_definition))
+        : null
+    );
+  const [publishedSiteDefinition, setPublishedSiteDefinition] =
+    useState<SiteDefinition | null>(
+      initialCachedSite?.site_definition || null
+    );
+  const activeSiteDefinition = draftSiteDefinition || siteDefinition;
+  const [siteName, setSiteName] = useState(
+    initialCachedSite?.site_definition?.site?.brand_name ||
+    initialCachedSite?.slug ||
+    ""
+  );
+  const [siteSlug, setSiteSlug] = useState(initialCachedSite?.slug || "");
+  const [loading, setLoading] = useState(!initialCachedSite);
   const [publishing, setPublishing] = useState(false);
   const [publishSuccess, setPublishSuccess] = useState(false);
-  const [adminAuthChecked, setAdminAuthChecked] = useState(false);
-  const [adminAuthenticated, setAdminAuthenticated] = useState(false);
+  const [adminAuthChecked, setAdminAuthChecked] = useState(
+    isStoreRoute || !!authAdmin
+  );
+  const [adminAuthenticated, setAdminAuthenticated] = useState(!!authAdmin);
+  const [deviceMode, setDeviceMode] = useState<"desktop" | "mobile">("desktop");
+
+  // When rendered inside a preview iframe, sync live definitions from parent window
+  useEffect(() => {
+    if (typeof window === "undefined" || window.self === window.top) return;
+
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data?.type === "WC_PREVIEW_SYNC_DEFINITION" && e.data.definition) {
+        setDraftSiteDefinition(e.data.definition);
+        setSiteDefinition(e.data.definition);
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
 
   const hasUnpublishedChanges = useMemo(() => {
     if (!draftSiteDefinition || !siteDefinition) return false;
     return JSON.stringify(draftSiteDefinition) !== JSON.stringify(siteDefinition);
   }, [draftSiteDefinition, siteDefinition]);
+
+  // Real-time synchronization when CRM is toggled from AdminSupportDesk
+  useEffect(() => {
+    const handleCrmChange = (e: Event) => {
+      const customEvent = e as CustomEvent<{ siteId?: string; siteSlug?: string; crm_enabled: boolean }>;
+      if (!customEvent.detail) return;
+      const { siteId: targetSiteId, siteSlug: targetSiteSlug, crm_enabled } = customEvent.detail;
+      const currentId = resolvedSiteId || siteId;
+      if (
+        (targetSiteId && (targetSiteId === currentId || targetSiteId === siteSlug || targetSiteId === siteSlugParam)) ||
+        (targetSiteSlug && (targetSiteSlug === currentId || targetSiteSlug === siteSlug || targetSiteSlug === siteSlugParam))
+      ) {
+        setSiteDefinition((prev) => (prev ? { ...prev, crm_enabled } : prev));
+        setDraftSiteDefinition((prev) => (prev ? { ...prev, crm_enabled } : prev));
+        setPublishedSiteDefinition((prev) => (prev ? { ...prev, crm_enabled } : prev));
+      }
+    };
+    window.addEventListener("wc_crm_status_changed", handleCrmChange);
+    return () => window.removeEventListener("wc_crm_status_changed", handleCrmChange);
+  }, [resolvedSiteId, siteId, siteSlug, siteSlugParam]);
 
   useEffect(() => {
     window.scrollTo({
@@ -622,7 +1219,7 @@ function BuilderPageContent() {
 
   const handlePublish = async () => {
     const currentSiteId = resolvedSiteId || siteId;
-    if (!currentSiteId || !draftSiteDefinition || publishing) return;
+    if (!currentSiteId || !draftSiteDefinition || publishing || !canPublish) return;
 
     setPublishing(true);
     try {
@@ -638,10 +1235,32 @@ function BuilderPageContent() {
       }
 
       const updatedSite = await response.json();
-      setSiteDefinition(updatedSite.site_definition || draftSiteDefinition);
-      setDraftSiteDefinition(updatedSite.draft_definition || draftSiteDefinition);
+      const finalDef = updatedSite.site_definition || draftSiteDefinition;
+      setSiteDefinition(finalDef);
+      setDraftSiteDefinition(updatedSite.draft_definition || finalDef);
       setPublishSuccess(true);
       setTimeout(() => setPublishSuccess(false), 3000);
+
+      // Invalidate memory and local caches so customer storefront immediately renders new theme
+      const currentSlug = siteSlug || updatedSite.slug || siteSlugParam;
+      if (currentSlug) {
+        siteSlugMemoryCache.set(currentSlug, updatedSite);
+        try {
+          localStorage.setItem(`wc_site_snapshot_${currentSlug}`, JSON.stringify(updatedSite));
+          if (finalDef?.theme) {
+            localStorage.setItem(`wc_theme_mode_${currentSlug}`, finalDef.theme.mode || "light");
+            if (finalDef.theme.primary_bg) {
+              localStorage.setItem(`wc_theme_bg_${currentSlug}`, finalDef.theme.primary_bg);
+            }
+          }
+        } catch (_) { }
+      }
+      if (currentSiteId) {
+        siteSlugMemoryCache.set(currentSiteId, updatedSite);
+        try {
+          localStorage.setItem(`wc_site_snapshot_${currentSiteId}`, JSON.stringify(updatedSite));
+        } catch (_) { }
+      }
     } catch (err) {
       console.error("Error publishing site:", err);
     } finally {
@@ -649,6 +1268,69 @@ function BuilderPageContent() {
     }
   };
 
+  const handleSiteDefinitionChange = useCallback(
+    (next: SiteDefinition) => {
+      setDraftSiteDefinition(next);
+      const nextBrand =
+        next.site?.brand_name ||
+        (next as any).site_name ||
+        (next as any).name ||
+        (next.theme as any)?.brandName ||
+        (next.theme as any)?.brand_name ||
+        (next.footer as any)?.brandName;
+      if (nextBrand) {
+        setSiteName(nextBrand);
+      }
+      const currentSlug = siteSlug || siteSlugParam;
+      const currentId = resolvedSiteId || siteId;
+      const existing =
+        (currentSlug ? siteSlugMemoryCache.get(currentSlug) : null) ||
+        (currentId ? siteSlugMemoryCache.get(currentId) : null);
+
+      const updatedSnapshot: SavedSite = {
+        id: currentId || existing?.id || "",
+        slug: currentSlug || existing?.slug || "",
+        draft_definition: next,
+        site_definition: siteDefinition || existing?.site_definition || next,
+        version: existing?.version ?? 1,
+        created_at: existing?.created_at ?? new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      if (currentSlug) {
+        siteSlugMemoryCache.set(currentSlug, updatedSnapshot);
+        try {
+          localStorage.setItem(`wc_site_snapshot_${currentSlug}`, JSON.stringify(updatedSnapshot));
+        } catch (_) { }
+      }
+
+      if (currentId) {
+        siteSlugMemoryCache.set(currentId, updatedSnapshot);
+        try {
+          localStorage.setItem(`wc_site_snapshot_${currentId}`, JSON.stringify(updatedSnapshot));
+        } catch (_) { }
+      }
+    },
+    [siteSlug, siteSlugParam, resolvedSiteId, siteId, siteDefinition]
+  );
+
+  // Real-time synchronization when Admin sections are modified (strictly scoped by siteId)
+  useEffect(() => {
+    const handleSync = (e: any) => {
+      const targetSiteId = e.detail?.siteId;
+      const currentSiteId = resolvedSiteId || siteId;
+      if (targetSiteId && currentSiteId && targetSiteId !== currentSiteId) {
+        return; // Ignore updates dispatched by a different tenant site
+      }
+      const updatedDef = e.detail?.siteDefinition;
+      if (updatedDef) {
+        setDraftSiteDefinition(updatedDef);
+        setSiteDefinition(updatedDef);
+      }
+    };
+    window.addEventListener("wc_site_definition_updated", handleSync);
+    return () => window.removeEventListener("wc_site_definition_updated", handleSync);
+  }, [resolvedSiteId, siteId]);
 
   const [editMode, setEditMode] = useState(false);
   const [editorTab, setEditorTab] = useState<EditorTab>("theme");
@@ -666,7 +1348,8 @@ function BuilderPageContent() {
     | null
   >(null);
   const [qrOpen, setQrOpen] = useState(false);
-  const [activeDrawer, setActiveDrawer] = useState<
+
+  const [activeDrawer, setActiveDrawerState] = useState<
     | "saved-sites"
     | "chat"
     | "customize"
@@ -675,40 +1358,95 @@ function BuilderPageContent() {
     | "settings"
     | "qr-link"
     | null
-  >(null);
-  const [savedSites, setSavedSites] = useState<SavedSite[]>([]);
+  >(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const saved = sessionStorage.getItem("wc_active_builder_drawer");
+      if (
+        saved &&
+        [
+          "saved-sites",
+          "chat",
+          "customize",
+          "admin-panel",
+          "assets",
+          "settings",
+        ].includes(saved)
+      ) {
+        return saved as any;
+      }
+    } catch { }
+    return null;
+  });
+
+  const setActiveDrawer = useCallback((
+    nextState:
+      | "saved-sites"
+      | "chat"
+      | "customize"
+      | "admin-panel"
+      | "assets"
+      | "settings"
+      | "qr-link"
+      | null
+      | ((prev: "saved-sites" | "chat" | "customize" | "admin-panel" | "assets" | "settings" | "qr-link" | null) => "saved-sites" | "chat" | "customize" | "admin-panel" | "assets" | "settings" | "qr-link" | null)
+  ) => {
+    setActiveDrawerState((prev) => {
+      const next = typeof nextState === "function" ? nextState(prev) : nextState;
+      try {
+        if (next) {
+          sessionStorage.setItem("wc_active_builder_drawer", next);
+        } else {
+          sessionStorage.removeItem("wc_active_builder_drawer");
+        }
+      } catch { }
+      return next;
+    });
+  }, []);
+
+  // Seed from the in-memory tab-session cache (no localStorage, no cross-user bleed).
+  // On first admin login this is [], populated quickly by loadSavedSites().
+  // On intra-session site switches the cache is already warm — no flash.
+  const [savedSites, setSavedSites] = useState<SavedSite[]>(getSavedSitesMemoryCache);
   const [savedSitesLoading, setSavedSitesLoading] = useState(false);
   const [pendingCounts, setPendingCounts] = useState<{ new_orders: number; new_returns: number; total: number } | null>(null);
 
 
   const previewPaneRef = useRef<HTMLDivElement | null>(null);
 
-
-  const isStoreRoute = location.pathname.startsWith("/store/");
   const appBase = isStoreRoute
     ? `/store/${siteSlugParam ?? ""}`
     : `/builder/${resolvedSiteId || siteId || ""}`;
   const builderBase = `/builder/${resolvedSiteId || siteId || ""}`;
+  const isSettingsRoute =
+    !isStoreRoute && location.pathname.startsWith(`${builderBase}/settings`);
   const isAdminRoute =
-    !isStoreRoute && location.pathname.startsWith(`${builderBase}/admin`);
+    !isStoreRoute && (location.pathname.startsWith(`${builderBase}/admin`) || isSettingsRoute);
 
-
-  const activeAdminNavKey: AdminNavKey | null = isAdminRoute
+  const activeAdminNavKey: AdminNavKey | null = (!isStoreRoute && location.pathname.startsWith(`${builderBase}/admin`))
     ? location.pathname.includes("/payment-settings")
       ? "payment-settings"
       : location.pathname.includes("/delivery")
-      ? "delivery"
-      : location.pathname.includes("/earnings")
-      ? "earnings"
-      : location.pathname.includes("/checkout-charges")
-      ? "checkout-charges"
-      : location.pathname.includes("/orders")
-      ? "orders"
-      : "products"
+        ? "delivery"
+        : location.pathname.includes("/earnings")
+          ? "earnings"
+          : location.pathname.includes("/discounts") || location.pathname.includes("/coupons")
+            ? "discounts"
+            : location.pathname.includes("/checkout-charges")
+              ? "checkout-charges"
+              : location.pathname.includes("/analytics")
+                ? "analytics"
+                : location.pathname.includes("/orders")
+                  ? "orders"
+                  : location.pathname.includes("/pages")
+                    ? "pages"
+                    : location.pathname.includes("/support")
+                      ? "support"
+                      : location.pathname.includes("/home-sections")
+                        ? "home-sections"
+                        : "products"
     : null;
 
-
-  const activeSiteDefinition = draftSiteDefinition || siteDefinition;
   const storefrontNavbarMode =
     (activeSiteDefinition?.theme?.navbar_position as
       | "static"
@@ -718,6 +1456,7 @@ function BuilderPageContent() {
 
 
   const showAdminTopbar = !isStoreRoute && adminAuthenticated;
+  const showDeviceSwitcher = showAdminTopbar && !isAdminRoute;
 
 
   useEffect(() => {
@@ -741,14 +1480,12 @@ function BuilderPageContent() {
 
         if (!response.ok) {
           setAdminAuthenticated(false);
-
-          if (isAdminRoute) {
+          if (!isStoreRoute) {
             navigate("/admin/login", {
               replace: true,
               state: { from: location.pathname },
             });
           }
-
           return;
         }
 
@@ -756,8 +1493,7 @@ function BuilderPageContent() {
       } catch (error) {
         console.error("Failed to verify admin session:", error);
         setAdminAuthenticated(false);
-
-        if (isAdminRoute) {
+        if (!isStoreRoute) {
           navigate("/admin/login", {
             replace: true,
             state: { from: location.pathname },
@@ -805,8 +1541,11 @@ function BuilderPageContent() {
 
   const loadSavedSites = async () => {
     if (isStoreRoute) return;
-    try {
+    // Only show skeleton if we have no sites loaded in RAM yet
+    if (getSavedSitesMemoryCache().length === 0) {
       setSavedSitesLoading(true);
+    }
+    try {
       const response = await fetch(`${API_BASE_URL}/auth/admin/sites`, {
         credentials: "include",
       });
@@ -814,10 +1553,11 @@ function BuilderPageContent() {
         throw new Error(`Failed to load admin sites: ${response.status}`);
       }
       const data = await response.json();
-      setSavedSites(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setSavedSitesMemoryCache(list); // warm the tab-session RAM cache
+      setSavedSites(list);
     } catch (error) {
       console.error("Error loading saved sites:", error);
-      setSavedSites([]);
     } finally {
       setSavedSitesLoading(false);
     }
@@ -842,7 +1582,11 @@ function BuilderPageContent() {
         throw new Error(errData.detail || `Failed to delete site (${response.status})`);
       }
 
-      setSavedSites((prev) => prev.filter((site) => site.id !== targetSiteId));
+      setSavedSites((prev) => {
+        const next = prev.filter((site) => site.id !== targetSiteId);
+        setSavedSitesMemoryCache(next);
+        return next;
+      });
 
       if (targetSiteId === (resolvedSiteId || siteId)) {
         navigate("/admin/sites", { replace: true });
@@ -854,47 +1598,114 @@ function BuilderPageContent() {
   };
 
 
-  const selectedProduct: Product | null = useMemo(() => {
-    if (!productSlug) return null;
-    if (!products.length) return null;
+  const [asyncDetailProduct, setAsyncDetailProduct] = useState<Product | null>(null);
 
+  useEffect(() => {
+    if (!productSlug) {
+      setAsyncDetailProduct(null);
+      return;
+    }
 
     const normalizedTarget = String(productSlug).trim().toLowerCase();
+    const inMem = products.find(
+      (p) =>
+        String(p.slug || "").trim().toLowerCase() === normalizedTarget ||
+        String(p.id || "").trim().toLowerCase() === normalizedTarget ||
+        slugify(String(p.name || "")) === normalizedTarget
+    );
 
+    if (inMem) {
+      setAsyncDetailProduct(inMem);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchProduct = async () => {
+      try {
+        const targetSite = resolvedSiteId || siteId;
+        if (!targetSite) return;
+
+        const res = await fetch(
+          `${API_BASE_URL}/sites/${targetSite}/products/public/by-slug/${encodeURIComponent(productSlug)}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && data && (data.id || data.name)) {
+            setAsyncDetailProduct(normalizeStorefrontProduct(data));
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load product by slug", e);
+      }
+    };
+
+    fetchProduct();
+    return () => {
+      cancelled = true;
+    };
+  }, [productSlug, products, resolvedSiteId, siteId]);
+
+  const selectedProduct: Product | null = useMemo(() => {
+    if (!productSlug) return null;
+
+    const normalizedTarget = String(productSlug).trim().toLowerCase();
 
     const bySlug = products.find(
       (p) => String(p.slug || "").trim().toLowerCase() === normalizedTarget
     );
     if (bySlug) return bySlug;
 
-
     const byId = products.find(
       (p) => String(p.id || "").trim().toLowerCase() === normalizedTarget
     );
     if (byId) return byId;
 
-
     const byNameSlug = products.find(
       (p) => slugify(String(p.name || "")) === normalizedTarget
     );
-    return byNameSlug ?? null;
-  }, [productSlug, products]);
+    if (byNameSlug) return byNameSlug;
+
+    return asyncDetailProduct ?? null;
+  }, [productSlug, products, asyncDetailProduct]);
 
 
   useEffect(() => {
     let cancelled = false;
 
-    const loadSite = async () => {
-      if (!siteDefinition) {
-        setLoading(true);
-      }
+    // Immediately isolate tenant state when route siteId / siteSlugParam changes!
+    const targetKey = siteSlugParam || siteId || "";
+    const cachedTarget = targetKey
+      ? (siteSlugMemoryCache.get(targetKey) || getInitialCachedSite(targetKey))
+      : null;
 
+    if (cachedTarget && (cachedTarget.id === siteId || cachedTarget.slug === siteSlugParam)) {
+      const def = isStoreRoute
+        ? (cachedTarget.site_definition || cachedTarget.draft_definition)
+        : (cachedTarget.draft_definition || cachedTarget.site_definition);
+      setSiteDefinition(def || null);
+      setDraftSiteDefinition(def || null);
+      setPublishedSiteDefinition(cachedTarget.site_definition || null);
+      setResolvedSiteId(cachedTarget.id || siteId || "");
+      setSiteSlug(cachedTarget.slug || siteSlugParam || "");
+      setSiteName(def?.site?.brand_name || cachedTarget.slug || "");
+      setSelectedBlockId(null);
+    } else {
+      // Clear out previous site definition to prevent cross-tenant UI bleed
+      setSiteDefinition(null);
+      setDraftSiteDefinition(null);
+      setPublishedSiteDefinition(null);
+      setSelectedBlockId(null);
+      setLoading(true);
+    }
+
+    const loadSite = async () => {
       try {
         let data: SavedSite | null = null;
 
         if (siteId) {
-          const response = await fetch(`${API_BASE_URL}/sites/${siteId}`, {
+          const response = await fetch(`${API_BASE_URL}/sites/${siteId}?t=${Date.now()}`, {
             credentials: "include",
+            cache: "no-cache",
           });
 
           if (!response.ok) {
@@ -902,6 +1713,21 @@ function BuilderPageContent() {
           }
 
           data = (await response.json()) as SavedSite;
+          siteSlugMemoryCache.set(siteId, data);
+          if (data.slug) siteSlugMemoryCache.set(data.slug, data);
+          try {
+            localStorage.setItem(`wc_site_snapshot_${siteId}`, JSON.stringify(data));
+            if (data.slug) {
+              localStorage.setItem(`wc_site_snapshot_${data.slug}`, JSON.stringify(data));
+              const def = data.site_definition;
+              if (def?.theme) {
+                localStorage.setItem(`wc_theme_mode_${data.slug}`, def.theme.mode || "light");
+                if (def.theme.primary_bg) {
+                  localStorage.setItem(`wc_theme_bg_${data.slug}`, def.theme.primary_bg);
+                }
+              }
+            }
+          } catch (_) { }
         } else if (siteSlugParam) {
           data = await resolveSiteBySlug(siteSlugParam);
 
@@ -914,8 +1740,49 @@ function BuilderPageContent() {
 
         if (cancelled) return;
 
-        const parsedSiteDefinition: SiteDefinition =
-          data.draft_definition || data.site_definition;
+        setPublishedSiteDefinition(data.site_definition || null);
+
+        let parsedSiteDefinition: SiteDefinition = (isStoreRoute && !isPreviewMode)
+          ? (data.site_definition || data.draft_definition)
+          : (data.draft_definition || data.site_definition);
+
+        // Auto-heal cross-tenant contamination:
+        // 1. If this site is 9e86e420-7776-4383-8cc1-fe3d9f6cf36a (user's affected site)
+        // 2. OR if draft contains another store's brand name
+        // 3. OR if draft theme has been contaminated by another store's palette while site_definition exists
+        const isTargetContaminatedSite = data.id === "9e86e420-7776-4383-8cc1-fe3d9f6cf36a" || siteId === "9e86e420-7776-4383-8cc1-fe3d9f6cf36a";
+        const siteBrand = String(data.site_definition?.site?.brand_name || data.slug || "").trim().toLowerCase();
+        const draftBrand = String(data.draft_definition?.site?.brand_name || (data.draft_definition?.theme as any)?.brandName || "").trim().toLowerCase();
+        const brandMismatch = Boolean(siteBrand && draftBrand && siteBrand !== draftBrand);
+
+        if (
+          !isStoreRoute &&
+          data.site_definition &&
+          (isTargetContaminatedSite || brandMismatch)
+        ) {
+          console.warn(`[Tenant Isolation] Restoring clean published definition for site "${siteBrand}" (${data.id}).`);
+          parsedSiteDefinition = data.site_definition;
+
+          // Clear any local poisoned snapshots for this site
+          try {
+            localStorage.removeItem(`wc_site_snapshot_${data.id}`);
+            if (data.slug) localStorage.removeItem(`wc_site_snapshot_${data.slug}`);
+            localStorage.removeItem(`webnirmaan_saved_themes_${data.id}`);
+            siteSlugMemoryCache.delete(data.id);
+            if (data.slug) siteSlugMemoryCache.delete(data.slug);
+          } catch (_) {}
+
+          // Heal draft on server asynchronously so PostgreSQL is permanently updated
+          const sId = data.id || siteId;
+          if (sId) {
+            fetch(`${API_BASE_URL}/sites/${sId}/draft`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({ draft_definition: data.site_definition }),
+            }).catch(() => {});
+          }
+        }
 
         setResolvedSiteId(data.id || "");
         setSiteSlug(data.slug || "");
@@ -933,6 +1800,25 @@ function BuilderPageContent() {
           parsedSiteDefinition.site?.brand_name || data.slug || "Website"
         );
 
+        if (isStoreRoute && (data.slug || siteSlugParam)) {
+          const sSlug = data.slug || siteSlugParam || "";
+          try {
+            const pubTheme = data.site_definition?.theme || parsedSiteDefinition.theme;
+            if (pubTheme) {
+              localStorage.setItem(`wc_theme_mode_${sSlug}`, pubTheme.mode || "light");
+              if (pubTheme.primary_bg) {
+                localStorage.setItem(`wc_theme_bg_${sSlug}`, pubTheme.primary_bg);
+              }
+            }
+          } catch (_) { }
+        }
+
+        if (data.slug || siteSlugParam) {
+          try {
+            localStorage.setItem("wc_last_visited_store", data.slug || siteSlugParam || "");
+          } catch (_) { }
+        }
+
         const freshAppBase = isStoreRoute
           ? `/store/${siteSlugParam ?? ""}`
           : `/builder/${data.id || siteId || ""}`;
@@ -940,21 +1826,43 @@ function BuilderPageContent() {
 
         if (parsedSiteDefinition.pages?.length > 0) {
           const currentPath = window.location.pathname;
+          const normCurrentPath = currentPath.replace(/\/+$/, "");
+          const normAppBase = freshAppBase.replace(/\/+$/, "");
 
           const staticPageRoutes = parsedSiteDefinition.pages.map((page) =>
-            toFullAppPath(freshAppBase, page.route)
+            toFullAppPath(freshAppBase, page.route).replace(/\/+$/, "")
           );
-          const isKnownStaticRoute = staticPageRoutes.includes(currentPath);
+          const isKnownStaticRoute = staticPageRoutes.includes(normCurrentPath);
           const isDynamicProductRoute =
-            currentPath.startsWith(`${freshAppBase}/products/`);
-          const isOrdersRoute = currentPath === `${freshAppBase}/orders`;
+            normCurrentPath.startsWith(`${normAppBase}/products/`);
+          const isOrdersRoute = normCurrentPath === `${normAppBase}/orders`;
+          const isProfileRoute = normCurrentPath === `${normAppBase}/profile` || normCurrentPath === `${normAppBase}/account`;
+          const isSupportRoute = normCurrentPath === `${normAppBase}/support`;
+          const isCartRoute = normCurrentPath === `${normAppBase}/cart`;
+          const isCheckoutRoute = normCurrentPath === `${normAppBase}/checkout`;
+          const isLoginRoute = normCurrentPath === `${normAppBase}/login`;
+          const isSignupRoute = normCurrentPath === `${normAppBase}/signup`;
+          const isCustomPageRoute =
+            normCurrentPath === `${normAppBase}/about` ||
+            normCurrentPath === `${normAppBase}/contact` ||
+            normCurrentPath === `${normAppBase}/privacy` ||
+            normCurrentPath === `${normAppBase}/terms` ||
+            normCurrentPath === `${normAppBase}/story` ||
+            normCurrentPath.startsWith(`${normAppBase}/pages/`);
           const isAdminPath =
-            !isStoreRoute && currentPath.startsWith(`${freshBuilderBase}/admin`);
+            !isStoreRoute && normCurrentPath.startsWith(`${freshBuilderBase}/admin`);
 
           if (
             !isKnownStaticRoute &&
             !isDynamicProductRoute &&
             !isOrdersRoute &&
+            !isProfileRoute &&
+            !isSupportRoute &&
+            !isCartRoute &&
+            !isCheckoutRoute &&
+            !isLoginRoute &&
+            !isSignupRoute &&
+            !isCustomPageRoute &&
             !isAdminPath
           ) {
             const homePage =
@@ -970,11 +1878,14 @@ function BuilderPageContent() {
             });
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error loading site:", error);
         if (!cancelled) {
           setSiteDefinition(null);
           setDraftSiteDefinition(null);
+          if (!isStoreRoute) {
+            navigate("/admin/sites", { replace: true });
+          }
         }
       } finally {
         if (!cancelled) {
@@ -992,12 +1903,39 @@ function BuilderPageContent() {
     };
   }, [siteId, siteSlugParam, isStoreRoute]);
 
+  // Real-time Storefront Traffic Tracking (Zero main-thread blocking)
+  useEffect(() => {
+    const targetSiteId = resolvedSiteId || siteId;
+    if (!isStoreRoute || !targetSiteId) return;
+
+    try {
+      const payload = JSON.stringify({
+        site_id: targetSiteId,
+        page_path: location.pathname,
+        referrer: typeof document !== "undefined" ? document.referrer || null : null,
+        screen_width: typeof window !== "undefined" ? window.innerWidth : null,
+        user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+      });
+
+      if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+        const blob = new Blob([payload], { type: "application/json" });
+        navigator.sendBeacon(`${API_BASE_URL}/analytics/collect`, blob);
+      } else {
+        fetch(`${API_BASE_URL}/analytics/collect`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: payload,
+          keepalive: true,
+        }).catch(() => {});
+      }
+    } catch (_) {}
+  }, [isStoreRoute, resolvedSiteId, siteId, location.pathname]);
+
 
   const storefrontHomePath = useMemo(() => {
-    if (!activeSiteDefinition || activeSiteDefinition.pages.length === 0) {
+    if (!activeSiteDefinition || !Array.isArray(activeSiteDefinition.pages) || activeSiteDefinition.pages.length === 0) {
       return appBase;
     }
-
 
     const homePage =
       activeSiteDefinition.pages.find(
@@ -1005,14 +1943,11 @@ function BuilderPageContent() {
           page.route === "/" || page.route === "" || page.role === "home"
       ) || activeSiteDefinition.pages[0];
 
-
     return toFullAppPath(appBase, homePage.route);
   }, [activeSiteDefinition, appBase]);
 
-
   const productDetailPage = useMemo(() => {
-    if (!activeSiteDefinition) return null;
-
+    if (!activeSiteDefinition || !Array.isArray(activeSiteDefinition.pages)) return null;
 
     const exactProductPage = activeSiteDefinition.pages.find((page) => {
       if (page.role === "product_detail" || page.page_type === "product_detail") return true;
@@ -1020,9 +1955,7 @@ function BuilderPageContent() {
       return page.blocks.some((block) => isProductDetailBlockType(block.type));
     });
 
-
     if (exactProductPage) return exactProductPage;
-
 
     return {
       id: "fallback-product-detail",
@@ -1035,6 +1968,295 @@ function BuilderPageContent() {
           type: "product_detail",
           data_source: "product",
         },
+      ],
+    } as Page;
+  }, [activeSiteDefinition]);
+
+  const checkoutPage = useMemo(() => {
+    if (!activeSiteDefinition || !Array.isArray(activeSiteDefinition.pages)) return null;
+    const exact = activeSiteDefinition.pages.find(
+      (p) => p.route === "/checkout" || p.route === "checkout" || p.role === "checkout"
+    );
+    if (exact) {
+      const cleanBlocks = (exact.blocks || []).filter((b) => {
+        const type = String(b.type || "").toLowerCase();
+        return (
+          !type.includes("banner") &&
+          !type.includes("hero") &&
+          !type.includes("carousel") &&
+          !type.includes("grid") &&
+          type !== "navbar" &&
+          type !== "footer"
+        );
+      });
+      return {
+        ...exact,
+        blocks: cleanBlocks.length > 0 ? cleanBlocks : [
+          { id: "delivery_form", type: "delivery_form", props: {} },
+          { id: "payment_methods", type: "payment_methods", props: {} },
+          { id: "place_order_cta", type: "place_order_cta", props: {} },
+        ],
+      };
+    }
+    return {
+      id: "fallback-checkout-page",
+      name: "Checkout",
+      route: "/checkout",
+      show_in_nav: false,
+      blocks: [
+        { id: "delivery_form", type: "delivery_form", props: {} },
+        { id: "payment_methods", type: "payment_methods", props: {} },
+        { id: "place_order_cta", type: "place_order_cta", props: {} },
+      ],
+    } as Page;
+  }, [activeSiteDefinition]);
+
+  const cartPage = useMemo(() => {
+    if (!activeSiteDefinition || !Array.isArray(activeSiteDefinition.pages)) return null;
+    const exact = activeSiteDefinition.pages.find(
+      (p) => p.route === "/cart" || p.route === "cart" || p.role === "cart"
+    );
+    if (exact) return exact;
+    return {
+      id: "fallback-cart-page",
+      name: "Cart",
+      route: "/cart",
+      show_in_nav: false,
+      blocks: [
+        { id: "cart_view", type: "cart_view", props: {} },
+      ],
+    } as Page;
+  }, [activeSiteDefinition]);
+
+  const profilePage = useMemo(() => {
+    if (!activeSiteDefinition || !Array.isArray(activeSiteDefinition.pages)) return null;
+    const exact = activeSiteDefinition.pages.find(
+      (p) =>
+        p.route === "/profile" ||
+        p.route === "profile" ||
+        p.role === "profile" ||
+        p.id === "profile" ||
+        p.id === "page-profile"
+    );
+    if (exact) {
+      const cleanBlocks = (exact.blocks || []).filter((b) => {
+        const type = String(b.type || "").toLowerCase();
+        return (
+          !type.includes("banner") &&
+          !type.includes("hero") &&
+          !type.includes("carousel") &&
+          !type.includes("grid") &&
+          type !== "navbar" &&
+          type !== "footer"
+        );
+      });
+      return {
+        ...exact,
+        blocks: cleanBlocks.length > 0 ? cleanBlocks : [
+          { id: "profile_details", type: "profile_details", props: {} },
+        ],
+      };
+    }
+    return {
+      id: "fallback-profile-page",
+      name: "Customer Profile",
+      route: "/profile",
+      show_in_nav: false,
+      blocks: [
+        { id: "profile_details", type: "profile_details", props: {} },
+      ],
+    } as Page;
+  }, [activeSiteDefinition]);
+
+  const loginPage = useMemo(() => {
+    if (!activeSiteDefinition || !Array.isArray(activeSiteDefinition.pages)) return null;
+    const raw = activeSiteDefinition.pages.find(
+      (p) =>
+        p.role === "login" ||
+        p.page_type === "login" ||
+        p.route === "/login" ||
+        p.route === "login" ||
+        p.id === "login" ||
+        p.id === "page-login"
+    );
+    if (raw) {
+      const hasBlock = raw.blocks?.some(
+        (b) =>
+          b.type === "signin_form" ||
+          b.type === "signinform" ||
+          b.type === "login_form" ||
+          b.type === "login"
+      );
+      if (hasBlock) {
+        return {
+          ...raw,
+          blocks: raw.blocks.map((b) =>
+            b.type === "signin_form" || b.type === "signinform" || b.type === "login_form" || b.type === "login"
+              ? { ...b, props: { max_width: "100%", ...(b.props || {}) } }
+              : b
+          ),
+        };
+      }
+      return {
+        ...raw,
+        blocks: [
+          ...(raw.blocks || []),
+          { id: "signin_form", type: "signin_form", props: { max_width: "100%" } },
+        ],
+      };
+    }
+    return {
+      id: "fallback-login-page",
+      name: "Customer Sign In",
+      route: "/login",
+      show_in_nav: false,
+      blocks: [
+        { id: "signin_form", type: "signin_form", props: { max_width: "100%" } },
+      ],
+    } as Page;
+  }, [activeSiteDefinition]);
+
+  const signupPage = useMemo(() => {
+    if (!activeSiteDefinition || !Array.isArray(activeSiteDefinition.pages)) return null;
+    const raw = activeSiteDefinition.pages.find(
+      (p) =>
+        p.role === "signup" ||
+        p.page_type === "signup" ||
+        p.route === "/signup" ||
+        p.route === "signup" ||
+        p.id === "signup" ||
+        p.id === "page-signup"
+    );
+    if (raw) {
+      const hasBlock = raw.blocks?.some(
+        (b) =>
+          b.type === "signup_form" ||
+          b.type === "signupform" ||
+          b.type === "register_form" ||
+          b.type === "signup"
+      );
+      if (hasBlock) {
+        return {
+          ...raw,
+          blocks: raw.blocks.map((b) =>
+            b.type === "signup_form" || b.type === "signupform" || b.type === "register_form" || b.type === "signup"
+              ? { ...b, props: { max_width: "100%", ...(b.props || {}) } }
+              : b
+          ),
+        };
+      }
+      return {
+        ...raw,
+        blocks: [
+          ...(raw.blocks || []),
+          { id: "signup_form", type: "signup_form", props: { max_width: "100%" } },
+        ],
+      };
+    }
+    return {
+      id: "fallback-signup-page",
+      name: "Customer Sign Up",
+      route: "/signup",
+      show_in_nav: false,
+      blocks: [
+        { id: "signup_form", type: "signup_form", props: { max_width: "100%" } },
+      ],
+    } as Page;
+  }, [activeSiteDefinition]);
+
+  const ordersPage = useMemo(() => {
+    if (!activeSiteDefinition || !Array.isArray(activeSiteDefinition.pages)) return null;
+    const raw = activeSiteDefinition.pages.find(
+      (p) =>
+        p.role === "orders" ||
+        p.page_type === "orders" ||
+        p.route === "/orders" ||
+        p.route === "orders" ||
+        p.id === "orders" ||
+        p.id === "page-orders"
+    );
+    if (raw) {
+      const hasBlock = raw.blocks?.some(
+        (b) =>
+          b.type === "customer_orders" ||
+          b.type === "customerorders" ||
+          b.type === "order_history" ||
+          b.type === "order_history_list" ||
+          b.type === "orders"
+      );
+      if (hasBlock) {
+        return {
+          ...raw,
+          blocks: raw.blocks.map((b) =>
+            b.type === "customer_orders" || b.type === "customerorders" || b.type === "order_history" || b.type === "order_history_list" || b.type === "orders"
+              ? { ...b, props: { max_width: "100%", ...(b.props || {}) } }
+              : b
+          ),
+        };
+      }
+      return {
+        ...raw,
+        blocks: [
+          ...(raw.blocks || []),
+          { id: "customer_orders", type: "customer_orders", props: { max_width: "100%" } },
+        ],
+      };
+    }
+    return {
+      id: "fallback-orders-page",
+      name: "Customer Order History",
+      route: "/orders",
+      show_in_nav: false,
+      blocks: [
+        { id: "customer_orders", type: "customer_orders", props: { max_width: "100%" } },
+      ],
+    } as Page;
+  }, [activeSiteDefinition]);
+
+  const supportPage = useMemo(() => {
+    if (!activeSiteDefinition || !Array.isArray(activeSiteDefinition.pages)) return null;
+    const raw = activeSiteDefinition.pages.find(
+      (p) =>
+        p.role === "support" ||
+        p.page_type === "support" ||
+        p.route === "/support" ||
+        p.route === "support" ||
+        p.id === "support" ||
+        p.id === "page-support"
+    );
+    if (raw) {
+      const hasBlock = raw.blocks?.some(
+        (b) =>
+          b.type === "customer_support" ||
+          b.type === "customersupport" ||
+          b.type === "support_desk" ||
+          b.type === "support"
+      );
+      if (hasBlock) {
+        return {
+          ...raw,
+          blocks: raw.blocks.map((b) =>
+            b.type === "customer_support" || b.type === "customersupport" || b.type === "support_desk" || b.type === "support"
+              ? { ...b, props: { max_width: "100%", ...(b.props || {}) } }
+              : b
+          ),
+        };
+      }
+      return {
+        ...raw,
+        blocks: [
+          ...(raw.blocks || []),
+          { id: "customer_support", type: "customer_support", props: { max_width: "100%" } },
+        ],
+      };
+    }
+    return {
+      id: "fallback-support-page",
+      name: "Help & Support",
+      route: "/support",
+      show_in_nav: false,
+      blocks: [
+        { id: "customer_support", type: "customer_support", props: { max_width: "100%" } },
       ],
     } as Page;
   }, [activeSiteDefinition]);
@@ -1071,6 +2293,34 @@ function BuilderPageContent() {
     setEditorTab("block");
   };
 
+  const lastAutoSelectedPathRef = useRef<string>("");
+  useEffect(() => {
+    if (!editMode || !adminAuthenticated) return;
+    const path = location.pathname;
+    if (lastAutoSelectedPathRef.current === path) return;
+    lastAutoSelectedPathRef.current = path;
+
+    if (path.endsWith("/support") || path.includes("/support")) {
+      setSelectedBlockId("customer_support");
+      setEditorTab("block");
+    } else if (path.endsWith("/profile") || path.includes("/profile") || path.endsWith("/account")) {
+      setSelectedBlockId("profile_details");
+      setEditorTab("block");
+    } else if (path.endsWith("/orders") || path.includes("/orders")) {
+      setSelectedBlockId("customer_orders");
+      setEditorTab("block");
+    } else if (path.endsWith("/login") || path.includes("/login") || path.endsWith("/signin")) {
+      setSelectedBlockId("signin_form");
+      setEditorTab("block");
+    } else if (path.endsWith("/signup") || path.includes("/signup") || path.endsWith("/register")) {
+      setSelectedBlockId("signup_form");
+      setEditorTab("block");
+    } else if (path.endsWith("/cart") || path.includes("/cart")) {
+      setSelectedBlockId("cart_view");
+      setEditorTab("block");
+    }
+  }, [location.pathname, editMode, adminAuthenticated]);
+
 
   const handleLogout = async () => {
     try {
@@ -1091,56 +2341,90 @@ function BuilderPageContent() {
     !isAdminRoute && !isStoreRoute && adminAuthenticated;
 
 
-  if (loading || !adminAuthChecked) {
+  if (isStoreRoute && loading && !activeSiteDefinition) {
     return (
-      <div
-        style={{
-          minHeight: "100vh",
-          padding: "24px",
-          background: "#f8fafc",
-          color: "#111827",
-        }}
-      >
-        <p>Loading website...</p>
-      </div>
+      <StorefrontSkeleton
+        isProductDetail={Boolean(productSlug)}
+        siteSlug={siteSlug || siteSlugParam || ""}
+      />
     );
   }
 
-
-  if (isAdminRoute && !adminAuthenticated) {
+  if (!isStoreRoute && !adminAuthenticated && adminAuthChecked) {
     return null;
   }
 
-
-  if (!activeSiteDefinition) {
+  if (isStoreRoute && !activeSiteDefinition && !loading) {
     return (
       <div
         style={{
           minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#ffffff",
+          color: "#0f172a",
+          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
           padding: "24px",
-          background: "#f8fafc",
-          color: "#111827",
+          textAlign: "center",
         }}
       >
-        <p>Website not found.</p>
-        {!isStoreRoute && (
-          <Link to="/admin/sites" style={{ color: "#2563eb" }}>
-            Back to dashboard
-          </Link>
-        )}
+        <div
+          style={{
+            width: "56px",
+            height: "56px",
+            borderRadius: "16px",
+            background: "rgba(239, 68, 68, 0.08)",
+            border: "1px solid rgba(239, 68, 68, 0.2)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "24px",
+            marginBottom: "16px",
+          }}
+        >
+          🏪
+        </div>
+        <h2 style={{ fontSize: "20px", fontWeight: 700, margin: "0 0 8px" }}>Store Not Found</h2>
+        <p style={{ fontSize: "14px", color: "#64748b", margin: "0 0 20px", maxWidth: "380px" }}>
+          We couldn't locate this storefront. Please check the link or return to the main dashboard.
+        </p>
       </div>
     );
   }
 
 
+  const isDarkSiteTheme = activeSiteDefinition?.theme?.mode === "dark" || isColorDarkHex(activeSiteDefinition?.theme?.primary_bg);
   const pageBg = isAdminRoute
     ? "#ffffff"
-    : activeSiteDefinition.theme?.primary_bg ||
-      (activeSiteDefinition.theme?.mode === "light" ? "#f8fafc" : "#0f172a");
+    : activeSiteDefinition?.theme?.primary_bg ||
+    (isDarkSiteTheme ? "#0f172a" : "#f8fafc");
   const textColor = isAdminRoute
     ? "#0f172a"
-    : activeSiteDefinition.theme?.text_color ||
-      (activeSiteDefinition.theme?.mode === "light" ? "#111827" : "#f9fafb");
+    : activeSiteDefinition?.theme?.text_color ||
+    (isDarkSiteTheme ? "#f9fafb" : "#111827");
+
+  // When rendered in mobile deviceMode or inside preview iframe, eliminate scrollbar gutters and lock horizontal drift
+  useEffect(() => {
+    const isInsideFrame = typeof window !== "undefined" && (window.self !== window.top || isPreviewMode);
+    const shouldSuppress = isInsideFrame || deviceMode === "mobile";
+    
+    if (!shouldSuppress) return;
+
+    document.documentElement.classList.add("is-mobile-preview");
+    document.body.classList.add("is-mobile-preview");
+
+    if (pageBg && isInsideFrame) {
+      document.documentElement.style.backgroundColor = pageBg;
+      document.body.style.backgroundColor = pageBg;
+    }
+
+    return () => {
+      document.documentElement.classList.remove("is-mobile-preview");
+      document.body.classList.remove("is-mobile-preview");
+    };
+  }, [isPreviewMode, pageBg, deviceMode]);
 
 
   const topBar = showAdminTopbar ? (
@@ -1153,21 +2437,57 @@ function BuilderPageContent() {
       }}
       userName={authAdmin?.name}
       userEmail={authAdmin?.email}
-      avatarUrl={undefined}
+      avatarUrl={authAdmin?.avatarUrl}
+      gender={authAdmin?.gender}
+      deviceMode={deviceMode}
+      onChangeDeviceMode={setDeviceMode}
+      showDeviceSwitcher={showDeviceSwitcher}
     />
   ) : null;
 
 
   const storeBadge = (pendingCounts?.total ?? 0) > 0 ? pendingCounts!.total : undefined;
 
+  const disabledControlKeys = useMemo(() => {
+    const keys: ("saved-sites" | "chat" | "customize" | "admin-panel" | "assets" | "settings" | "qr-link")[] = [];
+    if (!hasPermission("saved_sites:view")) keys.push("saved-sites");
+    if (!hasPermission("chat:access") && !hasPermission("chat:view")) keys.push("chat");
+    if (!hasPermission("customize:edit") && !hasPermission("customize:view")) keys.push("customize");
+    if (!hasPermission("assets:view")) keys.push("assets");
+    if (!hasPermission("qr_link:view")) keys.push("qr-link");
+    const hasAnySettingsPermission = [
+      "profile:view", "users_roles:view", "general_settings:view",
+      "domain_settings:view", "billing:view", "integrations:view", "settings:view"
+    ].some((p) => hasPermission(p));
+    if (!hasAnySettingsPermission) keys.push("settings");
+
+    const hasAnyStorePermission = [
+      "products:view", "orders:view", "home_sections:view", "analytics:view",
+      "support:view", "discounts:view", "delivery:view", "earnings:view",
+      "payout_settings:view", "checkout_charges:view"
+    ].some((p) => hasPermission(p));
+    if (!hasAnyStorePermission) keys.push("admin-panel");
+
+    return keys;
+  }, [hasPermission]);
 
   const leftPanel = showAdminTopbar ? (
     <BuilderControlPanel
-      activeKey={controlPanelSelection as any}
+      activeKey={(qrOpen ? "qr-link" : editMode ? "customize" : activeDrawer) as any}
       badgeCounts={storeBadge != null ? { "admin-panel": storeBadge } : {}}
+      disabledKeys={disabledControlKeys}
       onSelect={(key) => {
         if (!showAdminTopbar) return;
+        if (disabledControlKeys.includes(key)) return;
 
+        if (key === "qr-link") {
+          if (editMode) handleCloseEditMode();
+          setQrOpen((prev) => !prev);
+          return;
+        }
+
+        // Close QR popup if another tool is clicked
+        setQrOpen(false);
 
         if (key === "customize") {
           if (editMode) {
@@ -1182,7 +2502,6 @@ function BuilderPageContent() {
           return;
         }
 
-
         if (key === "saved-sites") {
           if (editMode) handleCloseEditMode();
           setControlPanelSelection(key);
@@ -1190,14 +2509,12 @@ function BuilderPageContent() {
           return;
         }
 
-
         if (key === "admin-panel") {
           if (editMode) handleCloseEditMode();
           setControlPanelSelection(key);
           setActiveDrawer((prev) => (prev === "admin-panel" ? null : "admin-panel"));
           return;
         }
-
 
         if (key === "assets") {
           if (editMode) handleCloseEditMode();
@@ -1209,7 +2526,6 @@ function BuilderPageContent() {
           return;
         }
 
-
         if (key === "chat") {
           if (editMode) handleCloseEditMode();
           if (isAdminRoute) {
@@ -1220,17 +2536,10 @@ function BuilderPageContent() {
           return;
         }
 
-
         if (key === "settings") {
           if (editMode) handleCloseEditMode();
           setControlPanelSelection(key);
           setActiveDrawer((prev) => (prev === "settings" ? null : "settings"));
-          return;
-        }
-
-
-        if (key === "qr-link") {
-          setQrOpen(true);
           return;
         }
       }}
@@ -1250,193 +2559,559 @@ function BuilderPageContent() {
               : "rgba(15,23,42,0.96)",
         }}
       >
-        <Suspense
-          fallback={
-            <div style={{ padding: "20px", color: "#94a3b8", fontSize: "13px" }}>
-              Loading customizer...
-            </div>
-          }
-        >
-          <EditorSidebar
-            siteDefinition={activeSiteDefinition}
-            selectedBlockId={selectedBlockId}
-            selectedTab={editorTab}
-            onTabChange={setEditorTab}
-            onSiteDefinitionChange={(next) =>
-              setDraftSiteDefinition(next as SiteDefinition)
+        <EditorSidebar
+          key={resolvedSiteId || siteId || "editor-sidebar"}
+          siteDefinition={activeSiteDefinition}
+          selectedBlockId={selectedBlockId}
+          selectedTab={editorTab}
+          onTabChange={setEditorTab}
+          onSelectBlock={(bId) => {
+            if (bId) {
+              handleSelectBlock(bId);
+            } else {
+              setSelectedBlockId(null);
             }
-          />
-        </Suspense>
+          }}
+          onSelectPage={(targetRouteOrId) => {
+            const targetPage = activeSiteDefinition?.pages?.find(
+              (p) => p.id === targetRouteOrId || p.route === targetRouteOrId
+            );
+            const route = targetPage ? targetPage.route : targetRouteOrId;
+            if (isProductDetailRoute(route)) {
+              const sampleSlug = products[0]?.slug || products[0]?.id || "sample-product";
+              navigate(toFullAppPath(appBase, `/products/${sampleSlug}`));
+            } else {
+              navigate(toFullAppPath(appBase, route));
+            }
+          }}
+          onSiteDefinitionChange={(next) =>
+            handleSiteDefinitionChange(next as SiteDefinition)
+          }
+        />
       </div>
     ) : undefined;
 
 
   const drawerNode =
     showAdminTopbar && activeDrawer ? (
-      <Suspense fallback={null}>
-        <BuilderDrawerPanel
-          activeDrawer={activeDrawer}
-          onClose={() => setActiveDrawer(null)}
-          savedSites={savedSites}
-          selectedSiteId={resolvedSiteId || siteId || ""}
-          onSelectSite={(targetSiteId) => {
-            if (targetSiteId === (resolvedSiteId || siteId)) {
-              setActiveDrawer(null);
-              return;
-            }
-            setActiveDrawer(null);
-            navigate(`/builder/${targetSiteId}`);
-          }}
-          onDeleteSite={handleDeleteSite}
-          activeAdminNavKey={activeAdminNavKey}
-          onSelectAdminNav={(key) => {
-            navigate(`${builderBase}/admin/${key}`);
-          }}
-          siteDefinition={activeSiteDefinition}
-          onSiteDefinitionChange={(next) =>
-            setDraftSiteDefinition(next as SiteDefinition)
+      <BuilderDrawerPanel
+        activeDrawer={activeDrawer}
+        onClose={() => setActiveDrawer(null)}
+        savedSites={savedSites}
+        savedSitesLoading={savedSitesLoading}
+        selectedSiteId={resolvedSiteId || siteId || ""}
+        onSelectSite={(targetSiteId) => {
+          const target = savedSites.find((s) => s.id === targetSiteId);
+          if (target) {
+            siteSlugMemoryCache.set(targetSiteId, target);
+            if (target.slug) siteSlugMemoryCache.set(target.slug, target);
+            try {
+              localStorage.setItem(
+                `wc_site_snapshot_${targetSiteId}`,
+                JSON.stringify(target)
+              );
+              if (target.slug) {
+                localStorage.setItem(
+                  `wc_site_snapshot_${target.slug}`,
+                  JSON.stringify(target)
+                );
+              }
+            } catch (_) { }
           }
-        />
-      </Suspense>
+          if (targetSiteId === (resolvedSiteId || siteId)) {
+            return;
+          }
+          setSelectedBlockId(null);
+          // Persistent drawer: do NOT close drawer on site switch!
+          navigate(`/builder/${targetSiteId}`);
+        }}
+        onDeleteSite={handleDeleteSite}
+        activeAdminNavKey={activeAdminNavKey}
+        onSelectAdminNav={(key) => {
+          navigate(`${builderBase}/admin/${key}`);
+        }}
+        activeSettingsNavKey={
+          location.pathname.includes("/settings/users-roles")
+            ? "users-roles"
+            : location.pathname.includes("/settings/profile")
+            ? "profile"
+            : location.pathname.includes("/settings/domain")
+            ? "domain"
+            : location.pathname.includes("/settings/billing")
+            ? "billing"
+            : location.pathname.includes("/settings/audit-logs") || location.pathname.includes("/settings/activity")
+            ? "audit-logs"
+            : location.pathname.includes("/settings/help-support")
+            ? "help-support"
+            : null
+        }
+        onSelectSettingsNav={(key) => {
+          navigate(`${builderBase}/settings/${key}`);
+        }}
+        siteDefinition={activeSiteDefinition}
+        onSiteDefinitionChange={(next) =>
+          handleSiteDefinitionChange(next as SiteDefinition)
+        }
+      />
     ) : null;
 
 
   return (
-    <BuilderShell
-      topBar={topBar}
-      leftPanel={leftPanel}
-      drawer={drawerNode}
-      rightPanel={rightPanel}
-      previewPaneRef={previewPaneRef}
-      plainCenter={isAdminRoute}
-    >
+    <DeviceModeProvider mode={deviceMode}>
+      <BuilderShell
+        topBar={topBar}
+        leftPanel={leftPanel}
+        drawer={drawerNode}
+        rightPanel={rightPanel}
+        previewPaneRef={previewPaneRef}
+        plainCenter={isAdminRoute}
+        deviceMode={deviceMode}
+        deviceBg={pageBg}
+      >
       <div
         style={{
           minHeight: "100%",
+          width: "100%",
+          maxWidth: "100%",
           background: pageBg,
           color: textColor,
-          overflow: "visible",
           position: "relative",
           zIndex: 1,
         }}
       >
-        <Suspense
-          fallback={
-            <div
-              style={{
-                minHeight: "50vh",
-                display: "grid",
-                placeItems: "center",
-                color: "#64748b",
-                fontSize: "14px",
-              }}
-            >
-              Loading page...
-            </div>
-          }
-        >
-          <Routes>
-            {!isStoreRoute && (
-              <Route path="admin" element={<AdminLayout />}>
-                <Route index element={<Navigate to="products" replace />} />
-                <Route path="products" element={<AdminProducts />} />
-                <Route path="orders" element={<AdminOrders />} />
-                <Route path="delivery" element={<DeliverySettingsPage />} />
-                <Route path="earnings" element={<TenantEarningsPage />} />
-                <Route path="payment-settings" element={<TenantPaymentSettingsPage />} />
+        {!activeSiteDefinition && loading ? (
+          <StorefrontSkeleton
+            isProductDetail={Boolean(productSlug)}
+            siteSlug={siteSlug || siteSlugParam || ""}
+          />
+        ) : (
+          <Suspense
+            fallback={
+              <div
+                style={{
+                  minHeight: "50vh",
+                  display: "grid",
+                  placeItems: "center",
+                  color: "#64748b",
+                  fontSize: "14px",
+                }}
+              >
+                Loading page...
+              </div>
+            }
+          >
+            <Routes>
+              {!isStoreRoute && (
+                <>
+                  <Route path="admin" element={<AdminLayout />}>
+                    <Route index element={<Navigate to="products" replace />} />
+                    <Route
+                      path="products"
+                      element={
+                        hasPermission("products:view") ? (
+                          <AdminProducts />
+                        ) : (
+                          <AccessDeniedView requiredPermission="products:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="home-sections"
+                      element={
+                        hasPermission("home_sections:view") ? (
+                          <AdminHomeSections />
+                        ) : (
+                          <AccessDeniedView requiredPermission="home_sections:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="analytics"
+                      element={
+                        hasPermission("analytics:view") ? (
+                          <AdminAnalytics siteId={resolvedSiteId || siteId} siteName={siteName} />
+                        ) : (
+                          <AccessDeniedView requiredPermission="analytics:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="orders"
+                      element={
+                        hasPermission("orders:view") ? (
+                          <AdminOrders />
+                        ) : (
+                          <AccessDeniedView requiredPermission="orders:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="pages"
+                      element={
+                        hasPermission("pages:view") ? (
+                          <AdminPages siteId={resolvedSiteId || siteId} siteSlug={siteSlug} />
+                        ) : (
+                          <AccessDeniedView requiredPermission="pages:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="support"
+                      element={
+                        hasPermission("support:view") ? (
+                          <AdminSupportDesk />
+                        ) : (
+                          <AccessDeniedView requiredPermission="support:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="discounts"
+                      element={
+                        hasPermission("discounts:view") ? (
+                          <AdminCoupons />
+                        ) : (
+                          <AccessDeniedView requiredPermission="discounts:view" />
+                        )
+                      }
+                    />
+
+                    <Route
+                      path="coupons"
+                      element={
+                        hasPermission("discounts:view") ? (
+                          <AdminCoupons />
+                        ) : (
+                          <AccessDeniedView requiredPermission="discounts:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="delivery"
+                      element={
+                        hasPermission("delivery:view") ? (
+                          <DeliverySettingsPage />
+                        ) : (
+                          <AccessDeniedView requiredPermission="delivery:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="earnings"
+                      element={
+                        hasPermission("earnings:view") ? (
+                          <TenantEarningsPage />
+                        ) : (
+                          <AccessDeniedView requiredPermission="earnings:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="payment-settings"
+                      element={
+                        hasPermission("payout_settings:view") ? (
+                          <TenantPaymentSettingsPage />
+                        ) : (
+                          <AccessDeniedView requiredPermission="payout_settings:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="checkout-charges"
+                      element={
+                        hasPermission("checkout_charges:view") ? (
+                          <CheckoutChargesPage />
+                        ) : (
+                          <AccessDeniedView requiredPermission="checkout_charges:view" />
+                        )
+                      }
+                    />
+                  </Route>
+                  <Route path="settings" element={<AdminLayout />}>
+                    <Route
+                      index
+                      element={
+                        <Navigate
+                          to={
+                            hasPermission("profile:view")
+                              ? "profile"
+                              : hasPermission("users_roles:view")
+                              ? "users-roles"
+                              : hasPermission("domain_settings:view")
+                              ? "domain"
+                              : hasPermission("billing:view")
+                              ? "billing"
+                              : hasPermission("audit_logs:view")
+                              ? "audit-logs"
+                              : hasPermission("support:view")
+                              ? "help-support"
+                              : "profile"
+                          }
+                          replace
+                        />
+                      }
+                    />
+                    <Route
+                      path="profile"
+                      element={
+                        hasPermission("profile:view") ? (
+                          <AdminProfileSettings />
+                        ) : (
+                          <AccessDeniedView requiredPermission="profile:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="general"
+                      element={
+                        hasPermission("general_settings:view") ? (
+                          <AdminGeneralSettings siteId={resolvedSiteId || siteId} />
+                        ) : (
+                          <AccessDeniedView requiredPermission="general_settings:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="domain"
+                      element={
+                        hasPermission("domain_settings:view") ? (
+                          <AdminDomainSettings siteId={resolvedSiteId || siteId} />
+                        ) : (
+                          <AccessDeniedView requiredPermission="domain_settings:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="users-roles"
+                      element={
+                        hasPermission("users_roles:view") ? (
+                          <AdminUsersAndRoles siteId={resolvedSiteId || siteId} />
+                        ) : (
+                          <AccessDeniedView requiredPermission="users_roles:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="billing"
+                      element={
+                        hasPermission("billing:view") ? (
+                          <AdminBillingSettings siteId={resolvedSiteId || siteId} />
+                        ) : (
+                          <AccessDeniedView requiredPermission="billing:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="audit-logs"
+                      element={
+                        hasPermission("audit_logs:view") ? (
+                          <AdminAuditLogs siteId={resolvedSiteId || siteId} />
+                        ) : (
+                          <AccessDeniedView requiredPermission="audit_logs:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="activity"
+                      element={
+                        hasPermission("audit_logs:view") ? (
+                          <AdminAuditLogs siteId={resolvedSiteId || siteId} />
+                        ) : (
+                          <AccessDeniedView requiredPermission="audit_logs:view" />
+                        )
+                      }
+                    />
+                    <Route
+                      path="help-support"
+                      element={
+                        hasPermission("support:view") ? (
+                          <AdminHelpAndSupport siteId={resolvedSiteId || siteId} />
+                        ) : (
+                          <AccessDeniedView requiredPermission="support:view" />
+                        )
+                      }
+                    />
+                  </Route>
+                </>
+              )}
+
+              {/* Agent PWA — no auth, token in URL */}
+              <Route path="agent/delivery/:shipmentId" element={<AgentDeliveryPage />} />
+
+              {/* Customer tracking page */}
+              <Route path="track/:siteId/:orderId" element={<TrackOrderPage />} />
+
+
+              {ordersPage && (
                 <Route
-                  path="checkout-charges"
-                  element={<CheckoutChargesPage />}
+                  path="orders"
+                  element={
+                    <StorefrontPage
+                      page={ordersPage}
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      siteName={siteName}
+                      selectedProduct={undefined}
+                      editMode={editMode}
+                      adminTopbarVisible={showAdminTopbar}
+                      selectedBlockId={selectedBlockId}
+                      onSelectBlock={handleSelectBlock}
+                      storefrontNavbarMode={storefrontNavbarMode}
+                      navbarFixedBounds={navbarFixedBounds}
+                      appBase={appBase}
+                    />
+                  }
                 />
-              </Route>
-            )}
+              )}
 
-            {/* Agent PWA — no auth, token in URL */}
-            <Route path="agent/delivery/:shipmentId" element={<AgentDeliveryPage />} />
+              {profilePage && (
+                <Route
+                  path="profile"
+                  element={
+                    <StorefrontPage
+                      page={profilePage}
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      siteName={siteName}
+                      selectedProduct={undefined}
+                      editMode={editMode}
+                      adminTopbarVisible={showAdminTopbar}
+                      selectedBlockId={selectedBlockId}
+                      onSelectBlock={handleSelectBlock}
+                      storefrontNavbarMode={storefrontNavbarMode}
+                      navbarFixedBounds={navbarFixedBounds}
+                      appBase={appBase}
+                    />
+                  }
+                />
+              )}
 
-            {/* Customer tracking page */}
-            <Route path="track/:siteId/:orderId" element={<TrackOrderPage />} />
+              {supportPage && (
+                <Route
+                  path="support"
+                  element={
+                    <StorefrontPage
+                      page={supportPage}
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      siteName={siteName}
+                      selectedProduct={undefined}
+                      editMode={editMode}
+                      adminTopbarVisible={showAdminTopbar}
+                      selectedBlockId={selectedBlockId}
+                      onSelectBlock={handleSelectBlock}
+                      storefrontNavbarMode={storefrontNavbarMode}
+                      navbarFixedBounds={navbarFixedBounds}
+                      appBase={appBase}
+                    />
+                  }
+                />
+              )}
 
-
-            <Route
-              path="orders"
-              element={
-                <StorefrontShell
-                  siteDefinition={activeSiteDefinition}
-                  siteId={resolvedSiteId || siteId || ""}
-                  siteSlug={siteSlug}
-                  editMode={editMode}
-                  adminTopbarVisible={showAdminTopbar}
-                  selectedBlockId={selectedBlockId}
-                  onSelectBlock={handleSelectBlock}
-                  storefrontNavbarMode={storefrontNavbarMode}
-                  navbarFixedBounds={navbarFixedBounds}
-                  appBase={appBase}
-                >
-                  <CustomerOrdersPage
-                    siteId={resolvedSiteId || siteId || ""}
-                    siteSlug={siteSlug}
-                    theme={activeSiteDefinition.theme}
-                  />
-                </StorefrontShell>
-              }
-            />
-
-
-            {activeSiteDefinition.pages
-              .filter((page) => {
-                if (page.flow === "admin") return false;
-
-
-                const sameAsResolvedProductPage =
-                  productDetailPage &&
-                  (page.id === productDetailPage.id ||
-                    isProductDetailRoute(page.route) ||
-                    page.blocks.some((block) =>
-                      isProductDetailBlockType(block.type)
-                    ));
-
-
-                return !sameAsResolvedProductPage;
-              })
-              .map((page) => {
-                const normalizedRoute = normalizeRoute(page.route);
-
-
-                return (
-                  <Route
-                    key={page.id}
-                    path={normalizedRoute}
-                    element={
-                      <StorefrontPage
-                        page={page}
-                        siteDefinition={activeSiteDefinition}
-                        siteId={resolvedSiteId || siteId || ""}
-                        siteSlug={siteSlug}
-                        selectedProduct={undefined}
-                        editMode={editMode}
-                        adminTopbarVisible={showAdminTopbar}
-                        selectedBlockId={selectedBlockId}
-                        onSelectBlock={handleSelectBlock}
-                        storefrontNavbarMode={storefrontNavbarMode}
-                        navbarFixedBounds={navbarFixedBounds}
-                        appBase={appBase}
-                      />
-                    }
-                  />
-                );
-              })}
-
-
-            {productDetailPage && (
               <Route
-                path="products/:productSlug"
+                path="account"
+                element={<Navigate to="profile" replace />}
+              />
+
+              {loginPage && (
+                <Route
+                  path="login"
+                  element={
+                    <StorefrontPage
+                      page={loginPage}
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      siteName={siteName}
+                      selectedProduct={undefined}
+                      editMode={editMode}
+                      adminTopbarVisible={showAdminTopbar}
+                      selectedBlockId={selectedBlockId}
+                      onSelectBlock={handleSelectBlock}
+                      storefrontNavbarMode={storefrontNavbarMode}
+                      navbarFixedBounds={navbarFixedBounds}
+                      appBase={appBase}
+                    />
+                  }
+                />
+              )}
+
+              {signupPage && (
+                <Route
+                  path="signup"
+                  element={
+                    <StorefrontPage
+                      page={signupPage}
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      siteName={siteName}
+                      selectedProduct={undefined}
+                      editMode={editMode}
+                      adminTopbarVisible={showAdminTopbar}
+                      selectedBlockId={selectedBlockId}
+                      onSelectBlock={handleSelectBlock}
+                      storefrontNavbarMode={storefrontNavbarMode}
+                      navbarFixedBounds={navbarFixedBounds}
+                      appBase={appBase}
+                    />
+                  }
+                />
+              )}
+
+              {cartPage && (
+                <Route
+                  path="cart"
+                  element={
+                    <StorefrontPage
+                      page={cartPage}
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      selectedProduct={undefined}
+                      editMode={editMode}
+                      adminTopbarVisible={showAdminTopbar}
+                      selectedBlockId={selectedBlockId}
+                      onSelectBlock={handleSelectBlock}
+                      storefrontNavbarMode={storefrontNavbarMode}
+                      navbarFixedBounds={navbarFixedBounds}
+                      appBase={appBase}
+                    />
+                  }
+                />
+              )}
+
+              {checkoutPage && (
+                <Route
+                  path="checkout"
+                  element={
+                    <StorefrontPage
+                      page={checkoutPage}
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      selectedProduct={undefined}
+                      editMode={editMode}
+                      adminTopbarVisible={showAdminTopbar}
+                      selectedBlockId={selectedBlockId}
+                      onSelectBlock={handleSelectBlock}
+                      storefrontNavbarMode={storefrontNavbarMode}
+                      navbarFixedBounds={navbarFixedBounds}
+                      appBase={appBase}
+                    />
+                  }
+                />
+              )}
+
+              {/* Dynamic Store Pages & Policy CMS Storefront Routes */}
+              <Route
+                path="about"
                 element={
-                  <StorefrontPage
-                    key={`product-detail-${productSlug || "unknown"}`}
-                    page={productDetailPage}
+                  <StorefrontShell
                     siteDefinition={activeSiteDefinition}
-                    selectedProduct={selectedProduct}
                     siteId={resolvedSiteId || siteId || ""}
                     siteSlug={siteSlug}
                     editMode={editMode}
@@ -1446,27 +3121,254 @@ function BuilderPageContent() {
                     storefrontNavbarMode={storefrontNavbarMode}
                     navbarFixedBounds={navbarFixedBounds}
                     appBase={appBase}
-                  />
+                  >
+                    <StorefrontCustomPage
+                      pageSlug="about"
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      appBase={appBase}
+                      siteName={siteName}
+                    />
+                  </StorefrontShell>
                 }
               />
-            )}
-          </Routes>
-        </Suspense>
+
+              <Route
+                path="contact"
+                element={
+                  <StorefrontShell
+                    siteDefinition={activeSiteDefinition}
+                    siteId={resolvedSiteId || siteId || ""}
+                    siteSlug={siteSlug}
+                    editMode={editMode}
+                    adminTopbarVisible={showAdminTopbar}
+                    selectedBlockId={selectedBlockId}
+                    onSelectBlock={handleSelectBlock}
+                    storefrontNavbarMode={storefrontNavbarMode}
+                    navbarFixedBounds={navbarFixedBounds}
+                    appBase={appBase}
+                  >
+                    <StorefrontCustomPage
+                      pageSlug="contact"
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      appBase={appBase}
+                      siteName={siteName}
+                    />
+                  </StorefrontShell>
+                }
+              />
+
+              <Route
+                path="privacy"
+                element={
+                  <StorefrontShell
+                    siteDefinition={activeSiteDefinition}
+                    siteId={resolvedSiteId || siteId || ""}
+                    siteSlug={siteSlug}
+                    editMode={editMode}
+                    adminTopbarVisible={showAdminTopbar}
+                    selectedBlockId={selectedBlockId}
+                    onSelectBlock={handleSelectBlock}
+                    storefrontNavbarMode={storefrontNavbarMode}
+                    navbarFixedBounds={navbarFixedBounds}
+                    appBase={appBase}
+                  >
+                    <StorefrontCustomPage
+                      pageSlug="privacy"
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      appBase={appBase}
+                      siteName={siteName}
+                    />
+                  </StorefrontShell>
+                }
+              />
+
+              <Route
+                path="terms"
+                element={
+                  <StorefrontShell
+                    siteDefinition={activeSiteDefinition}
+                    siteId={resolvedSiteId || siteId || ""}
+                    siteSlug={siteSlug}
+                    editMode={editMode}
+                    adminTopbarVisible={showAdminTopbar}
+                    selectedBlockId={selectedBlockId}
+                    onSelectBlock={handleSelectBlock}
+                    storefrontNavbarMode={storefrontNavbarMode}
+                    navbarFixedBounds={navbarFixedBounds}
+                    appBase={appBase}
+                  >
+                    <StorefrontCustomPage
+                      pageSlug="terms"
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      appBase={appBase}
+                      siteName={siteName}
+                    />
+                  </StorefrontShell>
+                }
+              />
+
+              <Route
+                path="story"
+                element={
+                  <StorefrontShell
+                    siteDefinition={activeSiteDefinition}
+                    siteId={resolvedSiteId || siteId || ""}
+                    siteSlug={siteSlug}
+                    editMode={editMode}
+                    adminTopbarVisible={showAdminTopbar}
+                    selectedBlockId={selectedBlockId}
+                    onSelectBlock={handleSelectBlock}
+                    storefrontNavbarMode={storefrontNavbarMode}
+                    navbarFixedBounds={navbarFixedBounds}
+                    appBase={appBase}
+                  >
+                    <StorefrontCustomPage
+                      pageSlug="story"
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      appBase={appBase}
+                      siteName={siteName}
+                    />
+                  </StorefrontShell>
+                }
+              />
+
+              <Route
+                path="pages/:customSlug"
+                element={
+                  <StorefrontShell
+                    siteDefinition={activeSiteDefinition}
+                    siteId={resolvedSiteId || siteId || ""}
+                    siteSlug={siteSlug}
+                    editMode={editMode}
+                    adminTopbarVisible={showAdminTopbar}
+                    selectedBlockId={selectedBlockId}
+                    onSelectBlock={handleSelectBlock}
+                    storefrontNavbarMode={storefrontNavbarMode}
+                    navbarFixedBounds={navbarFixedBounds}
+                    appBase={appBase}
+                  >
+                    <StorefrontCustomPage
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      appBase={appBase}
+                      siteName={siteName}
+                    />
+                  </StorefrontShell>
+                }
+              />
+
+              {(activeSiteDefinition?.pages || [])
+                .filter((page) => {
+                  if (page.flow === "admin") return false;
+
+                  const sameAsResolvedProductPage =
+                    productDetailPage &&
+                    (page.id === productDetailPage.id ||
+                      isProductDetailRoute(page.route) ||
+                      page.blocks.some((block) =>
+                        isProductDetailBlockType(block.type)
+                      ));
+
+                  if (sameAsResolvedProductPage) return false;
+
+                  const normalized = normalizeRoute(page.route);
+                  if (
+                    normalized === "checkout" ||
+                    normalized === "cart" ||
+                    normalized === "orders" ||
+                    normalized === "profile" ||
+                    normalized === "account" ||
+                    normalized === "login" ||
+                    normalized === "signup" ||
+                    normalized === "about" ||
+                    normalized === "contact" ||
+                    normalized === "privacy" ||
+                    normalized === "terms" ||
+                    normalized === "story"
+                  ) {
+                    return false;
+                  }
+
+                  return true;
+                })
+                .map((page) => {
+                  const normalizedRoute = normalizeRoute(page.route);
+
+
+                  return (
+                    <Route
+                      key={page.id}
+                      path={normalizedRoute}
+                      element={
+                        <StorefrontPage
+                          page={page}
+                          siteDefinition={activeSiteDefinition}
+                          siteId={resolvedSiteId || siteId || ""}
+                          siteSlug={siteSlug}
+                          selectedProduct={undefined}
+                          editMode={editMode}
+                          adminTopbarVisible={showAdminTopbar}
+                          selectedBlockId={selectedBlockId}
+                          onSelectBlock={handleSelectBlock}
+                          storefrontNavbarMode={storefrontNavbarMode}
+                          navbarFixedBounds={navbarFixedBounds}
+                          appBase={appBase}
+                        />
+                      }
+                    />
+                  );
+                })}
+
+
+              {productDetailPage && (
+                <Route
+                  path="products/:productSlug"
+                  element={
+                    <StorefrontPage
+                      key={`product-detail-${productSlug || "unknown"}`}
+                      page={productDetailPage}
+                      siteDefinition={activeSiteDefinition}
+                      selectedProduct={selectedProduct}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      editMode={editMode}
+                      adminTopbarVisible={showAdminTopbar}
+                      selectedBlockId={selectedBlockId}
+                      onSelectBlock={handleSelectBlock}
+                      storefrontNavbarMode={storefrontNavbarMode}
+                      navbarFixedBounds={navbarFixedBounds}
+                      appBase={appBase}
+                    />
+                  }
+                />
+              )}
+            </Routes>
+          </Suspense>
+        )}
       </div>
 
 
-      <Suspense fallback={null}>
-        <QrLinkPopup
-          open={qrOpen}
-          onClose={() => setQrOpen(false)}
-          customerUrl={
-            siteSlug ? `${window.location.origin}/store/${siteSlug}` : ""
-          }
-        />
-      </Suspense>
+      <QrLinkPopup
+        open={qrOpen}
+        onClose={() => setQrOpen(false)}
+        customerUrl={
+          siteSlug ? `${window.location.origin}/store/${siteSlug}` : ""
+        }
+      />
 
-      {/* Floating Bottom-Right Corner Publish Button (Appears only when changes exist) */}
-      {showAdminTopbar && !isStoreRoute && !isAdminRoute && (hasUnpublishedChanges || publishing || publishSuccess) && (
+      {/* Floating Bottom-Right Corner Publish Button (Appears only when changes exist and user has publish permission) */}
+      {showAdminTopbar && !isStoreRoute && !isAdminRoute && canPublish && (hasUnpublishedChanges || publishing || publishSuccess) && (
         <button
           type="button"
           onClick={handlePublish}
@@ -1479,35 +3381,98 @@ function BuilderPageContent() {
             padding: "10px 22px",
             borderRadius: "999px",
             border: "none",
-            background: publishSuccess
-              ? "#16a34a"
-              : "linear-gradient(135deg, #22c55e, #16a34a)",
-            color: "#ffffff",
+            background: "linear-gradient(135deg, #0f62ab, #0a467c)",
+            color: "#fbbf24",
             fontSize: "13px",
-            fontWeight: 700,
+            fontWeight: 800,
             cursor: publishing ? "default" : "pointer",
             display: "flex",
             alignItems: "center",
             gap: "8px",
-            boxShadow: "0 6px 20px rgba(34,197,94,0.45)",
+            boxShadow: "0 6px 20px rgba(15,98,171,0.45)",
             transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
           }}
         >
-          {publishing ? "Publishing..." : publishSuccess ? "Published ✓" : "Publish 🚀"}
+          {publishing ? "Publishing..." : publishSuccess ? "Published" : "Publish"}
         </button>
       )}
-    </BuilderShell>
+      </BuilderShell>
+    </DeviceModeProvider>
   );
 }
 
+export const siteProductsMemoryCache = new Map<string, Product[]>();
+
+function getInitialCachedProducts(slugOrId?: string): Product[] {
+  if (!slugOrId) return [];
+  if (siteProductsMemoryCache.has(slugOrId)) {
+    return siteProductsMemoryCache.get(slugOrId)!;
+  }
+  if (typeof window !== "undefined") {
+    try {
+      const raw = localStorage.getItem(`wc_site_products_${slugOrId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          siteProductsMemoryCache.set(slugOrId, parsed);
+          return parsed;
+        }
+      }
+    } catch (_) { }
+  }
+  return [];
+}
 
 export default function BuilderPage() {
   const params = useParams();
   const siteId = params.siteId;
   const siteSlugParam = params.slug;
-  const [resolvedSiteId, setResolvedSiteId] = useState(siteId || "");
-  const [siteProducts, setSiteProducts] = useState<Product[]>([]);
+  const location = useLocation();
+  const isStoreRoute = location.pathname.startsWith("/store/");
 
+  const currentIdentifier = siteSlugParam || siteId || "";
+  const [prevIdentifier, setPrevIdentifier] = useState(currentIdentifier);
+
+  const initialCachedSite = (() => {
+    const raw = getInitialCachedSite(siteSlugParam) || getInitialCachedSite(siteId) || null;
+    if (!raw) return null;
+    if (siteSlugParam && raw.slug !== siteSlugParam && raw.id !== siteSlugParam) return null;
+    if (siteId && raw.id !== siteId) return null;
+    return raw;
+  })();
+
+  const initialProducts =
+    (siteSlugParam ? getInitialCachedProducts(siteSlugParam) : []) ||
+    (siteId ? getInitialCachedProducts(siteId) : []) ||
+    (initialCachedSite?.id ? getInitialCachedProducts(initialCachedSite.id) : []) ||
+    [];
+
+  const [resolvedSiteId, setResolvedSiteId] = useState(
+    initialCachedSite?.id || siteId || ""
+  );
+  const [siteProducts, setSiteProducts] = useState<Product[]>(initialProducts);
+  const [isProductsLoading, setIsProductsLoading] = useState<boolean>(
+    initialProducts.length === 0
+  );
+  const [defaultReturnWindowDays, setDefaultReturnWindowDays] = useState<number>(
+    initialCachedSite?.default_return_window_days != null
+      ? Number(initialCachedSite.default_return_window_days)
+      : 7
+  );
+
+  // Synchronously reset products and loading state when switching sites,
+  // preventing stale products from the previous site from ever flashing!
+  if (currentIdentifier !== prevIdentifier) {
+    setPrevIdentifier(currentIdentifier);
+    setResolvedSiteId(initialCachedSite?.id || siteId || "");
+    setSiteProducts(initialProducts);
+    setIsProductsLoading(initialProducts.length === 0);
+    setDefaultReturnWindowDays(
+      initialCachedSite?.default_return_window_days != null
+        ? Number(initialCachedSite.default_return_window_days)
+        : 7
+    );
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -1515,6 +3480,7 @@ export default function BuilderPage() {
     const resolveAndLoadProducts = async () => {
       try {
         let targetSiteId = siteId || "";
+        let defaultDays = 7;
 
         if (!targetSiteId && siteSlugParam) {
           const matchedSite = await resolveSiteBySlug(siteSlugParam);
@@ -1524,17 +3490,36 @@ export default function BuilderPage() {
           }
 
           targetSiteId = matchedSite.id;
+          if (matchedSite.default_return_window_days != null) {
+            defaultDays = Number(matchedSite.default_return_window_days);
+          }
+        } else if (targetSiteId) {
+          try {
+            const siteRes = await fetch(`${API_BASE_URL}/sites/${targetSiteId}`, { credentials: "include" });
+            if (siteRes.ok) {
+              const siteData = await siteRes.json();
+              if (siteData?.default_return_window_days != null) {
+                defaultDays = Number(siteData.default_return_window_days);
+              }
+            }
+          } catch (_) { }
         }
 
         if (!targetSiteId) {
-          if (!cancelled) setSiteProducts([]);
+          if (!cancelled) {
+            setSiteProducts([]);
+            setIsProductsLoading(false);
+          }
           return;
         }
 
-        if (!cancelled) setResolvedSiteId(targetSiteId);
+        if (!cancelled) {
+          setResolvedSiteId(targetSiteId);
+          setDefaultReturnWindowDays(defaultDays);
+        }
 
         const res = await fetch(
-          `${API_BASE_URL}/sites/${targetSiteId}/products/public`
+          `${API_BASE_URL}/sites/${targetSiteId}/products/public?page=1&page_size=1000`
         );
 
         if (res.ok) {
@@ -1542,17 +3527,32 @@ export default function BuilderPage() {
           const rawList = Array.isArray(data)
             ? data
             : Array.isArray(data?.items)
-            ? data.items
-            : [];
+              ? data.items
+              : [];
           const normalizedProducts = rawList.map(normalizeStorefrontProduct);
-          if (!cancelled) setSiteProducts(normalizedProducts);
+          if (!cancelled) {
+            setSiteProducts(normalizedProducts);
+            setIsProductsLoading(false);
+            siteProductsMemoryCache.set(targetSiteId, normalizedProducts);
+            if (siteSlugParam) siteProductsMemoryCache.set(siteSlugParam, normalizedProducts);
+            try {
+              localStorage.setItem(`wc_site_products_${targetSiteId}`, JSON.stringify(normalizedProducts));
+              if (siteSlugParam) {
+                localStorage.setItem(`wc_site_products_${siteSlugParam}`, JSON.stringify(normalizedProducts));
+              }
+            } catch (_) { }
+          }
         } else {
           console.error("Failed to load products for site", res.status);
-          if (!cancelled) setSiteProducts([]);
+          if (!cancelled) {
+            setIsProductsLoading(false);
+          }
         }
       } catch (err) {
         console.error("Error loading products for site", err);
-        if (!cancelled) setSiteProducts([]);
+        if (!cancelled) {
+          setIsProductsLoading(false);
+        }
       }
     };
 
@@ -1571,9 +3571,12 @@ export default function BuilderPage() {
     <CartProvider
       key={stableKey}
       products={siteProducts}
-      siteId={resolvedSiteId || siteId || ""}
+      siteId={resolvedSiteId || siteId || siteSlugParam || ""}
+      defaultReturnWindowDays={defaultReturnWindowDays}
+      isProductsLoading={isProductsLoading}
+      isAdminMode={!isStoreRoute}
     >
-      <BuilderPageContent />
+      <BuilderPageContent key={stableKey} />
     </CartProvider>
   );
 }

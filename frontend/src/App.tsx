@@ -7,6 +7,7 @@ import {
   Outlet,
   useNavigate,
   useLocation,
+  useParams,
 } from "react-router-dom";
 import { CustomerAuthProvider } from "./context/CustomerAuthContext";
 import { AdminAuthProvider, useAdminAuth } from "./context/AdminAuthContext";
@@ -15,20 +16,36 @@ import { API_BASE_URL } from "./config/api";
 import BuilderShell from "./Component/BuilderShell";
 import BuilderTopControlBar from "./Component/BuilderTopControlBar";
 import BuilderControlPanel from "./Component/BuilderControlPanel";
-import BuilderDrawerPanel from "./Component/BuilderDrawerPanel";
+import BuilderDrawerPanel, { SettingsNavKey } from "./Component/BuilderDrawerPanel";
+import AdminProfileSettings from "./Component/AdminProfileSettings";
+import AdminUsersAndRoles from "./Component/AdminUsersAndRoles";
+import AdminAuditLogs from "./Component/AdminAuditLogs";
+import {
+  AdminGeneralSettings,
+  AdminDomainSettings,
+  AdminBillingSettings,
+  AdminIntegrationsSettings,
+  AdminHelpAndSupport,
+} from "./Component/AdminSettingsViews";
 import { AiWebpageGeneratingAnimation } from "./Component/AiWebpageGeneratingAnimation";
 import { AiAvatar } from "./Component/AiAvatar";
 import { UserAvatar } from "./Component/UserAvatar";
+import BuilderPage, { siteSlugMemoryCache } from "./BuilderPage";
 
-// Lazy-loaded routes for code splitting
-const BuilderPage = React.lazy(() => import("./BuilderPage"));
-const AdminLoginPage = React.lazy(() => import("./pages/AdminLoginPage"));
-const AdminSignupPage = React.lazy(() => import("./pages/AdminSignupPage"));
-const CustomerLoginPage = React.lazy(() => import("./pages/CustomerLoginPage"));
-const CustomerSignupPage = React.lazy(() => import("./pages/CustomerSignupPage"));
+import AdminLoginPage from "./pages/AdminLoginPage";
+import AdminSignupPage from "./pages/AdminSignupPage";
+import AdminResetPasswordPage from "./pages/AdminResetPasswordPage";
+import AdminAcceptInvitePage from "./pages/AdminAcceptInvitePage";
+import CustomerLoginPage from "./pages/CustomerLoginPage";
+import CustomerSignupPage from "./pages/CustomerSignupPage";
+
+// Lazy-loaded routes for secondary standalone pages
 const TrackOrderPage = React.lazy(() => import("./pages/TrackOrderPage"));
 const AgentDeliveryPage = React.lazy(() => import("./pages/AgentDeliveryPage"));
 const RiderLoginPage = React.lazy(() => import("./pages/RiderLoginPage"));
+const SupportAgentLoginPage = React.lazy(() => import("./pages/SupportAgentLoginPage"));
+const SupportAgentDashboard = React.lazy(() => import("./pages/SupportAgentDashboard"));
+
 
 function RouteLoadingFallback() {
   return (
@@ -37,21 +54,20 @@ function RouteLoadingFallback() {
         minHeight: "100vh",
         display: "grid",
         placeItems: "center",
-        background: "#0f172a",
-        color: "#f8fafc",
-        fontFamily: "inherit",
+        background: "transparent",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
     >
       <div style={{ textAlign: "center" }}>
         <div
           style={{
-            width: "36px",
-            height: "36px",
-            border: "3px solid rgba(255,255,255,0.15)",
+            width: "30px",
+            height: "30px",
+            border: "2.5px solid rgba(125,125,125,0.18)",
             borderTopColor: "#3b82f6",
             borderRadius: "50%",
             animation: "spin 0.8s linear infinite",
-            margin: "0 auto 12px",
+            margin: "0 auto",
           }}
         />
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -110,6 +126,7 @@ type SavedSite = {
   site_definition: SiteDefinition;
   draft_definition: SiteDefinition | null;
   version: number;
+  default_return_window_days?: number;
   created_at: string;
   updated_at: string;
 };
@@ -139,46 +156,13 @@ function slugify(value: string) {
 
 function RequireAdminAuth() {
   const location = useLocation();
-  const [checkingSession, setCheckingSession] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { admin, loading } = useAdminAuth();
 
-  useEffect(() => {
-    const checkAdminSession = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/auth/admin/me`, {
-          credentials: "include",
-        });
-
-        setIsAuthenticated(response.ok);
-      } catch (error) {
-        console.error("Error checking admin session:", error);
-        setIsAuthenticated(false);
-      } finally {
-        setCheckingSession(false);
-      }
-    };
-
-    checkAdminSession();
-  }, []);
-
-  if (checkingSession) {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          display: "grid",
-          placeItems: "center",
-          background: "#0f172a",
-          color: "#f8fafc",
-          padding: "24px",
-        }}
-      >
-        <p>Checking admin session...</p>
-      </div>
-    );
+  if (loading) {
+    return <RouteLoadingFallback />;
   }
 
-  if (!isAuthenticated) {
+  if (!admin) {
     return (
       <Navigate
         to="/admin/login"
@@ -193,7 +177,7 @@ function RequireAdminAuth() {
 
 function AdminSitesPage() {
   const navigate = useNavigate();
-  const { admin, logoutAdmin } = useAdminAuth();
+  const { admin, logoutAdmin, isOwner, hasPermission } = useAdminAuth();
 
   const ONBOARDING_CHAT_KEY = "webnirmaan_onboarding_chat";
   const ONBOARDING_SESSION_KEY = "webnirmaan_onboarding_session_id";
@@ -207,6 +191,8 @@ function AdminSitesPage() {
     }
     return null;
   });
+  // Never seed saved-sites from localStorage: a stale entry from a previously-logged-in
+  // admin account would momentarily expose their sites to the current admin (security gap).
   const [savedSites, setSavedSites] = useState<SavedSite[]>([]);
   const [activeDrawer, setActiveDrawer] = useState<
     | "saved-sites"
@@ -218,6 +204,7 @@ function AdminSitesPage() {
     | "qr-link"
     | null
   >(null);
+  const [activeSettingsNavKey, setActiveSettingsNavKey] = useState<SettingsNavKey | null>(null);
 
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     if (typeof window !== "undefined") {
@@ -297,7 +284,56 @@ function AdminSitesPage() {
       }
 
       const data = await response.json();
-      setSavedSites(Array.isArray(data) ? data : []);
+      const sitesList: SavedSite[] = Array.isArray(data) ? data : [];
+      setSavedSites(sitesList);
+
+      // Pre-populate memory and localStorage snapshot cache for all sites
+      sitesList.forEach((site: any) => {
+        if (site.id) {
+          siteSlugMemoryCache.set(site.id, site);
+          try {
+            localStorage.setItem(
+              `wc_site_snapshot_${site.id}`,
+              JSON.stringify(site)
+            );
+            const parsedTheme = site.site_definition?.theme;
+            if (parsedTheme) {
+              localStorage.setItem(
+                `wc_theme_mode_${site.id}`,
+                parsedTheme.mode || "light"
+              );
+              if (parsedTheme.primary_bg) {
+                localStorage.setItem(
+                  `wc_theme_bg_${site.id}`,
+                  parsedTheme.primary_bg
+                );
+              }
+            }
+          } catch (_) {}
+        }
+        if (site.slug) {
+          siteSlugMemoryCache.set(site.slug, site);
+          try {
+            localStorage.setItem(
+              `wc_site_snapshot_${site.slug}`,
+              JSON.stringify(site)
+            );
+            const parsedTheme = site.site_definition?.theme;
+            if (parsedTheme) {
+              localStorage.setItem(
+                `wc_theme_mode_${site.slug}`,
+                parsedTheme.mode || "light"
+              );
+              if (parsedTheme.primary_bg) {
+                localStorage.setItem(
+                  `wc_theme_bg_${site.slug}`,
+                  parsedTheme.primary_bg
+                );
+              }
+            }
+          } catch (_) {}
+        }
+      });
     } catch (error) {
       console.error("Error loading admin sites:", error);
       setSavedSites([]);
@@ -708,14 +744,22 @@ function AdminSitesPage() {
       onLogout={handleLogout}
       userName={admin?.name}
       userEmail={admin?.email}
+      avatarUrl={admin?.avatarUrl}
+      gender={admin?.gender}
     />
   );
 
   const leftPanel = (
     <BuilderControlPanel
-      activeKey={activeDrawer}
-      disabledKeys={["chat", "customize", "admin-panel", "assets", "qr-link"]}
+      activeKey={activeDrawer || (activeSettingsNavKey ? "settings" : !isOwner ? "saved-sites" : "chat")}
+      disabledKeys={!isOwner ? ["chat", "customize", "admin-panel", "assets", "qr-link"] : ["customize", "admin-panel", "assets", "qr-link"]}
       onSelect={(key) => {
+        if (key === "chat") {
+          if (!isOwner) return;
+          setActiveSettingsNavKey(null);
+          setActiveDrawer(null);
+          return;
+        }
         if (key === "saved-sites" || key === "settings") {
           setActiveDrawer((prev) => (prev === key ? null : key));
         }
@@ -726,13 +770,24 @@ function AdminSitesPage() {
   const drawerNode = activeDrawer ? (
     <BuilderDrawerPanel
       activeDrawer={activeDrawer}
-      onClose={() => setActiveDrawer(null)}
+      onClose={() => {
+        setActiveDrawer(null);
+        try {
+          sessionStorage.removeItem("wc_active_builder_drawer");
+        } catch (_) {}
+      }}
       savedSites={savedSites}
       onSelectSite={(targetSiteId) => {
-        setActiveDrawer(null);
+        try {
+          sessionStorage.setItem("wc_active_builder_drawer", "saved-sites");
+        } catch (_) {}
         openSite(targetSiteId);
       }}
       onDeleteSite={handleDeleteSite}
+      activeSettingsNavKey={activeSettingsNavKey}
+      onSelectSettingsNav={(key) => {
+        setActiveSettingsNavKey(key);
+      }}
     />
   ) : null;
 
@@ -743,7 +798,182 @@ function AdminSitesPage() {
       drawer={drawerNode}
       plainCenter={true}
     >
+      {activeSettingsNavKey === "profile" ? (
+        <div style={{ height: "100%", overflowY: "auto", background: "#ffffff", padding: "24px", boxSizing: "border-box" }}>
+          <AdminProfileSettings />
+        </div>
+      ) : activeSettingsNavKey === "users-roles" ? (
+        <div style={{ height: "100%", overflowY: "auto", background: "#ffffff", padding: "24px", boxSizing: "border-box" }}>
+          <AdminUsersAndRoles />
+        </div>
+      ) : activeSettingsNavKey === "domain" ? (
+        <div style={{ height: "100%", overflowY: "auto", background: "#ffffff", padding: "24px", boxSizing: "border-box" }}>
+          <AdminDomainSettings />
+        </div>
+      ) : activeSettingsNavKey === "billing" ? (
+        <div style={{ height: "100%", overflowY: "auto", background: "#ffffff", padding: "24px", boxSizing: "border-box" }}>
+          <AdminBillingSettings />
+        </div>
+      ) : activeSettingsNavKey === "audit-logs" ? (
+        <div style={{ height: "100%", overflowY: "auto", background: "#ffffff", padding: "24px", boxSizing: "border-box" }}>
+          <AdminAuditLogs />
+        </div>
+      ) : activeSettingsNavKey === "help-support" ? (
+        <div style={{ height: "100%", overflowY: "auto", background: "#ffffff", padding: "24px", boxSizing: "border-box" }}>
+          <AdminHelpAndSupport />
+        </div>
+      ) : !isOwner ? (
+        <div
+          style={{
+            height: "100%",
+            overflowY: "auto",
+            background: "#f8fafc",
+            padding: "36px 32px",
+            boxSizing: "border-box",
+            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+          }}
+        >
+          <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px", flexWrap: "wrap", gap: "16px" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                  <h1 style={{ fontSize: "24px", fontWeight: 700, color: "#0f172a", margin: 0, letterSpacing: "-0.02em" }}>
+                    Your Assigned Stores
+                  </h1>
+                  <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 8px", borderRadius: "12px", background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe" }}>
+                    {admin?.role || "Staff"}
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: "14px", color: "#64748b" }}>
+                  Select an assigned store below to manage products, orders, and storefront configuration.
+                </p>
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: "14px 18px",
+                borderRadius: "12px",
+                background: "#ffffff",
+                border: "1px solid #e2e8f0",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                marginBottom: "28px",
+              }}
+            >
+              <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#fef3c7", color: "#b45309", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>
+                🛡️
+              </div>
+              <div style={{ fontSize: "13px", color: "#475569", lineHeight: 1.5 }}>
+                <strong style={{ color: "#0f172a" }}>Store Creation Restricted:</strong> The AI Store Onboarding Agent is accessible strictly by workspace owners. As a team member, you have direct access to your assigned storefronts below.
+              </div>
+            </div>
+
+            {savedSites.length === 0 ? (
+              <div
+                style={{
+                  background: "#ffffff",
+                  borderRadius: "16px",
+                  border: "1px solid #e2e8f0",
+                  padding: "48px 24px",
+                  textAlign: "center",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+                }}
+              >
+                <div style={{ fontSize: "36px", marginBottom: "12px" }}>🏪</div>
+                <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 8px 0" }}>
+                  No Stores Currently Assigned
+                </h3>
+                <p style={{ fontSize: "13.5px", color: "#64748b", maxWidth: "420px", margin: "0 auto", lineHeight: 1.5 }}>
+                  Your account is active, but you have not been granted access to any store websites yet. Please contact your workspace owner.
+                </p>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))",
+                  gap: "18px",
+                }}
+              >
+                {savedSites.map((site) => {
+                  const brand = site.site_definition?.site?.brand_name || site.slug;
+                  const domain = site.site_definition?.site?.domain || "E-Commerce";
+                  return (
+                    <div
+                      key={site.id}
+                      style={{
+                        background: "#ffffff",
+                        borderRadius: "14px",
+                        border: "1px solid #e2e8f0",
+                        padding: "20px",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                        gap: "16px",
+                        transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = "translateY(-2px)";
+                        e.currentTarget.style.boxShadow = "0 8px 24px rgba(15,23,42,0.08)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = "translateY(0)";
+                        e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.04)";
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px", marginBottom: "8px" }}>
+                          <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {brand}
+                          </h3>
+                          <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 6px", borderRadius: "6px", background: "#f1f5f9", color: "#475569", textTransform: "uppercase" }}>
+                            {domain}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: "12px", color: "#64748b", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {site.slug}
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", gap: "8px", paddingTop: "12px", borderTop: "1px solid #f1f5f9" }}>
+                        <button
+                          type="button"
+                          onClick={() => openSite(site.id)}
+                          style={{
+                            flex: 1,
+                            padding: "8px 14px",
+                            borderRadius: "8px",
+                            background: "#2563eb",
+                            color: "#ffffff",
+                            border: "none",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "6px",
+                            boxShadow: "0 2px 6px rgba(37,99,235,0.25)",
+                          }}
+                        >
+                          <span>Open Store</span>
+                          <span>→</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
       <div
+        className="onboarding-agent-root"
         style={{
           height: "100%",
           display: "flex",
@@ -752,8 +982,23 @@ function AdminSitesPage() {
           color: "#0f172a",
           position: "relative",
           overflow: "hidden",
+          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
         }}
       >
+        <style>{`
+          .onboarding-agent-root,
+          .onboarding-agent-root input,
+          .onboarding-agent-root button,
+          .onboarding-agent-root textarea,
+          .onboarding-agent-root span,
+          .onboarding-agent-root div,
+          .onboarding-agent-root p,
+          .onboarding-agent-root h1,
+          .onboarding-agent-root h2,
+          .onboarding-agent-root h3 {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+          }
+        `}</style>
         {/* Chat Content Area */}
         <div
           style={{
@@ -838,7 +1083,7 @@ function AdminSitesPage() {
                       }}
                     >
                       {isUser ? (
-                        <UserAvatar size={32} />
+                        <UserAvatar size={32} avatarUrl={admin?.avatarUrl} gender={admin?.gender} />
                       ) : (
                         <AiAvatar size={32} />
                       )}
@@ -1202,6 +1447,7 @@ function AdminSitesPage() {
           </div>
         </div>
       </div>
+      )}
     </BuilderShell>
   );
 }
@@ -1231,6 +1477,69 @@ function ScrollToTop() {
   return null;
 }
 
+function StoreLoginWrapper() {
+  const { slug } = useParams<{ slug: string }>();
+  return <CustomerLoginPage key={slug || "default_login"} />;
+}
+
+function StoreSignupWrapper() {
+  const { slug } = useParams<{ slug: string }>();
+  return <CustomerSignupPage key={slug || "default_signup"} />;
+}
+
+function StandaloneStorePageRedirect({ slug: propSlug }: { slug?: string }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const params = useParams<{ customSlug?: string }>();
+
+  useEffect(() => {
+    let activeSlug = "";
+    try {
+      activeSlug = localStorage.getItem("wc_last_visited_store") || "";
+    } catch (_) {}
+
+    if (!activeSlug && siteSlugMemoryCache.size > 0) {
+      for (const [, site] of siteSlugMemoryCache.entries()) {
+        if (site?.slug) {
+          activeSlug = site.slug;
+          break;
+        }
+      }
+    }
+
+    const targetSlug =
+      propSlug ||
+      params.customSlug ||
+      location.pathname.replace(/^\/pages\//, "").replace(/^\//, "");
+
+    if (activeSlug) {
+      navigate(`/store/${activeSlug}/${targetSlug}`, { replace: true });
+      return;
+    }
+
+    const resolveStore = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/admin/sites`, { credentials: "include" });
+        if (res.ok) {
+          const sites = await res.json();
+          if (Array.isArray(sites) && sites.length > 0) {
+            const chosen = sites[0]?.slug || sites[0]?.id;
+            if (chosen) {
+              navigate(`/store/${chosen}/${targetSlug}`, { replace: true });
+              return;
+            }
+          }
+        }
+      } catch (_) {}
+      navigate("/admin/login", { replace: true });
+    };
+
+    resolveStore();
+  }, [propSlug, params.customSlug, location.pathname, navigate]);
+
+  return <RouteLoadingFallback />;
+}
+
 function AppRoutes() {
   return (
     <Suspense fallback={<RouteLoadingFallback />}>
@@ -1238,25 +1547,38 @@ function AppRoutes() {
         <Route path="/" element={<Navigate to="/admin/login" replace />} />
         <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route path="/admin/signup" element={<AdminSignupPage />} />
+        <Route path="/admin/reset-password" element={<AdminResetPasswordPage />} />
+        <Route path="/admin/accept-invite" element={<AdminAcceptInvitePage />} />
 
-        <Route path="/store/:slug/login" element={<CustomerLoginPage />} />
-        <Route path="/store/:slug/signup" element={<CustomerSignupPage />} />
+        <Route path="/store/:slug/login" element={<StoreLoginWrapper />} />
+        <Route path="/store/:slug/signup" element={<StoreSignupWrapper />} />
         <Route path="/store/:slug/track/:orderId" element={<TrackOrderPage />} />
         <Route path="/store/:slug/rider/login" element={<RiderLoginPage />} />
         <Route path="/store/:slug/rider/dashboard" element={<AgentDeliveryPage />} />
+        <Route path="/store/:slug/support/login" element={<SupportAgentLoginPage />} />
+        <Route path="/store/:slug/support/dashboard" element={<SupportAgentDashboard />} />
         <Route path="/store/:slug/*" element={<BuilderPage />} />
 
-        {/* Global Rider & Tracking Routes */}
+        {/* Global Rider, Support & Tracking Routes */}
         <Route path="/rider/login" element={<RiderLoginPage />} />
         <Route path="/rider/dashboard" element={<AgentDeliveryPage />} />
+        <Route path="/support/login" element={<SupportAgentLoginPage />} />
+        <Route path="/support/dashboard" element={<SupportAgentDashboard />} />
         <Route path="/track/:siteId/:orderId" element={<TrackOrderPage />} />
         <Route path="/agent/delivery/:shipmentId" element={<AgentDeliveryPage />} />
 
+        {/* Direct / Standalone Page Resolution for root-level URLs */}
+        <Route path="/about" element={<StandaloneStorePageRedirect slug="about" />} />
+        <Route path="/contact" element={<StandaloneStorePageRedirect slug="contact" />} />
+        <Route path="/privacy" element={<StandaloneStorePageRedirect slug="privacy" />} />
+        <Route path="/terms" element={<StandaloneStorePageRedirect slug="terms" />} />
+        <Route path="/story" element={<StandaloneStorePageRedirect slug="story" />} />
+        <Route path="/pages/:customSlug" element={<StandaloneStorePageRedirect />} />
+
         <Route element={<RequireAdminAuth />}>
           <Route path="/admin/sites" element={<AdminSitesPage />} />
+          <Route path="/builder/:siteId/*" element={<BuilderPage />} />
         </Route>
-
-        <Route path="/builder/:siteId/*" element={<BuilderPage />} />
       </Routes>
     </Suspense>
   );

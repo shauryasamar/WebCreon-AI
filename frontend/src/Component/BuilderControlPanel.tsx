@@ -173,27 +173,30 @@ function ControlButton({
             {item.icon}
           </div>
 
-          {/* Badge crosses the top-right corner of the icon */}
+          {/* Badge docked cleanly on the top-right corner */}
           {badge != null && badge > 0 ? (
             <span
               style={{
                 position: "absolute",
-                top: -4,
-                right: -5,
-                minWidth: 14,
-                height: 14,
-                borderRadius: 99,
+                top: -2,
+                right: -2,
+                minWidth: 15,
+                height: 15,
+                borderRadius: 999,
                 background: "#ef4444",
-                color: "#fff",
-                fontSize: 8,
+                color: "#ffffff",
+                border: "1.5px solid #ffffff",
+                fontSize: 8.5,
                 fontWeight: 800,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                padding: "0 2px",
+                padding: "0 3px",
                 lineHeight: 1,
                 pointerEvents: "none",
-                zIndex: 10,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                boxSizing: "border-box",
+                zIndex: 2,
               }}
             >
               {badge > 99 ? "99+" : badge}
@@ -232,6 +235,7 @@ export default function BuilderControlPanel({
 
   return (
     <div
+      className="builder-control-panel-root"
       style={{
         height: "100%",
         display: "flex",
@@ -239,8 +243,17 @@ export default function BuilderControlPanel({
         justifyContent: "space-between",
         padding: "8px 0",
         background: "#ffffff",
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
     >
+      <style>{`
+        .builder-control-panel-root,
+        .builder-control-panel-root button,
+        .builder-control-panel-root div,
+        .builder-control-panel-root span {
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+        }
+      `}</style>
       <div
         style={{
           display: "flex",

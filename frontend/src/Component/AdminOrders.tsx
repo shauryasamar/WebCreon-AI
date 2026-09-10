@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { API_BASE_URL as API_BASE } from "../config/api";
 import { Pagination } from "./Pagination";
+import GlassToast from "./GlassToast";
+import { useAdminAuth } from "../context/AdminAuthContext";
+import AccessDeniedView from "./AccessDeniedView";
 
 type AdminMode = "orders" | "returns";
 
@@ -16,6 +19,8 @@ type OrderStatus =
   | "failed"
   | "partially_cancelled"
   | "cancelled"
+  | "refunded"
+  | "replacement_dispatched"
   | "returned";
 
 type TabKey =
@@ -66,6 +71,7 @@ type OrderItem = {
   status: string;
   returnable_quantity?: number;
   pricing_snapshot?: any;
+  weight_grams?: number;
 };
 
 type Shipment = {
@@ -93,12 +99,33 @@ type Shipment = {
   [key: string]: any;
 };
 
+export type ShippingAddress = {
+  fullName?: string;
+  full_name?: string;
+  addressLine1?: string;
+  address_line1?: string;
+  city?: string;
+  postalCode?: string;
+  postal_code?: string;
+  mobileNumber?: string;
+  mobile_number?: string;
+  email?: string;
+  addressType?: string;
+  address_type?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  geoAccuracy?: string | null;
+  geo_accuracy?: string | null;
+  [key: string]: any;
+};
+
 type AdminOrderListItem = {
   id: string;
   customer_id: string;
   status: OrderStatus;
   payment_status?: string | null;
   total: number;
+  total_weight_grams?: number;
   payment_method: string;
   razorpay_payment_id?: string | null;
   razorpay_order_id?: string | null;
@@ -111,14 +138,7 @@ type AdminOrderListItem = {
   customer_name?: string | null;
   customer_phone?: string | null;
   customer_email?: string | null;
-  shipping_address?: {
-    fullName?: string;
-    addressLine1?: string;
-    city?: string;
-    postalCode?: string;
-    mobileNumber?: string;
-    email?: string;
-  } | null;
+  shipping_address?: ShippingAddress | null;
   shipment?: Shipment | null;
   items?: OrderItem[];
   item_count?: number;
@@ -135,17 +155,11 @@ type AdminOrderDetail = {
   status: OrderStatus;
   payment_status?: string | null;
   total: number;
+  total_weight_grams?: number;
   payment_method: string;
   razorpay_payment_id?: string | null;
   razorpay_order_id?: string | null;
-  shipping_address?: {
-    fullName?: string;
-    addressLine1?: string;
-    city?: string;
-    postalCode?: string;
-    mobileNumber?: string;
-    email?: string;
-  } | null;
+  shipping_address?: ShippingAddress | null;
   pricing_snapshot?: any;
   delivery_otp?: string | null;
   created_at: string;
@@ -208,14 +222,7 @@ type AdminReturnListItem = {
   customer_name?: string | null;
   customer_phone?: string | null;
   customer_email?: string | null;
-  shipping_address?: {
-    fullName?: string;
-    addressLine1?: string;
-    city?: string;
-    postalCode?: string;
-    mobileNumber?: string;
-    email?: string;
-  } | null;
+  shipping_address?: ShippingAddress | null;
   status: ReturnStatus;
   refund_status: ReturnRefundStatus | string;
   request_note?: string | null;
@@ -294,7 +301,25 @@ type AdminReturnDetail = {
   received_at?: string | null;
   inspected_at?: string | null;
   refunded_at?: string | null;
-  closed_at?: string | null;
+  refund_breakdown?: {
+    items_subtotal: number;
+    discounts_prorated: number;
+    tax_refund: number;
+    refundable_charges_added: number;
+    non_refundable_charges_retained: number;
+    suggested_refund_amount: number;
+    max_refundable_amount: number;
+    actual_refund_amount?: number;
+    exception_refund_added?: number;
+    charge_allocations: Array<{
+      id: string;
+      code: string;
+      label: string;
+      refundable: boolean;
+      total_order_amount: number;
+      allocated_amount: number;
+    }>;
+  };
   created_at: string;
   updated_at?: string | null;
   order: {
@@ -307,14 +332,7 @@ type AdminReturnDetail = {
     total: number;
     created_at?: string | null;
     delivered_at?: string | null;
-    shipping_address?: {
-      fullName?: string;
-      addressLine1?: string;
-      city?: string;
-      postalCode?: string;
-      mobileNumber?: string;
-      email?: string;
-    } | null;
+    shipping_address?: ShippingAddress | null;
     pricing_snapshot?: any;
     [key: string]: any;
   };
@@ -575,10 +593,40 @@ const getPaymentMethodIcon = (method?: string | null): React.ReactNode => {
   return <CreditCardIcon />;
 };
 
-const getStatusLabel = (status: string) => status.replaceAll("_", " ");
+const isOrderReplacement = (order?: { status: string; cancel_reason?: string | null; items?: Array<{ status: string }> } | null) => {
+  if (!order) return false;
+  return Boolean(
+    order.cancel_reason?.toLowerCase().includes("replacement") ||
+    order.status === "replacement_dispatched" ||
+    order.status === "replacement_pending" ||
+    (order.status === "confirmed" && order.items?.some(i => i.status === "delivered") && order.items?.some(i => i.status === "confirmed"))
+  );
+};
 
+const getStatusLabel = (status: string, cancelReason?: string | null, isRepl?: boolean) => {
+  if (isRepl || cancelReason?.toLowerCase().includes("replacement")) {
+    if (status === "confirmed" || status === "accepted") return "Re-Dispatch (Pending)";
+    if (status === "shipped") return "Re-Dispatch Shipped";
+    if (status === "out_for_delivery") return "Re-Dispatch Out for Delivery";
+    if (status === "delivered") return "Re-Dispatch Delivered";
+  }
+  if (status === "failed") return "Returned to Hub";
+  if (status === "replacement_dispatched") return "Replacement Dispatched";
+  return status.replaceAll("_", " ");
+};
 
-const getStatusTone = (status: string) => {
+const getStatusTone = (status: string, isRepl?: boolean) => {
+  if (isRepl) {
+    if (status === "confirmed" || status === "accepted") {
+      return { bg: "#f0f9ff", text: "#0284c7", border: "1px solid #7dd3fc" };
+    }
+    if (status === "shipped" || status === "out_for_delivery") {
+      return { bg: "#e0f2fe", text: "#0369a1", border: "1px solid #38bdf8" };
+    }
+    if (status === "delivered") {
+      return { bg: "#f0fdf4", text: "#15803d", border: "1px solid #bbf7d0" };
+    }
+  }
   switch (status) {
     case "placed":
       return { bg: "#eff6ff", text: "#1d4ed8", border: "1px solid #bfdbfe" };
@@ -610,6 +658,8 @@ const getStatusTone = (status: string) => {
       return { bg: "#faf5ff", text: "#7c3aed", border: "1px solid #e9d5ff" };
     case "refunded":
       return { bg: "#f0fdf4", text: "#15803d", border: "1px solid #bbf7d0" };
+    case "replacement_dispatched":
+      return { bg: "#f0f9ff", text: "#0284c7", border: "1px solid #bae6fd" };
     case "closed":
       return { bg: "#f1f5f9", text: "#334155", border: "1px solid #e2e8f0" };
     case "rejected":
@@ -631,17 +681,30 @@ const matchesTab = (order: AdminOrderListItem, tab: TabKey) => {
         order.status === "shipped" ||
         order.status === "out_for_delivery" ||
         order.status === "rescheduled" ||
-        order.status === "failed"
+        order.status === "failed" ||
+        order.status === "replacement_dispatched"
       );
     case "delivered":
       return order.status === "delivered" || order.status === "returned";
     case "cancelled":
-      return order.status === "cancelled" || order.status === "partially_cancelled";
+      return order.status === "cancelled" || order.status === "partially_cancelled" || order.status === "refunded";
     default:
       return false;
   }
 };
-
+const ADMIN_CANCEL_PRESETS = [
+  "Parcel Returned to Hub - Customer unreachable / no response after multiple attempts",
+  "Parcel Returned to Hub - Customer refused delivery at doorstep",
+  "Parcel Returned to Hub - Incorrect / untraceable address",
+  "Parcel Returned to Hub - Customer requested order cancellation",
+  "No response from customer after multiple delivery attempts",
+  "Customer unreachable / phone switched off",
+  "Customer refused delivery at doorstep",
+  "Incorrect or untraceable delivery address",
+  "Customer requested order cancellation",
+  "Item lost or damaged during transit",
+  "Other admin cancellation reason",
+];
 
 type DeliveryAgentItem = {
   id: string;
@@ -653,6 +716,9 @@ type DeliveryAgentItem = {
 
 type DeliverySettingsSummary = {
   delivery_mode: string;
+  enable_fleet?: boolean;
+  enable_shiprocket?: boolean;
+  enable_manual?: boolean;
   shiprocket_connected: boolean;
   shiprocket_enabled?: boolean;
   allow_own_delivery_agents?: boolean;
@@ -664,37 +730,103 @@ type DeliverySettingsSummary = {
 
 const matchesReturnTab = (item: AdminReturnListItem, tab: ReturnTabKey) => item.status === tab;
 
+const getCachedOrders = (id?: string): AdminOrderListItem[] => {
+  if (!id || typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`wc_admin_orders_${id}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
 
-const AdminOrders: React.FC = () => {
-  const { siteId } = useParams<{ siteId: string }>();
-  const [mode, setMode] = useState<AdminMode>("orders");
+const getCachedReturns = (id?: string): AdminReturnListItem[] => {
+  if (!id || typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`wc_admin_returns_${id}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
 
+type AdminOrdersProps = {
+  siteId?: string;
+  initialOrders?: AdminOrderListItem[];
+  initialReturns?: AdminReturnListItem[];
+};
 
-  const [orders, setOrders] = useState<AdminOrderListItem[]>([]);
+const AdminOrders: React.FC<AdminOrdersProps> = ({
+  siteId: propSiteId,
+  initialOrders = [],
+  initialReturns = [],
+}) => {
+  const { hasPermission, isOwner } = useAdminAuth();
+  const canViewOrders = isOwner || hasPermission("orders:view");
+  const canUpdateOrders = isOwner || hasPermission("orders:update");
+  const canCancelOrders = isOwner || hasPermission("orders:cancel");
+  const canRefundOrders = isOwner || hasPermission("orders:refund");
+
+  const params = useParams<{ siteId?: string; id?: string }>();
+  const siteId = propSiteId || params.siteId || params.id || "";
+  const [searchParams] = useSearchParams();
+  const [mode, setMode] = useState<"orders" | "returns">("orders");
+  const [activeTab, setActiveTab] = useState<TabKey>("yet_to_deliver");
+  const [orders, setOrders] = useState<AdminOrderListItem[]>(initialOrders);
   const [detailsMap, setDetailsMap] = useState<Record<string, AdminOrderDetail>>({});
-  const [shipmentDrafts, setShipmentDrafts] = useState<Record<string, ShipmentDraft>>({});
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TabKey>("new");
-
-  // Delivery integration state
-  const [deliveryAgents, setDeliveryAgents] = useState<DeliveryAgentItem[]>([]);
-  const [deliverySettings, setDeliverySettings] = useState<DeliverySettingsSummary | null>(null);
   const [selectedAgentMap, setSelectedAgentMap] = useState<Record<string, string>>({});
+  const [packageWeightMap, setPackageWeightMap] = useState<Record<string, number>>({});
   const [selectedDispatchModeMap, setSelectedDispatchModeMap] = useState<Record<string, "own_agent" | "shiprocket" | "manual">>({});
-  const [copiedLinkMap, setCopiedLinkMap] = useState<Record<string, boolean>>({});
+  const [editingCourierOrderIdMap, setEditingCourierOrderIdMap] = useState<Record<string, boolean>>({});
   const [reassigningOrderIdMap, setReassigningOrderIdMap] = useState<Record<string, boolean>>({});
   const [reassignAgentIdMap, setReassignAgentIdMap] = useState<Record<string, string>>({});
-  const [packageWeightMap, setPackageWeightMap] = useState<Record<string, number>>({});
+
+  const [deliveryAgents, setDeliveryAgents] = useState<DeliveryAgentItem[]>([]);
+  const [deliverySettings, setDeliverySettings] = useState<DeliverySettingsSummary | null>(null);
+
+  const [shipmentDrafts, setShipmentDrafts] = useState<Record<string, ShipmentDraft>>({});
+
+  const [adminCancelOrder, setAdminCancelOrder] = useState<AdminOrderListItem | null>(null);
+  const [adminCancelReason, setAdminCancelReason] = useState<string>(ADMIN_CANCEL_PRESETS[0]);
+  const [adminCancelCustomNote, setAdminCancelCustomNote] = useState<string>("");
+  const [copiedLinkMap, setCopiedLinkMap] = useState<Record<string, boolean>>({});
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+
+  const showToast = (message: string, type: "success" | "error" | "info" = "info") => {
+    setToast({ message, type });
+  };
+
+  const getOrderDefaultWeight = (orderItem?: AdminOrderListItem | AdminOrderDetail | null): number => {
+    if (!orderItem) return deliverySettings?.default_weight_grams || 500;
+    if (typeof orderItem.total_weight_grams === "number" && orderItem.total_weight_grams > 0) {
+      return orderItem.total_weight_grams;
+    }
+    if (Array.isArray(orderItem.items) && orderItem.items.length > 0) {
+      const sum = orderItem.items.reduce(
+        (acc, it) =>
+          acc +
+          ((it.weight_grams && it.weight_grams > 0
+            ? it.weight_grams
+            : deliverySettings?.default_weight_grams || 500) *
+            (it.quantity || 1)),
+        0
+      );
+      if (sum > 0) return sum;
+    }
+    return deliverySettings?.default_weight_grams || 500;
+  };
 
   // Return Reverse Logistics state
   const [selectedReturnAgentMap, setSelectedReturnAgentMap] = useState<Record<string, string>>({});
   const [selectedReturnDispatchModeMap, setSelectedReturnDispatchModeMap] = useState<Record<string, "own_agent" | "shiprocket" | "manual">>({});
   const [returnPackageWeightMap, setReturnPackageWeightMap] = useState<Record<string, number>>({});
   const [returnManualCourierMap, setReturnManualCourierMap] = useState<Record<string, { courierName: string; trackingNumber: string; notes: string }>>({});
+  const [editingReturnCourierMap, setEditingReturnCourierMap] = useState<Record<string, boolean>>({});
   const [reassigningReturnIdMap, setReassigningReturnIdMap] = useState<Record<string, boolean>>({});
   const [reassignReturnAgentIdMap, setReassignReturnAgentIdMap] = useState<Record<string, string>>({});
 
-  const [adminReturns, setAdminReturns] = useState<AdminReturnListItem[]>([]);
+  const [adminReturns, setAdminReturns] = useState<AdminReturnListItem[]>(initialReturns);
   const [returnDetailsMap, setReturnDetailsMap] = useState<Record<string, AdminReturnDetail>>({});
   const [expandedReturnId, setExpandedReturnId] = useState<string | null>(null);
   const [activeReturnTab, setActiveReturnTab] = useState<ReturnTabKey>("requested");
@@ -715,12 +847,17 @@ const AdminOrders: React.FC = () => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [serverTotalOrders, setServerTotalOrders] = useState<number>(initialOrders.length);
+  const [serverTotalPages, setServerTotalPages] = useState<number>(1);
+  const [serverTabCounts, setServerTabCounts] = useState<Record<string, number>>({});
 
+  const [serverTotalReturns, setServerTotalReturns] = useState<number>(initialReturns.length);
+  const [serverTotalReturnPages, setServerTotalReturnPages] = useState<number>(1);
+  const [serverReturnTabCounts, setServerReturnTabCounts] = useState<Record<string, number>>({});
 
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(initialOrders.length === 0);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string>("");
-
 
   const hydrateShipmentDraft = (orderId: string, detail: AdminOrderDetail) => {
     setShipmentDrafts((prev) => ({
@@ -732,7 +869,6 @@ const AdminOrders: React.FC = () => {
       },
     }));
   };
-
 
   const hydrateReturnDrafts = (returnId: string, detail: AdminReturnDetail) => {
     setReviewDrafts((prev) => ({
@@ -748,7 +884,6 @@ const AdminOrders: React.FC = () => {
         },
     }));
 
-
     setReceiveDrafts((prev) => ({
       ...prev,
       [returnId]:
@@ -759,7 +894,6 @@ const AdminOrders: React.FC = () => {
           ),
         },
     }));
-
 
     setInspectDrafts((prev) => ({
       ...prev,
@@ -778,7 +912,6 @@ const AdminOrders: React.FC = () => {
         },
     }));
 
-
     setRefundDrafts((prev) => ({
       ...prev,
       [returnId]:
@@ -789,22 +922,130 @@ const AdminOrders: React.FC = () => {
           adminNote: detail.admin_note || "",
         },
     }));
+
+    if (detail.pickup_details) {
+      setReturnManualCourierMap((prev) => ({
+        ...prev,
+        [returnId]: {
+          courierName: detail.pickup_details?.courier_name || "",
+          trackingNumber: detail.pickup_details?.tracking_number || "",
+          notes: detail.pickup_details?.pickup_notes || "",
+        },
+      }));
+    }
   };
 
+  const [selectedExtraChargesByReturn, setSelectedExtraChargesByReturn] = useState<Record<string, Record<string, boolean>>>({});
 
-  const loadOrdersForSite = async () => {
+  const toggleExtraCharge = (
+    returnId: string,
+    chargeId: string,
+    baseSuggested: number,
+    allAllocations: Array<{ id: string; label: string; allocated_amount: number; refundable: boolean }>
+  ) => {
+    const currentChecked = selectedExtraChargesByReturn[returnId] || {};
+    const willBeChecked = !currentChecked[chargeId];
+    const nextChecked = { ...currentChecked, [chargeId]: willBeChecked };
+    setSelectedExtraChargesByReturn((prev) => ({ ...prev, [returnId]: nextChecked }));
+
+    let addedAmount = 0;
+    const includedLabels: string[] = [];
+    allAllocations.forEach((ch) => {
+      if (nextChecked[ch.id]) {
+        addedAmount += Number(ch.allocated_amount || 0);
+        includedLabels.push(ch.label);
+      }
+    });
+
+    const newTotal = Number((baseSuggested + addedAmount).toFixed(2));
+    setRefundDraftValue(returnId, (draft) => ({
+      ...draft,
+      finalRefundAmount: String(newTotal),
+      refundOverrideReason:
+        includedLabels.length > 0
+          ? `Exception: Refunded non-refundable charge(s) (${includedLabels.join(", ")}) upon admin review.`
+          : "",
+    }));
+  };
+
+  const loadOrdersForSite = async (
+    page = currentPage,
+    size = pageSize,
+    tab = activeTab,
+    search = searchQuery,
+    payment = paymentFilter,
+    date = dateFilter,
+    fromD = customFromDate,
+    toD = customToDate
+  ) => {
     if (!siteId) return;
-    const orderList = await fetchJson(`${API_BASE}/orders/admin/${siteId}`);
-    setOrders(Array.isArray(orderList) ? orderList : []);
+    try {
+      const qParams = new URLSearchParams();
+      qParams.set("page", String(page));
+      qParams.set("page_size", String(size));
+      if (tab) qParams.set("tab", tab);
+      if (search.trim()) qParams.set("search", search.trim());
+      if (payment !== "all") qParams.set("payment_method", payment);
+      if (date !== "all") qParams.set("date_filter", date);
+      if (fromD) qParams.set("from_date", fromD);
+      if (toD) qParams.set("to_date", toD);
+
+      const res = await fetchJson(`${API_BASE}/orders/admin/${siteId}?${qParams.toString()}`);
+      if (res && Array.isArray(res.orders)) {
+        setOrders(res.orders);
+        setServerTotalOrders(res.total ?? res.orders.length);
+        setServerTotalPages(res.total_pages ?? 1);
+        if (res.tab_counts) setServerTabCounts(res.tab_counts);
+        if (page === 1) {
+          try {
+            localStorage.setItem(`wc_admin_orders_${siteId}`, JSON.stringify(res.orders));
+          } catch (_) {}
+        }
+      } else if (Array.isArray(res)) {
+        setOrders(res);
+        setServerTotalOrders(res.length);
+        setServerTotalPages(Math.max(1, Math.ceil(res.length / size)));
+      }
+    } catch (err) {
+      console.error("Failed to load orders", err);
+    }
     setDetailsMap({});
     setExpandedOrderId(null);
   };
 
-
-  const loadReturnsForSite = async () => {
+  const loadReturnsForSite = async (
+    page = currentPage,
+    size = pageSize,
+    tab = activeReturnTab,
+    search = searchQuery
+  ) => {
     if (!siteId) return;
-    const returnList = await fetchJson(`${API_BASE}/returns/admin/${siteId}`);
-    setAdminReturns(Array.isArray(returnList) ? returnList : []);
+    try {
+      const qParams = new URLSearchParams();
+      qParams.set("page", String(page));
+      qParams.set("page_size", String(size));
+      if (tab) qParams.set("status", tab);
+      if (search.trim()) qParams.set("search", search.trim());
+
+      const res = await fetchJson(`${API_BASE}/returns/admin/${siteId}?${qParams.toString()}`);
+      if (res && Array.isArray(res.returns)) {
+        setAdminReturns(res.returns);
+        setServerTotalReturns(res.total ?? res.returns.length);
+        setServerTotalReturnPages(res.total_pages ?? 1);
+        if (res.tab_counts) setServerReturnTabCounts(res.tab_counts);
+        if (page === 1) {
+          try {
+            localStorage.setItem(`wc_admin_returns_${siteId}`, JSON.stringify(res.returns));
+          } catch (_) {}
+        }
+      } else if (Array.isArray(res)) {
+        setAdminReturns(res);
+        setServerTotalReturns(res.length);
+        setServerTotalReturnPages(Math.max(1, Math.ceil(res.length / size)));
+      }
+    } catch (err) {
+      console.error("Failed to load returns", err);
+    }
     setReturnDetailsMap({});
     setExpandedReturnId(null);
   };
@@ -829,14 +1070,28 @@ const AdminOrders: React.FC = () => {
     }
   };
 
-  const handleDispatchOrder = async (orderId: string, customMode?: "own_agent" | "shiprocket" | "manual") => {
-    if (!siteId) return;
+  const handleDispatchOrder = async (
+    orderId: string,
+    customMode?: "own_agent" | "shiprocket" | "manual",
+    overrideWeight?: number
+  ) => {
+    if (!siteId || !canUpdateOrders) return;
     setActionLoadingId(orderId);
     try {
-      const storeDefaultMode = (deliverySettings?.delivery_mode as any) || "own_agent";
-      const chosenMode = customMode || selectedDispatchModeMap[orderId] || (storeDefaultMode === "hybrid" ? "own_agent" : storeDefaultMode);
+      const isFleet = deliverySettings?.enable_fleet !== undefined ? Boolean(deliverySettings.enable_fleet) : (deliverySettings?.delivery_mode === "own_agent" || deliverySettings?.delivery_mode === "hybrid");
+      const isSr = deliverySettings?.enable_shiprocket !== undefined ? Boolean(deliverySettings.enable_shiprocket) : (deliverySettings?.delivery_mode === "shiprocket" || deliverySettings?.delivery_mode === "hybrid");
+      const fallbackMode = isFleet ? "own_agent" : (isSr ? "shiprocket" : "manual");
+      const chosenMode = customMode || selectedDispatchModeMap[orderId] || fallbackMode;
       const agentId = selectedAgentMap[orderId] || "";
-      const customWeight = packageWeightMap[orderId] || deliverySettings?.default_weight_grams || 500;
+
+      const orderObj = orders.find((o) => o.id === orderId) || detailsMap[orderId];
+      const defaultWeight = orderObj ? getOrderDefaultWeight(orderObj) : (deliverySettings?.default_weight_grams || 500);
+      const customWeight = overrideWeight !== undefined
+        ? overrideWeight
+        : packageWeightMap[orderId] !== undefined
+        ? packageWeightMap[orderId]
+        : defaultWeight;
+
       const body: Record<string, any> = {
         mode: chosenMode,
         weight_grams: customWeight,
@@ -854,23 +1109,25 @@ const AdminOrders: React.FC = () => {
         const errJson = await res.json().catch(() => ({ detail: "Dispatch failed" }));
         throw new Error(errJson.detail || "Dispatch failed");
       }
+      const resData = await res.json().catch(() => ({}));
+      showToast(resData.message || "Order dispatched successfully!", "success");
       await loadOrdersForSite();
       if (expandedOrderId === orderId) {
         await refreshOrderDetail(orderId);
       }
       await loadDeliveryMeta();
     } catch (e: any) {
-      alert(e.message || "Failed to dispatch order");
+      showToast(e.message || "Failed to dispatch order", "error");
     } finally {
       setActionLoadingId(null);
     }
   };
 
   const handleReassignRider = async (orderId: string) => {
-    if (!siteId) return;
+    if (!siteId || !canUpdateOrders) return;
     const newAgentId = reassignAgentIdMap[orderId] || "";
     if (!newAgentId) {
-      alert("Please select a new delivery agent to reassign this order.");
+      showToast("Please select a new delivery agent to reassign this order.", "error");
       return;
     }
     setActionLoadingId(orderId);
@@ -889,6 +1146,7 @@ const AdminOrders: React.FC = () => {
         const errJson = await res.json().catch(() => ({ detail: "Reassign failed" }));
         throw new Error(errJson.detail || "Reassign failed");
       }
+      showToast("Delivery rider reassigned successfully!", "success");
       setReassigningOrderIdMap((p) => ({ ...p, [orderId]: false }));
       await loadOrdersForSite();
       if (expandedOrderId === orderId) {
@@ -896,7 +1154,7 @@ const AdminOrders: React.FC = () => {
       }
       await loadDeliveryMeta();
     } catch (e: any) {
-      alert(e.message || "Failed to reassign delivery agent");
+      showToast(e.message || "Failed to reassign delivery agent", "error");
     } finally {
       setActionLoadingId(null);
     }
@@ -906,17 +1164,20 @@ const AdminOrders: React.FC = () => {
     if (!link) return;
     navigator.clipboard.writeText(link);
     setCopiedLinkMap((prev) => ({ ...prev, [orderId]: true }));
+    showToast("Rider tracking link copied to clipboard!", "success");
     setTimeout(() => {
       setCopiedLinkMap((prev) => ({ ...prev, [orderId]: false }));
     }, 2500);
   };
 
   const handleDispatchReturnPickup = async (returnId: string, customMode?: "own_agent" | "shiprocket" | "manual") => {
-    if (!siteId) return;
+    if (!siteId || !canUpdateOrders) return;
     setActionLoadingId(returnId);
     try {
-      const storeDefaultMode = (deliverySettings?.delivery_mode as any) || "own_agent";
-      const chosenMode = customMode || selectedReturnDispatchModeMap[returnId] || (storeDefaultMode === "hybrid" ? "own_agent" : storeDefaultMode);
+      const isFleet = deliverySettings?.enable_fleet !== undefined ? Boolean(deliverySettings.enable_fleet) : (deliverySettings?.delivery_mode === "own_agent" || deliverySettings?.delivery_mode === "hybrid");
+      const isSr = deliverySettings?.enable_shiprocket !== undefined ? Boolean(deliverySettings.enable_shiprocket) : (deliverySettings?.delivery_mode === "shiprocket" || deliverySettings?.delivery_mode === "hybrid");
+      const fallbackMode = isFleet ? "own_agent" : (isSr ? "shiprocket" : "manual");
+      const chosenMode = customMode || selectedReturnDispatchModeMap[returnId] || fallbackMode;
       const agentId = selectedReturnAgentMap[returnId] || "";
       const customWeight = returnPackageWeightMap[returnId] || deliverySettings?.default_weight_grams || 500;
       const manualData = returnManualCourierMap[returnId] || { courierName: "", trackingNumber: "", notes: "" };
@@ -932,7 +1193,7 @@ const AdminOrders: React.FC = () => {
           if (availableAgent) {
             body.agent_id = availableAgent.id;
           } else {
-            alert("Please select an active delivery rider to assign this return pickup.");
+            showToast("Please select an active delivery rider to assign this return pickup.", "error");
             setActionLoadingId(null);
             return;
           }
@@ -963,20 +1224,22 @@ const AdminOrders: React.FC = () => {
       if (data.return_request) {
         setReturnDetailsMap((prev) => ({ ...prev, [returnId]: data.return_request }));
       }
+      showToast(data.message || "Return pickup dispatched successfully!", "success");
+      setEditingReturnCourierMap((p) => ({ ...p, [returnId]: false }));
       await loadReturnsForSite();
       await loadDeliveryMeta();
     } catch (err: any) {
-      alert(err?.message || "Failed to dispatch return pickup");
+      showToast(err?.message || "Failed to dispatch return pickup", "error");
     } finally {
       setActionLoadingId(null);
     }
   };
 
   const handleReassignReturnRider = async (returnId: string) => {
-    if (!siteId) return;
+    if (!siteId || !canUpdateOrders) return;
     const newAgentId = reassignReturnAgentIdMap[returnId] || "";
     if (!newAgentId) {
-      alert("Please select a new rider to reassign this return pickup.");
+      showToast("Please select a new rider to reassign this return pickup.", "error");
       return;
     }
     setActionLoadingId(returnId);
@@ -998,34 +1261,85 @@ const AdminOrders: React.FC = () => {
       if (data.return_request) {
         setReturnDetailsMap((prev) => ({ ...prev, [returnId]: data.return_request }));
       }
+      showToast("Return rider reassigned successfully!", "success");
       setReassigningReturnIdMap((p) => ({ ...p, [returnId]: false }));
       await loadReturnsForSite();
       await loadDeliveryMeta();
     } catch (err: any) {
-      alert(err?.message || "Failed to reassign rider");
+      showToast(err?.message || "Failed to reassign rider", "error");
     } finally {
       setActionLoadingId(null);
     }
   };
 
+  const handleSwitchReturnToManual = async (returnId: string) => {
+    if (!siteId || !canUpdateOrders) return;
+    const draft = returnManualCourierMap[returnId] || { courierName: "", trackingNumber: "", notes: "" };
+    setActionLoadingId(returnId);
+    try {
+      const res = await fetch(`${API_BASE}/returns/admin/${siteId}/${returnId}/dispatch-pickup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          mode: "manual",
+          courier_name: draft.courierName || "Manual Courier / Self Ship",
+          tracking_number: draft.trackingNumber || "",
+          pickup_notes: draft.notes || "",
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to switch return to manual courier");
+      }
+      const data = await res.json();
+      if (data.return_request) {
+        setReturnDetailsMap((prev) => ({ ...prev, [returnId]: data.return_request }));
+      }
+      showToast("Switched return to manual courier successfully!", "success");
+      setReassigningReturnIdMap((p) => ({ ...p, [returnId]: false }));
+      await loadReturnsForSite();
+      await loadDeliveryMeta();
+    } catch (err: any) {
+      showToast(err?.message || "Failed to switch to manual return", "error");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
 
   useEffect(() => {
-    if (!siteId) return;
-
+    if (!siteId) {
+      setLoading(false);
+      return;
+    }
 
     const loadByMode = async () => {
-      setLoading(true);
       setError("");
+      setLoading(true);
       try {
         if (mode === "orders") {
-          await loadOrdersForSite();
+          await loadOrdersForSite(
+            currentPage,
+            pageSize,
+            activeTab,
+            searchQuery,
+            paymentFilter,
+            dateFilter,
+            customFromDate,
+            customToDate
+          );
           try {
             await loadDeliveryMeta();
           } catch (metaErr) {
             console.warn("Delivery metadata load failed non-critically:", metaErr);
           }
         } else {
-          await loadReturnsForSite();
+          await loadReturnsForSite(
+            currentPage,
+            pageSize,
+            activeReturnTab,
+            searchQuery
+          );
         }
       } catch (err: any) {
         setError(err.message || `Failed to load ${mode}`);
@@ -1039,9 +1353,72 @@ const AdminOrders: React.FC = () => {
       }
     };
 
-
     loadByMode();
-  }, [siteId, mode]);
+  }, [
+    siteId,
+    mode,
+    activeTab,
+    activeReturnTab,
+    currentPage,
+    pageSize,
+    searchQuery,
+    paymentFilter,
+    dateFilter,
+    customFromDate,
+    customToDate,
+  ]);
+
+  // Deep-linking support for direct order/return links (e.g. from Earnings/Ledger page)
+  const targetOrderId = searchParams.get("orderId");
+  const targetReturnId = searchParams.get("returnId");
+
+  useEffect(() => {
+    if (targetOrderId && orders.length > 0) {
+      const found = orders.find(
+        (o) => o.id === targetOrderId || o.id.toLowerCase() === targetOrderId.toLowerCase() || o.id.startsWith(targetOrderId)
+      );
+      if (found) {
+        setMode("orders");
+        if (found.status === "placed") setActiveTab("new");
+        else if (found.status === "confirmed" || found.status === "accepted") setActiveTab("yet_to_ship");
+        else if (
+          found.status === "shipped" ||
+          found.status === "out_for_delivery" ||
+          found.status === "rescheduled" ||
+          found.status === "failed" ||
+          found.status === "replacement_dispatched"
+        )
+          setActiveTab("yet_to_deliver");
+        else if (found.status === "delivered" || found.status === "returned") setActiveTab("delivered");
+        else if (found.status === "cancelled" || found.status === "partially_cancelled" || found.status === "refunded") setActiveTab("cancelled");
+
+        setDateFilter("all");
+        setPaymentFilter("all");
+        setFulfillmentFilter("all");
+        setSearchQuery(found.id.slice(0, 8).toUpperCase());
+        setExpandedOrderId(found.id);
+        ensureOrderDetail(found.id);
+      } else {
+        setMode("orders");
+        setDateFilter("all");
+        setSearchQuery(targetOrderId.slice(0, 8).toUpperCase());
+        setExpandedOrderId(targetOrderId);
+        ensureOrderDetail(targetOrderId);
+      }
+    } else if (targetReturnId && adminReturns.length > 0) {
+      const found = adminReturns.find(
+        (r) => r.id === targetReturnId || r.id.toLowerCase() === targetReturnId.toLowerCase() || r.id.startsWith(targetReturnId)
+      );
+      if (found) {
+        setMode("returns");
+        setActiveReturnTab(found.status);
+        setDateFilter("all");
+        setSearchQuery(found.id.slice(0, 8).toUpperCase());
+        setExpandedReturnId(found.id);
+        ensureReturnDetail(found.id);
+      }
+    }
+  }, [targetOrderId, targetReturnId, orders, adminReturns]);
 
 
   const hasActiveFilters =
@@ -1122,6 +1499,9 @@ const AdminOrders: React.FC = () => {
   };
 
   const filteredOrders = useMemo(() => {
+    if (Object.keys(serverTabCounts).length > 0) {
+      return orders.filter((order) => matchesTab(order, activeTab));
+    }
     return orders.filter((order) => {
       // 1. Tab match
       if (!matchesTab(order, activeTab)) return false;
@@ -1187,6 +1567,7 @@ const AdminOrders: React.FC = () => {
       return true;
     });
   }, [
+    serverTabCounts,
     orders,
     activeTab,
     searchQuery,
@@ -1197,13 +1578,17 @@ const AdminOrders: React.FC = () => {
     customToDate,
   ]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
+  const totalPages = Math.max(1, serverTotalPages || Math.ceil(filteredOrders.length / pageSize));
   const paginatedOrders = useMemo(() => {
+    if (Object.keys(serverTabCounts).length > 0) return filteredOrders;
     const start = (currentPage - 1) * pageSize;
     return filteredOrders.slice(start, start + pageSize);
-  }, [filteredOrders, currentPage, pageSize]);
+  }, [serverTabCounts, filteredOrders, currentPage, pageSize]);
 
   const filteredReturns = useMemo(() => {
+    if (Object.keys(serverReturnTabCounts).length > 0) {
+      return adminReturns.filter((item) => matchesReturnTab(item, activeReturnTab));
+    }
     return adminReturns.filter((item) => {
       if (!matchesReturnTab(item, activeReturnTab)) return false;
       if (searchQuery.trim()) {
@@ -1216,16 +1601,26 @@ const AdminOrders: React.FC = () => {
       if (!matchesOrderDateFilter(item.created_at)) return false;
       return true;
     });
-  }, [adminReturns, activeReturnTab, searchQuery, dateFilter, customFromDate, customToDate]);
+  }, [serverReturnTabCounts, adminReturns, activeReturnTab, searchQuery, dateFilter, customFromDate, customToDate]);
 
-  const totalReturnPages = Math.max(1, Math.ceil(filteredReturns.length / pageSize));
+  const totalReturnPages = Math.max(1, serverTotalReturnPages || Math.ceil(filteredReturns.length / pageSize));
   const paginatedReturns = useMemo(() => {
+    if (Object.keys(serverReturnTabCounts).length > 0) return filteredReturns;
     const start = (currentPage - 1) * pageSize;
     return filteredReturns.slice(start, start + pageSize);
-  }, [filteredReturns, currentPage, pageSize]);
+  }, [serverReturnTabCounts, filteredReturns, currentPage, pageSize]);
 
 
   const counts = useMemo(() => {
+    if (Object.keys(serverTabCounts).length > 0) {
+      return {
+        new: serverTabCounts.new ?? 0,
+        yet_to_ship: serverTabCounts.yet_to_ship ?? 0,
+        yet_to_deliver: serverTabCounts.yet_to_deliver ?? 0,
+        delivered: serverTabCounts.delivered ?? 0,
+        cancelled: serverTabCounts.cancelled ?? 0,
+      };
+    }
     const matchesNonTab = (o: AdminOrderListItem) => {
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -1274,10 +1669,21 @@ const AdminOrders: React.FC = () => {
       delivered: orders.filter((o) => matchesTab(o, "delivered") && matchesNonTab(o)).length,
       cancelled: orders.filter((o) => matchesTab(o, "cancelled") && matchesNonTab(o)).length,
     };
-  }, [orders, searchQuery, paymentFilter, fulfillmentFilter, dateFilter, customFromDate, customToDate]);
+  }, [serverTabCounts, orders, searchQuery, paymentFilter, fulfillmentFilter, dateFilter, customFromDate, customToDate]);
 
 
   const returnCounts = useMemo(() => {
+    if (Object.keys(serverReturnTabCounts).length > 0) {
+      return {
+        requested: serverReturnTabCounts.requested ?? 0,
+        approved: serverReturnTabCounts.approved ?? 0,
+        received: serverReturnTabCounts.received ?? 0,
+        inspected: serverReturnTabCounts.inspected ?? 0,
+        refunded: serverReturnTabCounts.refunded ?? 0,
+        closed: serverReturnTabCounts.closed ?? 0,
+        rejected: serverReturnTabCounts.rejected ?? 0,
+      };
+    }
     const matchesNonTabReturn = (item: AdminReturnListItem) => {
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -1299,7 +1705,7 @@ const AdminOrders: React.FC = () => {
       closed: adminReturns.filter((o) => matchesReturnTab(o, "closed") && matchesNonTabReturn(o)).length,
       rejected: adminReturns.filter((o) => matchesReturnTab(o, "rejected") && matchesNonTabReturn(o)).length,
     };
-  }, [adminReturns, searchQuery, dateFilter, customFromDate, customToDate]);
+  }, [serverReturnTabCounts, adminReturns, searchQuery, dateFilter, customFromDate, customToDate]);
 
 
   const refreshOrderDetail = async (orderId: string) => {
@@ -1334,32 +1740,42 @@ const AdminOrders: React.FC = () => {
   const syncOrderAfterAction = async (orderId: string) => {
     if (!siteId) return;
 
-
-    const [orderList, detail] = await Promise.all([
-      fetchJson(`${API_BASE}/orders/admin/${siteId}`),
-      fetchJson(`${API_BASE}/orders/admin/${siteId}/${orderId}`),
-    ]);
-
-
-    setOrders(Array.isArray(orderList) ? orderList : []);
-    setDetailsMap((prev) => ({ ...prev, [orderId]: detail }));
-    hydrateShipmentDraft(orderId, detail);
+    await loadOrdersForSite(
+      currentPage,
+      pageSize,
+      activeTab,
+      searchQuery,
+      paymentFilter,
+      dateFilter,
+      customFromDate,
+      customToDate
+    );
+    try {
+      const detail = await fetchJson(`${API_BASE}/orders/admin/${siteId}/${orderId}`);
+      setDetailsMap((prev) => ({ ...prev, [orderId]: detail }));
+      hydrateShipmentDraft(orderId, detail);
+    } catch {
+      // ignore
+    }
   };
 
 
   const syncReturnAfterAction = async (returnId: string) => {
     if (!siteId) return;
 
-
-    const [returnList, detail] = await Promise.all([
-      fetchJson(`${API_BASE}/returns/admin/${siteId}`),
-      fetchJson(`${API_BASE}/returns/admin/${siteId}/${returnId}`),
-    ]);
-
-
-    setAdminReturns(Array.isArray(returnList) ? returnList : []);
-    setReturnDetailsMap((prev) => ({ ...prev, [returnId]: detail }));
-    hydrateReturnDrafts(returnId, detail);
+    await loadReturnsForSite(
+      currentPage,
+      pageSize,
+      activeReturnTab,
+      searchQuery
+    );
+    try {
+      const detail = await fetchJson(`${API_BASE}/returns/admin/${siteId}/${returnId}`);
+      setReturnDetailsMap((prev) => ({ ...prev, [returnId]: detail }));
+      hydrateReturnDrafts(returnId, detail);
+    } catch {
+      // ignore
+    }
   };
 
 
@@ -1374,6 +1790,17 @@ const AdminOrders: React.FC = () => {
     } = {}
   ) => {
     if (!siteId) return;
+    if (status === "cancelled") {
+      if (!canCancelOrders && !canUpdateOrders) {
+        showToast("You do not have permission to cancel orders.", "error");
+        return;
+      }
+    } else {
+      if (!canUpdateOrders) {
+        showToast("You do not have permission to update order status.", "error");
+        return;
+      }
+    }
     setActionLoadingId(orderId);
     try {
       await fetchJson(`${API_BASE}/orders/admin/${siteId}/${orderId}/status`, {
@@ -1388,7 +1815,7 @@ const AdminOrders: React.FC = () => {
       });
       await syncOrderAfterAction(orderId);
     } catch (err: any) {
-      window.alert(err.message || "Failed to update order");
+      showToast(err.message || "Failed to update order", "error");
     } finally {
       setActionLoadingId(null);
     }
@@ -1402,7 +1829,7 @@ const AdminOrders: React.FC = () => {
       try {
         await ensureOrderDetail(orderId);
       } catch (err: any) {
-        window.alert(err.message || "Failed to load order detail");
+        showToast(err.message || "Failed to load order detail", "error");
       }
     }
   };
@@ -1415,7 +1842,7 @@ const AdminOrders: React.FC = () => {
       try {
         await ensureReturnDetail(returnId);
       } catch (err: any) {
-        window.alert(err.message || "Failed to load return detail");
+        showToast(err.message || "Failed to load return detail", "error");
       }
     }
   };
@@ -1568,10 +1995,24 @@ const AdminOrders: React.FC = () => {
   };
 
 
-  const handleCancel = async (orderId: string) => {
-    const cancelReason = window.prompt("Enter cancel reason") || "";
+  const handleCancel = async (orderId: string, reason?: string) => {
+    if (!canCancelOrders) {
+      showToast("You do not have permission to cancel orders.", "error");
+      return;
+    }
+    let cancelReason = reason;
+    if (cancelReason === undefined) {
+      const order = orders.find((o) => o.id === orderId);
+      if (order) {
+        setAdminCancelOrder(order);
+        setAdminCancelReason(ADMIN_CANCEL_PRESETS[0]);
+        setAdminCancelCustomNote("");
+        return;
+      }
+      cancelReason = window.prompt("Enter cancel reason") || "";
+    }
     await updateStatus(orderId, "cancelled", {
-      cancel_reason: cancelReason || null,
+      cancel_reason: cancelReason || "Cancelled by admin",
     });
   };
 
@@ -1579,29 +2020,33 @@ const AdminOrders: React.FC = () => {
   const handleSaveShipment = async (orderId: string) => {
     const order = orders.find((item) => item.id === orderId);
     if (!order) return;
-
-
-    if (order.status === "confirmed") {
-      await handleMarkShipped(orderId);
-      return;
-    }
-
+    const draft = getShipmentDraft(order);
 
     if (order.status === "shipped") {
       await handleOutForDelivery(orderId);
       return;
     }
 
-
-    window.alert("Shipment details are saved when moving the order to shipped/out for delivery.");
+    await updateStatus(orderId, "shipped", {
+      delivery_partner_name: draft.deliveryPartnerName || null,
+      delivery_partner_phone: draft.deliveryPartnerPhone || null,
+      estimated_delivery_at: toIsoOrNull(draft.estimatedDeliveryAt),
+    });
   };
 
 
   const handleReviewReturn = async (returnId: string) => {
-    if (!siteId) return;
+    if (!siteId || !canUpdateOrders) return;
     const draft = reviewDrafts[returnId];
     if (!draft) return;
 
+    if (draft.action === "approve") {
+      const totalAppr = Object.values(draft.approvedQuantities).reduce((acc, q) => acc + Number(q || 0), 0);
+      if (totalAppr <= 0) {
+        showToast("Cannot approve return with 0 items. Please specify an approved quantity of at least 1, or select 'Reject Return' to decline the request.", "error");
+        return;
+      }
+    }
 
     setActionLoadingId(returnId);
     try {
@@ -1620,9 +2065,10 @@ const AdminOrders: React.FC = () => {
               : [],
         }),
       });
+      showToast("Return request reviewed successfully!", "success");
       await syncReturnAfterAction(returnId);
     } catch (err: any) {
-      window.alert(err.message || "Failed to review return request");
+      showToast(err.message || "Failed to review return request", "error");
     } finally {
       setActionLoadingId(null);
     }
@@ -1630,7 +2076,7 @@ const AdminOrders: React.FC = () => {
 
 
   const handleReceiveReturn = async (returnId: string) => {
-    if (!siteId) return;
+    if (!siteId || !canUpdateOrders) return;
     const draft = receiveDrafts[returnId];
     if (!draft) return;
 
@@ -1649,9 +2095,10 @@ const AdminOrders: React.FC = () => {
           ),
         }),
       });
+      showToast("Return marked as received!", "success");
       await syncReturnAfterAction(returnId);
     } catch (err: any) {
-      window.alert(err.message || "Failed to mark return as received");
+      showToast(err.message || "Failed to mark return as received", "error");
     } finally {
       setActionLoadingId(null);
     }
@@ -1659,7 +2106,7 @@ const AdminOrders: React.FC = () => {
 
 
   const handleInspectReturn = async (returnId: string) => {
-    if (!siteId) return;
+    if (!siteId || !canUpdateOrders) return;
     const detail = returnDetailsMap[returnId];
     const draft = inspectDrafts[returnId];
     const itemsList = detail?.items || [];
@@ -1685,9 +2132,10 @@ const AdminOrders: React.FC = () => {
           items: itemsPayload,
         }),
       });
+      showToast("Return inspection recorded successfully!", "success");
       await syncReturnAfterAction(returnId);
     } catch (err: any) {
-      window.alert(err.message || "Failed to inspect return");
+      showToast(err.message || "Failed to inspect return", "error");
     } finally {
       setActionLoadingId(null);
     }
@@ -1695,7 +2143,7 @@ const AdminOrders: React.FC = () => {
 
 
   const handleRefundReturn = async (returnId: string) => {
-    if (!siteId) return;
+    if (!siteId || !canRefundOrders) return;
     const draft = refundDrafts[returnId];
     if (!draft) return;
 
@@ -1712,9 +2160,10 @@ const AdminOrders: React.FC = () => {
           admin_note: draft.adminNote || null,
         }),
       });
+      showToast("Refund processed successfully!", "success");
       await syncReturnAfterAction(returnId);
     } catch (err: any) {
-      window.alert(err.message || "Failed to process refund");
+      showToast(err.message || "Failed to process refund", "error");
     } finally {
       setActionLoadingId(null);
     }
@@ -1722,7 +2171,7 @@ const AdminOrders: React.FC = () => {
 
 
   const handleCloseReturn = async (returnId: string) => {
-    if (!siteId) return;
+    if (!siteId || !canUpdateOrders) return;
 
 
     setActionLoadingId(returnId);
@@ -1730,9 +2179,10 @@ const AdminOrders: React.FC = () => {
       await fetchJson(`${API_BASE}/returns/admin/${siteId}/${returnId}/close`, {
         method: "PATCH",
       });
+      showToast("Return closed successfully!", "success");
       await syncReturnAfterAction(returnId);
     } catch (err: any) {
-      window.alert(err.message || "Failed to close return");
+      showToast(err.message || "Failed to close return", "error");
     } finally {
       setActionLoadingId(null);
     }
@@ -1740,7 +2190,7 @@ const AdminOrders: React.FC = () => {
 
 
   const generateBillPdf = (order: AdminOrderDetail | AdminOrderListItem) => {
-    window.alert(`Generate invoice for ${order.id}`);
+    showToast(`Generating invoice for ${order.id}...`, "info");
   };
 
 
@@ -1762,37 +2212,95 @@ const AdminOrders: React.FC = () => {
     if (activeTab === "new") {
       return (
         <div style={{ display: "flex", gap: "6px" }}>
+          {canUpdateOrders && (
+            <button
+              disabled={actionLoadingId === order.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleConfirmOrder(order.id);
+              }}
+              style={{
+                ...actionButtonStyle,
+                padding: "5px 10px",
+                background: "#eff6ff",
+                color: "#1d4ed8",
+                border: "1px solid #bfdbfe",
+              }}
+            >
+              Accept
+            </button>
+          )}
+          {canCancelOrders && (
+            <button
+              disabled={actionLoadingId === order.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCancel(order.id);
+              }}
+              style={{
+                ...actionButtonStyle,
+                padding: "5px 10px",
+                background: "#fef2f2",
+                color: "#b91c1c",
+                border: "1px solid #fecaca",
+              }}
+            >
+              Reject
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    const isReturnedToHub = order.status === "failed" || order.shipment?.status === "returned_to_warehouse" || order.shipment?.status === "failed";
+    const canCancel = order.status !== "delivered" && order.status !== "cancelled" && order.status !== "returned";
+
+    if (isReturnedToHub && canCancel) {
+      if (!canCancelOrders) return null;
+      return (
+        <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
           <button
             disabled={actionLoadingId === order.id}
             onClick={(e) => {
               e.stopPropagation();
-              handleConfirmOrder(order.id);
-            }}
-            style={{
-              ...actionButtonStyle,
-              padding: "5px 10px",
-              background: "#eff6ff",
-              color: "#1d4ed8",
-              border: "1px solid #bfdbfe",
-            }}
-          >
-            Accept
-          </button>
-          <button
-            disabled={actionLoadingId === order.id}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleCancel(order.id);
+              setAdminCancelOrder(order);
+              setAdminCancelReason("Parcel Returned to Hub - Customer unreachable / no response after multiple attempts");
+              setAdminCancelCustomNote(order.shipment?.notes ? cleanShipmentNotes(order.shipment.notes) : "");
             }}
             style={{
               ...actionButtonStyle,
               padding: "5px 10px",
               background: "#fef2f2",
-              color: "#b91c1c",
+              color: "#dc2626",
               border: "1px solid #fecaca",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+            }}
+            title="Cancel this returned order and restock inventory"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="15" y1="9" x2="9" y2="15" />
+              <line x1="9" y1="9" x2="15" y2="15" />
+            </svg>
+            Cancel Order
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              const detail = detailsMap[order.id] || order;
+              generateBillPdf(detail);
+            }}
+            style={{
+              ...actionButtonStyle,
+              padding: "5px 10px",
+              background: "#ffffff",
+              color: "#475569",
+              border: "1px solid #e2e8f0",
             }}
           >
-            Reject
+            Invoice
           </button>
         </div>
       );
@@ -1837,7 +2345,7 @@ const AdminOrders: React.FC = () => {
     if (returnItem.status === "requested") {
       return (
         <button
-          disabled={actionLoadingId === returnItem.id}
+          disabled={actionLoadingId === returnItem.id || !canUpdateOrders}
           onClick={(e) => {
             e.stopPropagation();
             handleReturnExpandToggle(returnItem.id);
@@ -1858,7 +2366,7 @@ const AdminOrders: React.FC = () => {
     if (returnItem.status === "approved") {
       return (
         <button
-          disabled={actionLoadingId === returnItem.id}
+          disabled={actionLoadingId === returnItem.id || !canUpdateOrders}
           onClick={(e) => {
             e.stopPropagation();
             handleReturnExpandToggle(returnItem.id);
@@ -1879,7 +2387,7 @@ const AdminOrders: React.FC = () => {
     if (returnItem.status === "received") {
       return (
         <button
-          disabled={actionLoadingId === returnItem.id}
+          disabled={actionLoadingId === returnItem.id || !canUpdateOrders}
           onClick={(e) => {
             e.stopPropagation();
             handleReturnExpandToggle(returnItem.id);
@@ -1900,7 +2408,7 @@ const AdminOrders: React.FC = () => {
     if (returnItem.status === "inspected") {
       return (
         <button
-          disabled={actionLoadingId === returnItem.id}
+          disabled={actionLoadingId === returnItem.id || !canRefundOrders}
           onClick={(e) => {
             e.stopPropagation();
             handleReturnExpandToggle(returnItem.id);
@@ -1918,7 +2426,7 @@ const AdminOrders: React.FC = () => {
     }
 
 
-    if (returnItem.status === "refunded" || returnItem.status === "rejected") {
+    if (canUpdateOrders && (returnItem.status === "refunded" || returnItem.status === "rejected")) {
       return (
         <button
           disabled={actionLoadingId === returnItem.id}
@@ -1943,8 +2451,18 @@ const AdminOrders: React.FC = () => {
   };
 
 
+  if (!canViewOrders) {
+    return (
+      <AccessDeniedView
+        title="Orders Access Restricted"
+        message="You do not have permission to view or manage store orders. Please contact your workspace administrator to request access."
+      />
+    );
+  }
+
   return (
     <div style={{ color: "#0f172a" }}>
+      {toast && <GlassToast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       {/* Top Header Card (Segmented Mode + Search & Filter Button) */}
       <div
         style={{
@@ -2454,11 +2972,10 @@ const AdminOrders: React.FC = () => {
           <div
             style={{
               display: "flex",
+              flexWrap: "wrap",
               gap: "4px",
-              overflowX: "auto",
               borderBottom: "1px solid #e2e8f0",
               marginBottom: "16px",
-              WebkitOverflowScrolling: "touch",
             }}
           >
             {tabs.map((tab) => {
@@ -2518,9 +3035,8 @@ const AdminOrders: React.FC = () => {
                 {hasActiveFilters ? "No orders match your filter criteria." : "No records in this tab."}
               </div>
             ) : (
-              <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-                <div style={{ minWidth: "760px", display: "flex", flexDirection: "column" }}>
-                  {/* Clean Table Header */}
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {/* Clean Table Header */}
                   <div
                     style={{
                       display: "grid",
@@ -2548,8 +3064,11 @@ const AdminOrders: React.FC = () => {
 
                   {paginatedOrders.map((order) => {
                     const isExpanded = expandedOrderId === order.id;
-                    const tone = getStatusTone(order.status);
                     const detail = getExpandedOrder(order);
+                    const isRepl = isOrderReplacement(order) || isOrderReplacement(detail);
+                    const isReplDelivered = isRepl && (order.status === "delivered" || detail?.status === "delivered");
+                    const isReplActive = isRepl && !isReplDelivered && order.status !== "cancelled" && detail?.status !== "cancelled";
+                    const tone = getStatusTone(order.status, isRepl);
                     const shipmentDraft = getShipmentDraft(order);
                     const items = detail?.items || order.items || [];
                     const shippingAddress = detail?.shipping_address || order.shipping_address;
@@ -2589,6 +3108,7 @@ const AdminOrders: React.FC = () => {
                                 display: "flex",
                                 alignItems: "center",
                                 gap: "7px",
+                                flexWrap: "wrap",
                               }}
                             >
                               <span>{order.customer_name || shippingAddress?.fullName || "Guest Customer"}</span>
@@ -2606,6 +3126,25 @@ const AdminOrders: React.FC = () => {
                               >
                                 #{order.id.slice(0, 8).toUpperCase()}
                               </span>
+                              {isReplActive && (
+                                <span
+                                    style={{
+                                      fontSize: "10.5px",
+                                      fontWeight: 700,
+                                      color: "#0284c7",
+                                      background: "#f0f9ff",
+                                      border: "1px solid #bae6fd",
+                                      padding: "1px 6px",
+                                      borderRadius: "4px",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "3px",
+                                    }}
+                                  >
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                                    <span>Re-Dispatch</span>
+                                  </span>
+                              )}
                             </div>
                             <div
                               style={{
@@ -2617,9 +3156,26 @@ const AdminOrders: React.FC = () => {
                               }}
                             >
                               {shippingAddress?.city ? `${shippingAddress.city} • ` : ""}
-                              {items.length > 0
-                                ? items.map((i) => `${i.product_name} ×${i.quantity}`).slice(0, 2).join(", ")
-                                : `${order.item_count || 1} item`}
+                              {(() => {
+                                if (isReplActive) {
+                                  const replItems = items.filter((i) => i.status === "confirmed" || i.status === "shipped" || i.status === "out_for_delivery");
+                                  const deliveredItems = items.filter((i) => i.status === "delivered");
+                                  if (replItems.length > 0 && deliveredItems.length > 0) {
+                                    return (
+                                      <span>
+                                        <strong style={{ color: "#0369a1" }}>Replacing: </strong>
+                                        {replItems.map((i) => `${i.product_name} ×${i.quantity}`).join(", ")}
+                                        <span style={{ color: "#94a3b8", marginLeft: "5px" }}>
+                                          ({deliveredItems.length} item{deliveredItems.length > 1 ? "s" : ""} delivered earlier)
+                                        </span>
+                                      </span>
+                                    );
+                                  }
+                                }
+                                return items.length > 0
+                                  ? items.map((i) => `${i.product_name} ×${i.quantity}`).slice(0, 2).join(", ")
+                                  : `${order.item_count || 1} item`;
+                              })()}
                             </div>
                           </div>
 
@@ -2720,279 +3276,292 @@ const AdminOrders: React.FC = () => {
                           </div>
                         </div>
 
-
-                        {isExpanded ? (
-                          <div style={{ padding: "16px 18px 20px", background: "#f8fafc" }}>
+                        {isExpanded && (
+                          <div style={{ padding: "16px", borderTop: "1px solid #e2e8f0", background: "#f8fafc" }}>
                             <div
                               style={{
                                 display: "grid",
-                                gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
+                                gridTemplateColumns: "1fr 1fr",
                                 gap: "16px",
-                                alignItems: "start",
                               }}
                             >
-                              {/* Left Column: Customer Details, Delivery Destination & Items */}
-                              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                                {/* Card 1: Customer & Shipping Information */}
-                                <div style={{ ...plainCardStyle, padding: "16px" }}>
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      alignItems: "center",
-                                      marginBottom: "12px",
-                                      paddingBottom: "8px",
-                                      borderBottom: "1px solid #f1f5f9",
-                                    }}
-                                  >
-                                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                                      Customer & Destination
-                                    </span>
-                                    <span
+                                {/* Left Column: Destination, Items Breakdown & Pricing Snapshot */}
+                                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                                  {/* Card 1: Customer Destination & Notes */}
+                                  <div style={{ ...plainCardStyle, padding: "16px" }}>
+                                    <div
                                       style={{
-                                        fontSize: "11px",
-                                        fontWeight: 700,
-                                        padding: "2px 8px",
-                                        borderRadius: "4px",
-                                        background: (detail?.payment_status || order.payment_status) === "paid"
-                                          ? "#f0fdf4"
-                                          : (detail?.payment_status || order.payment_status) === "refunded"
-                                          ? "#faf5ff"
-                                          : "#fffbeb",
-                                        color: (detail?.payment_status || order.payment_status) === "paid"
-                                          ? "#15803d"
-                                          : (detail?.payment_status || order.payment_status) === "refunded"
-                                          ? "#7c3aed"
-                                          : "#b45309",
-                                        border: `1px solid ${(detail?.payment_status || order.payment_status) === "paid" ? "#bbf7d0" : (detail?.payment_status || order.payment_status) === "refunded" ? "#e9d5ff" : "#fde68a"}`,
-                                        textTransform: "capitalize",
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "center",
+                                        marginBottom: "12px",
+                                        paddingBottom: "8px",
+                                        borderBottom: "1px solid #f1f5f9",
                                       }}
                                     >
-                                      Payment: {(detail?.payment_status || order.payment_status) || "Pending"}
-                                    </span>
-                                  </div>
-
-                                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                    <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
-                                      {shippingAddress?.fullName || detail?.customer_name || order.customer_name || "Guest Customer"}
-                                    </div>
-
-                                    <div style={{ fontSize: "13px", color: "#475569", lineHeight: 1.6, background: "#f8fafc", padding: "10px 12px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-                                      <div style={{ fontWeight: 600, color: "#1e293b", marginBottom: "2px" }}>
-                                        Delivery Address:
-                                      </div>
-                                      <div>{shippingAddress?.addressLine1 || "—"}</div>
-                                      <div>
-                                        {[shippingAddress?.city, shippingAddress?.postalCode].filter(Boolean).join(" - ") || "—"}
-                                      </div>
-                                    </div>
-
-                                    <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", fontSize: "13px", color: "#475569", marginTop: "2px" }}>
-                                      {(shippingAddress?.mobileNumber || detail?.customer_phone || order.customer_phone) && (
-                                        <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                                          <PhoneIcon />
-                                          <a
-                                            href={`tel:${shippingAddress?.mobileNumber || detail?.customer_phone || order.customer_phone}`}
-                                            style={{ color: "#2563eb", fontWeight: 600, textDecoration: "none" }}
-                                          >
-                                            {formatPhoneDisplay(shippingAddress?.mobileNumber || detail?.customer_phone || order.customer_phone || "")}
-                                          </a>
-                                        </div>
-                                      )}
-                                      {(shippingAddress?.email || detail?.customer_email || order.customer_email) && (
-                                        <div style={{ color: "#64748b" }}>
-                                          {shippingAddress?.email || detail?.customer_email || order.customer_email}
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    <div style={{ marginTop: "6px", paddingTop: "8px", borderTop: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12.5px" }}>
-                                      <span style={{ color: "#64748b" }}>Payment Method:</span>
-                                      <span style={{ fontWeight: 700, color: "#0f172a", display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                                        <span>{getPaymentMethodIcon(detail?.payment_method || order.payment_method)}</span>
-                                        <span>{formatPaymentMethodName(detail?.payment_method || order.payment_method)}</span>
+                                      <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                        Customer & Destination
+                                      </span>
+                                      <span
+                                        style={{
+                                          fontSize: "11px",
+                                          fontWeight: 700,
+                                          padding: "3px 8px",
+                                          borderRadius: "4px",
+                                          background: (detail?.payment_status || order.payment_status) === "paid" ? "#f0fdf4" : (detail?.payment_status || order.payment_status) === "refunded" ? "#f0fdf4" : (detail?.payment_status || order.payment_status) === "partially_refunded" ? "#eff6ff" : "#fef2f2",
+                                          color: (detail?.payment_status || order.payment_status) === "paid" ? "#15803d" : (detail?.payment_status || order.payment_status) === "refunded" ? "#15803d" : (detail?.payment_status || order.payment_status) === "partially_refunded" ? "#1d4ed8" : "#b91c1c",
+                                          border: `1px solid ${(detail?.payment_status || order.payment_status) === "paid" ? "#bbf7d0" : (detail?.payment_status || order.payment_status) === "refunded" ? "#bbf7d0" : (detail?.payment_status || order.payment_status) === "partially_refunded" ? "#bfdbfe" : "#fecaca"}`,
+                                          textTransform: "capitalize",
+                                        }}
+                                      >
+                                        Payment: {detail?.payment_status || order.payment_status || "Pending"}
                                       </span>
                                     </div>
 
+                                    <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a", marginBottom: "4px" }}>
+                                      {order.customer_name || shippingAddress?.fullName || "Guest Customer"}
+                                    </div>
+                                    <div style={{ fontSize: "12.5px", color: "#475569", lineHeight: "1.5" }}>
+                                      <span style={{ fontWeight: 600, color: "#334155" }}>Delivery Address:</span><br />
+                                      {shippingAddress?.addressLine1 || shippingAddress?.street || "No address line"}<br />
+                                      {shippingAddress?.city ? `${shippingAddress.city} - ${shippingAddress.postalCode || ""}` : ""}
+                                    </div>
+
+                                    {(order.customer_phone || shippingAddress?.mobileNumber) && (
+                                      <div style={{ fontSize: "12.5px", color: "#475569", marginTop: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
+                                        <PhoneIcon />
+                                        <a href={`tel:${order.customer_phone || shippingAddress?.mobileNumber}`} style={{ color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>
+                                          {formatPhoneDisplay(order.customer_phone || shippingAddress?.mobileNumber || "")}
+                                        </a>
+                                      </div>
+                                    )}
+                                    {(order.customer_email || shippingAddress?.email) && (
+                                      <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                                        {order.customer_email || shippingAddress?.email}
+                                      </div>
+                                    )}
+
+                                    <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                      <span style={{ fontSize: "12px", color: "#64748b" }}>Payment Method:</span>
+                                      <span style={{ fontSize: "12.5px", fontWeight: 700, color: "#0f172a" }}>{formatPaymentMethodName(order.payment_method)}</span>
+                                    </div>
+
                                     {(detail?.razorpay_payment_id || order.razorpay_payment_id) && (
-                                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px" }}>
-                                        <span style={{ color: "#64748b" }}>Payment Reference:</span>
-                                        <code style={{ fontSize: "11px", fontWeight: 700, background: "#f8fafc", padding: "2px 6px", borderRadius: "4px", border: "1px solid #e2e8f0", color: "#0f172a" }}>
+                                      <div style={{ marginTop: "4px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                        <span style={{ fontSize: "11px", color: "#64748b" }}>Payment Reference:</span>
+                                        <code style={{ fontSize: "11px", color: "#334155", background: "#f1f5f9", padding: "1px 5px", borderRadius: "3px" }}>
                                           {detail?.razorpay_payment_id || order.razorpay_payment_id}
                                         </code>
                                       </div>
                                     )}
+                                  </div>
 
-                                    {(detail?.delivery_otp || order.delivery_otp) && (
-                                      <div
-                                        style={{
-                                          marginTop: "6px",
-                                          padding: "8px 12px",
-                                          background: "#ecfdf5",
-                                          borderRadius: "6px",
-                                          border: "1px solid #a7f3d0",
-                                          display: "flex",
-                                          alignItems: "center",
-                                          justifyContent: "space-between",
-                                        }}
-                                      >
-                                        <span style={{ fontSize: "12px", fontWeight: 700, color: "#065f46" }}>
-                                          🔒 Delivery OTP:
+                                  {/* Card 2: Order Items & Pricing Breakdown */}
+                                  <div style={{ ...plainCardStyle, padding: "16px" }}>
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "center",
+                                        marginBottom: "12px",
+                                        paddingBottom: "8px",
+                                        borderBottom: "1px solid #f1f5f9",
+                                      }}
+                                    >
+                                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                        <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                          Order Items ({items.length})
                                         </span>
-                                        <code
+                                        {isReplActive && (
+                                          <span style={{ fontSize: "11px", fontWeight: 700, color: "#0284c7", background: "#f0f9ff", border: "1px solid #bae6fd", padding: "1px 6px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                                            <span>Re-Dispatch</span>
+                                          </span>
+                                        )}
+                                      </div>
+                                      <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
+                                        Total: {formatPrice(order.total)}
+                                      </span>
+                                    </div>
+
+                                    {/* Re-Dispatch Alert Notice for Warehouse Packing */}
+                                    {(() => {
+                                      if (isReplActive) {
+                                        const replItems = items.filter((i) => i.status === "confirmed" || i.status === "shipped" || i.status === "out_for_delivery");
+                                        const deliveredItems = items.filter((i) => i.status === "delivered");
+                                        if (replItems.length > 0 && deliveredItems.length > 0) {
+                                          return (
+                                            <div style={{ padding: "10px 12px", borderRadius: "6px", background: "#f0f9ff", border: "1.5px solid #bae6fd", marginBottom: "12px", fontSize: "12px", color: "#0369a1", display: "flex", alignItems: "flex-start", gap: "8px" }}>
+                                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: "2px" }}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                                              <div>
+                                                <strong>Packing Instruction (Partial Re-Dispatch):</strong> Pack only <strong>{replItems.map((i) => `${i.quantity}x ${i.product_name}`).join(", ")}</strong> for this replacement shipment. The other {deliveredItems.length} item(s) were already delivered.
+                                              </div>
+                                            </div>
+                                          );
+                                        }
+                                      }
+                                      return null;
+                                    })()}
+
+                                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                                      {items.map((item) => {
+                                        const isItemBeingReplaced = isReplActive && (item.status === "confirmed" || item.status === "shipped" || item.status === "out_for_delivery");
+                                        const isItemDeliveredEarlier = isReplActive && item.status === "delivered";
+
+                                        return (
+                                          <div
+                                            key={item.id}
+                                            style={{
+                                              display: "flex",
+                                              justifyContent: "space-between",
+                                              alignItems: "flex-start",
+                                              gap: "12px",
+                                              padding: "10px 12px",
+                                              borderRadius: "6px",
+                                              background: isItemBeingReplaced ? "#f0f9ff" : isItemDeliveredEarlier ? "#f8fafc" : "#ffffff",
+                                              border: isItemBeingReplaced ? "1.5px solid #7dd3fc" : "1px solid #e2e8f0",
+                                              transition: "all 0.15s ease",
+                                            }}
+                                          >
+                                            <div style={{ minWidth: 0, flex: 1 }}>
+                                              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                                                <span style={{ fontSize: "13.5px", fontWeight: 700, color: "#0f172a" }}>
+                                                  {item.product_name}
+                                                </span>
+                                                {isItemBeingReplaced && (
+                                                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#0284c7", background: "#e0f2fe", border: "1px solid #7dd3fc", padding: "2px 7px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                                                    <span>Re-Dispatch Item</span>
+                                                  </span>
+                                                )}
+                                                {isItemDeliveredEarlier && (
+                                                  <span style={{ fontSize: "11px", fontWeight: 600, color: "#15803d", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "2px 7px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                                    <span>Delivered Earlier</span>
+                                                  </span>
+                                                )}
+                                              </div>
+                                              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px", flexWrap: "wrap" }}>
+                                                <span style={{ fontSize: "12.5px", fontWeight: 600, color: "#475569" }}>
+                                                  Qty: {item.quantity}
+                                                </span>
+                                                {item.selected_variant_value && (
+                                                  <span
+                                                    style={{
+                                                      fontSize: "11px",
+                                                      fontWeight: 600,
+                                                      color: "#2563eb",
+                                                      background: "#eff6ff",
+                                                      border: "1px solid #bfdbfe",
+                                                      padding: "1px 6px",
+                                                      borderRadius: "4px",
+                                                    }}
+                                                  >
+                                                    {item.selected_variant_value}
+                                                  </span>
+                                                )}
+                                                {!isReplDelivered && !isItemBeingReplaced && !isItemDeliveredEarlier && item.status && item.status !== "delivered" && (
+                                                  <span style={{ fontSize: "11.5px", color: "#94a3b8" }}>
+                                                    • {item.status.replaceAll("_", " ")}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </div>
+                                            <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap" }}>
+                                              {formatPrice(item.line_total)}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Right Column: Fulfillment Dispatch Control & Admin Timeline */}
+                                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                                  {/* Card 1: Delivery & Dispatch Control */}
+                                  <div style={{ ...plainCardStyle, padding: "16px" }}>
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "center",
+                                        marginBottom: "12px",
+                                        paddingBottom: "8px",
+                                        borderBottom: "1px solid #f1f5f9",
+                                      }}
+                                    >
+                                      <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                        Fulfillment & Dispatch
+                                      </span>
+                                      {(detail?.shipment || order.shipment) ? (
+                                        <span
                                           style={{
-                                            fontSize: "13px",
-                                            fontWeight: 900,
-                                            letterSpacing: "3px",
-                                            fontFamily: "monospace",
-                                            color: "#047857",
-                                            background: "#ffffff",
-                                            padding: "2px 8px",
+                                            fontSize: "11px",
+                                            fontWeight: 700,
+                                            padding: "3px 8px",
                                             borderRadius: "4px",
-                                            border: "1px dashed #059669",
+                                            background: (detail?.shipment?.status || order.shipment?.status) === "delivered" ? "#f0fdf4" : "#eff6ff",
+                                            color: (detail?.shipment?.status || order.shipment?.status) === "delivered" ? "#15803d" : "#1d4ed8",
+                                            border: `1px solid ${(detail?.shipment?.status || order.shipment?.status) === "delivered" ? "#bbf7d0" : "#bfdbfe"}`,
+                                            textTransform: "capitalize",
                                           }}
                                         >
-                                          {detail?.delivery_otp || order.delivery_otp}
-                                        </code>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
+                                          {(detail?.shipment?.status || order.shipment?.status || "Pending").replaceAll("_", " ")}
+                                        </span>
+                                      ) : (
+                                        <span
+                                          style={{
+                                            fontSize: "11px",
+                                            fontWeight: 700,
+                                            padding: "3px 8px",
+                                            borderRadius: "4px",
+                                            background: "#fff7ed",
+                                            color: "#c2410c",
+                                            border: "1px solid #ffedd5",
+                                          }}
+                                        >
+                                          Pending Dispatch
+                                        </span>
+                                      )}
+                                    </div>
 
-                                {/* Card 2: Order Items & Pricing Breakdown */}
-                                <div style={{ ...plainCardStyle, padding: "16px" }}>
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      alignItems: "center",
-                                      marginBottom: "12px",
-                                      paddingBottom: "8px",
-                                      borderBottom: "1px solid #f1f5f9",
-                                    }}
-                                  >
-                                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                                      Order Items ({items.length})
-                                    </span>
-                                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
-                                      Total: {formatPrice(order.total)}
-                                    </span>
-                                  </div>
+                                    {(() => {
+                                      const currentShipment = detail?.shipment || order.shipment;
+                                      const isFleetOn = deliverySettings?.enable_fleet !== undefined ? Boolean(deliverySettings.enable_fleet) : (deliverySettings?.delivery_mode === "own_agent" || deliverySettings?.delivery_mode === "hybrid");
+                                      const isShiprocketOn = deliverySettings?.enable_shiprocket !== undefined ? Boolean(deliverySettings.enable_shiprocket) : (deliverySettings?.delivery_mode === "shiprocket" || deliverySettings?.delivery_mode === "hybrid");
+                                      const isManualOn = deliverySettings?.enable_manual !== undefined ? Boolean(deliverySettings.enable_manual) : (deliverySettings?.delivery_mode === "manual");
 
-                                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                    {items.map((item) => (
-                                      <div
-                                        key={item.id}
-                                        style={{
-                                          display: "flex",
-                                          justifyContent: "space-between",
-                                          alignItems: "flex-start",
-                                          gap: "12px",
-                                          padding: "10px 12px",
-                                          borderRadius: "6px",
-                                          background: "#f8fafc",
-                                          border: "1px solid #e2e8f0",
-                                        }}
-                                      >
-                                        <div style={{ minWidth: 0, flex: 1 }}>
-                                          <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#0f172a" }}>
-                                            {item.product_name}
-                                          </div>
-                                          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "3px", flexWrap: "wrap" }}>
-                                            <span style={{ fontSize: "12.5px", fontWeight: 600, color: "#475569" }}>
-                                              Qty: {item.quantity}
-                                            </span>
-                                            {item.selected_variant_value && (
-                                              <span
-                                                style={{
-                                                  fontSize: "11px",
-                                                  fontWeight: 600,
-                                                  color: "#2563eb",
-                                                  background: "#eff6ff",
-                                                  border: "1px solid #bfdbfe",
-                                                  padding: "1px 6px",
-                                                  borderRadius: "4px",
-                                                }}
-                                              >
-                                                {item.selected_variant_value}
-                                              </span>
-                                            )}
-                                            <span style={{ fontSize: "11.5px", color: "#94a3b8" }}>
-                                              • {item.status.replaceAll("_", " ")}
-                                            </span>
-                                          </div>
-                                        </div>
-                                        <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap" }}>
-                                          {formatPrice(item.line_total)}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              </div>
+                                      const availableModes: Array<{ id: "own_agent" | "shiprocket" | "manual"; label: string }> = [];
+                                      if (isFleetOn) availableModes.push({ id: "own_agent", label: "Own Fleet" });
+                                      if (isShiprocketOn) availableModes.push({ id: "shiprocket", label: "Shiprocket" });
+                                      if (isManualOn) availableModes.push({ id: "manual", label: "Manual" });
 
-                              {/* Right Column: Fulfillment Dispatch Control & Admin Timeline */}
-                              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                                {/* Card 1: Delivery & Dispatch Control */}
-                                <div style={{ ...plainCardStyle, padding: "16px" }}>
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      alignItems: "center",
-                                      marginBottom: "12px",
-                                      paddingBottom: "8px",
-                                      borderBottom: "1px solid #f1f5f9",
-                                    }}
-                                  >
-                                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                                      Fulfillment & Dispatch
-                                    </span>
-                                    {(detail?.shipment || order.shipment) ? (
-                                      <span
-                                        style={{
-                                          fontSize: "11px",
-                                          fontWeight: 700,
-                                          padding: "3px 8px",
-                                          borderRadius: "4px",
-                                          background: (detail?.shipment?.status || order.shipment?.status) === "delivered" ? "#f0fdf4" : "#eff6ff",
-                                          color: (detail?.shipment?.status || order.shipment?.status) === "delivered" ? "#15803d" : "#1d4ed8",
-                                          border: `1px solid ${(detail?.shipment?.status || order.shipment?.status) === "delivered" ? "#bbf7d0" : "#bfdbfe"}`,
-                                          textTransform: "capitalize",
-                                        }}
-                                      >
-                                        {(detail?.shipment?.status || order.shipment?.status || "Pending").replaceAll("_", " ")}
-                                      </span>
-                                    ) : (
-                                      <span
-                                        style={{
-                                          fontSize: "11px",
-                                          fontWeight: 700,
-                                          padding: "3px 8px",
-                                          borderRadius: "4px",
-                                          background: "#fff7ed",
-                                          color: "#c2410c",
-                                          border: "1px solid #ffedd5",
-                                        }}
-                                      >
-                                        Pending Dispatch
-                                      </span>
-                                    )}
-                                  </div>
+                                      if (availableModes.length === 0) {
+                                        availableModes.push({ id: "manual", label: "Manual" });
+                                      }
 
-                                  {(() => {
-                                    const currentShipment = detail?.shipment || order.shipment;
-                                    const storeDeliveryMode = deliverySettings?.delivery_mode || "own_agent";
-                                    const activeMode = selectedDispatchModeMap[order.id] || (storeDeliveryMode === "hybrid" ? "own_agent" : storeDeliveryMode);
-                                    const assignedRider = deliveryAgents.find((a) => a.id === currentShipment?.delivery_partner_phone || a.name === currentShipment?.delivery_partner_name);
-                                    const riderName = currentShipment?.delivery_partner_name || assignedRider?.name || "Assigned Rider";
-                                    const riderPhone = currentShipment?.delivery_partner_phone || assignedRider?.phone || "";
-                                    const isReassigning = Boolean(reassigningOrderIdMap[order.id]);
+                                      const activeMode: "own_agent" | "shiprocket" | "manual" = (
+                                        selectedDispatchModeMap[order.id] && availableModes.some((m) => m.id === selectedDispatchModeMap[order.id])
+                                          ? selectedDispatchModeMap[order.id]
+                                          : availableModes[0].id
+                                      ) as "own_agent" | "shiprocket" | "manual";
 
-                                    return (
+                                      const assignedRider = deliveryAgents.find((a) => a.id === currentShipment?.delivery_partner_phone || a.name === currentShipment?.delivery_partner_name);
+                                      const riderName = currentShipment?.delivery_partner_name || assignedRider?.name || "Assigned Rider";
+                                      const riderPhone = currentShipment?.delivery_partner_phone || assignedRider?.phone || "";
+                                      const isReassigning = Boolean(reassigningOrderIdMap[order.id]);
+
+                                      return (
                                       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                                        {/* If Order is already dispatched via Courier / Shiprocket */}
-                                        {Boolean(currentShipment?.courier_name || currentShipment?.awb_number || currentShipment?.delivery_mode === "shiprocket" || currentShipment?.mode === "shiprocket") ? (
+                                        {/* If Order is already dispatched via Shiprocket */}
+                                        {Boolean(
+                                          currentShipment && (
+                                            currentShipment.delivery_mode === "shiprocket" ||
+                                            currentShipment.mode === "shiprocket" ||
+                                            (Boolean(currentShipment.awb_number) && !currentShipment.agent_id && currentShipment.delivery_mode !== "manual")
+                                          )
+                                        ) ? (
                                           <div
                                             style={{
                                               padding: "14px",
@@ -3081,7 +3650,267 @@ const AdminOrders: React.FC = () => {
                                               )}
                                             </div>
                                           </div>
-                                        ) : currentShipment?.delivery_partner_name ? (
+                                        ) : Boolean(
+                                          currentShipment && (
+                                            currentShipment.delivery_mode === "manual" ||
+                                            currentShipment.mode === "manual" ||
+                                            (Boolean(currentShipment.delivery_partner_name) && currentShipment.delivery_mode !== "own_agent" && currentShipment.mode !== "own_agent" && !currentShipment.agent_id) ||
+                                            ((order.status === "shipped" || order.status === "out_for_delivery") && !currentShipment.agent_id && currentShipment.delivery_mode !== "own_agent")
+                                          )
+                                        ) ? (
+                                          /* If Order is dispatched via Manual Courier */
+                                          <div
+                                            style={{
+                                              padding: "14px",
+                                              background: "#f8fafc",
+                                              borderRadius: "8px",
+                                              border: "1px solid #e2e8f0",
+                                            }}
+                                          >
+                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                                              <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                                Manual Courier Partner
+                                              </div>
+                                              <span
+                                                style={{
+                                                  fontSize: "11px",
+                                                  fontWeight: 700,
+                                                  padding: "2px 7px",
+                                                  borderRadius: "4px",
+                                                  background: (order.status === "delivered" || currentShipment?.status === "delivered")
+                                                    ? "#f0fdf4"
+                                                    : (order.status === "out_for_delivery" || currentShipment?.status === "out_for_delivery")
+                                                    ? "#fff7ed"
+                                                    : "#eff6ff",
+                                                  color: (order.status === "delivered" || currentShipment?.status === "delivered")
+                                                    ? "#16a34a"
+                                                    : (order.status === "out_for_delivery" || currentShipment?.status === "out_for_delivery")
+                                                    ? "#c2410c"
+                                                    : "#1d4ed8",
+                                                  border: `1px solid ${
+                                                    (order.status === "delivered" || currentShipment?.status === "delivered")
+                                                      ? "#bbf7d0"
+                                                      : (order.status === "out_for_delivery" || currentShipment?.status === "out_for_delivery")
+                                                      ? "#ffedd5"
+                                                      : "#bfdbfe"
+                                                  }`,
+                                                  textTransform: "capitalize",
+                                                }}
+                                              >
+                                                {(order.status || currentShipment?.status || "Shipped").replaceAll("_", " ")}
+                                              </span>
+                                            </div>
+
+                                            <div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a", marginBottom: "4px" }}>
+                                              {currentShipment?.delivery_partner_name || "Courier Partner"}
+                                            </div>
+
+                                            {currentShipment?.delivery_partner_phone && (
+                                              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", fontSize: "13px" }}>
+                                                <span style={{ color: "#64748b" }}>Tracking No. / Contact:</span>
+                                                <code style={{ background: "#e2e8f0", padding: "2px 6px", borderRadius: "4px", fontWeight: 700, color: "#0f172a" }}>
+                                                  {currentShipment.delivery_partner_phone}
+                                                </code>
+                                              </div>
+                                            )}
+
+                                            {currentShipment?.notes && (
+                                              <div
+                                                style={{
+                                                  marginTop: "8px",
+                                                  marginBottom: "8px",
+                                                  padding: "8px 10px",
+                                                  background: "#fffbeb",
+                                                  borderRadius: "6px",
+                                                  border: "1px solid #fde68a",
+                                                  fontSize: "12px",
+                                                  color: "#92400e",
+                                                  lineHeight: 1.4,
+                                                }}
+                                              >
+                                                <div style={{ fontWeight: 700, color: "#b45309", marginBottom: "2px" }}>
+                                                  Delivery Note:
+                                                </div>
+                                                <div>{cleanShipmentNotes(currentShipment.notes)}</div>
+                                              </div>
+                                            )}
+
+                                            {/* Admin Control Actions for Manual Courier */}
+                                            {order.status !== "delivered" && order.status !== "cancelled" ? (
+                                              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "12px", paddingTop: "10px", borderTop: "1px solid #e2e8f0" }}>
+                                                <div style={{ fontSize: "12px", fontWeight: 700, color: "#475569" }}>
+                                                  Admin Delivery Controls:
+                                                </div>
+                                                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                                                   {canUpdateOrders && order.status === "shipped" && (
+                                                     <button
+                                                       type="button"
+                                                       onClick={() => handleOutForDelivery(order.id)}
+                                                       disabled={actionLoadingId === order.id}
+                                                       style={{
+                                                         padding: "7px 12px",
+                                                         borderRadius: "6px",
+                                                         background: "#d97706",
+                                                         color: "#ffffff",
+                                                         border: "none",
+                                                         fontSize: "12px",
+                                                         fontWeight: 700,
+                                                         cursor: actionLoadingId === order.id ? "wait" : "pointer",
+                                                       }}
+                                                     >
+                                                       {actionLoadingId === order.id ? "Updating..." : "Mark Out for Delivery"}
+                                                     </button>
+                                                   )}
+
+                                                   {canUpdateOrders && (order.status === "shipped" || order.status === "out_for_delivery" || order.status === "rescheduled") && (
+                                                     <button
+                                                       type="button"
+                                                       onClick={() => handleDelivered(order.id)}
+                                                       disabled={actionLoadingId === order.id}
+                                                       style={{
+                                                         padding: "7px 12px",
+                                                         borderRadius: "6px",
+                                                         background: "#16a34a",
+                                                         color: "#ffffff",
+                                                         border: "none",
+                                                         fontSize: "12px",
+                                                         fontWeight: 700,
+                                                         cursor: actionLoadingId === order.id ? "wait" : "pointer",
+                                                       }}
+                                                     >
+                                                       {actionLoadingId === order.id ? "Updating..." : "Mark Delivered"}
+                                                     </button>
+                                                   )}
+
+                                                   {canUpdateOrders && (
+                                                     <button
+                                                       type="button"
+                                                       onClick={() => setEditingCourierOrderIdMap((p) => ({ ...p, [order.id]: !p[order.id] }))}
+                                                       style={{
+                                                         padding: "7px 12px",
+                                                         borderRadius: "6px",
+                                                         background: "#ffffff",
+                                                         color: "#475569",
+                                                         border: "1px solid #cbd5e1",
+                                                         fontSize: "12px",
+                                                         fontWeight: 600,
+                                                         cursor: "pointer",
+                                                       }}
+                                                     >
+                                                       {editingCourierOrderIdMap[order.id] ? "Close Form" : "Edit Courier / Tracking"}
+                                                     </button>
+                                                   )}
+                                                 </div>
+
+                                                {/* Edit Form */}
+                                                {editingCourierOrderIdMap[order.id] && (
+                                                  <div
+                                                    style={{
+                                                      marginTop: "8px",
+                                                      padding: "10px",
+                                                      background: "#ffffff",
+                                                      borderRadius: "6px",
+                                                      border: "1px solid #cbd5e1",
+                                                      display: "flex",
+                                                      flexDirection: "column",
+                                                      gap: "8px",
+                                                    }}
+                                                  >
+                                                    <div>
+                                                      <div style={labelStyle}>Courier Partner Name</div>
+                                                      <input
+                                                        value={shipmentDraft.deliveryPartnerName}
+                                                        onChange={(e) => setShipmentDraftValue(order.id, "deliveryPartnerName", e.target.value)}
+                                                        placeholder="e.g. BlueDart / DTDC / SpeedPost"
+                                                        style={inputStyle}
+                                                      />
+                                                    </div>
+                                                    <div>
+                                                      <div style={labelStyle}>Tracking Number / Contact</div>
+                                                      <input
+                                                        value={shipmentDraft.deliveryPartnerPhone}
+                                                        onChange={(e) => setShipmentDraftValue(order.id, "deliveryPartnerPhone", e.target.value)}
+                                                        placeholder="e.g. AWB12345678"
+                                                        style={inputStyle}
+                                                      />
+                                                    </div>
+                                                    <div style={{ display: "flex", gap: "6px" }}>
+                                                      <button
+                                                        type="button"
+                                                        onClick={async () => {
+                                                          const draft = getShipmentDraft(order);
+                                                          await updateStatus(order.id, order.status as OrderStatus, {
+                                                            delivery_partner_name: draft.deliveryPartnerName || null,
+                                                            delivery_partner_phone: draft.deliveryPartnerPhone || null,
+                                                          });
+                                                          setEditingCourierOrderIdMap((p) => ({ ...p, [order.id]: false }));
+                                                        }}
+                                                        disabled={actionLoadingId === order.id}
+                                                        style={{
+                                                          padding: "6px 12px",
+                                                          borderRadius: "5px",
+                                                          background: "#2563eb",
+                                                          color: "#ffffff",
+                                                          border: "none",
+                                                          fontSize: "12px",
+                                                          fontWeight: 700,
+                                                          cursor: actionLoadingId === order.id ? "wait" : "pointer",
+                                                        }}
+                                                      >
+                                                        {actionLoadingId === order.id ? "Saving..." : "Save Changes"}
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => setEditingCourierOrderIdMap((p) => ({ ...p, [order.id]: false }))}
+                                                        style={{
+                                                          padding: "6px 10px",
+                                                          borderRadius: "5px",
+                                                          background: "#ffffff",
+                                                          color: "#475569",
+                                                          border: "1px solid #cbd5e1",
+                                                          fontSize: "12px",
+                                                          fontWeight: 600,
+                                                          cursor: "pointer",
+                                                        }}
+                                                      >
+                                                        Cancel
+                                                      </button>
+                                                    </div>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            ) : order.status === "delivered" ? (
+                                              <div
+                                                style={{
+                                                  marginTop: "10px",
+                                                  padding: "8px 12px",
+                                                  background: "#f0fdf4",
+                                                  border: "1px solid #bbf7d0",
+                                                  borderRadius: "6px",
+                                                  fontSize: "12px",
+                                                  color: "#166534",
+                                                  fontWeight: 600,
+                                                  display: "flex",
+                                                  alignItems: "center",
+                                                  gap: "6px",
+                                                }}
+                                              >
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                  <polyline points="20 6 9 17 4 12" />
+                                                </svg>
+                                                Package delivered to customer.
+                                              </div>
+                                            ) : null}
+                                          </div>
+                                        ) : Boolean(
+                                          currentShipment && (
+                                            currentShipment.delivery_mode === "own_agent" ||
+                                            currentShipment.mode === "own_agent" ||
+                                            Boolean(currentShipment.agent_id) ||
+                                            Boolean(assignedRider)
+                                          )
+                                        ) ? (
+                                          /* If Order is dispatched via Own Fleet Rider */
                                           <div
                                             style={{
                                               padding: "14px",
@@ -3092,7 +3921,7 @@ const AdminOrders: React.FC = () => {
                                           >
                                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                                               <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                                                Assigned Delivery Partner
+                                                Store Delivery Partner (Own Fleet)
                                               </div>
                                               {order.status === "cancelled" ? (
                                                 <span
@@ -3109,7 +3938,7 @@ const AdminOrders: React.FC = () => {
                                                 >
                                                   {currentShipment?.status === "returned_to_warehouse" ? "Returned to Warehouse" : "Cancelled"}
                                                 </span>
-                                              ) : (
+                                              ) : canUpdateOrders ? (
                                                 <button
                                                   type="button"
                                                   onClick={() => setReassigningOrderIdMap((p) => ({ ...p, [order.id]: !p[order.id] }))}
@@ -3124,9 +3953,9 @@ const AdminOrders: React.FC = () => {
                                                     textDecoration: "underline",
                                                   }}
                                                 >
-                                                  {isReassigning ? "Close" : "Reassign Rider"}
+                                                  {isReassigning ? "Close" : "Reassign Rider / Courier"}
                                                 </button>
-                                              )}
+                                              ) : null}
                                             </div>
 
                                             <div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
@@ -3182,6 +4011,91 @@ const AdminOrders: React.FC = () => {
                                                   )}
                                                 </div>
                                               )}
+
+                                              {/* Returned to Hub Banner & Direct Actions */}
+                                              {(currentShipment?.status === "returned_to_warehouse" || currentShipment?.status === "failed" || order.status === "failed") && order.status !== "cancelled" && (
+                                                <div
+                                                  style={{
+                                                    marginTop: "12px",
+                                                    padding: "12px 14px",
+                                                    background: "#fef2f2",
+                                                    borderRadius: "8px",
+                                                    border: "1px solid #fecaca",
+                                                    display: "flex",
+                                                    flexDirection: "column",
+                                                    gap: "10px",
+                                                  }}
+                                                >
+                                                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+                                                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                                      <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#dc2626" }} />
+                                                      <span style={{ fontSize: "13px", fontWeight: 700, color: "#991b1b" }}>
+                                                        Parcel Returned to Warehouse / Hub
+                                                      </span>
+                                                    </div>
+                                                    <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "4px", background: "#fee2e2", color: "#b91c1c", border: "1px solid #fca5a5" }}>
+                                                      Action Required
+                                                    </span>
+                                                  </div>
+
+                                                  <div style={{ fontSize: "12px", color: "#7f1d1d", lineHeight: 1.45 }}>
+                                                    The delivery partner brought this parcel back to the store warehouse. You can cancel this order to restore inventory stock and process customer refund, or reassign it to another partner.
+                                                  </div>
+
+                                                  {(canCancelOrders || canUpdateOrders) && (
+                                                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", paddingTop: "4px" }}>
+                                                      {canCancelOrders && (
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => {
+                                                            setAdminCancelOrder(order);
+                                                            setAdminCancelReason("Parcel Returned to Hub - Customer unreachable / no response after multiple attempts");
+                                                            setAdminCancelCustomNote(currentShipment?.notes ? cleanShipmentNotes(currentShipment.notes) : "");
+                                                          }}
+                                                          disabled={actionLoadingId === order.id}
+                                                          style={{
+                                                            padding: "7px 14px",
+                                                            borderRadius: "6px",
+                                                            background: "#dc2626",
+                                                            border: "none",
+                                                            color: "#ffffff",
+                                                            fontSize: "12.5px",
+                                                            fontWeight: 700,
+                                                            cursor: "pointer",
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            gap: "6px",
+                                                            boxShadow: "0 1px 2px rgba(220, 38, 38, 0.2)",
+                                                          }}
+                                                        >
+                                                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                            <circle cx="12" cy="12" r="10" />
+                                                            <line x1="15" y1="9" x2="9" y2="15" />
+                                                            <line x1="9" y1="9" x2="15" y2="15" />
+                                                          </svg>
+                                                          Cancel Order & Restock
+                                                        </button>
+                                                      )}
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => setReassigningOrderIdMap((p) => ({ ...p, [order.id]: true }))}
+                                                        style={{
+                                                          padding: "7px 12px",
+                                                          borderRadius: "6px",
+                                                          background: "#ffffff",
+                                                          border: "1px solid #cbd5e1",
+                                                          color: "#334155",
+                                                          fontSize: "12.5px",
+                                                          fontWeight: 600,
+                                                          cursor: "pointer",
+                                                        }}
+                                                      >
+                                                        Reassign Rider / Courier
+                                                      </button>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              )}
                                             </div>
 
                                             {/* Reassignment Dropdown Panel */}
@@ -3195,12 +4109,12 @@ const AdminOrders: React.FC = () => {
                                                   border: "1px solid #cbd5e1",
                                                   display: "flex",
                                                   flexDirection: "column",
-                                                  gap: "8px",
+                                                  gap: "10px",
                                                 }}
                                               >
-                                                <label style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a" }}>
-                                                  Select Replacement Rider
-                                                </label>
+                                                <div style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a" }}>
+                                                  Option 1: Choose Replacement In-House Rider
+                                                </div>
                                                 <select
                                                   value={reassignAgentIdMap[order.id] || ""}
                                                   onChange={(e) => setReassignAgentIdMap((p) => ({ ...p, [order.id]: e.target.value }))}
@@ -3219,102 +4133,118 @@ const AdminOrders: React.FC = () => {
                                                   <button
                                                     type="button"
                                                     onClick={() => handleReassignRider(order.id)}
-                                                    disabled={actionLoadingId === order.id}
+                                                    disabled={actionLoadingId === order.id || !reassignAgentIdMap[order.id]}
                                                     style={{
-                                                      padding: "6px 14px",
+                                                      padding: "6px 12px",
                                                       borderRadius: "5px",
                                                       background: "#2563eb",
                                                       color: "#ffffff",
                                                       border: "none",
                                                       fontSize: "12px",
                                                       fontWeight: 700,
-                                                      cursor: actionLoadingId === order.id ? "wait" : "pointer",
+                                                      cursor: (actionLoadingId === order.id || !reassignAgentIdMap[order.id]) ? "not-allowed" : "pointer",
+                                                      opacity: !reassignAgentIdMap[order.id] ? 0.6 : 1,
                                                     }}
                                                   >
-                                                    {actionLoadingId === order.id ? "Reassigning..." : "Confirm Reassignment"}
+                                                    {actionLoadingId === order.id ? "Reassigning..." : "Confirm Replacement Rider"}
                                                   </button>
-                                                  <button
-                                                    type="button"
-                                                    onClick={() => setReassigningOrderIdMap((p) => ({ ...p, [order.id]: false }))}
-                                                    style={{
-                                                      padding: "6px 12px",
-                                                      borderRadius: "5px",
-                                                      background: "#ffffff",
-                                                      color: "#475569",
-                                                      border: "1px solid #cbd5e1",
-                                                      fontSize: "12px",
-                                                      fontWeight: 600,
-                                                      cursor: "pointer",
-                                                    }}
-                                                  >
-                                                    Cancel
-                                                  </button>
+                                                </div>
+
+                                                <div style={{ borderTop: "1px dashed #cbd5e1", paddingTop: "10px", marginTop: "4px" }}>
+                                                  <div style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a", marginBottom: "8px" }}>
+                                                    Option 2: Switch to Manual Courier Partner
+                                                  </div>
+                                                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                                                    <input
+                                                      value={shipmentDraft.deliveryPartnerName}
+                                                      onChange={(e) => setShipmentDraftValue(order.id, "deliveryPartnerName", e.target.value)}
+                                                      placeholder="Courier Name (e.g. BlueDart / DTDC / SpeedPost)"
+                                                      style={inputStyle}
+                                                    />
+                                                    <input
+                                                      value={shipmentDraft.deliveryPartnerPhone}
+                                                      onChange={(e) => setShipmentDraftValue(order.id, "deliveryPartnerPhone", e.target.value)}
+                                                      placeholder="Tracking Number / AWB"
+                                                      style={inputStyle}
+                                                    />
+                                                    <div style={{ display: "flex", gap: "8px" }}>
+                                                      <button
+                                                        type="button"
+                                                        onClick={async () => {
+                                                          const draft = getShipmentDraft(order);
+                                                          if (!draft.deliveryPartnerName.trim()) {
+                                                            showToast("Please enter the courier partner name.", "error");
+                                                            return;
+                                                          }
+                                                          await updateStatus(order.id, "shipped", {
+                                                            delivery_partner_name: draft.deliveryPartnerName,
+                                                            delivery_partner_phone: draft.deliveryPartnerPhone || null,
+                                                          });
+                                                          setReassigningOrderIdMap((p) => ({ ...p, [order.id]: false }));
+                                                        }}
+                                                        disabled={actionLoadingId === order.id}
+                                                        style={{
+                                                          padding: "6px 12px",
+                                                          borderRadius: "5px",
+                                                          background: "#0f766e",
+                                                          color: "#ffffff",
+                                                          border: "none",
+                                                          fontSize: "12px",
+                                                          fontWeight: 700,
+                                                          cursor: "pointer",
+                                                        }}
+                                                      >
+                                                        {actionLoadingId === order.id ? "Switching..." : "Switch to Manual Courier"}
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => setReassigningOrderIdMap((p) => ({ ...p, [order.id]: false }))}
+                                                        style={{
+                                                          padding: "6px 10px",
+                                                          borderRadius: "5px",
+                                                          background: "#ffffff",
+                                                          color: "#475569",
+                                                          border: "1px solid #cbd5e1",
+                                                          fontSize: "12px",
+                                                          fontWeight: 600,
+                                                          cursor: "pointer",
+                                                        }}
+                                                      >
+                                                        Cancel
+                                                      </button>
+                                                    </div>
+                                                  </div>
                                                 </div>
                                               </div>
                                             )}
                                           </div>
-                                        ) : (
+                                        ) : !canUpdateOrders ? null : (
                                           /* If Not yet dispatched — Dispatch Controller */
                                           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                            {/* Mode Tabs */}
-                                            {storeDeliveryMode === "hybrid" && (
+                                            {/* Mode Tabs: only rendered if more than 1 delivery mode is enabled */}
+                                            {availableModes.length > 1 && (
                                               <div style={{ display: "flex", gap: "4px", padding: "3px", background: "#f1f5f9", borderRadius: "6px" }}>
-                                                <button
-                                                  type="button"
-                                                  onClick={() => setSelectedDispatchModeMap((p) => ({ ...p, [order.id]: "own_agent" }))}
-                                                  style={{
-                                                    flex: 1,
-                                                    padding: "6px 8px",
-                                                    borderRadius: "4px",
-                                                    border: "none",
-                                                    background: activeMode === "own_agent" ? "#ffffff" : "transparent",
-                                                    color: activeMode === "own_agent" ? "#2563eb" : "#64748b",
-                                                    fontWeight: 700,
-                                                    fontSize: "12px",
-                                                    cursor: "pointer",
-                                                    boxShadow: activeMode === "own_agent" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                                                  }}
-                                                >
-                                                  Own Fleet
-                                                </button>
-
-                                                <button
-                                                  type="button"
-                                                  onClick={() => setSelectedDispatchModeMap((p) => ({ ...p, [order.id]: "shiprocket" }))}
-                                                  style={{
-                                                    flex: 1,
-                                                    padding: "6px 8px",
-                                                    borderRadius: "4px",
-                                                    border: "none",
-                                                    background: activeMode === "shiprocket" ? "#ffffff" : "transparent",
-                                                    color: activeMode === "shiprocket" ? "#2563eb" : "#64748b",
-                                                    fontWeight: 700,
-                                                    fontSize: "12px",
-                                                    cursor: "pointer",
-                                                    boxShadow: activeMode === "shiprocket" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                                                  }}
-                                                >
-                                                  Shiprocket
-                                                </button>
-
-                                                <button
-                                                  type="button"
-                                                  onClick={() => setSelectedDispatchModeMap((p) => ({ ...p, [order.id]: "manual" }))}
-                                                  style={{
-                                                    flex: 1,
-                                                    padding: "6px 8px",
-                                                    borderRadius: "4px",
-                                                    border: "none",
-                                                    background: activeMode === "manual" ? "#ffffff" : "transparent",
-                                                    color: activeMode === "manual" ? "#2563eb" : "#64748b",
-                                                    fontWeight: 700,
-                                                    fontSize: "12px",
-                                                    cursor: "pointer",
-                                                    boxShadow: activeMode === "manual" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                                                  }}
-                                                >
-                                                  Manual
-                                                </button>
+                                                {availableModes.map((mode) => (
+                                                  <button
+                                                    key={mode.id}
+                                                    type="button"
+                                                    onClick={() => setSelectedDispatchModeMap((p) => ({ ...p, [order.id]: mode.id }))}
+                                                    style={{
+                                                      flex: 1,
+                                                      padding: "6px 8px",
+                                                      borderRadius: "4px",
+                                                      border: "none",
+                                                      background: activeMode === mode.id ? "#ffffff" : "transparent",
+                                                      color: activeMode === mode.id ? "#2563eb" : "#64748b",
+                                                      fontWeight: 700,
+                                                      fontSize: "12px",
+                                                      cursor: "pointer",
+                                                      boxShadow: activeMode === mode.id ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                                                    }}
+                                                  >
+                                                    {mode.label}
+                                                  </button>
+                                                ))}
                                               </div>
                                             )}
 
@@ -3360,66 +4290,78 @@ const AdminOrders: React.FC = () => {
                                             )}
 
                                             {/* Mode 2: Shiprocket Auto Courier */}
-                                            {activeMode === "shiprocket" && (
-                                              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                                <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>
-                                                  Auto-books courier pickup with Delhivery, BlueDart, DTDC, or Xpressbees and generates AWB tracking label.
-                                                </p>
+                                            {activeMode === "shiprocket" && (() => {
+                                               const defaultWeight = getOrderDefaultWeight(order);
+                                               const currentWeight = packageWeightMap[order.id] !== undefined ? packageWeightMap[order.id] : defaultWeight;
+                                               return (
+                                                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                                                   <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>
+                                                     Auto-books courier pickup with Delhivery, BlueDart, DTDC, or Xpressbees and generates AWB tracking label.
+                                                   </p>
 
-                                                <div>
-                                                  <label style={{ ...labelStyle, display: "flex", justifyContent: "space-between" }}>
-                                                    <span>Parcel Weight (Grams)</span>
-                                                    {packageWeightMap[order.id] ? (
-                                                      <span style={{ color: "#2563eb", fontWeight: 700 }}>
-                                                        {(packageWeightMap[order.id] / 1000).toFixed(2)} kg
-                                                      </span>
-                                                    ) : null}
-                                                  </label>
-                                                  <input
-                                                    type="number"
-                                                    min={10}
-                                                    step={50}
-                                                    placeholder="e.g. 450 (weight in grams)"
-                                                    value={packageWeightMap[order.id] || ""}
-                                                    onChange={(e) =>
-                                                      setPackageWeightMap((p) => ({
-                                                        ...p,
-                                                        [order.id]: Number(e.target.value),
-                                                      }))
-                                                    }
-                                                    style={inputStyle}
-                                                  />
-                                                  <p style={{ fontSize: "11px", color: "#64748b", margin: "4px 0 0" }}>
-                                                    Enter the weighed parcel weight in grams for courier rate and label generation.
-                                                  </p>
-                                                </div>
+                                                   <div>
+                                                     <label style={{ ...labelStyle, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                                       <span>Parcel Weight (Grams)</span>
+                                                       <span style={{ color: "#2563eb", fontWeight: 700, fontSize: "12px" }}>
+                                                         {currentWeight > 0 ? `${(currentWeight / 1000).toFixed(2)} kg (${currentWeight} g)` : "0 g"}
+                                                       </span>
+                                                     </label>
+                                                     <input
+                                                       type="number"
+                                                       min={10}
+                                                       step={50}
+                                                       placeholder="e.g. 500 (weight in grams)"
+                                                       value={currentWeight || ""}
+                                                       onChange={(e) =>
+                                                         setPackageWeightMap((p) => ({
+                                                           ...p,
+                                                           [order.id]: Math.max(0, Number(e.target.value) || 0),
+                                                         }))
+                                                       }
+                                                       style={inputStyle}
+                                                     />
+                                                     <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "5px", flexWrap: "wrap" }}>
+                                                       <span style={{ fontSize: "11px", color: "#059669", background: "rgba(16,185,129,0.1)", padding: "2px 7px", borderRadius: "4px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                            <polyline points="20 6 9 17 4 12"></polyline>
+                                                          </svg>
+                                                          Auto-calculated from product details
+                                                        </span>
+                                                       <span style={{ fontSize: "11px", color: "#64748b" }}>
+                                                         (Editable before booking)
+                                                       </span>
+                                                     </div>
+                                                   </div>
 
-                                                <button
-                                                  type="button"
-                                                  onClick={() => {
-                                                    if (!packageWeightMap[order.id] || packageWeightMap[order.id] <= 0) {
-                                                      const entered = window.prompt("Please enter the parcel weight in grams (e.g. 500):", "500");
-                                                      if (!entered || isNaN(Number(entered)) || Number(entered) <= 0) return;
-                                                      setPackageWeightMap((p) => ({ ...p, [order.id]: Number(entered) }));
-                                                    }
-                                                    handleDispatchOrder(order.id, "shiprocket");
-                                                  }}
-                                                  disabled={actionLoadingId === order.id}
-                                                  style={{
-                                                    padding: "9px 14px",
-                                                    borderRadius: "6px",
-                                                    background: "#2563eb",
-                                                    border: "1px solid #2563eb",
-                                                    color: "#ffffff",
-                                                    fontWeight: 700,
-                                                    fontSize: "13px",
-                                                    cursor: actionLoadingId === order.id ? "wait" : "pointer",
-                                                  }}
-                                                >
-                                                  {actionLoadingId === order.id ? "Booking Courier..." : "Book Courier via Shiprocket"}
-                                                </button>
-                                              </div>
-                                            )}
+                                                   <button
+                                                     type="button"
+                                                     onClick={() => {
+                                                       const weightToSend = packageWeightMap[order.id] !== undefined && packageWeightMap[order.id] > 0
+                                                         ? packageWeightMap[order.id]
+                                                         : defaultWeight;
+                                                       if (!weightToSend || weightToSend <= 0) {
+                                                         showToast("Please enter a valid parcel weight in grams", "error");
+                                                         return;
+                                                       }
+                                                       handleDispatchOrder(order.id, "shiprocket", weightToSend);
+                                                     }}
+                                                     disabled={actionLoadingId === order.id}
+                                                     style={{
+                                                       padding: "9px 14px",
+                                                       borderRadius: "6px",
+                                                       background: "#2563eb",
+                                                       border: "1px solid #2563eb",
+                                                       color: "#ffffff",
+                                                       fontWeight: 700,
+                                                       fontSize: "13px",
+                                                       cursor: actionLoadingId === order.id ? "wait" : "pointer",
+                                                     }}
+                                                   >
+                                                     {actionLoadingId === order.id ? "Booking Courier..." : "Book Courier via Shiprocket"}
+                                                   </button>
+                                                 </div>
+                                               );
+                                             })()}
 
                                             {/* Mode 3: Manual partner entry */}
                                             {activeMode === "manual" && (
@@ -3451,46 +4393,24 @@ const AdminOrders: React.FC = () => {
                                                 <button
                                                   type="button"
                                                   onClick={() => handleSaveShipment(order.id)}
+                                                  disabled={actionLoadingId === order.id}
                                                   style={{
-                                                    padding: "8px 12px",
+                                                    padding: "9px 14px",
                                                     borderRadius: "6px",
-                                                    background: "#ffffff",
-                                                    border: "1px solid #cbd5e1",
-                                                    color: "#0f172a",
+                                                    background: "#2563eb",
+                                                    border: "1px solid #2563eb",
+                                                    color: "#ffffff",
                                                     fontWeight: 700,
                                                     fontSize: "13px",
-                                                    cursor: "pointer",
+                                                    cursor: actionLoadingId === order.id ? "wait" : "pointer",
                                                   }}
                                                 >
-                                                  Save Manual Partner Details
+                                                  {actionLoadingId === order.id ? "Dispatching Order..." : "Save Details & Dispatch Order"}
                                                 </button>
                                               </div>
                                             )}
                                           </div>
                                         )}
-
-                                        {/* Customer Live Tracking Link */}
-                                        <div
-                                          style={{
-                                            display: "flex",
-                                            justifyContent: "space-between",
-                                            alignItems: "center",
-                                            fontSize: "12px",
-                                            color: "#64748b",
-                                            paddingTop: "8px",
-                                            borderTop: "1px solid #f1f5f9",
-                                          }}
-                                        >
-                                          <span>Customer Live Tracking:</span>
-                                          <a
-                                            href={`/track/${siteId}/${order.id}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            style={{ color: "#2563eb", fontWeight: 600, textDecoration: "underline" }}
-                                          >
-                                            View Live Tracking ↗
-                                          </a>
-                                        </div>
                                       </div>
                                     );
                                   })()}
@@ -3549,66 +4469,76 @@ const AdminOrders: React.FC = () => {
                                       <strong>Cancel Reason:</strong> {detail.cancel_reason}
                                     </div>
                                   ) : null}
+
+                                  {order.status !== "delivered" && order.status !== "cancelled" && order.status !== "returned" && canCancelOrders && (
+                                    <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px solid #f1f5f9" }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setAdminCancelOrder(order);
+                                          setAdminCancelReason(ADMIN_CANCEL_PRESETS[0]);
+                                          setAdminCancelCustomNote("");
+                                        }}
+                                        disabled={actionLoadingId === order.id}
+                                        style={{
+                                          width: "100%",
+                                          padding: "8px 12px",
+                                          borderRadius: "6px",
+                                          background: "#fef2f2",
+                                          border: "1px solid #fecaca",
+                                          color: "#b91c1c",
+                                          fontSize: "12.5px",
+                                          fontWeight: 700,
+                                          cursor: "pointer",
+                                          display: "flex",
+                                          alignItems: "center",
+                                          justifyContent: "center",
+                                          gap: "6px",
+                                        }}
+                                      >
+                                        <XMarkIcon />
+                                        <span>Cancel Order with Reason</span>
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </div>
                           </div>
-                        ) : null}
-                    </div>
-                  );
+                        )}
+                      </div>
+                    );
                 })}
-                </div>
               </div>
             )}
           </div>
 
-          {/* Pagination and page size controls */}
-          {filteredOrders.length > 0 && (
+          {/* Centered Pagination Controls */}
+          {orders.length > 0 && (
             <div
               style={{
                 display: "flex",
-                justifyContent: "space-between",
+                flexDirection: "column",
                 alignItems: "center",
-                flexWrap: "wrap",
-                gap: "12px",
+                justifyContent: "center",
+                gap: "10px",
                 marginTop: "16px",
                 padding: "8px 4px",
+                width: "100%",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#64748b" }}>
-                <span>Rows per page:</span>
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    const newSize = Number(e.target.value);
-                    setPageSize(newSize);
-                    setCurrentPage(1);
-                  }}
-                  style={{
-                    padding: "6px 10px",
-                    borderRadius: "6px",
-                    border: "1px solid #cbd5e1",
-                    background: "#ffffff",
-                    color: "#0f172a",
-                    fontSize: "13px",
-                    cursor: "pointer",
-                  }}
-                >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                </select>
-              </div>
-
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}
                 onPageChange={(page) => {
                   setCurrentPage(page);
                 }}
-                totalItems={filteredOrders.length}
                 pageSize={pageSize}
-                showRangeText={true}
+                pageSizeOptions={[10, 15, 25, 50, 100]}
+                onPageSizeChange={(newSize) => {
+                  setPageSize(newSize);
+                  setCurrentPage(1);
+                }}
                 accentColor="#2563eb"
                 style={{ padding: 0 }}
               />
@@ -3621,11 +4551,10 @@ const AdminOrders: React.FC = () => {
           <div
             style={{
               display: "flex",
+              flexWrap: "wrap",
               gap: "4px",
-              overflowX: "auto",
               borderBottom: "1px solid #e2e8f0",
               marginBottom: "16px",
-              WebkitOverflowScrolling: "touch",
             }}
           >
             {returnTabs.map((tab) => {
@@ -3850,7 +4779,7 @@ const AdminOrders: React.FC = () => {
                         <div style={{ minWidth: 0 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                             <span style={{ fontSize: "13.5px", color: "#0f172a", fontWeight: 700 }}>
-                              {formatPrice(returnItem.final_refund_amount || returnItem.suggested_refund_amount)}
+                              {formatPrice(detail?.final_refund_amount || returnItem.final_refund_amount || returnItem.suggested_refund_amount)}
                             </span>
                             {returnItem.refund_status && (
                               <span
@@ -4044,6 +4973,34 @@ const AdminOrders: React.FC = () => {
                                     <div>
                                       {[detail?.order?.shipping_address?.city, detail?.order?.shipping_address?.postalCode].filter(Boolean).join(" - ") || "—"}
                                     </div>
+                                    {(detail?.order?.shipping_address?.latitude && detail?.order?.shipping_address?.longitude) ? (
+                                      <div style={{ marginTop: "6px", paddingTop: "4px" }}>
+                                        <a
+                                          href={`https://www.google.com/maps?q=${detail.order.shipping_address.latitude},${detail.order.shipping_address.longitude}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          style={{
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: "4px",
+                                            fontSize: "12px",
+                                            fontWeight: 600,
+                                            color: "#2563eb",
+                                            textDecoration: "none",
+                                            background: "#eff6ff",
+                                            border: "1px solid #bfdbfe",
+                                            borderRadius: "4px",
+                                            padding: "2px 8px",
+                                          }}
+                                        >
+                                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                            <circle cx="12" cy="10" r="3"></circle>
+                                          </svg>
+                                          Open Exact Pinned Location on Maps
+                                        </a>
+                                      </div>
+                                    ) : null}
                                   </div>
 
                                   <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", fontSize: "13px", color: "#475569", marginTop: "2px" }}>
@@ -4089,7 +5046,7 @@ const AdminOrders: React.FC = () => {
                                     Return Items ({detail?.items?.length || returnItem.item_count || 1})
                                   </span>
                                   <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
-                                    Refund: {formatPrice(returnItem.final_refund_amount)}
+                                    Refund: {formatPrice(detail?.final_refund_amount || returnItem.final_refund_amount || returnItem.suggested_refund_amount)}
                                   </span>
                                 </div>
 
@@ -4199,8 +5156,81 @@ const AdminOrders: React.FC = () => {
                                   {detail?.order?.payment_method && detail.order.payment_method !== "cod" && detail.order.payment_method !== "cash_on_delivery" && (
                                     <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "1px solid #f1f5f9" }}>
                                       <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "8px 10px", borderRadius: "6px", fontSize: "12px", color: "#166534" }}>
-                                        <span>💳</span>
                                         <span><strong>Online Payment ({detail.order.payment_method}):</strong> Refund is automatically credited back to customer's original payment source via Razorpay.</span>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {detail?.refund_breakdown && (
+                                    <div
+                                      style={{
+                                        marginTop: "12px",
+                                        padding: "10px 12px",
+                                        borderRadius: "6px",
+                                        background: "#f8fafc",
+                                        border: "1px solid #e2e8f0",
+                                        fontSize: "12px",
+                                      }}
+                                    >
+                                      <div
+                                        style={{
+                                          display: "flex",
+                                          justifyContent: "space-between",
+                                          alignItems: "center",
+                                          marginBottom: "8px",
+                                          fontSize: "11px",
+                                          fontWeight: 700,
+                                          color: "#64748b",
+                                          textTransform: "uppercase",
+                                          letterSpacing: "0.04em",
+                                        }}
+                                      >
+                                        <span>Refund Breakdown</span>
+                                        <span style={{ fontSize: "10px", color: "#64748b", background: "#f1f5f9", padding: "1px 6px", borderRadius: "4px" }}>
+                                          Prorated
+                                        </span>
+                                      </div>
+                                      <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between", color: "#475569" }}>
+                                          <span>Items Subtotal</span>
+                                          <span style={{ fontWeight: 600, color: "#0f172a" }}>+{formatPrice(detail.refund_breakdown.items_subtotal)}</span>
+                                        </div>
+                                        {detail.refund_breakdown.discounts_prorated > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: "#475569" }}>
+                                            <span>Discount</span>
+                                            <span style={{ fontWeight: 600, color: "#dc2626" }}>-{formatPrice(detail.refund_breakdown.discounts_prorated)}</span>
+                                          </div>
+                                        )}
+                                        {detail.refund_breakdown.tax_refund > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: "#475569" }}>
+                                            <span>Tax (GST)</span>
+                                            <span style={{ fontWeight: 600, color: "#0f172a" }}>+{formatPrice(detail.refund_breakdown.tax_refund)}</span>
+                                          </div>
+                                        )}
+                                        {detail.refund_breakdown.refundable_charges_added > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: "#475569" }}>
+                                            <span>Refundable Charges</span>
+                                            <span style={{ fontWeight: 600, color: "#0f172a" }}>+{formatPrice(detail.refund_breakdown.refundable_charges_added)}</span>
+                                          </div>
+                                        )}
+                                        {detail.refund_breakdown.non_refundable_charges_retained > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: "#475569" }}>
+                                            <span>Non-Refundable Retained</span>
+                                            <span style={{ fontWeight: 600, color: "#dc2626" }}>-{formatPrice(detail.refund_breakdown.non_refundable_charges_retained)}</span>
+                                          </div>
+                                        )}
+                                        {(detail.refund_breakdown.exception_refund_added || 0) > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: "#15803d", fontWeight: 600, background: "#f0fdf4", padding: "4px 6px", borderRadius: "4px" }}>
+                                            <span>Retained Charges Refunded (Exception)</span>
+                                            <span style={{ fontWeight: 700 }}>+{formatPrice(detail.refund_breakdown.exception_refund_added || 0)}</span>
+                                          </div>
+                                        )}
+                                        <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid #e2e8f0", paddingTop: "6px", marginTop: "2px", fontWeight: 700, fontSize: "12.5px" }}>
+                                          <span>Total Refund</span>
+                                          <span style={{ color: "#15803d" }}>
+                                            {formatPrice(detail.final_refund_amount || returnItem.final_refund_amount || returnItem.suggested_refund_amount)}
+                                          </span>
+                                        </div>
                                       </div>
                                     </div>
                                   )}
@@ -4263,172 +5293,392 @@ const AdminOrders: React.FC = () => {
                                 </div>
 
                                 {(() => {
-                                  const currentPickup = detail?.pickup_details || returnItem.pickup_details;
-                                  const storeDeliveryMode = deliverySettings?.delivery_mode || "own_agent";
-                                  const activeReturnMode = selectedReturnDispatchModeMap[returnItem.id] || (storeDeliveryMode === "hybrid" ? "own_agent" : storeDeliveryMode);
-                                  const isReassigningReturn = Boolean(reassigningReturnIdMap[returnItem.id]);
+                                   const currentPickup = detail?.pickup_details || returnItem.pickup_details;
+                                   const isFleetOn = deliverySettings?.enable_fleet !== undefined ? Boolean(deliverySettings.enable_fleet) : (deliverySettings?.delivery_mode === "own_agent" || deliverySettings?.delivery_mode === "hybrid");
+                                   const isShiprocketOn = deliverySettings?.enable_shiprocket !== undefined ? Boolean(deliverySettings.enable_shiprocket) : (deliverySettings?.delivery_mode === "shiprocket" || deliverySettings?.delivery_mode === "hybrid");
+                                   const isManualOn = deliverySettings?.enable_manual !== undefined ? Boolean(deliverySettings.enable_manual) : (deliverySettings?.delivery_mode === "manual");
+
+                                   const availableReturnModes: Array<{ id: "own_agent" | "shiprocket" | "manual"; label: string }> = [];
+                                   if (isFleetOn) availableReturnModes.push({ id: "own_agent", label: "In-House Rider" });
+                                   if (isShiprocketOn) availableReturnModes.push({ id: "shiprocket", label: "Shiprocket" });
+                                   if (isManualOn) availableReturnModes.push({ id: "manual", label: "Manual" });
+
+                                   if (availableReturnModes.length === 0) {
+                                     availableReturnModes.push({ id: "manual", label: "Manual" });
+                                   }
+
+                                   const activeReturnMode: "own_agent" | "shiprocket" | "manual" = (
+                                     selectedReturnDispatchModeMap[returnItem.id] && availableReturnModes.some((m) => m.id === selectedReturnDispatchModeMap[returnItem.id])
+                                       ? selectedReturnDispatchModeMap[returnItem.id]
+                                       : availableReturnModes[0].id
+                                   ) as "own_agent" | "shiprocket" | "manual";
+                                   const isReassigningReturn = Boolean(reassigningReturnIdMap[returnItem.id]);
 
                                   return (
                                     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                                       {/* If already assigned pickup */}
                                       {currentPickup?.agent_name || currentPickup?.courier_name ? (
-                                        <div style={{ padding: "12px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-                                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                                            <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                                              Assigned Reverse Partner
-                                            </div>
-                                            {currentPickup.mode === "own_agent" && (
-                                              <button
-                                                type="button"
-                                                onClick={() => setReassigningReturnIdMap((p) => ({ ...p, [returnItem.id]: !p[returnItem.id] }))}
-                                                style={{
-                                                  background: "none",
-                                                  border: "none",
-                                                  color: "#2563eb",
-                                                  fontSize: "12px",
-                                                  fontWeight: 600,
-                                                  cursor: "pointer",
-                                                  padding: "0",
-                                                  textDecoration: "underline",
-                                                }}
-                                              >
-                                                {isReassigningReturn ? "Close" : "Reassign Rider"}
-                                              </button>
-                                            )}
-                                          </div>
+                                        (() => {
+                                          const isManualReturn = currentPickup.mode === "manual" || (!currentPickup.agent_name && Boolean(currentPickup.courier_name));
+                                          const isFleetReturn = currentPickup.mode === "own_agent" || Boolean(currentPickup.agent_name);
+                                          const isShiprocketReturn = currentPickup.mode === "shiprocket";
+                                          const isEditingReturnCourier = Boolean(editingReturnCourierMap[returnItem.id]);
 
-                                          <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
-                                            {currentPickup.agent_name || currentPickup.courier_name}
-                                            {currentPickup.agent_phone && (
-                                              <div style={{ fontSize: "13px", color: "#475569", marginTop: "3px", display: "flex", alignItems: "center", gap: "5px" }}>
-                                                <PhoneIcon />
-                                                <a href={`tel:${currentPickup.agent_phone}`} style={{ color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>
-                                                  {formatPhoneDisplay(currentPickup.agent_phone)}
-                                                </a>
-                                              </div>
-                                            )}
-                                            {currentPickup.tracking_number && (
-                                              <div style={{ fontSize: "12px", color: "#64748b", marginTop: "3px" }}>
-                                                AWB / Tracking: <strong>{currentPickup.tracking_number}</strong>
-                                              </div>
-                                            )}
-                                            {/* Level 1 Doorstep Physical Inspection Result */}
-                                            {(currentPickup.inspection_result === "failed" || currentPickup.pickup_status === "doorstep_rejected") ? (
-                                              <div style={{ marginTop: "8px", fontSize: "12px", color: "#991b1b", background: "#fef2f2", padding: "8px 10px", borderRadius: "6px", border: "1px solid #fecaca", lineHeight: 1.4 }}>
-                                                <div style={{ fontWeight: 700 }}>Doorstep Inspection Failed by Rider</div>
-                                                {currentPickup.inspection_failed_reason && <div>Reason: <strong>{currentPickup.inspection_failed_reason}</strong></div>}
-                                                {currentPickup.inspection_notes && <div>Rider Note: {currentPickup.inspection_notes}</div>}
-                                              </div>
-                                            ) : (currentPickup.pickup_status === "picked_up" || currentPickup.pickup_status === "delivered_to_hub") ? (
-                                              <div style={{ marginTop: "8px", fontSize: "12px", color: "#15803d", background: "#f0fdf4", padding: "6px 8px", borderRadius: "6px", border: "1px solid #bbf7d0", fontWeight: 600 }}>
-                                                Level 1 Doorstep Physical Inspection Passed
-                                              </div>
-                                            ) : null}
-                                            {currentPickup.pickup_notes && (
-                                              <div style={{ marginTop: "6px", fontSize: "12px", color: "#92400e", background: "#fffbeb", padding: "6px 8px", borderRadius: "4px", border: "1px solid #fde68a" }}>
-                                                {currentPickup.pickup_notes}
-                                              </div>
-                                            )}
-                                          </div>
+                                          if (isManualReturn) {
+                                            return (
+                                              <div style={{ padding: "12px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                                                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                                    <span style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                                      Manual Return Courier Partner
+                                                    </span>
+                                                    <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 6px", borderRadius: "999px", background: "#e0f2fe", color: "#0369a1" }}>
+                                                      Self-Ship / Courier
+                                                    </span>
+                                                  </div>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      setEditingReturnCourierMap((p) => ({ ...p, [returnItem.id]: !p[returnItem.id] }));
+                                                      if (!returnManualCourierMap[returnItem.id]) {
+                                                        setReturnManualCourierMap((p) => ({
+                                                          ...p,
+                                                          [returnItem.id]: {
+                                                            courierName: currentPickup.courier_name || "",
+                                                            trackingNumber: currentPickup.tracking_number || "",
+                                                            notes: currentPickup.pickup_notes || "",
+                                                          },
+                                                        }));
+                                                      }
+                                                    }}
+                                                    style={{
+                                                      background: "none",
+                                                      border: "none",
+                                                      color: "#2563eb",
+                                                      fontSize: "12px",
+                                                      fontWeight: 600,
+                                                      cursor: "pointer",
+                                                      padding: "0",
+                                                      textDecoration: "underline",
+                                                    }}
+                                                  >
+                                                    {isEditingReturnCourier ? "Cancel Edit" : "Edit Courier / Tracking"}
+                                                  </button>
+                                                </div>
 
-                                          {/* Reassign Return Rider Panel */}
-                                          {isReassigningReturn && (
-                                            <div style={{ marginTop: "10px", padding: "10px", background: "#ffffff", borderRadius: "6px", border: "1px solid #cbd5e1", display: "flex", flexDirection: "column", gap: "8px" }}>
-                                              <label style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a" }}>
-                                                Select Replacement Rider
-                                              </label>
-                                              <select
-                                                value={reassignReturnAgentIdMap[returnItem.id] || ""}
-                                                onChange={(e) => setReassignReturnAgentIdMap((p) => ({ ...p, [returnItem.id]: e.target.value }))}
-                                                style={{ ...inputStyle, fontSize: "13px" }}
-                                              >
-                                                <option value="">-- Choose Rider --</option>
-                                                {deliveryAgents.filter((a) => a.is_active).map((a) => (
-                                                  <option key={a.id} value={a.id}>
-                                                    {a.name} ({formatPhoneDisplay(a.phone)}) — {a.current_order_count} active orders
-                                                  </option>
-                                                ))}
-                                              </select>
-                                              <div style={{ display: "flex", gap: "8px" }}>
-                                                <button
-                                                  type="button"
-                                                  onClick={() => handleReassignReturnRider(returnItem.id)}
-                                                  disabled={actionLoadingId === returnItem.id}
-                                                  style={{ padding: "6px 12px", borderRadius: "5px", background: "#2563eb", color: "#ffffff", border: "none", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
-                                                >
-                                                  {actionLoadingId === returnItem.id ? "Reassigning..." : "Confirm Reassign"}
-                                                </button>
-                                                <button
-                                                  type="button"
-                                                  onClick={() => setReassigningReturnIdMap((p) => ({ ...p, [returnItem.id]: false }))}
-                                                  style={{ padding: "6px 10px", borderRadius: "5px", background: "#ffffff", color: "#475569", border: "1px solid #cbd5e1", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
-                                                >
-                                                  Cancel
-                                                </button>
+                                                {isEditingReturnCourier ? (
+                                                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "4px" }}>
+                                                    <div>
+                                                      <label style={{ fontSize: "11px", fontWeight: 700, color: "#475569" }}>Return Courier Name</label>
+                                                      <input
+                                                        value={returnManualCourierMap[returnItem.id]?.courierName ?? (currentPickup.courier_name || "")}
+                                                        onChange={(e) =>
+                                                          setReturnManualCourierMap((p) => ({
+                                                            ...p,
+                                                            [returnItem.id]: {
+                                                              courierName: e.target.value,
+                                                              trackingNumber: p[returnItem.id]?.trackingNumber ?? (currentPickup.tracking_number || ""),
+                                                              notes: p[returnItem.id]?.notes ?? (currentPickup.pickup_notes || ""),
+                                                            },
+                                                          }))
+                                                        }
+                                                        placeholder="e.g. DTDC Return, BlueDart, India Post"
+                                                        style={{ ...inputStyle, fontSize: "13px" }}
+                                                      />
+                                                    </div>
+                                                    <div>
+                                                      <label style={{ fontSize: "11px", fontWeight: 700, color: "#475569" }}>Tracking / AWB Number</label>
+                                                      <input
+                                                        value={returnManualCourierMap[returnItem.id]?.trackingNumber ?? (currentPickup.tracking_number || "")}
+                                                        onChange={(e) =>
+                                                          setReturnManualCourierMap((p) => ({
+                                                            ...p,
+                                                            [returnItem.id]: {
+                                                              trackingNumber: e.target.value,
+                                                              courierName: p[returnItem.id]?.courierName ?? (currentPickup.courier_name || ""),
+                                                              notes: p[returnItem.id]?.notes ?? (currentPickup.pickup_notes || ""),
+                                                            },
+                                                          }))
+                                                        }
+                                                        placeholder="e.g. DTDC98234823"
+                                                        style={{ ...inputStyle, fontSize: "13px" }}
+                                                      />
+                                                    </div>
+                                                    <div>
+                                                      <label style={{ fontSize: "11px", fontWeight: 700, color: "#475569" }}>Pickup / Handover Notes (Optional)</label>
+                                                      <input
+                                                        value={returnManualCourierMap[returnItem.id]?.notes ?? (currentPickup.pickup_notes || "")}
+                                                        onChange={(e) =>
+                                                          setReturnManualCourierMap((p) => ({
+                                                            ...p,
+                                                            [returnItem.id]: {
+                                                              notes: e.target.value,
+                                                              courierName: p[returnItem.id]?.courierName ?? (currentPickup.courier_name || ""),
+                                                              trackingNumber: p[returnItem.id]?.trackingNumber ?? (currentPickup.tracking_number || ""),
+                                                            },
+                                                          }))
+                                                        }
+                                                        placeholder="e.g. Customer shipped via Speed Post"
+                                                        style={{ ...inputStyle, fontSize: "13px" }}
+                                                      />
+                                                    </div>
+                                                    <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleDispatchReturnPickup(returnItem.id, "manual")}
+                                                        disabled={actionLoadingId === returnItem.id}
+                                                        style={{
+                                                          padding: "7px 14px",
+                                                          borderRadius: "6px",
+                                                          background: "#2563eb",
+                                                          color: "#ffffff",
+                                                          border: "none",
+                                                          fontSize: "12px",
+                                                          fontWeight: 700,
+                                                          cursor: "pointer",
+                                                        }}
+                                                      >
+                                                        {actionLoadingId === returnItem.id ? "Saving..." : "Save Courier Details"}
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => setEditingReturnCourierMap((p) => ({ ...p, [returnItem.id]: false }))}
+                                                        style={{
+                                                          padding: "7px 12px",
+                                                          borderRadius: "6px",
+                                                          background: "#ffffff",
+                                                          color: "#475569",
+                                                          border: "1px solid #cbd5e1",
+                                                          fontSize: "12px",
+                                                          fontWeight: 600,
+                                                          cursor: "pointer",
+                                                        }}
+                                                      >
+                                                        Cancel
+                                                      </button>
+                                                    </div>
+                                                  </div>
+                                                ) : (
+                                                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                                    <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+                                                      {currentPickup.courier_name || "Manual Courier / Self Ship"}
+                                                    </div>
+                                                    {currentPickup.tracking_number ? (
+                                                      <div style={{ fontSize: "12.5px", color: "#475569" }}>
+                                                        AWB / Tracking: <strong style={{ color: "#0f172a" }}>{currentPickup.tracking_number}</strong>
+                                                      </div>
+                                                    ) : (
+                                                      <div style={{ fontSize: "12px", color: "#94a3b8", fontStyle: "italic" }}>
+                                                        No tracking number provided
+                                                      </div>
+                                                    )}
+                                                    {currentPickup.pickup_notes && (
+                                                      <div style={{ marginTop: "4px", fontSize: "12px", color: "#92400e", background: "#fffbeb", padding: "6px 8px", borderRadius: "4px", border: "1px solid #fde68a" }}>
+                                                        {currentPickup.pickup_notes}
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                )}
                                               </div>
-                                            </div>
-                                          )}
+                                            );
+                                          }
+
+                                          if (isFleetReturn) {
+                                            return (
+                                              <div style={{ padding: "12px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                                                  <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                                    Store Delivery Partner (Own Fleet)
+                                                  </div>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => setReassigningReturnIdMap((p) => ({ ...p, [returnItem.id]: !p[returnItem.id] }))}
+                                                    style={{
+                                                      background: "none",
+                                                      border: "none",
+                                                      color: "#2563eb",
+                                                      fontSize: "12px",
+                                                      fontWeight: 600,
+                                                      cursor: "pointer",
+                                                      padding: "0",
+                                                      textDecoration: "underline",
+                                                    }}
+                                                  >
+                                                    {isReassigningReturn ? "Close" : "Reassign / Switch Partner"}
+                                                  </button>
+                                                </div>
+
+                                                <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+                                                  {currentPickup.agent_name}
+                                                  {currentPickup.agent_phone && (
+                                                    <div style={{ fontSize: "13px", color: "#475569", marginTop: "3px", display: "flex", alignItems: "center", gap: "5px" }}>
+                                                      <PhoneIcon />
+                                                      <a href={`tel:${currentPickup.agent_phone}`} style={{ color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>
+                                                        {formatPhoneDisplay(currentPickup.agent_phone)}
+                                                      </a>
+                                                    </div>
+                                                  )}
+                                                  {/* Level 1 Doorstep Physical Inspection Result */}
+                                                  {(currentPickup.inspection_result === "failed" || currentPickup.pickup_status === "doorstep_rejected") ? (
+                                                    <div style={{ marginTop: "8px", fontSize: "12px", color: "#991b1b", background: "#fef2f2", padding: "8px 10px", borderRadius: "6px", border: "1px solid #fecaca", lineHeight: 1.4 }}>
+                                                      <div style={{ fontWeight: 700 }}>Doorstep Inspection Failed by Rider</div>
+                                                      {currentPickup.inspection_failed_reason && <div>Reason: <strong>{currentPickup.inspection_failed_reason}</strong></div>}
+                                                      {currentPickup.inspection_notes && <div>Rider Note: {currentPickup.inspection_notes}</div>}
+                                                    </div>
+                                                  ) : (currentPickup.pickup_status === "picked_up" || currentPickup.pickup_status === "delivered_to_hub") ? (
+                                                    <div style={{ marginTop: "8px", fontSize: "12px", color: "#15803d", background: "#f0fdf4", padding: "6px 8px", borderRadius: "6px", border: "1px solid #bbf7d0", fontWeight: 600 }}>
+                                                      Level 1 Doorstep Physical Inspection Passed
+                                                    </div>
+                                                  ) : null}
+                                                  {currentPickup.pickup_notes && (
+                                                    <div style={{ marginTop: "6px", fontSize: "12px", color: "#92400e", background: "#fffbeb", padding: "6px 8px", borderRadius: "4px", border: "1px solid #fde68a" }}>
+                                                      {currentPickup.pickup_notes}
+                                                    </div>
+                                                  )}
+                                                </div>
+
+                                                {/* Reassign Return Rider / Switch to Manual Panel */}
+                                                {isReassigningReturn && (
+                                                  <div style={{ marginTop: "12px", padding: "12px", background: "#ffffff", borderRadius: "8px", border: "1px solid #cbd5e1", display: "flex", flexDirection: "column", gap: "12px" }}>
+                                                    {/* Option 1: In-House Rider Reassignment */}
+                                                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                                                      <label style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a" }}>
+                                                        Option 1: Choose Replacement Rider
+                                                      </label>
+                                                      <select
+                                                        value={reassignReturnAgentIdMap[returnItem.id] || ""}
+                                                        onChange={(e) => setReassignReturnAgentIdMap((p) => ({ ...p, [returnItem.id]: e.target.value }))}
+                                                        style={{ ...inputStyle, fontSize: "13px" }}
+                                                      >
+                                                        <option value="">-- Choose Rider --</option>
+                                                        {deliveryAgents.filter((a) => a.is_active).map((a) => (
+                                                          <option key={a.id} value={a.id}>
+                                                            {a.name} ({formatPhoneDisplay(a.phone)}) — {a.current_order_count} active orders
+                                                          </option>
+                                                        ))}
+                                                      </select>
+                                                      <div style={{ display: "flex", gap: "8px", marginTop: "2px" }}>
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => handleReassignReturnRider(returnItem.id)}
+                                                          disabled={actionLoadingId === returnItem.id || !reassignReturnAgentIdMap[returnItem.id]}
+                                                          style={{ padding: "6px 12px", borderRadius: "5px", background: "#2563eb", color: "#ffffff", border: "none", fontSize: "12px", fontWeight: 700, cursor: "pointer", opacity: !reassignReturnAgentIdMap[returnItem.id] ? 0.6 : 1 }}
+                                                        >
+                                                          {actionLoadingId === returnItem.id ? "Reassigning..." : "Confirm Reassign"}
+                                                        </button>
+                                                      </div>
+                                                    </div>
+
+                                                    {/* Option 2: Switch to Manual Courier */}
+                                                    <div style={{ borderTop: "1px dashed #cbd5e1", paddingTop: "10px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                                                      <label style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a" }}>
+                                                        Option 2: Switch to Manual Return Courier
+                                                      </label>
+                                                      <input
+                                                        value={returnManualCourierMap[returnItem.id]?.courierName || ""}
+                                                        onChange={(e) =>
+                                                          setReturnManualCourierMap((p) => ({
+                                                            ...p,
+                                                            [returnItem.id]: {
+                                                              courierName: e.target.value,
+                                                              trackingNumber: p[returnItem.id]?.trackingNumber || "",
+                                                              notes: p[returnItem.id]?.notes || "",
+                                                            },
+                                                          }))
+                                                        }
+                                                        placeholder="Courier Name (e.g. DTDC Return, Customer Self-Ship)"
+                                                        style={{ ...inputStyle, fontSize: "13px" }}
+                                                      />
+                                                      <input
+                                                        value={returnManualCourierMap[returnItem.id]?.trackingNumber || ""}
+                                                        onChange={(e) =>
+                                                          setReturnManualCourierMap((p) => ({
+                                                            ...p,
+                                                            [returnItem.id]: {
+                                                              trackingNumber: e.target.value,
+                                                              courierName: p[returnItem.id]?.courierName || "",
+                                                              notes: p[returnItem.id]?.notes || "",
+                                                            },
+                                                          }))
+                                                        }
+                                                        placeholder="Tracking / AWB Number (Optional)"
+                                                        style={{ ...inputStyle, fontSize: "13px" }}
+                                                      />
+                                                      <div style={{ display: "flex", gap: "8px", marginTop: "2px" }}>
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => handleSwitchReturnToManual(returnItem.id)}
+                                                          disabled={actionLoadingId === returnItem.id}
+                                                          style={{ padding: "6px 12px", borderRadius: "5px", background: "#059669", color: "#ffffff", border: "none", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
+                                                        >
+                                                          {actionLoadingId === returnItem.id ? "Switching..." : "Switch to Manual Courier"}
+                                                        </button>
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => setReassigningReturnIdMap((p) => ({ ...p, [returnItem.id]: false }))}
+                                                          style={{ padding: "6px 10px", borderRadius: "5px", background: "#ffffff", color: "#475569", border: "1px solid #cbd5e1", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                                        >
+                                                          Cancel
+                                                        </button>
+                                                      </div>
+                                                    </div>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            );
+                                          }
+
+                                          if (isShiprocketReturn) {
+                                            return (
+                                              <div style={{ padding: "12px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                                                <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "4px" }}>
+                                                  Shiprocket Reverse Logistics
+                                                </div>
+                                                <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+                                                  {currentPickup.courier_name}
+                                                </div>
+                                                {currentPickup.tracking_number && (
+                                                  <div style={{ fontSize: "12.5px", color: "#475569", marginTop: "2px" }}>
+                                                    AWB: <strong>{currentPickup.tracking_number}</strong>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            );
+                                          }
+
+                                          return null;
+                                        })()
+                                      ) : (returnItem.status === "rejected" || detail?.status === "rejected") ? (
+                                        <div style={{ padding: "10px 12px", background: "#fef2f2", color: "#991b1b", borderRadius: "6px", fontSize: "12px", border: "1px solid #fecaca", fontWeight: 600 }}>
+                                          Return request is rejected. Reverse logistics is disabled.
                                         </div>
                                       ) : (
                                         /* If Not assigned and return is approved or requested */
                                         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                          {/* Mode Tabs */}
-                                          {storeDeliveryMode === "hybrid" && (
+                                          {/* Mode Tabs: only rendered if more than 1 delivery mode is enabled */}
+                                          {availableReturnModes.length > 1 && (
                                             <div style={{ display: "flex", gap: "4px", padding: "3px", background: "#f1f5f9", borderRadius: "6px" }}>
-                                              <button
-                                                type="button"
-                                                onClick={() => setSelectedReturnDispatchModeMap((p) => ({ ...p, [returnItem.id]: "own_agent" }))}
-                                                style={{
-                                                  flex: 1,
-                                                  padding: "6px 8px",
-                                                  borderRadius: "4px",
-                                                  border: "none",
-                                                  background: activeReturnMode === "own_agent" ? "#ffffff" : "transparent",
-                                                  color: activeReturnMode === "own_agent" ? "#2563eb" : "#64748b",
-                                                  fontWeight: 700,
-                                                  fontSize: "12px",
-                                                  cursor: "pointer",
-                                                  boxShadow: activeReturnMode === "own_agent" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                                                }}
-                                              >
-                                                In-House Rider
-                                              </button>
-                                              <button
-                                                type="button"
-                                                onClick={() => setSelectedReturnDispatchModeMap((p) => ({ ...p, [returnItem.id]: "shiprocket" }))}
-                                                style={{
-                                                  flex: 1,
-                                                  padding: "6px 8px",
-                                                  borderRadius: "4px",
-                                                  border: "none",
-                                                  background: activeReturnMode === "shiprocket" ? "#ffffff" : "transparent",
-                                                  color: activeReturnMode === "shiprocket" ? "#2563eb" : "#64748b",
-                                                  fontWeight: 700,
-                                                  fontSize: "12px",
-                                                  cursor: "pointer",
-                                                  boxShadow: activeReturnMode === "shiprocket" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                                                }}
-                                              >
-                                                Shiprocket
-                                              </button>
-                                              <button
-                                                type="button"
-                                                onClick={() => setSelectedReturnDispatchModeMap((p) => ({ ...p, [returnItem.id]: "manual" }))}
-                                                style={{
-                                                  flex: 1,
-                                                  padding: "6px 8px",
-                                                  borderRadius: "4px",
-                                                  border: "none",
-                                                  background: activeReturnMode === "manual" ? "#ffffff" : "transparent",
-                                                  color: activeReturnMode === "manual" ? "#2563eb" : "#64748b",
-                                                  fontWeight: 700,
-                                                  fontSize: "12px",
-                                                  cursor: "pointer",
-                                                  boxShadow: activeReturnMode === "manual" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                                                }}
-                                              >
-                                                Manual
-                                              </button>
+                                              {availableReturnModes.map((mode) => (
+                                                <button
+                                                  key={mode.id}
+                                                  type="button"
+                                                  onClick={() => setSelectedReturnDispatchModeMap((p) => ({ ...p, [returnItem.id]: mode.id }))}
+                                                  style={{
+                                                    flex: 1,
+                                                    padding: "6px 8px",
+                                                    borderRadius: "4px",
+                                                    border: "none",
+                                                    background: activeReturnMode === mode.id ? "#ffffff" : "transparent",
+                                                    color: activeReturnMode === mode.id ? "#2563eb" : "#64748b",
+                                                    fontWeight: 700,
+                                                    fontSize: "12px",
+                                                    cursor: "pointer",
+                                                    boxShadow: activeReturnMode === mode.id ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                                                  }}
+                                                >
+                                                  {mode.label}
+                                                </button>
+                                              ))}
                                             </div>
                                           )}
 
@@ -4517,7 +5767,7 @@ const AdminOrders: React.FC = () => {
                                                       },
                                                     }))
                                                   }
-                                                  placeholder="e.g. DTDC Return / Self Ship"
+                                                  placeholder="e.g. DTDC Return, Customer Self-Ship"
                                                   style={inputStyle}
                                                 />
                                               </div>
@@ -4536,7 +5786,26 @@ const AdminOrders: React.FC = () => {
                                                       },
                                                     }))
                                                   }
-                                                  placeholder="Tracking Number"
+                                                  placeholder="e.g. DTDC98234823"
+                                                  style={inputStyle}
+                                                />
+                                              </div>
+                                              <div>
+                                                <div style={labelStyle}>Pickup / Handover Notes (Optional)</div>
+                                                <input
+                                                  value={returnManualCourierMap[returnItem.id]?.notes || ""}
+                                                  onChange={(e) =>
+                                                    setReturnManualCourierMap((p) => ({
+                                                      ...p,
+                                                      [returnItem.id]: {
+                                                        ...p[returnItem.id],
+                                                        notes: e.target.value,
+                                                        courierName: p[returnItem.id]?.courierName || "",
+                                                        trackingNumber: p[returnItem.id]?.trackingNumber || "",
+                                                      },
+                                                    }))
+                                                  }
+                                                  placeholder="e.g. Customer returned via speed post"
                                                   style={inputStyle}
                                                 />
                                               </div>
@@ -4547,9 +5816,9 @@ const AdminOrders: React.FC = () => {
                                                 style={{
                                                   padding: "8px 12px",
                                                   borderRadius: "6px",
-                                                  background: "#ffffff",
-                                                  border: "1px solid #cbd5e1",
-                                                  color: "#0f172a",
+                                                  background: "#2563eb",
+                                                  border: "1px solid #2563eb",
+                                                  color: "#ffffff",
                                                   fontWeight: 700,
                                                   fontSize: "13px",
                                                   cursor: "pointer",
@@ -4567,7 +5836,7 @@ const AdminOrders: React.FC = () => {
                               </div>
 
                               {/* Card 2: Return Lifecycle Admin Action */}
-                              {returnItem.status === "requested" ? (
+                              {returnItem.status === "requested" && canUpdateOrders ? (
                                 <div style={{ ...plainCardStyle, padding: "16px" }}>
                                   <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "12px", color: "#0f172a" }}>
                                     Review Return Request
@@ -4594,7 +5863,7 @@ const AdminOrders: React.FC = () => {
                                         cursor: "pointer",
                                       }}
                                     >
-                                      ✓ Approve Return
+                                      Approve Return
                                     </button>
 
                                     <button
@@ -4617,7 +5886,7 @@ const AdminOrders: React.FC = () => {
                                         cursor: "pointer",
                                       }}
                                     >
-                                      ✕ Reject Return
+                                      Reject Return
                                     </button>
                                   </div>
 
@@ -4727,21 +5996,26 @@ const AdminOrders: React.FC = () => {
                               {returnItem.status === "approved" ? (
                                 (() => {
                                   const pickupInfo = detail?.pickup_details || returnItem.pickup_details;
-                                  const isAssigned = Boolean(pickupInfo?.agent_name || pickupInfo?.courier_name);
+                                  const isFleetRiderPickup = pickupInfo?.mode === "own_agent" && Boolean(pickupInfo.agent_name);
 
-                                  if (isAssigned) {
+                                  if (isFleetRiderPickup) {
                                     return (
                                       <div style={{ ...plainCardStyle, padding: "16px", background: "#f8fafc", border: "1px solid #e2e8f0" }}>
                                         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                                          <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#eff6ff", color: "#2563eb", display: "grid", placeItems: "center", fontSize: "16px" }}>
-                                            🚚
+                                          <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#eff6ff", color: "#2563eb", display: "grid", placeItems: "center" }}>
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                              <rect x="1" y="3" width="15" height="13" />
+                                              <polygon points="16 8 20 8 23 11 23 16 16 16 8" />
+                                              <circle cx="5.5" cy="18.5" r="2.5" />
+                                              <circle cx="18.5" cy="18.5" r="2.5" />
+                                            </svg>
                                           </div>
                                           <div>
                                             <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
                                               Reverse Pickup In Progress
                                             </div>
                                             <div style={{ fontSize: "12px", color: "#64748b" }}>
-                                              Assigned to <strong>{pickupInfo.agent_name || pickupInfo.courier_name}</strong>.
+                                              Assigned to rider <strong>{pickupInfo.agent_name}</strong>.
                                             </div>
                                           </div>
                                         </div>
@@ -4752,13 +6026,17 @@ const AdminOrders: React.FC = () => {
                                     );
                                   }
 
+                                  if (!canUpdateOrders) return null;
+
                                   return (
                                     <div style={{ ...plainCardStyle, padding: "16px" }}>
-                                      <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "6px", color: "#0f172a" }}>
-                                        Direct In-Store Package Receipt
+                                      <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "4px", color: "#0f172a" }}>
+                                        In-Store Package Receipt & Verification
                                       </div>
                                       <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "14px" }}>
-                                        Confirm physical arrival if customer returned item directly to the store/hub without a rider.
+                                        {pickupInfo?.courier_name
+                                          ? `Package returned via ${pickupInfo.courier_name}. Verify received quantities to proceed to Quality Inspection & Restock.`
+                                          : "Confirm physical arrival if customer returned item directly to the store/hub."}
                                       </div>
 
                                       <div style={{ display: "grid", gap: "8px", marginBottom: "14px" }}>
@@ -4809,6 +6087,21 @@ const AdminOrders: React.FC = () => {
                                         })}
                                       </div>
 
+                                      <div style={{ marginBottom: "14px" }}>
+                                        <div style={labelStyle}>Admin Note (Optional)</div>
+                                        <textarea
+                                          value={receiveDraft.adminNote}
+                                          onChange={(e) =>
+                                            setReceiveDraftValue(returnItem.id, (draft) => ({
+                                              ...draft,
+                                              adminNote: e.target.value,
+                                            }))
+                                          }
+                                          placeholder="e.g. Package received at store warehouse in good condition..."
+                                          style={{ ...inputStyle, minHeight: "56px", resize: "vertical" }}
+                                        />
+                                      </div>
+
                                       <button
                                         onClick={() => handleReceiveReturn(returnItem.id)}
                                         disabled={actionLoadingId === returnItem.id}
@@ -4824,14 +6117,14 @@ const AdminOrders: React.FC = () => {
                                           cursor: actionLoadingId === returnItem.id ? "wait" : "pointer",
                                         }}
                                       >
-                                        Confirm Direct Hub Receipt
+                                        {actionLoadingId === returnItem.id ? "Receiving Package..." : "Confirm Package Received at Hub"}
                                       </button>
                                     </div>
                                   );
                                 })()
                               ) : null}
 
-                              {returnItem.status === "received" ? (
+                              {returnItem.status === "received" && canUpdateOrders ? (
                                 <div style={{ ...plainCardStyle, padding: "16px" }}>
                                   <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "6px", color: "#0f172a" }}>
                                     Product Quality Inspection & Stock Restock
@@ -4898,9 +6191,8 @@ const AdminOrders: React.FC = () => {
                                                   }}
                                                   style={{ ...inputStyle, padding: "6px 8px", fontSize: "12px" }}
                                                 >
-                                                  <option value="restock">Restock (Return to Stock)</option>
+                                                  <option value="restock">Restock (Return to Inventory)</option>
                                                   <option value="discard">Discard (Damaged / Unsellable)</option>
-                                                  <option value="quarantine">Quarantine (Hold for Quality Check)</option>
                                                 </select>
                                               </div>
 
@@ -4985,9 +6277,137 @@ const AdminOrders: React.FC = () => {
                                       Process Customer Refund
                                     </span>
                                     <span style={{ fontSize: "12px", fontWeight: 700, color: "#166534", background: "#dcfce7", border: "1px solid #bbf7d0", padding: "2px 7px", borderRadius: "4px" }}>
-                                      Allowed: {formatPrice(returnItem.suggested_refund_amount)}
+                                      Suggested: {formatPrice(returnItem.suggested_refund_amount)}
                                     </span>
                                   </div>
+
+                                  {/* Refund Calculation Breakdown Box */}
+                                  {detail?.refund_breakdown ? (
+                                    <div
+                                      style={{
+                                        background: "#f8fafc",
+                                        border: "1px solid #e2e8f0",
+                                        borderRadius: "8px",
+                                        padding: "12px 14px",
+                                        marginBottom: "14px",
+                                        fontSize: "12.5px",
+                                      }}
+                                    >
+                                      <div style={{ fontWeight: 700, color: "#0f172a", marginBottom: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                        <span style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#475569" }}>
+                                          Refund Breakdown
+                                        </span>
+                                        <span style={{ fontSize: "11px", fontWeight: 500, color: "#64748b" }}>Prorated</span>
+                                      </div>
+
+                                      <div style={{ display: "grid", gap: "6px", color: "#475569" }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                          <span>Items Subtotal</span>
+                                          <span style={{ fontWeight: 600, color: "#0f172a" }}>+{formatPrice(detail.refund_breakdown.items_subtotal)}</span>
+                                        </div>
+
+                                        {detail.refund_breakdown.discounts_prorated > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: "#b91c1c" }}>
+                                            <span>Discount</span>
+                                            <span style={{ fontWeight: 600 }}>-{formatPrice(detail.refund_breakdown.discounts_prorated)}</span>
+                                          </div>
+                                        )}
+
+                                        {detail.refund_breakdown.tax_refund > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                            <span>Tax (GST)</span>
+                                            <span style={{ fontWeight: 600, color: "#0f172a" }}>+{formatPrice(detail.refund_breakdown.tax_refund)}</span>
+                                          </div>
+                                        )}
+
+                                        {detail.refund_breakdown.refundable_charges_added > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: "#16a34a" }}>
+                                            <span>Refundable Charges</span>
+                                            <span style={{ fontWeight: 600 }}>+{formatPrice(detail.refund_breakdown.refundable_charges_added)}</span>
+                                          </div>
+                                        )}
+
+                                        {detail.refund_breakdown.non_refundable_charges_retained > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: "#b45309" }}>
+                                            <span>Non-Refundable Retained</span>
+                                            <span style={{ fontWeight: 600 }}>-{formatPrice(detail.refund_breakdown.non_refundable_charges_retained)}</span>
+                                          </div>
+                                        )}
+
+                                        <div
+                                          style={{
+                                            display: "flex",
+                                            justifyContent: "space-between",
+                                            alignItems: "center",
+                                            borderTop: "1px solid #e2e8f0",
+                                            paddingTop: "8px",
+                                            marginTop: "4px",
+                                            fontWeight: 700,
+                                            fontSize: "13px",
+                                            color: "#0f172a",
+                                          }}
+                                        >
+                                          <span>Suggested Refund</span>
+                                          <span style={{ color: "#16a34a", fontSize: "14px" }}>{formatPrice(detail.refund_breakdown.suggested_refund_amount)}</span>
+                                        </div>
+                                      </div>
+
+                                      {/* Non-Refundable Exception Checkboxes */}
+                                      {detail.refund_breakdown.charge_allocations?.some((c) => !c.refundable && c.allocated_amount > 0) && (
+                                        <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "1px solid #e2e8f0" }}>
+                                          <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b", marginBottom: "6px" }}>
+                                            Refund Retained Charges
+                                          </div>
+
+                                          <div style={{ display: "grid", gap: "6px" }}>
+                                            {detail.refund_breakdown.charge_allocations
+                                              .filter((c) => !c.refundable && c.allocated_amount > 0)
+                                              .map((charge) => {
+                                                const isChecked = Boolean(selectedExtraChargesByReturn[returnItem.id]?.[charge.id]);
+                                                return (
+                                                  <label
+                                                    key={charge.id}
+                                                    style={{
+                                                      display: "flex",
+                                                      alignItems: "center",
+                                                      justifyContent: "space-between",
+                                                      padding: "7px 10px",
+                                                      borderRadius: "6px",
+                                                      background: isChecked ? "#f0fdf4" : "#ffffff",
+                                                      border: isChecked ? "1px solid #86efac" : "1px solid #e2e8f0",
+                                                      cursor: canRefundOrders ? "pointer" : "not-allowed",
+                                                      fontSize: "12px",
+                                                      transition: "all 0.15s ease",
+                                                    }}
+                                                  >
+                                                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                                      <input
+                                                        type="checkbox"
+                                                        disabled={!canRefundOrders}
+                                                        checked={isChecked}
+                                                        onChange={() =>
+                                                          toggleExtraCharge(
+                                                            returnItem.id,
+                                                            charge.id,
+                                                            detail.refund_breakdown!.suggested_refund_amount,
+                                                            detail.refund_breakdown!.charge_allocations
+                                                          )
+                                                        }
+                                                        style={{ cursor: canRefundOrders ? "pointer" : "not-allowed", accentColor: "#16a34a" }}
+                                                      />
+                                                      <span style={{ fontWeight: 500, color: "#0f172a" }}>{charge.label}</span>
+                                                    </div>
+                                                    <span style={{ color: isChecked ? "#16a34a" : "#64748b", fontWeight: 600 }}>
+                                                      +{formatPrice(charge.allocated_amount)}
+                                                    </span>
+                                                  </label>
+                                                );
+                                              })}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : null}
 
                                   {/* Original Order Payment Source Banner */}
                                   {isOrderOnlinePaid ? (
@@ -5007,14 +6427,14 @@ const AdminOrders: React.FC = () => {
                                     >
                                       <div>
                                         <div style={{ fontSize: "12.5px", fontWeight: 700, color: "#166534" }}>
-                                          💳 Original Payment: Online ({formatPaymentMethodName(detail?.order?.payment_method)})
+                                          Payment Source: Online ({formatPaymentMethodName(detail?.order?.payment_method)})
                                         </div>
                                         <div style={{ fontSize: "11px", color: "#15803d", marginTop: "2px" }}>
                                           {detail?.order?.razorpay_payment_id ? `Razorpay Payment ID: ${detail.order.razorpay_payment_id}` : "Gateway Reversal Enabled"}
                                         </div>
                                       </div>
                                       <span style={{ fontSize: "10.5px", fontWeight: 700, color: "#15803d", background: "#ffffff", border: "1px solid #86efac", padding: "2px 6px", borderRadius: "4px" }}>
-                                        Instant Auto-Reversal
+                                        Auto-Reversal
                                       </span>
                                     </div>
                                   ) : (
@@ -5029,7 +6449,7 @@ const AdminOrders: React.FC = () => {
                                     >
                                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
                                         <span style={{ fontSize: "12.5px", fontWeight: 700, color: "#92400e" }}>
-                                          💵 Original Payment: Cash on Delivery (COD)
+                                          Payment Source: Cash on Delivery (COD)
                                         </span>
                                         {(detail?.customer_refund_account || returnItem.customer_refund_account) && (
                                           <span style={{ fontSize: "10px", fontWeight: 800, color: "#92400e", background: "#fef3c7", border: "1px solid #fde68a", padding: "1px 6px", borderRadius: "4px", textTransform: "uppercase" }}>
@@ -5069,6 +6489,8 @@ const AdminOrders: React.FC = () => {
                                     </div>
                                   )}
 
+                                  {!canRefundOrders ? null : (
+                                  <>
                                   <div style={{ display: "grid", gap: "10px", marginBottom: "14px" }}>
                                     <div>
                                       <div style={labelStyle}>Refund Method</div>
@@ -5083,10 +6505,10 @@ const AdminOrders: React.FC = () => {
                                         style={inputStyle}
                                       >
                                         {isOrderOnlinePaid && (
-                                          <option value="original_payment">⚡ Auto-Refund to Source (Razorpay Gateway)</option>
+                                          <option value="original_payment">Auto-Refund to Source (Razorpay Gateway)</option>
                                         )}
-                                        <option value="cod_refund">🏦 Direct Bank Transfer / UPI Refund (Manual Payout)</option>
-                                        <option value="store_credit">🎟️ Store Credit / Gift Voucher Code</option>
+                                        <option value="cod_refund">Direct Bank Transfer / UPI Refund (Manual Payout)</option>
+                                        <option value="store_credit">Store Credit / Voucher Code</option>
                                         {!isOrderOnlinePaid && (
                                           <option value="original_payment">Original Payment Gateway (Fallback)</option>
                                         )}
@@ -5169,6 +6591,8 @@ const AdminOrders: React.FC = () => {
                                       ? "Processing Refund..."
                                       : `Confirm & Issue Refund (${formatPrice(Number(refundDraft.finalRefundAmount || returnItem.final_refund_amount || returnItem.suggested_refund_amount))})`}
                                   </button>
+                                  </>
+                                  )}
                                 </div>
                               ) : null}
 
@@ -5232,58 +6656,212 @@ const AdminOrders: React.FC = () => {
           </div>
 
           {/* Pagination and page size controls */}
-          {filteredReturns.length > 0 && (
+          {adminReturns.length > 0 && (
             <div
               style={{
                 display: "flex",
-                justifyContent: "space-between",
+                flexDirection: "column",
                 alignItems: "center",
-                flexWrap: "wrap",
-                gap: "12px",
+                justifyContent: "center",
+                gap: "10px",
                 marginTop: "16px",
                 padding: "8px 4px",
+                width: "100%",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#64748b" }}>
-                <span>Rows per page:</span>
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    const newSize = Number(e.target.value);
-                    setPageSize(newSize);
-                    setCurrentPage(1);
-                  }}
-                  style={{
-                    padding: "6px 10px",
-                    borderRadius: "6px",
-                    border: "1px solid #cbd5e1",
-                    background: "#ffffff",
-                    color: "#0f172a",
-                    fontSize: "13px",
-                    cursor: "pointer",
-                  }}
-                >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                </select>
-              </div>
-
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalReturnPages}
                 onPageChange={(page) => {
                   setCurrentPage(page);
                 }}
-                totalItems={filteredReturns.length}
                 pageSize={pageSize}
-                showRangeText={true}
+                pageSizeOptions={[10, 15, 25, 50, 100]}
+                onPageSizeChange={(newSize) => {
+                  setPageSize(newSize);
+                  setCurrentPage(1);
+                }}
                 accentColor="#2563eb"
                 style={{ padding: 0 }}
               />
             </div>
           )}
         </>
+      )}
+
+      {/* ADMIN ORDER CANCELLATION MODAL */}
+      {adminCancelOrder && canCancelOrders && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.6)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "16px",
+            boxSizing: "border-box",
+          }}
+          onClick={() => setAdminCancelOrder(null)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "520px",
+              background: "#ffffff",
+              borderRadius: "16px",
+              padding: "24px",
+              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
+              boxSizing: "border-box",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 800, color: "#991b1b" }}>
+                  Cancel Order #{adminCancelOrder.id.slice(0, 8).toUpperCase()}
+                </h3>
+                <p style={{ margin: "3px 0 0", fontSize: "12.5px", color: "#64748b" }}>
+                  Customer: {adminCancelOrder.customer_name || "Store Customer"} • Status: {adminCancelOrder.status}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAdminCancelOrder(null)}
+                style={{
+                  background: "#f1f5f9",
+                  border: "none",
+                  borderRadius: "50%",
+                  width: "32px",
+                  height: "32px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#64748b",
+                  cursor: "pointer",
+                }}
+              >
+                <XMarkIcon />
+              </button>
+            </div>
+
+            <div
+              style={{
+                background: "#fef2f2",
+                borderRadius: "8px",
+                border: "1px solid #fecaca",
+                padding: "12px",
+                marginBottom: "16px",
+                fontSize: "12.5px",
+                color: "#991b1b",
+                lineHeight: 1.45,
+              }}
+            >
+              Cancelling this order will restore reserved product inventory, release any assigned delivery riders, and initiate an automatic Razorpay refund if paid online.
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const combined = adminCancelCustomNote.trim()
+                  ? `${adminCancelReason}: ${adminCancelCustomNote.trim()}`
+                  : adminCancelReason;
+                const orderId = adminCancelOrder.id;
+                setAdminCancelOrder(null);
+                await handleCancel(orderId, combined);
+              }}
+              style={{ display: "flex", flexDirection: "column", gap: "14px" }}
+            >
+              <div>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#334155", marginBottom: "6px" }}>
+                  Cancellation Reason Preset
+                </label>
+                <select
+                  value={adminCancelReason}
+                  onChange={(e) => setAdminCancelReason(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "13px",
+                    color: "#0f172a",
+                    background: "#ffffff",
+                  }}
+                  required
+                >
+                  {ADMIN_CANCEL_PRESETS.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#334155", marginBottom: "6px" }}>
+                  Custom Admin Note / Attempt Details
+                </label>
+                <textarea
+                  rows={3}
+                  value={adminCancelCustomNote}
+                  onChange={(e) => setAdminCancelCustomNote(e.target.value)}
+                  placeholder="e.g. Rider visited premises 3 times and called phone 4 times with no response. Dropped parcel back at warehouse."
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "13px",
+                    color: "#0f172a",
+                    resize: "none",
+                    fontFamily: "inherit",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+                <button
+                  type="button"
+                  onClick={() => setAdminCancelOrder(null)}
+                  style={{
+                    flex: 1,
+                    padding: "12px",
+                    borderRadius: "8px",
+                    background: "#f1f5f9",
+                    border: "1px solid #cbd5e1",
+                    color: "#475569",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Keep Order Active
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    flex: 2,
+                    padding: "12px",
+                    borderRadius: "8px",
+                    background: "#dc2626",
+                    border: "none",
+                    color: "#ffffff",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    boxShadow: "0 2px 6px rgba(220, 38, 38, 0.25)",
+                  }}
+                >
+                  Confirm Cancellation
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

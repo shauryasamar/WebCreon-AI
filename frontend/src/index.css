@@ -17,7 +17,7 @@
 
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
-  color-scheme: light dark;
+  color-scheme: light;
   color: var(--text);
   background: var(--bg);
   font-synthesis: none;
@@ -30,28 +30,18 @@
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
+html {
+  margin: 0;
+  padding: 0;
+  background-color: #f8fafc;
+  color-scheme: light;
 }
 
 body {
   margin: 0;
+  padding: 0;
+  background-color: #f8fafc;
+  color: #0f172a;
 }
 
 #root {
@@ -109,25 +99,120 @@ code {
   background: var(--code-bg);
 } */
 
-html,
-body,
+html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
+  background: #f8fafc;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
+  background: #f8fafc;
+  position: relative;
+}
+
 #root {
   margin: 0;
   padding: 0;
   width: 100%;
   min-height: 100%;
-  background: #0f172a;
-}
-
-body {
-  overflow-x: clip;
-  overflow-y: auto;
+  background: #f8fafc;
 }
 
 *,
 *::before,
 *::after {
   box-sizing: border-box;
+}
+
+/* ==========================================================================
+   Modern Minimal Theme Scrollbars (Replaces thick default OS scrollbars)
+   ========================================================================== */
+
+/* Modern CSS Standards (Firefox 64+, Chrome 121+, Safari 17.4+) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #e9edf2 transparent;
+}
+
+/* WebKit / Chromium Browsers (Chrome, Edge, Safari, Brave, Opera) */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #e9edf2;
+  border-radius: 9999px;
+  transition: background-color 0.15s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #dde3ec;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: #dde3ec;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ==========================================================================
+   Mobile & Smartphone Preview Scrollbar Elimination (No Blank Gutter)
+   ========================================================================== */
+.is-mobile-preview,
+.is-mobile-preview *,
+.builder-preview-scroll,
+.builder-preview-scroll *,
+html.is-mobile-preview,
+body.is-mobile-preview,
+body.is-mobile-preview #root,
+body.is-mobile-preview * {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.is-mobile-preview::-webkit-scrollbar,
+.is-mobile-preview *::-webkit-scrollbar,
+.builder-preview-scroll::-webkit-scrollbar,
+.builder-preview-scroll *::-webkit-scrollbar,
+html.is-mobile-preview::-webkit-scrollbar,
+body.is-mobile-preview::-webkit-scrollbar,
+body.is-mobile-preview *::-webkit-scrollbar {
+  display: none !important;
+  width: 0px !important;
+  height: 0px !important;
+  background: transparent !important;
+}
+
+@media (max-width: 768px) {
+  html,
+  body,
+  #root,
+  * {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
+  ::-webkit-scrollbar {
+    display: none !important;
+    width: 0px !important;
+    height: 0px !important;
+    background: transparent !important;
+  }
 }
 
 /* html,

@@ -15,16 +15,40 @@ const AdminSidebar = () => {
 
   const links = [
     {
+      label: "Analytics",
+      to: `/builder/${siteId}/admin/analytics`,
+    },
+    {
       label: "Products",
       to: `/builder/${siteId}/admin/products`,
     },
     {
-      label: "Orders",
+      label: "Orders & Returns",
       to: `/builder/${siteId}/admin/orders`,
+    },
+    {
+      label: "Discounts & Promo",
+      to: `/builder/${siteId}/admin/discounts`,
+    },
+    {
+      label: "Support & CRM",
+      to: `/builder/${siteId}/admin/support`,
+    },
+    {
+      label: "Home Sections",
+      to: `/builder/${siteId}/admin/home-sections`,
+    },
+    {
+      label: "Pages & Policies",
+      to: `/builder/${siteId}/admin/pages`,
     },
     {
       label: "Delivery & Shipping",
       to: `/builder/${siteId}/admin/delivery`,
+    },
+    {
+      label: "Checkout Charges",
+      to: `/builder/${siteId}/admin/checkout-charges`,
     },
     {
       label: "Earnings & Ledger",
@@ -33,10 +57,6 @@ const AdminSidebar = () => {
     {
       label: "Payout Settings",
       to: `/builder/${siteId}/admin/payment-settings`,
-    },
-    {
-      label: "Checkout Charges",
-      to: `/builder/${siteId}/admin/checkout-charges`,
     },
   ];
 

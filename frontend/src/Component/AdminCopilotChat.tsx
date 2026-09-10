@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { saveThemeSnapshot, updateThemeValues, applyThemeToPages } from "../customizations/editorUtils";
 import { AiAvatar } from "./AiAvatar";
+import { useAdminAuth } from "../context/AdminAuthContext";
+import { AccessDeniedView } from "./AccessDeniedView";
 
 type DataCard = {
   type: "redirect_card" | "orders_card" | "returns_card" | "analytics_card" | "palette_suggestions_card" | "component_palette_suggestions_card" | "camouflage_warning_card" | "table_card";
@@ -49,6 +51,10 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
   onSiteDefinitionChange,
 }) => {
   const navigate = useNavigate();
+  const { hasPermission, isOwner } = useAdminAuth();
+  const canAccessCopilot = isOwner || hasPermission("chat:access") || hasPermission("chat:view");
+  const canSendCopilot = canAccessCopilot;
+  const canClearCopilot = canAccessCopilot;
   const [messages, setMessages] = useState<CopilotMessage[]>(() => {
     if (typeof window !== "undefined" && siteId) {
       try {
@@ -78,18 +84,6 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
       } catch {}
     }
   }, [messages, siteId]);
-
-  const handleClearChat = () => {
-    setMessages([]);
-    if (typeof window !== "undefined" && siteId) {
-      try {
-        sessionStorage.removeItem(`webnirmaan_copilot_chat_${siteId}`);
-        localStorage.removeItem(`webnirmaan_copilot_chat_${siteId}`);
-      } catch {}
-    }
-    setToastMsg("Chat history cleared 🧹");
-    setTimeout(() => setToastMsg(null), 2500);
-  };
 
   // Clean fixed admin dashboard theme for Copilot UI
   const chatBg = "#ffffff";
@@ -127,7 +121,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
       onSiteDefinitionChange(updatedDef);
     }
 
-    setToastMsg(`Saved "${themeName}" to SAVED THEMES SNAPSHOTS in sidepanel! 📁`);
+    setToastMsg(`Saved "${themeName}" to SAVED SNAPSHOTS in sidepanel!`);
     setTimeout(() => setToastMsg(null), 3500);
   };
 
@@ -210,6 +204,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
   };
 
   const handleSend = async (textToSend?: string) => {
+    if (!canSendCopilot) return;
     const text = (textToSend || input).trim();
     if (!text || loading) return;
 
@@ -345,8 +340,13 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
     }
   };
 
+  if (!canAccessCopilot) {
+    return <AccessDeniedView moduleName="AI Copilot" requiredPermission="chat:access" />;
+  }
+
   return (
     <div
+      className="copilot-chat-root"
       style={{
         display: "flex",
         flexDirection: "column",
@@ -354,22 +354,39 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
         maxHeight: "calc(100vh - 110px)",
         background: chatBg,
         color: chatText,
-        fontFamily: "'Inter', sans-serif",
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
     >
+      <style>{`
+        .copilot-chat-root,
+        .copilot-chat-root input,
+        .copilot-chat-root button,
+        .copilot-chat-root textarea,
+        .copilot-chat-root span,
+        .copilot-chat-root div,
+        .copilot-chat-root p,
+        .copilot-chat-root h1,
+        .copilot-chat-root h2,
+        .copilot-chat-root h3 {
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+        }
+      `}</style>
       {/* Toast Notification Banner */}
       {toastMsg && (
         <div
           style={{
-            padding: "6px 12px",
-            background: "#10b981",
-            color: "#ffffff",
-            fontSize: "11px",
-            fontWeight: 700,
-            borderRadius: "6px",
+            padding: "8px 12px",
+            background: "rgba(240, 253, 244, 0.7)",
+            backdropFilter: "blur(12px) saturate(180%)",
+            WebkitBackdropFilter: "blur(12px) saturate(180%)",
+            color: "#14532d",
+            border: "1px solid rgba(22, 163, 74, 0.3)",
+            fontSize: "12px",
+            fontWeight: 600,
+            borderRadius: "8px",
             marginBottom: "8px",
             textAlign: "center",
-            boxShadow: "0 2px 8px rgba(16,185,129,0.2)",
+            boxShadow: "0 8px 24px 0 rgba(22, 101, 52, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.4)",
           }}
         >
           {toastMsg}
@@ -808,8 +825,8 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          placeholder="Ask Co-Pilot (e.g. fix footer text, show sales...)"
-          disabled={loading}
+          placeholder={!canSendCopilot ? "Permission required to chat with Co-Pilot" : "Ask Co-Pilot (e.g. fix footer text, show sales...)"}
+          disabled={loading || !canSendCopilot}
           style={{
             flex: 1,
             padding: "8px 12px",
@@ -819,21 +836,23 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
             color: chatText,
             fontSize: "12px",
             outline: "none",
+            opacity: canSendCopilot ? 1 : 0.6,
+            cursor: canSendCopilot ? "text" : "not-allowed",
           }}
         />
         <button
           type="button"
           onClick={() => handleSend()}
-          disabled={loading || !input.trim()}
+          disabled={loading || !input.trim() || !canSendCopilot}
           style={{
             padding: "8px 14px",
             borderRadius: "8px",
             border: "none",
-            background: loading || !input.trim() ? "#cbd5e1" : userBubbleBg,
+            background: loading || !input.trim() || !canSendCopilot ? "#cbd5e1" : userBubbleBg,
             color: "#ffffff",
             fontSize: "12px",
             fontWeight: 700,
-            cursor: loading || !input.trim() ? "default" : "pointer",
+            cursor: loading || !input.trim() || !canSendCopilot ? "default" : "pointer",
           }}
         >
           Send

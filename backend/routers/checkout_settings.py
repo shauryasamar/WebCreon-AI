@@ -7,9 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlmodel import Session, select
 
-from auth_middleware import enforce_site_ownership
+from auth_middleware import enforce_site_ownership, require_permission
 from db.database import get_session
 from models import Site
+from services.audit_service import AuditService, ActorType, SourceType, AuditCategory
 
 router = APIRouter(
     tags=["checkout-settings"],
@@ -30,6 +31,7 @@ class ChargeRulePayload(BaseModel):
     enabled: bool
     optional: bool
     customerSelectable: bool
+    refundable: bool = True
     amountType: Literal["fixed", "percent"]
     amountValue: str
     applyConditionType: Literal["none", "subtotal_lt", "subtotal_gte", "payment_method"]
@@ -174,6 +176,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": True,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "99",
                 "applyConditionType": "none",
@@ -189,6 +192,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "29",
                 "applyConditionType": "none",
@@ -204,6 +208,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": True,
                 "amountType": "fixed",
                 "amountValue": "19",
                 "applyConditionType": "none",
@@ -219,6 +224,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "15",
                 "applyConditionType": "none",
@@ -234,6 +240,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "9",
                 "applyConditionType": "none",
@@ -249,6 +256,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "49",
                 "applyConditionType": "subtotal_lt",
@@ -264,6 +272,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "39",
                 "applyConditionType": "payment_method",
@@ -279,13 +288,14 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": True,
                 "customerSelectable": True,
+                "refundable": True,
                 "amountType": "fixed",
                 "amountValue": "49",
                 "applyConditionType": "none",
                 "applyConditionValue": "",
                 "waiveConditionType": "none",
                 "waiveConditionValue": "",
-                "description": "Optional checkout add-on selected by customer.",
+                "description": "",
             },
         ],
     }
@@ -294,6 +304,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
 @router.get("/sites/{site_id}/checkout-settings", response_model=CheckoutSettingsResponse)
 def get_checkout_settings(
     site_id: UUID,
+    admin=Depends(require_permission("checkout_charges:view")),
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
@@ -306,16 +317,40 @@ def get_checkout_settings(
 def update_checkout_settings(
     site_id: UUID,
     payload: CheckoutSettingsPayload,
+    admin=Depends(require_permission("checkout_charges:edit")),
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
     site = get_site_or_404(session, site_id)
-
+    old_settings = site.checkout_settings
     site.checkout_settings = payload.model_dump()
 
     session.add(site)
     session.commit()
     session.refresh(site)
+
+    try:
+        admin_id = UUID(admin["adminId"]) if isinstance(admin, dict) and admin.get("adminId") else None
+        AuditService.log_event(
+            session=session,
+            site_id=site_id,
+            actor_type=ActorType.OWNER if (admin.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=admin_id,
+            actor_name=admin.get("name"),
+            actor_email=admin.get("email"),
+            actor_role=admin.get("role") or "Staff",
+            category=AuditCategory.SETTINGS,
+            action="checkout_settings.updated",
+            source=SourceType.WEB_ADMIN,
+            resource_type="checkout_settings",
+            resource_id=str(site_id),
+            resource_name="Checkout Charges & Policies",
+            summary=f"Updated checkout charges and fee rules for {site.name or site.slug}",
+            previous_state=old_settings,
+            new_state=site.checkout_settings,
+        )
+    except Exception as log_err:
+        pass
 
     return CheckoutSettingsResponse(**site.checkout_settings)
 

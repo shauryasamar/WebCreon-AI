@@ -1,8 +1,12 @@
-import React, { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { Pagination } from "../Component/Pagination";
 import { resolveThemeTokens } from "../context/ThemeContext";
+import { getThumbnailUrl } from "../utils/imageOptimizer";
+import { getCustomerAuthHeaders, getCustomerToken } from "../utils/customerAuthFetch";
+import { useDeviceMode } from "../context/DeviceModeContext";
+
 
 type RefundInfo = {
   status: string;
@@ -39,6 +43,7 @@ type OrderListItem = {
   delivery_otp?: string | null;
   has_returnable_items?: boolean;
   can_request_return?: boolean;
+  cancel_reason?: string | null;
   refund_info?: RefundInfo | null;
   shipment?: Shipment | null;
   [key: string]: any;
@@ -58,6 +63,7 @@ type OrderItem = {
   line_total: number;
   status: string;
   returnable_quantity: number;
+  return_window_days?: number | null;
   is_returnable?: boolean;
   max_returnable_quantity?: number;
   pricing_snapshot?: any;
@@ -102,6 +108,7 @@ type OrderDetail = {
   shipped_at?: string | null;
   delivered_at?: string | null;
   cancelled_at?: string | null;
+  cancel_reason?: string | null;
   items: OrderItem[];
   shipment?: Shipment | null;
   has_returnable_items?: boolean;
@@ -122,6 +129,8 @@ type CustomerReturnListItem = {
   refund_override_reason?: string | null;
   suggested_refund_amount: number;
   final_refund_amount: number;
+  pickup_status?: string | null;
+  pickup_details?: any;
   refund_method?: string | null;
   approved_at?: string | null;
   rejected_at?: string | null;
@@ -162,6 +171,28 @@ type CustomerReturnItem = {
   updated_at?: string | null;
 };
 
+type RefundChargeAllocation = {
+  id: string;
+  code?: string | null;
+  label: string;
+  refundable: boolean;
+  total_order_amount: number;
+  allocated_amount: number;
+};
+
+type RefundBreakdown = {
+  items_subtotal: number;
+  discounts_prorated: number;
+  tax_refund: number;
+  refundable_charges_added: number;
+  non_refundable_charges_retained: number;
+  suggested_refund_amount: number;
+  max_refundable_amount: number;
+  actual_refund_amount?: number;
+  exception_refund_added?: number;
+  charge_allocations: RefundChargeAllocation[];
+};
+
 type CustomerReturnDetail = {
   id: string;
   site_id: string;
@@ -175,6 +206,9 @@ type CustomerReturnDetail = {
   refund_override_reason?: string | null;
   suggested_refund_amount: number;
   final_refund_amount: number;
+  pickup_status?: string | null;
+  pickup_details?: any;
+  refund_breakdown?: RefundBreakdown | null;
   refund_method?: string | null;
   approved_at?: string | null;
   rejected_at?: string | null;
@@ -233,8 +267,9 @@ type ReturnDraft = {
 };
 
 type CustomerOrdersPageProps = {
-  siteId: string;
-  siteSlug: string;
+  siteId?: string;
+  siteSlug?: string;
+  siteName?: string;
   theme?: {
     mode?: string;
     primary_bg?: string;
@@ -244,6 +279,216 @@ type CustomerOrdersPageProps = {
     accent_color?: string;
     [key: string]: any;
   };
+  props?: Record<string, any>;
+  editMode?: boolean;
+  max_width?: number | string;
+  card_radius?: number | string;
+  card_padding?: number | string;
+  badge_radius?: number | string;
+  card_gap?: number | string;
+  title?: string;
+  page_title?: string;
+  subtitle?: string;
+  page_subtitle?: string;
+  show_search?: boolean;
+  show_filters?: boolean;
+  show_breadcrumb?: boolean;
+  empty_title?: string;
+  empty_description?: string;
+  start_shopping_label?: string;
+  card_bg?: string;
+  border_color?: string;
+  title_color?: string;
+  subtext_color?: string;
+  accent_color?: string;
+  filter_bar_bg?: string;
+  [key: string]: any;
+};
+
+const SAMPLE_PREVIEW_ORDERS: OrderListItem[] = [
+  {
+    id: "ORD-89421",
+    status: "shipped",
+    payment_status: "paid",
+    total: 2499,
+    payment_method: "upi",
+    razorpay_payment_id: "pay_preview_123",
+    created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    items: [
+      {
+        id: "item-1",
+        product_name: "Premium Oversized Cotton T-Shirt",
+        quantity: 1,
+        selected_variant_value: "Midnight Black / L",
+        returnable_quantity: 0,
+        is_returnable: false,
+      },
+      {
+        id: "item-2",
+        product_name: "Classic Minimalist Canvas Sneakers",
+        quantity: 1,
+        selected_variant_value: "White / EU 42",
+        returnable_quantity: 0,
+        is_returnable: false,
+      },
+    ],
+    shipment: {
+      id: "ship-1",
+      status: "shipped",
+      courier_name: "Bluedart Express",
+      tracking_number: "BD982410291",
+      awb_number: "7489201948",
+      shipped_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+      estimated_delivery_at: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+  },
+  {
+    id: "ORD-84192",
+    status: "delivered",
+    payment_status: "paid",
+    total: 1299,
+    payment_method: "card",
+    created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    delivered_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    has_returnable_items: true,
+    can_request_return: true,
+    items: [
+      {
+        id: "item-3",
+        product_name: "Aerolight Performance Running Cap",
+        quantity: 1,
+        selected_variant_value: "Slate Grey",
+        returnable_quantity: 1,
+        is_returnable: true,
+        max_returnable_quantity: 1,
+      },
+    ],
+    shipment: {
+      id: "ship-2",
+      status: "delivered",
+      delivery_partner_name: "Store Express Delivery",
+      delivered_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+  },
+  {
+    id: "ORD-78105",
+    status: "confirmed",
+    payment_status: "paid",
+    total: 849,
+    payment_method: "cod",
+    created_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+    items: [
+      {
+        id: "item-4",
+        product_name: "Matte Stainless Water Bottle (750ml)",
+        quantity: 1,
+        selected_variant_value: "Forest Green",
+        returnable_quantity: 0,
+        is_returnable: false,
+      },
+    ],
+  },
+];
+
+const SAMPLE_PREVIEW_DETAILS: Record<string, OrderDetail> = {
+  "ORD-89421": {
+    id: "ORD-89421",
+    status: "shipped",
+    payment_status: "paid",
+    total: 2499,
+    payment_method: "upi",
+    created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    confirmed_at: new Date(Date.now() - 40 * 60 * 60 * 1000).toISOString(),
+    shipped_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    items: [
+      {
+        id: "item-1",
+        product_id: "p1",
+        product_name: "Premium Oversized Cotton T-Shirt",
+        selected_variant_value: "Midnight Black / L",
+        unit_price: 999,
+        quantity: 1,
+        line_total: 999,
+        status: "shipped",
+        returnable_quantity: 0,
+      },
+      {
+        id: "item-2",
+        product_id: "p2",
+        product_name: "Classic Minimalist Canvas Sneakers",
+        selected_variant_value: "White / EU 42",
+        unit_price: 1500,
+        quantity: 1,
+        line_total: 1500,
+        status: "shipped",
+        returnable_quantity: 0,
+      },
+    ],
+    shipment: {
+      id: "ship-1",
+      status: "shipped",
+      courier_name: "Bluedart Express",
+      tracking_number: "BD982410291",
+      awb_number: "7489201948",
+      shipped_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    },
+  },
+  "ORD-84192": {
+    id: "ORD-84192",
+    status: "delivered",
+    payment_status: "paid",
+    total: 1299,
+    payment_method: "card",
+    created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    confirmed_at: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+    shipped_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    delivered_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    has_returnable_items: true,
+    can_request_return: true,
+    items: [
+      {
+        id: "item-3",
+        product_id: "p3",
+        product_name: "Aerolight Performance Running Cap",
+        selected_variant_value: "Slate Grey",
+        unit_price: 1299,
+        quantity: 1,
+        line_total: 1299,
+        status: "delivered",
+        returnable_quantity: 1,
+        max_returnable_quantity: 1,
+        is_returnable: true,
+      },
+    ],
+    shipment: {
+      id: "ship-2",
+      status: "delivered",
+      delivery_partner_name: "Store Express Delivery",
+      delivered_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+  },
+  "ORD-78105": {
+    id: "ORD-78105",
+    status: "confirmed",
+    payment_status: "paid",
+    total: 849,
+    payment_method: "cod",
+    created_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+    confirmed_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+    items: [
+      {
+        id: "item-4",
+        product_id: "p4",
+        product_name: "Matte Stainless Water Bottle (750ml)",
+        selected_variant_value: "Forest Green",
+        unit_price: 849,
+        quantity: 1,
+        line_total: 849,
+        status: "confirmed",
+        returnable_quantity: 0,
+      },
+    ],
+  },
 };
 
 function isColorDarkHex(colorHex?: string): boolean {
@@ -330,7 +575,7 @@ const PhoneIcon = () => (
 
 function labelize(value?: string | null) {
   if (!value) return "—";
-  return value.replaceAll("_", " ");
+  return String(value).replace(/_/g, " ");
 }
 
 function formatPaymentMethodName(method?: string | null): string {
@@ -356,13 +601,16 @@ function getPaymentMethodIcon(method?: string | null): React.ReactNode {
   if (m === "netbanking") {
     return (
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="3" y1="21" x2="21" y2="21" />
-        <line x1="3" y1="10" x2="21" y2="10" />
-        <polyline points="3 10 12 3 21 10" />
-        <line x1="6" y1="10" x2="6" y2="21" />
-        <line x1="10" y1="10" x2="10" y2="21" />
-        <line x1="14" y1="10" x2="14" y2="21" />
-        <line x1="18" y1="10" x2="18" y2="21" />
+        <rect x="2" y="5" width="20" height="14" rx="2" />
+        <line x1="2" y1="10" x2="22" y2="10" />
+      </svg>
+    );
+  }
+  if (m === "card") {
+    return (
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+        <line x1="1" y1="10" x2="23" y2="10" />
       </svg>
     );
   }
@@ -377,8 +625,8 @@ function getPaymentMethodIcon(method?: string | null): React.ReactNode {
   }
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
-      <line x1="1" y1="10" x2="23" y2="10" />
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="6" x2="12" y2="18" />
     </svg>
   );
 }
@@ -388,6 +636,8 @@ function getStatusColor(status?: string) {
     case "delivered":
     case "refunded":
       return "#16a34a";
+    case "replacement_dispatched":
+      return "#0284c7";
     case "returned":
       return "#7c3aed";
     case "cancelled":
@@ -466,10 +716,14 @@ function getStatusRank(status?: string) {
     case "placed":
       return 1;
     case "confirmed":
+    case "accepted":
+    case "processing":
       return 2;
     case "shipped":
+    case "in_transit":
       return 3;
     case "out_for_delivery":
+    case "picked_up":
     case "rescheduled":
       return 4;
     case "delivered":
@@ -522,19 +776,92 @@ const RETURN_REASONS: Array<{ value: ReturnReasonCode; label: string }> = [
   { value: "other", label: "Other" },
 ];
 
+const getCachedCustomerOrders = (sId?: string): OrderListItem[] => {
+  if (!sId || typeof window === "undefined") return [];
+  const token = getCustomerToken(sId);
+  if (!token) return [];
+  try {
+    const raw = localStorage.getItem(`wc_customer_orders_${sId}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
 const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
-  siteId,
-  siteSlug,
-  theme,
+  siteId: propSiteId,
+  siteSlug: propSiteSlug,
+  theme: propTheme,
+  ...restProps
 }) => {
+  const restPropsJson = JSON.stringify(restProps);
+  const customProps = useMemo(() => ({
+    ...(propTheme || {}),
+    ...(restProps.props || {}),
+    ...restProps,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [propTheme, restPropsJson]);
+
+  const siteId = propSiteId || customProps.siteId || "";
+  const siteSlug = propSiteSlug || customProps.siteSlug || "";
+  const theme = propTheme || customProps.theme;
+  const [liveCrmOverride, setLiveCrmOverride] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const handleCrmChange = (e: Event) => {
+      const ce = e as CustomEvent<{ siteId?: string; siteSlug?: string; crm_enabled: boolean }>;
+      if (!ce.detail) return;
+      const { siteId: targetSiteId, siteSlug: targetSiteSlug, crm_enabled } = ce.detail;
+      const curSlug = siteSlug;
+      const curId = siteId;
+      if (
+        (targetSiteSlug && curSlug && targetSiteSlug.toLowerCase().trim() === curSlug.toLowerCase().trim()) ||
+        (targetSiteId && curId && targetSiteId.toLowerCase().trim() === curId.toLowerCase().trim())
+      ) {
+        setLiveCrmOverride(crm_enabled);
+      }
+    };
+    window.addEventListener("wc_crm_status_changed", handleCrmChange);
+    return () => window.removeEventListener("wc_crm_status_changed", handleCrmChange);
+  }, [siteSlug, siteId]);
+
+  const isCrmEnabled =
+    liveCrmOverride !== null
+      ? liveCrmOverride
+      : (customProps as any)?.crm_enabled !== undefined
+      ? Boolean((customProps as any).crm_enabled)
+      : (restProps as any)?.siteDefinition?.crm_enabled !== undefined
+      ? Boolean((restProps as any).siteDefinition.crm_enabled)
+      : (propTheme as any)?.crm_enabled !== undefined
+      ? Boolean((propTheme as any).crm_enabled)
+      : true;
   const navigate = useNavigate();
 
-  const [orders, setOrders] = useState<OrderListItem[]>([]);
+  const isInsideEditor =
+    Boolean(restProps.editMode) ||
+    Boolean(customProps.editMode) ||
+    (typeof window !== "undefined" &&
+      (window.location.pathname.startsWith("/builder/") ||
+        window.location.search.includes("edit_mode=true")));
+
+  const initialCachedOrders = useMemo(() => {
+    const cached = getCachedCustomerOrders(siteId);
+    if (cached.length > 0) return cached;
+    if (isInsideEditor) return SAMPLE_PREVIEW_ORDERS;
+    return [];
+  }, [siteId, isInsideEditor]);
+
+  const [orders, setOrders] = useState<OrderListItem[]>(initialCachedOrders);
   const [returns, setReturns] = useState<CustomerReturnListItem[]>([]);
   const [returnDetailMap, setReturnDetailMap] = useState<Record<string, CustomerReturnDetail>>({});
-  const [loading, setLoading] = useState(true);
-  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
-  const [detailMap, setDetailMap] = useState<Record<string, OrderDetail>>({});
+  const [loading, setLoading] = useState(initialCachedOrders.length === 0 && !isInsideEditor);
+  const [isUnauthenticated, setIsUnauthenticated] = useState(false);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(
+    isInsideEditor ? (initialCachedOrders[0]?.id || "ORD-89421") : null
+  );
+  const [detailMap, setDetailMap] = useState<Record<string, OrderDetail>>(
+    isInsideEditor ? SAMPLE_PREVIEW_DETAILS : {}
+  );
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [submittingReturnOrderId, setSubmittingReturnOrderId] = useState<string | null>(null);
@@ -554,113 +881,444 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
     textColor: defaultTextPrimary,
     mutedTextColor: defaultTextMuted,
     borderColor: resolvedBorderColor,
-    accentColor,
+    accentColor: defaultAccentColor,
     panelBg,
     subtleBg: innerBg,
   } = resolveThemeTokens(theme);
+
+  const effectiveMaxWidth =
+    customProps.max_width !== undefined && customProps.max_width !== null && customProps.max_width !== ""
+      ? (typeof customProps.max_width === "number" ? `${customProps.max_width}px` : (customProps.max_width === "100%" || customProps.max_width === "full" ? "100%" : String(customProps.max_width)))
+      : "100%";
+
+  const effectiveCardRadius =
+    customProps.card_radius !== undefined && customProps.card_radius !== null && customProps.card_radius !== ""
+      ? (typeof customProps.card_radius === "number" ? `${customProps.card_radius}px` : String(customProps.card_radius))
+      : "14px";
+
+  const effectiveCardPadding =
+    customProps.card_padding !== undefined && customProps.card_padding !== null && customProps.card_padding !== ""
+      ? (typeof customProps.card_padding === "number" ? `${customProps.card_padding}px` : String(customProps.card_padding))
+      : (viewportWidth <= 640 ? "14px" : "18px 20px");
+
+  const effectiveBadgeRadius =
+    customProps.badge_radius !== undefined && customProps.badge_radius !== null && customProps.badge_radius !== ""
+      ? (typeof customProps.badge_radius === "number" ? `${customProps.badge_radius}px` : String(customProps.badge_radius))
+      : "999px";
+
+  const effectiveCardGap =
+    customProps.card_gap !== undefined && customProps.card_gap !== null && customProps.card_gap !== ""
+      ? (typeof customProps.card_gap === "number" ? `${customProps.card_gap}px` : String(customProps.card_gap))
+      : "14px";
+
+  const effectiveInnerRadius =
+    customProps.inner_radius !== undefined && customProps.inner_radius !== null && customProps.inner_radius !== ""
+      ? (typeof customProps.inner_radius === "number" ? `${customProps.inner_radius}px` : String(customProps.inner_radius))
+      : (customProps.card_radius !== undefined && customProps.card_radius !== null && customProps.card_radius !== ""
+          ? (typeof customProps.card_radius === "number" ? `${Math.max(0, customProps.card_radius - 2)}px` : String(customProps.card_radius))
+          : "12px");
+
   const pageBg = (theme as any)?.order_history_bg || defaultPageBg;
-  const cardBg = (theme as any)?.order_history_card_bg || defaultCardBg;
+  const customCardBg = customProps.card_bg || (theme as any)?.order_history_card_bg;
+  const cardBg = customCardBg || defaultCardBg;
   const isCardDark = isColorDarkHex(cardBg);
   const isLight = !isCardDark;
 
+  const accentColor = customProps.accent_color || defaultAccentColor || "#2563eb";
+
   const rawTextPrimary = (theme as any)?.order_history_text;
+  const customTitleColor = customProps.title_color;
   const textPrimary =
-    rawTextPrimary && (isColorDarkHex(rawTextPrimary) !== isCardDark)
+    customTitleColor ||
+    (rawTextPrimary && (isColorDarkHex(rawTextPrimary) !== isCardDark)
       ? rawTextPrimary
-      : (isCardDark ? "#f8fafc" : "#0f172a");
+      : (isCardDark ? "#f8fafc" : "#0f172a"));
+  const titleColor = textPrimary;
 
   const rawTextMuted = (theme as any)?.order_history_muted_text;
+  const customSubtextColor = customProps.subtext_color;
   const textMuted =
-    rawTextMuted && (isColorDarkHex(rawTextMuted) !== isCardDark)
+    customSubtextColor ||
+    (rawTextMuted && (isColorDarkHex(rawTextMuted) !== isCardDark)
       ? rawTextMuted
-      : (isCardDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)");
+      : (isCardDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)"));
 
-  const cardBorder = `1px solid ${(theme as any)?.order_history_border || (isCardDark ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.10)")}`;
+  const customBorderColor = customProps.border_color || (theme as any)?.order_history_border;
+  const cardBorder = `1px solid ${customBorderColor || (isCardDark ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.10)")}`;
   const divider = cardBorder;
   const timelineRail = isCardDark ? "rgba(255,255,255,0.25)" : "rgba(15,23,42,0.18)";
   const pendingDot = isCardDark ? "rgba(255,255,255,0.35)" : "rgba(15,23,42,0.25)";
 
-  const isMobile = viewportWidth <= 640;
-  const isTablet = viewportWidth > 640 && viewportWidth <= 1024;
+  const showBreadcrumb = customProps.show_breadcrumb !== false;
+  const showSearch = customProps.show_search !== false;
+  const showFilters = customProps.show_filters !== false;
+  const emptyTitle = customProps.empty_title || "No orders yet";
+  const emptyDescription = customProps.empty_description || "Orders placed from this account will show here.";
+  const startShoppingLabel = customProps.start_shopping_label || "Explore Store";
+
+  const customExpandedBg = customProps.expanded_bg;
+  const expandedBg = customExpandedBg || (isLight ? "#f8fafc" : "rgba(255,255,255,0.02)");
+
+  const customInnerBoxBg = customProps.inner_box_bg;
+  const effectiveInnerBoxBg = customInnerBoxBg || panelBg;
+
+  const customInnerBorderColor = customProps.inner_border_color || customProps.border_color;
+  const innerBoxBorder = `1px solid ${customInnerBorderColor || (isCardDark ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.10)")}`;
+
+  const customItemCardBg = customProps.item_card_bg;
+  const effectiveItemCardBg = customItemCardBg || innerBg;
+
+  const itemsHeading = customProps.items_heading || "Items";
+  const trackingHeading = customProps.tracking_heading || "Tracking";
+  const shippingHeading = customProps.shipping_heading || "Shipping address";
+  const paymentHeading = customProps.payment_heading || "Payment details";
+  const summaryHeading = customProps.summary_heading || "Summary";
+
+  const showTracking = customProps.show_tracking !== false;
+  const showShipping = customProps.show_shipping !== false;
+  const showPayment = customProps.show_payment !== false;
+  const showSummary = customProps.show_summary !== false;
+
+  const deviceMode = useDeviceMode();
+  const isMobile = deviceMode === "mobile" || viewportWidth <= 640;
+  const isTablet = deviceMode === "mobile" ? false : (viewportWidth > 640 && viewportWidth <= 1024);
   const isCompact = isMobile || isTablet;
 
   useEffect(() => {
-    const handleResize = () => setViewportWidth(window.innerWidth);
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    let rAFId: number | null = null;
+    const handleResize = () => {
+      if (rAFId !== null) cancelAnimationFrame(rAFId);
+      rAFId = requestAnimationFrame(() => {
+        setViewportWidth((prev) => {
+          const w = window.innerWidth;
+          return Math.abs(prev - w) >= 12 ? w : prev;
+        });
+      });
+    };
+    window.addEventListener("resize", handleResize, { passive: true });
+    return () => {
+      if (rAFId !== null) cancelAnimationFrame(rAFId);
+      window.removeEventListener("resize", handleResize);
+    };
   }, []);
 
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(5);
+  const [pageSize, setPageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
   const [totalOrders, setTotalOrders] = useState(0);
 
-  const loadOrders = async (page = currentPage) => {
-    if (!siteId) return;
-    const response = await fetch(`${API_BASE_URL}/orders/${siteId}/my-orders?page=${page}&page_size=${pageSize}`, {
-      credentials: "include",
+  // Industry-Level Customer Filter State
+  const [searchInputValue, setSearchInputValue] = useState("");
+  const [appliedSearchQuery, setAppliedSearchQuery] = useState("");
+  const [statusTab, setStatusTab] = useState<"all" | "active" | "delivered" | "returns" | "cancelled">("all");
+  const [dateFilter, setDateFilter] = useState<"30_days" | "60_days" | "6_months" | "this_year" | "custom">("30_days");
+  const [customFromDate, setCustomFromDate] = useState("");
+  const [customToDate, setCustomToDate] = useState("");
+  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "amount_high" | "amount_low">("newest");
+
+  const statusCounts = useMemo(() => {
+    let all = 0;
+    let active = 0;
+    let delivered = 0;
+    let returnsCount = 0;
+    let cancelled = 0;
+
+    orders.forEach((order) => {
+      // 1. Date Range Filter
+      if (order.created_at) {
+        const orderTime = new Date(order.created_at).getTime();
+        const now = Date.now();
+        if (!isNaN(orderTime)) {
+          if (dateFilter === "30_days" && now - orderTime > 30 * 24 * 60 * 60 * 1000) return;
+          if (dateFilter === "60_days" && now - orderTime > 60 * 24 * 60 * 60 * 1000) return;
+          if (dateFilter === "6_months" && now - orderTime > 180 * 24 * 60 * 60 * 1000) return;
+          if (dateFilter === "this_year" && new Date(orderTime).getFullYear() !== new Date().getFullYear()) return;
+          if (dateFilter === "custom") {
+            if (customFromDate) {
+              const fromTime = new Date(customFromDate).setHours(0, 0, 0, 0);
+              if (!isNaN(fromTime) && orderTime < fromTime) return;
+            }
+            if (customToDate) {
+              const toTime = new Date(customToDate).setHours(23, 59, 59, 999);
+              if (!isNaN(toTime) && orderTime > toTime) return;
+            }
+          }
+        }
+      }
+
+      // 2. Search Query Filter (Matches applied search term)
+      if (appliedSearchQuery.trim()) {
+        const q = appliedSearchQuery.trim().toLowerCase();
+        const matchId = (order.id || "").toLowerCase().includes(q);
+        const matchRazorpay = (order.razorpay_order_id || "").toLowerCase().includes(q) || (order.razorpay_payment_id || "").toLowerCase().includes(q);
+        const matchCourier = (order.shipment?.courier_name || "").toLowerCase().includes(q) || (order.shipment?.tracking_number || "").toLowerCase().includes(q) || (order.shipment?.awb_number || "").toLowerCase().includes(q);
+        const matchItems = (order.items || []).some((item) => (item.product_name || "").toLowerCase().includes(q) || (item.selected_variant_value || "").toLowerCase().includes(q));
+
+        if (!matchId && !matchRazorpay && !matchCourier && !matchItems) {
+          return;
+        }
+      }
+
+      all++;
+      const s = (order.status || "").toLowerCase();
+      const hasReturn = Boolean(order.refund_info || (returns && returns.some((r) => r.order_id === order.id)) || ["returned", "refunded"].includes(s));
+
+      if (["placed", "confirmed", "processing", "shipped", "out_for_delivery", "rescheduled"].includes(s)) {
+        active++;
+      } else if (s === "delivered") {
+        delivered++;
+      } else if (["returned", "refunded", "requested", "approved", "received", "inspected"].includes(s) || hasReturn) {
+        returnsCount++;
+      } else if (["cancelled", "rejected"].includes(s)) {
+        cancelled++;
+      }
     });
-    if (!response.ok) throw new Error("Failed to load orders");
-    const data = await response.json();
-    if (Array.isArray(data)) {
-      setOrders(data);
-      setTotalOrders(data.length);
-      setTotalPages(Math.ceil(data.length / pageSize) || 1);
-    } else if (data && Array.isArray(data.orders)) {
-      setOrders(data.orders);
-      setTotalOrders(data.total ?? data.orders.length);
-      setTotalPages(data.total_pages ?? Math.ceil((data.total ?? data.orders.length) / pageSize) ?? 1);
-    } else {
-      setOrders([]);
-      setTotalOrders(0);
-      setTotalPages(1);
-    }
+
+    return {
+      all,
+      active,
+      delivered,
+      returns: returnsCount,
+      cancelled,
+    };
+  }, [orders, returns, dateFilter, customFromDate, customToDate, appliedSearchQuery]);
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter((order) => {
+      // 1. Status Filter
+      const s = (order.status || "").toLowerCase();
+      const hasReturn = Boolean(order.refund_info || (returns && returns.some((r) => r.order_id === order.id)) || ["returned", "refunded"].includes(s));
+
+      if (statusTab === "active") {
+        if (!["placed", "confirmed", "processing", "shipped", "out_for_delivery", "rescheduled"].includes(s)) {
+          return false;
+        }
+      } else if (statusTab === "delivered") {
+        if (s !== "delivered") return false;
+      } else if (statusTab === "returns") {
+        if (!hasReturn && !["returned", "refunded", "requested", "approved", "received", "inspected"].includes(s)) {
+          return false;
+        }
+      } else if (statusTab === "cancelled") {
+        if (!["cancelled", "rejected"].includes(s)) return false;
+      }
+
+      // 2. Date Range Filter (Default: Last 30 Days)
+      if (order.created_at) {
+        const orderTime = new Date(order.created_at).getTime();
+        const now = Date.now();
+        if (!isNaN(orderTime)) {
+          if (dateFilter === "30_days" && now - orderTime > 30 * 24 * 60 * 60 * 1000) return false;
+          if (dateFilter === "60_days" && now - orderTime > 60 * 24 * 60 * 60 * 1000) return false;
+          if (dateFilter === "6_months" && now - orderTime > 180 * 24 * 60 * 60 * 1000) return false;
+          if (dateFilter === "this_year" && new Date(orderTime).getFullYear() !== new Date().getFullYear()) return false;
+          if (dateFilter === "custom") {
+            if (customFromDate) {
+              const fromTime = new Date(customFromDate).setHours(0, 0, 0, 0);
+              if (!isNaN(fromTime) && orderTime < fromTime) return false;
+            }
+            if (customToDate) {
+              const toTime = new Date(customToDate).setHours(23, 59, 59, 999);
+              if (!isNaN(toTime) && orderTime > toTime) return false;
+            }
+          }
+        }
+      }
+
+      // 3. Search Query Filter (Order ID, Payment ID, Tracking, Item name)
+      if (appliedSearchQuery.trim()) {
+        const q = appliedSearchQuery.trim().toLowerCase();
+        const matchId = (order.id || "").toLowerCase().includes(q);
+        const matchRazorpay = (order.razorpay_order_id || "").toLowerCase().includes(q) || (order.razorpay_payment_id || "").toLowerCase().includes(q);
+        const matchCourier = (order.shipment?.courier_name || "").toLowerCase().includes(q) || (order.shipment?.tracking_number || "").toLowerCase().includes(q) || (order.shipment?.awb_number || "").toLowerCase().includes(q);
+        const matchItems = (order.items || []).some((item) => (item.product_name || "").toLowerCase().includes(q) || (item.selected_variant_value || "").toLowerCase().includes(q));
+
+        if (!matchId && !matchRazorpay && !matchCourier && !matchItems) {
+          return false;
+        }
+      }
+
+      return true;
+    }).sort((a, b) => {
+      if (sortBy === "oldest") {
+        return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+      }
+      if (sortBy === "amount_high") {
+        return Number(b.total || 0) - Number(a.total || 0);
+      }
+      if (sortBy === "amount_low") {
+        return Number(a.total || 0) - Number(b.total || 0);
+      }
+      // default: newest first
+      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+    });
+  }, [orders, returns, statusTab, dateFilter, customFromDate, customToDate, appliedSearchQuery, sortBy]);
+
+  const paginatedOrders = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredOrders.slice(start, start + pageSize);
+  }, [filteredOrders, currentPage, pageSize]);
+
+  const effectiveTotalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
+
+  const hasActiveFilters = appliedSearchQuery.trim() !== "" || statusTab !== "all" || dateFilter !== "30_days" || sortBy !== "newest";
+
+  const handleResetFilters = () => {
+    setSearchInputValue("");
+    setAppliedSearchQuery("");
+    setStatusTab("all");
+    setDateFilter("30_days");
+    setCustomFromDate("");
+    setCustomToDate("");
+    setSortBy("newest");
+    setCurrentPage(1);
   };
 
-  const handlePageChange = async (newPage: number) => {
-    if (newPage === currentPage) return;
-    setCurrentPage(newPage);
-    setLoading(true);
+  const loadOrders = async () => {
+    if (!siteId) {
+      if (isInsideEditor) {
+        setOrders(SAMPLE_PREVIEW_ORDERS);
+        setTotalOrders(SAMPLE_PREVIEW_ORDERS.length);
+        setTotalPages(1);
+        setDetailMap(SAMPLE_PREVIEW_DETAILS);
+        setLoading(false);
+      }
+      return;
+    }
+
+    const token = getCustomerToken(siteId || siteSlug);
+    if (!token && !isInsideEditor) {
+      setOrders([]);
+      setDetailMap({});
+      setTotalOrders(0);
+      setTotalPages(1);
+      setLoading(false);
+      setIsUnauthenticated(true);
+      try {
+        localStorage.removeItem(`wc_customer_orders_${siteId}`);
+        if (siteSlug) localStorage.removeItem(`wc_customer_orders_${siteSlug}`);
+      } catch (_) {}
+      return;
+    }
+
     try {
-      await loadOrders(newPage);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      const response = await fetch(`${API_BASE_URL}/orders/${siteId}/my-orders`, {
+        credentials: "include",
+        headers: getCustomerAuthHeaders(siteId),
+      });
+
+      if (response.status === 401) {
+        setOrders([]);
+        setDetailMap({});
+        setTotalOrders(0);
+        setTotalPages(1);
+        setIsUnauthenticated(true);
+        try {
+          localStorage.removeItem(`wc_customer_orders_${siteId}`);
+          if (siteSlug) localStorage.removeItem(`wc_customer_orders_${siteSlug}`);
+        } catch (_) {}
+        return;
+      }
+
+      if (!response.ok) throw new Error("Failed to load orders");
+      const data = await response.json();
+      setIsUnauthenticated(false);
+      const list = Array.isArray(data) ? data : (data && Array.isArray(data.orders) ? data.orders : []);
+      if (list.length === 0 && isInsideEditor) {
+        setOrders(SAMPLE_PREVIEW_ORDERS);
+        setTotalOrders(SAMPLE_PREVIEW_ORDERS.length);
+        setTotalPages(1);
+        setDetailMap(SAMPLE_PREVIEW_DETAILS);
+      } else {
+        setOrders(list);
+        setTotalOrders(list.length);
+        setTotalPages(Math.ceil(list.length / pageSize) || 1);
+        const newDetails: Record<string, OrderDetail> = {};
+        list.forEach((ord: any) => {
+          if (ord && ord.id) {
+            newDetails[ord.id] = ord;
+          }
+        });
+        setDetailMap((prev) => ({ ...newDetails, ...prev }));
+        try {
+          if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+            (window as any).requestIdleCallback(() => {
+              try {
+                localStorage.setItem(`wc_customer_orders_${siteId}`, JSON.stringify(list));
+              } catch (_) {}
+            });
+          } else {
+            setTimeout(() => {
+              try {
+                localStorage.setItem(`wc_customer_orders_${siteId}`, JSON.stringify(list));
+              } catch (_) {}
+            }, 100);
+          }
+        } catch (_) {}
+      }
     } catch (err) {
-      console.error("Failed to navigate order pages", err);
+      console.error("Failed to load customer orders", err);
+      if (isInsideEditor) {
+        setOrders(SAMPLE_PREVIEW_ORDERS);
+        setTotalOrders(SAMPLE_PREVIEW_ORDERS.length);
+        setTotalPages(1);
+        setDetailMap(SAMPLE_PREVIEW_DETAILS);
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  const handlePageChange = (newPage: number) => {
+    if (newPage === currentPage) return;
+    setCurrentPage(newPage);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setCurrentPage(1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const loadReturns = async () => {
     if (!siteId) return;
-    const response = await fetch(`${API_BASE_URL}/returns/${siteId}/my-returns`, {
-      credentials: "include",
-    });
-    if (!response.ok) throw new Error("Failed to load returns");
-    const data = await response.json();
-    const list = Array.isArray(data) ? data : [];
-    setReturns(list);
+    try {
+      const response = await fetch(`${API_BASE_URL}/returns/${siteId}/my-returns`, {
+        credentials: "include",
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const list = Array.isArray(data) ? data : [];
+        setReturns(list);
+      }
+    } catch (err) {
+      console.error("Failed to load customer returns", err);
+    }
   };
 
   useEffect(() => {
     const bootstrap = async () => {
-      if (!siteId) return;
-      try {
-        setLoading(true);
-        setError("");
-        await Promise.all([loadOrders(1), loadReturns()]);
-      } catch (err) {
-        console.error(err);
-        setOrders([]);
-        setReturns([]);
-        setError("Unable to load orders right now.");
-      } finally {
-        setLoading(false);
+      if (!siteId) {
+        if (isInsideEditor) {
+          setOrders(SAMPLE_PREVIEW_ORDERS);
+          setTotalOrders(SAMPLE_PREVIEW_ORDERS.length);
+          setTotalPages(1);
+          setDetailMap(SAMPLE_PREVIEW_DETAILS);
+          setLoading(false);
+        }
+        return;
       }
+      if (initialCachedOrders.length === 0 && !isInsideEditor) {
+        setLoading(true);
+      }
+      setError("");
+      loadOrders();
+      loadReturns();
     };
 
     bootstrap();
-  }, [siteId]);
+  }, [siteId, isInsideEditor]);
 
   useEffect(() => {
     window.scrollTo({
@@ -668,18 +1326,24 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       left: 0,
       behavior: "instant" as ScrollBehavior,
     });
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
   }, []);
 
   const loadOrderDetail = async (orderId: string, force = false) => {
+    if (isInsideEditor && SAMPLE_PREVIEW_DETAILS[orderId]) {
+      setDetailMap((prev) => ({
+        ...prev,
+        [orderId]: SAMPLE_PREVIEW_DETAILS[orderId],
+      }));
+      return;
+    }
     if (!siteId) return;
-    if (!force && detailMap[orderId]) return;
+    if (!force && detailMap[orderId]?.shipping_address) return;
 
     try {
       setDetailLoadingId(orderId);
       const response = await fetch(`${API_BASE_URL}/orders/${siteId}/my-orders/${orderId}`, {
         credentials: "include",
+        headers: getCustomerAuthHeaders(siteId),
       });
 
       if (!response.ok) {
@@ -695,7 +1359,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       setOrders((prev) =>
         prev.map((o) =>
           o.id === orderId
-            ? { ...o, refund_info: data.refund_info, payment_status: data.payment_status, status: data.status }
+            ? { ...o, ...data }
             : o
         )
       );
@@ -708,18 +1372,26 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
         (data.items || []).forEach((item: OrderItem) => {
           const itemCanReturn =
             data.status === "delivered" &&
-            ((typeof item.is_returnable === "boolean" && item.is_returnable) ||
-              Number(item.returnable_quantity || 0) > 0);
+            (item.returnable_quantity || 0) > 0 &&
+            (item.return_window_days ?? 7) > 0;
 
-          if (itemCanReturn) {
+          if (!itemCanReturn) return;
+
+          const existingItem = currentItems[item.id];
+          if (existingItem) {
             nextItems[item.id] = {
-              selected: currentItems[item.id]?.selected || false,
+              ...existingItem,
               quantity: Math.min(
-                Math.max(currentItems[item.id]?.quantity || 1, 1),
-                Number(item.max_returnable_quantity || item.returnable_quantity || 1)
+                Math.max(1, existingItem.quantity || 1),
+                item.returnable_quantity || 1
               ),
-              reason_code: currentItems[item.id]?.reason_code || "damaged",
-              reason_note: currentItems[item.id]?.reason_note || "",
+            };
+          } else {
+            nextItems[item.id] = {
+              selected: true,
+              quantity: 1,
+              reason_code: "damaged",
+              reason_note: "",
             };
           }
         });
@@ -728,48 +1400,49 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
           ...prev,
           [orderId]: {
             request_note: existingDraft?.request_note || "",
+            refund_account_type: existingDraft?.refund_account_type || "upi",
+            refund_upi_id: existingDraft?.refund_upi_id || "",
+            refund_account_holder: existingDraft?.refund_account_holder || "",
+            refund_account_number: existingDraft?.refund_account_number || "",
+            refund_ifsc_code: existingDraft?.refund_ifsc_code || "",
+            refund_bank_name: existingDraft?.refund_bank_name || "",
             items: nextItems,
           },
         };
       });
     } catch (err) {
-      console.error(err);
+      console.error("Failed to load customer order detail", err);
     } finally {
       setDetailLoadingId(null);
     }
   };
 
   const loadReturnDetail = async (returnId: string) => {
-    if (!siteId || returnDetailMap[returnId]) return;
+    if (!siteId) return;
     try {
       const response = await fetch(`${API_BASE_URL}/returns/${siteId}/my-returns/${returnId}`, {
         credentials: "include",
       });
-      if (!response.ok) throw new Error("Failed to load return detail");
-      const data = await response.json();
-      setReturnDetailMap((prev) => ({
-        ...prev,
-        [returnId]: data,
-      }));
+      if (response.ok) {
+        const data = await response.json();
+        setReturnDetailMap((prev) => ({
+          ...prev,
+          [returnId]: data,
+        }));
+      }
     } catch (err) {
-      console.error(err);
+      console.error("Failed to load customer return detail", err);
     }
   };
 
-  useEffect(() => {
-    returns.forEach((item) => {
-      if (!returnDetailMap[item.id]) {
-        loadReturnDetail(item.id);
-      }
-    });
-  }, [returns, siteId]);
+
 
   const handleToggle = async (orderId: string) => {
     const nextOrderId = expandedOrderId === orderId ? null : orderId;
     setExpandedOrderId(nextOrderId);
 
     if (nextOrderId) {
-      await loadOrderDetail(nextOrderId);
+      await loadOrderDetail(nextOrderId, true);
     }
   };
 
@@ -790,9 +1463,9 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       const response = await fetch(`${API_BASE_URL}/orders/${siteId}/${orderId}/cancel`, {
         method: "POST",
         credentials: "include",
-        headers: {
+        headers: getCustomerAuthHeaders(siteId, {
           "Content-Type": "application/json",
-        },
+        }),
         body: JSON.stringify({
           cancel_reason: cancelReason || "Cancelled by customer",
         }),
@@ -823,8 +1496,14 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   };
 
-  const isItemReturnable = (item: OrderItem) => {
-    return Number(item.returnable_quantity || 0) > 0;
+  const isItemReturnable = (item: OrderItem, deliveredAt?: string | null) => {
+    if (item.return_window_days === 0) return false;
+    if (Number(item.returnable_quantity || 0) <= 0) return false;
+    if (deliveredAt && item.return_window_days != null && item.return_window_days > 0) {
+      const windowClosesMs = new Date(deliveredAt).getTime() + item.return_window_days * 24 * 60 * 60 * 1000;
+      if (Date.now() > windowClosesMs) return false;
+    }
+    return true;
   };
 
   const canRequestReturnForOrder = (detail?: OrderDetail | null, order?: OrderListItem | null) => {
@@ -837,7 +1516,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
     }
 
     if (!detail || detail.status !== "delivered") return false;
-    return detail.items.some((item) => isItemReturnable(item));
+    return detail.items.some((item) => isItemReturnable(item, detail.delivered_at));
   };
 
   const getSelectedReturnItems = (orderId: string) => {
@@ -1039,28 +1718,31 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
   };
 
   const renderTrackingTimeline = (detail: OrderDetail) => {
-    const orderStatus = detail.status;
-    const isCancelled = orderStatus === "cancelled";
-    const currentRank = isCancelled ? 0 : getStatusRank(orderStatus);
-    const isDelivered = !isCancelled && (orderStatus === "delivered" || currentRank >= 5);
-    const isOutForDelivery = !isCancelled && (currentRank >= 4 || orderStatus === "out_for_delivery");
-    const isShipped = !isCancelled && (currentRank >= 3 || isOutForDelivery || isDelivered);
-    const isPacked = !isCancelled && (currentRank >= 2 || isShipped);
+    const orderStatus = detail.status || detail.shipment?.status || "placed";
+    const isCancelled = orderStatus === "cancelled" || detail.shipment?.status === "cancelled";
+    const currentRank = isCancelled ? 0 : Math.max(getStatusRank(orderStatus), getStatusRank(detail.shipment?.status));
+    const isDelivered = !isCancelled && (orderStatus === "delivered" || detail.shipment?.status === "delivered" || currentRank >= 5);
+    const isOutForDelivery = !isCancelled && (currentRank >= 4 || orderStatus === "out_for_delivery" || detail.shipment?.status === "out_for_delivery" || detail.shipment?.status === "picked_up");
+    const isShipped = !isCancelled && (currentRank >= 3 || isOutForDelivery || isDelivered || detail.shipment?.status === "shipped" || detail.shipment?.status === "in_transit");
+    const isPacked = !isCancelled && (currentRank >= 2 || isShipped || detail.shipment?.status === "assigned" || detail.shipment?.status === "accepted");
     const isPlaced = true;
+    const isActivelyOutForDelivery = !isCancelled && !isDelivered && (orderStatus === "out_for_delivery" || detail.shipment?.status === "out_for_delivery" || detail.shipment?.status === "picked_up");
 
-    const isOwnAgent =
+    const isOwnAgent = Boolean(
       detail.shipment?.delivery_mode === "own_agent" ||
       detail.shipment?.mode === "own_agent" ||
       Boolean(detail.shipment?.agent_id) ||
-      Boolean(detail.shipment?.delivery_partner_name && !detail.shipment?.awb_number);
+      Boolean(detail.shipment?.delivery_partner_name && !detail.shipment?.courier_name)
+    );
 
-    const isShiprocket =
+    const isShiprocket = Boolean(
       !isOwnAgent && (
         detail.shipment?.delivery_mode === "shiprocket" ||
         detail.shipment?.mode === "shiprocket" ||
         Boolean(detail.shipment?.awb_number) ||
         Boolean(detail.shipment?.courier_name)
-      );
+      )
+    );
 
     const orderedDate = formatFlipkartDate(detail.created_at);
     const orderedTime = formatFlipkartDateTime(detail.created_at);
@@ -1242,14 +1924,17 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
     return (
       <div
         style={{
-          border: cardBorder,
-          borderRadius: "18px",
+          border: innerBoxBorder,
+          borderRadius: effectiveInnerRadius,
           padding: isCompact ? "16px" : "20px",
-          background: panelBg,
+          background: effectiveInnerBoxBg,
         }}
       >
         <div
           style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
             fontSize: "13px",
             fontWeight: 800,
             marginBottom: "16px",
@@ -1258,13 +1943,19 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
             color: textMuted,
           }}
         >
-          Tracking
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="1" y="3" width="15" height="13"></rect>
+            <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+            <circle cx="5.5" cy="18.5" r="2.5"></circle>
+            <circle cx="18.5" cy="18.5" r="2.5"></circle>
+          </svg>
+          <span>{trackingHeading}</span>
         </div>
 
         {isCancelled ? (
           <div
             style={{
-              borderRadius: "14px",
+              borderRadius: effectiveInnerRadius,
               border: "1px solid rgba(239,68,68,0.18)",
               background: "rgba(239,68,68,0.08)",
               padding: "14px 16px",
@@ -1434,8 +2125,8 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
           })}
         </div>
 
-        {/* Own Fleet Rider Contact Card — below tracker, only when out for delivery and not cancelled */}
-        {isOwnAgent && !isCancelled && isOutForDelivery && (detail.shipment?.delivery_partner_name || detail.shipment?.delivery_partner_phone) && (
+        {/* Own Fleet Rider Contact Card — strictly only shown when order is actively OUT FOR DELIVERY */}
+        {isOwnAgent && isActivelyOutForDelivery && (detail.shipment?.delivery_partner_name || detail.shipment?.delivery_partner_phone) && (
           <div
             style={{
               marginTop: "16px",
@@ -1506,6 +2197,104 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
           </div>
         )}
 
+        {/* Delivery Verification OTP banner for Customer — strictly only shown when actively OUT FOR DELIVERY */}
+        {isOwnAgent && isActivelyOutForDelivery && (detail.delivery_otp || detail.shipment?.delivery_otp) && (
+          <div
+            style={{
+              marginTop: "12px",
+              padding: "12px 16px",
+              borderRadius: "14px",
+              background: isLight ? "#eff6ff" : "rgba(37, 99, 235, 0.08)",
+              border: "1.5px solid rgba(37, 99, 235, 0.25)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: "10px",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: "11px", fontWeight: 800, color: "#2563eb", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Delivery Verification Code
+              </div>
+              <div style={{ fontSize: "12px", color: textMuted, marginTop: "2px" }}>
+                Share this 4-digit PIN with the delivery partner upon arrival.
+              </div>
+            </div>
+            <div
+              style={{
+                fontFamily: "monospace",
+                fontSize: "20px",
+                fontWeight: 900,
+                letterSpacing: "4px",
+                padding: "6px 14px",
+                borderRadius: "8px",
+                background: isLight ? "#ffffff" : "rgba(15, 23, 42, 0.6)",
+                border: "1px solid rgba(37, 99, 235, 0.3)",
+                color: "#2563eb",
+              }}
+            >
+              {detail.delivery_otp || detail.shipment?.delivery_otp}
+            </div>
+          </div>
+        )}
+
+        {/* Manual Courier Partner Card — shows partner name and tracking/contact number */}
+        {!isOwnAgent && !isShiprocket && !isCancelled && (isShipped || isOutForDelivery || isDelivered) && (detail.shipment?.delivery_partner_name || detail.shipment?.delivery_partner_phone) && (
+          <div
+            style={{
+              marginTop: "16px",
+              padding: "12px 16px",
+              borderRadius: "14px",
+              background: isLight ? "#f8fafc" : "rgba(148, 163, 184, 0.08)",
+              border: "1.5px solid rgba(148, 163, 184, 0.25)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: "12px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <div
+                style={{
+                  width: "38px",
+                  height: "38px",
+                  borderRadius: "10px",
+                  background: "#2563eb",
+                  color: "#ffffff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 800,
+                  fontSize: "18px",
+                  flexShrink: 0,
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="1" y="3" width="15" height="13" />
+                  <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
+                  <circle cx="5.5" cy="18.5" r="2.5" />
+                  <circle cx="18.5" cy="18.5" r="2.5" />
+                </svg>
+              </div>
+              <div>
+                <div style={{ fontSize: "11px", fontWeight: 800, color: "#2563eb", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Dispatched via Courier Partner
+                </div>
+                <div style={{ fontSize: "14px", fontWeight: 800, color: textPrimary }}>
+                  {detail.shipment.delivery_partner_name || "Courier Partner"}
+                </div>
+                {detail.shipment.delivery_partner_phone && (
+                  <div style={{ fontSize: "12px", color: textMuted, marginTop: "2px" }}>
+                    Tracking No. / Contact: <strong style={{ color: textPrimary }}>{detail.shipment.delivery_partner_phone}</strong>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Reschedule Notice if applicable */}
         {detail.shipment?.notes && (orderStatus === "rescheduled" || detail.shipment.status === "rescheduled") && (
           <div
@@ -1544,7 +2333,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       <div
         style={{
           border: cardBorder,
-          borderRadius: "18px",
+          borderRadius: effectiveInnerRadius,
           background: panelBg,
           overflow: "hidden",
         }}
@@ -1604,7 +2393,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                     alignItems: "center",
                     gap: "8px",
                     padding: "8px 12px",
-                    borderRadius: "999px",
+                    borderRadius: effectiveBadgeRadius,
                     background: `${statusColor}18`,
                     border: `1px solid ${statusColor}30`,
                     color: statusColor,
@@ -1619,7 +2408,12 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                 <div style={{ fontSize: "13px", color: textMuted }}>
                   Refund:{" "}
                   <span style={{ color: textPrimary, fontWeight: 700 }}>
-                    {formatPrice(latestReturn.final_refund_amount || latestReturn.suggested_refund_amount)}
+                    {formatPrice(
+                      latestDetail?.final_refund_amount ||
+                      latestReturn.final_refund_amount ||
+                      latestDetail?.suggested_refund_amount ||
+                      latestReturn.suggested_refund_amount
+                    )}
                   </span>
                 </div>
 
@@ -1665,7 +2459,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
               <div style={{ display: "flex", flexDirection: "column", gap: "14px", paddingTop: "14px" }}>
                 <div
                   style={{
-                    borderRadius: "16px",
+                    borderRadius: effectiveInnerRadius,
                     background: innerBg,
                     border: cardBorder,
                     padding: isCompact ? "12px" : "14px",
@@ -1805,6 +2599,137 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                   ) : null}
                 </div>
 
+                {/* Reverse Logistics & Return Pickup Card */}
+                {(() => {
+                  const pickup = latestDetail.pickup_details || latestReturn.pickup_details;
+                  if (!pickup || latestDetail.status === "rejected") return null;
+
+                  const isManual = pickup.mode === "manual" || (!pickup.agent_name && Boolean(pickup.courier_name));
+                  const isFleet = pickup.mode === "own_agent" || Boolean(pickup.agent_name);
+                  const isShiprocket = pickup.mode === "shiprocket";
+
+                  return (
+                    <div
+                      style={{
+                        borderRadius: "16px",
+                        background: innerBg,
+                        border: cardBorder,
+                        padding: isCompact ? "12px" : "14px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          marginBottom: "10px",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: "12px",
+                            fontWeight: 800,
+                            letterSpacing: "0.05em",
+                            textTransform: "uppercase",
+                            color: textMuted,
+                          }}
+                        >
+                          Reverse Logistics & Pickup
+                        </span>
+                        <span
+                          style={{
+                            fontSize: "11px",
+                            color: isManual ? "#0369a1" : isFleet ? "#15803d" : "#7c3aed",
+                            background: isManual
+                              ? isLight ? "#e0f2fe" : "rgba(3,105,161,0.18)"
+                              : isFleet
+                              ? isLight ? "#f0fdf4" : "rgba(21,128,61,0.18)"
+                              : isLight ? "#f5f3ff" : "rgba(124,58,237,0.18)",
+                            padding: "2px 8px",
+                            borderRadius: "999px",
+                            fontWeight: 700,
+                          }}
+                        >
+                          {isManual ? "Self-Ship / Courier" : isFleet ? "Store Rider" : "Shiprocket"}
+                        </span>
+                      </div>
+
+                      {isManual ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          <div style={{ fontSize: "14px", fontWeight: 700, color: textPrimary }}>
+                            {pickup.courier_name || "Manual Courier / Self Ship"}
+                          </div>
+                          {pickup.tracking_number ? (
+                            <div style={{ fontSize: "13px", color: textMuted }}>
+                              AWB / Tracking Number:{" "}
+                              <strong style={{ color: textPrimary }}>{pickup.tracking_number}</strong>
+                            </div>
+                          ) : null}
+                          {pickup.pickup_notes ? (
+                            <div
+                              style={{
+                                marginTop: "4px",
+                                fontSize: "12px",
+                                color: isLight ? "#92400e" : "#fde68a",
+                                background: isLight ? "#fffbeb" : "rgba(253,230,138,0.1)",
+                                padding: "8px 10px",
+                                borderRadius: "8px",
+                                border: `1px solid ${isLight ? "#fde68a" : "rgba(253,230,138,0.2)"}`,
+                              }}
+                            >
+                              {pickup.pickup_notes}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : isFleet ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          <div style={{ fontSize: "14px", fontWeight: 700, color: textPrimary }}>
+                            {pickup.agent_name || "Assigned Store Rider"}
+                          </div>
+                          {pickup.agent_phone ? (
+                            <div style={{ fontSize: "13px", color: textMuted }}>
+                              Rider Contact:{" "}
+                              <a
+                                href={`tel:${pickup.agent_phone}`}
+                                style={{ color: "#2563eb", fontWeight: 600, textDecoration: "none" }}
+                              >
+                                {pickup.agent_phone}
+                              </a>
+                            </div>
+                          ) : null}
+                          {pickup.inspection_result === "failed" || pickup.pickup_status === "doorstep_rejected" ? (
+                            <div
+                              style={{
+                                marginTop: "4px",
+                                fontSize: "12px",
+                                color: "#dc2626",
+                                background: isLight ? "#fef2f2" : "rgba(220,38,38,0.1)",
+                                padding: "8px 10px",
+                                borderRadius: "8px",
+                                border: "1px solid rgba(220,38,38,0.2)",
+                              }}
+                            >
+                              <strong>Doorstep Verification Failed:</strong>{" "}
+                              {pickup.inspection_failed_reason || "Item did not match return conditions."}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : isShiprocket ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          <div style={{ fontSize: "14px", fontWeight: 700, color: textPrimary }}>
+                            {pickup.courier_name || "Shiprocket Reverse Logistics"}
+                          </div>
+                          {pickup.tracking_number ? (
+                            <div style={{ fontSize: "13px", color: textMuted }}>
+                              AWB: <strong style={{ color: textPrimary }}>{pickup.tracking_number}</strong>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })()}
+
                 <div
                   style={{
                     borderRadius: "16px",
@@ -1826,8 +2751,12 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                   >
                     <div>
                       <div style={{ fontSize: "12px", color: textMuted, marginBottom: "4px" }}>Refund amount</div>
-                      <div style={{ fontSize: "16px", fontWeight: 800 }}>
-                        {formatPrice(latestDetail.final_refund_amount || latestDetail.suggested_refund_amount)}
+                      <div style={{ fontSize: "16px", fontWeight: 800, color: "#16a34a" }}>
+                        {formatPrice(
+                          typeof latestDetail.final_refund_amount === "number" && latestDetail.final_refund_amount > 0
+                            ? latestDetail.final_refund_amount
+                            : latestDetail.suggested_refund_amount
+                        )}
                       </div>
                     </div>
                     <div>
@@ -1844,6 +2773,148 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                     </div>
                   </div>
                 </div>
+
+                {latestDetail.refund_breakdown ? (
+                  <div
+                    style={{
+                      borderRadius: "16px",
+                      background: innerBg,
+                      border: cardBorder,
+                      padding: isCompact ? "12px" : "14px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          fontWeight: 800,
+                          letterSpacing: "0.05em",
+                          textTransform: "uppercase",
+                          color: textMuted,
+                        }}
+                      >
+                        Refund breakdown
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          color: textMuted,
+                          background: isLight ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.06)",
+                          padding: "2px 8px",
+                          borderRadius: "999px",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Prorated
+                      </span>
+                    </div>
+
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "13px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", color: textMuted }}>
+                        <span>Items Subtotal</span>
+                        <span style={{ fontWeight: 600, color: textPrimary }}>
+                          +{formatPrice(latestDetail.refund_breakdown.items_subtotal)}
+                        </span>
+                      </div>
+
+                      {latestDetail.refund_breakdown.discounts_prorated > 0 ? (
+                        <div style={{ display: "flex", justifyContent: "space-between", color: textMuted }}>
+                          <span>Discount</span>
+                          <span style={{ fontWeight: 600, color: "#dc2626" }}>
+                            -{formatPrice(latestDetail.refund_breakdown.discounts_prorated)}
+                          </span>
+                        </div>
+                      ) : null}
+
+                      {latestDetail.refund_breakdown.tax_refund > 0 ? (
+                        <div style={{ display: "flex", justifyContent: "space-between", color: textMuted }}>
+                          <span>Tax (GST)</span>
+                          <span style={{ fontWeight: 600, color: textPrimary }}>
+                            +{formatPrice(latestDetail.refund_breakdown.tax_refund)}
+                          </span>
+                        </div>
+                      ) : null}
+
+                      {latestDetail.refund_breakdown.refundable_charges_added > 0 ? (
+                        <div style={{ display: "flex", justifyContent: "space-between", color: textMuted }}>
+                          <span>Refundable Charges</span>
+                          <span style={{ fontWeight: 600, color: textPrimary }}>
+                            +{formatPrice(latestDetail.refund_breakdown.refundable_charges_added)}
+                          </span>
+                        </div>
+                      ) : null}
+
+                      {latestDetail.refund_breakdown.non_refundable_charges_retained > 0 ? (
+                        <div style={{ display: "flex", justifyContent: "space-between", color: textMuted }}>
+                          <div>
+                            <span>Non-Refundable Retained</span>
+                            <div style={{ fontSize: "11px", opacity: 0.7 }}>
+                              {latestDetail.refund_breakdown.charge_allocations
+                                ?.filter((c) => !c.refundable)
+                                .map((c) => c.label)
+                                .join(", ") || "Shipping / COD fee"}
+                            </div>
+                          </div>
+                          <span style={{ fontWeight: 600, color: "#dc2626" }}>
+                            -{formatPrice(latestDetail.refund_breakdown.non_refundable_charges_retained)}
+                          </span>
+                        </div>
+                      ) : null}
+
+                      {(latestDetail.refund_breakdown.exception_refund_added || 0) > 0 ? (
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            color: "#16a34a",
+                            fontWeight: 600,
+                            padding: "6px 8px",
+                            borderRadius: "8px",
+                            background: "rgba(22,163,74,0.08)",
+                          }}
+                        >
+                          <div>
+                            <div>Retained Charges Refunded</div>
+                            <div style={{ fontSize: "11px", fontWeight: 400, opacity: 0.85 }}>
+                              Approved exception upon review
+                            </div>
+                          </div>
+                          <span style={{ fontWeight: 700 }}>
+                            +{formatPrice(latestDetail.refund_breakdown.exception_refund_added || 0)}
+                          </span>
+                        </div>
+                      ) : null}
+
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          paddingTop: "8px",
+                          marginTop: "2px",
+                          borderTop: divider,
+                          fontWeight: 800,
+                          fontSize: "14px",
+                        }}
+                      >
+                        <span>Total Refund</span>
+                        <span style={{ color: "#16a34a" }}>
+                          {formatPrice(
+                            typeof latestDetail.final_refund_amount === "number" && latestDetail.final_refund_amount > 0
+                              ? latestDetail.final_refund_amount
+                              : latestDetail.suggested_refund_amount
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
 
                 <div
                   style={{
@@ -1887,8 +2958,10 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                       >
                         {item.product_image ? (
                           <img
-                            src={item.product_image}
+                            src={getThumbnailUrl(item.product_image, 140, 140)}
                             alt={item.product_name}
+                            loading="eager"
+                            decoding="async"
                             style={{
                               width: "64px",
                               height: "64px",
@@ -2037,99 +3110,768 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
         background: isLight ? pageBg : "transparent",
         color: textPrimary,
         padding: isMobile ? "16px 12px 36px" : "24px 16px 48px",
+        boxSizing: "border-box",
+        width: "100%",
       }}
     >
       <div
         style={{
-          maxWidth: "1180px",
+          maxWidth: effectiveMaxWidth,
+          width: "100%",
           margin: "0 auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: "16px",
         }}
       >
+        {/* Uniform Header Navigation Bar */}
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            gap: "16px",
             flexWrap: "wrap",
-            marginBottom: "24px",
+            gap: "12px",
+            minHeight: "38px",
+            width: "100%",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <h1
+          {/* Breadcrumb back-link */}
+          {showBreadcrumb && (
+            <div
               style={{
-                margin: 0,
-                fontSize: isMobile ? "24px" : "28px",
-                lineHeight: 1.2,
-                fontWeight: 800,
-                letterSpacing: "-0.02em",
-                color: textPrimary,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "13px",
+                color: textMuted,
+                fontWeight: 500,
               }}
             >
-              Order history
-            </h1>
-            {totalOrders > 0 && (
               <span
+                onClick={() => {
+                  const path = window.location.pathname;
+                  if (path.startsWith("/builder/")) {
+                    const segments = path.split("/").filter(Boolean);
+                    const currentSiteId = segments[1] || siteId;
+                    navigate(`/builder/${currentSiteId}`);
+                  } else if (siteSlug) {
+                    navigate(`/store/${siteSlug}`);
+                  } else if (siteId) {
+                    navigate(`/builder/${siteId}`);
+                  } else {
+                    navigate("/");
+                  }
+                }}
                 style={{
-                  fontSize: "12px",
-                  fontWeight: 700,
-                  padding: "4px 10px",
-                  borderRadius: "999px",
-                  background: isLight ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.08)",
+                  cursor: "pointer",
+                  transition: "color 0.15s ease",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
                   color: textMuted,
                 }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = accentColor)}
+                onMouseLeave={(e) => (e.currentTarget.style.color = textMuted)}
               >
-                {totalOrders} {totalOrders === 1 ? "order" : "orders"}
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="19" y1="12" x2="5" y2="12" />
+                  <polyline points="12 19 5 12 12 5" />
+                </svg>
+                <span>Store</span>
               </span>
-            )}
-          </div>
+              <span>/</span>
+              <span style={{ color: textPrimary, fontWeight: 700 }}>Orders</span>
+            </div>
+          )}
 
-          <button
-            type="button"
-            onClick={() => {
-              const path = window.location.pathname;
-              if (path.startsWith("/builder/")) {
-                const segments = path.split("/").filter(Boolean);
-                const currentSiteId = segments[1] || siteId;
-                navigate(`/builder/${currentSiteId}`);
-              } else if (siteSlug) {
-                navigate(`/store/${siteSlug}`);
-              } else if (siteId) {
-                navigate(`/builder/${siteId}`);
-              } else {
-                navigate("/");
-              }
-            }}
-            style={{
-              border: cardBorder,
-              background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)",
-              color: textPrimary,
-              borderRadius: "12px",
-              padding: "10px 16px",
-              fontSize: "13px",
-              fontWeight: 700,
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "8px",
-              boxShadow: isLight ? "0 2px 6px rgba(15,23,42,0.04)" : "none",
-              transition: "all 0.15s ease",
-            }}
-          >
-            ← Continue shopping
-          </button>
         </div>
 
-        {loading ? (
+        {/* Industry-Level Themed Customer Orders Filter Bar */}
+        {(showSearch || showFilters) && !loading && orders.length > 0 && (
           <div
             style={{
               background: cardBg,
               border: cardBorder,
-              borderRadius: "24px",
-              padding: "24px",
+              borderRadius: effectiveCardRadius,
+              padding: isMobile ? "14px" : "16px 20px",
+              marginBottom: "0px",
+              boxShadow: isLight ? "0 2px 10px rgba(15,23,42,0.03)" : "0 8px 24px rgba(2,6,23,0.20)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "14px",
             }}
           >
-            Loading orders...
+            {/* Search Input and Filter Controls */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "stretch",
+                justifyContent: showSearch && showFilters ? "space-between" : (showSearch ? "flex-start" : "flex-end"),
+                gap: "10px",
+                flexDirection: isMobile ? "column" : "row",
+                width: "100%",
+              }}
+            >
+              {/* Search Form with Phone-Compatible Submit, Enter Key, Magnifier & Clear */}
+              {showSearch && (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    setAppliedSearchQuery(searchInputValue.trim());
+                    setCurrentPage(1);
+                  }}
+                  style={{
+                    position: "relative",
+                    flex: isMobile ? "1 1 100%" : "1 1 280px",
+                    width: "100%",
+                    margin: 0,
+                  }}
+                >
+                  <button
+                    type="submit"
+                    style={{
+                      position: "absolute",
+                      left: "10px",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      color: textMuted,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      padding: "4px",
+                    }}
+                    title="Search orders"
+                    aria-label="Search orders"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="11" cy="11" r="8" />
+                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                  </button>
+                  <input
+                    type="search"
+                    enterKeyHint="search"
+                    inputMode="search"
+                    value={searchInputValue}
+                    onChange={(e) => {
+                      setSearchInputValue(e.target.value);
+                      if (e.target.value === "") {
+                        setAppliedSearchQuery("");
+                        setCurrentPage(1);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        setAppliedSearchQuery(searchInputValue.trim());
+                        setCurrentPage(1);
+                      }
+                    }}
+                    placeholder="Search by order ID, item name, tracking..."
+                    style={{
+                      width: "100%",
+                      padding: "9px 34px 9px 36px",
+                      borderRadius: effectiveInnerRadius,
+                      border: `1px solid ${isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}`,
+                      background: isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)",
+                      color: textPrimary,
+                      fontSize: "13px",
+                      fontWeight: 500,
+                      outline: "none",
+                      boxSizing: "border-box",
+                      transition: "border-color 0.15s ease, background 0.15s ease",
+                    }}
+                  />
+                  {searchInputValue && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchInputValue("");
+                        setAppliedSearchQuery("");
+                        setCurrentPage(1);
+                      }}
+                      style={{
+                        position: "absolute",
+                        right: "10px",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        background: "transparent",
+                        border: "none",
+                        color: textMuted,
+                        fontSize: "14px",
+                        cursor: "pointer",
+                        padding: "4px",
+                        lineHeight: 1,
+                      }}
+                      title="Clear search"
+                      aria-label="Clear search"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </form>
+              )}
+
+              {/* Mobile Filter Controls: Status Dropdown + Date & Sort Dropdowns */}
+              {showFilters && (
+                isMobile ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", width: "100%" }}>
+                  {/* Status Selector Dropdown */}
+                  <div style={{ position: "relative", width: "100%" }}>
+                    <select
+                      value={statusTab}
+                      onChange={(e) => {
+                        setStatusTab(e.target.value as any);
+                        setCurrentPage(1);
+                      }}
+                      style={{
+                        appearance: "none",
+                        width: "100%",
+                        padding: "9px 32px 9px 12px",
+                        borderRadius: "10px",
+                        border: `1px solid ${statusTab !== "all" ? accentColor : (isLight ? "rgba(15,23,42,0.14)" : "rgba(255,255,255,0.16)")}`,
+                        background: statusTab !== "all"
+                          ? (isLight ? `${accentColor}12` : `${accentColor}25`)
+                          : (isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)"),
+                        color: textPrimary,
+                        fontSize: "12.5px",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        outline: "none",
+                      }}
+                    >
+                      <option value="all">Status: All Orders ({statusCounts.all})</option>
+                      <option value="active">Status: In Transit / Active ({statusCounts.active})</option>
+                      <option value="delivered">Status: Delivered ({statusCounts.delivered})</option>
+                      <option value="returns">Status: Returns & Refunds ({statusCounts.returns})</option>
+                      <option value="cancelled">Status: Cancelled ({statusCounts.cancelled})</option>
+                    </select>
+                    <div style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: textMuted, display: "flex" }}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                    </div>
+                  </div>
+
+                  {/* Date & Sort in 2 equal columns */}
+                  <div style={{ display: "flex", gap: "8px", width: "100%" }}>
+                    <div style={{ position: "relative", flex: 1, width: "50%" }}>
+                      <select
+                        value={dateFilter}
+                        onChange={(e) => {
+                          setDateFilter(e.target.value as any);
+                          setCurrentPage(1);
+                        }}
+                        style={{
+                          appearance: "none",
+                          width: "100%",
+                          padding: "8px 24px 8px 10px",
+                          borderRadius: "10px",
+                          border: `1px solid ${isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}`,
+                          background: isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)",
+                          color: textPrimary,
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          outline: "none",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        <option value="30_days">Last 30 days</option>
+                        <option value="60_days">Last 60 days</option>
+                        <option value="6_months">Last 6 months</option>
+                        <option value="this_year">This year ({new Date().getFullYear()})</option>
+                        <option value="custom">Custom dates...</option>
+                      </select>
+                      <div style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: textMuted, display: "flex" }}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                      </div>
+                    </div>
+
+                    <div style={{ position: "relative", flex: 1, width: "50%" }}>
+                      <select
+                        value={sortBy}
+                        onChange={(e) => {
+                          setSortBy(e.target.value as any);
+                          setCurrentPage(1);
+                        }}
+                        style={{
+                          appearance: "none",
+                          width: "100%",
+                          padding: "8px 24px 8px 10px",
+                          borderRadius: "10px",
+                          border: `1px solid ${isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}`,
+                          background: isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)",
+                          color: textPrimary,
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          outline: "none",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        <option value="newest">Newest first</option>
+                        <option value="oldest">Oldest first</option>
+                        <option value="amount_high">Total: High to Low</option>
+                        <option value="amount_low">Total: Low to High</option>
+                      </select>
+                      <div style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: textMuted, display: "flex" }}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Desktop Date Filter & Sort Dropdowns */
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  <div style={{ position: "relative" }}>
+                    <select
+                      value={dateFilter}
+                      onChange={(e) => {
+                        setDateFilter(e.target.value as any);
+                        setCurrentPage(1);
+                      }}
+                      style={{
+                        appearance: "none",
+                        padding: "8px 28px 8px 12px",
+                        borderRadius: "10px",
+                        border: `1px solid ${isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}`,
+                        background: isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)",
+                        color: textPrimary,
+                        fontSize: "12.5px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        outline: "none",
+                      }}
+                    >
+                      <option value="30_days">Last 30 days (Default)</option>
+                      <option value="60_days">Last 60 days</option>
+                      <option value="6_months">Last 6 months</option>
+                      <option value="this_year">This year ({new Date().getFullYear()})</option>
+                      <option value="custom">Custom date range...</option>
+                    </select>
+                    <div style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: textMuted, display: "flex" }}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                    </div>
+                  </div>
+
+                  <div style={{ position: "relative" }}>
+                    <select
+                      value={sortBy}
+                      onChange={(e) => {
+                        setSortBy(e.target.value as any);
+                        setCurrentPage(1);
+                      }}
+                      style={{
+                        appearance: "none",
+                        padding: "8px 28px 8px 12px",
+                        borderRadius: "10px",
+                        border: `1px solid ${isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}`,
+                        background: isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)",
+                        color: textPrimary,
+                        fontSize: "12.5px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        outline: "none",
+                      }}
+                    >
+                      <option value="newest">Newest first</option>
+                      <option value="oldest">Oldest first</option>
+                      <option value="amount_high">Total: High to Low</option>
+                      <option value="amount_low">Total: Low to High</option>
+                    </select>
+                    <div style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: textMuted, display: "flex" }}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                    </div>
+                  </div>
+                </div>
+              )
+            )}
+          </div>
+
+            {/* Custom Date Range Pickers (Rendered when 'Custom date range' is active and filters enabled) */}
+            {showFilters && dateFilter === "custom" && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr 1fr" : "auto auto auto",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "10px 12px",
+                  borderRadius: effectiveInnerRadius,
+                  border: `1px dashed ${isLight ? "rgba(15,23,42,0.18)" : "rgba(255,255,255,0.20)"}`,
+                  background: isLight ? "rgba(15,23,42,0.01)" : "rgba(255,255,255,0.02)",
+                  width: "100%",
+                  boxSizing: "border-box",
+                }}
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0 }}>
+                  <label style={{ fontSize: "11px", fontWeight: 700, color: textMuted, textTransform: "uppercase" }}>From</label>
+                  <input
+                    type="date"
+                    value={customFromDate}
+                    onChange={(e) => {
+                      setCustomFromDate(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "6px 8px",
+                      borderRadius: effectiveInnerRadius,
+                      border: `1px solid ${isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}`,
+                      background: isLight ? "#ffffff" : "rgba(255,255,255,0.06)",
+                      color: textPrimary,
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0 }}>
+                  <label style={{ fontSize: "11px", fontWeight: 700, color: textMuted, textTransform: "uppercase" }}>To</label>
+                  <input
+                    type="date"
+                    value={customToDate}
+                    onChange={(e) => {
+                      setCustomToDate(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "6px 8px",
+                      borderRadius: effectiveInnerRadius,
+                      border: `1px solid ${isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}`,
+                      background: isLight ? "#ffffff" : "rgba(255,255,255,0.06)",
+                      color: textPrimary,
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+
+                {(customFromDate || customToDate) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomFromDate("");
+                      setCustomToDate("");
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      gridColumn: isMobile ? "span 2" : "auto",
+                      background: "transparent",
+                      border: "none",
+                      color: accentColor,
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      textDecoration: "underline",
+                      padding: "4px 8px",
+                      textAlign: isMobile ? "center" : "left",
+                    }}
+                  >
+                    Clear custom dates
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Desktop Status Filter Tabs (Rendered on wide screens for 1-click tab switching when filters enabled) */}
+            {showFilters && !isMobile && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  flexWrap: "wrap",
+                  width: "100%",
+                }}
+              >
+                {[
+                  { key: "all", label: "All Orders", count: statusCounts.all },
+                  { key: "active", label: "In Transit / Active", count: statusCounts.active },
+                  { key: "delivered", label: "Delivered", count: statusCounts.delivered },
+                  { key: "returns", label: "Returns & Refunds", count: statusCounts.returns },
+                  { key: "cancelled", label: "Cancelled", count: statusCounts.cancelled },
+                ].map((tab) => {
+                  const isActive = statusTab === tab.key;
+                  const activeColor = isColorDarkHex(accentColor) ? "#ffffff" : "#0f172a";
+
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => {
+                        setStatusTab(tab.key as any);
+                        setCurrentPage(1);
+                      }}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "6px 13px",
+                        borderRadius: effectiveBadgeRadius,
+                        border: isActive
+                          ? `1px solid ${accentColor}`
+                          : `1px solid ${isLight ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.10)"}`,
+                        background: isActive
+                          ? accentColor
+                          : (isLight ? "rgba(15,23,42,0.03)" : "rgba(255,255,255,0.05)"),
+                        color: isActive ? activeColor : textMuted,
+                        fontSize: "12.5px",
+                        fontWeight: isActive ? 700 : 500,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                        transition: "all 0.15s ease",
+                        boxShadow: isActive ? `0 2px 8px ${accentColor}33` : "none",
+                      }}
+                    >
+                      <span>{tab.label}</span>
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          padding: "1px 6px",
+                          borderRadius: effectiveBadgeRadius,
+                          background: isActive
+                            ? "rgba(255,255,255,0.25)"
+                            : (isLight ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.10)"),
+                          color: isActive ? activeColor : textMuted,
+                        }}
+                      >
+                        {tab.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Active Filters Bar (if any active filters) */}
+            {hasActiveFilters && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  flexWrap: "wrap",
+                  paddingTop: "6px",
+                  borderTop: `1px dashed ${isLight ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.10)"}`,
+                  fontSize: "12px",
+                }}
+              >
+                <span style={{ color: textMuted, fontWeight: 600 }}>Active filters:</span>
+
+                {statusTab !== "all" && (
+                  <span
+                    onClick={() => setStatusTab("all")}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      background: isLight ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.08)",
+                      color: textPrimary,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Status: {statusTab.toUpperCase()} ✕
+                  </span>
+                )}
+
+                {dateFilter !== "30_days" && (
+                  <span
+                    onClick={() => {
+                      setDateFilter("30_days");
+                      setCustomFromDate("");
+                      setCustomToDate("");
+                    }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      background: isLight ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.08)",
+                      color: textPrimary,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Date: {dateFilter.replace("_", " ")} ✕
+                  </span>
+                )}
+
+                {appliedSearchQuery && (
+                  <span
+                    onClick={() => {
+                      setSearchInputValue("");
+                      setAppliedSearchQuery("");
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      background: isLight ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.08)",
+                      color: textPrimary,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Search: "{appliedSearchQuery}" ✕
+                  </span>
+                )}
+
+                {sortBy !== "newest" && (
+                  <span
+                    onClick={() => setSortBy("newest")}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      background: isLight ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.08)",
+                      color: textPrimary,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Sort: {sortBy.replace("_", " ")} ✕
+                  </span>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: accentColor,
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    padding: "2px 6px",
+                    textDecoration: "underline",
+                  }}
+                >
+                  Clear all
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {loading && orders.length === 0 ? (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "14px",
+              width: "100%",
+            }}
+          >
+            {[1, 2, 3].map((skelId) => (
+              <div
+                key={skelId}
+                style={{
+                  background: cardBg,
+                  border: cardBorder,
+                  borderRadius: "20px",
+                  padding: isMobile ? "16px 14px" : "20px 22px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "12px",
+                  boxShadow: isLight ? "0 4px 16px rgba(15,23,42,0.04)" : "0 10px 24px rgba(2,6,23,0.20)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ height: "18px", width: "160px", borderRadius: "6px", background: "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)", backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
+                  <div style={{ height: "24px", width: "80px", borderRadius: "999px", background: "#f1f5f9" }} />
+                </div>
+                <div style={{ height: "14px", width: "100px", borderRadius: "4px", background: "#f1f5f9" }} />
+                <div style={{ height: "40px", width: "100%", borderRadius: "8px", background: "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)", backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
+              </div>
+            ))}
+          </div>
+        ) : isUnauthenticated && !isInsideEditor ? (
+          <div
+            style={{
+              background: cardBg,
+              border: cardBorder,
+              borderRadius: effectiveCardRadius,
+              padding: isMobile ? "36px 18px" : "56px 24px",
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "16px",
+              boxShadow: isLight ? "0 4px 20px rgba(15,23,42,0.06)" : "0 8px 32px rgba(0,0,0,0.3)",
+            }}
+          >
+            <div
+              style={{
+                width: "60px",
+                height: "60px",
+                borderRadius: "50%",
+                background: isLight ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)",
+                display: "grid",
+                placeItems: "center",
+                color: accentColor,
+              }}
+            >
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+            </div>
+            <div>
+              <div style={{ fontSize: "20px", fontWeight: 800, color: titleColor, marginBottom: "8px" }}>
+                Sign in to view your orders
+              </div>
+              <div style={{ color: textMuted, fontSize: "14px", maxWidth: "440px", lineHeight: 1.5 }}>
+                Track your active shipments, view live delivery statuses and OTPs, request returns, and download invoices.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const targetPath = siteSlug ? `/store/${siteSlug}` : (siteId ? `/store/${siteId}` : "/");
+                navigate(targetPath);
+              }}
+              style={{
+                marginTop: "8px",
+                background: accentColor,
+                color: isColorDarkHex(accentColor) ? "#ffffff" : "#0f172a",
+                border: "none",
+                borderRadius: effectiveBadgeRadius,
+                padding: "12px 28px",
+                fontSize: "14px",
+                fontWeight: 700,
+                cursor: "pointer",
+                boxShadow: `0 4px 14px ${accentColor}33`,
+              }}
+            >
+              Sign In to Your Account
+            </button>
           </div>
         ) : error ? (
           <div
@@ -2148,27 +3890,132 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
             style={{
               background: cardBg,
               border: cardBorder,
-              borderRadius: "24px",
-              padding: "32px",
+              borderRadius: effectiveCardRadius,
+              padding: isMobile ? "32px 20px" : "48px 32px",
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "14px",
             }}
           >
-            <div style={{ fontSize: "18px", fontWeight: 700, marginBottom: "8px" }}>
-              No orders yet
+            <div
+              style={{
+                width: "56px",
+                height: "56px",
+                borderRadius: "50%",
+                background: isLight ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
+                display: "grid",
+                placeItems: "center",
+                color: textMuted,
+              }}
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <path d="M16 10a4 4 0 0 1-8 0" />
+              </svg>
             </div>
-            <div style={{ color: textMuted, fontSize: "14px" }}>
-              Orders placed from this account will show here.
+            <div>
+              <div style={{ fontSize: "18px", fontWeight: 700, color: titleColor, marginBottom: "6px" }}>
+                {emptyTitle}
+              </div>
+              <div style={{ color: textMuted, fontSize: "14px", maxWidth: "420px" }}>
+                {emptyDescription}
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (siteSlug) {
+                  navigate(`/store/${siteSlug}`);
+                } else if (siteId) {
+                  navigate(`/builder/${siteId}`);
+                } else {
+                  navigate("/");
+                }
+              }}
+              style={{
+                marginTop: "6px",
+                background: accentColor,
+                color: isColorDarkHex(accentColor) ? "#ffffff" : "#0f172a",
+                border: "none",
+                borderRadius: effectiveBadgeRadius,
+                padding: "10px 24px",
+                fontSize: "14px",
+                fontWeight: 700,
+                cursor: "pointer",
+                boxShadow: `0 4px 14px ${accentColor}33`,
+              }}
+            >
+              {startShoppingLabel}
+            </button>
+          </div>
+        ) : filteredOrders.length === 0 ? (
+          <div
+            style={{
+              background: cardBg,
+              border: cardBorder,
+              borderRadius: effectiveCardRadius,
+              padding: "48px 24px",
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "12px",
+            }}
+          >
+            <div
+              style={{
+                width: "48px",
+                height: "48px",
+                borderRadius: "50%",
+                background: isLight ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)",
+                display: "grid",
+                placeItems: "center",
+                color: textMuted,
+              }}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+            </div>
+            <div style={{ fontSize: "17px", fontWeight: 700, color: textPrimary }}>
+              No orders match your filter criteria
+            </div>
+            <div style={{ color: textMuted, fontSize: "13.5px", maxWidth: "380px" }}>
+              Try adjusting your search keyword, date range, or switching to "All Orders".
+            </div>
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              style={{
+                marginTop: "6px",
+                background: accentColor,
+                color: isColorDarkHex(accentColor) ? "#ffffff" : "#0f172a",
+                border: "none",
+                borderRadius: effectiveBadgeRadius,
+                padding: "8px 18px",
+                fontSize: "13px",
+                fontWeight: 700,
+                cursor: "pointer",
+                boxShadow: `0 4px 12px ${accentColor}33`,
+              }}
+            >
+              Reset All Filters
+            </button>
           </div>
         ) : (
           <div
             style={{
               display: "flex",
               flexDirection: "column",
-              gap: "14px",
+              gap: effectiveCardGap,
             }}
           >
-            {orders.map((order) => {
-              const detail = detailMap[order.id];
+            {paginatedOrders.map((order) => {
+              const detail = detailMap[order.id] || (order.items && order.items.length > 0 ? (order as any) : null);
               const isExpanded = expandedOrderId === order.id;
               const canCancel = order.status !== "delivered" && order.status !== "returned" && order.status !== "cancelled";
               const isDelivered = order.status === "delivered";
@@ -2179,7 +4026,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
               const orderReturns = getReturnsForOrder(order.id);
               const hasExistingReturn = orderReturns.length > 0;
               const hasSelectableReturnItems =
-                !!detail && detail.items.some((item) => isItemReturnable(item));
+                !!detail && detail.items.some((item) => isItemReturnable(item, detail.delivered_at));
 
               return (
                 <div
@@ -2187,12 +4034,14 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                   style={{
                     background: cardBg,
                     border: isExpanded ? `1px solid ${accentColor}55` : cardBorder,
-                    borderRadius: "20px",
+                    borderRadius: effectiveCardRadius,
                     overflow: "hidden",
+                    contentVisibility: "auto",
+                    containIntrinsicSize: isExpanded ? "0 400px" : "0 88px",
                     boxShadow: isExpanded
                       ? (isLight ? "0 14px 32px rgba(15,23,42,0.10)" : "0 20px 44px rgba(2,6,23,0.40)")
                       : (isLight ? "0 4px 16px rgba(15,23,42,0.04)" : "0 10px 24px rgba(2,6,23,0.20)"),
-                    transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                    transition: "border-color 0.2s ease, box-shadow 0.2s ease",
                   }}
                 >
                   <button
@@ -2207,7 +4056,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                         : "transparent",
                       border: "none",
                       color: "inherit",
-                      padding: isMobile ? "14px 14px" : "18px 20px",
+                      padding: effectiveCardPadding,
                       cursor: "pointer",
                       display: "block",
                       transition: "background 0.15s ease",
@@ -2228,7 +4077,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                           style={{
                             width: "42px",
                             height: "42px",
-                            borderRadius: "12px",
+                            borderRadius: effectiveInnerRadius,
                             background: isLight ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)",
                             display: "grid",
                             placeItems: "center",
@@ -2261,7 +4110,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                   fontSize: "11px",
                                   fontWeight: 700,
                                   padding: "2px 8px",
-                                  borderRadius: "999px",
+                                  borderRadius: effectiveBadgeRadius,
                                   background: isLight ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.08)",
                                   color: textMuted,
                                 }}
@@ -2297,19 +4146,33 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                       >
                         {/* Status chip */}
                         {(() => {
-                          const isFullyCancelledOrReturned = order.status === "cancelled" || order.status === "returned";
-                          const currentRefundInfo = isFullyCancelledOrReturned
-                            ? (detailMap[order.id]?.refund_info || order.refund_info)
-                            : null;
+                          const currentRefundInfo = (detailMap[order.id]?.refund_info || order.refund_info);
+                          const isFullyRefunded = order.status === "refunded" || order.payment_status === "refunded" || currentRefundInfo?.status === "completed" || currentRefundInfo?.status_label === "Refunded";
+                          const isPartiallyRefunded = order.payment_status === "partially_refunded" || currentRefundInfo?.status_label === "Partially Refunded";
                           const isRefundFailed = currentRefundInfo?.status === "failed";
                           const isRefundProcessing = currentRefundInfo?.status === "processing";
-                          const isRefundCompleted = currentRefundInfo?.status === "completed" && isFullyCancelledOrReturned;
-                          const chipColor = isRefundFailed
+                          const isRepl = Boolean(
+                            (order.cancel_reason || detailMap[order.id]?.cancel_reason || "").startsWith("Replacement Authorized")
+                          );
+                          const isReplDelivered = isRepl && order.status === "delivered";
+                          const chipColor = isRepl
+                            ? (isReplDelivered ? "#059669" : "#0284c7")
+                            : (isRefundFailed
                             ? "#ef4444"
-                            : (isRefundProcessing ? "#d97706" : (isRefundCompleted ? "#059669" : statusColor));
-                          const chipLabel = isRefundFailed
+                            : (isFullyRefunded
+                            ? "#059669"
+                            : (isPartiallyRefunded
+                            ? "#0284c7"
+                            : (isRefundProcessing ? "#d97706" : statusColor))));
+                          const chipLabel = isRepl
+                            ? (isReplDelivered ? "Replacement Delivered" : (order.status === "shipped" ? "Re-Dispatch Shipped" : (order.status === "out_for_delivery" ? "Re-Dispatch Out for Delivery" : "Re-Dispatch (In Progress)")))
+                            : (isRefundFailed
                             ? "Refund Failed"
-                            : (isRefundProcessing ? "Refund in progress" : (isRefundCompleted ? "Refunded" : order.status.replaceAll("_", " ")));
+                            : (isFullyRefunded
+                            ? "Refunded"
+                            : (isPartiallyRefunded
+                            ? "Partially Refunded"
+                            : (isRefundProcessing ? "Refund in progress" : order.status.replaceAll("_", " ")))));
 
                           return (
                             <div
@@ -2318,7 +4181,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                 alignItems: "center",
                                 gap: "6px",
                                 padding: "6px 12px",
-                                borderRadius: "999px",
+                                borderRadius: effectiveBadgeRadius,
                                 background: `${chipColor}14`,
                                 border: `1px solid ${chipColor}28`,
                                 color: chipColor,
@@ -2341,29 +4204,52 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                           );
                         })()}
 
-                        {/* Delivery OTP Badge on Card — only for Own Fleet */}
-                        {(order.status === "out_for_delivery" || order.status === "shipped") && order.delivery_otp && order.shipment?.mode !== "shiprocket" && order.shipment?.delivery_mode !== "shiprocket" ? (
-                          <div
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "6px",
-                              padding: "5px 12px",
-                              borderRadius: "999px",
-                              background: isLight ? "#ecfdf5" : "rgba(16, 185, 129, 0.12)",
-                              border: "1px dashed #10b981",
-                              color: "#059669",
-                              fontSize: "12px",
-                              fontWeight: 800,
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            <span>OTP:</span>
-                            <span style={{ letterSpacing: "2px", fontFamily: "monospace", fontWeight: 900 }}>
-                              {order.delivery_otp}
-                            </span>
-                          </div>
-                        ) : null}
+                        {/* Delivery OTP Badge on Card — only when OUT FOR DELIVERY for Own Fleet */}
+                        {(() => {
+                          const currentOtp = detail?.delivery_otp || order.delivery_otp || detail?.shipment?.delivery_otp || order.shipment?.delivery_otp;
+                          const isOwnFleet = Boolean(
+                            detail?.shipment?.delivery_mode === "own_agent" ||
+                            detail?.shipment?.mode === "own_agent" ||
+                            order.shipment?.delivery_mode === "own_agent" ||
+                            order.shipment?.mode === "own_agent" ||
+                            Boolean(detail?.shipment?.agent_id) ||
+                            Boolean(order.shipment?.agent_id) ||
+                            Boolean(detail?.shipment?.delivery_partner_name && !detail?.shipment?.courier_name) ||
+                            Boolean(order.shipment?.delivery_partner_name && !order.shipment?.courier_name)
+                          );
+                          const isOfd = Boolean(
+                            order.status === "out_for_delivery" ||
+                            detail?.status === "out_for_delivery" ||
+                            order.shipment?.status === "out_for_delivery" ||
+                            detail?.shipment?.status === "out_for_delivery" ||
+                            order.shipment?.status === "picked_up" ||
+                            detail?.shipment?.status === "picked_up"
+                          );
+                          if (!currentOtp || !isOwnFleet || !isOfd) return null;
+
+                          return (
+                            <div
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px",
+                                padding: "5px 12px",
+                                borderRadius: "999px",
+                                background: isLight ? "#ecfdf5" : "rgba(16, 185, 129, 0.12)",
+                                border: "1px dashed #10b981",
+                                color: "#059669",
+                                fontSize: "12px",
+                                fontWeight: 800,
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              <span>OTP:</span>
+                              <span style={{ letterSpacing: "2px", fontFamily: "monospace", fontWeight: 900 }}>
+                                {currentOtp}
+                              </span>
+                            </div>
+                          );
+                        })()}
 
                         {/* Price */}
                         <div
@@ -2422,7 +4308,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                       style={{
                         borderTop: divider,
                         padding: isCompact ? "14px" : "18px",
-                        background: isLight ? "#f8fafc" : "rgba(255,255,255,0.02)",
+                        background: expandedBg,
                       }}
                     >
                       {detailLoadingId === order.id && !detail ? (
@@ -2431,63 +4317,154 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                         </div>
                       ) : detail ? (
                         <>
-                          {/* Delivery Verification Code (OTP) Banner — only for Own Fleet */}
-                          {detail.delivery_otp && detail.shipment?.mode !== "shiprocket" && detail.shipment?.delivery_mode !== "shiprocket" && (detail.status === "out_for_delivery" || detail.status === "shipped") ? (
-                            <div
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "space-between",
-                                padding: isCompact ? "12px 14px" : "14px 18px",
-                                background: isLight ? "#f0fdf4" : "rgba(16, 185, 129, 0.08)",
-                                border: "1.5px solid rgba(16, 185, 129, 0.3)",
-                                borderRadius: "16px",
-                                marginBottom: "16px",
-                                flexWrap: "wrap",
-                                gap: "12px",
-                              }}
-                            >
-                              <div>
-                                <div
-                                  style={{
-                                    fontSize: "12px",
-                                    fontWeight: 800,
-                                    color: "#059669",
-                                    textTransform: "uppercase",
-                                    letterSpacing: "0.5px",
-                                  }}
-                                >
-                                  Delivery Verification OTP
-                                </div>
-                                <div style={{ fontSize: "12px", color: textMuted, marginTop: "2px" }}>
-                                  Share this 4-digit code with the delivery partner upon receiving your order.
-                                </div>
-                              </div>
+                          {/* Delivery Verification Code (OTP) Banner — only when OUT FOR DELIVERY for Own Fleet */}
+                          {(() => {
+                            const currentOtp = detail?.delivery_otp || order.delivery_otp || detail?.shipment?.delivery_otp || order.shipment?.delivery_otp;
+                            const isOwnFleet = Boolean(
+                              detail?.shipment?.delivery_mode === "own_agent" ||
+                              detail?.shipment?.mode === "own_agent" ||
+                              order.shipment?.delivery_mode === "own_agent" ||
+                              order.shipment?.mode === "own_agent" ||
+                              Boolean(detail?.shipment?.agent_id) ||
+                              Boolean(order.shipment?.agent_id) ||
+                              Boolean(detail?.shipment?.delivery_partner_name && !detail?.shipment?.courier_name) ||
+                              Boolean(order.shipment?.delivery_partner_name && !order.shipment?.courier_name)
+                            );
+                            const isOfd = Boolean(
+                              order.status === "out_for_delivery" ||
+                              detail?.status === "out_for_delivery" ||
+                              order.shipment?.status === "out_for_delivery" ||
+                              detail?.shipment?.status === "out_for_delivery" ||
+                              order.shipment?.status === "picked_up" ||
+                              detail?.shipment?.status === "picked_up"
+                            );
+                            if (!currentOtp || !isOwnFleet || !isOfd) return null;
+
+                            return (
                               <div
                                 style={{
-                                  fontSize: "22px",
-                                  fontWeight: 900,
-                                  letterSpacing: "6px",
-                                  color: "#059669",
-                                  background: isLight ? "#ffffff" : "rgba(0,0,0,0.3)",
-                                  padding: "4px 16px",
-                                  borderRadius: "10px",
-                                  border: "2px dashed #10b981",
-                                  fontFamily: "monospace",
-                                  boxShadow: "0 2px 8px rgba(16, 185, 129, 0.12)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  padding: isCompact ? "12px 14px" : "14px 18px",
+                                  background: isLight ? "#f0fdf4" : "rgba(16, 185, 129, 0.08)",
+                                  border: "1.5px solid rgba(16, 185, 129, 0.3)",
+                                  borderRadius: effectiveInnerRadius,
+                                  marginBottom: "16px",
+                                  flexWrap: "wrap",
+                                  gap: "12px",
                                 }}
                               >
-                                {detail.delivery_otp}
+                                <div>
+                                  <div
+                                    style={{
+                                      fontSize: "12px",
+                                      fontWeight: 800,
+                                      color: "#059669",
+                                      textTransform: "uppercase",
+                                      letterSpacing: "0.5px",
+                                    }}
+                                  >
+                                    Delivery Verification OTP
+                                  </div>
+                                  <div style={{ fontSize: "12px", color: textMuted, marginTop: "2px" }}>
+                                    Share this 4-digit code with the delivery partner upon receiving your order.
+                                  </div>
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "22px",
+                                    fontWeight: 900,
+                                    letterSpacing: "6px",
+                                    color: "#059669",
+                                    background: isLight ? "#ffffff" : "rgba(0,0,0,0.3)",
+                                    padding: "4px 16px",
+                                    borderRadius: effectiveInnerRadius,
+                                    border: "2px dashed #10b981",
+                                    fontFamily: "monospace",
+                                  }}
+                                >
+                                  {currentOtp}
+                                </div>
                               </div>
-                            </div>
-                          ) : null}
+                            );
+                          })()}
+                          {(() => {
+                            const isRepl = Boolean((detail?.cancel_reason || order.cancel_reason || "").startsWith("Replacement Authorized"));
+                            const isReplDelivered = isRepl && (order.status === "delivered" || detail?.status === "delivered");
+                            const isReplActive = isRepl && !isReplDelivered && order.status !== "cancelled" && detail?.status !== "cancelled";
+
+                            if (isReplActive) {
+                              return (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "12px",
+                                    padding: "12px 16px",
+                                    background: isLight ? "#f0f9ff" : "rgba(2, 132, 199, 0.08)",
+                                    border: "1.5px solid #7dd3fc",
+                                    borderRadius: effectiveInnerRadius,
+                                    marginBottom: "16px",
+                                    color: "#0369a1",
+                                  }}
+                                >
+                                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                                  </svg>
+                                  <div>
+                                    <div style={{ fontWeight: 800, color: isLight ? "#0c4a6e" : "#e0f2fe", fontSize: "13.5px" }}>
+                                      Replacement Order in Progress
+                                    </div>
+                                    <div style={{ fontSize: "12px", color: isLight ? "#0284c7" : "#7dd3fc", marginTop: "2px" }}>
+                                      Support authorized a replacement shipment for this order. We are preparing it for delivery.
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            if (isReplDelivered) {
+                              return (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "12px",
+                                    padding: "12px 16px",
+                                    background: isLight ? "#f0fdf4" : "rgba(16, 185, 129, 0.08)",
+                                    border: "1.5px solid #86efac",
+                                    borderRadius: effectiveInnerRadius,
+                                    marginBottom: "16px",
+                                    color: "#15803d",
+                                  }}
+                                >
+                                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                  </svg>
+                                  <div>
+                                    <div style={{ fontWeight: 800, color: isLight ? "#14532d" : "#bbf7d0", fontSize: "13.5px" }}>
+                                      Replacement Completed & Delivered
+                                    </div>
+                                    <div style={{ fontSize: "12px", color: isLight ? "#16a34a" : "#86efac", marginTop: "2px" }}>
+                                      The replacement shipment for this order has been successfully delivered.
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            return null;
+                          })()}
 
                           <div
                             style={{
                               display: "grid",
                               gridTemplateColumns: isTablet || isMobile
                                 ? "1fr"
-                                : "minmax(0, 1.4fr) minmax(320px, 1fr)",
+                                : "repeat(2, minmax(0, 1fr))",
                               gap: "18px",
                               alignItems: "start",
                             }}
@@ -2501,23 +4478,31 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                           >
                             <div
                               style={{
-                                border: cardBorder,
-                                borderRadius: "18px",
+                                border: innerBoxBorder,
+                                borderRadius: effectiveInnerRadius,
                                 padding: isCompact ? "14px" : "16px",
-                                background: panelBg,
+                                background: effectiveInnerBoxBg,
                               }}
                             >
                               <div
                                 style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "8px",
                                   fontSize: "13px",
                                   fontWeight: 800,
-                                  marginBottom: "12px",
+                                  marginBottom: "14px",
                                   letterSpacing: "0.04em",
                                   textTransform: "uppercase",
                                   color: textMuted,
                                 }}
                               >
-                                Items
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                                  <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                                  <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                                </svg>
+                                <span>{itemsHeading} ({detail.items?.length || 0})</span>
                               </div>
 
                               <div
@@ -2527,10 +4512,16 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                   gap: "12px",
                                 }}
                               >
-                                {detail.items.map((item) => {
+                                {(detail.items || []).map((item) => {
                                   const draftItem = draft?.items?.[item.id];
-                                  const itemCanReturn = isItemReturnable(item);
+                                  const itemCanReturn = isItemReturnable(item, detail.delivered_at);
                                   const isEligible = itemCanReturn && isReturnFormOpen;
+                                  const isReplOrder = Boolean((detail?.cancel_reason || order.cancel_reason || "").startsWith("Replacement Authorized"));
+                                  const isReplDelivered = isReplOrder && (order.status === "delivered" || detail?.status === "delivered");
+                                  const isReplActive = isReplOrder && !isReplDelivered && order.status !== "cancelled" && detail?.status !== "cancelled";
+
+                                  const isItemReplInTransit = isReplActive && (item.status === "confirmed" || item.status === "shipped" || item.status === "out_for_delivery" || item.status === "placed");
+                                  const isItemDeliveredEarlier = isReplActive && item.status === "delivered";
 
                                   return (
                                     <div
@@ -2540,9 +4531,9 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                         flexDirection: "column",
                                         gap: "12px",
                                         padding: "12px",
-                                        borderRadius: "16px",
-                                        background: innerBg,
-                                        border: cardBorder,
+                                        borderRadius: effectiveInnerRadius,
+                                        background: isItemReplInTransit ? (isLight ? "#f0f9ff" : "rgba(2, 132, 199, 0.08)") : effectiveItemCardBg,
+                                        border: isItemReplInTransit ? "1.5px solid #7dd3fc" : innerBoxBorder,
                                       }}
                                     >
                                       <div
@@ -2559,14 +4550,20 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                       >
                                         {item.product_image ? (
                                           <img
-                                            src={item.product_image}
-                                            alt={item.product_name}
+                                            src={getThumbnailUrl(item.product_image, 140, 140)}
+                                            alt={item.product_name || "Product"}
+                                            width={72}
+                                            height={72}
+                                            loading="lazy"
+                                            decoding="async"
                                             style={{
                                               width: "72px",
                                               height: "72px",
+                                              aspectRatio: "1/1",
                                               objectFit: "cover",
-                                              borderRadius: "14px",
+                                              borderRadius: effectiveInnerRadius,
                                               border: cardBorder,
+                                              flexShrink: 0,
                                             }}
                                           />
                                         ) : null}
@@ -2577,9 +4574,51 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                               fontSize: "14px",
                                               fontWeight: 700,
                                               marginBottom: "4px",
+                                              display: "flex",
+                                              alignItems: "center",
+                                              gap: "8px",
+                                              flexWrap: "wrap",
                                             }}
                                           >
-                                            {item.product_name}
+                                            <span>{item.product_name || "Product"}</span>
+                                            {isItemReplInTransit && (
+                                              <span
+                                                style={{
+                                                  fontSize: "11px",
+                                                  fontWeight: 700,
+                                                  color: "#0284c7",
+                                                  background: "#e0f2fe",
+                                                  border: "1px solid #7dd3fc",
+                                                  padding: "2px 7px",
+                                                  borderRadius: effectiveBadgeRadius,
+                                                  display: "inline-flex",
+                                                  alignItems: "center",
+                                                  gap: "4px",
+                                                }}
+                                              >
+                                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                                                <span>Replacement in Progress</span>
+                                              </span>
+                                            )}
+                                            {isItemDeliveredEarlier && (
+                                              <span
+                                                style={{
+                                                  fontSize: "11px",
+                                                  fontWeight: 600,
+                                                  color: "#15803d",
+                                                  background: "#f0fdf4",
+                                                  border: "1px solid #bbf7d0",
+                                                  padding: "2px 7px",
+                                                  borderRadius: effectiveBadgeRadius,
+                                                  display: "inline-flex",
+                                                  alignItems: "center",
+                                                  gap: "4px",
+                                                }}
+                                              >
+                                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                                <span>Delivered Earlier</span>
+                                              </span>
+                                            )}
                                           </div>
                                           <div style={{ fontSize: "13px", color: textMuted }}>
                                             Qty {item.quantity}
@@ -2587,18 +4626,69 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                               ? ` • ${item.selected_variant_label || "Variant"}: ${item.selected_variant_value}`
                                               : ""}
                                           </div>
-                                          <div style={{ fontSize: "12px", color: textMuted, marginTop: "4px" }}>
-                                            Item status: {item.status.replaceAll("_", " ")}
-                                          </div>
-                                          {Number(item.returnable_quantity || 0) > 0 ? (
-                                            <div style={{ fontSize: "12px", color: "#16a34a", marginTop: "4px", fontWeight: 600 }}>
-                                              Returnable quantity: {item.returnable_quantity}
+                                          {!isReplDelivered && !isItemReplInTransit && !isItemDeliveredEarlier && item.status && item.status !== "delivered" && (
+                                            <div style={{ fontSize: "12px", color: textMuted, marginTop: "4px" }}>
+                                              Item status: {String(item.status).replace(/_/g, " ")}
                                             </div>
-                                          ) : (detail.status === "delivered" || detail.status === "returned") ? (
+                                          )}
+                                          {item.return_window_days === 0 ? (
                                             <div style={{ fontSize: "12px", color: "#dc2626", marginTop: "4px", fontWeight: 600 }}>
-                                              Already fully returned or not eligible for return
+                                              Non-Returnable (Final Sale)
+                                            </div>
+                                          ) : Number(item.returnable_quantity || 0) > 0 ? (
+                                            itemCanReturn ? (
+                                              <div style={{ fontSize: "12px", color: "#16a34a", marginTop: "4px", fontWeight: 600 }}>
+                                                Returnable ({item.return_window_days != null ? `${item.return_window_days} Days Policy` : "Returnable"} • Qty: {item.returnable_quantity})
+                                              </div>
+                                            ) : (
+                                              <div style={{ fontSize: "12px", color: "#dc2626", marginTop: "4px", fontWeight: 600 }}>
+                                                Return window expired {item.return_window_days != null ? `(${item.return_window_days} Days Policy)` : ""}
+                                              </div>
+                                            )
+                                          ) : (detail.status === "delivered" || detail.status === "returned") ? (
+                                            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px", fontWeight: 600 }}>
+                                              Already fully returned
                                             </div>
                                           ) : null}
+
+                                          {isCrmEnabled && (
+                                            <div style={{ marginTop: "6px" }}>
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  const isStore = typeof window !== "undefined" && window.location.pathname.startsWith("/store/");
+                                                  const isBuilder = typeof window !== "undefined" && window.location.pathname.startsWith("/builder/");
+                                                  const prefix = isStore
+                                                    ? `/store/${siteSlug || ""}`
+                                                    : isBuilder
+                                                    ? `/builder/${siteId || siteSlug || ""}`
+                                                    : (siteSlug ? `/store/${siteSlug}` : "");
+                                                  const targetPath = `${prefix}/support?tab=new&orderId=${detail.id}&itemId=${item.id}`;
+                                                  navigate(targetPath);
+                                                }}
+                                                style={{
+                                                  background: "transparent",
+                                                  border: "none",
+                                                  color: accentColor,
+                                                  fontSize: "11.5px",
+                                                  fontWeight: 600,
+                                                  cursor: "pointer",
+                                                  padding: 0,
+                                                  display: "inline-flex",
+                                                  alignItems: "center",
+                                                  gap: "4px",
+                                                  textDecoration: "underline",
+                                                  textUnderlineOffset: "2px",
+                                                }}
+                                              >
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                                                </svg>
+                                                <span>Need help with this product?</span>
+                                              </button>
+                                            </div>
+                                          )}
                                         </div>
 
                                         <div
@@ -2771,182 +4861,124 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                               </div>
                             </div>
 
-                            <div
-                              style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: "14px",
-                              }}
-                            >
-                              <div
-                                style={{
-                                  border: cardBorder,
-                                  borderRadius: "18px",
-                                  padding: isCompact ? "14px" : "16px",
-                                  background: panelBg,
-                                }}
-                              >
+                            {/* Shipping & Delivery Address */}
+                            {showShipping && (() => {
+                              const shipping = detail?.shipping_address || order?.shipping_address || (order as any)?.shipping_address || {};
+                              const fullName =
+                                shipping.fullName ||
+                                shipping.full_name ||
+                                shipping.name ||
+                                (order as any)?.customer_name ||
+                                (detail as any)?.customer_name ||
+                                "Customer";
+                              const address1 =
+                                shipping.addressLine1 ||
+                                shipping.address_line1 ||
+                                shipping.address ||
+                                shipping.street ||
+                                shipping.line1 ||
+                                shipping.address1 ||
+                                "";
+                              const address2 =
+                                shipping.addressLine2 ||
+                                shipping.address_line2 ||
+                                shipping.line2 ||
+                                shipping.address2 ||
+                                "";
+                              const city = shipping.city || "";
+                              const state = shipping.state || "";
+                              const postalCode =
+                                shipping.postalCode ||
+                                shipping.postal_code ||
+                                shipping.pincode ||
+                                shipping.zip ||
+                                shipping.zipcode ||
+                                "";
+                              const phone =
+                                shipping.mobileNumber ||
+                                shipping.mobile_number ||
+                                shipping.phone ||
+                                (order as any)?.customer_phone ||
+                                (detail as any)?.customer_phone ||
+                                "";
+                              const email =
+                                shipping.email ||
+                                (order as any)?.customer_email ||
+                                (detail as any)?.customer_email ||
+                                "";
+
+                              return (
                                 <div
                                   style={{
-                                    fontSize: "13px",
-                                    fontWeight: 800,
-                                    marginBottom: "10px",
-                                    letterSpacing: "0.04em",
-                                    textTransform: "uppercase",
-                                    color: textMuted,
+                                    border: innerBoxBorder,
+                                    borderRadius: effectiveInnerRadius,
+                                    padding: isCompact ? "14px" : "16px",
+                                    background: effectiveInnerBoxBg,
                                   }}
                                 >
-                                  Shipping address
-                                </div>
-                                <div style={{ fontSize: "14px", fontWeight: 700 }}>
-                                  {detail.shipping_address?.fullName || "—"}
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: "14px",
-                                    color: textMuted,
-                                    marginTop: "6px",
-                                    lineHeight: 1.6,
-                                  }}
-                                >
-                                  {detail.shipping_address?.addressLine1 || "—"}
-                                  <br />
-                                  {detail.shipping_address?.city || "—"} - {detail.shipping_address?.postalCode || "—"}
-                                  <br />
-                                  {detail.shipping_address?.mobileNumber || "—"}
-                                  {detail.shipping_address?.email ? ` • ${detail.shipping_address.email}` : ""}
-                                </div>
-                              </div>
-
-                              <div
-                                style={{
-                                  border: cardBorder,
-                                  borderRadius: "18px",
-                                  padding: isCompact ? "14px" : "16px",
-                                  background: panelBg,
-                                  display: "flex",
-                                  flexDirection: "column",
-                                  gap: "10px",
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    fontSize: "13px",
-                                    fontWeight: 800,
-                                    letterSpacing: "0.04em",
-                                    textTransform: "uppercase",
-                                    color: textMuted,
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "space-between",
-                                  }}
-                                >
-                                  <span>Payment details</span>
-                                  <span
-                                    style={{
-                                      fontSize: "11px",
-                                      fontWeight: 800,
-                                      padding: "3px 9px",
-                                      borderRadius: "999px",
-                                      textTransform: "capitalize",
-                                      background:
-                                        detail.payment_status === "paid"
-                                          ? "rgba(16,185,129,0.14)"
-                                          : detail.payment_status === "refunded"
-                                          ? "rgba(139,92,246,0.14)"
-                                          : detail.payment_status === "failed"
-                                          ? "rgba(239,68,68,0.14)"
-                                          : "rgba(245,158,11,0.14)",
-                                      color:
-                                        detail.payment_status === "paid"
-                                          ? "#059669"
-                                          : detail.payment_status === "refunded"
-                                          ? "#7c3aed"
-                                          : detail.payment_status === "failed"
-                                          ? "#dc2626"
-                                          : "#d97706",
-                                    }}
-                                  >
-                                    {detail.payment_status === "paid"
-                                      ? (detail.payment_method?.toLowerCase() === "cod" ? "● Cash Collected (Paid)" : "● Paid")
-                                      : detail.payment_status === "refunded"
-                                      ? "● Refunded"
-                                      : detail.payment_status === "failed"
-                                      ? "● Payment Failed"
-                                      : (detail.payment_method?.toLowerCase() === "cod" ? "● Pay on Delivery (Pending)" : "● " + (labelize(detail.payment_status) || "Pending"))}
-                                  </span>
-                                </div>
-
-                                <div
-                                  style={{
-                                    display: "grid",
-                                    gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)",
-                                    gap: "10px",
-                                    marginTop: "2px",
-                                  }}
-                                >
-                                  <div>
-                                    <div style={{ fontSize: "12px", color: textMuted, marginBottom: "3px" }}>
-                                      Payment method
-                                    </div>
-                                    <div
-                                      style={{
-                                        fontSize: "13px",
-                                        fontWeight: 700,
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "6px",
-                                      }}
-                                    >
-                                      <span>{getPaymentMethodIcon(detail.payment_method)}</span>
-                                      <span>{formatPaymentMethodName(detail.payment_method)}</span>
-                                    </div>
-                                  </div>
-
-                                  <div>
-                                    <div style={{ fontSize: "12px", color: textMuted, marginBottom: "3px" }}>
-                                      Total amount
-                                    </div>
-                                    <div style={{ fontSize: "14px", fontWeight: 800, color: textPrimary }}>
-                                      {formatPrice(detail.total)}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {detail.razorpay_payment_id && (
                                   <div
                                     style={{
-                                      paddingTop: "8px",
-                                      borderTop: divider,
                                       display: "flex",
-                                      flexDirection: "column",
-                                      gap: "4px",
+                                      alignItems: "center",
+                                      gap: "8px",
+                                      fontSize: "13px",
+                                      fontWeight: 800,
+                                      marginBottom: "12px",
+                                      letterSpacing: "0.04em",
+                                      textTransform: "uppercase",
+                                      color: textMuted,
                                     }}
                                   >
-                                    <div style={{ fontSize: "11px", color: textMuted, textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                                      Transaction reference
-                                    </div>
-                                    <code
-                                      style={{
-                                        fontSize: "12px",
-                                        fontWeight: 700,
-                                        padding: "4px 8px",
-                                        borderRadius: "6px",
-                                        background: isLight ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)",
-                                        wordBreak: "break-all",
-                                        color: textPrimary,
-                                        width: "fit-content",
-                                      }}
-                                    >
-                                      {detail.razorpay_payment_id}
-                                    </code>
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                      <circle cx="12" cy="10" r="3"></circle>
+                                    </svg>
+                                    <span>{shippingHeading}</span>
                                   </div>
-                                )}
-                              </div>
+                                  <div style={{ fontSize: "14px", fontWeight: 700 }}>
+                                    {fullName}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: "14px",
+                                      color: textMuted,
+                                      marginTop: "6px",
+                                      lineHeight: 1.6,
+                                    }}
+                                  >
+                                    {address1 ? (
+                                      <>
+                                        {address1}
+                                        {address2 ? <span>, {address2}</span> : null}
+                                        <br />
+                                      </>
+                                    ) : null}
+                                    {city || postalCode ? (
+                                      <>
+                                        {[city, state].filter(Boolean).join(", ")}
+                                        {postalCode ? (city ? ` - ${postalCode}` : postalCode) : ""}
+                                        <br />
+                                      </>
+                                    ) : null}
+                                    {phone ? (
+                                      <>
+                                        {formatPhoneDisplay(phone)}
+                                        {email ? ` • ${email}` : ""}
+                                      </>
+                                    ) : email ? (
+                                      email
+                                    ) : !address1 && !city ? (
+                                      "Address on file"
+                                    ) : null}
+                                  </div>
+                                </div>
+                              );
+                            })()}
 
-                              {renderReturnAccordion(order.id)}
-                            </div>
+                            {/* Return History Accordion */}
+                            {renderReturnAccordion(order.id)}
 
+                            {/* Return Request Form (Placed in Left Column under Return Accordion) */}
                             {isReturnFormOpen && canReturn ? (
                               <div
                                 style={{
@@ -2992,9 +5024,15 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                           border: (draft?.refund_account_type || "upi") === "upi" ? `1px solid ${accentColor}` : cardBorder,
                                           background: (draft?.refund_account_type || "upi") === "upi" ? `${accentColor}18` : "transparent",
                                           color: (draft?.refund_account_type || "upi") === "upi" ? accentColor : textMuted,
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          gap: "6px",
                                         }}
                                       >
-                                        ⚡ Instant UPI / QR
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                                        </svg>
+                                        <span>Instant UPI / QR</span>
                                       </button>
                                       <button
                                         type="button"
@@ -3008,9 +5046,16 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                           border: draft?.refund_account_type === "bank" ? `1px solid ${accentColor}` : cardBorder,
                                           background: draft?.refund_account_type === "bank" ? `${accentColor}18` : "transparent",
                                           color: draft?.refund_account_type === "bank" ? accentColor : textMuted,
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          gap: "6px",
                                         }}
                                       >
-                                        🏦 Bank Account (NEFT/IMPS)
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                          <rect x="2" y="5" width="20" height="14" rx="2" />
+                                          <line x1="2" y1="10" x2="22" y2="10" />
+                                        </svg>
+                                        <span>Bank Account (NEFT/IMPS)</span>
                                       </button>
                                     </div>
 
@@ -3111,6 +5156,59 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                   </div>
                                 )}
 
+                                {(() => {
+                                   const selectedEntries = Object.entries(draft?.items || {}).filter(([_, it]) => it.selected);
+                                   if (!selectedEntries.length) return null;
+                                   let estItemsSubtotal = 0;
+                                   let estRefundTotal = 0;
+                                   let estNonRefundableRetained = 0;
+
+                                   selectedEntries.forEach(([itemId, draftItem]) => {
+                                     const matchedItem = detail.items.find((i) => i.id === itemId);
+                                     if (matchedItem && draftItem.quantity > 0) {
+                                       const qty = draftItem.quantity;
+                                       const totalQty = matchedItem.quantity || 1;
+                                       const unitPrice = Number(matchedItem.unit_price || 0);
+                                       estItemsSubtotal += unitPrice * qty;
+
+                                       const snap = matchedItem.pricing_snapshot;
+                                       if (snap && snap.refundable_line_total != null) {
+                                         estRefundTotal += (Number(snap.refundable_line_total) / totalQty) * qty;
+                                         estNonRefundableRetained += (Number(snap.non_refundable_charges_allocated || 0) / totalQty) * qty;
+                                       } else {
+                                         estRefundTotal += (Number(matchedItem.line_total || 0) / totalQty) * qty;
+                                       }
+                                     }
+                                   });
+
+                                   return (
+                                     <div
+                                       style={{
+                                         border: cardBorder,
+                                         borderRadius: "14px",
+                                         padding: "12px 14px",
+                                         background: isLight ? "#f0fdf4" : "rgba(16,185,129,0.06)",
+                                         marginBottom: "14px",
+                                         fontSize: "12.5px",
+                                       }}
+                                     >
+                                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                                         <span style={{ fontWeight: 700, color: textPrimary }}>
+                                           Estimated Refund Amount
+                                         </span>
+                                         <span style={{ fontWeight: 800, fontSize: "14px", color: "#16a34a" }}>
+                                           {formatPrice(estRefundTotal)}
+                                         </span>
+                                       </div>
+                                       {estNonRefundableRetained > 0 && (
+                                         <div style={{ fontSize: "11.5px", color: textMuted, marginTop: "2px" }}>
+                                           Note: Non-refundable checkout charges ({formatPrice(estNonRefundableRetained)} prorated) are deducted according to store policy.
+                                         </div>
+                                       )}
+                                     </div>
+                                   );
+                                 })()}
+
                                 <div
                                   style={{
                                     fontSize: "13px",
@@ -3193,6 +5291,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                             ) : null}
                           </div>
 
+                          {/* Column 2: Right Column (Tracking, Payment, Refund Info, Summary, Action Buttons) */}
                           <div
                             style={{
                               display: "flex",
@@ -3200,37 +5299,17 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                               gap: "14px",
                             }}
                           >
-                            {detail.refund_info ? (
-                              <div
-                                style={{
-                                  border: detail.refund_info.status === "failed"
-                                    ? "1px solid rgba(239,68,68,0.35)"
-                                    : (detail.refund_info.status === "completed"
-                                      ? "1px solid rgba(16,185,129,0.30)"
-                                      : (detail.refund_info.status === "processing"
-                                        ? "1px solid rgba(245,158,11,0.30)"
-                                        : cardBorder)),
-                                  borderRadius: "18px",
-                                  padding: isCompact ? "14px" : "16px",
-                                  background: detail.refund_info.status === "failed"
-                                    ? (isLight ? "#fef2f2" : "rgba(239,68,68,0.08)")
-                                    : (detail.refund_info.status === "completed"
-                                      ? (isLight ? "#ecfdf5" : "rgba(16,185,129,0.08)")
-                                      : (detail.refund_info.status === "processing"
-                                        ? (isLight ? "#fffbeb" : "rgba(245,158,11,0.08)")
-                                        : panelBg)),
-                                  display: "flex",
-                                  flexDirection: "column",
-                                  gap: "8px",
-                                }}
-                              >
+                              {/* 1. Order Tracking Timeline (Top Priority) */}
+                              {showTracking && renderTrackingTimeline(detail)}
+
+                              {/* 2. Order Summary (Price Breakdown) */}
+                              {showSummary && (
                                 <div
                                   style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "space-between",
-                                    flexWrap: "wrap",
-                                    gap: "8px",
+                                    border: innerBoxBorder,
+                                    borderRadius: effectiveInnerRadius,
+                                    padding: isCompact ? "14px" : "16px",
+                                    background: effectiveInnerBoxBg,
                                   }}
                                 >
                                   <div
@@ -3238,271 +5317,476 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                       display: "flex",
                                       alignItems: "center",
                                       gap: "8px",
+                                      fontSize: "13px",
                                       fontWeight: 800,
-                                      fontSize: "14px",
-                                      color: detail.refund_info.status === "failed"
-                                        ? "#ef4444"
-                                        : (detail.refund_info.status === "completed"
-                                          ? "#059669"
-                                          : (detail.refund_info.status === "processing" ? "#d97706" : textPrimary)),
+                                      marginBottom: "12px",
+                                      letterSpacing: "0.04em",
+                                      textTransform: "uppercase",
+                                      color: textMuted,
                                     }}
                                   >
-                                    <span
-                                      style={{
-                                        width: "8px",
-                                        height: "8px",
-                                        borderRadius: "50%",
-                                        background: detail.refund_info.status === "failed"
-                                          ? "#ef4444"
-                                          : (detail.refund_info.status === "completed"
-                                            ? "#059669"
-                                            : (detail.refund_info.status === "processing" ? "#d97706" : textMuted)),
-                                      }}
-                                    />
-                                    <span>{detail.refund_info.status_label}</span>
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                      <polyline points="14 2 14 8 20 8"></polyline>
+                                      <line x1="16" y1="13" x2="8" y2="13"></line>
+                                      <line x1="16" y1="17" x2="8" y2="17"></line>
+                                      <polyline points="10 9 9 9 8 9"></polyline>
+                                    </svg>
+                                    <span>{summaryHeading}</span>
                                   </div>
-                                  {detail.refund_info.estimated_days && (
+
+                                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        gap: "12px",
+                                        fontSize: "14px",
+                                      }}
+                                    >
+                                      <span style={{ color: textMuted }}>Subtotal</span>
+                                      <span>{formatPrice(detail.pricing_snapshot?.subtotal)}</span>
+                                    </div>
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        gap: "12px",
+                                        fontSize: "14px",
+                                      }}
+                                    >
+                                      <span style={{ color: textMuted }}>Discount</span>
+                                      <span>-{formatPrice(detail.pricing_snapshot?.promoDiscount || 0)}</span>
+                                    </div>
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        gap: "12px",
+                                        fontSize: "14px",
+                                      }}
+                                    >
+                                      <span style={{ color: textMuted }}>Tax</span>
+                                      <span>{formatPrice(detail.pricing_snapshot?.tax?.amount || 0)}</span>
+                                    </div>
+
+                                    {(detail.pricing_snapshot?.charges || []).map((charge: any, cIdx: number) => (
+                                      <div
+                                        key={charge?.id || charge?.code || charge?.label || charge?.name || `charge-${cIdx}`}
+                                        style={{
+                                          display: "flex",
+                                          justifyContent: "space-between",
+                                          gap: "12px",
+                                          fontSize: "14px",
+                                        }}
+                                      >
+                                        <span style={{ color: textMuted }}>{charge?.label || charge?.name || "Fee"}</span>
+                                        <span>{formatPrice(charge?.finalAmount || charge?.amount || 0)}</span>
+                                      </div>
+                                    ))}
+
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        gap: "12px",
+                                        fontSize: "16px",
+                                        fontWeight: 800,
+                                        paddingTop: "10px",
+                                        borderTop: divider,
+                                      }}
+                                    >
+                                      <span>Total</span>
+                                      <span>{formatPrice(detail.total)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 3. Payment Details */}
+                              {showPayment && (
+                                <div
+                                  style={{
+                                    border: innerBoxBorder,
+                                    borderRadius: effectiveInnerRadius,
+                                    padding: isCompact ? "14px" : "16px",
+                                    background: effectiveInnerBoxBg,
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "10px",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      fontSize: "13px",
+                                      fontWeight: 800,
+                                      letterSpacing: "0.04em",
+                                      textTransform: "uppercase",
+                                      color: textMuted,
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "space-between",
+                                    }}
+                                  >
+                                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                                        <line x1="1" y1="10" x2="23" y2="10"></line>
+                                      </svg>
+                                      <span>{paymentHeading}</span>
+                                    </div>
                                     <span
                                       style={{
                                         fontSize: "11px",
                                         fontWeight: 800,
-                                        padding: "3px 8px",
-                                        borderRadius: "6px",
-                                        background: detail.refund_info.status === "failed"
-                                          ? "rgba(239,68,68,0.18)"
-                                          : (detail.refund_info.status === "completed" ? "rgba(16,185,129,0.18)" : "rgba(245,158,11,0.18)"),
-                                        color: detail.refund_info.status === "failed"
-                                          ? "#dc2626"
-                                          : (detail.refund_info.status === "completed" ? "#047857" : "#b45309"),
-                                        textTransform: "uppercase",
-                                        letterSpacing: "0.02em",
+                                        padding: "3px 9px",
+                                        borderRadius: "999px",
+                                        textTransform: "capitalize",
+                                        background:
+                                          detail.payment_status === "paid"
+                                            ? "rgba(16,185,129,0.14)"
+                                            : detail.payment_status === "refunded"
+                                            ? "rgba(139,92,246,0.14)"
+                                            : detail.payment_status === "failed"
+                                            ? "rgba(239,68,68,0.14)"
+                                            : "rgba(245,158,11,0.14)",
+                                        color:
+                                          detail.payment_status === "paid"
+                                            ? "#059669"
+                                            : detail.payment_status === "refunded"
+                                            ? "#7c3aed"
+                                            : detail.payment_status === "failed"
+                                            ? "#dc2626"
+                                            : "#d97706",
                                       }}
                                     >
-                                      {detail.refund_info.estimated_days}
+                                      {detail.payment_status === "paid"
+                                        ? (detail.payment_method?.toLowerCase() === "cod" ? "● Cash Collected (Paid)" : "● Paid")
+                                        : detail.payment_status === "refunded"
+                                        ? "● Refunded"
+                                        : detail.payment_status === "failed"
+                                        ? "● Payment Failed"
+                                        : (detail.payment_method?.toLowerCase() === "cod" ? "● Pay on Delivery (Pending)" : "● " + (labelize(detail.payment_status) || "Pending"))}
                                     </span>
-                                  )}
-                                </div>
+                                  </div>
 
-                                <div style={{ fontSize: "13px", color: textMuted, lineHeight: 1.55 }}>
-                                  {detail.refund_info.note}
-                                </div>
-
-                                <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center", marginTop: "2px" }}>
-                                  {detail.refund_info.reference_id && (
-                                    <div style={{ fontSize: "12px", color: textMuted }}>
-                                      Gateway Ref: <code style={{ fontWeight: 700, padding: "2px 6px", borderRadius: "4px", background: isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.08)" }}>{detail.refund_info.reference_id}</code>
-                                    </div>
-                                  )}
-                                  {detail.refund_info.arn && (
-                                    <div style={{ fontSize: "12px", color: textMuted }}>
-                                      Bank ARN: <code style={{ fontWeight: 700, padding: "2px 6px", borderRadius: "4px", background: isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.08)" }}>{detail.refund_info.arn}</code>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            ) : null}
-
-                            {renderTrackingTimeline(detail)}
-
-                            <div
-                              style={{
-                                border: cardBorder,
-                                borderRadius: "18px",
-                                padding: isCompact ? "14px" : "16px",
-                                background: panelBg,
-                              }}
-                            >
-                              <div
-                                style={{
-                                  fontSize: "13px",
-                                  fontWeight: 800,
-                                  marginBottom: "10px",
-                                  letterSpacing: "0.04em",
-                                  textTransform: "uppercase",
-                                  color: textMuted,
-                                }}
-                              >
-                                Summary
-                              </div>
-
-                              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    gap: "12px",
-                                    fontSize: "14px",
-                                  }}
-                                >
-                                  <span style={{ color: textMuted }}>Subtotal</span>
-                                  <span>{formatPrice(detail.pricing_snapshot?.subtotal)}</span>
-                                </div>
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    gap: "12px",
-                                    fontSize: "14px",
-                                  }}
-                                >
-                                  <span style={{ color: textMuted }}>Discount</span>
-                                  <span>-{formatPrice(detail.pricing_snapshot?.promoDiscount || 0)}</span>
-                                </div>
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    gap: "12px",
-                                    fontSize: "14px",
-                                  }}
-                                >
-                                  <span style={{ color: textMuted }}>Tax</span>
-                                  <span>{formatPrice(detail.pricing_snapshot?.tax?.amount || 0)}</span>
-                                </div>
-
-                                {(detail.pricing_snapshot?.charges || []).map((charge: any) => (
                                   <div
-                                    key={charge.id || charge.code}
                                     style={{
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      gap: "12px",
-                                      fontSize: "14px",
+                                      display: "grid",
+                                      gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)",
+                                      gap: "10px",
+                                      marginTop: "2px",
                                     }}
                                   >
-                                    <span style={{ color: textMuted }}>{charge.label}</span>
-                                    <span>{formatPrice(charge.finalAmount || 0)}</span>
+                                    <div>
+                                      <div style={{ fontSize: "12px", color: textMuted, marginBottom: "3px" }}>
+                                        Payment method
+                                      </div>
+                                      <div
+                                        style={{
+                                          fontSize: "13px",
+                                          fontWeight: 700,
+                                          display: "flex",
+                                          alignItems: "center",
+                                          gap: "6px",
+                                        }}
+                                      >
+                                        <span>{getPaymentMethodIcon(detail.payment_method)}</span>
+                                        <span>{formatPaymentMethodName(detail.payment_method)}</span>
+                                      </div>
+                                    </div>
+
+                                    <div>
+                                      <div style={{ fontSize: "12px", color: textMuted, marginBottom: "3px" }}>
+                                        Total amount
+                                      </div>
+                                      <div style={{ fontSize: "14px", fontWeight: 800, color: textPrimary }}>
+                                        {formatPrice(detail.total)}
+                                      </div>
+                                    </div>
                                   </div>
-                                ))}
 
+                                  {detail.razorpay_payment_id && (
+                                    <div
+                                      style={{
+                                        paddingTop: "8px",
+                                        borderTop: divider,
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        gap: "4px",
+                                      }}
+                                    >
+                                      <div style={{ fontSize: "11px", color: textMuted, textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                        Transaction reference
+                                      </div>
+                                      <code
+                                        style={{
+                                          fontSize: "12px",
+                                          fontWeight: 700,
+                                          padding: "4px 8px",
+                                          borderRadius: "6px",
+                                          background: isLight ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)",
+                                          wordBreak: "break-all",
+                                          color: textPrimary,
+                                          width: "fit-content",
+                                        }}
+                                      >
+                                        {detail.razorpay_payment_id}
+                                      </code>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* 4. Refund Information (Financial Lifecycle) */}
+                              {detail.refund_info ? (
                                 <div
                                   style={{
+                                    border: detail.refund_info.status === "failed"
+                                      ? "1px solid rgba(239,68,68,0.35)"
+                                      : (detail.refund_info.status === "completed"
+                                        ? "1px solid rgba(16,185,129,0.30)"
+                                        : (detail.refund_info.status === "processing"
+                                          ? "1px solid rgba(245,158,11,0.30)"
+                                          : cardBorder)),
+                                    borderRadius: effectiveInnerRadius,
+                                    padding: isCompact ? "14px" : "16px",
+                                    background: detail.refund_info.status === "failed"
+                                      ? (isLight ? "#fef2f2" : "rgba(239,68,68,0.08)")
+                                      : (detail.refund_info.status === "completed"
+                                        ? (isLight ? "#ecfdf5" : "rgba(16,185,129,0.08)")
+                                        : (detail.refund_info.status === "processing"
+                                          ? (isLight ? "#fffbeb" : "rgba(245,158,11,0.08)")
+                                          : panelBg)),
                                     display: "flex",
-                                    justifyContent: "space-between",
-                                    gap: "12px",
-                                    fontSize: "16px",
-                                    fontWeight: 800,
-                                    paddingTop: "10px",
-                                    borderTop: divider,
+                                    flexDirection: "column",
+                                    gap: "8px",
                                   }}
                                 >
-                                  <span>Total</span>
-                                  <span>{formatPrice(detail.total)}</span>
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "space-between",
+                                      flexWrap: "wrap",
+                                      gap: "8px",
+                                    }}
+                                  >
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        fontWeight: 800,
+                                        fontSize: "14px",
+                                        color: detail.refund_info.status === "failed"
+                                          ? "#ef4444"
+                                          : (detail.refund_info.status === "completed"
+                                            ? "#059669"
+                                            : (detail.refund_info.status === "processing" ? "#d97706" : textPrimary)),
+                                      }}
+                                    >
+                                      <span
+                                        style={{
+                                          width: "8px",
+                                          height: "8px",
+                                          borderRadius: "50%",
+                                          background: detail.refund_info.status === "failed"
+                                            ? "#ef4444"
+                                            : (detail.refund_info.status === "completed"
+                                              ? "#059669"
+                                              : (detail.refund_info.status === "processing" ? "#d97706" : textMuted)),
+                                        }}
+                                      />
+                                      <span>{detail.refund_info.status_label}</span>
+                                    </div>
+                                    {detail.refund_info.estimated_days && (
+                                      <span
+                                        style={{
+                                          fontSize: "11px",
+                                          fontWeight: 800,
+                                          padding: "3px 8px",
+                                          borderRadius: effectiveBadgeRadius,
+                                          background: detail.refund_info.status === "failed"
+                                            ? "rgba(239,68,68,0.18)"
+                                            : (detail.refund_info.status === "completed" ? "rgba(16,185,129,0.18)" : "rgba(245,158,11,0.18)"),
+                                          color: detail.refund_info.status === "failed"
+                                            ? "#dc2626"
+                                            : (detail.refund_info.status === "completed" ? "#047857" : "#b45309"),
+                                          textTransform: "uppercase",
+                                          letterSpacing: "0.02em",
+                                        }}
+                                      >
+                                        {detail.refund_info.estimated_days}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div style={{ fontSize: "13px", color: textMuted, lineHeight: 1.55 }}>
+                                    {detail.refund_info.note}
+                                  </div>
+
+                                  <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center", marginTop: "2px" }}>
+                                    {detail.refund_info.reference_id && (
+                                      <div style={{ fontSize: "12px", color: textMuted }}>
+                                        Gateway Ref: <code style={{ fontWeight: 700, padding: "2px 6px", borderRadius: "4px", background: isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.08)" }}>{detail.refund_info.reference_id}</code>
+                                      </div>
+                                    )}
+                                    {detail.refund_info.arn && (
+                                      <div style={{ fontSize: "12px", color: textMuted }}>
+                                        Bank ARN: <code style={{ fontWeight: 700, padding: "2px 6px", borderRadius: "4px", background: isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.08)" }}>{detail.refund_info.arn}</code>
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
+                              ) : null}
+
+                              {/* 5. Order Action Buttons */}
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexWrap: "wrap",
+                                  gap: "10px",
+                                }}
+                              >
+                                {canCancel ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCancelOrder(order.id, order.status)}
+                                    disabled={cancellingOrderId === order.id}
+                                    style={{
+                                      border: "1px solid rgba(239,68,68,0.26)",
+                                      background: "rgba(239,68,68,0.12)",
+                                      color: "#dc2626",
+                                      borderRadius: "14px",
+                                      padding: "12px 16px",
+                                      fontSize: "14px",
+                                      fontWeight: 700,
+                                      cursor: cancellingOrderId === order.id ? "not-allowed" : "pointer",
+                                      opacity: cancellingOrderId === order.id ? 0.7 : 1,
+                                    }}
+                                  >
+                                    {cancellingOrderId === order.id ? "Cancelling..." : "Cancel order"}
+                                  </button>
+                                ) : null}
+
+                                {isDelivered && canReturn ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setShowReturnFormOrderId((prev) => (prev === order.id ? null : order.id))
+                                    }
+                                    style={{
+                                      border: `1px solid ${accentColor}33`,
+                                      background: `${accentColor}14`,
+                                      color: accentColor,
+                                      borderRadius: "14px",
+                                      padding: "12px 16px",
+                                      fontSize: "14px",
+                                      fontWeight: 700,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    {isReturnFormOpen ? "Hide return form" : "Request return"}
+                                  </button>
+                                ) : null}
+
+                                {isDelivered && !canReturn ? (
+                                  <button
+                                    type="button"
+                                    disabled
+                                    style={{
+                                      border: `1px solid ${accentColor}22`,
+                                      background: `${accentColor}10`,
+                                      color: accentColor,
+                                      borderRadius: "14px",
+                                      padding: "12px 16px",
+                                      fontSize: "14px",
+                                      fontWeight: 700,
+                                      cursor: "not-allowed",
+                                      opacity: 0.75,
+                                    }}
+                                  >
+                                    No returnable items left
+                                  </button>
+                                ) : null}
+
+                                {/* Customer Support & Help Button */}
+                                {isCrmEnabled && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const isStore = typeof window !== "undefined" && window.location.pathname.startsWith("/store/");
+                                      const isBuilder = typeof window !== "undefined" && window.location.pathname.startsWith("/builder/");
+                                      const prefix = isStore
+                                        ? `/store/${siteSlug || ""}`
+                                        : isBuilder
+                                        ? `/builder/${siteId || siteSlug || ""}`
+                                        : (siteSlug ? `/store/${siteSlug}` : "");
+                                      const targetPath = `${prefix}/support?tab=new&orderId=${order.id}`;
+                                      navigate(targetPath);
+                                    }}
+                                    style={{
+                                      border: `1px solid ${customBorderColor || (isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)")}`,
+                                      background: isLight ? "#ffffff" : "rgba(255,255,255,0.05)",
+                                      color: textPrimary,
+                                      borderRadius: "14px",
+                                      padding: "12px 16px",
+                                      fontSize: "14px",
+                                      fontWeight: 700,
+                                      cursor: "pointer",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "8px",
+                                    }}
+                                  >
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                    </svg>
+                                    Need Help with Order
+                                  </button>
+                                )}
+
+                                {isDelivered && hasExistingReturn && canReturn ? (
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      padding: "12px 14px",
+                                      borderRadius: "14px",
+                                      border: "1px solid rgba(239,68,68,0.18)",
+                                      background: "rgba(239,68,68,0.08)",
+                                      color: "#dc2626",
+                                      fontSize: "13px",
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    All items in this order have already been fully returned.
+                                  </div>
+                                ) : null}
                               </div>
-                            </div>
-
-                            <div
-                              style={{
-                                display: "flex",
-                                flexWrap: "wrap",
-                                gap: "10px",
-                              }}
-                            >
-                              {canCancel ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleCancelOrder(order.id, order.status)}
-                                  disabled={cancellingOrderId === order.id}
-                                  style={{
-                                    border: "1px solid rgba(239,68,68,0.26)",
-                                    background: "rgba(239,68,68,0.12)",
-                                    color: "#dc2626",
-                                    borderRadius: "14px",
-                                    padding: "12px 16px",
-                                    fontSize: "14px",
-                                    fontWeight: 700,
-                                    cursor: cancellingOrderId === order.id ? "not-allowed" : "pointer",
-                                    opacity: cancellingOrderId === order.id ? 0.7 : 1,
-                                  }}
-                                >
-                                  {cancellingOrderId === order.id ? "Cancelling..." : "Cancel order"}
-                                </button>
-                              ) : null}
-
-                              {isDelivered && canReturn ? (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setShowReturnFormOrderId((prev) => (prev === order.id ? null : order.id))
-                                  }
-                                  style={{
-                                    border: `1px solid ${accentColor}33`,
-                                    background: `${accentColor}14`,
-                                    color: accentColor,
-                                    borderRadius: "14px",
-                                    padding: "12px 16px",
-                                    fontSize: "14px",
-                                    fontWeight: 700,
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  {isReturnFormOpen ? "Hide return form" : "Request return"}
-                                </button>
-                              ) : null}
-
-                              {isDelivered && !canReturn ? (
-                                <button
-                                  type="button"
-                                  disabled
-                                  style={{
-                                    border: `1px solid ${accentColor}22`,
-                                    background: `${accentColor}10`,
-                                    color: accentColor,
-                                    borderRadius: "14px",
-                                    padding: "12px 16px",
-                                    fontSize: "14px",
-                                    fontWeight: 700,
-                                    cursor: "not-allowed",
-                                    opacity: 0.75,
-                                  }}
-                                >
-                                  No returnable items left
-                                </button>
-                              ) : null}
-
-                              {isDelivered && hasExistingReturn && canReturn ? (
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    padding: "12px 14px",
-                                    borderRadius: "14px",
-                                    border: cardBorder,
-                                    background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)",
-                                    color: textMuted,
-                                    fontSize: "13px",
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  Previous return requests exist. You can still return other eligible items.
-                                </div>
-                              ) : null}
-
-                              {isDelivered && isReturnFormOpen && !hasSelectableReturnItems ? (
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    padding: "12px 14px",
-                                    borderRadius: "14px",
-                                    border: "1px solid rgba(239,68,68,0.18)",
-                                    background: "rgba(239,68,68,0.08)",
-                                    color: "#dc2626",
-                                    fontSize: "13px",
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  All items in this order have already been fully returned.
-                                </div>
-                              ) : null}
-                            </div>
                           </div>
                         </div>
                         </>
                       ) : (
-                        <div style={{ color: textMuted, fontSize: "14px" }}>
-                          Unable to load order details.
+                        <div style={{ padding: "14px", display: "flex", alignItems: "center", justifyContent: "space-between", background: isLight ? "#f8fafc" : "rgba(255,255,255,0.02)", borderRadius: "8px" }}>
+                          <span style={{ color: textMuted, fontSize: "13px" }}>Loading order items and tracking information...</span>
+                          <button
+                            type="button"
+                            onClick={() => loadOrderDetail(order.id, true)}
+                            style={{
+                              background: "none",
+                              border: `1px solid ${accentColor}`,
+                              color: accentColor,
+                              borderRadius: "6px",
+                              padding: "4px 12px",
+                              fontSize: "12px",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Reload Details
+                          </button>
                         </div>
                       )}
                     </div>
@@ -3513,14 +5797,22 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
           </div>
         )}
 
-        {totalPages > 1 && (
+        {Boolean(effectiveTotalPages > 1 || filteredOrders.length > 0) && (
           <Pagination
             currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={handlePageChange}
-            totalItems={totalOrders}
+            totalPages={effectiveTotalPages}
+            onPageChange={(p) => {
+              setCurrentPage(p);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            totalItems={filteredOrders.length}
             pageSize={pageSize}
-            showRangeText={true}
+            pageSizeOptions={[5, 10, 15, 25, 50]}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize);
+              setCurrentPage(1);
+            }}
+            showRangeText={false}
             theme={theme}
             accentColor={accentColor}
           />
@@ -3530,4 +5822,4 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
   );
 };
 
-export default CustomerOrdersPage;
+export default React.memo(CustomerOrdersPage);

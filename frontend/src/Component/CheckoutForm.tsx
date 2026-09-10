@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useCart } from "../CartContext";
+import { getThumbnailUrl } from "../utils/imageOptimizer";
 
 type CheckoutFormProps = {
   title?: string;
@@ -484,8 +485,10 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
                         }}
                       >
                         <img
-                          src={item.image}
+                          src={getThumbnailUrl(item.image, 140, 140)}
                           alt={item.name}
+                          loading="eager"
+                          decoding="async"
                           style={{
                             width: "100%",
                             height: "100%",
