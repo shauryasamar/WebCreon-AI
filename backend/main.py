@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv, find_dotenv
@@ -105,10 +106,15 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="AI Website Builder Backend", lifespan=lifespan)
 
 
-# Allow all origins during development; tighten in production.
+# CORS: reads comma-separated origins from CORS_ORIGINS env var.
+# Defaults to ["*"] for local dev. Set to specific domains in production.
+# Example: CORS_ORIGINS=https://yourdomain.com,https://admin.yourdomain.com
+_cors_raw = os.getenv("CORS_ORIGINS", "*").strip()
+_cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()] or ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

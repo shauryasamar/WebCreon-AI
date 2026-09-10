@@ -125,23 +125,28 @@ def verify_google_id_token(id_token: str) -> Optional[dict[str, Any]]:
     except Exception as e:
         logger.warning(f"Google TokenInfo endpoint check failed: {e}")
 
-    # 2. Fallback: Parse unverified JWT payload (for local dev / mock mode)
-    try:
-        parts = id_token.split(".")
-        if len(parts) == 3:
-            import base64
-            padded = parts[1] + "=" * ((4 - len(parts[1]) % 4) % 4)
-            payload_bytes = base64.urlsafe_b64decode(padded)
-            payload = json.loads(payload_bytes.decode("utf-8"))
-            if "email" in payload:
-                return {
-                    "email": payload.get("email"),
-                    "name": payload.get("name") or payload.get("email", "").split("@")[0].capitalize(),
-                    "picture": payload.get("picture"),
-                    "google_id": payload.get("sub") or f"google_{secrets.token_hex(8)}",
-                    "email_verified": True,
-                }
-    except Exception as e:
-        logger.error(f"Failed to decode Google token fallback: {e}")
+    # 2. Fallback: Parse unverified JWT payload (LOCAL DEV ONLY — disabled by default)
+    # WARNING: Never enable in production — allows authentication bypass!
+    if os.getenv("GOOGLE_AUTH_ALLOW_UNVERIFIED", "").lower() in ("true", "1", "yes"):
+        try:
+            parts = id_token.split(".")
+            if len(parts) == 3:
+                import base64
+                padded = parts[1] + "=" * ((4 - len(parts[1]) % 4) % 4)
+                payload_bytes = base64.urlsafe_b64decode(padded)
+                payload = json.loads(payload_bytes.decode("utf-8"))
+                if "email" in payload:
+                    logger.warning(
+                        "Using UNVERIFIED Google token fallback — do NOT use in production!"
+                    )
+                    return {
+                        "email": payload.get("email"),
+                        "name": payload.get("name") or payload.get("email", "").split("@")[0].capitalize(),
+                        "picture": payload.get("picture"),
+                        "google_id": payload.get("sub") or f"google_{secrets.token_hex(8)}",
+                        "email_verified": True,
+                    }
+        except Exception as e:
+            logger.error(f"Failed to decode Google token fallback: {e}")
 
     return None

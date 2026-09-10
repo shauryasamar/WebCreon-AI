@@ -2835,16 +2835,16 @@ function BuilderPageContent() {
                           to={
                             hasPermission("profile:view")
                               ? "profile"
-                              : hasPermission("general_settings:view")
-                              ? "general"
-                              : hasPermission("domain_settings:view")
-                              ? "domain"
                               : hasPermission("users_roles:view")
                               ? "users-roles"
+                              : hasPermission("domain_settings:view")
+                              ? "domain"
                               : hasPermission("billing:view")
                               ? "billing"
-                              : hasPermission("integrations:view")
-                              ? "integrations"
+                              : hasPermission("audit_logs:view")
+                              ? "audit-logs"
+                              : hasPermission("support:view")
+                              ? "help-support"
                               : "profile"
                           }
                           replace

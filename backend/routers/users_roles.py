@@ -562,7 +562,8 @@ def list_roles(
 ):
     """List all available system and custom roles."""
     ensure_default_roles_and_users(session)
-    check_admin_has_permission(current_admin["adminId"], "users_roles:view", session)
+    if not check_admin_has_permission(current_admin["adminId"], "users_roles:view", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to view users and roles")
 
     roles = session.exec(select(Role).order_by(Role.created_at.asc())).all()
 
@@ -584,7 +585,8 @@ def create_role(
     session: Session = Depends(get_session),
 ):
     """Create a new custom role."""
-    check_admin_has_permission(current_admin["adminId"], "users_roles:edit", session)
+    if not check_admin_has_permission(current_admin["adminId"], "users_roles:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to manage users and roles")
     name = payload.name.strip()
 
     # Ensure role name is unique
@@ -616,7 +618,8 @@ def update_role(
     session: Session = Depends(get_session),
 ):
     """Update a custom role or edit non-protected properties of a system role."""
-    check_admin_has_permission(current_admin["adminId"], "users_roles:edit", session)
+    if not check_admin_has_permission(current_admin["adminId"], "users_roles:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to manage users and roles")
     role = session.get(Role, role_id)
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
@@ -660,7 +663,8 @@ def delete_role(
     session: Session = Depends(get_session),
 ):
     """Delete a custom role. Disallowed if system role or assigned to users."""
-    check_admin_has_permission(current_admin["adminId"], "users_roles:edit", session)
+    if not check_admin_has_permission(current_admin["adminId"], "users_roles:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to manage users and roles")
     role = session.get(Role, role_id)
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
@@ -694,7 +698,8 @@ def list_users(
 ):
     """List workspace users and team members scoped to the current site/workspace."""
     ensure_default_roles_and_users(session)
-    check_admin_has_permission(current_admin["adminId"], "users_roles:view", session)
+    if not check_admin_has_permission(current_admin["adminId"], "users_roles:view", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to view users and roles")
 
     curr_admin_id = UUID(current_admin["adminId"])
     curr_admin_obj = session.get(Admin, curr_admin_id)
@@ -882,7 +887,8 @@ def invite_user(
     session: Session = Depends(get_session),
 ):
     """Invite a new team member or add an existing Webcreon user to this store team."""
-    check_admin_has_permission(current_admin["adminId"], "users_roles:edit", session)
+    if not check_admin_has_permission(current_admin["adminId"], "users_roles:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to manage users and roles")
     email = payload.email.lower().strip()
     curr_adm_id = UUID(current_admin["adminId"])
 
@@ -939,6 +945,16 @@ def invite_user(
     expires_at = utc_now() + timedelta(days=7)
 
     if existing:
+        # Prevent overwriting an existing workspace owner's role
+        existing_role_obj = session.get(Role, existing.role_id) if existing.role_id else None
+        existing_is_owner = (existing_role_obj and existing_role_obj.name == "Owner") or \
+                            (existing.role in ("Owner", "super_admin") and not existing.role_id)
+        if existing_is_owner:
+            raise HTTPException(
+                status_code=400,
+                detail=f"'{email}' is already a workspace owner on Webcreon and cannot be added as a team member.",
+            )
+
         # User already exists on Webcreon -> Add them to this store team!
         target_admin = existing
         target_admin.role = role.name
@@ -1046,7 +1062,8 @@ def update_user(
     session: Session = Depends(get_session),
 ):
     """Update team member role, website access, or additional permissions."""
-    check_admin_has_permission(current_admin["adminId"], "users_roles:edit", session)
+    if not check_admin_has_permission(current_admin["adminId"], "users_roles:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to manage users and roles")
     admin = session.get(Admin, user_id)
     if not admin:
         raise HTTPException(status_code=404, detail="User not found")
@@ -1147,7 +1164,8 @@ def deactivate_user(
     session: Session = Depends(get_session),
 ):
     """Deactivate user. Prevents login, preserves configuration."""
-    check_admin_has_permission(current_admin["adminId"], "users_roles:edit", session)
+    if not check_admin_has_permission(current_admin["adminId"], "users_roles:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to manage users and roles")
     admin = session.get(Admin, user_id)
     if not admin:
         raise HTTPException(status_code=404, detail="User not found")
@@ -1179,7 +1197,8 @@ def reactivate_user(
     session: Session = Depends(get_session),
 ):
     """Reactivate a deactivated user."""
-    check_admin_has_permission(current_admin["adminId"], "users_roles:edit", session)
+    if not check_admin_has_permission(current_admin["adminId"], "users_roles:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to manage users and roles")
     admin = session.get(Admin, user_id)
     if not admin:
         raise HTTPException(status_code=404, detail="User not found")
@@ -1208,7 +1227,8 @@ def resend_invite(
     session: Session = Depends(get_session),
 ):
     """Generate fresh invitation token and return updated invitation link."""
-    check_admin_has_permission(current_admin["adminId"], "users_roles:edit", session)
+    if not check_admin_has_permission(current_admin["adminId"], "users_roles:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to manage users and roles")
     admin = session.get(Admin, user_id)
     if not admin:
         raise HTTPException(status_code=404, detail="User not found")
@@ -1241,7 +1261,8 @@ def remove_user(
     session: Session = Depends(get_session),
 ):
     """Permanently remove a team member from this workspace. Owner cannot be removed."""
-    check_admin_has_permission(current_admin["adminId"], "users_roles:edit", session)
+    if not check_admin_has_permission(current_admin["adminId"], "users_roles:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to manage users and roles")
     admin = session.get(Admin, user_id)
     if not admin:
         raise HTTPException(status_code=404, detail="User not found")

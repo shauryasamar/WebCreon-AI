@@ -268,9 +268,8 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
   const activeUserFilterCount = useMemo(() => {
     let count = 0;
     if (roleFilter !== "all") count++;
-    if (statusFilter !== "all") count++;
     return count;
-  }, [roleFilter, statusFilter]);
+  }, [roleFilter]);
 
   // Filtered users
   const filteredUsers = useMemo(() => {
@@ -907,37 +906,11 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                       </select>
                     </div>
 
-                    <div>
-                      <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#475569", marginBottom: "6px" }}>
-                        Status
-                      </label>
-                      <select
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value as any)}
-                        style={{
-                          width: "100%",
-                          height: "34px",
-                          padding: "0 8px",
-                          borderRadius: "6px",
-                          border: "1px solid #cbd5e1",
-                          fontSize: "13px",
-                          background: "#ffffff",
-                          outline: "none",
-                        }}
-                      >
-                        <option value="all">All Statuses</option>
-                        <option value="active">Active</option>
-                        <option value="pending">Invitation Pending</option>
-                        <option value="inactive">Inactive</option>
-                      </select>
-                    </div>
-
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "8px", borderTop: "1px solid #f1f5f9" }}>
                       <button
                         type="button"
                         onClick={() => {
                           setRoleFilter("all");
-                          setStatusFilter("all");
                         }}
                         style={{
                           background: "none",
@@ -976,7 +949,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
         </div>
 
         {/* Row 2: Active Filter Chips Bar */}
-        {(roleFilter !== "all" || statusFilter !== "all" || searchQuery) && (
+        {(roleFilter !== "all" || searchQuery) && (
           <div
             style={{
               display: "flex",
@@ -1043,38 +1016,12 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
               </span>
             )}
 
-            {statusFilter !== "all" && (
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  fontSize: "11.5px",
-                  fontWeight: 600,
-                  padding: "2px 8px",
-                  borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
-                }}
-              >
-                <span>Status: {statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}</span>
-                <button
-                  type="button"
-                  onClick={() => setStatusFilter("all")}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#1d4ed8", padding: 0 }}
-                >
-                  <XMarkIcon />
-                </button>
-              </span>
-            )}
 
             <button
               type="button"
               onClick={() => {
                 setSearchQuery("");
                 setRoleFilter("all");
-                setStatusFilter("all");
               }}
               style={{
                 background: "none",

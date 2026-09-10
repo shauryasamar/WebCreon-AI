@@ -26,6 +26,7 @@ def _forbidden(detail: str = "Forbidden") -> HTTPException:
 def authenticate_admin(
     request: Request,
     admin_token: Optional[str] = Cookie(default=None, alias="admin_token"),
+    session: Session = Depends(get_session),
 ):
     if not admin_token:
         raise _unauthorized("Admin authentication required")
@@ -40,6 +41,18 @@ def authenticate_admin(
     admin_id = payload.get("adminId")
     if not admin_id:
         raise _unauthorized("Invalid admin token payload")
+
+    # Verify admin still exists and is active in DB
+    try:
+        admin_uuid = UUID(str(admin_id))
+    except (ValueError, TypeError):
+        raise _unauthorized("Invalid admin token payload")
+
+    admin_obj = session.get(Admin, admin_uuid)
+    if not admin_obj:
+        raise _unauthorized("Admin account not found")
+    if not admin_obj.is_active:
+        raise _unauthorized("Admin account has been deactivated")
 
     request.state.admin = {"adminId": admin_id}
     return request.state.admin

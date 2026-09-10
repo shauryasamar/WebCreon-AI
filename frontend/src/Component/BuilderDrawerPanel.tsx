@@ -61,8 +61,8 @@ const ADMIN_NAV_ITEMS: AdminNavItem[] = [
 
 export type SettingsNavKey =
   | "profile"
-  | "domain"
   | "users-roles"
+  | "domain"
   | "billing"
   | "audit-logs"
   | "help-support";
@@ -78,12 +78,12 @@ const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
     label: "Profile",
   },
   {
-    key: "domain",
-    label: "Domain & URLs",
-  },
-  {
     key: "users-roles",
     label: "Users & Roles",
+  },
+  {
+    key: "domain",
+    label: "Domain & URLs",
   },
   {
     key: "billing",

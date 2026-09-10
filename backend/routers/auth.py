@@ -80,7 +80,6 @@ class UpdateAdminProfileRequest(BaseModel):
     gender: Optional[str] = None
     phone: Optional[str] = None
     avatar_url: Optional[str] = None
-    role: Optional[str] = None
     timezone: Optional[str] = None
 
 
