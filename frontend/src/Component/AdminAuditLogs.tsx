@@ -4,6 +4,7 @@ import { API_BASE_URL } from "../config/api";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import { AccessDeniedView } from "./AccessDeniedView";
 import { GlassToast } from "./GlassToast";
+import { Pagination } from "./Pagination";
 
 // ---------------------------------------------------------------------------
 // TYPES
@@ -13,6 +14,8 @@ export type ActivityItem = {
   id: string;
   site_id: string | null;
   site_name: string | null;
+  website_name?: string | null;
+  website?: { id: string; name: string; slug: string } | null;
   admin_id: string | null;
   actor_email: string | null;
   actor_name: string;
@@ -135,6 +138,23 @@ const ChevronDownIcon = ({ open }: { open: boolean }) => (
   </svg>
 );
 
+const StoreIcon = () => (
+  <svg
+    width="12"
+    height="12"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{ flexShrink: 0, opacity: 0.7 }}
+  >
+    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    <polyline points="9 22 9 12 15 12 15 22" />
+  </svg>
+);
+
 
 
 const chipStyle: React.CSSProperties = {
@@ -222,17 +242,28 @@ function getCategoryTheme(category: string) {
     case "website":
     case "pages":
     case "sections":
-      return { bg: "#f0f9ff", color: "#0284c7", border: "#bae6fd", label: "Home Sections & Pages" };
+      return { bg: "#f0f9ff", color: "#0284c7", border: "#bae6fd", label: "Pages & Sections" };
     case "settings":
     case "checkout_charges":
-      return { bg: "#fffbeb", color: "#b45309", border: "#fde68a", label: "Checkout Charges & Policies" };
+      return { bg: "#fffbeb", color: "#b45309", border: "#fde68a", label: "Checkout Charges" };
     case "financial":
     case "earnings_ledger":
     case "payouts":
     case "ledger":
-      return { bg: "#ecfdf5", color: "#047857", border: "#a7f3d0", label: "Earnings & Ledger / Payouts" };
+      return { bg: "#ecfdf5", color: "#047857", border: "#a7f3d0", label: "Earnings & Ledger" };
     default:
-      return { bg: "#f8fafc", color: "#475569", border: "#e2e8f0", label: category ? category.replace("_", " ").replace(".", " ").toUpperCase() : "Activity" };
+      return {
+        bg: "#f8fafc",
+        color: "#475569",
+        border: "#e2e8f0",
+        label: category
+          ? category
+              .replace(/[_.]+/g, " ")
+              .split(" ")
+              .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+              .join(" ")
+          : "Activity",
+      };
   }
 }
 
@@ -242,44 +273,6 @@ function getRoleBadge(role: string) {
   if (r.includes("manager")) return { bg: "#f5f3ff", color: "#6d28d9", border: "#ddd6fe", text: "Store Manager" };
   if (r.includes("support")) return { bg: "#ecfdf5", color: "#047857", border: "#a7f3d0", text: "Support Staff" };
   return { bg: "#f1f5f9", color: "#475569", border: "#e2e8f0", text: role || "Staff" };
-}
-
-function getSourceBadge(source?: string, actorType?: string) {
-  const s = (source || "").toLowerCase();
-  const a = (actorType || "").toLowerCase();
-
-  if (s === "shiprocket" || a === "shiprocket") {
-    return { bg: "#f0f9ff", color: "#0369a1", border: "#bae6fd", text: "Shiprocket", icon: "🚀" };
-  }
-  if (s === "razorpay" || a === "payment_provider") {
-    return { bg: "#eef2ff", color: "#4338ca", border: "#c7d2fe", text: "Razorpay", icon: "💳" };
-  }
-  if (s === "rider_app" || a === "rider") {
-    return { bg: "#fff7ed", color: "#c2410c", border: "#fed7aa", text: "Rider App", icon: "🛵" };
-  }
-  if (s === "ai_copilot" || a === "ai") {
-    return { bg: "#faf5ff", color: "#7e22ce", border: "#e9d5ff", text: "AI Copilot", icon: "✨" };
-  }
-  if (s === "cron_scheduler" || a === "cron_job" || a === "scheduled_task") {
-    return { bg: "#f0fdfa", color: "#0f766e", border: "#99f6e4", text: "Automated", icon: "⏱️" };
-  }
-  if (s === "background_worker" || a === "background_job") {
-    return { bg: "#f8fafc", color: "#475569", border: "#cbd5e1", text: "Worker Job", icon: "⚙️" };
-  }
-  if (s === "webhook" || a === "webhook") {
-    return { bg: "#f1f5f9", color: "#334155", border: "#cbd5e1", text: "Webhook", icon: "🔗" };
-  }
-  if (s === "ui" || a === "owner" || a === "team_member" || a === "user") {
-    return { bg: "#f8fafc", color: "#1e293b", border: "#e2e8f0", text: "Dashboard", icon: "👤" };
-  }
-  return { bg: "#f8fafc", color: "#475569", border: "#e2e8f0", text: source || "System", icon: "•" };
-}
-
-function getUserInitials(name: string): string {
-  if (!name) return "U";
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 // ---------------------------------------------------------------------------
@@ -333,7 +326,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
 
   // Pagination
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
 
@@ -368,7 +361,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
   }, [effectiveSiteId]);
 
   // Fetch activity
-  const fetchActivity = async (isManualRefresh = false) => {
+  const fetchActivity = async (targetPage = page, targetPageSize = pageSize, isManualRefresh = false) => {
     if (!canView) return;
     if (isManualRefresh) setRefreshing(true);
     else setLoading(true);
@@ -379,29 +372,34 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
       if (searchQuery.trim()) params.set("q", searchQuery.trim());
       if (selectedCategory !== "all") params.set("category", selectedCategory);
       if (selectedSource !== "all") params.set("source", selectedSource);
-      if (selectedUser !== "all") params.set("user_id", selectedUser);
-      if (selectedSite !== "all") params.set("site_id", selectedSite);
+      if (selectedUser !== "all") {
+        params.set("user", selectedUser);
+        params.set("user_id", selectedUser);
+      }
+      if (selectedSite && selectedSite !== "all") {
+        params.set("site_id", selectedSite);
+      }
       params.set("date_range", dateRange);
       if (dateRange === "custom") {
         if (startDate) params.set("start_date", startDate);
         if (endDate) params.set("end_date", endDate);
       }
-      params.set("page", String(page));
-      params.set("page_size", String(pageSize));
+      params.set("page", String(targetPage));
+      params.set("page_size", String(targetPageSize));
 
-      // Validate effectiveSiteId is a proper UUID (not "all" or undefined)
-      const isValidSiteId = effectiveSiteId
-        && effectiveSiteId !== "all"
-        && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(effectiveSiteId);
+      const targetSite = (selectedSite && selectedSite !== "all")
+        ? selectedSite
+        : (effectiveSiteId && effectiveSiteId !== "all" ? effectiveSiteId : null);
 
-      // Remove site_id from query params if we're already scoping by URL path
+      const isValidSiteId = targetSite
+        && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetSite);
+
       if (isValidSiteId) {
         params.delete("site_id");
       }
 
-      // Use site-scoped URL path only when we have a valid UUID siteId
       const endpoint = isValidSiteId
-        ? `${API_BASE_URL}/admin/sites/${effectiveSiteId}/activity?${params.toString()}`
+        ? `${API_BASE_URL}/admin/sites/${targetSite}/activity?${params.toString()}`
         : `${API_BASE_URL}/admin/activity?${params.toString()}`;
 
       const res = await fetch(endpoint, {
@@ -421,7 +419,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
       }
 
       const data = await res.json();
-      setLogs(data.logs || []);
+      setLogs(data.logs || data.items || []);
       setTotalPages(data.total_pages || 1);
       setTotalCount(data.total || 0);
 
@@ -440,20 +438,23 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
     }
   };
 
-  // Reset page to 1 when filters change
+  // Refetch on page 1 when any filter changes
+  const isInitialMount = useRef(true);
   useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      fetchActivity(1, pageSize);
+      return;
+    }
     setPage(1);
-  }, [searchQuery, selectedUser, selectedCategory, selectedSource, selectedSite, dateRange, startDate, endDate]);
-
-  // Refetch when page or filters change
-  useEffect(() => {
-    fetchActivity();
-  }, [page, pageSize, selectedUser, selectedCategory, selectedSource, selectedSite, dateRange, startDate, endDate]);
+    fetchActivity(1, pageSize);
+  }, [selectedUser, selectedCategory, selectedSource, selectedSite, dateRange, startDate, endDate]);
 
   // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchActivity();
+      setPage(1);
+      fetchActivity(1, pageSize);
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
@@ -500,15 +501,26 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
     if (selectedCategory !== "all") params.set("category", selectedCategory);
     if (selectedSource !== "all") params.set("source", selectedSource);
     if (selectedUser !== "all") params.set("user_id", selectedUser);
-    if (selectedSite !== "all") params.set("site_id", selectedSite);
+    if (selectedSite && selectedSite !== "all") params.set("site_id", selectedSite);
     params.set("date_range", dateRange);
     if (dateRange === "custom") {
       if (startDate) params.set("start_date", startDate);
       if (endDate) params.set("end_date", endDate);
     }
 
-    const endpoint = effectiveSiteId
-      ? `${API_BASE_URL}/admin/sites/${effectiveSiteId}/activity/export-csv?${params.toString()}`
+    const targetSite = (selectedSite && selectedSite !== "all")
+      ? selectedSite
+      : (effectiveSiteId && effectiveSiteId !== "all" ? effectiveSiteId : null);
+
+    const isValidSiteId = targetSite
+      && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetSite);
+
+    if (isValidSiteId) {
+      params.delete("site_id");
+    }
+
+    const endpoint = isValidSiteId
+      ? `${API_BASE_URL}/admin/sites/${targetSite}/activity/export-csv?${params.toString()}`
       : `${API_BASE_URL}/admin/activity/export-csv?${params.toString()}`;
 
     window.open(endpoint, "_blank");
@@ -562,7 +574,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
             gap: "10px",
           }}
         >
-          {/* Mode Pill (Activity) */}
+          {/* Mode Pill (Activity Logs) */}
           <div
             style={{
               display: "inline-flex",
@@ -585,7 +597,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                 userSelect: "none",
               }}
             >
-              Activity
+              Activity Logs
             </span>
           </div>
 
@@ -790,10 +802,10 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                         outline: "none",
                       }}
                     >
-                      <option value="all">All Users</option>
-                      {availableUsers.map((u) => (
+                      <option value="all">All Team Members</option>
+                      {availableUsers.map((u: any) => (
                         <option key={u.id} value={u.id}>
-                          {u.name || u.email}
+                          {u.name || u.email} {u.role ? `(${u.role})` : ""}
                         </option>
                       ))}
                     </select>
@@ -931,6 +943,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                 </div>
               )}
             </div>
+
           </div>
         </div>
 
@@ -999,7 +1012,10 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
             {selectedUser !== "all" && (
               <span style={chipStyle}>
                 <span>
-                  User: {availableUsers.find((u) => u.id === selectedUser)?.name || selectedUser}
+                  User:{" "}
+                  {availableUsers.find((u) => u.id === selectedUser)?.name ||
+                    availableUsers.find((u) => u.id === selectedUser)?.email ||
+                    selectedUser}
                 </span>
                 <button
                   type="button"
@@ -1015,13 +1031,16 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
             {!effectiveSiteId && selectedSite !== "all" && (
               <span style={chipStyle}>
                 <span>
-                  Site: {availableSites.find((s) => s.id === selectedSite)?.name || selectedSite}
+                  Site:{" "}
+                  {availableSites.find((s) => s.id === selectedSite)?.name ||
+                    availableSites.find((s) => s.id === selectedSite)?.slug ||
+                    selectedSite}
                 </span>
                 <button
                   type="button"
                   onClick={() => setSelectedSite("all")}
                   style={chipCloseStyle}
-                  title="Remove website filter"
+                  title="Remove site filter"
                 >
                   <XMarkIcon />
                 </button>
@@ -1109,76 +1128,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
       )}
 
       {/* ----------------------------------------------------------------- */}
-      {/* 4. ACTION BAR JUST ABOVE CARDS (TAB TITLE + EXPORT CSV)            */}
-      {/* ----------------------------------------------------------------- */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "12px",
-          gap: "12px",
-        }}
-      >
-        {/* Left: Tab / Heading */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
-            Activity Logs
-          </span>
-          {totalCount > 0 && (
-            <span
-              style={{
-                fontSize: "11px",
-                fontWeight: 700,
-                padding: "1px 7px",
-                borderRadius: "10px",
-                background: "#eff6ff",
-                color: "#2563eb",
-                border: "1px solid #bfdbfe",
-              }}
-            >
-              {totalCount}
-            </span>
-          )}
-        </div>
-
-        {/* Right: Export CSV Button */}
-        <button
-          type="button"
-          onClick={handleExportCsv}
-          disabled={loading || totalCount === 0}
-          style={{
-            background: "#2563eb",
-            color: "#ffffff",
-            border: "none",
-            borderRadius: "6px",
-            padding: "5px 13px",
-            height: "32px",
-            fontSize: "12.5px",
-            fontWeight: 600,
-            cursor: loading || totalCount === 0 ? "not-allowed" : "pointer",
-            opacity: loading || totalCount === 0 ? 0.7 : 1,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "6px",
-            boxShadow: "0 1px 2px rgba(37,99,235,0.2)",
-            transition: "all 0.15s ease",
-            whiteSpace: "nowrap",
-          }}
-          onMouseEnter={(e) => {
-            if (!loading && totalCount > 0) e.currentTarget.style.background = "#1d4ed8";
-          }}
-          onMouseLeave={(e) => {
-            if (!loading && totalCount > 0) e.currentTarget.style.background = "#2563eb";
-          }}
-        >
-          <DownloadIcon />
-          <span>Export CSV</span>
-        </button>
-      </div>
-
-      {/* ----------------------------------------------------------------- */}
-      {/* 5. EVENT LOGS TABLE (CLEAN ACCORDION ROWS)                        */}
+      {/* 4. EVENT LOGS TABLE (CLEAN ACCORDION ROWS)                        */}
       {/* ----------------------------------------------------------------- */}
       <div
         style={{
@@ -1189,7 +1139,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
           boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
         }}
       >
-        {/* Column Headers Bar (matching user's reference) */}
+        {/* Column Headers Bar */}
         <div
           style={{
             display: "flex",
@@ -1206,11 +1156,56 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
             userSelect: "none",
           }}
         >
-          <div style={{ width: "175px", flexShrink: 0 }}>Timestamp ▼</div>
-          <div style={{ width: "115px", flexShrink: 0 }}>Category</div>
-          <div style={{ width: "165px", flexShrink: 0 }}>Actor</div>
+          <div style={{ width: effectiveSiteId ? "170px" : "160px", flexShrink: 0 }}>Timestamp ▼</div>
+          {!effectiveSiteId && <div style={{ width: "140px", flexShrink: 0 }}>Website</div>}
+          <div style={{ width: effectiveSiteId ? "160px" : "140px", flexShrink: 0 }}>Category</div>
+          <div style={{ width: effectiveSiteId ? "180px" : "170px", flexShrink: 0 }}>Actor</div>
           <div style={{ flex: 1, minWidth: 0 }}>Activity Description</div>
-          <div style={{ width: "24px", flexShrink: 0, textAlign: "right" }} />
+          <div
+            style={{
+              width: "24px",
+              flexShrink: 0,
+              display: "grid",
+              placeItems: "center",
+            }}
+          >
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              disabled={loading || totalCount === 0}
+              title="Export activity logs to CSV"
+              aria-label="Export activity logs to CSV"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "22px",
+                height: "22px",
+                padding: 0,
+                borderRadius: "5px",
+                border: "1px solid #cbd5e1",
+                background: "#ffffff",
+                color: "#64748b",
+                cursor: loading || totalCount === 0 ? "not-allowed" : "pointer",
+                opacity: loading || totalCount === 0 ? 0.45 : 1,
+                transition: "all 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                if (!loading && totalCount > 0) {
+                  e.currentTarget.style.color = "#2563eb";
+                  e.currentTarget.style.borderColor = "#93c5fd";
+                  e.currentTarget.style.background = "#eff6ff";
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = "#64748b";
+                e.currentTarget.style.borderColor = "#cbd5e1";
+                e.currentTarget.style.background = "#ffffff";
+              }}
+            >
+              <DownloadIcon />
+            </button>
+          </div>
         </div>
 
         {loading && logs.length === 0 ? (
@@ -1219,23 +1214,27 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
             <div
               key={idx}
               style={{
-                padding: "11px 16px",
+                padding: "10px 16px",
                 borderBottom: "1px solid #f1f5f9",
                 display: "flex",
                 alignItems: "center",
                 gap: "12px",
               }}
             >
-              <div style={{ width: "175px", flexShrink: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+              <div style={{ width: effectiveSiteId ? "170px" : "160px", flexShrink: 0, display: "flex", alignItems: "center", gap: "8px" }}>
                 <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#f1f5f9" }} />
-                <div style={{ width: "130px", height: "13px", borderRadius: "4px", background: "#f1f5f9" }} />
+                <div style={{ width: "120px", height: "13px", borderRadius: "4px", background: "#f1f5f9" }} />
               </div>
-              <div style={{ width: "115px", flexShrink: 0 }}>
-                <div style={{ width: "70px", height: "18px", borderRadius: "4px", background: "#f1f5f9" }} />
+              {!effectiveSiteId && (
+                <div style={{ width: "140px", flexShrink: 0 }}>
+                  <div style={{ width: "95px", height: "13px", borderRadius: "4px", background: "#f1f5f9" }} />
+                </div>
+              )}
+              <div style={{ width: effectiveSiteId ? "160px" : "140px", flexShrink: 0 }}>
+                <div style={{ width: "100px", height: "13px", borderRadius: "4px", background: "#f1f5f9" }} />
               </div>
-              <div style={{ width: "165px", flexShrink: 0, display: "flex", alignItems: "center", gap: "7px" }}>
-                <div style={{ width: "20px", height: "20px", borderRadius: "50%", background: "#f1f5f9" }} />
-                <div style={{ width: "90px", height: "13px", borderRadius: "4px", background: "#f1f5f9" }} />
+              <div style={{ width: effectiveSiteId ? "180px" : "170px", flexShrink: 0, display: "flex", alignItems: "center", gap: "7px" }}>
+                <div style={{ width: "110px", height: "13px", borderRadius: "4px", background: "#f1f5f9" }} />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ width: "70%", height: "13px", borderRadius: "4px", background: "#f1f5f9" }} />
@@ -1299,7 +1298,6 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
             const dateInfo = formatActivityDate(log.created_at);
             const catTheme = getCategoryTheme(log.category);
             const roleBadge = getRoleBadge(log.actor_role);
-            const srcBadge = getSourceBadge(log.source, log.actor_type);
             const summaryText = log.summary || log.description;
             const isLast = index === logs.length - 1;
 
@@ -1315,7 +1313,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                 <div
                   onClick={() => toggleExpand(log.id)}
                   style={{
-                    padding: "11px 16px",
+                    padding: "10px 16px",
                     display: "flex",
                     alignItems: "center",
                     gap: "12px",
@@ -1335,7 +1333,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                   {/* 1. Timestamp Column */}
                   <div
                     style={{
-                      width: "175px",
+                      width: effectiveSiteId ? "170px" : "160px",
                       flexShrink: 0,
                       display: "flex",
                       alignItems: "center",
@@ -1358,61 +1356,94 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                     </span>
                   </div>
 
-                  {/* 2. Category Column */}
-                  <div style={{ width: "115px", flexShrink: 0 }}>
-                    <span
+                  {/* 2. Website Column (Only in global multi-site overview) */}
+                  {!effectiveSiteId && (
+                    <div
                       style={{
-                        display: "inline-block",
-                        padding: "1.5px 7px",
-                        borderRadius: "4px",
-                        background: catTheme.bg,
-                        color: catTheme.color,
-                        border: `1px solid ${catTheme.border}`,
-                        fontSize: "11px",
-                        fontWeight: 700,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.03em",
+                        width: "140px",
+                        flexShrink: 0,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        overflow: "hidden",
                       }}
+                      title={log.site_name || (log.website_name && log.website_name !== "Account-wide" ? log.website_name : "Account-wide")}
                     >
-                      {log.category_label || catTheme.label}
-                    </span>
-                  </div>
+                      {log.site_name || (log.website_name && log.website_name !== "Account-wide") ? (
+                        <span
+                          style={{
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            color: "#1e293b",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                          }}
+                        >
+                          <StoreIcon />
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {log.site_name || log.website_name}
+                          </span>
+                        </span>
+                      ) : (
+                        <span
+                          style={{
+                            fontSize: "10.5px",
+                            fontWeight: 600,
+                            color: "#64748b",
+                            background: "#f1f5f9",
+                            padding: "1px 6px",
+                            borderRadius: "4px",
+                            border: "1px solid #e2e8f0",
+                          }}
+                        >
+                          Account-wide
+                        </span>
+                      )}
+                    </div>
+                  )}
 
-                  {/* 3. Actor Column */}
+                  {/* 3. Category Column (Clean text typography, no bulky badge box) */}
                   <div
                     style={{
-                      width: "165px",
+                      width: effectiveSiteId ? "160px" : "140px",
+                      flexShrink: 0,
+                      fontSize: "12px",
+                      fontWeight: 500,
+                      color: "#475569",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                    title={log.category_label || catTheme.label}
+                  >
+                    {log.category_label || catTheme.label}
+                  </div>
+
+                  {/* 4. Actor Column */}
+                  <div
+                    style={{
+                      width: effectiveSiteId ? "180px" : "170px",
                       flexShrink: 0,
                       display: "flex",
                       alignItems: "center",
                       gap: "7px",
                       overflow: "hidden",
+                      minWidth: 0,
                     }}
                   >
-                    <div
-                      style={{
-                        width: "20px",
-                        height: "20px",
-                        borderRadius: "50%",
-                        background: "#0f172a",
-                        color: "#ffffff",
-                        fontSize: "9px",
-                        fontWeight: 700,
-                        display: "grid",
-                        placeItems: "center",
-                        flexShrink: 0,
-                      }}
-                    >
-                      {getUserInitials(log.actor_name)}
-                    </div>
                     <span
                       style={{
-                        fontSize: "12px",
+                        fontSize: "12.5px",
                         fontWeight: 600,
-                        color: "#334155",
+                        color: "#0f172a",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
+                        flexShrink: 1,
                       }}
                       title={log.actor_name || "System"}
                     >
@@ -1421,8 +1452,8 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                     <span
                       style={{
                         fontSize: "10px",
-                        padding: "1px 5px",
-                        borderRadius: "3px",
+                        padding: "1px 6px",
+                        borderRadius: "4px",
                         background: roleBadge.bg,
                         color: roleBadge.color,
                         fontWeight: 600,
@@ -1433,7 +1464,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                     </span>
                   </div>
 
-                  {/* 4. Activity Description Column (Single-line, strictly one row) */}
+                  {/* 5. Activity Description Column (Single-line, strictly one row) */}
                   <div
                     style={{
                       flex: 1,
@@ -1442,7 +1473,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
                       fontSize: "13px",
-                      color: "#0f172a",
+                      color: "#334155",
                       fontWeight: 500,
                     }}
                     title={summaryText}
@@ -1450,7 +1481,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                     {summaryText}
                   </div>
 
-                  {/* 5. Chevron Column */}
+                  {/* 6. Chevron Column */}
                   <div
                     style={{
                       width: "24px",
@@ -1467,368 +1498,220 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                 {isExpanded && (
                   <div
                     style={{
-                      padding: "16px 20px",
+                      padding: "8px 16px 12px 16px",
                       background: "#f8fafc",
-                      borderTop: "1px solid #e2e8f0",
+                      borderTop: "1px solid #f1f5f9",
                       borderBottom: "1px solid #e2e8f0",
                     }}
                   >
-                    {/* Top metadata grid */}
                     <div
                       style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                        gap: "14px",
-                        marginBottom: "16px",
                         background: "#ffffff",
-                        padding: "14px",
-                        borderRadius: "8px",
                         border: "1px solid #e2e8f0",
+                        borderRadius: "6px",
+                        padding: "10px 14px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "8px",
                       }}
                     >
-                      {/* Actor Information */}
-                      <div>
-                        <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "#64748b", marginBottom: "4px" }}>
-                          Actor / Initiator
-                        </div>
-                        <div style={{ fontWeight: 600, fontSize: "13px", color: "#0f172a" }}>
-                          {log.actor_name || "System"}
-                        </div>
-                        <div style={{ fontSize: "12px", color: "#64748b" }}>
-                          {log.actor_email || "system@webcreon.internal"}
-                        </div>
-                        <div style={{ marginTop: "4px" }}>
-                          <span
-                            style={{
-                              fontSize: "10.5px",
-                              fontWeight: 600,
-                              padding: "1px 6px",
-                              borderRadius: "4px",
-                              background: roleBadge.bg,
-                              color: roleBadge.color,
-                              border: `1px solid ${roleBadge.border}`,
-                            }}
-                          >
-                            {roleBadge.text}
-                          </span>
+                      {/* Full Activity Message */}
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
+                        <span
+                          style={{
+                            fontSize: "11px",
+                            fontWeight: 700,
+                            textTransform: "uppercase",
+                            color: "#64748b",
+                            letterSpacing: "0.04em",
+                            flexShrink: 0,
+                            paddingTop: "2px",
+                          }}
+                        >
+                          Full Message:
+                        </span>
+                        <div
+                          style={{
+                            fontSize: "13px",
+                            fontWeight: 600,
+                            color: "#0f172a",
+                            lineHeight: 1.45,
+                            wordBreak: "break-word",
+                            flex: 1,
+                          }}
+                        >
+                          {log.description || log.summary || summaryText}
                         </div>
                       </div>
 
-                      {/* Origin & Environment */}
-                      <div>
-                        <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "#64748b", marginBottom: "4px" }}>
-                          Origin & Client
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <span style={{ fontWeight: 600, fontSize: "13px", color: "#0f172a" }}>
-                            {srcBadge.icon} {srcBadge.text}
-                          </span>
-                          {log.actor_type && (
-                            <span style={{ fontSize: "11px", color: "#64748b", textTransform: "uppercase" }}>
-                              ({log.actor_type})
-                            </span>
-                          )}
-                        </div>
+                      {/* Compact Context Details Strip */}
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          flexWrap: "wrap",
+                          gap: "8px 16px",
+                          padding: "6px 10px",
+                          background: "#f8fafc",
+                          borderRadius: "5px",
+                          border: "1px solid #f1f5f9",
+                          fontSize: "11.5px",
+                        }}
+                      >
+                        {log.action && (
+                          <div>
+                            <span style={{ color: "#64748b", marginRight: "4px" }}>Action:</span>
+                            <code style={{ background: "#ffffff", padding: "1px 5px", borderRadius: "3px", border: "1px solid #e2e8f0", color: "#1e293b", fontWeight: 600 }}>
+                              {log.action}
+                            </code>
+                          </div>
+                        )}
+                        {(log.resource_name || log.resource_id) && (
+                          <div>
+                            <span style={{ color: "#64748b", marginRight: "4px" }}>Target:</span>
+                            <span style={{ color: "#0f172a", fontWeight: 600 }}>{log.resource_name || log.resource_id}</span>
+                            {log.resource_type && <span style={{ color: "#94a3b8", marginLeft: "3px" }}>({log.resource_type})</span>}
+                          </div>
+                        )}
                         {log.ip_address && (
-                          <div style={{ fontSize: "11.5px", color: "#64748b", marginTop: "3px" }}>
-                            IP: <code style={{ background: "#f1f5f9", padding: "1px 4px", borderRadius: "3px" }}>{log.ip_address}</code>
+                          <div>
+                            <span style={{ color: "#64748b", marginRight: "4px" }}>IP:</span>
+                            <span style={{ color: "#475569", fontFamily: "monospace" }}>{log.ip_address}</span>
                           </div>
                         )}
-                        {log.user_agent && (
-                          <div
-                            style={{
-                              fontSize: "11px",
-                              color: "#94a3b8",
-                              marginTop: "2px",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                              maxWidth: "280px",
-                            }}
-                            title={log.user_agent}
-                          >
-                            {log.user_agent}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Scope & Affected Resource */}
-                      <div>
-                        <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "#64748b", marginBottom: "4px" }}>
-                          Scope & Resource
-                        </div>
-                        <div style={{ fontSize: "13px", color: "#0f172a", fontWeight: 600 }}>
-                          {log.site_name ? `Store: ${log.site_name}` : "Organization Level"}
-                        </div>
-                        {(log.resource_name || log.resource_type || log.resource_id) && (
-                          <div style={{ fontSize: "12px", color: "#475569", marginTop: "2px" }}>
-                            {log.resource_name && <span><strong>{log.resource_name}</strong> </span>}
-                            {log.resource_type && <span style={{ textTransform: "capitalize", color: "#64748b" }}>({log.resource_type})</span>}
-                            {log.resource_id && (
-                              <div style={{ fontSize: "11px", color: "#94a3b8" }}>
-                                ID: {log.resource_id}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Execution Details */}
-                      <div>
-                        <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "#64748b", marginBottom: "4px" }}>
-                          Execution & Time
-                        </div>
-                        <div style={{ fontSize: "12px", color: "#0f172a", fontWeight: 600 }}>
-                          {dateInfo.formatted}
-                        </div>
-                        <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>
-                          UTC: {new Date(log.created_at).toISOString()}
-                        </div>
-                        {log.correlation_id && (
-                          <div style={{ fontSize: "11px", color: "#64748b", marginTop: "4px" }}>
-                            Trace: <code style={{ background: "#f1f5f9", padding: "1px 4px", borderRadius: "3px" }}>{log.correlation_id}</code>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Transaction & Financial Highlights */}
-                    {log.details && (log.category === "financial" || log.details.amount !== undefined || log.details.payout_amount !== undefined || log.details.awb_code) && (
-                      <div style={{ marginBottom: "14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "12px 16px" }}>
-                        <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "#15803d", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
-                          <span>💳</span> Transaction & Execution Highlights
-                        </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px", fontSize: "12.5px" }}>
-                          {(log.details.amount !== undefined || log.details.payout_amount !== undefined) && (
-                            <div>
-                              <div style={{ fontSize: "11px", color: "#166534" }}>Amount</div>
-                              <div style={{ fontSize: "15px", fontWeight: 700, color: "#14532d" }}>
-                                ₹{Number(log.details.amount || log.details.payout_amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                              </div>
-                            </div>
-                          )}
-                          {log.details.masked_account_number && (
-                            <div>
-                              <div style={{ fontSize: "11px", color: "#166534" }}>Destination Account</div>
-                              <div style={{ fontWeight: 600, color: "#14532d" }}>{log.details.masked_account_number}</div>
-                            </div>
-                          )}
-                          {log.details.awb_code && (
-                            <div>
-                              <div style={{ fontSize: "11px", color: "#166534" }}>AWB / Courier Ref</div>
-                              <div style={{ fontWeight: 600, color: "#14532d" }}>{log.details.awb_code}</div>
-                            </div>
-                          )}
-                          {log.details.current_status && (
-                            <div>
-                              <div style={{ fontSize: "11px", color: "#166534" }}>Status</div>
-                              <div style={{ fontWeight: 600, color: "#14532d", textTransform: "capitalize" }}>{log.details.current_status}</div>
-                            </div>
-                          )}
+                        <div>
+                          <span style={{ color: "#64748b", marginRight: "4px" }}>Exact Time:</span>
+                          <span style={{ color: "#475569" }}>{new Date(log.created_at).toUTCString()}</span>
                         </div>
                       </div>
-                    )}
 
-                    {/* Changes Made (Diffs: Before ➔ After) */}
-                    {log.details && (log.details.before || log.details.after) && (
-                      <div style={{ marginBottom: "14px" }}>
-                        <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", marginBottom: "6px" }}>
-                          Changes Made (State Diffs)
+                      {/* Event Attributes (if any) */}
+                      {log.details?.metadata && typeof log.details.metadata === "object" && Object.keys(log.details.metadata).length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px", fontSize: "11.5px" }}>
+                          <span style={{ color: "#64748b", fontWeight: 600, marginRight: "2px" }}>Attributes:</span>
+                          {Object.entries(log.details.metadata).map(([mKey, mVal]) => (
+                            <span
+                              key={mKey}
+                              style={{
+                                background: "#f8fafc",
+                                border: "1px solid #e2e8f0",
+                                borderRadius: "4px",
+                                padding: "1px 6px",
+                                color: "#334155",
+                              }}
+                            >
+                              <strong style={{ textTransform: "capitalize" }}>{mKey.replace(/_/g, " ")}:</strong> {typeof mVal === "boolean" ? (mVal ? "true" : "false") : String(mVal)}
+                            </span>
+                          ))}
                         </div>
-                        <div style={{ background: "#ffffff", borderRadius: "8px", border: "1px solid #e2e8f0", overflow: "hidden" }}>
+                      )}
+
+                      {/* Changes Made (Diffs) */}
+                      {log.details && (log.details.before || log.details.after) && (
+                        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px", fontSize: "11.5px" }}>
+                          <span style={{ color: "#64748b", fontWeight: 600, marginRight: "2px" }}>Changes:</span>
                           {Object.keys(log.details.after || {}).map((key) => {
                             const beforeVal = log.details?.before?.[key];
                             const afterVal = log.details?.after?.[key];
                             if (beforeVal === undefined && afterVal === undefined) return null;
-
                             const formatVal = (v: any) => {
-                              if (v === null || v === undefined) return <em style={{ color: "#94a3b8" }}>none</em>;
+                              if (v === null || v === undefined) return "none";
                               if (typeof v === "boolean") return v ? "true" : "false";
-                              if (Array.isArray(v)) return v.join(", ") || "(empty)";
-                              if (key.includes("price") || key.includes("cost") || key.includes("amount")) {
-                                return `₹${v}`;
-                              }
                               return String(v);
                             };
-
                             return (
-                              <div
+                              <span
                                 key={key}
                                 style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "space-between",
-                                  padding: "9px 14px",
-                                  borderBottom: "1px solid #f1f5f9",
-                                  fontSize: "12.5px",
+                                  fontSize: "11.5px",
+                                  background: "#f8fafc",
+                                  border: "1px solid #e2e8f0",
+                                  borderRadius: "4px",
+                                  padding: "2px 7px",
                                 }}
                               >
-                                <span style={{ fontWeight: 600, color: "#334155", textTransform: "capitalize" }}>
-                                  {key.replace(/_/g, " ")}:
-                                </span>
-                                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                  <span style={{ color: "#64748b", textDecoration: beforeVal !== undefined ? "line-through" : "none" }}>
+                                <strong style={{ color: "#334155" }}>{key.replace(/_/g, " ")}:</strong>{" "}
+                                {beforeVal !== undefined && (
+                                  <span style={{ color: "#94a3b8", textDecoration: "line-through", marginRight: "4px" }}>
                                     {formatVal(beforeVal)}
                                   </span>
-                                  <span style={{ color: "#94a3b8" }}>➔</span>
-                                  <span style={{ fontWeight: 600, color: "#15803d", background: "#f0fdf4", padding: "1px 6px", borderRadius: "4px" }}>
-                                    {formatVal(afterVal)}
-                                  </span>
-                                </div>
-                              </div>
+                                )}
+                                <span style={{ color: "#15803d", fontWeight: 600 }}>{formatVal(afterVal)}</span>
+                              </span>
                             );
                           })}
                         </div>
-                      </div>
-                    )}
+                      )}
 
-                    {/* Raw Metadata & JSON Payload */}
-                    {log.details && Object.keys(log.details).length > 0 && (
-                      <details style={{ borderRadius: "8px", border: "1px solid #e2e8f0", background: "#ffffff", padding: "10px 14px" }}>
-                        <summary style={{ fontSize: "12px", fontWeight: 600, color: "#475569", cursor: "pointer", userSelect: "none", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                          <span>Raw Event Payload & Metadata</span>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleCopyJson(log.id, log.details);
-                            }}
-                            style={{
-                              padding: "3px 9px",
-                              borderRadius: "5px",
-                              border: "1px solid #cbd5e1",
-                              background: "#ffffff",
-                              fontSize: "11px",
-                              fontWeight: 600,
-                              color: "#334155",
-                              cursor: "pointer",
-                            }}
-                          >
-                            {copiedId === log.id ? "Copied!" : "Copy JSON"}
-                          </button>
-                        </summary>
-                        <pre
-                          style={{
-                            marginTop: "10px",
-                            padding: "10px 12px",
-                            background: "#0f172a",
-                            color: "#f8fafc",
-                            borderRadius: "6px",
-                            fontSize: "11px",
-                            overflowX: "auto",
-                            fontFamily: "monospace",
-                            lineHeight: 1.45,
-                          }}
-                        >
-                          {JSON.stringify(log.details, null, 2)}
-                        </pre>
-                      </details>
-                    )}
+                      {/* Transaction Highlights (if any) */}
+                      {log.details && (log.category === "financial" || log.details.amount !== undefined || log.details.payout_amount !== undefined) && (
+                        <div style={{ padding: "4px 8px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "4px", display: "flex", alignItems: "center", gap: "12px", fontSize: "11.5px" }}>
+                          {(log.details.amount !== undefined || log.details.payout_amount !== undefined) && (
+                            <div>
+                              <span style={{ color: "#166534", marginRight: "4px" }}>Amount:</span>
+                              <strong style={{ color: "#14532d" }}>
+                                ₹{Number(log.details.amount || log.details.payout_amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                              </strong>
+                            </div>
+                          )}
+                          {log.details.masked_account_number && (
+                            <div>
+                              <span style={{ color: "#166534", marginRight: "4px" }}>Account:</span>
+                              <span style={{ color: "#14532d", fontWeight: 600 }}>{log.details.masked_account_number}</span>
+                            </div>
+                          )}
+                          {log.details.current_status && (
+                            <div>
+                              <span style={{ color: "#166534", marginRight: "4px" }}>Status:</span>
+                              <span style={{ color: "#14532d", fontWeight: 600, textTransform: "capitalize" }}>{log.details.current_status}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Raw JSON toggle */}
+                      {log.details && Object.keys(log.details).length > 0 && (
+                        <div style={{ borderTop: "1px solid #f8fafc", paddingTop: "4px" }}>
+                          <details style={{ fontSize: "11px", color: "#64748b" }}>
+                            <summary style={{ cursor: "pointer", userSelect: "none", fontWeight: 500 }}>
+                              View Raw Payload
+                            </summary>
+                            <pre style={{ margin: "4px 0 0 0", padding: "6px 10px", background: "#0f172a", color: "#f8fafc", borderRadius: "4px", fontSize: "10.5px", overflowX: "auto", maxHeight: "160px" }}>
+                              {JSON.stringify(log.details, null, 2)}
+                            </pre>
+                          </details>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
             );
           })
         )}
-
-        {/* Pagination controls */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "12px 16px",
-            background: "#f8fafc",
-            borderTop: "1px solid #e2e8f0",
-            flexWrap: "wrap",
-            gap: "12px",
-            fontSize: "12.5px",
-            color: "#64748b",
-          }}
-        >
-          <div>
-            {totalCount > 0 ? (
-              <span>
-                Showing <strong style={{ color: "#0f172a" }}>{(page - 1) * pageSize + 1}</strong> to{" "}
-                <strong style={{ color: "#0f172a" }}>{Math.min(page * pageSize, totalCount)}</strong> of{" "}
-                <strong style={{ color: "#0f172a" }}>{totalCount}</strong> activities
-              </span>
-            ) : (
-              <span>No activities</span>
-            )}
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            {/* Page Size Selector */}
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <span>Per page:</span>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setPage(1);
-                }}
-                style={{
-                  height: "28px",
-                  padding: "0 6px",
-                  borderRadius: "5px",
-                  border: "1px solid #cbd5e1",
-                  background: "#ffffff",
-                  fontSize: "12px",
-                  color: "#0f172a",
-                  outline: "none",
-                }}
-              >
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-            </div>
-
-            {/* Pagination Buttons */}
-            <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1 || loading}
-                style={{
-                  padding: "4px 10px",
-                  borderRadius: "5px",
-                  border: "1px solid #cbd5e1",
-                  background: "#ffffff",
-                  color: page <= 1 ? "#94a3b8" : "#334155",
-                  fontSize: "12px",
-                  fontWeight: 500,
-                  cursor: page <= 1 ? "not-allowed" : "pointer",
-                }}
-              >
-                Previous
-              </button>
-              <span style={{ padding: "0 6px", fontWeight: 600, color: "#0f172a" }}>
-                {page} / {Math.max(1, totalPages)}
-              </span>
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages || loading}
-                style={{
-                  padding: "4px 10px",
-                  borderRadius: "5px",
-                  border: "1px solid #cbd5e1",
-                  background: "#ffffff",
-                  color: page >= totalPages ? "#94a3b8" : "#334155",
-                  fontSize: "12px",
-                  fontWeight: 500,
-                  cursor: page >= totalPages ? "not-allowed" : "pointer",
-                }}
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        </div>
       </div>
+
+      {/* Pagination controls using shared standard Pagination component */}
+      {totalCount > 0 && (
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          totalItems={totalCount}
+          pageSize={pageSize}
+          pageSizeOptions={[10, 20, 50, 100]}
+          onPageChange={(newPage) => {
+            setPage(newPage);
+            fetchActivity(newPage, pageSize);
+          }}
+          onPageSizeChange={(newSize) => {
+            setPageSize(newSize);
+            setPage(1);
+            fetchActivity(1, newSize);
+          }}
+          showRangeText={true}
+          accentColor="#2563eb"
+        />
+      )}
 
       {/* Retention notice */}
       <div style={{ marginTop: "12px", textAlign: "right", fontSize: "11.5px", color: "#94a3b8" }}>

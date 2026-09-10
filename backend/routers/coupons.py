@@ -201,7 +201,6 @@ def admin_create_coupon(
     try:
         admin_uuid = UUID(str(admin_id)) if admin_id else None
         AuditService.log_event(
-            session=session,
             site_id=site.id,
             actor_type=ActorType.OWNER if (admin.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
             actor_id=admin_uuid,
@@ -282,7 +281,6 @@ def admin_update_coupon(
     try:
         admin_uuid = UUID(str(admin_id)) if admin_id else None
         AuditService.log_event(
-            session=session,
             site_id=site.id,
             actor_type=ActorType.OWNER if (admin.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
             actor_id=admin_uuid,
@@ -333,7 +331,6 @@ def admin_toggle_coupon(
     try:
         admin_uuid = UUID(str(admin_id)) if admin_id else None
         AuditService.log_event(
-            session=session,
             site_id=site.id,
             actor_type=ActorType.OWNER if (admin.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
             actor_id=admin_uuid,
@@ -382,7 +379,6 @@ def admin_delete_coupon(
     try:
         admin_uuid = UUID(str(admin_id)) if admin_id else None
         AuditService.log_event(
-            session=session,
             site_id=site.id,
             actor_type=ActorType.OWNER if (admin.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
             actor_id=admin_uuid,

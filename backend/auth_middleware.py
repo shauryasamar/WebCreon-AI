@@ -54,7 +54,31 @@ def authenticate_admin(
     if not admin_obj.is_active:
         raise _unauthorized("Admin account has been deactivated")
 
-    request.state.admin = {"adminId": admin_id}
+    role_obj = None
+    if admin_obj.role_id:
+        try:
+            r_uuid = UUID(str(admin_obj.role_id))
+            role_obj = session.get(Role, r_uuid)
+        except Exception:
+            role_obj = None
+
+    if not role_obj and admin_obj.role:
+        role_obj = session.exec(select(Role).where(func.lower(Role.name) == admin_obj.role.strip().lower())).first()
+
+    if role_obj:
+        is_owner = (role_obj.name == "Owner")
+    else:
+        is_owner = bool(admin_obj.role in ("Owner", "super_admin") and not admin_obj.role_id)
+
+    role_display = role_obj.name if role_obj else (admin_obj.role or "Staff")
+
+    request.state.admin = {
+        "adminId": admin_id,
+        "name": admin_obj.name,
+        "email": admin_obj.email,
+        "role": role_display,
+        "is_owner": is_owner,
+    }
     return request.state.admin
 
 

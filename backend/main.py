@@ -1349,7 +1349,6 @@ def update_site(
         from services.audit_service import AuditService, ActorType, SourceType, AuditCategory
         admin_uuid = UUID(str(admin_id)) if admin_id else None
         AuditService.log_event(
-            session=session,
             site_id=site_id,
             actor_type=ActorType.OWNER if ownership.get("is_owner") else ActorType.TEAM_MEMBER,
             actor_id=admin_uuid,
@@ -1361,8 +1360,8 @@ def update_site(
             source=SourceType.WEB_ADMIN,
             resource_type="website_sections",
             resource_id=str(site_id),
-            resource_name=f"{site.name or site.slug} Home Sections",
-            summary=f"Updated home sections layout for '{site.name or site.slug}' (v{site.version})",
+            resource_name=f"{getattr(site, 'name', None) or site.slug} Home Sections",
+            summary=f"Updated home sections layout for '{getattr(site, 'name', None) or site.slug}' (v{site.version})",
             metadata={"version": site.version, "slug": site.slug},
         )
     except Exception as log_err:
@@ -1399,7 +1398,6 @@ def update_site_default_return_policy(
         from services.audit_service import AuditService, ActorType, SourceType, AuditCategory
         admin_uuid = UUID(str(ownership["adminId"])) if ownership.get("adminId") else None
         AuditService.log_event(
-            session=session,
             site_id=site_id,
             actor_type=ActorType.OWNER if (ownership.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
             actor_id=admin_uuid,
@@ -1411,7 +1409,7 @@ def update_site_default_return_policy(
             source=SourceType.WEB_ADMIN,
             resource_type="store_policy",
             resource_id=str(site_id),
-            resource_name=f"{site.name or site.slug} Return Policy",
+            resource_name=f"{getattr(site, 'name', None) or site.slug} Return Policy",
             summary=f"Updated default store return window to {payload.default_return_window_days} days",
             metadata={"default_return_window_days": payload.default_return_window_days},
         )

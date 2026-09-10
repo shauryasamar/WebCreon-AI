@@ -4,6 +4,7 @@ import { API_BASE_URL } from "../config/api";
 import { MarkdownContent } from "../utils/markdownRenderer";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import AccessDeniedView from "./AccessDeniedView";
+import GlassToast from "./GlassToast";
 
 export type StorePage = {
   id: string;
@@ -334,7 +335,6 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
 
   const showToast = (text: string, type: "success" | "info" | "error" = "success") => {
     setToastMessage({ text, type });
-    setTimeout(() => setToastMessage(null), 3200);
   };
 
   // Resolve siteId / siteSlug if needed
@@ -569,18 +569,50 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
       showToast("You do not have permission to publish or unpublish pages.", "error");
       return;
     }
+    const targetStatus = !page.is_published;
+
+    // Optimistic UI update so toggle switches instantly without lag
+    setPages((prev) =>
+      prev.map((p) => (p.id === page.id ? { ...p, is_published: targetStatus } : p))
+    );
+
     try {
       const res = await fetch(`${API_BASE_URL}/sites/${siteId}/pages/${page.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ is_published: !page.is_published }),
+        body: JSON.stringify({ is_published: targetStatus }),
       });
-      if (!res.ok) throw new Error("Failed to update status");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.detail || "Failed to update status");
+      }
       const updated = await res.json();
-      setPages((prev) => prev.map((p) => (p.id === page.id ? updated : p)));
-      showToast(updated.is_published ? `"${page.title}" is now Active!` : `"${page.title}" is now Inactive.`, "success");
+      setPages((prev) =>
+        prev.map((p) => {
+          if (p.id !== page.id) return p;
+          return {
+            ...p,
+            ...updated,
+            id: updated.id || p.id,
+            title: updated.title || p.title,
+            slug: updated.slug || p.slug,
+            subtitle: updated.subtitle !== undefined ? updated.subtitle : p.subtitle,
+            content: updated.content !== undefined ? updated.content : p.content,
+            page_type: updated.page_type || p.page_type,
+            is_published: updated.is_published !== undefined ? updated.is_published : targetStatus,
+          };
+        })
+      );
+      showToast(
+        targetStatus ? `"${page.title}" is now Active!` : `"${page.title}" is now Inactive.`,
+        "success"
+      );
     } catch (err: any) {
+      // Revert optimistic state on failure
+      setPages((prev) =>
+        prev.map((p) => (p.id === page.id ? { ...p, is_published: page.is_published } : p))
+      );
       showToast(err.message || "Failed to update page status", "error");
     }
   };
@@ -653,8 +685,23 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
       const savedPage: StorePage = await res.json();
 
       if (editingPage) {
-        setPages((prev) => prev.map((p) => (p.id === savedPage.id ? savedPage : p)));
-        showToast(`Updated "${savedPage.title}" successfully!`, "success");
+        setPages((prev) =>
+          prev.map((p) => {
+            if (p.id !== savedPage.id) return p;
+            return {
+              ...p,
+              ...savedPage,
+              id: savedPage.id || p.id,
+              title: savedPage.title || p.title,
+              slug: savedPage.slug || p.slug,
+              subtitle: savedPage.subtitle !== undefined ? savedPage.subtitle : p.subtitle,
+              content: savedPage.content !== undefined ? savedPage.content : p.content,
+              page_type: savedPage.page_type || p.page_type,
+              is_published: savedPage.is_published !== undefined ? savedPage.is_published : p.is_published,
+            };
+          })
+        );
+        showToast(`Updated "${savedPage.title || editingPage.title}" successfully!`, "success");
       } else {
         setPages((prev) => [savedPage, ...prev]);
         showToast(`Created "${savedPage.title}" successfully!`, "success");
@@ -734,34 +781,13 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
 
   return (
     <div style={{ color: "#0f172a" }}>
-      {/* Toast Notification */}
+      {/* GlassToast Notification */}
       {toastMessage && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: "24px",
-            right: "24px",
-            zIndex: 9999,
-            background:
-              toastMessage.type === "error"
-                ? "#ef4444"
-                : toastMessage.type === "info"
-                ? "#0f172a"
-                : "#10b981",
-            color: "#ffffff",
-            padding: "12px 20px",
-            borderRadius: "10px",
-            boxShadow: "0 10px 25px rgba(0,0,0,0.18)",
-            fontSize: "13.5px",
-            fontWeight: 600,
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            animation: "fadeIn 0.2s ease",
-          }}
-        >
-          <span>{toastMessage.text}</span>
-        </div>
+        <GlassToast
+          message={toastMessage.text}
+          type={toastMessage.type}
+          onClose={() => setToastMessage(null)}
+        />
       )}
 
       {/* Top Header Card (Segmented Mode + Global Search & Filter Button) */}

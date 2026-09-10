@@ -322,10 +322,10 @@ def verify_activity_access(
     admin: dict,
     session: Session,
     target_site_id: Optional[str] = None,
-) -> tuple[Admin, bool, List[UUID]]:
+) -> tuple[Admin, bool, List[UUID], List[UUID]]:
     """
     Verifies authentication, active user status, View Activity permission,
-    and returns (admin_obj, is_owner_or_all_access, list_of_accessible_site_ids).
+    and returns (admin_obj, is_owner_or_all_access, list_of_accessible_site_ids, list_of_workspace_member_ids).
     Raises HTTP 401/403 if unauthorized.
     """
     admin_id = admin.get("adminId")
@@ -364,17 +364,49 @@ def verify_activity_access(
                 detail="Forbidden: You do not have permission to view workspace activity.",
             )
 
-    # Determine website accessibility
+    # 1. Identify Workspace Owner:
+    if admin_obj.invited_by_admin_id:
+        owner_obj = session.get(Admin, admin_obj.invited_by_admin_id)
+        site_owner = owner_obj or admin_obj
+    else:
+        site_owner = admin_obj
+
+    # 2. Collect workspace sites belonging to this workspace owner:
+    owner_site_links = session.exec(
+        select(AdminSite.site_id).where(AdminSite.admin_id == site_owner.id)
+    ).all()
+    owner_site_ids = set(owner_site_links)
+
+    # Also include any direct site links for this admin
+    admin_site_links = session.exec(
+        select(AdminSite.site_id).where(AdminSite.admin_id == a_uuid)
+    ).all()
+    admin_site_ids = set(admin_site_links)
+
     website_access_type = getattr(admin_obj, "website_access_type", "all") or "all"
     is_all_access = is_owner or (website_access_type == "all")
 
-    accessible_site_ids: List[UUID] = []
     if is_all_access:
-        accessible_site_ids = session.exec(select(Site.id)).all()
+        accessible_site_ids = list(owner_site_ids | admin_site_ids)
     else:
-        accessible_site_ids = session.exec(
-            select(AdminSite.site_id).where(AdminSite.admin_id == a_uuid)
+        accessible_site_ids = list(admin_site_ids)
+
+    # 3. Collect only team members belonging to this workspace owner/team:
+    workspace_members = {site_owner.id, a_uuid}
+    invited_admins = session.exec(
+        select(Admin.id).where(Admin.invited_by_admin_id == site_owner.id)
+    ).all()
+    for mid in invited_admins:
+        workspace_members.add(mid)
+
+    if accessible_site_ids:
+        linked_admins = session.exec(
+            select(AdminSite.admin_id).where(AdminSite.site_id.in_(accessible_site_ids))
         ).all()
+        for mid in linked_admins:
+            workspace_members.add(mid)
+
+    workspace_member_ids = list(workspace_members)
 
     # If a specific site was requested in the URL, verify access
     if target_site_id:
@@ -390,7 +422,7 @@ def verify_activity_access(
                 detail="Forbidden: You do not have access to activity logs for this website.",
             )
 
-    return admin_obj, is_all_access, accessible_site_ids
+    return admin_obj, is_all_access, accessible_site_ids, workspace_member_ids
 
 
 def format_activity_title(action: str) -> str:
@@ -419,6 +451,7 @@ def get_activity_feed(
     category: Optional[str] = Query(None),
     source: Optional[str] = Query(None),
     user: Optional[str] = Query(None),
+    user_id: Optional[str] = Query(None),
     actor: Optional[str] = Query(None),
     q: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
@@ -426,20 +459,21 @@ def get_activity_feed(
     from_date: Optional[str] = Query(None),
     to_date: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=5, le=100),
+    page_size: int = Query(10, ge=1, le=100),
     admin: dict = Depends(authenticate_admin),
     session: Session = Depends(get_session),
 ):
     """
     Returns server-side paginated and filtered activity records respecting user permissions
-    and store scoping.
+    and strict workspace / store scoping.
     """
-    admin_obj, is_all_access, accessible_site_ids = verify_activity_access(admin, session, site_id)
+    admin_obj, is_all_access, accessible_site_ids, workspace_member_ids = verify_activity_access(admin, session, site_id)
 
     query = select(AuditLog)
 
     # 1. Store Authorization & Scoping
-    if site_id:
+    has_specific_site = bool(site_id and site_id.strip() and site_id.lower() not in ("all", "all_sites", "null", "none"))
+    if has_specific_site:
         try:
             target_uuid = UUID(str(site_id))
             query = query.where(AuditLog.site_id == target_uuid)
@@ -450,13 +484,17 @@ def get_activity_feed(
             else:
                 return {"items": [], "logs": [], "total": 0, "page": page, "page_size": page_size, "total_pages": 1}
     else:
-        if not is_all_access:
-            if not accessible_site_ids:
-                return {
-                    "items": [], "logs": [], "total": 0, "page": page, "page_size": page_size,
-                    "total_pages": 1, "available_users": [], "available_sites": [], "available_sources": []
-                }
-            query = query.where(AuditLog.site_id.in_(accessible_site_ids))
+        if not accessible_site_ids:
+            return {
+                "items": [], "logs": [], "total": 0, "page": page, "page_size": page_size,
+                "total_pages": 1, "available_users": [], "available_sites": [], "available_sources": []
+            }
+        query = query.where(
+            or_(
+                AuditLog.site_id.in_(accessible_site_ids),
+                and_(AuditLog.site_id.is_(None), AuditLog.admin_id.in_(workspace_member_ids)),
+            )
+        )
 
     # 2. Date Filtering (Default: Last 30 Days)
     now_utc = datetime.now(timezone.utc)
@@ -552,7 +590,7 @@ def get_activity_feed(
             ))
 
     # 5. User / Actor Filter
-    target_user = user or actor
+    target_user = user or user_id or actor
     if target_user and target_user != "all":
         try:
             target_admin_uuid = UUID(str(target_user))
@@ -633,29 +671,33 @@ def get_activity_feed(
             for s in user_sites
         ]
 
-    # Fetch available unique users for dropdown and map admin details
+    # Fetch available unique users for dropdown and map admin details (strictly scoped to workspace)
     available_users = []
     admins_by_id = {}
-    try:
-        all_admins = session.exec(select(Admin.id, Admin.name, Admin.email, Admin.role)).all()
-        for a in all_admins:
-            a_id_str = str(a[0])
-            r_label = "Owner" if a[3] in ("super_admin", "Owner", "owner") else (a[3] or "Admin")
-            name_val = (a[1] or "").strip() or a[2].split("@")[0].title()
-            admins_by_id[a_id_str] = {
-                "id": a_id_str,
-                "name": name_val,
-                "email": a[2],
-                "role": r_label,
-            }
-            available_users.append({
-                "id": a_id_str,
-                "name": name_val,
-                "email": a[2],
-                "role": r_label,
-            })
-    except Exception:
-        pass
+    if workspace_member_ids:
+        try:
+            team_admins = session.exec(
+                select(Admin.id, Admin.name, Admin.email, Admin.role)
+                .where(Admin.id.in_(workspace_member_ids))
+            ).all()
+            for a in team_admins:
+                a_id_str = str(a[0])
+                r_label = "Owner" if a[3] in ("super_admin", "Owner", "owner") else (a[3] or "Admin")
+                name_val = (a[1] or "").strip() or a[2].split("@")[0].title()
+                admins_by_id[a_id_str] = {
+                    "id": a_id_str,
+                    "name": name_val,
+                    "email": a[2],
+                    "role": r_label,
+                }
+                available_users.append({
+                    "id": a_id_str,
+                    "name": name_val,
+                    "email": a[2],
+                    "role": r_label,
+                })
+        except Exception:
+            pass
 
     available_sources = [
         {"id": "all", "name": "All Sources"},
@@ -777,10 +819,11 @@ def export_activity_csv(
     admin: dict = Depends(authenticate_admin),
     session: Session = Depends(get_session),
 ):
-    admin_obj, is_all_access, accessible_site_ids = verify_activity_access(admin, session, site_id)
+    admin_obj, is_all_access, accessible_site_ids, workspace_member_ids = verify_activity_access(admin, session, site_id)
 
     query = select(AuditLog)
-    if site_id:
+    has_specific_site = bool(site_id and site_id.strip() and site_id.lower() not in ("all", "all_sites", "null", "none"))
+    if has_specific_site:
         try:
             target_uuid = UUID(str(site_id))
             query = query.where(AuditLog.site_id == target_uuid)
@@ -788,9 +831,17 @@ def export_activity_csv(
             site_obj = session.exec(select(Site).where(Site.slug == site_id)).first()
             if site_obj:
                 query = query.where(AuditLog.site_id == site_obj.id)
+            else:
+                return Response(content="", media_type="text/csv")
     else:
-        if not is_all_access:
-            query = query.where(AuditLog.site_id.in_(accessible_site_ids))
+        if not accessible_site_ids:
+            return Response(content="", media_type="text/csv")
+        query = query.where(
+            or_(
+                AuditLog.site_id.in_(accessible_site_ids),
+                and_(AuditLog.site_id.is_(None), AuditLog.admin_id.in_(workspace_member_ids)),
+            )
+        )
 
     if category and category != "all":
         query = query.where(AuditLog.category == category)
@@ -843,29 +894,48 @@ def export_activity_csv(
 
     logs = session.exec(query.order_by(desc(AuditLog.created_at)).limit(2000)).all()
 
+    # Pre-fetch site brand names for display
+    site_ids_to_lookup = {r.site_id for r in logs if r.site_id}
+    sites_map = {}
+    if site_ids_to_lookup:
+        site_records = session.exec(select(Site).where(Site.id.in_(site_ids_to_lookup))).all()
+        for s in site_records:
+            brand_name = (
+                (s.site_definition or {}).get("site", {}).get("brand_name")
+                or (s.site_definition or {}).get("site", {}).get("title")
+                or (s.site_definition or {}).get("brand_name")
+                or s.slug
+            )
+            sites_map[s.id] = brand_name
+
     admins_by_id = {}
-    try:
-        all_admins = session.exec(select(Admin.id, Admin.name, Admin.email, Admin.role)).all()
-        for a in all_admins:
-            a_id_str = str(a[0])
-            r_label = "Owner" if a[3] in ("super_admin", "Owner", "owner") else (a[3] or "Admin")
-            name_val = (a[1] or "").strip() or a[2].split("@")[0].title()
-            admins_by_id[a_id_str] = {
-                "name": name_val,
-                "email": a[2],
-                "role": r_label,
-            }
-    except Exception:
-        pass
+    if workspace_member_ids:
+        try:
+            team_admins = session.exec(
+                select(Admin.id, Admin.name, Admin.email, Admin.role)
+                .where(Admin.id.in_(workspace_member_ids))
+            ).all()
+            for a in team_admins:
+                a_id_str = str(a[0])
+                r_label = "Owner" if a[3] in ("super_admin", "Owner", "owner") else (a[3] or "Admin")
+                name_val = (a[1] or "").strip() or a[2].split("@")[0].title()
+                admins_by_id[a_id_str] = {
+                    "name": name_val,
+                    "email": a[2],
+                    "role": r_label,
+                }
+        except Exception:
+            pass
 
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
-        "Timestamp (UTC)", "Activity", "Action Code", "Source", "Actor Type",
+        "Timestamp (UTC)", "Website", "Activity", "Action Code", "Source", "Actor Type",
         "Category", "Performed By", "Role", "Email", "Resource", "Summary", "Status", "IP Address"
     ])
 
     for log in logs:
+        site_name_display = sites_map.get(log.site_id, "Account-wide") if log.site_id else "Account-wide"
         admin_info = admins_by_id.get(str(log.admin_id)) if log.admin_id else None
         display_actor_name = log.actor_name
         if not display_actor_name or display_actor_name.strip().lower() == "staff":
@@ -892,6 +962,7 @@ def export_activity_csv(
 
         writer.writerow([
             log.created_at.strftime("%Y-%m-%d %H:%M:%S") if log.created_at else "",
+            site_name_display,
             format_activity_title(log.action),
             log.action,
             log.source or "web_app",

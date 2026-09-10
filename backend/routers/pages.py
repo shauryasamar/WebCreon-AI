@@ -357,7 +357,6 @@ def create_store_page(
     try:
         admin_uuid = UUID(str(admin_id)) if admin_id else None
         AuditService.log_event(
-            session=session,
             site_id=site_id,
             actor_type=ActorType.OWNER if (ownership.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
             actor_id=admin_uuid,
@@ -377,6 +376,7 @@ def create_store_page(
     except Exception as log_err:
         pass
 
+    session.refresh(new_page)
     return new_page
 
 
@@ -402,8 +402,35 @@ def update_store_page(
     session: Session = Depends(get_session),
 ):
     admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
-    if admin_id and not check_admin_has_permission(admin_id, "pages:edit", session):
-        raise HTTPException(status_code=403, detail="You do not have permission to edit store pages")
+    role = (ownership.get("role") or "").lower() if isinstance(ownership, dict) else ""
+    is_owner = role == "owner" or ownership.get("is_owner") is True or ownership.get("isOwner") is True
+
+    is_status_toggle_only = (
+        payload.is_published is not None
+        and payload.title is None
+        and payload.slug is None
+        and payload.subtitle is None
+        and payload.content is None
+        and payload.page_type is None
+        and payload.meta_title is None
+        and payload.meta_description is None
+        and payload.contact_email is None
+        and payload.contact_phone is None
+        and payload.contact_address is None
+        and payload.contact_hours is None
+    )
+
+    if not is_owner and admin_id:
+        if is_status_toggle_only:
+            has_publish = check_admin_has_permission(admin_id, "pages:publish", session)
+            has_edit = check_admin_has_permission(admin_id, "pages:edit", session)
+            if not (has_publish or has_edit):
+                raise HTTPException(status_code=403, detail="You do not have permission to publish or unpublish store pages")
+        else:
+            if not check_admin_has_permission(admin_id, "pages:edit", session):
+                raise HTTPException(status_code=403, detail="You do not have permission to edit store pages")
+            if payload.is_published is not None and not check_admin_has_permission(admin_id, "pages:publish", session):
+                raise HTTPException(status_code=403, detail="You do not have permission to publish or unpublish store pages")
 
     page = session.get(StorePage, page_id)
     if not page or page.site_id != site_id:
@@ -436,7 +463,7 @@ def update_store_page(
     if payload.page_type is not None:
         page.page_type = payload.page_type
     if payload.is_published is not None and payload.is_published != page.is_published:
-        if admin_id and not check_admin_has_permission(admin_id, "pages:publish", session):
+        if not is_owner and admin_id and not (check_admin_has_permission(admin_id, "pages:publish", session) or check_admin_has_permission(admin_id, "pages:edit", session)):
             raise HTTPException(status_code=403, detail="You do not have permission to publish or unpublish store pages")
         page.is_published = payload.is_published
 
@@ -462,7 +489,6 @@ def update_store_page(
     try:
         admin_uuid = UUID(str(admin_id)) if admin_id else None
         AuditService.log_event(
-            session=session,
             site_id=site_id,
             actor_type=ActorType.OWNER if (ownership.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
             actor_id=admin_uuid,
@@ -482,6 +508,7 @@ def update_store_page(
     except Exception as log_err:
         pass
 
+    session.refresh(page)
     return page
 
 

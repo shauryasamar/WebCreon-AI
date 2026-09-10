@@ -332,7 +332,6 @@ def update_checkout_settings(
     try:
         admin_id = UUID(admin["adminId"]) if isinstance(admin, dict) and admin.get("adminId") else None
         AuditService.log_event(
-            session=session,
             site_id=site_id,
             actor_type=ActorType.OWNER if (admin.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
             actor_id=admin_id,
@@ -345,7 +344,7 @@ def update_checkout_settings(
             resource_type="checkout_settings",
             resource_id=str(site_id),
             resource_name="Checkout Charges & Policies",
-            summary=f"Updated checkout charges and fee rules for {site.name or site.slug}",
+            summary=f"Updated checkout charges and fee rules for {getattr(site, 'name', None) or site.slug}",
             previous_state=old_settings,
             new_state=site.checkout_settings,
         )

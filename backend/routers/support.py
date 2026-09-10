@@ -1390,7 +1390,6 @@ def update_support_settings(
 
     try:
         AuditService.log_event(
-            session=session,
             site_id=site.id,
             actor_type=ActorType.OWNER if (admin.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
             actor_id=admin_uuid,
@@ -1402,7 +1401,7 @@ def update_support_settings(
             source=SourceType.WEB_ADMIN,
             resource_type="support_settings",
             resource_id=str(site.id),
-            resource_name=f"{site.name or site.slug} Support Settings",
+            resource_name=f"{getattr(site, 'name', None) or site.slug} Support Settings",
             summary=f"{'Enabled' if payload.crm_enabled else 'Disabled'} CRM & Customer Support services",
             metadata={"crm_enabled": bool(payload.crm_enabled)},
         )

@@ -99,6 +99,12 @@ class Site(SQLModel, table=True):
         sa_column=Column(Integer, nullable=False, default=7),
     )
     version: int = Field(default=1, nullable=False)
+    @property
+    def name(self) -> str:
+        if self.site_definition and isinstance(self.site_definition, dict):
+            return self.site_definition.get("site_name") or self.site_definition.get("name") or self.slug
+        return self.slug
+
     created_at: datetime = Field(
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False),

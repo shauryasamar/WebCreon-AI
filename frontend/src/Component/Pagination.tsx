@@ -320,6 +320,13 @@ export const Pagination: React.FC<PaginationProps> = ({
         </div>
       )}
 
+      {/* Optional Range Text */}
+      {showRangeText && totalItems !== undefined && totalItems > 0 && pageSize && (
+        <div style={{ fontSize: "12px", color: mutedText, fontWeight: 500 }}>
+          Showing <strong style={{ color: isDarkCanvas ? "#f8fafc" : "#0f172a" }}>{Math.min((currentPage - 1) * pageSize + 1, totalItems)}</strong>–<strong style={{ color: isDarkCanvas ? "#f8fafc" : "#0f172a" }}>{Math.min(currentPage * pageSize, totalItems)}</strong> of <strong style={{ color: isDarkCanvas ? "#f8fafc" : "#0f172a" }}>{totalItems}</strong>
+        </div>
+      )}
+
       {/* Optional Page Size Selector (Centered below) */}
       {pageSizeOptions && pageSizeOptions.length > 0 && onPageSizeChange && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", fontSize: "12.5px", color: mutedText, marginTop: "2px" }}>

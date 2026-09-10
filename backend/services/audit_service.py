@@ -277,6 +277,9 @@ class AuditService:
                 except Exception:
                     pass
 
+        if final_actor_role == "Owner" and actor_type in (ActorType.USER, "USER", "TEAM_MEMBER"):
+            actor_type = ActorType.OWNER
+
         # Final fallbacks if still empty
         if not final_actor_name:
             if actor_type in (ActorType.SYSTEM, ActorType.CRON_JOB, ActorType.BACKGROUND_JOB):
@@ -362,11 +365,8 @@ class AuditService:
             return audit_entry
 
         try:
-            if session:
-                return _execute_insert(session)
-            else:
-                with Session(engine) as isolated_session:
-                    return _execute_insert(isolated_session)
+            with Session(engine) as isolated_session:
+                return _execute_insert(isolated_session)
         except Exception as err:
             logger.error(f"Failed to record centralized audit event '{action}': {err}", exc_info=True)
             return None
