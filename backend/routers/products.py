@@ -1045,7 +1045,9 @@ def list_products_public(
         response.headers["X-Cache"] = "HIT"
         return cached_val
 
-    get_site_or_404(session, site_id)
+    site = get_site_or_404(session, site_id)
+    if not getattr(site, "is_online", True):
+        raise HTTPException(status_code=503, detail="Store is currently offline for maintenance.")
 
     query = select(Product).where(Product.site_id == site_id, Product.is_active == True)
 
@@ -1187,7 +1189,9 @@ def get_public_product_by_slug_or_id(
     if cached is not None:
         return cached
 
-    get_site_or_404(session, site_id)
+    site = get_site_or_404(session, site_id)
+    if not getattr(site, "is_online", True):
+        raise HTTPException(status_code=503, detail="Store is currently offline for maintenance.")
 
     # 1. Try exact slug match
     product = session.exec(

@@ -47,6 +47,8 @@ import {
 } from "./Component/AdminSettingsViews";
 import AccessDeniedView from "./Component/AccessDeniedView";
 import StorefrontCustomPage from "./Component/StorefrontCustomPage";
+import StoreMaintenancePage from "./Component/StoreMaintenancePage";
+import StoreClosedPage from "./Component/StoreClosedPage";
 
 import EditorRenderPage from "./customizations/EditorRenderPage";
 import EditorSidebar from "./customizations/EditorSidebar";
@@ -110,6 +112,7 @@ type SavedSite = {
   site_definition: SiteDefinition;
   draft_definition: SiteDefinition | null;
   version: number;
+  is_online?: boolean;
   default_return_window_days?: number;
   created_at: string;
   updated_at: string;
@@ -1158,6 +1161,10 @@ function BuilderPageContent() {
     ""
   );
   const [siteSlug, setSiteSlug] = useState(initialCachedSite?.slug || "");
+  const [isOnline, setIsOnline] = useState<boolean>(
+    initialCachedSite?.is_online !== undefined ? initialCachedSite.is_online : true
+  );
+  const [statusLoading, setStatusLoading] = useState<boolean>(false);
   const [loading, setLoading] = useState(!initialCachedSite);
   const [publishing, setPublishing] = useState(false);
   const [publishSuccess, setPublishSuccess] = useState(false);
@@ -1265,6 +1272,65 @@ function BuilderPageContent() {
       console.error("Error publishing site:", err);
     } finally {
       setPublishing(false);
+    }
+  };
+
+  const handleToggleStoreStatus = async (newOnline: boolean) => {
+    const currentSiteId = resolvedSiteId || siteId;
+    if (!currentSiteId || statusLoading) return;
+
+    setStatusLoading(true);
+    const oldOnline = isOnline;
+    setIsOnline(newOnline); // Optimistic UI update
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/sites/${currentSiteId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ is_online: newOnline }),
+      });
+
+      if (!response.ok) {
+        const errPayload = await response.json().catch(() => ({}));
+        throw new Error(errPayload.detail || "Failed to update store availability status.");
+      }
+
+      const resData = await response.json();
+      setIsOnline(resData.is_online);
+
+      // Update savedSites in list state
+      setSavedSites((prev) =>
+        prev.map((s) => (s.id === currentSiteId ? { ...s, is_online: resData.is_online } : s))
+      );
+
+      // Invalidate memory and local caches
+      const currentSlug = siteSlug || resData.slug || siteSlugParam;
+      if (currentSlug) {
+        const cached = siteSlugMemoryCache.get(currentSlug);
+        if (cached) {
+          cached.is_online = resData.is_online;
+          siteSlugMemoryCache.set(currentSlug, cached);
+          try {
+            localStorage.setItem(`wc_site_snapshot_${currentSlug}`, JSON.stringify(cached));
+          } catch (_) {}
+        }
+      }
+      if (currentSiteId) {
+        const cached = siteSlugMemoryCache.get(currentSiteId);
+        if (cached) {
+          cached.is_online = resData.is_online;
+          siteSlugMemoryCache.set(currentSiteId, cached);
+          try {
+            localStorage.setItem(`wc_site_snapshot_${currentSiteId}`, JSON.stringify(cached));
+          } catch (_) {}
+        }
+      }
+    } catch (err: any) {
+      setIsOnline(oldOnline); // Revert optimistic update
+      alert(err.message || "Failed to update store availability.");
+    } finally {
+      setStatusLoading(false);
     }
   };
 
@@ -1678,13 +1744,16 @@ function BuilderPageContent() {
       ? (siteSlugMemoryCache.get(targetKey) || getInitialCachedSite(targetKey))
       : null;
 
-    if (cachedTarget && (cachedTarget.id === siteId || cachedTarget.slug === siteSlugParam)) {
+      if (cachedTarget && (cachedTarget.id === siteId || cachedTarget.slug === siteSlugParam)) {
       const def = isStoreRoute
         ? (cachedTarget.site_definition || cachedTarget.draft_definition)
         : (cachedTarget.draft_definition || cachedTarget.site_definition);
       setSiteDefinition(def || null);
       setDraftSiteDefinition(def || null);
       setPublishedSiteDefinition(cachedTarget.site_definition || null);
+      if (cachedTarget.is_online !== undefined) {
+        setIsOnline(cachedTarget.is_online);
+      }
       setResolvedSiteId(cachedTarget.id || siteId || "");
       setSiteSlug(cachedTarget.slug || siteSlugParam || "");
       setSiteName(def?.site?.brand_name || cachedTarget.slug || "");
@@ -1786,6 +1855,7 @@ function BuilderPageContent() {
 
         setResolvedSiteId(data.id || "");
         setSiteSlug(data.slug || "");
+        setIsOnline(data.is_online !== undefined ? data.is_online : true);
 
         if (!parsedSiteDefinition) {
           setSiteDefinition(null);
@@ -2350,47 +2420,57 @@ function BuilderPageContent() {
     );
   }
 
+  if (isStoreRoute && !isOnline && !isPreviewMode) {
+    const sDef = publishedSiteDefinition || siteDefinition || activeSiteDefinition;
+    const storeBrand =
+      (sDef as any)?.site?.brand_name ||
+      (sDef as any)?.site_name ||
+      (sDef as any)?.site_title ||
+      siteName ||
+      siteSlug ||
+      "Store";
+    const storeTheme =
+      (sDef as any)?.theme ||
+      (sDef as any)?.site?.theme ||
+      (sDef as any)?.site_definition?.theme ||
+      (sDef as any)?.draft_definition?.theme ||
+      {};
+    const storeLogoUrl =
+      (sDef as any)?.logo ||
+      (sDef as any)?.header?.logo ||
+      (sDef as any)?.navbar?.logoUrl ||
+      (sDef as any)?.theme?.logo;
+    const resolvedSupportEmail =
+      (sDef as any)?.support_email ||
+      (sDef as any)?.contact_email ||
+      (sDef as any)?.email;
+    const resolvedSupportPhone =
+      (sDef as any)?.support_phone ||
+      (sDef as any)?.contact_phone ||
+      (sDef as any)?.phone;
+
+    return (
+      <StoreMaintenancePage
+        slug={siteSlug || siteSlugParam || ""}
+        storeName={storeBrand}
+        logoUrl={storeLogoUrl}
+        supportEmail={resolvedSupportEmail}
+        supportPhone={resolvedSupportPhone}
+        theme={storeTheme}
+      />
+    );
+  }
+
   if (!isStoreRoute && !adminAuthenticated && adminAuthChecked) {
     return null;
   }
 
   if (isStoreRoute && !activeSiteDefinition && !loading) {
     return (
-      <div
-        style={{
-          minHeight: "100vh",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#ffffff",
-          color: "#0f172a",
-          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-          padding: "24px",
-          textAlign: "center",
-        }}
-      >
-        <div
-          style={{
-            width: "56px",
-            height: "56px",
-            borderRadius: "16px",
-            background: "rgba(239, 68, 68, 0.08)",
-            border: "1px solid rgba(239, 68, 68, 0.2)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: "24px",
-            marginBottom: "16px",
-          }}
-        >
-          🏪
-        </div>
-        <h2 style={{ fontSize: "20px", fontWeight: 700, margin: "0 0 8px" }}>Store Not Found</h2>
-        <p style={{ fontSize: "14px", color: "#64748b", margin: "0 0 20px", maxWidth: "380px" }}>
-          We couldn't locate this storefront. Please check the link or return to the main dashboard.
-        </p>
-      </div>
+      <StoreClosedPage
+        slug={siteSlug || siteSlugParam || ""}
+        storeName={siteName || siteSlug || siteSlugParam || ""}
+      />
     );
   }
 
@@ -2652,6 +2732,15 @@ function BuilderPageContent() {
         onSiteDefinitionChange={(next) =>
           handleSiteDefinitionChange(next as SiteDefinition)
         }
+        isOnline={isOnline}
+        isPublished={Boolean(
+          publishedSiteDefinition?.blocks?.length ||
+          siteDefinition?.blocks?.length ||
+          activeSiteDefinition?.blocks?.length ||
+          (activeSiteDefinition as any)?.pages?.length
+        )}
+        onToggleStoreStatus={handleToggleStoreStatus}
+        statusLoading={statusLoading}
       />
     ) : null;
 

@@ -3,6 +3,14 @@ import { Link, useParams, useLocation } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { resolveThemeTokens } from "../context/ThemeContext";
 import { MarkdownContent, MarkdownThemeProps } from "../utils/markdownRenderer";
+import {
+  DiwaliGraphics,
+  HoliGraphics,
+  DurgaGraphics,
+  RakhiGraphics,
+  ChristmasGraphics,
+  EidGraphics,
+} from "./FestiveGraphics";
 
 export type StorefrontCustomPageProps = {
   pageSlug?: string;
@@ -197,6 +205,42 @@ const StorefrontCustomPage: React.FC<StorefrontCustomPageProps> = ({
     >
       {/* Top Anchor for Back-to-Top scrolling */}
       <div ref={pageTopRef} tabIndex={-1} style={{ position: "relative", top: 0, left: 0, height: 0, width: 0, overflow: "hidden" }} />
+
+      {Boolean(siteDefinition?.theme?.festival_theme && siteDefinition.theme.festival_theme !== "none") && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "relative",
+            width: "100%",
+            height: 0,
+            margin: 0,
+            padding: 0,
+            pointerEvents: "none",
+            zIndex: 25,
+            overflow: "visible",
+            opacity: 0.6,
+          }}
+        >
+          {siteDefinition?.theme?.festival_theme === "diwali" && (
+            <DiwaliGraphics variant="divider" isDark={theme.isDark} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "54px" }} />
+          )}
+          {siteDefinition?.theme?.festival_theme === "holi" && (
+            <HoliGraphics variant="divider" isDark={theme.isDark} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "54px" }} />
+          )}
+          {siteDefinition?.theme?.festival_theme === "durga_puja" && (
+            <DurgaGraphics variant="divider" isDark={theme.isDark} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "54px" }} />
+          )}
+          {siteDefinition?.theme?.festival_theme === "rakhi" && (
+            <RakhiGraphics variant="divider" isDark={theme.isDark} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "54px" }} />
+          )}
+          {siteDefinition?.theme?.festival_theme === "christmas" && (
+            <ChristmasGraphics variant="divider" isDark={theme.isDark} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "54px" }} />
+          )}
+          {siteDefinition?.theme?.festival_theme === "eid" && (
+            <EidGraphics variant="divider" isDark={theme.isDark} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "54px" }} />
+          )}
+        </div>
+      )}
 
       <div
         style={{

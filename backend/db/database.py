@@ -39,6 +39,8 @@ def create_db_and_tables():
         with engine.connect() as conn:
 
             conn.execute(text("""
+                ALTER TABLE sites ADD COLUMN IF NOT EXISTS is_online BOOLEAN NOT NULL DEFAULT TRUE;
+                CREATE INDEX IF NOT EXISTS ix_sites_is_online ON sites(is_online);
                 ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_status VARCHAR(30) DEFAULT 'pending';
                 ALTER TABLE admins ADD COLUMN IF NOT EXISTS role_id UUID;
                 ALTER TABLE admins ADD COLUMN IF NOT EXISTS additional_permissions JSONB;

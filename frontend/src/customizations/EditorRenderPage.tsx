@@ -7,6 +7,14 @@ import { API_BASE_URL } from "../config/api";
 import { ThemeProvider, resolveThemeTokens } from "../context/ThemeContext";
 import { normalizeStorefrontProduct } from "../utils/productNormalizer";
 import FestiveBackgroundOverlay from "../Component/FestiveBackgroundOverlay";
+import {
+  DiwaliGraphics,
+  HoliGraphics,
+  DurgaGraphics,
+  RakhiGraphics,
+  ChristmasGraphics,
+  EidGraphics,
+} from "../Component/FestiveGraphics";
 import { getCheckoutAddresses, SavedAddress } from "../addressService";
 import { useCustomerAuth } from "../context/CustomerAuthContext";
 import { useDeviceMode } from "../context/DeviceModeContext";
@@ -424,7 +432,7 @@ function EditorBlockWrapper({
         maxWidth: "100%",
         margin: "0",
         padding: 0,
-        zIndex: selected ? 50 : 1,
+        zIndex: selected ? 5 : 1,
         overflow: "visible",
         boxSizing: "border-box",
         borderRadius: isCart ? 0 : `${containerRadius}px`,
@@ -767,6 +775,82 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
       params.get("product_ids")
     );
   }, [searchQuery, sectionTitleParam, currentSectionIdParam, location.search]);
+
+  const isHomePage = useMemo(() => {
+    if (isDedicatedSectionOrSearchView) return false;
+    if (isCartPage) return false;
+    if (isProductDetailPageContext) return false;
+    if (isCheckoutPage) return false;
+
+    // Check URL Path for non-home routes
+    const path = typeof window !== "undefined" ? (location?.pathname || window.location.pathname) : "";
+    if (
+      path.endsWith("/profile") || path.includes("/profile") ||
+      path.endsWith("/account") || path.includes("/account") ||
+      path.endsWith("/orders") || path.includes("/orders") ||
+      path.endsWith("/support") || path.includes("/support") ||
+      path.endsWith("/help") || path.includes("/help") ||
+      path.endsWith("/cart") || path.includes("/cart") ||
+      path.endsWith("/login") || path.includes("/login") ||
+      path.endsWith("/signup") || path.includes("/signup")
+    ) {
+      return false;
+    }
+
+    // Check selected block in admin customizer
+    if (selectedBlockId) {
+      const s = String(selectedBlockId).toLowerCase();
+      if (
+        s.includes("profile") ||
+        s.includes("order") ||
+        s.includes("support") ||
+        s.includes("help") ||
+        s.includes("cart") ||
+        s.includes("detail") ||
+        s.includes("login") ||
+        s.includes("signup")
+      ) {
+        return false;
+      }
+    }
+
+    // Check page blocks in active definition
+    const blocks = Array.isArray(resolvedBlocks) ? resolvedBlocks : [];
+    const hasHero = blocks.some((b) => {
+      const t = String(b.type || "").toLowerCase();
+      return t.includes("hero") || t.includes("banner");
+    });
+    const hasSpecialPageBlock = blocks.some((b) => {
+      const t = String(b.type || "").toLowerCase();
+      return (
+        t.includes("profile") ||
+        t.includes("order") ||
+        t.includes("support") ||
+        t.includes("help") ||
+        t.includes("cart") ||
+        t.includes("login") ||
+        t.includes("signup")
+      );
+    });
+    if (hasSpecialPageBlock && !hasHero) {
+      return false;
+    }
+
+    if (page?.role && page.role !== "home" && page.role !== "landing") return false;
+    if (page?.page_type && page.page_type !== "landing" && page.page_type !== "home") return false;
+    if (page?.slug && page.slug !== "home" && page.slug !== "index" && page.slug !== "") return false;
+    if (page?.route && page.route !== "/" && page.route !== "/home") return false;
+    return true;
+  }, [
+    isDedicatedSectionOrSearchView,
+    isCartPage,
+    isProductDetailPageContext,
+    isCheckoutPage,
+    page,
+    selectedBlockId,
+    location.pathname,
+    resolvedBlocks,
+  ]);
 
   const sectionBaseProducts = useMemo(() => {
     if (!activeSectionBlock) return products;
@@ -1415,7 +1499,7 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
             display: isCartPage ? "flex" : undefined,
             flexDirection: isCartPage ? "column" : undefined,
             justifyContent: isCartPage ? "flex-start" : undefined,
-            paddingTop: isCartPage ? "8px" : undefined,
+            paddingTop: 0,
             boxSizing: "border-box",
             background: isFullGlass ? glassBackground : (theme?.primary_bg || (isThemeDark ? "#0f172a" : "#ffffff")),
             color: theme?.text_color || (isThemeDark ? "#f8fafc" : "#0f172a"),
@@ -1430,7 +1514,53 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
             />
           )}
 
-          {blocksToRender.map((block, index) => renderBlock(block, index))}
+          {blocksToRender.map((block, index) => {
+            const renderedBlock = renderBlock(block, index);
+            const isFirstContentBlock =
+              (index === 1 && blocksToRender[0]?.type === "navbar") ||
+              (index === 0 && block.type !== "navbar");
+
+            return (
+              <React.Fragment key={block.id || `${block.type}-${index}`}>
+                {isFirstContentBlock && !isHomePage && Boolean(theme?.festival_theme && theme.festival_theme !== "none") && (
+                  <div
+                    aria-hidden="true"
+                    style={{
+                      position: "relative",
+                      width: "100%",
+                      height: 0,
+                      margin: 0,
+                      padding: 0,
+                      pointerEvents: "none",
+                      zIndex: 25,
+                      overflow: "visible",
+                      opacity: 0.6,
+                    }}
+                  >
+                    {theme?.festival_theme === "diwali" && (
+                      <DiwaliGraphics variant="divider" isDark={isThemeDark} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "54px" }} />
+                    )}
+                    {theme?.festival_theme === "holi" && (
+                      <HoliGraphics variant="divider" isDark={isThemeDark} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "54px" }} />
+                    )}
+                    {theme?.festival_theme === "durga_puja" && (
+                      <DurgaGraphics variant="divider" isDark={isThemeDark} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "54px" }} />
+                    )}
+                    {theme?.festival_theme === "rakhi" && (
+                      <RakhiGraphics variant="divider" isDark={isThemeDark} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "54px" }} />
+                    )}
+                    {theme?.festival_theme === "christmas" && (
+                      <ChristmasGraphics variant="divider" isDark={isThemeDark} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "54px" }} />
+                    )}
+                    {theme?.festival_theme === "eid" && (
+                      <EidGraphics variant="divider" isDark={isThemeDark} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "54px" }} />
+                    )}
+                  </div>
+                )}
+                {renderedBlock}
+              </React.Fragment>
+            );
+          })}
           <FilterModal
             open={filterModalOpen}
             onClose={() => setFilterModalOpen(false)}
@@ -1808,6 +1938,41 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
           background: pageBg,
         }}
       >
+        {Boolean(theme?.festival_theme && theme.festival_theme !== "none") && (
+          <div
+            aria-hidden="true"
+            style={{
+              position: "relative",
+              width: "100%",
+              height: 0,
+              margin: 0,
+              padding: 0,
+              pointerEvents: "none",
+              zIndex: 25,
+              overflow: "visible",
+              opacity: 0.6,
+            }}
+          >
+            {theme?.festival_theme === "diwali" && (
+              <DiwaliGraphics variant="divider" isDark={isDark} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "54px" }} />
+            )}
+            {theme?.festival_theme === "holi" && (
+              <HoliGraphics variant="divider" isDark={isDark} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "54px" }} />
+            )}
+            {theme?.festival_theme === "durga_puja" && (
+              <DurgaGraphics variant="divider" isDark={isDark} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "54px" }} />
+            )}
+            {theme?.festival_theme === "rakhi" && (
+              <RakhiGraphics variant="divider" isDark={isDark} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "54px" }} />
+            )}
+            {theme?.festival_theme === "christmas" && (
+              <ChristmasGraphics variant="divider" isDark={isDark} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "54px" }} />
+            )}
+            {theme?.festival_theme === "eid" && (
+              <EidGraphics variant="divider" isDark={isDark} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "54px" }} />
+            )}
+          </div>
+        )}
         <div
           style={{
             maxWidth: checkoutOuterMaxWidth,

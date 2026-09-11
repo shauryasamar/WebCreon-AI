@@ -168,6 +168,13 @@ PERMISSION_CATALOG = [
                     {"id": "payout_settings:edit", "name": "Edit", "description": "Change bank details and payout preferences", "sensitive": True},
                 ],
             },
+            {
+                "module": "Store Status",
+                "key": "store_status",
+                "permissions": [
+                    {"id": "store_status:edit", "name": "Live / Offline Mode", "description": "Switch storefront availability between Live and Offline maintenance mode", "sensitive": True},
+                ],
+            },
         ],
     },
     {
@@ -260,6 +267,7 @@ DEFAULT_SYSTEM_ROLES = [
             "delivery:view", "delivery:edit",
             "checkout_charges:view", "checkout_charges:edit",
             "earnings:view",
+            "store_status:edit",
             "profile:view", "profile:edit",
         ],
     },

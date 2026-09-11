@@ -127,6 +127,7 @@ type SavedSite = {
   draft_definition: SiteDefinition | null;
   version: number;
   default_return_window_days?: number;
+  is_online?: boolean;
   created_at: string;
   updated_at: string;
 };

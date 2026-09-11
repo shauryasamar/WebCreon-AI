@@ -151,6 +151,15 @@ async def _domain_edge_sync_cron_task():
 async def lifespan(app: FastAPI):
     create_db_and_tables()
     try:
+        with engine.connect() as conn:
+            from sqlalchemy import text
+            conn.execute(text("ALTER TABLE sites ADD COLUMN IF NOT EXISTS is_online BOOLEAN NOT NULL DEFAULT TRUE;"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sites_is_online ON sites(is_online);"))
+            conn.commit()
+    except Exception as ddl_err:
+        logger.warning("Could not execute sites is_online DDL: %s", ddl_err)
+
+    try:
         with Session(engine) as session:
             users_roles.ensure_default_roles_and_users(session)
             adms = session.exec(select(Admin.id, Admin.email, Admin.name, Admin.role, Admin.invited_by_admin_id, Admin.status)).all()
@@ -558,6 +567,10 @@ class ReplyConversationRequest(BaseModel):
 
 class PublishSiteRequest(BaseModel):
     draft_definition: Dict[str, Any]
+
+
+class UpdateSiteStatusRequest(BaseModel):
+    is_online: bool
 
 
 @app.post("/conversation/start")
@@ -1035,6 +1048,82 @@ def publish_site(
     return site
 
 
+@app.patch("/sites/{site_id}/status")
+def update_site_status(
+    site_id: UUID,
+    payload: UpdateSiteStatusRequest,
+    request: Request = None,
+    ownership=Depends(enforce_site_ownership),
+    session: Session = Depends(get_session),
+):
+    if not check_admin_has_permission(ownership["adminId"], "store_status:edit", session):
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to change store availability.",
+        )
+
+    site = session.get(Site, site_id)
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    if not site.is_published:
+        raise HTTPException(
+            status_code=400,
+            detail="Store must be published before availability status can be toggled.",
+        )
+
+    old_status = site.is_online
+    site.is_online = payload.is_online
+    site.version = site.version + 1
+
+    session.add(site)
+    session.commit()
+    session.refresh(site)
+
+    # Invalidate public caches immediately
+    invalidate_public_site_cache(site.slug, site.id)
+    try:
+        from routers.products import catalog_cache
+        catalog_cache.invalidate_site(site.id)
+    except Exception:
+        pass
+
+    # Audit logging
+    try:
+        status_text = "Live" if site.is_online else "Offline (Maintenance)"
+        audit_logs.log_activity(
+            session=session,
+            user_id=UUID(ownership["adminId"]),
+            action="store.status_changed",
+            category="website",
+            site_id=site.id,
+            resource_type="store",
+            resource_id=str(site.id),
+            resource_name=site.name or site.slug,
+            summary=f"Switched store '{site.name or site.slug}' to {status_text}",
+            details={
+                "slug": site.slug,
+                "is_online": site.is_online,
+                "previous_state": {"is_online": old_status},
+                "new_state": {"is_online": site.is_online},
+                "version": site.version,
+            },
+            request=request,
+            user_email=ownership.get("email"),
+            user_name=ownership.get("name") or ownership.get("email"),
+        )
+    except Exception as log_err:
+        logger.warning(f"Failed to record store status audit log: {log_err}")
+
+    return {
+        "id": str(site.id),
+        "slug": site.slug,
+        "is_online": site.is_online,
+        "version": site.version,
+        "message": f"Store is now {'Live' if site.is_online else 'Offline'}.",
+    }
+
+
 @app.patch("/sites/{site_identifier}/draft")
 def save_site_draft(
     site_identifier: str,
@@ -1231,30 +1320,51 @@ def get_public_site_theme_fast(
     try:
         uuid_val = UUID(slug)
         site = session.exec(
-            select(Site.id, Site.slug, Site.site_definition).where((Site.slug == slug) | (Site.id == uuid_val))
+            select(Site.id, Site.slug, Site.site_definition, Site.draft_definition, Site.is_online).where((Site.slug == slug) | (Site.id == uuid_val))
         ).first()
     except Exception:
         site = session.exec(
-            select(Site.id, Site.slug, Site.site_definition).where(Site.slug == slug)
+            select(Site.id, Site.slug, Site.site_definition, Site.draft_definition, Site.is_online).where(Site.slug == slug)
         ).first()
 
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
 
-    site_id, site_slug, site_def = site
+    site_id, site_slug, site_def, draft_def, is_online = site
     site_def = site_def or {}
-    etag_val = f'"{site_id}-{site_def.get("theme", {}).get("footer_layout", "default")}"'
+    draft_def = draft_def or {}
+    effective_def = site_def if bool(site_def.get("theme")) else (draft_def if bool(draft_def.get("theme")) else site_def)
+    site_theme = effective_def.get("theme") or site_def.get("theme") or draft_def.get("theme") or {}
+    brand_name = (
+        site_def.get("site_name")
+        or site_def.get("site_title")
+        or site_def.get("title")
+        or site_def.get("name")
+        or (site_def.get("site", {}) or {}).get("brand_name")
+        or (draft_def.get("site", {}) or {}).get("brand_name")
+        or ""
+    )
+    logo_val = (
+        site_def.get("logo")
+        or site_def.get("header", {}).get("logo")
+        or site_def.get("theme", {}).get("logo")
+        or draft_def.get("logo")
+        or draft_def.get("header", {}).get("logo")
+        or draft_def.get("theme", {}).get("logo")
+    )
+    etag_val = f'"{site_id}-{site_theme.get("footer_layout", "default")}-{is_online}"'
 
     theme_payload = {
         "id": str(site_id),
         "slug": site_slug,
-        "site_name": site_def.get("site_name") or site_def.get("site_title") or site_def.get("title") or site_def.get("name") or "",
-        "logo": site_def.get("logo") or site_def.get("header", {}).get("logo") or site_def.get("theme", {}).get("logo"),
-        "theme": site_def.get("theme") or {},
-        "crm_enabled": bool(site_def.get("crm_enabled", True)),
+        "is_online": is_online if is_online is not None else True,
+        "site_name": brand_name,
+        "logo": logo_val,
+        "theme": site_theme,
+        "crm_enabled": bool(site_def.get("crm_enabled", draft_def.get("crm_enabled", True))),
         "navbar": {
-            "brandName": site_def.get("navbar", {}).get("brandName") or site_def.get("header", {}).get("brandName") or site_def.get("site_name") or "",
-            "logoUrl": site_def.get("logo") or site_def.get("header", {}).get("logo") or site_def.get("theme", {}).get("logo"),
+            "brandName": site_def.get("navbar", {}).get("brandName") or site_def.get("header", {}).get("brandName") or brand_name,
+            "logoUrl": logo_val,
         },
     }
 

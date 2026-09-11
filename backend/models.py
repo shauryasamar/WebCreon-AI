@@ -98,6 +98,10 @@ class Site(SQLModel, table=True):
         default=7,
         sa_column=Column(Integer, nullable=False, default=7),
     )
+    is_online: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, default=True, index=True),
+    )
     version: int = Field(default=1, nullable=False)
     @property
     def name(self) -> str:

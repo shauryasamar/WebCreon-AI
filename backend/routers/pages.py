@@ -587,6 +587,9 @@ def get_public_store_page(
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
 
+    if not getattr(site, "is_online", True):
+        raise HTTPException(status_code=503, detail="Store is currently offline for maintenance.")
+
     # Clean slug
     clean_target_slug = slug.strip().lower()
     # Normalize aliases e.g. about-us -> about, contact-us -> contact

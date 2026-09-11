@@ -2,8 +2,64 @@ import React from "react";
 
 export interface FestiveGraphicProps extends React.SVGProps<SVGSVGElement> {
   isDark?: boolean;
-  variant?: "hero" | "navbar" | "footer" | "grid";
+  variant?: "hero" | "navbar" | "footer" | "grid" | "divider" | "hanging";
 }
+
+/**
+ * Hook to dynamically measure the real DOM width of the festive garland container.
+ * This ensures swags are calculated to fit the exact pixel width with ZERO clipping,
+ * zero cut-in-half ornaments, and true 1:1 circular geometry on every phone and screen.
+ */
+const useResponsiveSvgWidth = () => {
+  const [width, setWidth] = React.useState<number>(() => {
+    if (typeof window !== "undefined" && window.innerWidth) {
+      return window.innerWidth;
+    }
+    return 1200;
+  });
+  const svgRef = React.useRef<SVGSVGElement | null>(null);
+
+  React.useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+
+    const measure = () => {
+      const parent = el.parentElement;
+      const w = parent ? parent.getBoundingClientRect().width : el.getBoundingClientRect().width;
+      if (w > 20) {
+        setWidth(Math.round(w));
+      }
+    };
+
+    measure();
+
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const crWidth = entry.contentRect.width;
+          if (crWidth > 20) {
+            setWidth(Math.round(crWidth));
+          }
+        }
+      });
+      if (el.parentElement) {
+        ro.observe(el.parentElement);
+      }
+      ro.observe(el);
+    }
+
+    const onResize = () => measure();
+    window.addEventListener("resize", onResize, { passive: true });
+
+    return () => {
+      if (ro) ro.disconnect();
+      window.removeEventListener("resize", onResize);
+    };
+  }, []);
+
+  return { width, svgRef };
+};
 
 // ======================================================================
 // 🎨 1. HOLI FESTIVAL GRAPHICS (World-Class Vector Suite)
@@ -349,30 +405,108 @@ export const HoliNavbarCluster: React.FC<FestiveGraphicProps> = ({ isDark = fals
 };
 
 export const HoliDividerWave: React.FC<FestiveGraphicProps> = ({ isDark = false, style, ...props }) => {
-  const id = React.useId();
-  return (
-    <svg viewBox="0 0 1200 30" preserveAspectRatio="none" style={style} {...props}>
-      <defs>
-        <linearGradient id={`h-wave-grad1-${id}`} x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#ec4899" stopOpacity="0.85" />
-          <stop offset="25%" stopColor="#a855f7" stopOpacity="0.75" />
-          <stop offset="50%" stopColor="#06b6d4" stopOpacity="0.8" />
-          <stop offset="75%" stopColor="#eab308" stopOpacity="0.75" />
-          <stop offset="100%" stopColor="#ec4899" stopOpacity="0.85" />
-        </linearGradient>
-      </defs>
+  const { width, svgRef } = useResponsiveSvgWidth();
+  const numSwags = Math.max(2, Math.round(width / 115));
+  const swagW = width / numSwags;
 
+  let ropePath = "M 0 1";
+  const swags = [];
+  for (let i = 0; i < numSwags; i++) {
+    const x0 = i * swagW;
+    const x1 = (i + 1) * swagW;
+    const midX = x0 + swagW / 2;
+    ropePath += ` Q ${midX} 13 ${x1} 1`;
+    swags.push({ i, x0, x1, midX });
+  }
+
+  return (
+    <svg
+      ref={svgRef}
+      viewBox={`0 0 ${width} 54`}
+      preserveAspectRatio="none"
+      width="100%"
+      height="54"
+      style={{ width: "100%", height: "54px", display: "block", overflow: "visible", ...style }}
+      {...props}
+    >
       <path
-        d="M 0 15 Q 150 25 300 15 Q 450 5 600 15 Q 750 25 900 15 Q 1050 5 1200 15"
+        d={ropePath}
         fill="none"
-        stroke={`url(#h-wave-grad1-${id})`}
-        strokeWidth="3.5"
+        stroke={isDark ? "#cbd5e1" : "#b45309"}
+        strokeWidth="1.4"
         strokeLinecap="round"
+        opacity={isDark ? 0.7 : 0.6}
       />
-      <circle cx="150" cy="20" r="3.5" fill="#ec4899" opacity="0.8" />
-      <circle cx="450" cy="10" r="4" fill="#06b6d4" opacity="0.8" />
-      <circle cx="750" cy="20" r="3.5" fill="#facc15" opacity="0.8" />
-      <circle cx="1050" cy="10" r="4" fill="#ec4899" opacity="0.8" />
+      <path
+        d={ropePath}
+        fill="none"
+        stroke="#db2777"
+        strokeWidth="1.0"
+        strokeDasharray="4, 4"
+        opacity={isDark ? 0.7 : 0.6}
+      />
+
+      {/* End terminal knots */}
+      <circle cx="0" cy="1" r="2.2" fill="#d97706" opacity={0.8} />
+      <circle cx={width} cy="1" r="2.2" fill="#d97706" opacity={0.8} />
+
+      {/* Inter-swag knot beads */}
+      {swags.slice(0, -1).map(({ x1, i }) => (
+        <g key={`h-knot-${i}`} transform={`translate(${x1}, 1)`} opacity={isDark ? 0.85 : 0.76}>
+          <circle cx="0" cy="0" r="1.8" fill="#d97706" />
+          <circle cx="0" cy="3" r="1.2" fill="#facc15" />
+        </g>
+      ))}
+
+      {/* Hanging Gulal Pom-Poms & Tassels at each swag center */}
+      {swags.map(({ midX, i }) => {
+        const mod = i % 4;
+        if (mod === 0) {
+          return (
+            <g key={`h-orn-${i}`} transform={`translate(${midX}, 13)`} opacity={isDark ? 0.88 : 0.78}>
+              <line x1="0" y1="0" x2="0" y2="18" stroke="#db2777" strokeWidth="0.9" opacity={0.65} />
+              <circle cx="0" cy="2.5" r="1.3" fill="#facc15" />
+              <g transform="translate(0, 18)">
+                <circle cx="0" cy="0" r="2.6" fill="#db2777" />
+                <path d="M -2.6 0 L -3.8 8 L 3.8 8 L 2.6 0 Z" fill="#db2777" opacity={0.88} />
+              </g>
+            </g>
+          );
+        } else if (mod === 1) {
+          return (
+            <g key={`h-orn-${i}`} transform={`translate(${midX}, 13)`} opacity={isDark ? 0.88 : 0.78}>
+              <line x1="0" y1="0" x2="0" y2="15" stroke="#0284c7" strokeWidth="0.9" opacity={0.65} />
+              <circle cx="0" cy="2.5" r="1.3" fill="#facc15" />
+              <g transform="translate(0, 15)">
+                <circle cx="0" cy="0" r="3.2" fill="#0284c7" />
+                <circle cx="-0.7" cy="-0.9" r="0.9" fill="#ffffff" opacity={0.65} />
+              </g>
+            </g>
+          );
+        } else if (mod === 2) {
+          return (
+            <g key={`h-orn-${i}`} transform={`translate(${midX}, 13)`} opacity={isDark ? 0.88 : 0.78}>
+              <line x1="0" y1="0" x2="0" y2="20" stroke="#d97706" strokeWidth="0.9" opacity={0.65} />
+              <circle cx="0" cy="2.5" r="1.3" fill="#facc15" />
+              <g transform="translate(0, 20)">
+                <circle cx="0" cy="0" r="2.6" fill="#d97706" />
+                <path d="M -2.6 0 L -3.8 8 L 3.8 8 L 2.6 0 Z" fill="#d97706" opacity={0.88} />
+              </g>
+            </g>
+          );
+        } else {
+          return (
+            <g key={`h-orn-${i}`} transform={`translate(${midX}, 13)`} opacity={isDark ? 0.88 : 0.78}>
+              <line x1="0" y1="0" x2="0" y2="16" stroke="#9333ea" strokeWidth="0.9" opacity={0.65} />
+              <circle cx="0" cy="2.5" r="1.3" fill="#facc15" />
+              <g transform="translate(0, 16)">
+                <circle cx="0" cy="0" r="3.2" fill="#9333ea" />
+                <circle cx="-0.7" cy="-0.9" r="0.9" fill="#ffffff" opacity={0.65} />
+              </g>
+            </g>
+          );
+        }
+      })}
     </svg>
   );
 };
@@ -382,114 +516,36 @@ export const HoliFooterScene: React.FC<FestiveGraphicProps> = ({ isDark = false,
   return (
     <svg viewBox="0 0 1440 280" preserveAspectRatio="xMidYMid slice" style={style} {...props}>
       <defs>
-        <radialGradient id={`h-foot-glow-l-${id}`} cx="10%" cy="50%" r="60%">
-          <stop offset="0%" stopColor="#ec4899" stopOpacity={isDark ? 0.35 : 0.18} />
-          <stop offset="60%" stopColor="#8b5cf6" stopOpacity={isDark ? 0.15 : 0.08} />
-          <stop offset="100%" stopColor="#ec4899" stopOpacity="0" />
-        </radialGradient>
-        <radialGradient id={`h-foot-glow-r-${id}`} cx="90%" cy="50%" r="60%">
-          <stop offset="0%" stopColor="#06b6d4" stopOpacity={isDark ? 0.35 : 0.18} />
-          <stop offset="60%" stopColor="#facc15" stopOpacity={isDark ? 0.2 : 0.08} />
-          <stop offset="100%" stopColor="#06b6d4" stopOpacity="0" />
-        </radialGradient>
         <filter id={`h-foot-blur-${id}`} x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="4" />
+          <feGaussianBlur stdDeviation="3" />
         </filter>
       </defs>
 
-      {/* Ambient Color Washes */}
-      <rect x="0" y="0" width="1440" height="280" fill={`url(#h-foot-glow-l-${id})`} />
-      <rect x="0" y="0" width="1440" height="280" fill={`url(#h-foot-glow-r-${id})`} />
-
-      {/* ── LEFT CORNER: Dynamic Gulal Powder Explosions & Paint Splatters ── */}
-      <g transform="translate(10, 30)">
-        {/* Soft Powder Puff */}
-        <circle cx="90" cy="120" r="75" fill="#f43f5e" opacity={isDark ? 0.22 : 0.15} filter={`url(#h-foot-blur-${id})`} />
-        <circle cx="160" cy="90" r="55" fill="#a855f7" opacity={isDark ? 0.22 : 0.15} filter={`url(#h-foot-blur-${id})`} />
-        <circle cx="130" cy="170" r="60" fill="#facc15" opacity={isDark ? 0.22 : 0.15} filter={`url(#h-foot-blur-${id})`} />
-
-        {/* Dynamic Vector Splash Streaks */}
-        <path d="M 0 180 C 40 160 80 130 140 150 C 180 165 210 120 230 80 C 200 110 150 125 110 115 C 60 100 20 140 0 180 Z" fill="#ec4899" opacity="0.8" />
-        <path d="M 20 220 C 60 200 110 210 160 180 C 200 150 240 180 270 140 C 230 160 180 140 130 160 C 80 180 40 190 20 220 Z" fill="#8b5cf6" opacity="0.75" />
-        <path d="M 0 100 Q 60 70 110 90 Q 160 110 190 60 Q 130 75 90 60 Q 40 40 0 100 Z" fill="#facc15" opacity="0.85" />
-        <path d="M 60 250 C 90 210 130 200 170 230 C 200 250 230 210 250 190 C 210 210 170 180 120 200 C 80 220 50 230 60 250 Z" fill="#06b6d4" opacity="0.75" />
-
-        {/* Splatter Droplets */}
-        <circle cx="250" cy="70" r="7" fill="#ec4899" opacity="0.85" />
-        <circle cx="280" cy="110" r="5" fill="#facc15" opacity="0.9" />
-        <circle cx="295" cy="150" r="6" fill="#8b5cf6" opacity="0.85" />
-        <circle cx="265" cy="210" r="8" fill="#06b6d4" opacity="0.85" />
-        <circle cx="180" cy="30" r="4.5" fill="#ec4899" opacity="0.8" />
-        <circle cx="210" cy="45" r="3.5" fill="#facc15" opacity="0.85" />
-        <circle cx="140" cy="20" r="5" fill="#10b981" opacity="0.8" />
-
-        {/* Mini Gulal Bowl (Terracotta) */}
-        <ellipse cx="60" cy="235" rx="35" ry="12" fill="#9a3412" opacity="0.9" />
-        <ellipse cx="60" cy="230" rx="32" ry="9" fill="#ea580c" />
-        <path d="M 32 230 Q 60 195 88 230 Z" fill="#ec4899" />
-        <path d="M 40 228 Q 60 205 80 228 Z" fill="#f43f5e" />
+      {/* ── TOP BORDER: Delicate Holi Color Ribbon Wave ── */}
+      <g opacity={isDark ? 0.45 : 0.35} fill="none" strokeWidth="2">
+        <path d="M 0 14 Q 180 34 360 14 Q 540 -6 720 14 Q 900 34 1080 14 Q 1260 -6 1440 14" stroke="#ec4899" />
+        <path d="M 0 20 Q 180 -2 360 18 Q 540 38 720 18 Q 900 -2 1080 18 Q 1260 38 1440 18" stroke="#06b6d4" strokeWidth="1.5" />
       </g>
 
-      {/* ── RIGHT CORNER: Pichkari Jet Stream, Splashes & Color Swirls ── */}
-      <g transform="translate(1120, 20)">
-        {/* Soft Powder Puff */}
-        <circle cx="220" cy="110" r="75" fill="#06b6d4" opacity={isDark ? 0.22 : 0.15} filter={`url(#h-foot-blur-${id})`} />
-        <circle cx="140" cy="160" r="65" fill="#facc15" opacity={isDark ? 0.22 : 0.15} filter={`url(#h-foot-blur-${id})`} />
-        <circle cx="180" cy="80" r="55" fill="#10b981" opacity={isDark ? 0.22 : 0.15} filter={`url(#h-foot-blur-${id})`} />
+      {/* Subtle Color Droplets along Top Wave */}
+      {[120, 280, 460, 640, 820, 1000, 1180, 1340].map((cx, idx) => {
+        const cols = ["#ec4899", "#06b6d4", "#facc15", "#8b5cf6", "#10b981"];
+        const col = cols[idx % cols.length];
+        return (
+          <circle key={`h-drop-${idx}`} cx={cx} cy={idx % 2 === 0 ? 28 : 10} r="3" fill={col} opacity={isDark ? 0.6 : 0.45} />
+        );
+      })}
 
-        {/* Dynamic Inward Splash Arcs */}
-        <path d="M 320 160 C 260 140 220 110 160 130 C 110 150 70 100 40 60 C 80 90 130 105 180 95 C 230 80 280 120 320 160 Z" fill="#06b6d4" opacity="0.8" />
-        <path d="M 300 210 C 240 190 190 200 140 170 C 90 140 50 170 20 130 C 60 150 110 130 160 150 C 210 170 260 180 300 210 Z" fill="#facc15" opacity="0.85" />
-        <path d="M 320 80 Q 250 60 200 80 Q 150 100 110 50 Q 170 65 220 50 Q 270 30 320 80 Z" fill="#ec4899" opacity="0.8" />
-        <path d="M 270 240 C 220 200 180 210 130 180 C 100 160 60 200 30 180 C 80 190 120 170 170 190 C 210 210 240 220 270 240 Z" fill="#10b981" opacity="0.75" />
-
-        {/* Splatter Droplets */}
-        <circle cx="50" cy="60" r="7" fill="#06b6d4" opacity="0.85" />
-        <circle cx="20" cy="110" r="5.5" fill="#facc15" opacity="0.9" />
-        <circle cx="10" cy="160" r="6" fill="#ec4899" opacity="0.85" />
-        <circle cx="45" cy="210" r="7.5" fill="#10b981" opacity="0.85" />
-        <circle cx="130" cy="30" r="4.5" fill="#8b5cf6" opacity="0.8" />
-        <circle cx="95" cy="45" r="3.5" fill="#06b6d4" opacity="0.85" />
-
-        {/* Decorative Golden Pichkari Silhouette */}
-        <g transform="translate(240, 210) rotate(-35)">
-          <rect x="-6" y="-70" width="12" height="70" rx="4" fill="#fbbf24" stroke="#b45309" strokeWidth="1" />
-          <rect x="-6" y="-60" width="12" height="14" fill="#ef4444" />
-          <rect x="-6" y="-35" width="12" height="14" fill="#06b6d4" />
-          <circle cx="0" cy="-80" r="7" fill="#f59e0b" />
-          <polygon points="-5,0 5,0 2,14 -2,14" fill="#d97706" />
-        </g>
-      </g>
-
-      {/* ── DRIFTING COLOR PARTICLES & MARIGOLD PETALS ALONG FOOTER ── */}
+      {/* ── DRIFTING COLOR PARTICLES & MARIGOLD PETALS (Light & Sparse) ── */}
       {[
-        { cx: 380, cy: 60, r: 4, fill: "#f43f5e" },
-        { cx: 460, cy: 220, r: 5, fill: "#facc15" },
-        { cx: 540, cy: 80, r: 3.5, fill: "#06b6d4" },
-        { cx: 620, cy: 240, r: 4.5, fill: "#a855f7" },
-        { cx: 720, cy: 50, r: 5, fill: "#f59e0b" },
-        { cx: 810, cy: 230, r: 4, fill: "#ec4899" },
-        { cx: 900, cy: 70, r: 5.5, fill: "#10b981" },
-        { cx: 980, cy: 210, r: 3.5, fill: "#facc15" },
-        { cx: 1060, cy: 80, r: 4.5, fill: "#06b6d4" },
+        { cx: 220, cy: 90, r: 2.5, fill: "#f43f5e" },
+        { cx: 460, cy: 180, r: 2, fill: "#facc15" },
+        { cx: 700, cy: 80, r: 2.5, fill: "#06b6d4" },
+        { cx: 940, cy: 190, r: 2, fill: "#a855f7" },
+        { cx: 1180, cy: 85, r: 2.5, fill: "#10b981" },
+        { cx: 1350, cy: 170, r: 2, fill: "#ec4899" },
       ].map((dot, idx) => (
-        <circle key={idx} cx={dot.cx} cy={dot.cy} r={dot.r} fill={dot.fill} opacity={isDark ? 0.75 : 0.6} />
-      ))}
-
-      {/* Marigold Petals floating */}
-      {[
-        { cx: 420, cy: 150, rot: 25 },
-        { cx: 680, cy: 190, rot: -40 },
-        { cx: 780, cy: 90, rot: 60 },
-        { cx: 1020, cy: 160, rot: -15 },
-      ].map((petal, idx) => (
-        <path
-          key={`pet-${idx}`}
-          d="M 0 -8 C 5 -4 5 4 0 8 C -5 4 -5 -4 0 -8 Z"
-          fill="#f59e0b"
-          opacity={isDark ? 0.7 : 0.55}
-          transform={`translate(${petal.cx}, ${petal.cy}) rotate(${petal.rot}) scale(1.2)`}
-        />
+        <circle key={`h-dot-${idx}`} cx={dot.cx} cy={dot.cy} r={dot.r} fill={dot.fill} opacity={isDark ? 0.45 : 0.3} />
       ))}
     </svg>
   );
@@ -705,22 +761,111 @@ export const DiwaliNavbarCluster: React.FC<FestiveGraphicProps> = ({ isDark = fa
 };
 
 export const DiwaliDividerWave: React.FC<FestiveGraphicProps> = ({ isDark = false, style, ...props }) => {
-  const id = React.useId();
+  const { width, svgRef } = useResponsiveSvgWidth();
+  const numSwags = Math.max(2, Math.round(width / 115));
+  const swagW = width / numSwags;
+
+  let ropePath = "M 0 1";
+  const swags = [];
+  for (let i = 0; i < numSwags; i++) {
+    const x0 = i * swagW;
+    const x1 = (i + 1) * swagW;
+    const midX = x0 + swagW / 2;
+    ropePath += ` Q ${midX} 13 ${x1} 1`;
+    swags.push({ i, x0, x1, midX });
+  }
+
   return (
-    <svg viewBox="0 0 1200 30" preserveAspectRatio="none" style={style} {...props}>
+    <svg
+      ref={svgRef}
+      viewBox={`0 0 ${width} 54`}
+      preserveAspectRatio="none"
+      width="100%"
+      height="54"
+      style={{ width: "100%", height: "54px", display: "block", overflow: "visible", ...style }}
+      {...props}
+    >
+      {/* Rope curves */}
       <path
-        d="M 0 12 Q 150 24 300 12 Q 450 24 600 12 Q 750 24 900 12 Q 1050 24 1200 12"
+        d={ropePath}
+        fill="none"
+        stroke={isDark ? "#facc15" : "#d97706"}
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        opacity={isDark ? 0.75 : 0.65}
+      />
+      <path
+        d={ropePath}
         fill="none"
         stroke="#ea580c"
-        strokeWidth="2.5"
+        strokeWidth="0.9"
+        strokeDasharray="4, 4"
+        opacity={isDark ? 0.75 : 0.65}
       />
-      <path
-        d="M 0 16 Q 150 26 300 16 Q 450 26 600 16 Q 750 26 900 16 Q 1050 26 1200 16"
-        fill="none"
-        stroke="#facc15"
-        strokeWidth="1.8"
-        strokeDasharray="6, 5"
-      />
+
+      {/* End terminal knots */}
+      <circle cx="0" cy="1" r="2.4" fill="#b45309" opacity={0.85} />
+      <circle cx={width} cy="1" r="2.4" fill="#b45309" opacity={0.85} />
+
+      {/* Inter-swag knot beads */}
+      {swags.slice(0, -1).map(({ x1, i }) => (
+        <g key={`d-knot-${i}`} transform={`translate(${x1}, 1)`} opacity={isDark ? 0.85 : 0.78}>
+          <circle cx="0" cy="0" r="2.0" fill="#f59e0b" />
+          <circle cx="0" cy="3.5" r="1.3" fill="#ea580c" />
+        </g>
+      ))}
+
+      {/* Swag center ornaments */}
+      {swags.map(({ midX, i }) => {
+        const mod = i % 4;
+        if (mod === 0) {
+          return (
+            <g key={`d-orn-${i}`} transform={`translate(${midX}, 13)`} opacity={isDark ? 0.9 : 0.82}>
+              <line x1="0" y1="0" x2="0" y2="18" stroke="#d97706" strokeWidth="1.0" opacity={0.65} />
+              <g transform="translate(0, 18)">
+                <path d="M -5 3 C -5 7.5 5 7.5 5 3 Z" fill="#9a3412" />
+                <ellipse cx="0" cy="3" rx="4.5" ry="1.4" fill="#ea580c" />
+                <path d="M 0 2 C -1.6 0 0 -4 0 -5 C 0 -4 1.6 0 0 2 Z" fill="#f59e0b" />
+              </g>
+            </g>
+          );
+        } else if (mod === 1) {
+          return (
+            <g key={`d-orn-${i}`} transform={`translate(${midX}, 13)`} opacity={isDark ? 0.9 : 0.82}>
+              <line x1="0" y1="0" x2="0" y2="18" stroke="#d97706" strokeWidth="1.0" opacity={0.65} />
+              <g transform="translate(0, 18)">
+                <circle cx="0" cy="0" r="1.8" fill="#d97706" />
+                <path d="M -3.2 1.5 C -3.2 -1 3.2 -1 3.2 1.5 L 4.8 7 L -4.8 7 Z" fill="#b45309" />
+                <circle cx="0" cy="8.5" r="1.3" fill="#78350f" />
+              </g>
+            </g>
+          );
+        } else if (mod === 2) {
+          return (
+            <g key={`d-orn-${i}`} transform={`translate(${midX}, 13)`} opacity={isDark ? 0.9 : 0.82}>
+              <line x1="0" y1="0" x2="0" y2="16" stroke="#d97706" strokeWidth="1.0" opacity={0.65} />
+              <g transform="translate(0, 16)">
+                <polygon points="0,-3 4.5,3 0,9 -4.5,3" fill="#ea580c" />
+                <polygon points="0,-0.5 2.8,3 0,6.5 -2.8,3" fill="#facc15" />
+                <line x1="-2" y1="9" x2="-3" y2="14" stroke="#d97706" strokeWidth="0.8" />
+                <line x1="0" y1="9" x2="0" y2="15" stroke="#ea580c" strokeWidth="0.8" />
+                <line x1="2" y1="9" x2="3" y2="14" stroke="#d97706" strokeWidth="0.8" />
+              </g>
+            </g>
+          );
+        } else {
+          return (
+            <g key={`d-orn-${i}`} transform={`translate(${midX}, 13)`} opacity={isDark ? 0.9 : 0.82}>
+              <line x1="0" y1="0" x2="0" y2="16" stroke="#d97706" strokeWidth="1.0" opacity={0.65} />
+              <g transform="translate(0, 16)">
+                <rect x="-1.5" y="-2" width="3" height="2" fill="#78350f" rx="0.5" />
+                <ellipse cx="0" cy="3.5" rx="3.5" ry="4.5" fill="#f59e0b" />
+                <circle cx="0" cy="3" r="1.2" fill="#ffffff" opacity={0.75} />
+              </g>
+            </g>
+          );
+        }
+      })}
     </svg>
   );
 };
@@ -730,24 +875,8 @@ export const DiwaliFooterScene: React.FC<FestiveGraphicProps> = ({ isDark = fals
   return (
     <svg viewBox="0 0 1440 280" preserveAspectRatio="xMidYMid slice" style={style} {...props}>
       <defs>
-        <radialGradient id={`d-foot-amber-l-${id}`} cx="12%" cy="75%" r="55%">
-          <stop offset="0%" stopColor="#f59e0b" stopOpacity={isDark ? 0.4 : 0.2} />
-          <stop offset="50%" stopColor="#d97706" stopOpacity={isDark ? 0.18 : 0.08} />
-          <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
-        </radialGradient>
-        <radialGradient id={`d-foot-amber-r-${id}`} cx="88%" cy="75%" r="55%">
-          <stop offset="0%" stopColor="#f59e0b" stopOpacity={isDark ? 0.4 : 0.2} />
-          <stop offset="50%" stopColor="#d97706" stopOpacity={isDark ? 0.18 : 0.08} />
-          <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
-        </radialGradient>
-        <radialGradient id={`d-diya-flame-${id}`} cx="50%" cy="80%" r="80%">
-          <stop offset="0%" stopColor="#ffffff" />
-          <stop offset="25%" stopColor="#fef08a" />
-          <stop offset="60%" stopColor="#f59e0b" />
-          <stop offset="100%" stopColor="#dc2626" stopOpacity="0.8" />
-        </radialGradient>
         <filter id={`d-foot-glow-${id}`} x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur stdDeviation="6" result="blur" />
+          <feGaussianBlur stdDeviation="3" result="blur" />
           <feMerge>
             <feMergeNode in="blur" />
             <feMergeNode in="SourceGraphic" />
@@ -755,113 +884,45 @@ export const DiwaliFooterScene: React.FC<FestiveGraphicProps> = ({ isDark = fals
         </filter>
         <linearGradient id={`d-gold-brass-${id}`} x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor="#fef08a" />
-          <stop offset="40%" stopColor="#f59e0b" />
-          <stop offset="100%" stopColor="#78350f" />
+          <stop offset="50%" stopColor="#f59e0b" />
+          <stop offset="100%" stopColor="#b45309" />
         </linearGradient>
       </defs>
 
-      {/* Ambient Warm Golden Washes */}
-      <rect x="0" y="0" width="1440" height="280" fill={`url(#d-foot-amber-l-${id})`} />
-      <rect x="0" y="0" width="1440" height="280" fill={`url(#d-foot-amber-r-${id})`} />
-
-      {/* ── TOP BORDER: Hanging Golden Bells & Marigold Garland Toran ── */}
-      <g stroke="#f59e0b" strokeWidth="1.5" opacity={isDark ? 0.65 : 0.45} fill="none">
-        <path d="M 0 15 Q 120 40 240 15 Q 360 40 480 15 Q 600 40 720 15 Q 840 40 960 15 Q 1080 40 1200 15 Q 1320 40 1440 15" />
+      {/* ── TOP BORDER: Elegant Hanging Golden Bells & Marigold Garland Toran ── */}
+      <g stroke="#f59e0b" strokeWidth="1.2" opacity={isDark ? 0.45 : 0.35} fill="none">
+        <path d="M 0 12 Q 120 32 240 12 Q 360 32 480 12 Q 600 32 720 12 Q 840 32 960 12 Q 1080 32 1200 12 Q 1320 32 1440 12" />
       </g>
       {[120, 360, 600, 840, 1080, 1320].map((cx, idx) => (
-        <g key={`toran-bell-${idx}`} transform={`translate(${cx}, 28)`}>
-          <line x1="0" y1="0" x2="0" y2="18" stroke="#f59e0b" strokeWidth="1.2" />
-          {/* Marigold flower bud */}
-          <circle cx="0" cy="18" r="6" fill="#f59e0b" />
-          <circle cx="0" cy="18" r="3.5" fill="#ea580c" />
+        <g key={`toran-bell-${idx}`} transform={`translate(${cx}, 22)`} opacity={isDark ? 0.75 : 0.6}>
+          <line x1="0" y1="0" x2="0" y2="12" stroke="#f59e0b" strokeWidth="1" />
+          {/* Marigold bud */}
+          <circle cx="0" cy="12" r="4.5" fill="#f59e0b" />
+          <circle cx="0" cy="12" r="2.5" fill="#ea580c" />
           {/* Hanging Bell */}
-          <path d="M -5 28 C -5 22 5 22 5 28 L 7 36 L -7 36 Z" fill={`url(#d-gold-brass-${id})`} />
-          <circle cx="0" cy="38" r="2" fill="#fbbf24" />
+          <path d="M -4 18 C -4 14 4 14 4 18 L 5.5 24 L -5.5 24 Z" fill={`url(#d-gold-brass-${id})`} />
+          <circle cx="0" cy="25.5" r="1.5" fill="#fbbf24" />
         </g>
       ))}
 
-      {/* ── LEFT CORNER: Grand Glowing Traditional Diya on Lotus Rangoli ── */}
-      <g transform="translate(130, 205)">
-        {/* Lotus Rangoli Base Petals */}
-        {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((angle, i) => (
-          <path
-            key={`l-petal-${i}`}
-            d="M 0 0 C 14 -18 24 -40 0 -55 C -24 -40 -14 -18 0 0 Z"
-            fill={i % 2 === 0 ? "#ea580c" : "#facc15"}
-            opacity={isDark ? 0.75 : 0.6}
-            transform={`rotate(${angle}) scale(0.85)`}
-          />
-        ))}
-        <circle cx="0" cy="0" r="28" fill="#991b1b" opacity="0.8" />
-        <circle cx="0" cy="0" r="20" fill="#f59e0b" opacity="0.9" />
-
-        {/* Diya Clay/Brass Bowl */}
-        <ellipse cx="0" cy="-6" rx="42" ry="16" fill={`url(#d-gold-brass-${id})`} />
-        <ellipse cx="0" cy="-10" rx="34" ry="11" fill="#78350f" />
-        <ellipse cx="0" cy="-11" rx="30" ry="8" fill="#d97706" />
-
-        {/* 3D Radiant Diya Flame */}
-        <g filter={`url(#d-foot-glow-${id})`} transform="translate(0, -18)">
-          <path d="M 0 -38 C 14 -22 14 -4 0 0 C -14 -4 -14 -22 0 -38 Z" fill={`url(#d-diya-flame-${id})`} />
-          <circle cx="0" cy="-12" r="5" fill="#ffffff" />
-        </g>
-
-        {/* Sparkler Embers Rising */}
-        <circle cx="-18" cy="-45" r="2.5" fill="#fef08a" opacity="0.9" filter={`url(#d-foot-glow-${id})`} />
-        <circle cx="15" cy="-55" r="3" fill="#fef08a" opacity="0.9" filter={`url(#d-foot-glow-${id})`} />
-        <circle cx="2" cy="-68" r="2" fill="#ffffff" opacity="0.95" />
+      {/* ── SUBTLE RANGOLI SCALLOP BORDER ALONG BOTTOM ── */}
+      <g fill="none" stroke="#f59e0b" strokeWidth="1" opacity={isDark ? 0.22 : 0.14}>
+        <path d="M 0 272 Q 60 252 120 272 Q 180 252 240 272 Q 300 252 360 272 Q 420 252 480 272 Q 540 252 600 272 Q 660 252 720 272 Q 780 252 840 272 Q 900 252 960 272 Q 1020 252 1080 272 Q 1140 252 1200 272 Q 1260 252 1320 272 Q 1380 252 1440 272" />
       </g>
 
-      {/* ── RIGHT CORNER: Secondary Diya with Marigold Genda Phool Garland ── */}
-      <g transform="translate(1310, 205)">
-        {/* Rangoli Base */}
-        {[0, 45, 90, 135, 180, 225, 270, 315].map((angle, i) => (
-          <path
-            key={`r-petal-${i}`}
-            d="M 0 0 C 12 -16 20 -36 0 -48 C -20 -36 -12 -16 0 0 Z"
-            fill={i % 2 === 0 ? "#facc15" : "#dc2626"}
-            opacity={isDark ? 0.75 : 0.6}
-            transform={`rotate(${angle}) scale(0.85)`}
-          />
-        ))}
-        <circle cx="0" cy="0" r="22" fill="#991b1b" opacity="0.8" />
-
-        {/* Diya Bowl */}
-        <ellipse cx="0" cy="-6" rx="38" ry="14" fill={`url(#d-gold-brass-${id})`} />
-        <ellipse cx="0" cy="-9" rx="30" ry="9" fill="#78350f" />
-        <ellipse cx="0" cy="-10" rx="26" ry="7" fill="#d97706" />
-
-        {/* Flame */}
-        <g filter={`url(#d-foot-glow-${id})`} transform="translate(0, -16)">
-          <path d="M 0 -34 C 12 -20 12 -4 0 0 C -12 -4 -12 -20 0 -34 Z" fill={`url(#d-diya-flame-${id})`} />
-          <circle cx="0" cy="-10" r="4.5" fill="#ffffff" />
-        </g>
-
-        {/* Sparkler Embers Rising */}
-        <circle cx="-14" cy="-42" r="2.5" fill="#fef08a" opacity="0.9" filter={`url(#d-foot-glow-${id})`} />
-        <circle cx="16" cy="-52" r="2" fill="#ffffff" opacity="0.95" />
-      </g>
-
-      {/* ── SACRED RANGOLI MANDALA BORDER PATTERNS ALONG BOTTOM ── */}
-      <g fill="none" stroke="#f59e0b" strokeWidth="1.2" opacity={isDark ? 0.35 : 0.22}>
-        <path d="M 280 270 Q 340 230 400 270 Q 460 230 520 270 Q 580 230 640 270 Q 700 230 760 270 Q 820 230 880 270 Q 940 230 1000 270 Q 1060 230 1120 270" />
-      </g>
-
-      {/* Floating Glowing Sparkle Embers */}
+      {/* Floating Gentle Golden Sparkles (Sparse, minimal, non-intrusive) */}
       {[
-        { cx: 320, cy: 110, r: 3 },
-        { cx: 440, cy: 190, r: 2 },
-        { cx: 580, cy: 90, r: 3.5 },
-        { cx: 720, cy: 170, r: 2.5 },
-        { cx: 860, cy: 100, r: 3 },
-        { cx: 980, cy: 200, r: 2 },
-        { cx: 1120, cy: 80, r: 3.5 },
-        { cx: 1220, cy: 150, r: 2.5 },
+        { cx: 200, cy: 90, r: 2 },
+        { cx: 420, cy: 150, r: 1.5 },
+        { cx: 650, cy: 75, r: 2.2 },
+        { cx: 880, cy: 140, r: 1.8 },
+        { cx: 1100, cy: 80, r: 2 },
+        { cx: 1280, cy: 160, r: 1.5 },
       ].map((star, idx) => (
-        <g key={`sparkle-${idx}`} transform={`translate(${star.cx}, ${star.cy})`}>
-          <circle cx="0" cy="0" r={star.r * 2} fill="#f59e0b" opacity={isDark ? 0.3 : 0.15} filter={`url(#d-foot-glow-${id})`} />
-          <path d={`M 0 -${star.r * 2.5} L 0 ${star.r * 2.5} M -${star.r * 2.5} 0 L ${star.r * 2.5} 0`} stroke="#fef08a" strokeWidth="1" opacity="0.8" />
-          <circle cx="0" cy="0" r={star.r * 0.7} fill="#ffffff" />
+        <g key={`sparkle-${idx}`} transform={`translate(${star.cx}, ${star.cy})`} opacity={isDark ? 0.6 : 0.45}>
+          <circle cx="0" cy="0" r={star.r * 1.8} fill="#f59e0b" opacity="0.25" filter={`url(#d-foot-glow-${id})`} />
+          <path d={`M 0 -${star.r * 2} L 0 ${star.r * 2} M -${star.r * 2} 0 L ${star.r * 2} 0`} stroke="#fef08a" strokeWidth="0.8" />
+          <circle cx="0" cy="0" r={star.r * 0.6} fill="#ffffff" />
         </g>
       ))}
     </svg>
@@ -1058,24 +1119,94 @@ export const DurgaNavbarCluster: React.FC<FestiveGraphicProps> = ({ isDark = fal
 };
 
 export const DurgaDividerWave: React.FC<FestiveGraphicProps> = ({ isDark = false, style, ...props }) => {
-  const id = React.useId();
-  return (
-    <svg viewBox="0 0 1200 30" preserveAspectRatio="none" style={style} {...props}>
-      <defs>
-        <linearGradient id={`dp-div-grad-${id}`} x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#dc2626" stopOpacity="0.85" />
-          <stop offset="50%" stopColor="#eab308" stopOpacity="0.85" />
-          <stop offset="100%" stopColor="#dc2626" stopOpacity="0.85" />
-        </linearGradient>
-      </defs>
+  const { width, svgRef } = useResponsiveSvgWidth();
+  const numSwags = Math.max(2, Math.round(width / 115));
+  const swagW = width / numSwags;
 
+  let ropePath = "M 0 1";
+  const swags = [];
+  for (let i = 0; i < numSwags; i++) {
+    const x0 = i * swagW;
+    const x1 = (i + 1) * swagW;
+    const midX = x0 + swagW / 2;
+    ropePath += ` Q ${midX} 13 ${x1} 1`;
+    swags.push({ i, x0, x1, midX });
+  }
+
+  return (
+    <svg
+      ref={svgRef}
+      viewBox={`0 0 ${width} 54`}
+      preserveAspectRatio="none"
+      width="100%"
+      height="54"
+      style={{ width: "100%", height: "54px", display: "block", overflow: "visible", ...style }}
+      {...props}
+    >
       <path
-        d="M 0 15 Q 200 25 400 15 Q 600 25 800 15 Q 1000 25 1200 15"
+        d={ropePath}
         fill="none"
-        stroke={`url(#dp-div-grad-${id})`}
-        strokeWidth="3"
+        stroke={isDark ? "#f87171" : "#dc2626"}
+        strokeWidth="1.4"
         strokeLinecap="round"
+        opacity={isDark ? 0.75 : 0.65}
       />
+      <path
+        d={ropePath}
+        fill="none"
+        stroke="#eab308"
+        strokeWidth="1.0"
+        strokeDasharray="5, 4"
+        opacity={isDark ? 0.75 : 0.65}
+      />
+
+      {/* End terminal knots */}
+      <circle cx="0" cy="1" r="2.2" fill="#b91c1c" opacity={0.85} />
+      <circle cx={width} cy="1" r="2.2" fill="#b91c1c" opacity={0.85} />
+
+      {/* Inter-swag knot beads */}
+      {swags.slice(0, -1).map(({ x1, i }) => (
+        <g key={`dp-knot-${i}`} transform={`translate(${x1}, 1)`} opacity={isDark ? 0.85 : 0.78}>
+          <circle cx="0" cy="0" r="1.8" fill="#ca8a04" />
+          <circle cx="0" cy="3" r="1.2" fill="#dc2626" />
+        </g>
+      ))}
+
+      {/* Swag center ornaments */}
+      {swags.map(({ midX, i }) => {
+        const mod = i % 3;
+        if (mod === 0) {
+          return (
+            <g key={`dp-orn-${i}`} transform={`translate(${midX}, 13)`} opacity={isDark ? 0.88 : 0.8}>
+              <line x1="0" y1="0" x2="0" y2="16" stroke="#b91c1c" strokeWidth="0.9" opacity={0.65} />
+              <g transform="translate(0, 16)">
+                <path d="M 0 0 C -3.5 5 -4.5 12 0 17 C 4.5 12 3.5 5 0 0 Z" fill="#15803d" />
+              </g>
+            </g>
+          );
+        } else if (mod === 1) {
+          return (
+            <g key={`dp-orn-${i}`} transform={`translate(${midX}, 13)`} opacity={isDark ? 0.88 : 0.8}>
+              <line x1="0" y1="0" x2="0" y2="18" stroke="#b91c1c" strokeWidth="0.9" opacity={0.65} />
+              <g transform="translate(0, 18)">
+                <circle cx="0" cy="0" r="1.6" fill="#b91c1c" />
+                <path d="M -3.2 1.5 C -3.2 -1 3.2 -1 3.2 1.5 L 4.5 6.5 L -4.5 6.5 Z" fill="#ca8a04" />
+                <circle cx="0" cy="8" r="1.3" fill="#854d0e" />
+              </g>
+            </g>
+          );
+        } else {
+          return (
+            <g key={`dp-orn-${i}`} transform={`translate(${midX}, 13)`} opacity={isDark ? 0.88 : 0.8}>
+              <line x1="0" y1="0" x2="0" y2="17" stroke="#b91c1c" strokeWidth="0.9" opacity={0.65} />
+              <g transform="translate(0, 17)">
+                <circle cx="0" cy="3" r="4.0" fill="#f59e0b" />
+                <circle cx="0" cy="3" r="2.4" fill="#ea580c" />
+              </g>
+            </g>
+          );
+        }
+      })}
     </svg>
   );
 };
@@ -1085,114 +1216,54 @@ export const DurgaFooterScene: React.FC<FestiveGraphicProps> = ({ isDark = false
   return (
     <svg viewBox="0 0 1440 280" preserveAspectRatio="xMidYMid slice" style={style} {...props}>
       <defs>
-        <radialGradient id={`dp-foot-crimson-l-${id}`} cx="12%" cy="70%" r="60%">
-          <stop offset="0%" stopColor="#dc2626" stopOpacity={isDark ? 0.4 : 0.22} />
-          <stop offset="50%" stopColor="#991b1b" stopOpacity={isDark ? 0.2 : 0.1} />
-          <stop offset="100%" stopColor="#dc2626" stopOpacity="0" />
-        </radialGradient>
-        <radialGradient id={`dp-foot-gold-r-${id}`} cx="88%" cy="70%" r="60%">
-          <stop offset="0%" stopColor="#f59e0b" stopOpacity={isDark ? 0.4 : 0.2} />
-          <stop offset="50%" stopColor="#b45309" stopOpacity={isDark ? 0.18 : 0.08} />
-          <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
-        </radialGradient>
         <filter id={`dp-foot-glow-${id}`} x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur stdDeviation="6" result="blur" />
+          <feGaussianBlur stdDeviation="3" result="blur" />
           <feMerge>
             <feMergeNode in="blur" />
             <feMergeNode in="SourceGraphic" />
           </feMerge>
         </filter>
-        <linearGradient id={`dp-gold-metal-${id}`} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#fef08a" />
-          <stop offset="35%" stopColor="#facc15" />
-          <stop offset="70%" stopColor="#eab308" />
-          <stop offset="100%" stopColor="#854d0e" />
-        </linearGradient>
       </defs>
 
-      {/* Ambient Crimson & Golden Glows */}
-      <rect x="0" y="0" width="1440" height="280" fill={`url(#dp-foot-crimson-l-${id})`} />
-      <rect x="0" y="0" width="1440" height="280" fill={`url(#dp-foot-gold-r-${id})`} />
+      {/* ── TOP BORDER: Delicate Sacred Red & Gold Marigold Garland ── */}
+      <g stroke="#f59e0b" strokeWidth="1.2" opacity={isDark ? 0.4 : 0.3} fill="none">
+        <path d="M 0 12 Q 120 28 240 12 Q 360 28 480 12 Q 600 28 720 12 Q 840 28 960 12 Q 1080 28 1200 12 Q 1320 28 1440 12" />
+      </g>
+      {[120, 360, 600, 840, 1080, 1320].map((cx, idx) => (
+        <g key={`dp-toran-${idx}`} transform={`translate(${cx}, 20)`} opacity={isDark ? 0.7 : 0.55}>
+          <circle cx="0" cy="8" r="4" fill="#dc2626" />
+          <circle cx="0" cy="8" r="2" fill="#facc15" />
+        </g>
+      ))}
 
-      {/* ── KASH PHOOL (Autumn White Grass Plumes) Swaying Across Background ── */}
-      <g stroke={isDark ? "#ffffff" : "#cbd5e1"} strokeWidth="1.2" opacity={isDark ? 0.3 : 0.2} fill="none">
-        {[80, 220, 360, 520, 720, 920, 1100, 1260, 1380].map((x, idx) => (
+      {/* ── KASH PHOOL (Autumn White Grass Plumes) Swaying Across Background (Subtle) ── */}
+      <g stroke={isDark ? "#ffffff" : "#94a3b8"} strokeWidth="1" opacity={isDark ? 0.18 : 0.12} fill="none">
+        {[80, 240, 420, 600, 780, 960, 1140, 1320].map((x, idx) => (
           <g key={`kash-${idx}`} transform={`translate(${x}, 280)`}>
-            <path d={`M 0 0 Q ${idx % 2 === 0 ? 25 : -25} -60 ${idx % 2 === 0 ? 40 : -40} -130`} />
-            {/* Feathery plume tips */}
-            <path d={`M ${idx % 2 === 0 ? 30 : -30} -100 Q ${idx % 2 === 0 ? 45 : -45} -115 ${idx % 2 === 0 ? 55 : -55} -135`} strokeWidth="0.8" />
-            <path d={`M ${idx % 2 === 0 ? 25 : -25} -90 Q ${idx % 2 === 0 ? 40 : -40} -105 ${idx % 2 === 0 ? 50 : -50} -120`} strokeWidth="0.8" />
+            <path d={`M 0 0 Q ${idx % 2 === 0 ? 20 : -20} -45 ${idx % 2 === 0 ? 30 : -30} -95`} />
+            <path d={`M ${idx % 2 === 0 ? 22 : -22} -70 Q ${idx % 2 === 0 ? 35 : -35} -85 ${idx % 2 === 0 ? 42 : -42} -100`} strokeWidth="0.7" />
           </g>
         ))}
       </g>
 
-      {/* ── LEFT CORNER: Majestic Traditional Dhak Drum with Chomor Feathers ── */}
-      <g transform="translate(140, 175)">
-        {/* Traditional Dhak (Wood & Parchment Drum) */}
-        {/* Chomor / Kash white feathers crest on top */}
-        <g stroke="#ffffff" strokeWidth="1.5" opacity="0.85">
-          <path d="M -15 -60 Q -30 -100 -55 -125" fill="none" />
-          <path d="M 0 -65 Q 0 -110 -10 -135" fill="none" />
-          <path d="M 15 -60 Q 30 -100 50 -125" fill="none" />
-        </g>
-        {/* Red decorative cloth wrap on Dhak */}
-        <ellipse cx="0" cy="0" rx="44" ry="52" fill="#b91c1c" stroke="#7f1d1d" strokeWidth="2" />
-        <ellipse cx="0" cy="0" rx="38" ry="46" fill="#dc2626" />
-        {/* Golden ropes / straps */}
-        <path d="M -30 -35 L 30 35 M 30 -35 L -30 35" stroke={`url(#dp-gold-metal-${id})`} strokeWidth="2" />
-        <path d="M 0 -45 L 0 45 M -40 0 L 40 0" stroke={`url(#dp-gold-metal-${id})`} strokeWidth="1.5" />
-        {/* Drum heads */}
-        <ellipse cx="0" cy="-45" rx="36" ry="12" fill="#fef08a" stroke="#ca8a04" strokeWidth="1.5" />
-        <ellipse cx="0" cy="45" rx="36" ry="12" fill="#ca8a04" />
-        {/* Dhak drumsticks */}
-        <line x1="-35" y1="-30" x2="-65" y2="-75" stroke="#fef08a" strokeWidth="3" strokeLinecap="round" />
-        <line x1="35" y1="-30" x2="65" y2="-75" stroke="#fef08a" strokeWidth="3" strokeLinecap="round" />
-      </g>
-
-      {/* ── RIGHT CORNER: Sacred Dhunachi (Incense Burner) with Fragrant Smoke Swirls & Shankha ── */}
-      <g transform="translate(1300, 185)">
-        {/* Fragrant Aromatic Smoke Swirls */}
-        <g stroke="#fef08a" strokeWidth="1.8" fill="none" opacity={isDark ? 0.6 : 0.4} filter={`url(#dp-foot-glow-${id})`}>
-          <path d="M 0 -50 C -20 -80 15 -110 -10 -145 C -30 -170 10 -195 0 -220" />
-          <path d="M 12 -50 C 30 -75 0 -105 25 -135 C 40 -160 15 -185 30 -210" strokeWidth="1.2" />
-        </g>
-
-        {/* Brass Dhunachi Clay Pot */}
-        {/* Glowing Ember in pot */}
-        <ellipse cx="0" cy="-40" rx="32" ry="12" fill="#ea580c" />
-        <ellipse cx="0" cy="-42" rx="26" ry="8" fill="#fef08a" filter={`url(#dp-foot-glow-${id})`} />
-        {/* Dhunachi Bowl */}
-        <path d="M -35 -40 Q 0 -10 35 -40 L 22 10 Q 0 18 -22 10 Z" fill={`url(#dp-gold-metal-${id})`} />
-        {/* Dhunachi Handle Stem */}
-        <path d="M -10 12 L -6 45 L 6 45 L 10 12 Z" fill="#b45309" />
-        <ellipse cx="0" cy="45" rx="20" ry="7" fill={`url(#dp-gold-metal-${id})`} />
-
-        {/* Sacred Shankha (Conch Shell) beside Dhunachi */}
-        <g transform="translate(-65, 15) rotate(-20) scale(0.7)">
-          <path d="M 0 -20 C 25 -15 35 15 15 35 C 0 45 -20 30 -25 10 C -30 -10 -15 -25 0 -20 Z" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.5" />
-          <path d="M 0 -20 C 10 -10 15 10 5 25" stroke="#f59e0b" strokeWidth="1" fill="none" />
-          <circle cx="5" cy="28" r="3" fill="#f59e0b" />
-        </g>
-      </g>
-
-      {/* ── SACRED TRISHUL & CIRCULAR ALPONA MOTIFS ALONG BORDER ── */}
-      {[420, 600, 780, 960, 1140].map((cx, idx) => (
-        <g key={`alpona-circ-${idx}`} transform={`translate(${cx}, 245)`} opacity={isDark ? 0.35 : 0.22}>
-          <circle cx="0" cy="0" r="18" fill="none" stroke="#f59e0b" strokeWidth="1.2" />
-          <circle cx="0" cy="0" r="10" fill="none" stroke="#dc2626" strokeWidth="1" strokeDasharray="3, 2" />
-          <circle cx="0" cy="0" r="3.5" fill="#fef08a" />
+      {/* ── SACRED CIRCULAR ALPONA MOTIFS ALONG BOTTOM ── */}
+      {[300, 500, 720, 940, 1160].map((cx, idx) => (
+        <g key={`alpona-circ-${idx}`} transform={`translate(${cx}, 255)`} opacity={isDark ? 0.25 : 0.16}>
+          <circle cx="0" cy="0" r="14" fill="none" stroke="#f59e0b" strokeWidth="1" />
+          <circle cx="0" cy="0" r="8" fill="none" stroke="#dc2626" strokeWidth="0.8" strokeDasharray="3, 2" />
+          <circle cx="0" cy="0" r="2.5" fill="#fef08a" />
         </g>
       ))}
 
-      {/* Auspicious Red & Gold Sparkles */}
+      {/* Auspicious Red & Gold Sparkles (Sparse) */}
       {[
-        { cx: 280, cy: 90, r: 3 },
-        { cx: 480, cy: 150, r: 2.5 },
-        { cx: 680, cy: 80, r: 3 },
-        { cx: 880, cy: 160, r: 2.5 },
-        { cx: 1040, cy: 100, r: 3 },
+        { cx: 200, cy: 90, r: 2 },
+        { cx: 480, cy: 150, r: 1.8 },
+        { cx: 720, cy: 75, r: 2.2 },
+        { cx: 960, cy: 140, r: 1.8 },
+        { cx: 1240, cy: 90, r: 2 },
       ].map((sp, idx) => (
-        <circle key={`sp-durga-${idx}`} cx={sp.cx} cy={sp.cy} r={sp.r} fill="#fef08a" opacity="0.8" filter={`url(#dp-foot-glow-${id})`} />
+        <circle key={`sp-durga-${idx}`} cx={sp.cx} cy={sp.cy} r={sp.r} fill="#fef08a" opacity={isDark ? 0.55 : 0.4} filter={`url(#dp-foot-glow-${id})`} />
       ))}
     </svg>
   );
@@ -1337,23 +1408,105 @@ export const ChristmasNavbarCluster: React.FC<FestiveGraphicProps> = ({ isDark =
 };
 
 export const ChristmasDividerWave: React.FC<FestiveGraphicProps> = ({ isDark = false, style, ...props }) => {
-  const id = React.useId();
+  const { width, svgRef } = useResponsiveSvgWidth();
+  const numSwags = Math.max(2, Math.round(width / 115));
+  const swagW = width / numSwags;
+
+  let ropePath = "M 0 1";
+  const swags = [];
+  for (let i = 0; i < numSwags; i++) {
+    const x0 = i * swagW;
+    const x1 = (i + 1) * swagW;
+    const midX = x0 + swagW / 2;
+    ropePath += ` Q ${midX} 13 ${x1} 1`;
+    swags.push({ i, x0, x1, midX });
+  }
+
   return (
-    <svg viewBox="0 0 1200 30" preserveAspectRatio="none" style={style} {...props}>
+    <svg
+      ref={svgRef}
+      viewBox={`0 0 ${width} 54`}
+      preserveAspectRatio="none"
+      width="100%"
+      height="54"
+      style={{ width: "100%", height: "54px", display: "block", overflow: "visible", ...style }}
+      {...props}
+    >
       <path
-        d="M 0 12 Q 150 24 300 12 Q 450 24 600 12 Q 750 24 900 12 Q 1050 24 1200 12"
+        d={ropePath}
         fill="none"
-        stroke="#15803d"
-        strokeWidth="3.5"
+        stroke={isDark ? "#4ade80" : "#166534"}
+        strokeWidth="1.6"
         strokeLinecap="round"
+        opacity={isDark ? 0.75 : 0.65}
       />
       <path
-        d="M 0 10 Q 150 22 300 10 Q 450 22 600 10 Q 750 22 900 10 Q 1050 22 1200 10"
+        d={ropePath}
         fill="none"
-        stroke="#22c55e"
-        strokeWidth="1.5"
+        stroke="#16a34a"
+        strokeWidth="1.0"
         strokeLinecap="round"
+        opacity={isDark ? 0.75 : 0.65}
       />
+
+      {/* End terminal knots */}
+      <circle cx="0" cy="1" r="2.2" fill="#ca8a04" opacity={0.85} />
+      <circle cx={width} cy="1" r="2.2" fill="#ca8a04" opacity={0.85} />
+
+      {/* Inter-swag knot beads */}
+      {swags.slice(0, -1).map(({ x1, i }) => (
+        <g key={`c-knot-${i}`} transform={`translate(${x1}, 1)`} opacity={isDark ? 0.85 : 0.78}>
+          <circle cx="0" cy="0" r="1.8" fill="#ca8a04" />
+          <circle cx="0" cy="3" r="1.2" fill="#dc2626" />
+        </g>
+      ))}
+
+      {/* Swag center ornaments */}
+      {swags.map(({ midX, i }) => {
+        const mod = i % 4;
+        if (mod === 0) {
+          return (
+            <g key={`c-orn-${i}`} transform={`translate(${midX}, 13)`} opacity={isDark ? 0.88 : 0.8}>
+              <line x1="0" y1="0" x2="0" y2="16" stroke="#64748b" strokeWidth="0.8" opacity={0.6} />
+              <g transform="translate(0, 16)">
+                <rect x="-1.2" y="-1.8" width="2.4" height="1.8" fill="#1e293b" rx="0.5" />
+                <ellipse cx="0" cy="3.5" rx="3" ry="4.2" fill="#facc15" />
+                <circle cx="0" cy="3" r="1.2" fill="#ffffff" opacity={0.75} />
+              </g>
+            </g>
+          );
+        } else if (mod === 1) {
+          return (
+            <g key={`c-orn-${i}`} transform={`translate(${midX}, 13)`} opacity={isDark ? 0.88 : 0.8}>
+              <line x1="0" y1="0" x2="0" y2="18" stroke="#64748b" strokeWidth="0.8" opacity={0.6} />
+              <g transform="translate(0, 18)">
+                <rect x="-1.8" y="-1.8" width="3.6" height="1.8" fill="#ca8a04" rx="0.5" />
+                <circle cx="0" cy="4.2" r="4.2" fill="#dc2626" />
+                <ellipse cx="-1.2" cy="2.8" rx="1.4" ry="0.9" fill="#ffffff" opacity={0.65} />
+              </g>
+            </g>
+          );
+        } else if (mod === 2) {
+          return (
+            <g key={`c-orn-${i}`} transform={`translate(${midX}, 13)`} opacity={isDark ? 0.88 : 0.8}>
+              <line x1="0" y1="0" x2="0" y2="17" stroke="#64748b" strokeWidth="0.8" opacity={0.6} />
+              <g transform="translate(0, 17)">
+                <path d="M 0 0 L 0 7 C 0 11 5.5 11 5.5 7" fill="none" stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" />
+                <path d="M 0 0 L 0 7 C 0 11 5.5 11 5.5 7" fill="none" stroke="#dc2626" strokeWidth="2.2" strokeDasharray="2, 2" strokeLinecap="round" />
+              </g>
+            </g>
+          );
+        } else {
+          return (
+            <g key={`c-orn-${i}`} transform={`translate(${midX}, 13)`} opacity={isDark ? 0.88 : 0.8}>
+              <line x1="0" y1="0" x2="0" y2="18" stroke="#64748b" strokeWidth="0.8" opacity={0.6} />
+              <g transform="translate(0, 18)">
+                <polygon points="0,-3.5 1.2,-1 3.5,-1 1.8,0.8 2.4,3.2 0,1.6 -2.4,3.2 -1.8,0.8 -3.5,-1 -1.2,-1" fill="#eab308" />
+              </g>
+            </g>
+          );
+        }
+      })}
     </svg>
   );
 };
@@ -1363,33 +1516,8 @@ export const ChristmasFooterScene: React.FC<FestiveGraphicProps> = ({ isDark = f
   return (
     <svg viewBox="0 0 1440 280" preserveAspectRatio="xMidYMid slice" style={style} {...props}>
       <defs>
-        <radialGradient id={`c-foot-pine-l-${id}`} cx="12%" cy="60%" r="60%">
-          <stop offset="0%" stopColor="#15803d" stopOpacity={isDark ? 0.35 : 0.18} />
-          <stop offset="60%" stopColor="#1e3a8a" stopOpacity={isDark ? 0.18 : 0.08} />
-          <stop offset="100%" stopColor="#15803d" stopOpacity="0" />
-        </radialGradient>
-        <radialGradient id={`c-foot-gold-r-${id}`} cx="88%" cy="60%" r="60%">
-          <stop offset="0%" stopColor="#dc2626" stopOpacity={isDark ? 0.32 : 0.16} />
-          <stop offset="60%" stopColor="#f59e0b" stopOpacity={isDark ? 0.18 : 0.08} />
-          <stop offset="100%" stopColor="#dc2626" stopOpacity="0" />
-        </radialGradient>
-        <radialGradient id={`c-bauble-red-ft-${id}`} cx="35%" cy="35%" r="65%">
-          <stop offset="0%" stopColor="#fca5a5" />
-          <stop offset="35%" stopColor="#dc2626" />
-          <stop offset="100%" stopColor="#7f1d1d" />
-        </radialGradient>
-        <radialGradient id={`c-bauble-gold-ft-${id}`} cx="35%" cy="35%" r="65%">
-          <stop offset="0%" stopColor="#fef08a" />
-          <stop offset="35%" stopColor="#eab308" />
-          <stop offset="100%" stopColor="#854d0e" />
-        </radialGradient>
-        <radialGradient id={`c-bauble-blue-ft-${id}`} cx="35%" cy="35%" r="65%">
-          <stop offset="0%" stopColor="#93c5fd" />
-          <stop offset="35%" stopColor="#2563eb" />
-          <stop offset="100%" stopColor="#1e3a8a" />
-        </radialGradient>
         <filter id={`c-foot-glow-${id}`} x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur stdDeviation="5" result="blur" />
+          <feGaussianBlur stdDeviation="3" result="blur" />
           <feMerge>
             <feMergeNode in="blur" />
             <feMergeNode in="SourceGraphic" />
@@ -1397,29 +1525,20 @@ export const ChristmasFooterScene: React.FC<FestiveGraphicProps> = ({ isDark = f
         </filter>
       </defs>
 
-      {/* Ambient Winter Evergreen Washes */}
-      <rect x="0" y="0" width="1440" height="280" fill={`url(#c-foot-pine-l-${id})`} />
-      <rect x="0" y="0" width="1440" height="280" fill={`url(#c-foot-gold-r-${id})`} />
-
       {/* ── TOP BORDER: Continuous Pine Garland Swag with Warm Fairy Lights ── */}
-      <g fill="none" stroke="#166534" strokeWidth="6" strokeLinecap="round" opacity="0.9">
-        <path d="M -20 10 Q 120 40 260 10 Q 400 40 540 10 Q 680 40 820 10 Q 960 40 1100 10 Q 1240 40 1380 10 Q 1460 30 1480 10" />
+      <g fill="none" stroke="#166534" strokeWidth="4" strokeLinecap="round" opacity={isDark ? 0.7 : 0.55}>
+        <path d="M -20 10 Q 120 32 260 10 Q 400 32 540 10 Q 680 32 820 10 Q 960 32 1100 10 Q 1240 32 1380 10 Q 1460 25 1480 10" />
       </g>
-      <g fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" opacity="0.75">
-        <path d="M -20 8 Q 120 38 260 8 Q 400 38 540 8 Q 680 38 820 8 Q 960 38 1100 8 Q 1240 38 1380 8 Q 1460 28 1480 8" />
+      <g fill="none" stroke="#22c55e" strokeWidth="1.8" strokeLinecap="round" opacity={isDark ? 0.6 : 0.45}>
+        <path d="M -20 8 Q 120 30 260 8 Q 400 30 540 8 Q 680 30 820 8 Q 960 30 1100 8 Q 1240 30 1380 8 Q 1460 23 1480 8" />
       </g>
 
       {/* Holly Berry Clusters on Garland */}
       {[120, 260, 400, 540, 680, 820, 960, 1100, 1240, 1380].map((cx, idx) => (
-        <g key={`holly-${idx}`} transform={`translate(${cx}, ${idx % 2 === 0 ? 25 : 12})`}>
-          {/* Green leaves */}
-          <path d="M -6 -4 Q -12 -12 0 -16 Q 12 -12 6 -4 Z" fill="#15803d" />
-          <path d="M -10 2 Q -18 6 -14 14 Q -4 12 0 4 Z" fill="#15803d" />
-          {/* Red Holly Berries */}
-          <circle cx="-3" cy="2" r="3.5" fill="#dc2626" />
-          <circle cx="3" cy="2" r="3.5" fill="#dc2626" />
-          <circle cx="0" cy="-3" r="3.5" fill="#ef4444" />
-          <circle cx="-1" cy="-4" r="1.2" fill="#ffffff" />
+        <g key={`holly-${idx}`} transform={`translate(${cx}, ${idx % 2 === 0 ? 20 : 10})`} opacity={isDark ? 0.75 : 0.6}>
+          <circle cx="-2.5" cy="2" r="2.5" fill="#dc2626" />
+          <circle cx="2.5" cy="2" r="2.5" fill="#dc2626" />
+          <circle cx="0" cy="-2" r="2.5" fill="#ef4444" />
         </g>
       ))}
 
@@ -1431,71 +1550,29 @@ export const ChristmasFooterScene: React.FC<FestiveGraphicProps> = ({ isDark = f
           <circle
             key={`fairy-${idx}`}
             cx={cx}
-            cy={idx % 2 === 0 ? 22 : 14}
-            r="4.5"
+            cy={idx % 2 === 0 ? 18 : 12}
+            r="3"
             fill={col}
+            opacity={isDark ? 0.75 : 0.6}
             filter={`url(#c-foot-glow-${id})`}
           />
         );
       })}
 
-      {/* ── LEFT CORNER: Hanging Shiny Glass Baubles & Pine Branch ── */}
-      <g transform="translate(120, 0)">
-        {/* Pine needles cluster */}
-        <path d="M 0 0 L -40 60 M 0 0 L -20 70 M 0 0 L 20 70 M 0 0 L 40 60" stroke="#15803d" strokeWidth="2.5" />
-        
-        {/* Red Bauble on Golden String */}
-        <line x1="-30" y1="0" x2="-30" y2="90" stroke="#facc15" strokeWidth="1.2" />
-        <rect x="-34" y="85" width="8" height="6" fill="#facc15" rx="1" />
-        <circle cx="-30" cy="115" r="24" fill={`url(#c-bauble-red-ft-${id})`} />
-        <ellipse cx="-38" cy="107" rx="6" ry="3" fill="#ffffff" opacity="0.6" transform="rotate(-30, -38, 107)" />
-
-        {/* Gold Bauble */}
-        <line x1="25" y1="0" x2="25" y2="120" stroke="#facc15" strokeWidth="1.2" />
-        <rect x="21" y="115" width="8" height="6" fill="#facc15" rx="1" />
-        <circle cx="25" cy="142" r="20" fill={`url(#c-bauble-gold-ft-${id})`} />
-        <ellipse cx="19" cy="135" rx="5" ry="2.5" fill="#ffffff" opacity="0.65" transform="rotate(-30, 19, 135)" />
-
-        {/* Blue Bauble */}
-        <line x1="75" y1="0" x2="75" y2="70" stroke="#facc15" strokeWidth="1.2" />
-        <rect x="71" y="65" width="8" height="5" fill="#facc15" rx="1" />
-        <circle cx="75" cy="88" r="17" fill={`url(#c-bauble-blue-ft-${id})`} />
-      </g>
-
-      {/* ── RIGHT CORNER: Wrapped Gift Box, Candy Cane & Pinecone ── */}
-      <g transform="translate(1320, 170)">
-        {/* Red & Gold Luxury Gift Box */}
-        <rect x="-40" y="0" width="60" height="55" rx="4" fill="#dc2626" stroke="#991b1b" strokeWidth="1.5" />
-        <rect x="-16" y="0" width="12" height="55" fill="#facc15" />
-        <rect x="-40" y="22" width="60" height="10" fill="#facc15" />
-        {/* Golden Satin Bow */}
-        <circle cx="-14" cy="-3" r="6.5" fill="#fde047" />
-        <circle cx="-6" cy="-3" r="6.5" fill="#fde047" />
-        <circle cx="-10" cy="-1" r="3" fill="#ca8a04" />
-
-        {/* Candy Cane Leaning */}
-        <g transform="translate(30, 10) rotate(22)">
-          <path d="M 0 45 L 0 -15 C 0 -30 18 -30 18 -15 L 18 -5" fill="none" stroke="#f8fafc" strokeWidth="7" strokeLinecap="round" />
-          <path d="M 0 45 L 0 -15 C 0 -30 18 -30 18 -15 L 18 -5" fill="none" stroke="#dc2626" strokeWidth="7" strokeDasharray="5, 6" strokeLinecap="round" />
-        </g>
-      </g>
-
-      {/* ── DELICATE CRYSTAL SNOWFLAKES FLOATING IN AIR ── */}
+      {/* ── DELICATE CRYSTAL SNOWFLAKES FLOATING IN AIR (Sparse & Subtle) ── */}
       {[
-        { cx: 280, cy: 110, size: 10 },
-        { cx: 450, cy: 180, size: 8 },
-        { cx: 620, cy: 100, size: 12 },
-        { cx: 780, cy: 190, size: 9 },
-        { cx: 940, cy: 120, size: 11 },
-        { cx: 1100, cy: 170, size: 8 },
-        { cx: 1220, cy: 90, size: 10 },
+        { cx: 200, cy: 90, size: 7 },
+        { cx: 450, cy: 160, size: 6 },
+        { cx: 720, cy: 80, size: 8 },
+        { cx: 980, cy: 150, size: 6 },
+        { cx: 1240, cy: 90, size: 7 },
       ].map((flake, idx) => (
-        <g key={`flake-${idx}`} transform={`translate(${flake.cx}, ${flake.cy})`} stroke={isDark ? "#ffffff" : "#93c5fd"} strokeWidth="1.2" opacity={isDark ? 0.75 : 0.55}>
+        <g key={`flake-${idx}`} transform={`translate(${flake.cx}, ${flake.cy})`} stroke={isDark ? "#ffffff" : "#93c5fd"} strokeWidth="1" opacity={isDark ? 0.5 : 0.35}>
           <line x1={-flake.size} y1="0" x2={flake.size} y2="0" />
           <line x1="0" y1={-flake.size} x2="0" y2={flake.size} />
           <line x1={-flake.size * 0.7} y1={-flake.size * 0.7} x2={flake.size * 0.7} y2={flake.size * 0.7} />
           <line x1={-flake.size * 0.7} y1={flake.size * 0.7} x2={flake.size * 0.7} y2={-flake.size * 0.7} />
-          <circle cx="0" cy="0" r="1.5" fill="#ffffff" />
+          <circle cx="0" cy="0" r="1" fill="#ffffff" />
         </g>
       ))}
     </svg>
@@ -1638,22 +1715,96 @@ export const RakhiNavbarCluster: React.FC<FestiveGraphicProps> = ({ isDark = fal
 };
 
 export const RakhiDividerWave: React.FC<FestiveGraphicProps> = ({ isDark = false, style, ...props }) => {
-  const id = React.useId();
+  const { width, svgRef } = useResponsiveSvgWidth();
+  const numSwags = Math.max(2, Math.round(width / 115));
+  const swagW = width / numSwags;
+
+  let ropePath = "M 0 1";
+  const swags = [];
+  for (let i = 0; i < numSwags; i++) {
+    const x0 = i * swagW;
+    const x1 = (i + 1) * swagW;
+    const midX = x0 + swagW / 2;
+    ropePath += ` Q ${midX} 13 ${x1} 1`;
+    swags.push({ i, x0, x1, midX });
+  }
+
   return (
-    <svg viewBox="0 0 1200 30" preserveAspectRatio="none" style={style} {...props}>
+    <svg
+      ref={svgRef}
+      viewBox={`0 0 ${width} 54`}
+      preserveAspectRatio="none"
+      width="100%"
+      height="54"
+      style={{ width: "100%", height: "54px", display: "block", overflow: "visible", ...style }}
+      {...props}
+    >
       <path
-        d="M 0 14 Q 200 24 400 14 Q 600 24 800 14 Q 1000 24 1200 14"
+        d={ropePath}
         fill="none"
-        stroke="#dc2626"
-        strokeWidth="2.5"
+        stroke={isDark ? "#f87171" : "#dc2626"}
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        opacity={isDark ? 0.75 : 0.65}
       />
       <path
-        d="M 0 14 Q 200 24 400 14 Q 600 24 800 14 Q 1000 24 1200 14"
+        d={ropePath}
         fill="none"
         stroke="#facc15"
-        strokeWidth="1.2"
-        strokeDasharray="6, 4"
+        strokeWidth="1.0"
+        strokeDasharray="4, 4"
+        opacity={isDark ? 0.75 : 0.65}
       />
+
+      {/* End terminal knots */}
+      <circle cx="0" cy="1" r="2.2" fill="#b91c1c" opacity={0.85} />
+      <circle cx={width} cy="1" r="2.2" fill="#b91c1c" opacity={0.85} />
+
+      {/* Inter-swag knot beads */}
+      {swags.slice(0, -1).map(({ x1, i }) => (
+        <g key={`r-knot-${i}`} transform={`translate(${x1}, 1)`} opacity={isDark ? 0.85 : 0.78}>
+          <circle cx="0" cy="0" r="1.8" fill="#eab308" />
+          <circle cx="0" cy="3" r="1.2" fill="#dc2626" />
+        </g>
+      ))}
+
+      {/* Swag center ornaments */}
+      {swags.map(({ midX, i }) => {
+        const mod = i % 3;
+        if (mod === 0) {
+          return (
+            <g key={`r-orn-${i}`} transform={`translate(${midX}, 13)`} opacity={isDark ? 0.88 : 0.8}>
+              <line x1="0" y1="0" x2="0" y2="18" stroke="#b91c1c" strokeWidth="0.9" opacity={0.65} />
+              <g transform="translate(0, 18)">
+                <path d="M -3 1.5 C -3 -1 3 -1 3 1.5 L 4 5 L -4 5 Z" fill="#ca8a04" />
+                <line x1="-2" y1="5" x2="-3" y2="13" stroke="#b91c1c" strokeWidth="0.9" />
+                <line x1="0" y1="5" x2="0" y2="14" stroke="#b91c1c" strokeWidth="1.0" />
+                <line x1="2" y1="5" x2="3" y2="13" stroke="#b91c1c" strokeWidth="0.9" />
+              </g>
+            </g>
+          );
+        } else if (mod === 1) {
+          return (
+            <g key={`r-orn-${i}`} transform={`translate(${midX}, 13)`} opacity={isDark ? 0.88 : 0.8}>
+              <line x1="0" y1="0" x2="0" y2="16" stroke="#b91c1c" strokeWidth="0.9" opacity={0.65} />
+              <g transform="translate(0, 16)">
+                <circle cx="0" cy="3" r="3.8" fill="#eab308" />
+                <circle cx="0" cy="3" r="2.2" fill="#b91c1c" />
+              </g>
+            </g>
+          );
+        } else {
+          return (
+            <g key={`r-orn-${i}`} transform={`translate(${midX}, 13)`} opacity={isDark ? 0.88 : 0.8}>
+              <line x1="0" y1="0" x2="0" y2="16" stroke="#b91c1c" strokeWidth="0.9" opacity={0.65} />
+              <g transform="translate(0, 16)">
+                <circle cx="0" cy="2" r="2.2" fill="#eab308" />
+                <circle cx="0" cy="6.5" r="1.6" fill="#b91c1c" />
+              </g>
+            </g>
+          );
+        }
+      })}
     </svg>
   );
 };
@@ -1663,65 +1814,34 @@ export const RakhiFooterScene: React.FC<FestiveGraphicProps> = ({ isDark = false
   return (
     <svg viewBox="0 0 1440 280" preserveAspectRatio="xMidYMid slice" style={style} {...props}>
       <defs>
-        <radialGradient id={`r-foot-red-l-${id}`} cx="12%" cy="60%" r="60%">
-          <stop offset="0%" stopColor="#dc2626" stopOpacity={isDark ? 0.35 : 0.2} />
-          <stop offset="50%" stopColor="#991b1b" stopOpacity={isDark ? 0.18 : 0.08} />
-          <stop offset="100%" stopColor="#dc2626" stopOpacity="0" />
-        </radialGradient>
-        <radialGradient id={`r-foot-gold-r-${id}`} cx="88%" cy="60%" r="60%">
-          <stop offset="0%" stopColor="#f59e0b" stopOpacity={isDark ? 0.35 : 0.2} />
-          <stop offset="50%" stopColor="#b45309" stopOpacity={isDark ? 0.18 : 0.08} />
-          <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
-        </radialGradient>
-        <linearGradient id={`r-gold-metal-ft-${id}`} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#fef08a" />
-          <stop offset="30%" stopColor="#eab308" />
-          <stop offset="70%" stopColor="#facc15" />
-          <stop offset="100%" stopColor="#713f12" />
-        </linearGradient>
         <filter id={`r-foot-glow-${id}`} x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur stdDeviation="5" result="blur" />
+          <feGaussianBlur stdDeviation="3" result="blur" />
           <feMerge>
             <feMergeNode in="blur" />
             <feMergeNode in="SourceGraphic" />
           </feMerge>
         </filter>
+        <linearGradient id={`r-gold-metal-ft-${id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#fef08a" />
+          <stop offset="35%" stopColor="#facc15" />
+          <stop offset="100%" stopColor="#b45309" />
+        </linearGradient>
       </defs>
 
-      {/* Ambient Silk Saffron/Red Washes */}
-      <rect x="0" y="0" width="1440" height="280" fill={`url(#r-foot-red-l-${id})`} />
-      <rect x="0" y="0" width="1440" height="280" fill={`url(#r-foot-gold-r-${id})`} />
-
-      {/* ── FLOWING BRAIDED RESHAM SILK DORI THREADS ACROSS FOOTER ── */}
-      <g fill="none" strokeLinecap="round">
-        {/* Red core thread */}
+      {/* ── TOP BORDER: Continuous Crimson & Gold Resham Silk Dori Wave ── */}
+      <g fill="none">
         <path
-          d="M 0 35 Q 240 85 480 35 Q 720 -10 960 45 Q 1200 80 1440 25"
+          d="M 0 16 Q 240 32 480 16 Q 720 0 960 20 Q 1200 36 1440 16"
           stroke="#dc2626"
-          strokeWidth="4"
-          opacity="0.8"
+          strokeWidth="2.5"
+          opacity={isDark ? 0.6 : 0.45}
         />
-        {/* Golden yellow spiral twist thread */}
         <path
-          d="M 0 35 Q 240 85 480 35 Q 720 -10 960 45 Q 1200 80 1440 25"
+          d="M 0 16 Q 240 32 480 16 Q 720 0 960 20 Q 1200 36 1440 16"
           stroke="#facc15"
-          strokeWidth="2"
-          strokeDasharray="7, 5"
-          opacity="0.9"
-        />
-        {/* Secondary wave along bottom */}
-        <path
-          d="M 0 240 Q 240 190 480 235 Q 720 270 960 220 Q 1200 180 1440 230"
-          stroke="#dc2626"
-          strokeWidth="3"
-          opacity={isDark ? 0.5 : 0.35}
-        />
-        <path
-          d="M 0 240 Q 240 190 480 235 Q 720 270 960 220 Q 1200 180 1440 230"
-          stroke="#facc15"
-          strokeWidth="1.5"
-          strokeDasharray="6, 5"
-          opacity={isDark ? 0.6 : 0.4}
+          strokeWidth="1.2"
+          strokeDasharray="6, 4"
+          opacity={isDark ? 0.75 : 0.6}
         />
       </g>
 
@@ -1730,75 +1850,37 @@ export const RakhiFooterScene: React.FC<FestiveGraphicProps> = ({ isDark = false
         <circle
           key={`bead-${idx}`}
           cx={cx}
-          cy={idx % 2 === 0 ? 55 : 30}
-          r="4.5"
+          cy={idx % 2 === 0 ? 24 : 14}
+          r="3"
           fill={`url(#r-gold-metal-ft-${id})`}
           filter={`url(#r-foot-glow-${id})`}
         />
       ))}
 
-      {/* ── LEFT CORNER: Exquisite Kundan Floral Rakhi Medallion ── */}
-      <g transform="translate(130, 145)">
-        {/* Outer Filigree Petals */}
-        {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((angle, i) => (
-          <path
-            key={`r-ft-p1-${i}`}
-            d="M 0 -18 Q 10 -38 0 -50 Q -10 -38 0 -18 Z"
-            fill={`url(#r-gold-metal-ft-${id})`}
-            transform={`rotate(${angle}) scale(0.9)`}
-          />
-        ))}
-        {/* Inner Red Enamel Petals */}
-        {[15, 45, 75, 105, 135, 165, 195, 225, 255, 285, 315, 345].map((angle, i) => (
-          <path
-            key={`r-ft-p2-${i}`}
-            d="M 0 -12 Q 6 -28 0 -38 Q -6 -28 0 -12 Z"
-            fill="#dc2626"
-            transform={`rotate(${angle}) scale(0.9)`}
-          />
-        ))}
-        {/* Golden Bead Ring & Ruby Gem Center */}
-        <circle cx="0" cy="0" r="24" fill="none" stroke={`url(#r-gold-metal-ft-${id})`} strokeWidth="4" strokeDasharray="4, 3" />
-        <circle cx="0" cy="0" r="16" fill="#fcd34d" />
-        <circle cx="0" cy="0" r="12" fill="#991b1b" />
-        <circle cx="0" cy="0" r="7" fill="#ef4444" filter={`url(#r-foot-glow-${id})`} />
+      {/* ── SUBTLE BOTTOM THREAD WAVE ── */}
+      <g fill="none" opacity={isDark ? 0.25 : 0.15}>
+        <path
+          d="M 0 265 Q 240 245 480 265 Q 720 280 960 255 Q 1200 240 1440 260"
+          stroke="#dc2626"
+          strokeWidth="1.5"
+        />
       </g>
 
-      {/* ── RIGHT CORNER: Silver Puja Thali with Sweets & Diya ── */}
-      <g transform="translate(1310, 160)">
-        {/* Silver Thali plate */}
-        <ellipse cx="0" cy="20" rx="55" ry="20" fill="#cbd5e1" stroke="#64748b" strokeWidth="2" />
-        <ellipse cx="0" cy="18" rx="48" ry="15" fill="#f8fafc" />
-
-        {/* Kumkum & Akshat bowls */}
-        <circle cx="-20" cy="18" r="9" fill="#dc2626" />
-        <circle cx="20" cy="18" r="9" fill="#facc15" />
-
-        {/* Traditional Kaju Katli Sweet (Silver Foil Diamond) */}
-        <polygon points="0,10 8,18 0,26 -8,18" fill="#f1f5f9" stroke="#94a3b8" strokeWidth="1" />
-
-        {/* Mini Lit Diya on Thali */}
-        <ellipse cx="0" cy="6" rx="10" ry="4" fill={`url(#r-gold-metal-ft-${id})`} />
-        <path d="M 0 4 C -2.5 -2 0 -10 0 -14 C 0 -10 2.5 -2 0 4 Z" fill="#f59e0b" filter={`url(#r-foot-glow-${id})`} />
-        <circle cx="0" cy="-3" r="2" fill="#ffffff" />
-      </g>
-
-      {/* Floating Golden Shimmer & Petals */}
+      {/* Floating Golden Shimmer & Petals (Sparse & Subtle) */}
       {[
-        { cx: 380, cy: 160 },
-        { cx: 520, cy: 110 },
-        { cx: 680, cy: 170 },
-        { cx: 840, cy: 120 },
-        { cx: 1020, cy: 180 },
-        { cx: 1180, cy: 110 },
+        { cx: 240, cy: 90 },
+        { cx: 520, cy: 150 },
+        { cx: 780, cy: 80 },
+        { cx: 1040, cy: 160 },
+        { cx: 1280, cy: 90 },
       ].map((shimmer, idx) => (
         <circle
           key={`rakhi-shimmer-${idx}`}
           cx={shimmer.cx}
           cy={shimmer.cy}
-          r="3"
+          r="2"
           fill="#fef08a"
-          opacity={isDark ? 0.75 : 0.5}
+          opacity={isDark ? 0.6 : 0.4}
           filter={`url(#r-foot-glow-${id})`}
         />
       ))}
@@ -1920,16 +2002,98 @@ export const EidNavbarCluster: React.FC<FestiveGraphicProps> = ({ isDark = false
 };
 
 export const EidDividerWave: React.FC<FestiveGraphicProps> = ({ isDark = false, style, ...props }) => {
-  const id = React.useId();
+  const { width, svgRef } = useResponsiveSvgWidth();
+  const numSwags = Math.max(2, Math.round(width / 115));
+  const swagW = width / numSwags;
+
+  let ropePath = "M 0 1";
+  const swags = [];
+  for (let i = 0; i < numSwags; i++) {
+    const x0 = i * swagW;
+    const x1 = (i + 1) * swagW;
+    const midX = x0 + swagW / 2;
+    ropePath += ` Q ${midX} 13 ${x1} 1`;
+    swags.push({ i, x0, x1, midX });
+  }
+
   return (
-    <svg viewBox="0 0 1200 30" preserveAspectRatio="none" style={style} {...props}>
+    <svg
+      ref={svgRef}
+      viewBox={`0 0 ${width} 54`}
+      preserveAspectRatio="none"
+      width="100%"
+      height="54"
+      style={{ width: "100%", height: "54px", display: "block", overflow: "visible", ...style }}
+      {...props}
+    >
       <path
-        d="M 0 14 Q 200 24 400 14 Q 600 24 800 14 Q 1000 24 1200 14"
+        d={ropePath}
         fill="none"
-        stroke="#0d9488"
-        strokeWidth="2.5"
+        stroke={isDark ? "#facc15" : "#ca8a04"}
+        strokeWidth="1.4"
         strokeLinecap="round"
+        opacity={isDark ? 0.75 : 0.65}
       />
+      <path
+        d={ropePath}
+        fill="none"
+        stroke="#059669"
+        strokeWidth="1.0"
+        strokeDasharray="4, 4"
+        opacity={isDark ? 0.75 : 0.65}
+      />
+
+      {/* End terminal knots */}
+      <circle cx="0" cy="1" r="2.2" fill="#ca8a04" opacity={0.85} />
+      <circle cx={width} cy="1" r="2.2" fill="#ca8a04" opacity={0.85} />
+
+      {/* Inter-swag knot beads */}
+      {swags.slice(0, -1).map(({ x1, i }) => (
+        <g key={`e-knot-${i}`} transform={`translate(${x1}, 1)`} opacity={isDark ? 0.85 : 0.78}>
+          <circle cx="0" cy="0" r="1.8" fill="#ca8a04" />
+          <circle cx="0" cy="3" r="1.2" fill="#059669" />
+        </g>
+      ))}
+
+      {/* Swag center ornaments */}
+      {swags.map(({ midX, i }) => {
+        const mod = i % 3;
+        if (mod === 0) {
+          return (
+            <g key={`e-orn-${i}`} transform={`translate(${midX}, 13)`} opacity={isDark ? 0.88 : 0.8}>
+              <line x1="0" y1="0" x2="0" y2="16" stroke="#ca8a04" strokeWidth="0.8" opacity={0.65} />
+              <g transform="translate(0, 16)">
+                <polygon
+                  points="0,-3.2 1.0,-1.0 3.2,-1.0 1.4,0.6 2.0,2.8 0,1.5 -2.0,2.8 -1.4,0.6 -3.2,-1.0 -1.0,-1.0"
+                  fill="#facc15"
+                />
+              </g>
+            </g>
+          );
+        } else if (mod === 1) {
+          return (
+            <g key={`e-orn-${i}`} transform={`translate(${midX}, 13)`} opacity={isDark ? 0.88 : 0.8}>
+              <line x1="0" y1="0" x2="0" y2="16" stroke="#ca8a04" strokeWidth="0.8" opacity={0.65} />
+              <g transform="translate(0, 16)">
+                <polygon points="-1.8,0 1.8,0 1.2,-2 -1.2,-2" fill="#ca8a04" />
+                <polygon points="-2.5,0 2.5,0 1.8,6 -1.8,6" fill="#fef08a" />
+                <polygon points="-2.5,0 2.5,0 1.8,6 -1.8,6" fill="none" stroke="#ca8a04" strokeWidth="0.7" />
+                <circle cx="0" cy="3" r="1" fill="#ea580c" />
+                <polygon points="-1.8,6 1.8,6 0,8.5" fill="#ca8a04" />
+              </g>
+            </g>
+          );
+        } else {
+          return (
+            <g key={`e-orn-${i}`} transform={`translate(${midX}, 13)`} opacity={isDark ? 0.88 : 0.8}>
+              <line x1="0" y1="0" x2="0" y2="16" stroke="#ca8a04" strokeWidth="0.8" opacity={0.65} />
+              <g transform="translate(0, 16)">
+                <path d="M -2 -4 A 4 4 0 1 0 3 2 A 3 3 0 1 1 -2 -4 Z" fill="#facc15" />
+              </g>
+            </g>
+          );
+        }
+      })}
     </svg>
   );
 };
@@ -1939,24 +2103,13 @@ export const EidFooterScene: React.FC<FestiveGraphicProps> = ({ isDark = false, 
   return (
     <svg viewBox="0 0 1440 280" preserveAspectRatio="xMidYMid slice" style={style} {...props}>
       <defs>
-        <radialGradient id={`e-foot-teal-l-${id}`} cx="12%" cy="60%" r="60%">
-          <stop offset="0%" stopColor="#0d9488" stopOpacity={isDark ? 0.4 : 0.22} />
-          <stop offset="50%" stopColor="#115e59" stopOpacity={isDark ? 0.2 : 0.1} />
-          <stop offset="100%" stopColor="#0d9488" stopOpacity="0" />
-        </radialGradient>
-        <radialGradient id={`e-foot-gold-r-${id}`} cx="88%" cy="60%" r="60%">
-          <stop offset="0%" stopColor="#f59e0b" stopOpacity={isDark ? 0.35 : 0.2} />
-          <stop offset="50%" stopColor="#b45309" stopOpacity={isDark ? 0.18 : 0.08} />
-          <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
-        </radialGradient>
         <linearGradient id={`e-gold-brass-ft-${id}`} x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor="#fef08a" />
           <stop offset="35%" stopColor="#facc15" />
-          <stop offset="70%" stopColor="#eab308" />
           <stop offset="100%" stopColor="#854d0e" />
         </linearGradient>
         <filter id={`e-foot-glow-${id}`} x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur stdDeviation="6" result="blur" />
+          <feGaussianBlur stdDeviation="3" result="blur" />
           <feMerge>
             <feMergeNode in="blur" />
             <feMergeNode in="SourceGraphic" />
@@ -1964,86 +2117,36 @@ export const EidFooterScene: React.FC<FestiveGraphicProps> = ({ isDark = false, 
         </filter>
       </defs>
 
-      {/* Ambient Teal & Golden Radiance */}
-      <rect x="0" y="0" width="1440" height="280" fill={`url(#e-foot-teal-l-${id})`} />
-      <rect x="0" y="0" width="1440" height="280" fill={`url(#e-foot-gold-r-${id})`} />
+      {/* ── TOP BORDER: Elegant Lantern & Crescent Swag ── */}
+      <g stroke="#facc15" strokeWidth="1" opacity={isDark ? 0.4 : 0.28} fill="none">
+        <path d="M 0 10 Q 120 25 240 10 Q 360 25 480 10 Q 600 25 720 10 Q 840 25 960 10 Q 1080 25 1200 10 Q 1320 25 1440 10" />
+      </g>
+      {[120, 360, 600, 840, 1080, 1320].map((cx, idx) => (
+        <g key={`eid-swag-${idx}`} transform={`translate(${cx}, 18)`} opacity={isDark ? 0.7 : 0.5}>
+          <circle cx="0" cy="5" r="2.5" fill="#facc15" />
+        </g>
+      ))}
 
-      {/* ── BOTTOM EDGE: Elegant Grand Mosque Domes & Minarets Silhouette ── */}
-      <g fill={isDark ? "#042f2e" : "#134e4a"} opacity={isDark ? 0.6 : 0.35}>
-        {/* Main Central Dome */}
-        <path d="M 640 280 C 640 210 720 180 720 160 C 720 180 800 210 800 280 Z" />
-        <line x1="720" y1="160" x2="720" y2="135" stroke={`url(#e-gold-brass-ft-${id})`} strokeWidth="2.5" />
-        <circle cx="720" cy="135" r="3.5" fill={`url(#e-gold-brass-ft-${id})`} />
-
-        {/* Side Domes */}
-        <path d="M 440 280 C 440 230 500 210 500 190 C 500 210 560 230 560 280 Z" />
-        <path d="M 880 280 C 880 230 940 210 940 190 C 940 210 1000 230 1000 280 Z" />
-
-        {/* Left Minaret */}
-        <rect x="380" y="160" width="16" height="120" />
-        <polygon points="375,160 388,125 401,160" fill={`url(#e-gold-brass-ft-${id})`} />
-
-        {/* Right Minaret */}
-        <rect x="1040" y="160" width="16" height="120" />
-        <polygon points="1035,160 1048,125 1061,160" fill={`url(#e-gold-brass-ft-${id})`} />
+      {/* ── BOTTOM EDGE: Subtle Mosque Dome Horizon Silhouette ── */}
+      <g fill={isDark ? "#042f2e" : "#0d9488"} opacity={isDark ? 0.25 : 0.12}>
+        <path d="M 640 280 C 640 230 720 210 720 195 C 720 210 800 230 800 280 Z" />
+        <path d="M 460 280 C 460 245 510 230 510 215 C 510 230 560 245 560 280 Z" />
+        <path d="M 880 280 C 880 245 930 230 930 215 C 930 230 980 245 980 280 Z" />
       </g>
 
-      {/* ── TOP LEFT: Hanging Ornate Moroccan Fanous Lantern ── */}
-      <g transform="translate(120, 0)">
-        {/* Hanging Golden Chain */}
-        <line x1="0" y1="0" x2="0" y2="60" stroke={`url(#e-gold-brass-ft-${id})`} strokeWidth="2" strokeDasharray="4, 3" />
-        {/* Top Lantern Cap */}
-        <path d="M -18 60 L 18 60 L 12 40 L -12 40 Z" fill={`url(#e-gold-brass-ft-${id})`} />
-        <circle cx="0" cy="36" r="4" fill={`url(#e-gold-brass-ft-${id})`} />
-        {/* Glass Body */}
-        <polygon points="-24,60 24,60 18,125 -18,125" fill="#fef08a" opacity="0.9" filter={`url(#e-foot-glow-${id})`} />
-        <polygon points="-24,60 24,60 18,125 -18,125" fill="none" stroke={`url(#e-gold-brass-ft-${id})`} strokeWidth="3" />
-        <line x1="0" y1="60" x2="0" y2="125" stroke={`url(#e-gold-brass-ft-${id})`} strokeWidth="2" />
-        {/* Candle Flame */}
-        <path d="M 0 100 C -3 92 0 82 0 78 C 0 82 3 92 0 100 Z" fill="#ea580c" />
-        <circle cx="0" cy="92" r="2.5" fill="#ffffff" />
-        {/* Bottom Finial */}
-        <path d="M -18 125 L 18 125 L 0 150 Z" fill={`url(#e-gold-brass-ft-${id})`} />
-        <circle cx="0" cy="154" r="3.5" fill={`url(#e-gold-brass-ft-${id})`} />
-      </g>
-
-      {/* ── TOP RIGHT: Secondary Hanging Fanous & Glowing Crescent Moon ── */}
-      <g transform="translate(1320, 0)">
-        {/* Hanging Lantern */}
-        <line x1="0" y1="0" x2="0" y2="75" stroke={`url(#e-gold-brass-ft-${id})`} strokeWidth="2" strokeDasharray="4, 3" />
-        <path d="M -16 75 L 16 75 L 10 58 L -10 58 Z" fill={`url(#e-gold-brass-ft-${id})`} />
-        <polygon points="-20,75 20,75 15,130 -15,130" fill="#fef08a" opacity="0.9" filter={`url(#e-foot-glow-${id})`} />
-        <polygon points="-20,75 20,75 15,130 -15,130" fill="none" stroke={`url(#e-gold-brass-ft-${id})`} strokeWidth="3" />
-        <line x1="0" y1="75" x2="0" y2="130" stroke={`url(#e-gold-brass-ft-${id})`} strokeWidth="2" />
-        <path d="M 0 110 C -3 102 0 94 0 90 C 0 94 3 102 0 110 Z" fill="#ea580c" />
-        <circle cx="0" cy="103" r="2.5" fill="#ffffff" />
-        <path d="M -15 130 L 15 130 L 0 152 Z" fill={`url(#e-gold-brass-ft-${id})`} />
-      </g>
-
-      {/* Floating Golden Crescent Moon (Upper Right Sky) */}
-      <g transform="translate(1200, 70)" filter={`url(#e-foot-glow-${id})`}>
-        <path
-          d="M -25 -40 A 42 42 0 1 0 28 20 A 32 32 0 1 1 -25 -40 Z"
-          fill={`url(#e-gold-brass-ft-${id})`}
-        />
-      </g>
-
-      {/* ── TWINKLING 8-POINTED ISLAMIC STARS IN MIDNIGHT SKY ── */}
+      {/* ── TWINKLING 8-POINTED ISLAMIC STARS (Sparse & Subtle) ── */}
       {[
-        { cx: 260, cy: 70, r: 5 },
-        { cx: 340, cy: 120, r: 3.5 },
-        { cx: 480, cy: 60, r: 4.5 },
-        { cx: 600, cy: 110, r: 3.5 },
-        { cx: 760, cy: 50, r: 5 },
-        { cx: 880, cy: 100, r: 4 },
-        { cx: 1020, cy: 65, r: 4.5 },
-        { cx: 1120, cy: 120, r: 3.5 },
+        { cx: 200, cy: 80, r: 3.5 },
+        { cx: 480, cy: 140, r: 2.8 },
+        { cx: 720, cy: 60, r: 3.5 },
+        { cx: 960, cy: 130, r: 2.8 },
+        { cx: 1240, cy: 75, r: 3.2 },
       ].map((star, idx) => (
         <polygon
           key={`star-ft-${idx}`}
           points={`${star.cx},${star.cy - star.r} ${star.cx + star.r * 0.4},${star.cy - star.r * 0.4} ${star.cx + star.r},${star.cy} ${star.cx + star.r * 0.4},${star.cy + star.r * 0.4} ${star.cx},${star.cy + star.r} ${star.cx - star.r * 0.4},${star.cy + star.r * 0.4} ${star.cx - star.r},${star.cy} ${star.cx - star.r * 0.4},${star.cy - star.r * 0.4}`}
           fill="#fef08a"
-          opacity={isDark ? 0.85 : 0.65}
+          opacity={isDark ? 0.65 : 0.45}
           filter={`url(#e-foot-glow-${id})`}
         />
       ))}
@@ -2060,6 +2163,8 @@ export const HoliGraphics: React.FC<FestiveGraphicProps> = ({ variant = "hero", 
     case "navbar":
       return <HoliNavbarCluster {...props} />;
     case "grid":
+    case "divider":
+    case "hanging":
       return <HoliDividerWave {...props} />;
     case "footer":
       return <HoliFooterScene {...props} />;
@@ -2074,6 +2179,8 @@ export const DiwaliGraphics: React.FC<FestiveGraphicProps> = ({ variant = "hero"
     case "navbar":
       return <DiwaliNavbarCluster {...props} />;
     case "grid":
+    case "divider":
+    case "hanging":
       return <DiwaliDividerWave {...props} />;
     case "footer":
       return <DiwaliFooterScene {...props} />;
@@ -2088,6 +2195,8 @@ export const DurgaGraphics: React.FC<FestiveGraphicProps> = ({ variant = "hero",
     case "navbar":
       return <DurgaNavbarCluster {...props} />;
     case "grid":
+    case "divider":
+    case "hanging":
       return <DurgaDividerWave {...props} />;
     case "footer":
       return <DurgaFooterScene {...props} />;
@@ -2102,6 +2211,8 @@ export const ChristmasGraphics: React.FC<FestiveGraphicProps> = ({ variant = "he
     case "navbar":
       return <ChristmasNavbarCluster {...props} />;
     case "grid":
+    case "divider":
+    case "hanging":
       return <ChristmasDividerWave {...props} />;
     case "footer":
       return <ChristmasFooterScene {...props} />;
@@ -2116,6 +2227,8 @@ export const RakhiGraphics: React.FC<FestiveGraphicProps> = ({ variant = "hero",
     case "navbar":
       return <RakhiNavbarCluster {...props} />;
     case "grid":
+    case "divider":
+    case "hanging":
       return <RakhiDividerWave {...props} />;
     case "footer":
       return <RakhiFooterScene {...props} />;
@@ -2130,6 +2243,8 @@ export const EidGraphics: React.FC<FestiveGraphicProps> = ({ variant = "hero", .
     case "navbar":
       return <EidNavbarCluster {...props} />;
     case "grid":
+    case "divider":
+    case "hanging":
       return <EidDividerWave {...props} />;
     case "footer":
       return <EidFooterScene {...props} />;

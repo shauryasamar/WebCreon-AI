@@ -24,6 +24,7 @@ type SavedSite = {
   slug: string;
   site_definition?: any;
   draft_definition?: any;
+  is_online?: boolean;
 };
 
 export type AdminNavKey =
@@ -113,6 +114,10 @@ type BuilderDrawerPanelProps = {
   onSelectSettingsNav?: (key: SettingsNavKey) => void;
   siteDefinition?: any;
   onSiteDefinitionChange?: (next: any) => void;
+  isOnline?: boolean;
+  isPublished?: boolean;
+  onToggleStoreStatus?: (newOnline: boolean) => Promise<void> | void;
+  statusLoading?: boolean;
 };
 
 function titleForDrawer(key: ControlItemKey | null) {
@@ -123,10 +128,14 @@ function titleForDrawer(key: ControlItemKey | null) {
       return "WEBCREON CO-PILOT";
     case "admin-panel":
       return "STORE CONTROL";
+    case "customize":
+      return "CUSTOMIZE";
     case "assets":
       return "COMPONENT ASSETS";
     case "settings":
       return "SETTINGS";
+    case "qr-link":
+      return "QR & SHARE LINK";
     default:
       return "";
   }
@@ -220,16 +229,30 @@ function getSiteDescription(site: SavedSite): string {
   return `Online storefront for ${brandName} with curated catalog and easy checkout.`;
 }
 
-function LinkIcon({ isSelected }: { isSelected?: boolean }) {
+function LinkIcon({
+  isOnline = true,
+  isSelected,
+}: {
+  isOnline?: boolean;
+  isSelected?: boolean;
+}) {
+  const iconColor = isOnline ? "#2563eb" : "#f59e0b";
+
   return (
     <svg
       viewBox="0 0 24 24"
       fill="none"
-      stroke={isSelected ? "#2563eb" : "#64748b"}
-      strokeWidth="1.8"
+      stroke={iconColor}
+      strokeWidth="1.85"
       strokeLinecap="round"
       strokeLinejoin="round"
-      style={{ width: 16, height: 16, flexShrink: 0, marginTop: "2px" }}
+      style={{
+        width: 16,
+        height: 16,
+        flexShrink: 0,
+        marginTop: "2px",
+        transition: "stroke 0.15s ease",
+      }}
     >
       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
       <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
@@ -242,15 +265,18 @@ function SavedSiteCard({
   isSelected,
   onClick,
   onDelete,
+  liveStatus,
 }: {
   site: SavedSite;
   isSelected: boolean;
   onClick: () => void;
   onDelete?: () => void;
+  liveStatus?: boolean;
 }) {
   const [isHovered, setIsHovered] = useState(false);
   const brandName = getBrandName(site);
   const description = getSiteDescription(site);
+  const isSiteOnline = liveStatus !== undefined ? liveStatus : (site.is_online !== false);
 
   return (
     <div
@@ -271,8 +297,9 @@ function SavedSiteCard({
         transition: "all 0.12s ease",
         position: "relative",
       }}
+      title={isSiteOnline ? `${brandName} (Live)` : `${brandName} (Maintenance / Offline)`}
     >
-      <LinkIcon isSelected={isSelected} />
+      <LinkIcon isOnline={isSiteOnline} isSelected={isSelected} />
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
@@ -1042,9 +1069,14 @@ export default function BuilderDrawerPanel({
   onSelectSettingsNav,
   siteDefinition,
   onSiteDefinitionChange,
+  isOnline = true,
+  isPublished = false,
+  onToggleStoreStatus,
+  statusLoading = false,
 }: BuilderDrawerPanelProps) {
   const { hasPermission, isOwner } = useAdminAuth();
   const canDeleteSite = isOwner || hasPermission("saved_sites:delete");
+  const canToggleStatus = isOwner || hasPermission("store_status:edit");
 
   const visibleAdminNavItems = isOwner
     ? ADMIN_NAV_ITEMS
@@ -1328,7 +1360,10 @@ export default function BuilderDrawerPanel({
       `}</style>
       <div
         style={{
-          padding: "14px 16px 10px",
+          height: "44px",
+          minHeight: "44px",
+          maxHeight: "44px",
+          padding: "0 16px",
           borderBottom: "1px solid rgba(15,23,42,0.06)",
           display: "flex",
           alignItems: "center",
@@ -1339,25 +1374,120 @@ export default function BuilderDrawerPanel({
           color: "#64748b",
           textTransform: "uppercase",
           flexShrink: 0,
+          boxSizing: "border-box",
         }}
       >
-        <span>{title}</span>
-        <button
-          type="button"
-          onClick={onClose}
-          style={{
-            border: "none",
-            background: "transparent",
-            cursor: "pointer",
-            fontSize: 18,
-            lineHeight: 1,
-            color: "#94a3b8",
-            display: "grid",
-            placeItems: "center",
-          }}
-        >
-          ×
-        </button>
+        <span style={{ lineHeight: "44px", display: "inline-block" }}>{title}</span>
+        
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", height: "100%" }}>
+          {activeDrawer === "saved-sites" && onToggleStoreStatus && (
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label={isOnline ? "Store is Live (Serving visitors). Click to switch to Offline maintenance mode." : "Store is Offline (Maintenance mode). Click to bring store Live."}
+              title={
+                !isPublished
+                  ? "Publish store before toggling Live / Offline availability"
+                  : !canToggleStatus
+                  ? "You do not have permission to change store status"
+                  : isOnline
+                  ? "Store is LIVE (Serving public visitors & taking orders) — Click to switch to Offline maintenance mode"
+                  : "Store is OFFLINE (Maintenance mode active) — Click to bring store Live"
+              }
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isPublished && canToggleStatus && !statusLoading) {
+                  onToggleStoreStatus(!isOnline);
+                }
+              }}
+              onKeyDown={(e) => {
+                if ((e.key === "Enter" || e.key === " ") && isPublished && canToggleStatus && !statusLoading) {
+                  e.preventDefault();
+                  onToggleStoreStatus(!isOnline);
+                }
+              }}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                background: "#edf2f7",
+                border: "1px solid rgba(15, 23, 42, 0.08)",
+                borderRadius: "7px",
+                padding: "1.5px",
+                gap: "2px",
+                cursor: !isPublished || !canToggleStatus || statusLoading ? "not-allowed" : "pointer",
+                opacity: !isPublished || !canToggleStatus ? 0.6 : 1,
+                transition: "all 0.15s ease",
+                boxShadow: "inset 0 1px 2px rgba(0,0,0,0.04)",
+                userSelect: "none",
+                height: "23px",
+                boxSizing: "border-box",
+              }}
+            >
+              {/* OFFLINE Icon (Eye-Off) */}
+              <div
+                style={{
+                  width: "23px",
+                  height: "19px",
+                  borderRadius: "5.5px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: !isOnline ? "#ffffff" : "transparent",
+                  color: !isOnline ? "#f97316" : "#64748b",
+                  boxShadow: !isOnline ? "0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.06)" : "none",
+                  transition: "all 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
+                }}
+              >
+                <svg width="13.5" height="13.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/>
+                  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/>
+                  <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/>
+                  <line x1="2" x2="22" y1="2" y2="22"/>
+                </svg>
+              </div>
+
+              {/* LIVE Icon (Eye) */}
+              <div
+                style={{
+                  width: "23px",
+                  height: "19px",
+                  borderRadius: "5.5px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: isOnline ? "#ffffff" : "transparent",
+                  color: isOnline ? "#2563eb" : "#64748b",
+                  boxShadow: isOnline ? "0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.06)" : "none",
+                  transition: "all 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
+                }}
+              >
+                <svg width="13.5" height="13.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              </div>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              border: "none",
+              background: "transparent",
+              cursor: "pointer",
+              fontSize: 18,
+              lineHeight: 1,
+              color: "#94a3b8",
+              display: "grid",
+              placeItems: "center",
+              width: "24px",
+              height: "24px",
+            }}
+          >
+            ×
+          </button>
+        </div>
       </div>
 
       <div
@@ -1420,6 +1550,7 @@ export default function BuilderDrawerPanel({
                     key={site.id}
                     site={site}
                     isSelected={isSelected}
+                    liveStatus={isSelected ? isOnline : (site.is_online !== false)}
                     onClick={() => onSelectSite?.(site.id)}
                     onDelete={canDeleteSite ? () => {
                       setDeleteSiteModal({

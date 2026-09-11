@@ -611,10 +611,10 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   const rawFestiveOpacity = currentSlide.festive_opacity !== undefined
     ? currentSlide.festive_opacity
     : (restProps as any).festive_opacity !== undefined
-    ? (restProps as any).festive_opacity
-    : (theme as any)?.hero_festive_opacity !== undefined
-    ? (theme as any)?.hero_festive_opacity
-    : (theme as any)?.festive_opacity;
+      ? (restProps as any).festive_opacity
+      : (theme as any)?.hero_festive_opacity !== undefined
+        ? (theme as any)?.hero_festive_opacity
+        : (theme as any)?.festive_opacity;
 
   const renderHeroFestiveBackdrop = () => {
     if (hasSlideBgImage || !festTheme || festTheme === "none") return null;
