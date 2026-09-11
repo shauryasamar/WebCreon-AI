@@ -362,6 +362,8 @@ class AuditService:
             )
             s.add(audit_entry)
             s.commit()
+            s.refresh(audit_entry)
+            s.expunge(audit_entry)
             return audit_entry
 
         try:

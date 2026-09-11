@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 from threading import Lock
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
@@ -151,10 +151,6 @@ def get_customer_for_site_or_404(
     return user
 
 
-def make_slug(name: str) -> str:
-    return "-".join(name.strip().lower().split())
-
-
 def json_safe(value: Any) -> Any:
     if isinstance(value, Decimal):
         return float(value)
@@ -222,6 +218,9 @@ def get_product_review_summary(
 
     avg_rating, review_count = result
     return float(avg_rating or 0), int(review_count or 0)
+
+
+get_product_rating_summary = get_product_review_summary
 
 
 def get_product_reviews(
@@ -1723,170 +1722,6 @@ def download_sample_csv(
     )
 
 
-class BulkProductActionRequest(BaseModel):
-    product_ids: list[UUID]
-    action: str  # "activate", "deactivate", "delete"
-
-
-@router.post("/bulk-action")
-def bulk_product_action(
-    site_id: UUID,
-    payload: BulkProductActionRequest,
-    ownership=Depends(enforce_site_ownership),
-    session: Session = Depends(get_session),
-):
-    get_site_or_404(session, site_id)
-    admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
-    if admin_id:
-        if payload.action in {"delete"} and not check_admin_has_permission(admin_id, "products:delete", session):
-            raise HTTPException(status_code=403, detail="You do not have permission to delete products")
-        elif payload.action in {"duplicate"} and not check_admin_has_permission(admin_id, "products:create", session):
-            raise HTTPException(status_code=403, detail="You do not have permission to duplicate or create products")
-        elif payload.action in {"activate", "make_active", "publish", "active", "deactivate", "make_draft", "draft"} and not check_admin_has_permission(admin_id, "products:edit", session):
-            raise HTTPException(status_code=403, detail="You do not have permission to edit products")
-
-    if not payload.product_ids:
-        return {"success": True, "count": 0}
-
-    if payload.action in {"activate", "make_active", "publish", "active"}:
-        products = session.exec(
-            select(Product).where(
-                Product.site_id == site_id,
-                Product.id.in_(payload.product_ids),
-            )
-        ).all()
-        for p in products:
-            p.is_active = True
-        session.add_all(products)
-        session.commit()
-        catalog_cache.invalidate_site(site_id)
-        return {"success": True, "count": len(products), "action": "activate"}
-
-    elif payload.action in {"deactivate", "make_draft", "unpublish", "draft"}:
-        products = session.exec(
-            select(Product).where(
-                Product.site_id == site_id,
-                Product.id.in_(payload.product_ids),
-            )
-        ).all()
-        for p in products:
-            p.is_active = False
-        session.add_all(products)
-        session.commit()
-        catalog_cache.invalidate_site(site_id)
-        return {"success": True, "count": len(products), "action": "deactivate"}
-
-    elif payload.action in {"duplicate", "copy"}:
-        products = session.exec(
-            select(Product).where(
-                Product.site_id == site_id,
-                Product.id.in_(payload.product_ids),
-            )
-        ).all()
-        cloned_count = 0
-        for product in products:
-            cloned_product = Product(
-                site_id=site_id,
-                name=f"{product.name} (Copy)",
-                brand=product.brand,
-                category=product.category,
-                category_id=product.category_id,
-                description=product.description,
-                price=product.price,
-                compare_price=product.compare_price,
-                stock=product.stock,
-                in_stock=product.in_stock,
-                is_active=False,
-                sku=f"{product.sku}-COPY" if product.sku else None,
-                hsn_code=product.hsn_code,
-                video_url=product.video_url,
-                video_position=getattr(product, "video_position", 2),
-                sibling_group=getattr(product, "sibling_group", None),
-                sibling_label=f"{product.sibling_label} (Copy)" if getattr(product, "sibling_label", None) else None,
-                weight_grams=product.weight_grams,
-                length_cm=product.length_cm,
-                width_cm=product.width_cm,
-                height_cm=product.height_cm,
-                highlights=deepcopy(product.highlights) if product.highlights else [],
-                images=deepcopy(product.images) if product.images else [],
-                variant_option=deepcopy(product.variant_option) if product.variant_option else None,
-                return_window_days=product.return_window_days,
-            )
-            session.add(cloned_product)
-            session.flush()
-
-            assoc_rows = session.exec(
-                select(ProductCollection).where(
-                    ProductCollection.product_id == product.id
-                )
-            ).all()
-            for assoc in assoc_rows:
-                session.add(
-                    ProductCollection(
-                        product_id=cloned_product.id,
-                        collection_id=assoc.collection_id,
-                    )
-                )
-            cloned_count += 1
-
-        session.commit()
-        catalog_cache.invalidate_site(site_id)
-        return {"success": True, "count": cloned_count, "action": "duplicate"}
-
-    elif payload.action == "delete":
-        # 1. Fetch matching products belonging to this site
-        products = session.exec(
-            select(Product).where(
-                Product.site_id == site_id,
-                Product.id.in_(payload.product_ids),
-            )
-        ).all()
-        if not products:
-            return {"success": True, "count": 0, "action": "delete"}
-
-        target_ids = [p.id for p in products]
-
-        # 2. Clean up transient cart items containing these products
-        session.exec(
-            delete(CartItem).where(CartItem.product_id.in_(target_ids))
-        )
-
-        # 3. Clean up product collections junction
-        session.exec(
-            delete(ProductCollection).where(
-                ProductCollection.product_id.in_(target_ids)
-            )
-        )
-
-        # 4. Clean up product reviews
-        session.exec(
-            delete(ProductReview).where(
-                ProductReview.product_id.in_(target_ids)
-            )
-        )
-
-        # 5. Nullify historical order references to preserve order records without FK blocks
-        session.exec(
-            update(OrderItem).where(OrderItem.product_id.in_(target_ids)).values(product_id=None)
-        )
-        session.exec(
-            update(ReturnItem).where(ReturnItem.product_id.in_(target_ids)).values(product_id=None)
-        )
-        session.exec(
-            update(InventoryMovement).where(InventoryMovement.product_id.in_(target_ids)).values(product_id=None)
-        )
-
-        # 6. Delete products
-        for p in products:
-            session.delete(p)
-        session.commit()
-        catalog_cache.invalidate_site(site_id)
-        return {"success": True, "count": len(products), "action": "delete"}
-
-    else:
-        raise HTTPException(status_code=400, detail=f"Unknown action '{payload.action}'")
-
-
 @router.post("/import-csv")
 async def import_products_csv(
     site_id: UUID,
@@ -2311,7 +2146,7 @@ def list_product_reviews(
     reviews = get_product_reviews(
         session, site_id, product.id, product.sibling_group, limit=page_size, offset=offset
     )
-    avg_rating, total_count = get_product_rating_summary(
+    avg_rating, total_count = get_product_review_summary(
         session, site_id, product.id, product.sibling_group
     )
 
@@ -2679,7 +2514,7 @@ def update_product(
     session.refresh(product)
     catalog_cache.invalidate_site(site_id)
 
-    diff_changes: Dict[str, Any] = {}
+    diff_changes: dict[str, Any] = {}
     primary_action = "product.updated"
     new_price = float(product.price) if product.price is not None else None
     if old_price != new_price:
@@ -2745,19 +2580,26 @@ def bulk_action_products(
 ):
     get_site_or_404(session, site_id)
     admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
+    action = payload.action.strip().lower()
+
     if admin_id:
-        act = payload.action.strip().lower()
-        if act == "delete" and not check_admin_has_permission(admin_id, "products:delete", session):
+        if action == "delete" and not check_admin_has_permission(admin_id, "products:delete", session):
             raise HTTPException(status_code=403, detail="You do not have permission to delete products")
-        elif act in ("make_active", "make_draft") and not check_admin_has_permission(admin_id, "products:edit", session):
+        elif action in {"duplicate", "copy"} and not check_admin_has_permission(admin_id, "products:create", session):
+            raise HTTPException(status_code=403, detail="You do not have permission to duplicate or create products")
+        elif action in {"make_active", "activate", "publish", "active", "make_draft", "deactivate", "unpublish", "draft"} and not check_admin_has_permission(admin_id, "products:edit", session):
             raise HTTPException(status_code=403, detail="You do not have permission to edit products")
 
     if not payload.product_ids:
-        raise HTTPException(status_code=400, detail="No product IDs provided")
+        return {"success": True, "action": action, "affected_count": 0, "batch_size": 250}
 
-    action = payload.action.strip().lower()
-    if action not in {"make_active", "make_draft", "delete"}:
-        raise HTTPException(status_code=400, detail="Invalid bulk action")
+    valid_actions = {
+        "make_active", "activate", "publish", "active",
+        "make_draft", "deactivate", "unpublish", "draft",
+        "duplicate", "copy", "delete"
+    }
+    if action not in valid_actions:
+        raise HTTPException(status_code=400, detail=f"Invalid bulk action '{payload.action}'")
 
     parsed_ids: list[UUID] = []
     for pid in payload.product_ids:
@@ -2780,7 +2622,7 @@ def bulk_action_products(
     affected_count = 0
 
     try:
-        if action == "make_active":
+        if action in {"make_active", "activate", "publish", "active"}:
             for chunk in chunk_list(unique_ids, CHUNK_SIZE):
                 stmt = (
                     update(Product)
@@ -2789,7 +2631,7 @@ def bulk_action_products(
                 )
                 result = session.exec(stmt)
                 affected_count += getattr(result, "rowcount", len(chunk))
-        elif action == "make_draft":
+        elif action in {"make_draft", "deactivate", "unpublish", "draft"}:
             for chunk in chunk_list(unique_ids, CHUNK_SIZE):
                 stmt = (
                     update(Product)
@@ -2798,6 +2640,57 @@ def bulk_action_products(
                 )
                 result = session.exec(stmt)
                 affected_count += getattr(result, "rowcount", len(chunk))
+        elif action in {"duplicate", "copy"}:
+            products = session.exec(
+                select(Product).where(
+                    Product.site_id == site_id,
+                    Product.id.in_(unique_ids),
+                )
+            ).all()
+            for product in products:
+                cloned_product = Product(
+                    site_id=site_id,
+                    name=f"{product.name} (Copy)",
+                    brand=product.brand,
+                    category=product.category,
+                    category_id=product.category_id,
+                    description=product.description,
+                    price=product.price,
+                    compare_price=product.compare_price,
+                    stock=product.stock,
+                    in_stock=product.in_stock,
+                    is_active=False,
+                    sku=f"{product.sku}-COPY" if product.sku else None,
+                    hsn_code=product.hsn_code,
+                    video_url=product.video_url,
+                    video_position=getattr(product, "video_position", 2),
+                    sibling_group=getattr(product, "sibling_group", None),
+                    sibling_label=f"{product.sibling_label} (Copy)" if getattr(product, "sibling_label", None) else None,
+                    weight_grams=product.weight_grams,
+                    length_cm=product.length_cm,
+                    width_cm=product.width_cm,
+                    height_cm=product.height_cm,
+                    highlights=deepcopy(product.highlights) if product.highlights else [],
+                    images=deepcopy(product.images) if product.images else [],
+                    variant_option=deepcopy(product.variant_option) if product.variant_option else None,
+                    return_window_days=product.return_window_days,
+                )
+                session.add(cloned_product)
+                session.flush()
+
+                assoc_rows = session.exec(
+                    select(ProductCollection).where(
+                        ProductCollection.product_id == product.id
+                    )
+                ).all()
+                for assoc in assoc_rows:
+                    session.add(
+                        ProductCollection(
+                            product_id=cloned_product.id,
+                            collection_id=assoc.collection_id,
+                        )
+                    )
+                affected_count += 1
         elif action == "delete":
             for chunk in chunk_list(unique_ids, CHUNK_SIZE):
                 # 1. Delete transient cart items containing these products
@@ -2933,7 +2826,7 @@ def quick_edit_product(
     session.refresh(product)
     catalog_cache.invalidate_site(site_id)
 
-    diff_changes: Dict[str, Any] = {}
+    diff_changes: dict[str, Any] = {}
     primary_action = "product.updated"
     new_price = float(product.price) if product.price is not None else None
     if old_price != new_price:

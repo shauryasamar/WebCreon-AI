@@ -38,8 +38,12 @@ from models import (
     ProductCollection, ProductReview, ReturnRequest, ReturnItem, ReturnStatusHistory,
     Shipment, InventoryMovement, OrderStatusHistory, User, UserAddress,
     DeliveryAgent, DeliverySettings, SiteTrafficEvent,
+    AuditLog, SiteDomain, DomainOperation, SiteSlugHistory,
+    TenantLedgerEntry, TenantBankAccount, Payout,
+    SupportAgent, SupportTicket, SupportTicketMessage,
+    StorePage, Coupon, CouponUsage, SiteDefinitionHistory,
 )
-from routers import analytics, auth, cart, categories, checkout, checkout_settings, collections, coupons, orders, pages, payments, products, returns, support, users_roles, audit_logs
+from routers import analytics, auth, cart, categories, checkout, checkout_settings, collections, coupons, orders, pages, payments, products, returns, support, users_roles, audit_logs, domains
 from routers import delivery
 
 
@@ -105,6 +109,42 @@ async def _activity_retention_cron_task():
             await asyncio.sleep(86400)  # Run once every 24 hours
         except asyncio.CancelledError:
             break
+
+
+async def _domain_edge_sync_cron_task():
+    """Periodically reconciles domains in routing_unknown or ssl_pending state with edge provider."""
+    while True:
+        try:
+            await asyncio.sleep(900)  # Check every 15 minutes
+            with Session(engine) as session:
+                from models import SiteDomain
+                from services.domain_provider import get_domain_provider
+                pending_domains = session.exec(
+                    select(SiteDomain).where(
+                        (SiteDomain.status == "routing_unknown") |
+                        ((SiteDomain.status == "connected") & (SiteDomain.ssl_status == "ssl_pending"))
+                    )
+                ).all()
+                if pending_domains:
+                    provider = get_domain_provider()
+                    for dom in pending_domains:
+                        try:
+                            if dom.status == "routing_unknown":
+                                routing_st = provider.get_domain_routing_status(dom.domain)
+                                if routing_st == "active":
+                                    dom.status = "connected"
+                            if dom.ssl_status == "ssl_pending":
+                                ssl_st = provider.get_ssl_status(dom.domain)
+                                if ssl_st in ("ssl_active", "ssl_failed"):
+                                    dom.ssl_status = ssl_st
+                            session.add(dom)
+                        except Exception:
+                            pass
+                    session.commit()
+        except asyncio.CancelledError:
+            break
+        except Exception as err:
+            logger.error("Error in domain edge sync background task: %s", err)
 
 
 @asynccontextmanager
@@ -204,6 +244,7 @@ async def lifespan(app: FastAPI):
         logger.warning("Could not purge legacy REPL shipments: %s", cleanup_err)
     escrow_task = asyncio.create_task(_mature_escrow_cron_task())
     retention_task = asyncio.create_task(_activity_retention_cron_task())
+    domain_sync_task = asyncio.create_task(_domain_edge_sync_cron_task())
     try:
         yield
     finally:
@@ -214,12 +255,17 @@ async def lifespan(app: FastAPI):
             pass
         escrow_task.cancel()
         retention_task.cancel()
+        domain_sync_task.cancel()
         try:
             await escrow_task
         except asyncio.CancelledError:
             pass
         try:
             await retention_task
+        except asyncio.CancelledError:
+            pass
+        try:
+            await domain_sync_task
         except asyncio.CancelledError:
             pass
 
@@ -274,6 +320,7 @@ app.include_router(users_roles.router)
 app.include_router(users_roles.router, prefix="/api")
 app.include_router(audit_logs.router)
 app.include_router(audit_logs.router, prefix="/api")
+app.include_router(domains.router)
 
 
 # ---------------------------------------------------------------------------
@@ -1493,51 +1540,84 @@ def delete_site(
         detail_msg = f"Cannot delete store with uncleared activity ({', '.join(reasons)}). Please resolve or cancel all active orders and return requests first."
         raise HTTPException(status_code=400, detail=detail_msg)
 
-    # 1. Return related tables
+    # 1. Support system (messages -> tickets -> agents)
+    ticket_ids = session.exec(select(SupportTicket.id).where(SupportTicket.site_id == site_id)).all()
+    if ticket_ids:
+        session.exec(delete(SupportTicketMessage).where(SupportTicketMessage.ticket_id.in_(ticket_ids)))
+    session.exec(delete(SupportTicket).where(SupportTicket.site_id == site_id))
+    session.exec(delete(SupportAgent).where(SupportAgent.site_id == site_id))
+
+    # 2. Return related tables (status history -> return items -> return requests)
     return_request_ids = session.exec(select(ReturnRequest.id).where(ReturnRequest.site_id == site_id)).all()
     if return_request_ids:
         session.exec(delete(ReturnStatusHistory).where(ReturnStatusHistory.return_request_id.in_(return_request_ids)))
     session.exec(delete(ReturnItem).where(ReturnItem.site_id == site_id))
     session.exec(delete(ReturnRequest).where(ReturnRequest.site_id == site_id))
 
-    # 2. Product Reviews
+    # 3. Product Reviews
     session.exec(delete(ProductReview).where(ProductReview.site_id == site_id))
 
-    # 3. Shipments & Inventory Movements
+    # 4. Shipments & Inventory Movements
     session.exec(delete(Shipment).where(Shipment.site_id == site_id))
     session.exec(delete(InventoryMovement).where(InventoryMovement.site_id == site_id))
 
-    # 4. Orders, Order Items & Order Status History
+    # 5. Delivery Settings & Agents
+    session.exec(delete(DeliveryAgent).where(DeliveryAgent.site_id == site_id))
+    session.exec(delete(DeliverySettings).where(DeliverySettings.site_id == site_id))
+
+    # 6. Tenant Financials (Ledger, Payouts, Bank Accounts)
+    session.exec(delete(TenantLedgerEntry).where(TenantLedgerEntry.site_id == site_id))
+    session.exec(delete(Payout).where(Payout.site_id == site_id))
+    session.exec(delete(TenantBankAccount).where(TenantBankAccount.site_id == site_id))
+
+    # 7. Coupons & Usages
+    session.exec(delete(CouponUsage).where(CouponUsage.site_id == site_id))
+    session.exec(delete(Coupon).where(Coupon.site_id == site_id))
+
+    # 8. Orders, Order Items & Order Status History
     order_ids = session.exec(select(Order.id).where(Order.site_id == site_id)).all()
     if order_ids:
         session.exec(delete(OrderStatusHistory).where(OrderStatusHistory.order_id.in_(order_ids)))
     session.exec(delete(OrderItem).where(OrderItem.site_id == site_id))
     session.exec(delete(Order).where(Order.site_id == site_id))
 
-    # 5. Cart Items & Carts
+    # 9. Cart Items & Carts
     cart_ids = session.exec(select(Cart.id).where(Cart.site_id == site_id)).all()
     if cart_ids:
         session.exec(delete(CartItem).where(CartItem.cart_id.in_(cart_ids)))
     session.exec(delete(Cart).where(Cart.site_id == site_id))
 
-    # 6. Product Collections & Products
+    # 10. Product Collections & Products
     product_ids = session.exec(select(Product.id).where(Product.site_id == site_id)).all()
     if product_ids:
         session.exec(delete(ProductCollection).where(ProductCollection.product_id.in_(product_ids)))
     session.exec(delete(Product).where(Product.site_id == site_id))
 
-    # 7. Collections & Categories
+    # 11. Collections & Categories
     session.exec(delete(Collection).where(Collection.site_id == site_id))
     session.exec(delete(Category).where(Category.site_id == site_id))
 
-    # 8. User Addresses & Users
+    # 12. Store Pages, Traffic Events, and Definition History
+    session.exec(delete(StorePage).where(StorePage.site_id == site_id))
+    session.exec(delete(SiteTrafficEvent).where(SiteTrafficEvent.site_id == site_id))
+    session.exec(delete(SiteDefinitionHistory).where(SiteDefinitionHistory.site_id == site_id))
+
+    # 13. Domains, Operations & Slug History
+    session.exec(delete(DomainOperation).where(DomainOperation.site_id == site_id))
+    session.exec(delete(SiteDomain).where(SiteDomain.site_id == site_id))
+    session.exec(delete(SiteSlugHistory).where(SiteSlugHistory.site_id == site_id))
+
+    # 14. User Addresses & Users
     session.exec(delete(UserAddress).where(UserAddress.site_id == site_id))
     session.exec(delete(User).where(User.site_id == site_id))
 
-    # 9. AdminSite associations
+    # 15. Audit Logs
+    session.exec(delete(AuditLog).where(AuditLog.site_id == site_id))
+
+    # 16. AdminSite associations
     session.exec(delete(AdminSite).where(AdminSite.site_id == site_id))
 
-    # 10. Delete Site entity
+    # 17. Delete Site entity
     session.delete(site)
     session.commit()
 

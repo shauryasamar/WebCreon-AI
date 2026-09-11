@@ -991,7 +991,7 @@ def dispatch_order(
 
     res = None
     if mode == "own_agent":
-        res = _dispatch_own_agent(order, site_id, body, settings, session, existing_shipment=existing)
+        res = _dispatch_own_agent(order, site_id, body, settings, session, existing_shipment=existing, ownership=ownership, admin_id=admin_id)
     elif mode == "shiprocket":
         res = _dispatch_shiprocket(order, site_id, body, settings, session, existing_shipment=existing)
     else:
@@ -1031,6 +1031,8 @@ def _dispatch_own_agent(
     settings: DeliverySettings,
     session: Session,
     existing_shipment: Optional[Shipment] = None,
+    ownership: Optional[dict] = None,
+    admin_id: Optional[Any] = None,
 ) -> dict:
     """Assign or reassign an own delivery agent — auto-pick least busy if agent_id not specified."""
     agent_id: Optional[UUID] = None
@@ -1126,14 +1128,16 @@ def _dispatch_own_agent(
     session.refresh(shipment)
 
     try:
+        ownership_dict = ownership or {}
+        admin_uuid = UUID(str(admin_id)) if admin_id else None
         AuditService.log_event(
             session=session,
             site_id=site_id,
-            actor_type=ActorType.OWNER if (ownership.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
-            actor_id=admin_id,
-            actor_name=ownership.get("name"),
-            actor_email=ownership.get("email"),
-            actor_role=ownership.get("role") or "Staff",
+            actor_type=ActorType.OWNER if (ownership_dict.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=admin_uuid,
+            actor_name=ownership_dict.get("name"),
+            actor_email=ownership_dict.get("email"),
+            actor_role=ownership_dict.get("role") or "Staff",
             category=AuditCategory.DELIVERY,
             action="order.assigned_to_rider" if not is_reassign else "order.reassigned_to_rider",
             source=SourceType.WEB_ADMIN,

@@ -105,6 +105,12 @@ class Site(SQLModel, table=True):
             return self.site_definition.get("site_name") or self.site_definition.get("name") or self.slug
         return self.slug
 
+    @property
+    def is_published(self) -> bool:
+        if self.site_definition and isinstance(self.site_definition, dict):
+            return bool(self.site_definition.get("pages") is not None)
+        return False
+
     created_at: datetime = Field(
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False),
@@ -1423,4 +1429,74 @@ class AuditLog(SQLModel, table=True):
     )
 
 
+class SiteDomain(SQLModel, table=True):
+    __tablename__ = "site_domains"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    site_id: UUID = Field(foreign_key="sites.id", index=True, nullable=False)
+
+    domain: str = Field(index=True, unique=True, nullable=False)
+    is_primary: bool = Field(default=False, nullable=False)
+    domain_type: str = Field(default="custom_subdomain", nullable=False)  # custom_subdomain | custom_www
+
+    status: str = Field(default="dns_required", nullable=False)
+    ssl_status: str = Field(default="ssl_pending", nullable=False)
+
+    dns_record_type: str = Field(default="CNAME", nullable=False)
+    dns_record_name: str = Field(nullable=False)
+    dns_record_value: str = Field(nullable=False)
+
+    verification_token: str = Field(nullable=False)
+    last_verified_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    error_message: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False, onupdate=utc_now))
+
+
+class DomainOperation(SQLModel, table=True):
+    __tablename__ = "domain_operations"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    domain_id: UUID = Field(foreign_key="site_domains.id", index=True, nullable=False)
+    site_id: UUID = Field(foreign_key="sites.id", index=True, nullable=False)
+
+    operation_type: str = Field(nullable=False)  # REGISTER_DOMAIN, REMOVE_DOMAIN, VERIFY_DNS, CHECK_SSL, PURGE_CACHE
+    idempotency_key: str = Field(index=True, unique=True, nullable=False)
+    status: str = Field(default="pending", nullable=False)  # pending, in_progress, completed, failed, uncertain
+    attempt_count: int = Field(default=0, nullable=False)
+    last_error: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    provider_reference: Optional[str] = Field(default=None, nullable=True)
+
+    next_retry_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False, onupdate=utc_now))
+
+
+class ProcessedProviderEvent(SQLModel, table=True):
+    __tablename__ = "processed_provider_events"
+    __table_args__ = (
+        UniqueConstraint("provider", "event_id", name="uq_provider_event_id"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    provider: str = Field(nullable=False)
+    event_id: str = Field(nullable=False)
+
+    resource_id: Optional[str] = Field(default=None, nullable=True)
+    payload_hash: str = Field(nullable=False)
+    status: str = Field(default="processed", nullable=False)
+
+    received_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    processed_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+
+
+class SiteSlugHistory(SQLModel, table=True):
+    __tablename__ = "site_slug_history"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    site_id: UUID = Field(foreign_key="sites.id", index=True, nullable=False)
+    old_slug: str = Field(index=True, unique=True, nullable=False)
+    reserved_until: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
 

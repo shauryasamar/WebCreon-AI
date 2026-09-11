@@ -41,9 +41,9 @@ CATEGORY_DEFINITIONS = {
         "legacy": ["delivery", "shipping", "delivery_shipping", "riders"],
     },
     "website": {
-        "label": "Home Sections & Pages",
-        "prefixes": ["website.", "page.", "section."],
-        "legacy": ["website", "pages", "sections", "website_store", "home_sections", "pages_policies"],
+        "label": "Store, Pages & Domains",
+        "prefixes": ["website.", "page.", "section.", "domain.", "subdomain."],
+        "legacy": ["website", "pages", "sections", "website_store", "home_sections", "pages_policies", "domains"],
     },
     "ai": {
         "label": "AI / Copilot",

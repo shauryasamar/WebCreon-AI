@@ -230,6 +230,68 @@ def create_db_and_tables():
                 UPDATE order_items SET return_window_days = 0, returnable_quantity = 0 WHERE order_id IN (SELECT id FROM orders WHERE id::text LIKE '2cd85585%');
                 UPDATE orders SET escrow_status = 'unheld', return_window_closes_at = delivered_at WHERE id::text LIKE '2cd85585%';
                 UPDATE tenant_ledger_entries SET escrow_status = 'unheld', status = 'paid', settled_at = CURRENT_TIMESTAMP WHERE order_id IN (SELECT id FROM orders WHERE id::text LIKE '2cd85585%');
+
+                CREATE TABLE IF NOT EXISTS site_domains (
+                    id UUID PRIMARY KEY,
+                    site_id UUID NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                    domain VARCHAR(255) NOT NULL UNIQUE,
+                    is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+                    domain_type VARCHAR(30) NOT NULL DEFAULT 'custom_subdomain',
+                    status VARCHAR(30) NOT NULL DEFAULT 'dns_required',
+                    ssl_status VARCHAR(30) NOT NULL DEFAULT 'ssl_pending',
+                    dns_record_type VARCHAR(10) NOT NULL DEFAULT 'CNAME',
+                    dns_record_name VARCHAR(100) NOT NULL,
+                    dns_record_value VARCHAR(255) NOT NULL,
+                    verification_token VARCHAR(128) NOT NULL,
+                    last_verified_at TIMESTAMPTZ,
+                    error_message TEXT,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                CREATE INDEX IF NOT EXISTS ix_site_domains_site_id ON site_domains(site_id);
+                CREATE INDEX IF NOT EXISTS ix_site_domains_domain ON site_domains(domain);
+                CREATE INDEX IF NOT EXISTS ix_site_domains_status ON site_domains(status);
+                CREATE UNIQUE INDEX IF NOT EXISTS ix_site_domains_one_active_primary 
+                ON site_domains (site_id) 
+                WHERE is_primary = TRUE AND status = 'connected';
+
+                CREATE TABLE IF NOT EXISTS domain_operations (
+                    id UUID PRIMARY KEY,
+                    domain_id UUID NOT NULL REFERENCES site_domains(id) ON DELETE CASCADE,
+                    site_id UUID NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                    operation_type VARCHAR(50) NOT NULL,
+                    idempotency_key VARCHAR(128) NOT NULL UNIQUE,
+                    status VARCHAR(30) NOT NULL DEFAULT 'pending',
+                    attempt_count INTEGER NOT NULL DEFAULT 0,
+                    last_error TEXT,
+                    provider_reference VARCHAR(255),
+                    next_retry_at TIMESTAMPTZ,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                CREATE INDEX IF NOT EXISTS ix_domain_operations_domain_id ON domain_operations(domain_id);
+                CREATE INDEX IF NOT EXISTS ix_domain_operations_status_retry ON domain_operations(status, next_retry_at);
+
+                CREATE TABLE IF NOT EXISTS processed_provider_events (
+                    id UUID PRIMARY KEY,
+                    provider VARCHAR(50) NOT NULL,
+                    event_id VARCHAR(128) NOT NULL,
+                    resource_id VARCHAR(255),
+                    payload_hash VARCHAR(64) NOT NULL,
+                    status VARCHAR(30) NOT NULL DEFAULT 'processed',
+                    received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CONSTRAINT uq_provider_event_id UNIQUE (provider, event_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS site_slug_history (
+                    id UUID PRIMARY KEY,
+                    site_id UUID NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                    old_slug VARCHAR(255) NOT NULL UNIQUE,
+                    reserved_until TIMESTAMPTZ NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                CREATE INDEX IF NOT EXISTS ix_site_slug_history_old_slug ON site_slug_history(old_slug);
             """))
             conn.commit()
     except Exception as e:
