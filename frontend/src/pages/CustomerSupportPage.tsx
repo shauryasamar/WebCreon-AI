@@ -342,43 +342,13 @@ export default function CustomerSupportPage({
   const [chatOpen, setChatOpen] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
 
-  // Measure phone preview frame stage height in admin phone preview mode (defaults to standard 844px phone chassis)
-  const [adminStageHeight, setAdminStageHeight] = useState<number>(844);
-
-  useEffect(() => {
-    if (!isAdminPhoneView) return;
-    const updateStageHeight = () => {
-      const stageEl =
-        document.querySelector(".builder-preview-scroll") ||
-        document.querySelector(".builder-preview-stage") ||
-        document.querySelector(".is-mobile-preview");
-      if (stageEl && stageEl.clientHeight > 0) {
-        setAdminStageHeight(stageEl.clientHeight);
-      }
-    };
-    updateStageHeight();
-    const t = setTimeout(updateStageHeight, 100);
-    window.addEventListener("resize", updateStageHeight);
-    return () => {
-      clearTimeout(t);
-      window.removeEventListener("resize", updateStageHeight);
-    };
-  }, [isAdminPhoneView]);
-
   const adminPhoneHeight = useMemo(() => {
-    const rawStage = adminStageHeight > 0 ? adminStageHeight : 844;
+    // Smartphone chassis inner height in Builder preview is standard 844px
+    const rawStage = 844;
     const navH = navbarHeight > 0 ? navbarHeight : 72;
     return Math.max(480, rawStage - navH);
-  }, [adminStageHeight, navbarHeight]);
+  }, [navbarHeight]);
 
-  useEffect(() => {
-    if (isAdminPhoneView && chatOpen) {
-      const scrollParent = document.querySelector(".builder-preview-scroll");
-      if (scrollParent) {
-        scrollParent.scrollTop = 0;
-      }
-    }
-  }, [isAdminPhoneView, chatOpen]);
 
   // Keyboard active detection on mobile (both focus state and viewport resize)
   const isKeyboardOpen =
@@ -960,6 +930,27 @@ export default function CustomerSupportPage({
       loadTickets(ticketsPage + 1, true);
     }
   };
+
+  const ticketsBottomSentinelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!ticketsBottomSentinelRef.current || ticketsPage >= ticketsTotalPages || ticketsLoading || ticketsLoadingMore) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && ticketsPage < ticketsTotalPages && !ticketsLoading && !ticketsLoadingMore) {
+          loadTickets(ticketsPage + 1, true);
+        }
+      },
+      { threshold: 0.1, rootMargin: "120px" }
+    );
+
+    const el = ticketsBottomSentinelRef.current;
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ticketsPage, ticketsTotalPages, ticketsLoading, ticketsLoadingMore]);
 
   // Server-side paginated load of orders (6 items per batch) with LRU caching
   const loadOrders = async (targetPage = 1, isAppend = false) => {
@@ -1545,19 +1536,19 @@ export default function CustomerSupportPage({
               display: "flex",
               flexDirection: "column",
               flex: "1 1 0%",
+              overflow: "hidden",
             }
             : {
-              height: isMobile
+              height: "auto",
+              minHeight: isMobile
                 ? (isAdmin ? `${adminPhoneHeight}px` : (viewportHeight ? `${Math.max(360, viewportHeight - navbarHeight)}px` : `calc(100dvh - ${navbarHeight}px)`))
                 : `calc(100vh - ${navbarHeight}px)`,
-              minHeight: isAdmin && isMobile ? `${adminPhoneHeight}px` : "0px",
-              maxHeight: isMobile
-                ? (isAdmin ? `${adminPhoneHeight}px` : (viewportHeight ? `${Math.max(360, viewportHeight - navbarHeight)}px` : `calc(100dvh - ${navbarHeight}px)`))
-                : `calc(100vh - ${navbarHeight}px)`,
+              maxHeight: "none",
               padding: isMobile ? (effectiveViewportWidth > 640 ? "8px 16px 10px" : "6px 8px 8px") : "8px 16px 10px",
               display: "flex",
               flexDirection: "column",
-              flex: "1 1 0%",
+              flex: "none",
+              overflow: "visible",
             }),
         background: primaryBg,
         color: textColor,
@@ -1565,10 +1556,10 @@ export default function CustomerSupportPage({
         width: "100%",
         display: "flex",
         flexDirection: "column",
-        overflow: isDesktopAdmin ? "visible" : "hidden",
+        overflow: isMobile && chatOpen ? "hidden" : "visible",
         touchAction: !isAdmin && isMobile && chatOpen ? "none" : undefined,
-        overscrollBehavior: isDesktopAdmin ? "auto" : "none",
-        flex: isDesktopAdmin ? "none" : "1 1 0%",
+        overscrollBehavior: isMobile && chatOpen ? "none" : "auto",
+        flex: isMobile && chatOpen ? "1 1 0%" : "none",
       }}
     >
       <style>{`
@@ -1606,6 +1597,13 @@ export default function CustomerSupportPage({
             transform: translateY(0) scale(1);
           }
         }
+        .custom-chat-scroll {
+          overflow-y: auto !important;
+          -webkit-overflow-scrolling: touch !important;
+          touch-action: pan-y !important;
+          overscroll-behavior: contain !important;
+          scrollbar-width: thin !important;
+        }
         .custom-chat-scroll::-webkit-scrollbar {
           width: 5px;
         }
@@ -1628,11 +1626,11 @@ export default function CustomerSupportPage({
           display: "flex",
           flexDirection: "column",
           gap: isMobile ? "6px" : "8px",
-          flex: isDesktopAdmin ? "none" : "1 1 0%",
+          flex: isMobile && chatOpen ? "1 1 0%" : "none",
           minHeight: 0,
-          height: isDesktopAdmin ? "auto" : "100%",
-          maxHeight: isDesktopAdmin ? "none" : "100%",
-          overflow: isDesktopAdmin ? "visible" : "hidden",
+          height: isMobile && chatOpen ? "100%" : "auto",
+          maxHeight: isMobile && chatOpen ? "100%" : "none",
+          overflow: isMobile && chatOpen ? "hidden" : "visible",
         }}
       >
         {/* Toast Notification */}
@@ -1944,12 +1942,12 @@ export default function CustomerSupportPage({
                   gap: isMobile ? "0px" : "10px",
                   boxSizing: "border-box",
                   width: "100%",
-                  flex: isDesktopAdmin ? "none" : "1 1 0%",
-                  minHeight: isDesktopAdmin ? "440px" : 0,
-                  height: isDesktopAdmin ? "480px" : "100%",
-                  maxHeight: isDesktopAdmin ? "none" : "100%",
+                  flex: !isMobile ? "none" : (chatOpen ? "1 1 0%" : "none"),
+                  minHeight: isDesktopAdmin ? "440px" : (!isMobile ? "540px" : 0),
+                  height: isDesktopAdmin ? "480px" : (!isMobile ? "580px" : (chatOpen ? "100%" : "auto")),
+                  maxHeight: isDesktopAdmin ? "none" : (!isMobile ? "700px" : (chatOpen ? "100%" : "none")),
                   display: "flex",
-                  overflow: "hidden",
+                  overflow: !isMobile ? "hidden" : (chatOpen ? "hidden" : "visible"),
                   boxShadow: isMobile ? "none" : "0 4px 20px rgba(0,0,0,0.03)",
                 }}
               >
@@ -1965,12 +1963,12 @@ export default function CustomerSupportPage({
                       display: "flex",
                       flexDirection: "column",
                       flexShrink: 0,
-                      flex: isMobile ? "1 1 0%" : (!isMobile ? "0 0 290px" : undefined),
+                      flex: isMobile ? (chatOpen ? "1 1 0%" : "none") : "0 0 290px",
                       height: "100%",
                       minHeight: 0,
-                      maxHeight: "100%",
+                      maxHeight: isMobile ? (chatOpen ? "100%" : "none") : "100%",
                       background: cardBg,
-                      overflow: "hidden",
+                      overflow: isMobile ? (chatOpen ? "hidden" : "visible") : "hidden",
                     }}
                   >
                     {/* List Header & Search Filter */}
@@ -2099,11 +2097,14 @@ export default function CustomerSupportPage({
                     {/* Scrollable List of Ticket Cards */}
                     <div
                       onScroll={handleTicketsScroll}
-                      className="custom-chat-scroll"
+                      className={isMobile && !chatOpen ? undefined : "custom-chat-scroll"}
                       style={{
-                        flex: 1,
+                        flex: isMobile && !chatOpen ? "none" : 1,
                         minHeight: 0,
-                        overflowY: "auto",
+                        overflowY: isMobile && !chatOpen ? "visible" : "auto",
+                        WebkitOverflowScrolling: "touch",
+                        overscrollBehavior: "contain",
+                        touchAction: "pan-y",
                         padding: "6px 8px",
                         display: "flex",
                         flexDirection: "column",
@@ -2295,16 +2296,44 @@ export default function CustomerSupportPage({
                       )}
 
                       {ticketsLoadingMore && (
-                        <div style={{ padding: "6px", textAlign: "center", fontSize: "10.5px", color: textMuted }}>
-                          Loading more requests...
+                        <div style={{ padding: "8px", textAlign: "center", fontSize: "11px", color: accentColor, fontWeight: 600 }}>
+                          Loading earlier inquiries...
                         </div>
                       )}
 
-                      {ticketsPage < ticketsTotalPages && tickets.length > 0 && !ticketsLoadingMore && (
-                        <div style={{ padding: "5px", textAlign: "center", fontSize: "10px", color: textMuted }}>
-                          Showing {tickets.length} of {ticketsTotalCount || tickets.length} — scroll for more
-                        </div>
+                      {ticketsPage < ticketsTotalPages && tickets.length > 0 && (
+                        <button
+                          type="button"
+                          disabled={ticketsLoadingMore}
+                          onClick={() => loadTickets(ticketsPage + 1, true)}
+                          style={{
+                            padding: "7px 12px",
+                            margin: "6px 4px 4px",
+                            borderRadius: buttonRadius,
+                            border: `1px solid ${borderColor}`,
+                            background: isLight ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
+                            color: accentColor,
+                            fontSize: "11px",
+                            fontWeight: 700,
+                            cursor: ticketsLoadingMore ? "default" : "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "5px",
+                            transition: "all 0.15s ease",
+                            opacity: ticketsLoadingMore ? 0.6 : 1,
+                          }}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19" />
+                            <polyline points="19 12 12 19 5 12" />
+                          </svg>
+                          <span>{ticketsLoadingMore ? "Loading..." : `Load older inquiries (${Math.max(0, (ticketsTotalCount || 0) - tickets.length)} remaining)`}</span>
+                        </button>
                       )}
+
+                      {/* Sentinel element to auto-load older tickets on scroll */}
+                      <div ref={ticketsBottomSentinelRef} style={{ height: "1px", width: "100%", pointerEvents: "none" }} />
                     </div>
                   </div>
                 )}
@@ -3216,13 +3245,13 @@ export default function CustomerSupportPage({
                   padding: cardPadding,
                   width: "100%",
                   boxSizing: "border-box",
-                  flex: isDesktopAdmin ? "none" : "1 1 0%",
-                  minHeight: isDesktopAdmin ? "440px" : 0,
-                  height: isDesktopAdmin ? "auto" : "100%",
-                  maxHeight: isDesktopAdmin ? "none" : "100%",
+                  flex: "none",
+                  minHeight: isDesktopAdmin ? "440px" : "auto",
+                  height: "auto",
+                  maxHeight: "none",
                   display: "flex",
                   flexDirection: "column",
-                  overflow: isDesktopAdmin ? "visible" : "hidden",
+                  overflow: "visible",
                 }}
               >
                 <div style={{ marginBottom: "12px", flexShrink: 0 }}>
@@ -3258,10 +3287,10 @@ export default function CustomerSupportPage({
                     flexDirection: "column",
                     gap: "14px",
                     width: "100%",
-                    flex: isDesktopAdmin ? "none" : 1,
-                    minHeight: 0,
-                    height: isDesktopAdmin ? "auto" : undefined,
-                    overflowY: isDesktopAdmin ? "visible" : "auto",
+                    flex: "none",
+                    minHeight: "auto",
+                    height: "auto",
+                    overflowY: "visible",
                     paddingRight: "4px",
                   }}
                 >
