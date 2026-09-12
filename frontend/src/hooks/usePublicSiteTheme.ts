@@ -8,6 +8,8 @@ export type PublicSiteData = {
   siteName: string;
   logo?: string;
   crm_enabled?: boolean;
+  contact_email?: string;
+  contact_phone?: string;
   navbar?: {
     brandName?: string;
     logoUrl?: string;
@@ -21,6 +23,7 @@ export type PublicSiteData = {
     accent_color?: string;
     border_color?: string;
   };
+  [key: string]: any;
 };
 
 export function cleanSiteName(rawName?: string, rawSlug?: string): string {

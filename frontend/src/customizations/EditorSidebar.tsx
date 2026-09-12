@@ -7762,9 +7762,33 @@ function SupportEditor({
       }
     }
 
+    if (Array.isArray(nextDef.blocks)) {
+      for (let i = 0; i < nextDef.blocks.length; i++) {
+        const b = nextDef.blocks[i];
+        if (
+          b.id === selectedBlock.id ||
+          b.type === selectedBlock.type ||
+          isSupportBlock(b)
+        ) {
+          nextDef.blocks[i] = {
+            ...b,
+            props: { ...(b.props ?? {}), ...patch },
+          };
+          updated = true;
+        }
+      }
+    }
+
     if (!updated) {
       if (!Array.isArray(nextDef.pages)) nextDef.pages = [];
-      let suppPg = nextDef.pages.find((pg: any) => pg.route === "/support" || pg.role === "support" || pg.id === "support");
+      let suppPg = nextDef.pages.find(
+        (pg: any) =>
+          pg.route === "/support" ||
+          pg.role === "support" ||
+          pg.slug === "support" ||
+          pg.id === "support" ||
+          pg.id === "page-support"
+      );
       if (!suppPg) {
         suppPg = {
           id: "page-support",
@@ -7973,42 +7997,45 @@ function SupportEditor({
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
               <NumberStepperField
                 label="Input Radius"
-                value={parseNumProp(p.input_radius, 8)}
+                value={parseNumProp(p.input_radius ?? p.input_border_radius, 8)}
                 min={0}
                 max={24}
                 step={2}
                 unit="px"
-                onChange={(val) => updateProps({ input_radius: val })}
+                onChange={(val) => updateProps({ input_radius: val, input_border_radius: val })}
               />
               <NumberStepperField
                 label="Button Radius"
-                value={parseNumProp(p.button_radius, 8)}
+                value={parseNumProp(p.button_radius ?? p.buttonRadius, 8)}
                 min={0}
                 max={24}
                 step={2}
                 unit="px"
-                onChange={(val) => updateProps({ button_radius: val })}
+                onChange={(val) => updateProps({ button_radius: val, buttonRadius: val })}
               />
             </div>
           </section>
 
           <section style={sectionCardStyle(isLightMode)}>
             <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
-              Form Features & Toggles
+              Features & Toggles
             </div>
             <div style={{ display: "grid", gap: "6px" }}>
               <CompactToggleRow
-                label="Order & Product Selector"
+                label="Order & Product Selection"
+                subtitle="Link tickets to customer orders and items"
                 checked={p.allowOrderSelection !== false}
                 onChange={(checked) => updateProps({ allowOrderSelection: checked })}
               />
               <CompactToggleRow
-                label="Allow Photo/Document Links"
+                label="Photo Attachments"
+                subtitle="Show upload paperclip in chat and form"
                 checked={p.allowAttachments !== false}
                 onChange={(checked) => updateProps({ allowAttachments: checked })}
               />
               <CompactToggleRow
-                label="Show Contact Info Section"
+                label="Store Contact Info"
+                subtitle="Display email and phone banner on support desk"
                 checked={p.showContactInfo !== false}
                 onChange={(checked) => updateProps({ showContactInfo: checked })}
               />
@@ -8070,8 +8097,8 @@ function SupportEditor({
                 <label style={fieldLabelStyle}>Support Email</label>
                 <input
                   type="email"
-                  value={getStr("supportEmail", "")}
-                  onChange={(e) => updateProps({ supportEmail: e.target.value })}
+                  value={getStr("supportEmail", "") || getStr("support_email", "")}
+                  onChange={(e) => updateProps({ supportEmail: e.target.value, support_email: e.target.value })}
                   style={textInputStyle}
                   placeholder="support@yourstore.com"
                 />
@@ -8081,8 +8108,8 @@ function SupportEditor({
                 <label style={fieldLabelStyle}>Support Phone</label>
                 <input
                   type="text"
-                  value={getStr("supportPhone", "")}
-                  onChange={(e) => updateProps({ supportPhone: e.target.value })}
+                  value={getStr("supportPhone", "") || getStr("support_phone", "")}
+                  onChange={(e) => updateProps({ supportPhone: e.target.value, support_phone: e.target.value })}
                   style={textInputStyle}
                   placeholder="+91 98765 43210"
                 />
@@ -8092,8 +8119,15 @@ function SupportEditor({
                 <label style={fieldLabelStyle}>Operating Hours</label>
                 <input
                   type="text"
-                  value={getStr("supportHours", "")}
-                  onChange={(e) => updateProps({ supportHours: e.target.value })}
+                  value={getStr("supportHours", "") || getStr("support_hours", "") || getStr("operatingHours", "") || getStr("operating_hours", "")}
+                  onChange={(e) =>
+                    updateProps({
+                      supportHours: e.target.value,
+                      support_hours: e.target.value,
+                      operatingHours: e.target.value,
+                      operating_hours: e.target.value,
+                    })
+                  }
                   style={textInputStyle}
                   placeholder="Mon - Sat, 9:00 AM - 7:00 PM"
                 />
@@ -8120,7 +8154,7 @@ function SupportEditor({
               <CompactColorRow
                 label="Card Background"
                 value={p.card_bg || (siteDefinition.theme?.mode === "dark" ? "#1e293b" : "#ffffff")}
-                onChange={(val) => updateProps({ card_bg: val })}
+                onChange={(val) => updateProps({ card_bg: val, ...(p.chat_bg ? {} : { chat_bg: val }) })}
               />
               <CompactColorRow
                 label="Card Border"
@@ -8129,7 +8163,7 @@ function SupportEditor({
               />
               <CompactColorRow
                 label="Chat Window / Panel Bg"
-                value={p.chat_bg || (siteDefinition.theme?.mode === "dark" ? "rgba(255,255,255,0.03)" : "#f8fafc")}
+                value={p.chat_bg || p.card_bg || (siteDefinition.theme?.mode === "dark" ? "#1e293b" : "#ffffff")}
                 onChange={(val) => updateProps({ chat_bg: val })}
               />
             </div>

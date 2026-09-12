@@ -841,25 +841,39 @@ export function findBlockById(
     blockId === "support_desk" ||
     blockId === "supportdesk"
   ) {
-    const supportP = siteDefinition.pages.find(
+    const isSupportB = (b: any) =>
+      b &&
+      (b.id === "customer_support" ||
+        b.type === "customer_support" ||
+        b.type === "customersupport" ||
+        b.type === "support" ||
+        b.type === "support_desk" ||
+        b.type === "supportdesk");
+
+    // 1. Check support page directly
+    const supportP = siteDefinition.pages?.find(
       (p) =>
         p.role === "support" ||
         p.page_type === "support" ||
         p.route === "/support" ||
         p.route === "support" ||
         p.id === "support" ||
-        p.id === "page-support"
+        p.id === "page-support" ||
+        (p as any)?.slug === "support"
     );
-    const inSupport = supportP?.blocks?.find(
-      (b) =>
-        b.id === "customer_support" ||
-        b.type === "customer_support" ||
-        b.type === "customersupport" ||
-        b.type === "support" ||
-        b.type === "support_desk" ||
-        b.type === "supportdesk"
-    );
+    const inSupport = supportP?.blocks?.find(isSupportB);
     if (inSupport) return inSupport;
+
+    // 2. Check all pages for any support block
+    for (const page of siteDefinition.pages || []) {
+      const match = page.blocks?.find(isSupportB);
+      if (match) return match;
+    }
+
+    // 3. Check root blocks array if present
+    const inRoot = (siteDefinition as any).blocks?.find?.(isSupportB);
+    if (inRoot) return inRoot;
+
     return {
       id: "customer_support",
       type: "customer_support",
@@ -2003,7 +2017,9 @@ export function updateBlockProps(
         p.route === "/support" ||
         p.route === "support" ||
         p.id === "support" ||
-        p.id === "page-support"
+        p.id === "page-support" ||
+        (p as any)?.slug === "support" ||
+        (p as any)?.name?.toLowerCase?.().includes("support")
     );
     if (supportPageIndex !== -1) {
       const targetPage = siteDefinition.pages[supportPageIndex];

@@ -295,6 +295,11 @@ export default function CustomerSupportPage({
 
   const deviceMode = useDeviceMode();
 
+  const effectiveViewportWidth = useMemo(() => {
+    if (deviceMode === "mobile") return 390;
+    return viewportWidth;
+  }, [deviceMode, viewportWidth]);
+
   // Responsive device & tablet classification:
   // Activates the touch/tablet-optimized single-pane view (same comfortable experience as iPad Mini)
   // for:
@@ -331,9 +336,49 @@ export default function CustomerSupportPage({
     restProps?.editMode ||
     (typeof window !== "undefined" && window.location.pathname.startsWith("/builder"))
   );
-  const isAdminPhoneView = isEditMode && deviceMode === "mobile";
+  const isAdmin = isEditMode;
+  const isDesktopAdmin = isEditMode && !isMobile;
+  const isAdminPhoneView = isEditMode && isMobile;
   const [chatOpen, setChatOpen] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
+
+  // Measure phone preview frame stage height in admin phone preview mode (defaults to standard 844px phone chassis)
+  const [adminStageHeight, setAdminStageHeight] = useState<number>(844);
+
+  useEffect(() => {
+    if (!isAdminPhoneView) return;
+    const updateStageHeight = () => {
+      const stageEl =
+        document.querySelector(".builder-preview-scroll") ||
+        document.querySelector(".builder-preview-stage") ||
+        document.querySelector(".is-mobile-preview");
+      if (stageEl && stageEl.clientHeight > 0) {
+        setAdminStageHeight(stageEl.clientHeight);
+      }
+    };
+    updateStageHeight();
+    const t = setTimeout(updateStageHeight, 100);
+    window.addEventListener("resize", updateStageHeight);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("resize", updateStageHeight);
+    };
+  }, [isAdminPhoneView]);
+
+  const adminPhoneHeight = useMemo(() => {
+    const rawStage = adminStageHeight > 0 ? adminStageHeight : 844;
+    const navH = navbarHeight > 0 ? navbarHeight : 72;
+    return Math.max(480, rawStage - navH);
+  }, [adminStageHeight, navbarHeight]);
+
+  useEffect(() => {
+    if (isAdminPhoneView && chatOpen) {
+      const scrollParent = document.querySelector(".builder-preview-scroll");
+      if (scrollParent) {
+        scrollParent.scrollTop = 0;
+      }
+    }
+  }, [isAdminPhoneView, chatOpen]);
 
   // Keyboard active detection on mobile (both focus state and viewport resize)
   const isKeyboardOpen =
@@ -346,11 +391,11 @@ export default function CustomerSupportPage({
         window.visualViewport &&
         window.innerHeight - window.visualViewport.height > 100));
 
-  const isKeyboardActive = !isAdminPhoneView && isMobile && chatOpen && (isKeyboardOpen || inputFocused);
+  const isKeyboardActive = !isAdmin && !isAdminPhoneView && isMobile && chatOpen && (isKeyboardOpen || inputFocused);
 
   // Auto-hide storefront navbar when keyboard is active on real mobile devices to give maximum screen space for chat
   useEffect(() => {
-    if (isAdminPhoneView || !isMobile || !chatOpen) return;
+    if (isAdmin || isAdminPhoneView || !isMobile || !chatOpen) return;
     const navEl =
       document.getElementById("storefront-navbar") ||
       document.querySelector("header") ||
@@ -368,12 +413,12 @@ export default function CustomerSupportPage({
         navEl.style.removeProperty("display");
       }
     };
-  }, [isAdminPhoneView, isKeyboardActive, isMobile, chatOpen]);
+  }, [isAdmin, isAdminPhoneView, isKeyboardActive, isMobile, chatOpen]);
 
   // Lock mobile background window scroll when keyboard is active on real mobile devices so screen never rubber-bands
   // and outer window can never scroll the chat input up into the ceiling
   useEffect(() => {
-    if (!isAdminPhoneView && isMobile && chatOpen) {
+    if (!isAdmin && !isAdminPhoneView && isMobile && chatOpen) {
       const clampScroll = () => {
         if (window.scrollY !== 0 || window.pageXOffset !== 0) {
           window.scrollTo(0, 0);
@@ -410,31 +455,36 @@ export default function CustomerSupportPage({
         }
       };
     }
-  }, [isAdminPhoneView, isMobile, chatOpen, isKeyboardActive]);
+  }, [isAdmin, isAdminPhoneView, isMobile, chatOpen, isKeyboardActive]);
 
   useEffect(() => {
-    if (chatOpen) {
+    if (!isAdmin && chatOpen) {
       window.scrollTo({ top: 0, behavior: "instant" });
       const builderScroll = document.querySelector(".builder-preview-scroll");
       if (builderScroll) {
         builderScroll.scrollTo({ top: 0, behavior: "instant" });
       }
     }
-  }, [chatOpen]);
+  }, [isAdmin, chatOpen]);
 
   // Read configurable block props from site editor / admin
-  const blockProps = restProps?.props || (restProps as any) || {};
+  const blockProps = {
+    ...(restProps || {}),
+    ...(restProps?.props || {}),
+  };
   const inquiriesTabLabel = blockProps?.inquiriesTabLabel || "Inquiries";
   const newRequestTabLabel = blockProps?.newRequestTabLabel || "+ New Request";
   const submitButtonText = blockProps?.submitButtonText || "Submit Request";
-  const supportEmail = blockProps?.supportEmail || "";
-  const supportPhone = blockProps?.supportPhone || "";
-  const supportHours = blockProps?.supportHours || "";
+  const supportEmail = blockProps?.supportEmail || blockProps?.support_email || "";
+  const supportPhone = blockProps?.supportPhone || blockProps?.support_phone || "";
+  const supportHours = blockProps?.supportHours || blockProps?.support_hours || blockProps?.operatingHours || blockProps?.operating_hours || "";
 
   // Scroll to top on initial mount
   useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
+    if (!isAdmin) {
+      window.scrollTo(0, 0);
+    }
+  }, [isAdmin]);
 
   const { siteData } = usePublicSiteTheme(activeSlug);
   const [liveCrmOverride, setLiveCrmOverride] = useState<boolean | null>(null);
@@ -487,34 +537,37 @@ export default function CustomerSupportPage({
   }, [blockProps?.max_width]);
 
   const cardRadius = parseDimension(blockProps?.card_radius ?? blockProps?.border_radius, "12px");
-  const cardPadding = parseDimension(blockProps?.card_padding ?? blockProps?.padding, isMobile ? "16px" : "24px");
+  const cardPadding = parseDimension(blockProps?.card_padding ?? blockProps?.padding, isMobile ? "14px" : "20px");
   const chatRadius = parseDimension(blockProps?.chat_radius ?? blockProps?.chat_window_radius, "10px");
   const bubbleRadius = parseDimension(blockProps?.bubble_radius ?? blockProps?.chat_bubble_radius, "14px");
   const innerRadius = parseDimension(blockProps?.inner_radius, "8px");
-  const inputRadius = parseDimension(blockProps?.input_radius, "8px");
-  const buttonRadius = parseDimension(blockProps?.button_radius, "8px");
+  const inputRadius = parseDimension(blockProps?.input_radius ?? blockProps?.input_border_radius ?? blockProps?.inputRadius, "8px");
+  const buttonRadius = parseDimension(blockProps?.button_radius ?? blockProps?.buttonRadius, "8px");
   const badgeRadius = parseDimension(blockProps?.badge_radius, "4px");
 
   // Consistent, solid theme colors without dark transparency clashes
   const accentColor = blockProps?.accent_color || activeTheme.accent_color || "#2563eb";
-  const primaryBg = isLight ? (blockProps?.primary_bg || activeTheme.primary_bg || "#f8fafc") : "#0b1120";
-  const cardBg = isLight ? (blockProps?.card_bg || activeTheme.card_bg || "#ffffff") : "#131c31";
+  const primaryBg = blockProps?.primary_bg || (isLight ? (activeTheme.primary_bg || "#f8fafc") : "#0b1120");
+  const cardBg = blockProps?.card_bg || (isLight ? (activeTheme.card_bg || "#ffffff") : "#131c31");
   const surfaceBg = isLight ? "#f1f5f9" : "#1a243d";
-  const chatBg = isLight ? (blockProps?.chat_bg || "#ffffff") : "#0f172a";
-  const textColor = isLight ? (blockProps?.text_color || activeTheme.text_color || "#0f172a") : "#f8fafc";
-  const textMuted = isLight ? (blockProps?.subtext_color || "#64748b") : "#94a3b8";
-  const borderColor = isLight ? (blockProps?.border_color || activeTheme.border_color || "#e2e8f0") : "rgba(255, 255, 255, 0.12)";
+  const chatBg = blockProps?.chat_bg || cardBg;
+  const textColor = blockProps?.text_color || (isLight ? (activeTheme.text_color || "#0f172a") : "#f8fafc");
+  const titleColor = blockProps?.title_color || (isLight ? (activeTheme.text_color || "#0f172a") : "#f8fafc");
+  const textMuted = blockProps?.subtext_color || (isLight ? "#64748b" : "#94a3b8");
+  const borderColor = blockProps?.border_color || (isLight ? (activeTheme.border_color || "#e2e8f0") : "rgba(255, 255, 255, 0.12)");
   const buttonTextColor = blockProps?.button_text_color || "#ffffff";
-  const inputBg = isLight ? "#ffffff" : "#1a243d";
-  const inputBorder = borderColor;
-  const inputTextColor = textColor;
+  const inputBg = blockProps?.input_bg || (isLight ? "#ffffff" : "#1a243d");
+  const inputBorder = blockProps?.input_border || borderColor;
+  const inputTextColor = blockProps?.input_text_color || textColor;
   const customerBubbleBg = blockProps?.customer_bubble_bg || accentColor;
   const customerBubbleText = blockProps?.customer_bubble_text || "#ffffff";
-  const agentBubbleBg = blockProps?.agent_bubble_bg || surfaceBg;
+  const agentBubbleBg = blockProps?.agent_bubble_bg || (isLight ? "#f1f5f9" : "#1e293b");
   const agentBubbleText = blockProps?.agent_bubble_text || textColor;
   const allowOrderSelection = blockProps?.allowOrderSelection !== false;
   const allowAttachments = blockProps?.allowAttachments !== false;
   const showContactInfo = blockProps?.showContactInfo !== false;
+  const siteContactEmail = (siteData as any)?.contact_email;
+  const siteContactPhone = (siteData as any)?.contact_phone;
 
   // View State
   const [activeTab, setActiveTab] = useState<"inquiries" | "new">("inquiries");
@@ -1461,43 +1514,47 @@ export default function CustomerSupportPage({
   return (
     <div
       style={{
-        ...(isAdminPhoneView
+        ...(isDesktopAdmin
           ? {
-            height: `calc(844px - ${navbarHeight}px)`,
-            minHeight: "740px",
-            maxHeight: `calc(844px - ${navbarHeight}px)`,
+            height: "auto",
+            minHeight: "auto",
+            maxHeight: "none",
             display: "flex",
             flexDirection: "column",
-            flex: "1 1 0%",
-            padding: chatOpen ? "0px" : "6px 8px 8px",
+            flex: "none",
+            padding: "10px 18px 20px",
           }
           : isMobile && chatOpen
             ? {
-              position: "fixed",
-              top: isKeyboardActive
-                ? (viewportOffsetTop > 0 ? `${viewportOffsetTop}px` : "0px")
-                : `${navbarHeight}px`,
+              position: !isAdmin ? "fixed" : "relative",
+              top: !isAdmin
+                ? (isKeyboardActive ? (viewportOffsetTop > 0 ? `${viewportOffsetTop}px` : "0px") : `${navbarHeight}px`)
+                : undefined,
               left: 0,
               right: 0,
-              bottom: isKeyboardActive ? undefined : 0,
-              height: isKeyboardActive
-                ? `${viewportHeight || (typeof window !== "undefined" ? window.visualViewport?.height || window.innerHeight : 600)}px`
-                : `calc(100dvh - ${navbarHeight}px)`,
-              maxHeight: isKeyboardActive
-                ? `${viewportHeight || (typeof window !== "undefined" ? window.visualViewport?.height || window.innerHeight : 600)}px`
-                : `calc(100dvh - ${navbarHeight}px)`,
-              zIndex: 9990,
+              bottom: !isAdmin ? (isKeyboardActive ? undefined : 0) : undefined,
+              height: !isAdmin
+                ? (isKeyboardActive ? `${viewportHeight || (typeof window !== "undefined" ? window.visualViewport?.height || window.innerHeight : 600)}px` : `calc(100dvh - ${navbarHeight}px)`)
+                : `${adminPhoneHeight}px`,
+              minHeight: !isAdmin ? "0px" : `${adminPhoneHeight}px`,
+              maxHeight: !isAdmin
+                ? (isKeyboardActive ? `${viewportHeight || (typeof window !== "undefined" ? window.visualViewport?.height || window.innerHeight : 600)}px` : `calc(100dvh - ${navbarHeight}px)`)
+                : `${adminPhoneHeight}px`,
+              zIndex: !isAdmin ? 9990 : 1,
               padding: isKeyboardActive ? "0px" : "6px 8px 8px",
+              display: "flex",
+              flexDirection: "column",
+              flex: "1 1 0%",
             }
             : {
               height: isMobile
-                ? (viewportHeight ? `${Math.max(360, viewportHeight - navbarHeight)}px` : `calc(100dvh - ${navbarHeight}px)`)
+                ? (isAdmin ? `${adminPhoneHeight}px` : (viewportHeight ? `${Math.max(360, viewportHeight - navbarHeight)}px` : `calc(100dvh - ${navbarHeight}px)`))
                 : `calc(100vh - ${navbarHeight}px)`,
-              minHeight: "0px",
+              minHeight: isAdmin && isMobile ? `${adminPhoneHeight}px` : "0px",
               maxHeight: isMobile
-                ? (viewportHeight ? `${Math.max(360, viewportHeight - navbarHeight)}px` : `calc(100dvh - ${navbarHeight}px)`)
+                ? (isAdmin ? `${adminPhoneHeight}px` : (viewportHeight ? `${Math.max(360, viewportHeight - navbarHeight)}px` : `calc(100dvh - ${navbarHeight}px)`))
                 : `calc(100vh - ${navbarHeight}px)`,
-              padding: isMobile ? (viewportWidth > 640 ? "8px 16px 10px" : "6px 8px 8px") : "8px 16px 10px",
+              padding: isMobile ? (effectiveViewportWidth > 640 ? "8px 16px 10px" : "6px 8px 8px") : "8px 16px 10px",
               display: "flex",
               flexDirection: "column",
               flex: "1 1 0%",
@@ -1508,10 +1565,10 @@ export default function CustomerSupportPage({
         width: "100%",
         display: "flex",
         flexDirection: "column",
-        overflow: "hidden",
-        touchAction: isMobile && chatOpen ? "none" : undefined,
-        overscrollBehavior: "none",
-        flex: "1 1 0%",
+        overflow: isDesktopAdmin ? "visible" : "hidden",
+        touchAction: !isAdmin && isMobile && chatOpen ? "none" : undefined,
+        overscrollBehavior: isDesktopAdmin ? "auto" : "none",
+        flex: isDesktopAdmin ? "none" : "1 1 0%",
       }}
     >
       <style>{`
@@ -1571,11 +1628,11 @@ export default function CustomerSupportPage({
           display: "flex",
           flexDirection: "column",
           gap: isMobile ? "6px" : "8px",
-          flex: "1 1 0%",
+          flex: isDesktopAdmin ? "none" : "1 1 0%",
           minHeight: 0,
-          height: "100%",
-          maxHeight: "100%",
-          overflow: "hidden",
+          height: isDesktopAdmin ? "auto" : "100%",
+          maxHeight: isDesktopAdmin ? "none" : "100%",
+          overflow: isDesktopAdmin ? "visible" : "hidden",
         }}
       >
         {/* Toast Notification */}
@@ -1678,9 +1735,9 @@ export default function CustomerSupportPage({
               <div
                 style={{
                   display: "flex",
-                  flexDirection: isMobile ? (viewportWidth > 640 ? "row" : "column") : "row",
+                  flexDirection: isMobile ? (effectiveViewportWidth > 640 ? "row" : "column") : "row",
                   justifyContent: "space-between",
-                  alignItems: isMobile ? (viewportWidth > 640 ? "center" : "stretch") : "center",
+                  alignItems: isMobile ? (effectiveViewportWidth > 640 ? "center" : "stretch") : "center",
                   gap: isMobile ? "8px" : "12px",
                   padding: "0 2px",
                   width: "100%",
@@ -1731,8 +1788,22 @@ export default function CustomerSupportPage({
                     <span>Store</span>
                   </span>
                   <span>/</span>
-                  <span style={{ color: textColor, fontWeight: 700 }}>Customer Support Desk</span>
+                  <span style={{ color: titleColor, fontWeight: 700 }}>Customer Support Desk</span>
                 </div>
+
+                {!isMobile && showContactInfo && (supportEmail || siteContactEmail || supportPhone || siteContactPhone || supportHours) && (
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", fontSize: "11px", color: textMuted, flexWrap: "wrap" }}>
+                    {(supportEmail || siteContactEmail) && (
+                      <span>Email: <strong style={{ color: textColor }}>{supportEmail || siteContactEmail}</strong></span>
+                    )}
+                    {(supportPhone || siteContactPhone) && (
+                      <span>{(supportEmail || siteContactEmail) ? "• " : ""}Phone: <strong style={{ color: textColor }}>{supportPhone || siteContactPhone}</strong></span>
+                    )}
+                    {supportHours && (
+                      <span>{((supportEmail || siteContactEmail) || (supportPhone || siteContactPhone)) ? "• " : ""}Hours: <strong style={{ color: textColor }}>{supportHours}</strong></span>
+                    )}
+                  </div>
+                )}
 
                 {/* Segmented Tab Bar / Navigation Pills */}
                 {isMobile ? (
@@ -1743,7 +1814,7 @@ export default function CustomerSupportPage({
                       background: isLight ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.08)",
                       padding: "3px",
                       borderRadius: "10px",
-                      width: viewportWidth > 640 ? "340px" : "100%",
+                      width: effectiveViewportWidth > 640 ? "340px" : "100%",
                       boxSizing: "border-box",
                       gap: "4px",
                     }}
@@ -1869,12 +1940,14 @@ export default function CustomerSupportPage({
                   background: cardBg,
                   borderRadius: isMobile && chatOpen && isKeyboardActive ? "0px" : cardRadius,
                   border: isMobile && chatOpen && isKeyboardActive ? "none" : `1px solid ${borderColor}`,
+                  padding: isMobile && chatOpen ? "0px" : cardPadding,
+                  gap: isMobile ? "0px" : "10px",
                   boxSizing: "border-box",
                   width: "100%",
-                  flex: "1 1 0%",
-                  minHeight: 0,
-                  height: "100%",
-                  maxHeight: "100%",
+                  flex: isDesktopAdmin ? "none" : "1 1 0%",
+                  minHeight: isDesktopAdmin ? "440px" : 0,
+                  height: isDesktopAdmin ? "480px" : "100%",
+                  maxHeight: isDesktopAdmin ? "none" : "100%",
                   display: "flex",
                   overflow: "hidden",
                   boxShadow: isMobile ? "none" : "0 4px 20px rgba(0,0,0,0.03)",
@@ -1887,15 +1960,16 @@ export default function CustomerSupportPage({
                       width: isMobile ? "100%" : "290px",
                       minWidth: isMobile ? "100%" : "270px",
                       maxWidth: isMobile ? "100%" : "310px",
-                      borderRight: isMobile ? "none" : `1px solid ${borderColor}`,
+                      border: isMobile ? "none" : `1px solid ${borderColor}`,
+                      borderRadius: isMobile ? 0 : innerRadius,
                       display: "flex",
                       flexDirection: "column",
                       flexShrink: 0,
-                      flex: isMobile && isAdminPhoneView ? "1 1 0%" : (!isMobile ? "0 0 290px" : undefined),
+                      flex: isMobile ? "1 1 0%" : (!isMobile ? "0 0 290px" : undefined),
                       height: "100%",
                       minHeight: 0,
                       maxHeight: "100%",
-                      background: isLight ? "#ffffff" : "rgba(15,23,42,0.4)",
+                      background: cardBg,
                       overflow: "hidden",
                     }}
                   >
@@ -1913,7 +1987,7 @@ export default function CustomerSupportPage({
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <span style={{ fontSize: "12.5px", fontWeight: 800, color: textColor }}>
+                          <span style={{ fontSize: "12.5px", fontWeight: 800, color: titleColor }}>
                             Your Inquiries
                           </span>
                           {tickets.length > 0 && (
@@ -1979,14 +2053,14 @@ export default function CustomerSupportPage({
                             value={ticketSearchQuery}
                             onChange={(e) => setTicketSearchQuery(e.target.value)}
                             onFocus={() => {
-                              if (typeof window !== "undefined") {
+                              if (!isAdmin && typeof window !== "undefined") {
                                 window.scrollTo({ top: 0, left: 0, behavior: "instant" });
                               }
                             }}
                             style={{
                               width: "100%",
                               padding: isMobile ? "6px 24px 6px 28px" : "5px 22px 5px 26px",
-                              borderRadius: "6px",
+                              borderRadius: inputRadius,
                               border: `1px solid ${inputBorder}`,
                               background: inputBg,
                               color: inputTextColor,
@@ -2119,12 +2193,12 @@ export default function CustomerSupportPage({
                                   borderRadius: innerRadius,
                                   cursor: "pointer",
                                   background: isSelected
-                                    ? isLight
-                                      ? `${accentColor}0e`
-                                      : `${accentColor}18`
-                                    : isLight
-                                      ? "#ffffff"
-                                      : "rgba(255,255,255,0.03)",
+                                    ? (isLight
+                                      ? `${accentColor}12`
+                                      : `${accentColor}22`)
+                                    : (isLight
+                                      ? (cardBg === "#ffffff" ? "#f8fafc" : cardBg)
+                                      : "rgba(255,255,255,0.04)"),
                                   border: isSelected
                                     ? `1.5px solid ${accentColor}`
                                     : `1px solid ${borderColor}`,
@@ -2143,7 +2217,7 @@ export default function CustomerSupportPage({
                                 onMouseLeave={(e) => {
                                   if (!isSelected) {
                                     e.currentTarget.style.borderColor = borderColor;
-                                    e.currentTarget.style.background = isLight ? "#ffffff" : "rgba(255,255,255,0.03)";
+                                    e.currentTarget.style.background = isLight ? (cardBg === "#ffffff" ? "#f8fafc" : cardBg) : "rgba(255,255,255,0.03)";
                                   }
                                 }}
                               >
@@ -2181,7 +2255,7 @@ export default function CustomerSupportPage({
                                   {t.subject}
                                 </div>
 
-                                {t.order_items_summary && (
+                                {allowOrderSelection && t.order_items_summary && (
                                   <div
                                     style={{
                                       display: "inline-flex",
@@ -2244,6 +2318,8 @@ export default function CustomerSupportPage({
                       display: "flex",
                       flexDirection: "column",
                       background: chatBg,
+                      borderRadius: isMobile ? 0 : chatRadius,
+                      border: isMobile ? "none" : `1px solid ${borderColor}`,
                       overflow: "hidden",
                       height: "100%",
                       minHeight: 0,
@@ -2256,7 +2332,7 @@ export default function CustomerSupportPage({
                         <div
                           style={{
                             padding: isMobile ? "6px 10px" : "6px 14px",
-                            background: isLight ? "#ffffff" : "#1e293b",
+                            background: cardBg,
                             borderBottom: `1px solid ${borderColor}`,
                             display: "flex",
                             justifyContent: "space-between",
@@ -2360,7 +2436,7 @@ export default function CustomerSupportPage({
                                   style={{
                                     fontSize: isMobile ? "12.5px" : "13px",
                                     fontWeight: 700,
-                                    color: textColor,
+                                    color: titleColor,
                                     whiteSpace: "nowrap",
                                     overflow: "hidden",
                                     textOverflow: "ellipsis",
@@ -2528,7 +2604,7 @@ export default function CustomerSupportPage({
                             display: "flex",
                             flexDirection: "column",
                             gap: "7px",
-                            background: isLight ? "#f8fafc" : "#0b1120",
+                            background: chatBg || cardBg,
                           }}
                         >
                           {/* Older messages indicator / button */}
@@ -2635,7 +2711,7 @@ export default function CustomerSupportPage({
                                       display: "flex",
                                       alignItems: "flex-end",
                                       gap: "6px",
-                                      maxWidth: isMobile ? (viewportWidth > 640 ? "75%" : "90%") : "78%",
+                                      maxWidth: isMobile ? (effectiveViewportWidth > 640 ? "75%" : "90%") : "78%",
                                       alignSelf: isCustomer ? "flex-end" : "flex-start",
                                       animation: "messageSlideIn 0.2s ease-out",
                                     }}
@@ -2721,20 +2797,20 @@ export default function CustomerSupportPage({
                                         style={{
                                           padding: "7px 11px",
                                           borderRadius: isCustomer
-                                            ? "14px 14px 2px 14px"
-                                            : "14px 14px 14px 2px",
+                                            ? `${bubbleRadius} ${bubbleRadius} 2px ${bubbleRadius}`
+                                            : `${bubbleRadius} ${bubbleRadius} ${bubbleRadius} 2px`,
                                           background: isCustomer
-                                            ? `linear-gradient(135deg, ${accentColor}, ${accentColor}f2)`
-                                            : isLight ? "#ffffff" : "#1e293b",
+                                            ? customerBubbleBg
+                                            : agentBubbleBg,
                                           color: isCustomer
-                                            ? "#ffffff"
-                                            : textColor,
+                                            ? customerBubbleText
+                                            : agentBubbleText,
                                           fontSize: "12.5px",
                                           lineHeight: "1.42",
                                           border: isCustomer ? "none" : `1px solid ${borderColor}`,
                                           wordBreak: "break-word",
                                           boxShadow: isCustomer
-                                            ? `0 2px 8px ${accentColor}25`
+                                            ? `0 2px 8px rgba(0,0,0,0.12)`
                                             : "0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)",
                                         }}
                                       >
@@ -2919,7 +2995,7 @@ export default function CustomerSupportPage({
                               onSubmit={handleSendReply}
                               style={{
                                 padding: isMobile ? (isKeyboardActive ? "6px 8px" : "6px 8px calc(6px + env(safe-area-inset-bottom))") : "7px 14px",
-                                background: isLight ? "#ffffff" : "#1e293b",
+                                background: cardBg,
                                 borderTop: `1px solid ${borderColor}`,
                                 display: "flex",
                                 gap: "7px",
@@ -2946,30 +3022,32 @@ export default function CustomerSupportPage({
                                 }}
                               />
 
-                              {/* Paperclip File Upload Button */}
-                              <button
-                                type="button"
-                                onClick={() => chatFileInputRef.current?.click()}
-                                disabled={sendingReply}
-                                title="Attach photo"
-                                style={{
-                                  width: "32px",
-                                  height: "32px",
-                                  borderRadius: "50%",
-                                  border: `1px solid ${borderColor}`,
-                                  background: chatImage ? `${accentColor}18` : isLight ? "#f8fafc" : "rgba(255,255,255,0.06)",
-                                  color: chatImage ? accentColor : textMuted,
-                                  display: "grid",
-                                  placeItems: "center",
-                                  cursor: "pointer",
-                                  flexShrink: 0,
-                                  transition: "all 0.15s ease",
-                                }}
-                              >
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                                </svg>
-                              </button>
+                              {/* Paperclip File Upload Button (Controlled by allowAttachments toggle) */}
+                              {allowAttachments && (
+                                <button
+                                  type="button"
+                                  onClick={() => chatFileInputRef.current?.click()}
+                                  disabled={sendingReply}
+                                  title="Attach photo"
+                                  style={{
+                                    width: "32px",
+                                    height: "32px",
+                                    borderRadius: "50%",
+                                    border: `1px solid ${borderColor}`,
+                                    background: chatImage ? `${accentColor}18` : isLight ? (cardBg === "#ffffff" ? "#f8fafc" : "rgba(0,0,0,0.04)") : "rgba(255,255,255,0.06)",
+                                    color: chatImage ? accentColor : textMuted,
+                                    display: "grid",
+                                    placeItems: "center",
+                                    cursor: "pointer",
+                                    flexShrink: 0,
+                                    transition: "all 0.15s ease",
+                                  }}
+                                >
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                                  </svg>
+                                </button>
+                              )}
 
                               {/* Text Message Input Field (Kept enabled so keyboard never closes on send) */}
                               <input
@@ -2987,13 +3065,13 @@ export default function CustomerSupportPage({
                                 }}
                                 onFocus={() => {
                                   setInputFocused(true);
-                                  if (typeof window !== "undefined") {
+                                  if (!isAdmin && typeof window !== "undefined") {
                                     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
                                     document.body.scrollTop = 0;
                                   }
                                   [40, 120, 250, 400, 600].forEach((delay) => {
                                     setTimeout(() => {
-                                      if (typeof window !== "undefined" && window.scrollY !== 0) {
+                                      if (!isAdmin && typeof window !== "undefined" && window.scrollY !== 0) {
                                         window.scrollTo({ top: 0, left: 0, behavior: "instant" });
                                       }
                                       if (chatContainerRef.current) {
@@ -3004,7 +3082,7 @@ export default function CustomerSupportPage({
                                 }}
                                 onBlur={() => {
                                   setInputFocused(false);
-                                  if (typeof window !== "undefined") {
+                                  if (!isAdmin && typeof window !== "undefined") {
                                     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
                                     document.body.scrollTop = 0;
                                   }
@@ -3012,9 +3090,9 @@ export default function CustomerSupportPage({
                                 style={{
                                   flex: 1,
                                   padding: "7px 14px",
-                                  borderRadius: "18px",
+                                  borderRadius: inputRadius,
                                   border: `1px solid ${inputBorder}`,
-                                  background: isLight ? "#f1f5f9" : "#0f172a",
+                                  background: inputBg || (isLight ? "#f1f5f9" : "#0f172a"),
                                   color: inputTextColor,
                                   fontSize: isMobile ? "16px" : "12.5px",
                                   outline: "none",
@@ -3091,7 +3169,7 @@ export default function CustomerSupportPage({
                             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                           </svg>
                         </div>
-                        <div style={{ fontSize: "16px", fontWeight: 800, color: textColor, marginBottom: "6px" }}>
+                        <div style={{ fontSize: "16px", fontWeight: 800, color: titleColor, marginBottom: "6px" }}>
                           {tickets.length > 0 ? "Select an Inquiry" : "No Support Requests Yet"}
                         </div>
                         <p style={{ fontSize: "13px", color: textMuted, maxWidth: "340px", margin: "0 0 18px", lineHeight: 1.5 }}>
@@ -3135,20 +3213,20 @@ export default function CustomerSupportPage({
                   background: cardBg,
                   borderRadius: cardRadius,
                   border: `1px solid ${borderColor}`,
-                  padding: isMobile ? "12px 14px" : "18px 22px",
+                  padding: cardPadding,
                   width: "100%",
                   boxSizing: "border-box",
-                  flex: "1 1 0%",
-                  minHeight: 0,
-                  height: "100%",
-                  maxHeight: "100%",
+                  flex: isDesktopAdmin ? "none" : "1 1 0%",
+                  minHeight: isDesktopAdmin ? "440px" : 0,
+                  height: isDesktopAdmin ? "auto" : "100%",
+                  maxHeight: isDesktopAdmin ? "none" : "100%",
                   display: "flex",
                   flexDirection: "column",
-                  overflow: "hidden",
+                  overflow: isDesktopAdmin ? "visible" : "hidden",
                 }}
               >
                 <div style={{ marginBottom: "12px", flexShrink: 0 }}>
-                  <h2 style={{ margin: "0 0 4px", fontSize: "16px", fontWeight: 800, color: textColor }}>
+                  <h2 style={{ margin: "0 0 4px", fontSize: "16px", fontWeight: 800, color: titleColor }}>
                     Open a Support Request
                   </h2>
                   <p style={{ margin: 0, fontSize: "12.5px", color: textMuted }}>
@@ -3180,9 +3258,10 @@ export default function CustomerSupportPage({
                     flexDirection: "column",
                     gap: "14px",
                     width: "100%",
-                    flex: 1,
+                    flex: isDesktopAdmin ? "none" : 1,
                     minHeight: 0,
-                    overflowY: "auto",
+                    height: isDesktopAdmin ? "auto" : undefined,
+                    overflowY: isDesktopAdmin ? "visible" : "auto",
                     paddingRight: "4px",
                   }}
                 >
@@ -3837,7 +3916,7 @@ export default function CustomerSupportPage({
                         value={subject}
                         onChange={(e) => setSubject(e.target.value)}
                         onFocus={() => {
-                          if (typeof window !== "undefined") {
+                          if (!isAdmin && typeof window !== "undefined") {
                             window.scrollTo({ top: 0, left: 0, behavior: "instant" });
                           }
                         }}
@@ -3868,7 +3947,7 @@ export default function CustomerSupportPage({
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
                       onFocus={() => {
-                        if (typeof window !== "undefined") {
+                        if (!isAdmin && typeof window !== "undefined") {
                           window.scrollTo({ top: 0, left: 0, behavior: "instant" });
                         }
                       }}
@@ -4022,11 +4101,17 @@ export default function CustomerSupportPage({
                       {submitting ? (uploadingNewRequestImage ? "Uploading Photo..." : "Submitting...") : submitButtonText}
                     </button>
 
-                    {showContactInfo && (supportEmail || supportPhone || supportHours) && (
-                      <div style={{ fontSize: "11.5px", color: textMuted, display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                        {supportEmail && <span>Email: <strong>{supportEmail}</strong></span>}
-                        {supportPhone && <span>Phone: <strong>{supportPhone}</strong></span>}
-                        {supportHours && <span>Hours: <strong>{supportHours}</strong></span>}
+                    {!isMobile && showContactInfo && (supportEmail || siteContactEmail || supportPhone || siteContactPhone || supportHours) && (
+                      <div style={{ fontSize: "11.5px", color: textMuted, display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
+                        {(supportEmail || siteContactEmail) && (
+                          <span>Email: <strong style={{ color: textColor }}>{supportEmail || siteContactEmail}</strong></span>
+                        )}
+                        {(supportPhone || siteContactPhone) && (
+                          <span>Phone: <strong style={{ color: textColor }}>{supportPhone || siteContactPhone}</strong></span>
+                        )}
+                        {supportHours && (
+                          <span>Hours: <strong style={{ color: textColor }}>{supportHours}</strong></span>
+                        )}
                       </div>
                     )}
                   </div>

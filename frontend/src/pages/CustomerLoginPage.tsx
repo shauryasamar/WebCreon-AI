@@ -412,13 +412,16 @@ export default function CustomerLoginPage(props: CustomerLoginPageProps = {}) {
   return (
     <div
       style={{
-        minHeight: "calc(100vh - 80px)",
+        minHeight: isInsideEditor ? "100%" : "100vh",
+        height: isInsideEditor ? "auto" : (isShortScreen ? "auto" : "100vh"),
+        maxHeight: isInsideEditor ? "none" : (isShortScreen ? "none" : "100vh"),
+        overflowY: isInsideEditor ? "visible" : (isShortScreen ? "auto" : "hidden"),
         width: "100%",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        padding: isMobile ? "24px 14px" : "48px 24px",
+        padding: isMobile ? "16px 12px" : (isShortScreen ? "18px 16px" : "24px 16px"),
         background: primaryBg,
         color: textColor,
         boxSizing: "border-box",
@@ -454,366 +457,366 @@ export default function CustomerLoginPage(props: CustomerLoginPageProps = {}) {
             transition: "all 0.2s ease",
           }}
         >
-        {/* BACK TO STORE LINK */}
-        <div style={{ display: "flex", alignItems: "center" }}>
-          <button
-            type="button"
-            onClick={() => navigate(storeBase || "/")}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              color: subtextColor,
-              fontSize: "12px",
-              fontWeight: 500,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-              padding: 0,
-              transition: "color 0.15s ease",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = textColor)}
-            onMouseLeave={(e) => (e.currentTarget.style.color = subtextColor)}
-          >
-            ← Back to store
-          </button>
-        </div>
-
-        {/* BRAND NAME HEADING & CLEAN SIGN IN HEADER */}
-        <div style={{ textAlign: "center", marginBottom: isMobile ? "2px" : "4px" }}>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: isMobile ? "22px" : "26px",
-              fontWeight: 800,
-              color: textColor,
-              letterSpacing: "-0.02em",
-              lineHeight: 1.2,
-            }}
-          >
-            {customProps.title || siteName}
-          </h1>
-          <p
-            style={{
-              margin: "4px 0 0 0",
-              fontSize: isMobile ? "13px" : "14px",
-              fontWeight: 500,
-              color: subtextColor,
-            }}
-          >
-            {customProps.subtitle || "Sign in to your account"}
-          </p>
-        </div>
-
-        {/* PREVIEW NOTICE */}
-        {previewNotice && (
-          <div
-            style={{
-              padding: "10px 14px",
-              borderRadius: inputRadius,
-              background: "rgba(34, 197, 94, 0.12)",
-              color: "#16a34a",
-              fontSize: "13px",
-              fontWeight: 600,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "6px",
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-            <span>{previewNotice}</span>
-          </div>
-        )}
-
-        {/* 1-CLICK GOOGLE SIGN IN */}
-        {showGoogleAuth && (
-          <div>
-            <div
-              id="customer-google-signin-btn"
-              style={{ display: "flex", justifyContent: "center", width: "100%" }}
-            ></div>
+          {/* BACK TO STORE LINK */}
+          <div style={{ display: "flex", alignItems: "center" }}>
             <button
-              id="customer-google-fallback-btn"
               type="button"
-              onClick={() => {
-                if ((window as any).google?.accounts?.id) {
-                  (window as any).google.accounts.id.prompt();
-                } else {
-                  handleDevGoogleLogin();
-                }
-              }}
-              disabled={googleSubmitting || authLoading}
+              onClick={() => navigate(storeBase || "/")}
               style={{
-                width: "100%",
-                height: isMobile ? "38px" : "44px",
-                background: isDarkCard ? "#0f172a" : "#ffffff",
-                border: `1px solid ${borderColor}`,
-                borderRadius: buttonRadius,
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: subtextColor,
+                fontSize: "12px",
+                fontWeight: 500,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                padding: 0,
+                transition: "color 0.15s ease",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = textColor)}
+              onMouseLeave={(e) => (e.currentTarget.style.color = subtextColor)}
+            >
+              ← Back to store
+            </button>
+          </div>
+
+          {/* BRAND NAME HEADING & CLEAN SIGN IN HEADER */}
+          <div style={{ textAlign: "center", marginBottom: isMobile ? "2px" : "4px" }}>
+            <h1
+              style={{
+                margin: 0,
+                fontSize: isMobile ? "22px" : "26px",
+                fontWeight: 800,
+                color: textColor,
+                letterSpacing: "-0.02em",
+                lineHeight: 1.2,
+              }}
+            >
+              {customProps.title || siteName}
+            </h1>
+            <p
+              style={{
+                margin: "4px 0 0 0",
+                fontSize: isMobile ? "13px" : "14px",
+                fontWeight: 500,
+                color: subtextColor,
+              }}
+            >
+              {customProps.subtitle || "Sign in to your account"}
+            </p>
+          </div>
+
+          {/* PREVIEW NOTICE */}
+          {previewNotice && (
+            <div
+              style={{
+                padding: "10px 14px",
+                borderRadius: inputRadius,
+                background: "rgba(34, 197, 94, 0.12)",
+                color: "#16a34a",
+                fontSize: "13px",
+                fontWeight: 600,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                gap: "10px",
-                cursor: "pointer",
-                fontWeight: 600,
-                fontSize: isMobile ? "13px" : "14px",
-                color: textColor,
-                transition: "all 0.15s ease",
+                gap: "6px",
               }}
             >
-              <svg width={isMobile ? 16 : 18} height={isMobile ? 16 : 18} viewBox="0 0 24 24">
-                <path
-                  fill="#4285F4"
-                  d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.35 24 12 24z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
-                />
-                <path
-                  fill="#EA4335"
-                  d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-                />
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
               </svg>
-              <span>{googleSubmitting ? "Connecting..." : "Continue with Google"}</span>
-            </button>
-          </div>
-        )}
+              <span>{previewNotice}</span>
+            </div>
+          )}
 
-        {/* DIVIDER */}
-        {showGoogleAuth && (
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div style={{ flex: 1, height: "1px", background: borderColor }}></div>
-            <span style={{ fontSize: isMobile ? "10.5px" : "11.5px", fontWeight: 600, color: subtextColor, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-              or with email
-            </span>
-            <div style={{ flex: 1, height: "1px", background: borderColor }}></div>
-          </div>
-        )}
-
-        {/* FORM */}
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: isMobile ? "10px" : "14px" }}>
-          <div>
-            <label
-              htmlFor="customer-email"
-              style={{ display: "block", marginBottom: isMobile ? "3px" : "5px", fontSize: isMobile ? "11.5px" : "13px", fontWeight: 600, color: textColor }}
-            >
-              Email Address
-            </label>
-            <input
-              id="customer-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onFocus={() => setInputFocused("email")}
-              onBlur={() => setInputFocused(null)}
-              autoComplete="email"
-              placeholder="name@example.com"
-              style={{
-                width: "100%",
-                height: isMobile ? "36px" : "42px",
-                boxSizing: "border-box",
-                padding: isMobile ? "0 10px" : "0 14px",
-                borderRadius: inputRadius,
-                border: `1px solid ${inputFocused === "email" ? accentColor : inputBorder}`,
-                background: inputBg,
-                color: inputTextColor,
-                outline: "none",
-                fontSize: isMobile ? "13px" : "14px",
-                boxShadow: inputFocused === "email" ? `0 0 0 3px ${accentColor}25` : "none",
-                transition: "all 0.15s ease",
-              }}
-            />
-          </div>
-
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? "3px" : "5px" }}>
-              <label
-                htmlFor="customer-password"
-                style={{ fontSize: isMobile ? "11.5px" : "13px", fontWeight: 600, color: textColor }}
-              >
-                Password
-              </label>
+          {/* 1-CLICK GOOGLE SIGN IN */}
+          {showGoogleAuth && (
+            <div>
+              <div
+                id="customer-google-signin-btn"
+                style={{ display: "flex", justifyContent: "center", width: "100%" }}
+              ></div>
               <button
+                id="customer-google-fallback-btn"
                 type="button"
                 onClick={() => {
-                  setForgotEmail(email);
-                  setForgotStep("request");
-                  setForgotError("");
-                  setForgotSuccess("");
-                  setShowForgotModal(true);
+                  if ((window as any).google?.accounts?.id) {
+                    (window as any).google.accounts.id.prompt();
+                  } else {
+                    handleDevGoogleLogin();
+                  }
                 }}
+                disabled={googleSubmitting || authLoading}
                 style={{
-                  background: "none",
-                  border: "none",
-                  padding: 0,
-                  fontSize: isMobile ? "11px" : "12.5px",
-                  fontWeight: 600,
-                  color: accessibleAccentColor,
+                  width: "100%",
+                  height: isMobile ? "38px" : "44px",
+                  background: isDarkCard ? "#0f172a" : "#ffffff",
+                  border: `1px solid ${borderColor}`,
+                  borderRadius: buttonRadius,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "10px",
                   cursor: "pointer",
+                  fontWeight: 600,
+                  fontSize: isMobile ? "13px" : "14px",
+                  color: textColor,
+                  transition: "all 0.15s ease",
                 }}
               >
-                Forgot password?
+                <svg width={isMobile ? 16 : 18} height={isMobile ? 16 : 18} viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.35 24 12 24z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                  />
+                </svg>
+                <span>{googleSubmitting ? "Connecting..." : "Continue with Google"}</span>
               </button>
             </div>
-            <div style={{ position: "relative" }}>
+          )}
+
+          {/* DIVIDER */}
+          {showGoogleAuth && (
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div style={{ flex: 1, height: "1px", background: borderColor }}></div>
+              <span style={{ fontSize: isMobile ? "10.5px" : "11.5px", fontWeight: 600, color: subtextColor, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                or with email
+              </span>
+              <div style={{ flex: 1, height: "1px", background: borderColor }}></div>
+            </div>
+          )}
+
+          {/* FORM */}
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: isMobile ? "10px" : "14px" }}>
+            <div>
+              <label
+                htmlFor="customer-email"
+                style={{ display: "block", marginBottom: isMobile ? "3px" : "5px", fontSize: isMobile ? "11.5px" : "13px", fontWeight: 600, color: textColor }}
+              >
+                Email Address
+              </label>
               <input
-                id="customer-password"
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onFocus={() => setInputFocused("password")}
+                id="customer-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onFocus={() => setInputFocused("email")}
                 onBlur={() => setInputFocused(null)}
-                autoComplete="current-password"
-                placeholder="Enter password"
+                autoComplete="email"
+                placeholder="name@example.com"
                 style={{
                   width: "100%",
                   height: isMobile ? "36px" : "42px",
                   boxSizing: "border-box",
-                  padding: isMobile ? "0 40px 0 10px" : "0 44px 0 14px",
+                  padding: isMobile ? "0 10px" : "0 14px",
                   borderRadius: inputRadius,
-                  border: `1px solid ${inputFocused === "password" ? accentColor : inputBorder}`,
+                  border: `1px solid ${inputFocused === "email" ? accentColor : inputBorder}`,
                   background: inputBg,
                   color: inputTextColor,
                   outline: "none",
                   fontSize: isMobile ? "13px" : "14px",
-                  boxShadow: inputFocused === "password" ? `0 0 0 3px ${accentColor}25` : "none",
+                  boxShadow: inputFocused === "email" ? `0 0 0 3px ${accentColor}25` : "none",
                   transition: "all 0.15s ease",
                 }}
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
+            </div>
+
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? "3px" : "5px" }}>
+                <label
+                  htmlFor="customer-password"
+                  style={{ fontSize: isMobile ? "11.5px" : "13px", fontWeight: 600, color: textColor }}
+                >
+                  Password
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForgotEmail(email);
+                    setForgotStep("request");
+                    setForgotError("");
+                    setForgotSuccess("");
+                    setShowForgotModal(true);
+                  }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    fontSize: isMobile ? "11px" : "12.5px",
+                    fontWeight: 600,
+                    color: accessibleAccentColor,
+                    cursor: "pointer",
+                  }}
+                >
+                  Forgot password?
+                </button>
+              </div>
+              <div style={{ position: "relative" }}>
+                <input
+                  id="customer-password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onFocus={() => setInputFocused("password")}
+                  onBlur={() => setInputFocused(null)}
+                  autoComplete="current-password"
+                  placeholder="Enter password"
+                  style={{
+                    width: "100%",
+                    height: isMobile ? "36px" : "42px",
+                    boxSizing: "border-box",
+                    padding: isMobile ? "0 40px 0 10px" : "0 44px 0 14px",
+                    borderRadius: inputRadius,
+                    border: `1px solid ${inputFocused === "password" ? accentColor : inputBorder}`,
+                    background: inputBg,
+                    color: inputTextColor,
+                    outline: "none",
+                    fontSize: isMobile ? "13px" : "14px",
+                    boxShadow: inputFocused === "password" ? `0 0 0 3px ${accentColor}25` : "none",
+                    transition: "all 0.15s ease",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: "absolute",
+                    right: "10px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "none",
+                    border: "none",
+                    padding: "4px",
+                    fontSize: isMobile ? "11.5px" : "12.5px",
+                    fontWeight: 600,
+                    color: subtextColor,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
+            </div>
+
+            {error && (
+              <div
                 style={{
-                  position: "absolute",
-                  right: "10px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  background: "none",
-                  border: "none",
-                  padding: "4px",
-                  fontSize: isMobile ? "11.5px" : "12.5px",
-                  fontWeight: 600,
-                  color: subtextColor,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
+                  padding: "8px 12px",
+                  borderRadius: inputRadius,
+                  background: "rgba(239, 68, 68, 0.12)",
+                  color: "#ef4444",
+                  fontSize: "12.5px",
+                  lineHeight: 1.35,
                 }}
               >
-                {showPassword ? "Hide" : "Show"}
-              </button>
-            </div>
-          </div>
+                {error}
+              </div>
+            )}
 
-          {error && (
-            <div
-              style={{
-                padding: "8px 12px",
-                borderRadius: inputRadius,
-                background: "rgba(239, 68, 68, 0.12)",
-                color: "#ef4444",
-                fontSize: "12.5px",
-                lineHeight: 1.35,
-              }}
-            >
-              {error}
-            </div>
-          )}
-
-          <div style={{ display: "grid", gridTemplateColumns: showGuestContinue ? "1.4fr 1fr" : "1fr", gap: "10px", marginTop: "4px" }}>
-            <button
-              type="submit"
-              disabled={authLoading || googleSubmitting}
-              style={{
-                height: isMobile ? "38px" : "44px",
-                borderRadius: buttonRadius,
-                border: "none",
-                background: accentColor,
-                color: buttonTextColor,
-                fontSize: isMobile ? "13px" : "14px",
-                fontWeight: 700,
-                cursor: authLoading || googleSubmitting ? "not-allowed" : "pointer",
-                opacity: authLoading || googleSubmitting ? 0.75 : 1,
-                boxShadow: `0 3px 12px ${accentColor}35`,
-                transition: "all 0.15s ease",
-              }}
-            >
-              {authLoading ? "Signing in..." : (customProps.submit_button_label || "Sign In")}
-            </button>
-
-            {showGuestContinue && (
+            <div style={{ display: "grid", gridTemplateColumns: showGuestContinue ? "1.4fr 1fr" : "1fr", gap: "10px", marginTop: "4px" }}>
               <button
-                type="button"
-                onClick={handleContinueAsGuest}
+                type="submit"
+                disabled={authLoading || googleSubmitting}
                 style={{
                   height: isMobile ? "38px" : "44px",
                   borderRadius: buttonRadius,
-                  border: `1px solid ${borderColor}`,
-                  background: "transparent",
-                  color: textColor,
+                  border: "none",
+                  background: accentColor,
+                  color: buttonTextColor,
                   fontSize: isMobile ? "13px" : "14px",
-                  fontWeight: 600,
-                  cursor: "pointer",
+                  fontWeight: 700,
+                  cursor: authLoading || googleSubmitting ? "not-allowed" : "pointer",
+                  opacity: authLoading || googleSubmitting ? 0.75 : 1,
+                  boxShadow: `0 3px 12px ${accentColor}35`,
                   transition: "all 0.15s ease",
                 }}
               >
-                Guest Access
+                {authLoading ? "Signing in..." : (customProps.submit_button_label || "Sign In")}
               </button>
-            )}
-          </div>
-        </form>
 
-        {/* SWITCH TO SIGN UP & BADGE */}
-        <div style={{ textAlign: "center", paddingTop: "2px" }}>
-          <p style={{ margin: 0, fontSize: isMobile ? "12.5px" : "13.5px", color: subtextColor }}>
-            New customer?{" "}
-            <Link
-              to={websiteName ? `/store/${websiteName}/signup` : "/"}
-              style={{
-                color: accessibleAccentColor,
-                textDecoration: "none",
-                fontWeight: 700,
-              }}
-            >
-              Create an account
-            </Link>
-          </p>
+              {showGuestContinue && (
+                <button
+                  type="button"
+                  onClick={handleContinueAsGuest}
+                  style={{
+                    height: isMobile ? "38px" : "44px",
+                    borderRadius: buttonRadius,
+                    border: `1px solid ${borderColor}`,
+                    background: "transparent",
+                    color: textColor,
+                    fontSize: isMobile ? "13px" : "14px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  Guest Access
+                </button>
+              )}
+            </div>
+          </form>
 
-          <div style={{ marginTop: isMobile ? "8px" : "12px", display: "flex", justifyContent: "center" }}>
-            <a
-              href="/"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "5px",
-                textDecoration: "none",
-                fontSize: "11.5px",
-                color: subtextColor,
-                opacity: 0.85,
-              }}
-            >
-              <span>Powered by</span>
-              <span
+          {/* SWITCH TO SIGN UP & BADGE */}
+          <div style={{ textAlign: "center", paddingTop: "2px" }}>
+            <p style={{ margin: 0, fontSize: isMobile ? "12.5px" : "13.5px", color: subtextColor }}>
+              New customer?{" "}
+              <Link
+                to={websiteName ? `/store/${websiteName}/signup` : "/"}
                 style={{
-                  fontWeight: 800,
-                  background: "linear-gradient(135deg, #2563eb, #7c3aed)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
+                  color: accessibleAccentColor,
+                  textDecoration: "none",
+                  fontWeight: 700,
                 }}
               >
-                WebCreon AI
-              </span>
-            </a>
+                Create an account
+              </Link>
+            </p>
+
+            <div style={{ marginTop: isMobile ? "8px" : "12px", display: "flex", justifyContent: "center" }}>
+              <a
+                href="/"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  textDecoration: "none",
+                  fontSize: "11.5px",
+                  color: subtextColor,
+                  opacity: 0.85,
+                }}
+              >
+                <span>Powered by</span>
+                <span
+                  style={{
+                    fontWeight: 800,
+                    background: "linear-gradient(135deg, #2563eb, #7c3aed)",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                  }}
+                >
+                  WebCreon AI
+                </span>
+              </a>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
       {/* FORGOT PASSWORD MODAL */}
       {showForgotModal && (
