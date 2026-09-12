@@ -1411,6 +1411,12 @@ const FilterModal: React.FC<FilterModalProps> = ({
           to { transform: translateY(0); }
         }
 
+        .filter-modal-overlay,
+        .filter-modal-overlay * {
+          box-sizing: border-box;
+          font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
         .filter-modal-overlay {
           position: ${isInline ? "absolute" : "fixed"};
           inset: 0;

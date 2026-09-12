@@ -10,6 +10,7 @@ type BuilderTopControlBarProps = {
   userEmail?: string;
   avatarUrl?: string;
   gender?: string;
+  isOwner?: boolean;
   deviceMode?: "desktop" | "mobile";
   onChangeDeviceMode?: (mode: "desktop" | "mobile") => void;
   showDeviceSwitcher?: boolean;
@@ -23,6 +24,7 @@ export default function BuilderTopControlBar({
   userEmail,
   avatarUrl,
   gender,
+  isOwner = false,
   deviceMode = "desktop",
   onChangeDeviceMode,
   showDeviceSwitcher = false,
@@ -75,17 +77,20 @@ export default function BuilderTopControlBar({
           color: #0f172a !important;
         }
       `}</style>
-      <button
-        type="button"
-        onClick={onGoDashboard}
+      <div
+        onClick={isOwner ? onGoDashboard : undefined}
+        role={isOwner ? "button" : undefined}
+        tabIndex={isOwner ? 0 : undefined}
+        title={isOwner ? "Switch store / AI Onboarding" : "Webcreon"}
         style={{
           display: "flex",
           alignItems: "center",
           gap: "10px",
           border: "none",
           background: "transparent",
-          cursor: "pointer",
+          cursor: isOwner ? "pointer" : "default",
           padding: 0,
+          userSelect: "none",
         }}
       >
         <div
@@ -110,7 +115,7 @@ export default function BuilderTopControlBar({
             </>
           ) : null}
         </div>
-      </button>
+      </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
         {showDeviceSwitcher && (

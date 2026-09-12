@@ -770,19 +770,6 @@ def get_admin_sites(
 
     # Team member: scope strictly to the workspace owner's storefronts
     owner_id = getattr(admin_obj, "invited_by_admin_id", None)
-    if not owner_id:
-        owner_admin = session.exec(
-            select(Admin)
-            .join(Role, Role.id == Admin.role_id, isouter=True)
-            .where((Role.name == "Owner") | (Admin.role == "Owner"))
-            .order_by(Admin.created_at.asc())
-        ).first()
-        if owner_admin:
-            owner_id = owner_admin.id
-            admin_obj.invited_by_admin_id = owner_admin.id
-            session.add(admin_obj)
-            session.commit()
-
     owner_uuid = None
     if owner_id:
         try:
@@ -811,23 +798,7 @@ def get_admin_sites(
     website_access_type = getattr(admin_obj, "website_access_type", "all") or "all"
 
     if website_access_type == "all":
-        if owner_sites:
-            return owner_sites
-        # Fallback: only clean non-test sites explicitly linked to this admin
-        return session.exec(
-            select(Site)
-            .join(AdminSite, AdminSite.site_id == Site.id)
-            .where(
-                AdminSite.admin_id == admin_uuid,
-                ~Site.slug.like("store-ret-%"),
-                ~Site.slug.like("store-charges-%"),
-                ~Site.slug.like("stat-store-%"),
-                ~Site.slug.like("inv-store-%"),
-                ~Site.slug.like("sec-store-%"),
-                ~Site.slug.like("test-store-%"),
-            )
-            .order_by(Site.created_at.desc())
-        ).all()
+        return owner_sites
 
     # "specific" access: return only sites assigned to this member that belong to the owner's workspace
     if owner_site_ids:
@@ -837,25 +808,18 @@ def get_admin_sites(
             .where(
                 AdminSite.admin_id == admin_uuid,
                 Site.id.in_(owner_site_ids),
+                ~Site.slug.like("store-ret-%"),
+                ~Site.slug.like("store-charges-%"),
+                ~Site.slug.like("stat-store-%"),
+                ~Site.slug.like("inv-store-%"),
+                ~Site.slug.like("sec-store-%"),
+                ~Site.slug.like("test-store-%"),
             )
             .order_by(Site.created_at.desc())
         ).all()
         return member_sites
 
-    return session.exec(
-        select(Site)
-        .join(AdminSite, AdminSite.site_id == Site.id)
-        .where(
-            AdminSite.admin_id == admin_uuid,
-            ~Site.slug.like("store-ret-%"),
-            ~Site.slug.like("store-charges-%"),
-            ~Site.slug.like("stat-store-%"),
-            ~Site.slug.like("inv-store-%"),
-            ~Site.slug.like("sec-store-%"),
-            ~Site.slug.like("test-store-%"),
-        )
-        .order_by(Site.created_at.desc())
-    ).all()
+    return []
 
 
 @router.post("/admin/logout")

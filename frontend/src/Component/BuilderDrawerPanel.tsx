@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { API_BASE_URL } from "../config/api";
 import { AdminCopilotChat } from "./AdminCopilotChat";
 import AdminProfileSettings from "./AdminProfileSettings";
@@ -1124,6 +1124,28 @@ export default function BuilderDrawerPanel({
     active_returns: number;
   } | null>(null);
 
+  const scrollAreaRef = useRef<HTMLDivElement | null>(null);
+  const SAVED_SITES_SCROLL_KEY = "wc_saved_sites_drawer_scroll";
+
+  useLayoutEffect(() => {
+    if (activeDrawer === "saved-sites" && !savedSitesLoading && scrollAreaRef.current) {
+      try {
+        const saved = sessionStorage.getItem(SAVED_SITES_SCROLL_KEY);
+        if (saved) {
+          const top = parseFloat(saved);
+          if (!isNaN(top) && top > 0) {
+            scrollAreaRef.current.scrollTop = top;
+            requestAnimationFrame(() => {
+              if (scrollAreaRef.current) {
+                scrollAreaRef.current.scrollTop = top;
+              }
+            });
+          }
+        }
+      } catch (_) {}
+    }
+  }, [activeDrawer, savedSitesLoading, savedSites.length]);
+
   useEffect(() => {
     if (!deleteSiteModal) {
       setDeleteCheckData(null);
@@ -1491,7 +1513,15 @@ export default function BuilderDrawerPanel({
       </div>
 
       <div
+        ref={scrollAreaRef}
         className="builder-drawer-scroll-area"
+        onScroll={(e) => {
+          if (activeDrawer === "saved-sites") {
+            try {
+              sessionStorage.setItem(SAVED_SITES_SCROLL_KEY, String(e.currentTarget.scrollTop));
+            } catch (_) {}
+          }
+        }}
         style={{
           padding: "12px",
           fontSize: 12,

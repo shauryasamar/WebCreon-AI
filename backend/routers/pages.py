@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from auth_middleware import check_admin_has_permission, enforce_site_ownership
+from auth_middleware import check_admin_has_permission, enforce_site_ownership, resolve_site_by_slug_or_404
 from db.database import get_session
 from models import AdminSite, Site, StorePage, SupportTicket, SupportTicketMessage, utc_now
 from services.audit_service import AuditService, ActorType, SourceType, AuditCategory
@@ -574,18 +574,7 @@ def get_public_store_page(
     session: Session = Depends(get_session),
 ):
     """Public endpoint for storefront visitors to fetch page content."""
-    site = None
-    try:
-        site_uuid = UUID(site_identifier)
-        site = session.get(Site, site_uuid)
-    except (ValueError, TypeError):
-        pass
-
-    if not site:
-        site = session.exec(select(Site).where(Site.slug == site_identifier)).first()
-
-    if not site:
-        raise HTTPException(status_code=404, detail="Site not found")
+    site = resolve_site_by_slug_or_404(site_identifier, session)
 
     if not getattr(site, "is_online", True):
         raise HTTPException(status_code=503, detail="Store is currently offline for maintenance.")
@@ -663,18 +652,7 @@ def submit_contact_inquiry(
     session: Session = Depends(get_session),
 ):
     """Customer submits an inquiry via the Contact Us page."""
-    site = None
-    try:
-        site_uuid = UUID(site_identifier)
-        site = session.get(Site, site_uuid)
-    except (ValueError, TypeError):
-        pass
-
-    if not site:
-        site = session.exec(select(Site).where(Site.slug == site_identifier)).first()
-
-    if not site:
-        raise HTTPException(status_code=404, detail="Site not found")
+    site = resolve_site_by_slug_or_404(site_identifier, session)
 
     # If support tickets table is available, create a support ticket automatically!
     try:

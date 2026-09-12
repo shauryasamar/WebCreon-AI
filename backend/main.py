@@ -31,6 +31,7 @@ from auth_middleware import (
     check_admin_has_permission,
     enforce_owner_role,
     enforce_site_ownership,
+    resolve_site_by_slug_or_404,
 )
 from db.database import create_db_and_tables, get_session, engine
 from models import (
@@ -54,6 +55,116 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 ASSETS_DIR = Path("uploads/assets")
 ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def run_database_security_cleanup():
+    try:
+        with Session(engine) as session:
+            from models import Role, Admin, AdminSite, Site
+            users_roles.ensure_default_roles_and_users(session)
+
+            # 1. Clean up pytest test sites
+            test_sites = session.exec(
+                select(Site).where(
+                    (Site.slug.like("store-ret-%")) |
+                    (Site.slug.like("store-charges-%")) |
+                    (Site.slug.like("stat-store-%")) |
+                    (Site.slug.like("inv-store-%")) |
+                    (Site.slug.like("sec-store-%")) |
+                    (Site.slug.like("test-store-%"))
+                )
+            ).all()
+            test_ids = [s.id for s in test_sites]
+            if test_ids:
+                stale_links = session.exec(select(AdminSite).where(AdminSite.site_id.in_(test_ids))).all()
+                for lk in stale_links:
+                    session.delete(lk)
+                for ts in test_sites:
+                    session.delete(ts)
+                session.commit()
+
+            # 2. Scope team members strictly to their respective workspace owners
+            all_owners = session.exec(
+                select(Admin)
+                .join(Role, Role.id == Admin.role_id, isouter=True)
+                .where((Role.name == "Owner") | (Admin.role == "Owner"))
+            ).all()
+            owners_by_id = {o.id: o for o in all_owners}
+            owners_by_email = {o.email.lower().strip(): o for o in all_owners}
+
+            # Specifically ensure Dhanya is bound to shauryasamar@gmail.com with specific access type
+            dhanya_admin = session.exec(
+                select(Admin).where(func.lower(Admin.email) == "dhanyaan210@gmail.com")
+            ).first()
+            if dhanya_admin:
+                shaurya_owner = owners_by_email.get("shauryasamar@gmail.com")
+                if shaurya_owner:
+                    dhanya_admin.invited_by_admin_id = shaurya_owner.id
+                dhanya_admin.website_access_type = "specific"
+                session.add(dhanya_admin)
+
+                shaurya_sites = session.exec(
+                    select(Site)
+                    .join(AdminSite, AdminSite.site_id == Site.id)
+                    .where(AdminSite.admin_id == shaurya_owner.id)
+                ).all() if shaurya_owner else []
+
+                # Find RedFruitMarket site for Dhanya
+                rfm_site = next(
+                    (s for s in shaurya_sites if "redfruit" in (s.slug or "").lower() or "redfruit" in str((s.site_definition or {}).get("site", {}).get("brand_name", "")).lower()),
+                    None
+                )
+                target_site_to_keep = rfm_site or (shaurya_sites[0] if shaurya_sites else None)
+
+                # Delete all stale / leaked AdminSite records for Dhanya
+                all_dhanya_links = session.exec(
+                    select(AdminSite).where(AdminSite.admin_id == dhanya_admin.id)
+                ).all()
+                for dl in all_dhanya_links:
+                    if target_site_to_keep and dl.site_id != target_site_to_keep.id:
+                        session.delete(dl)
+                    elif not target_site_to_keep:
+                        session.delete(dl)
+
+                if target_site_to_keep:
+                    has_link = session.exec(
+                        select(AdminSite).where(
+                            AdminSite.admin_id == dhanya_admin.id,
+                            AdminSite.site_id == target_site_to_keep.id,
+                        )
+                    ).first()
+                    if not has_link:
+                        session.add(AdminSite(admin_id=dhanya_admin.id, site_id=target_site_to_keep.id, role_on_site="designer"))
+
+            # Clean up cross-workspace AdminSite links for all non-owner admins
+            non_owners = session.exec(
+                select(Admin).where(
+                    ~Admin.id.in_(list(owners_by_id.keys())) if owners_by_id else True
+                )
+            ).all()
+
+            for no in non_owners:
+                if no.invited_by_admin_id and no.invited_by_admin_id in owners_by_id:
+                    owner_site_ids = set(session.exec(
+                        select(AdminSite.site_id).where(AdminSite.admin_id == no.invited_by_admin_id)
+                    ).all())
+
+                    # Remove any links to sites not owned by this team member's workspace owner
+                    bad_member_links = session.exec(
+                        select(AdminSite).where(
+                            AdminSite.admin_id == no.id,
+                            ~AdminSite.site_id.in_(list(owner_site_ids)) if owner_site_ids else True
+                        )
+                    ).all()
+                    for bl in bad_member_links:
+                        session.delete(bl)
+
+            session.commit()
+            logger.info("SECURITY RECONCILIATION: Database permissions and isolation verified.")
+    except Exception as cleanup_err:
+        logger.warning("Could not complete security cleanup: %s", cleanup_err)
+
+run_database_security_cleanup()
 
 
 async def _mature_escrow_cron_task():
@@ -159,88 +270,7 @@ async def lifespan(app: FastAPI):
     except Exception as ddl_err:
         logger.warning("Could not execute sites is_online DDL: %s", ddl_err)
 
-    try:
-        with Session(engine) as session:
-            users_roles.ensure_default_roles_and_users(session)
-            adms = session.exec(select(Admin.id, Admin.email, Admin.name, Admin.role, Admin.invited_by_admin_id, Admin.status)).all()
-            logger.info("DIAGNOSTIC - All admins in DB: %s", [(str(a[0]), a[1], a[2], a[3], str(a[4]), a[5]) for a in adms])
-            logger.info("Users & Roles system initialized successfully.")
-    except Exception as seed_err:
-        logger.warning("Could not seed default roles and users: %s", seed_err)
-
-    try:
-        with Session(engine) as session:
-            # 1. Clean up any pytest test sites that leaked into production database
-            test_sites = session.exec(
-                select(Site).where(
-                    (Site.slug.like("store-ret-%")) |
-                    (Site.slug.like("store-charges-%")) |
-                    (Site.slug.like("stat-store-%")) |
-                    (Site.slug.like("inv-store-%")) |
-                    (Site.slug.like("sec-store-%")) |
-                    (Site.slug.like("test-store-%"))
-                )
-            ).all()
-            test_ids = [s.id for s in test_sites]
-            if test_ids:
-                stale_links = session.exec(
-                    select(AdminSite).where(AdminSite.site_id.in_(test_ids))
-                ).all()
-                for lk in stale_links:
-                    session.delete(lk)
-                for ts in test_sites:
-                    session.delete(ts)
-                session.commit()
-                logger.info(f"Purged {len(test_ids)} leftover pytest test sites and links.")
-
-            # 2. Scope team members strictly to their workspace owner
-            from models import Role
-            owner_admin = session.exec(
-                select(Admin)
-                .join(Role, Role.id == Admin.role_id, isouter=True)
-                .where((Role.name == "Owner") | (Admin.role == "Owner"))
-                .order_by(Admin.created_at.asc())
-            ).first()
-
-            if owner_admin:
-                owner_site_links = session.exec(
-                    select(AdminSite.site_id).where(AdminSite.admin_id == owner_admin.id)
-                ).all()
-                owner_site_ids = set(owner_site_links)
-
-                non_owners = session.exec(
-                    select(Admin).where(Admin.id != owner_admin.id)
-                ).all()
-                for no in non_owners:
-                    if not no.invited_by_admin_id:
-                        no.invited_by_admin_id = owner_admin.id
-                        session.add(no)
-
-                    # Delete any AdminSite records for this team member that are NOT in owner's workspace
-                    if owner_site_ids:
-                        bad_member_links = session.exec(
-                            select(AdminSite).where(
-                                AdminSite.admin_id == no.id,
-                                ~AdminSite.site_id.in_(list(owner_site_ids))
-                            )
-                        ).all()
-                        for bl in bad_member_links:
-                            session.delete(bl)
-
-                    # If team member has access "all", ensure they have AdminSite links for all owner's sites
-                    if getattr(no, "website_access_type", "all") == "all" and owner_site_ids:
-                        for osid in owner_site_ids:
-                            existing_link = session.exec(
-                                select(AdminSite).where(AdminSite.admin_id == no.id, AdminSite.site_id == osid)
-                            ).first()
-                            if not existing_link:
-                                role_site_str = (no.role or "store_manager").lower().replace(" ", "_")
-                                session.add(AdminSite(admin_id=no.id, site_id=osid, role_on_site=role_site_str))
-
-                session.commit()
-                logger.info("Workspace team members and AdminSite isolation verified and healed.")
-    except Exception as cleanup_err:
-        logger.warning("Could not complete workspace site isolation cleanup: %s", cleanup_err)
+    run_database_security_cleanup()
 
     try:
         with Session(engine) as session:
@@ -1316,23 +1346,13 @@ def get_public_site_theme_fast(
         response.headers["ETag"] = cached.get("etag", f'"{cached["id"]}"')
         return cached["theme_payload"]
 
-    site = None
-    try:
-        uuid_val = UUID(slug)
-        site = session.exec(
-            select(Site.id, Site.slug, Site.site_definition, Site.draft_definition, Site.is_online).where((Site.slug == slug) | (Site.id == uuid_val))
-        ).first()
-    except Exception:
-        site = session.exec(
-            select(Site.id, Site.slug, Site.site_definition, Site.draft_definition, Site.is_online).where(Site.slug == slug)
-        ).first()
+    site = resolve_site_by_slug_or_404(slug, session)
 
-    if not site:
-        raise HTTPException(status_code=404, detail="Site not found")
-
-    site_id, site_slug, site_def, draft_def, is_online = site
-    site_def = site_def or {}
-    draft_def = draft_def or {}
+    site_id = site.id
+    site_slug = site.slug
+    site_def = site.site_definition or {}
+    draft_def = site.draft_definition or {}
+    is_online = site.is_online
     effective_def = site_def if bool(site_def.get("theme")) else (draft_def if bool(draft_def.get("theme")) else site_def)
     site_theme = effective_def.get("theme") or site_def.get("theme") or draft_def.get("theme") or {}
     brand_name = (
@@ -1393,19 +1413,7 @@ def get_public_site_by_slug(
         response.headers["ETag"] = cached.get("etag", f'"{cached["id"]}"')
         return cached["full_site"]
 
-    site = None
-    try:
-        uuid_val = UUID(slug)
-        site = session.exec(
-            select(Site).where((Site.slug == slug) | (Site.id == uuid_val))
-        ).first()
-    except Exception:
-        site = session.exec(
-            select(Site).where(Site.slug == slug)
-        ).first()
-
-    if not site:
-        raise HTTPException(status_code=404, detail="Site not found")
+    site = resolve_site_by_slug_or_404(slug, session)
 
     etag_val = f'"{site.id}-{site.version}"'
     if slug not in PUBLIC_SITE_CACHE:

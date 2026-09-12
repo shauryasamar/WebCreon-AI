@@ -287,18 +287,18 @@ function EditorBlockWrapper({
     blockType === "place_order_cta" || blockType === "placeordercta" || blockId === "place_order_cta" || blockType === "checkout_review"
       ? "Review & Pay"
       : blockType === "profile_details" || blockType === "profiledetails" || blockId === "profile_details" || blockType === "profile"
-      ? "Profile Details"
-      : blockType === "signin_form" || blockType === "signinform" || blockId === "signin_form" || blockType === "login_form" || blockType === "login"
-      ? "Sign In Form"
-      : blockType === "signup_form" || blockType === "signupform" || blockId === "signup_form" || blockType === "register_form" || blockType === "signup"
-      ? "Sign Up Form"
-      : blockType === "customer_orders" || blockType === "customerorders" || blockId === "customer_orders" || blockType === "orders" || blockType === "order_history" || blockType === "order_history_list"
-      ? "Order History"
-      : blockType === "customer_support" || blockType === "customersupport" || blockId === "customer_support" || blockType === "support" || blockType === "support_desk"
-      ? "Help & Support"
-      : (blockType || "")
-          .replace(/[-_]/g, " ")
-          .replace(/\b\w/g, (c) => c.toUpperCase());
+        ? "Profile Details"
+        : blockType === "signin_form" || blockType === "signinform" || blockId === "signin_form" || blockType === "login_form" || blockType === "login"
+          ? "Sign In Form"
+          : blockType === "signup_form" || blockType === "signupform" || blockId === "signup_form" || blockType === "register_form" || blockType === "signup"
+            ? "Sign Up Form"
+            : blockType === "customer_orders" || blockType === "customerorders" || blockId === "customer_orders" || blockType === "orders" || blockType === "order_history" || blockType === "order_history_list"
+              ? "Order History"
+              : blockType === "customer_support" || blockType === "customersupport" || blockId === "customer_support" || blockType === "support" || blockType === "support_desk"
+                ? "Help & Support"
+                : (blockType || "")
+                  .replace(/[-_]/g, " ")
+                  .replace(/\b\w/g, (c) => c.toUpperCase());
 
   const isCart = Boolean(isCartBlock);
   const parseNumSafe = (val: any, fallback: number) => {
@@ -633,6 +633,15 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
     page?.route === "/cart" ||
     page?.page_type === "cart" ||
     page?.role === "cart";
+
+  const isSupportPage =
+    page?.slug === "support" ||
+    page?.route === "/support" ||
+    page?.page_type === "support" ||
+    page?.role === "support" ||
+    resolvedBlocks.some((b) =>
+      ["customer_support", "customersupport", "support_page", "supportpage", "support_desk", "supportdesk", "support"].includes(String(b.type || "").toLowerCase())
+    );
 
   const isProductDetailPageContext =
     Boolean(selectedProduct) ||
@@ -1090,13 +1099,13 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
   }, [sectionTitleParam, activeSectionBlock, searchQuery, filters, categories, collections]);
 
   const dynamicSubtitle = useMemo(() => {
-    if (sectionTitleParam) return `${resolvedTotalCount.toLocaleString()} Items`;
-    if (activeSectionBlock) return activeSectionBlock.props?.subtitle || `${resolvedTotalCount.toLocaleString()} Items`;
+    if (sectionTitleParam) return "Curated Selection";
+    if (activeSectionBlock) return activeSectionBlock.props?.subtitle || "Featured Selection";
     if (searchQuery.trim()) return "Search Results";
     if (filters.categoryId) return "Category";
     if (filters.collections.length > 0) return "Collection";
     return "Browse Products";
-  }, [sectionTitleParam, activeSectionBlock, searchQuery, filters, resolvedTotalCount]);
+  }, [sectionTitleParam, activeSectionBlock, searchQuery, filters]);
 
   const detailRelevantBlocks = useMemo(() => {
     if (!isProductDetailPageContext) return resolvedBlocks;
@@ -1259,6 +1268,12 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
         return false;
       }
 
+      if (isSupportPage) {
+        const isSupportLike = ["customer_support", "customersupport", "support_page", "supportpage", "support_desk", "supportdesk", "support"].includes(type);
+        if (isSupportLike) return true;
+        return false;
+      }
+
       const isProductDetailLike =
         PRODUCT_DETAIL_TYPES.has(type) || dataSource === "product";
       if (isProductDetailPageContext && isProductDetailLike) {
@@ -1269,7 +1284,7 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
 
       return true;
     });
-  }, [detailRelevantBlocks, isCheckoutPage, isCartPage, isProductDetailPageContext, isDedicatedSectionOrSearchView, page]);
+  }, [detailRelevantBlocks, isCheckoutPage, isCartPage, isSupportPage, isProductDetailPageContext, isDedicatedSectionOrSearchView, page]);
 
   // Auto switch checkout step if selected block belongs to a specific step
   useEffect(() => {
@@ -1483,6 +1498,10 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
       (theme as any)?.name?.toLowerCase()?.includes("glass");
 
     const isThemeDark = theme?.mode === "dark" || isColorDarkHex(theme?.primary_bg);
+    const resolvedAccent = theme?.accent_color || (isThemeDark ? "#60a5fa" : "#2563eb");
+    const scrollTrackBg = theme?.primary_bg || (isThemeDark ? "#0f172a" : "#f1f5f9");
+    const scrollThumbColor = resolvedAccent;
+    const scrollThumbHover = isThemeDark ? "#ffffff" : "#0f172a";
 
     const glassBackground = isThemeDark
       ? "radial-gradient(circle at 10% 15%, rgba(56, 189, 248, 0.18) 0%, transparent 45%), radial-gradient(circle at 90% 60%, rgba(139, 92, 246, 0.18) 0%, transparent 50%), radial-gradient(circle at 50% 90%, rgba(236, 72, 153, 0.12) 0%, transparent 45%), #090d16"
@@ -1495,9 +1514,13 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
           style={{
             position: "relative",
             width: "100%",
-            minHeight: isCartPage ? "calc(100vh - 220px)" : "100%",
-            display: isCartPage ? "flex" : undefined,
-            flexDirection: isCartPage ? "column" : undefined,
+            maxWidth: "100%",
+            minHeight: isCartPage ? "calc(100vh - 220px)" : (isSupportPage ? "100vh" : "100%"),
+            height: isSupportPage ? "100vh" : undefined,
+            maxHeight: isSupportPage ? "100vh" : undefined,
+            overflow: isSupportPage ? "hidden" : undefined,
+            display: isCartPage || isSupportPage ? "flex" : undefined,
+            flexDirection: isCartPage || isSupportPage ? "column" : undefined,
             justifyContent: isCartPage ? "flex-start" : undefined,
             paddingTop: 0,
             boxSizing: "border-box",
@@ -1506,7 +1529,7 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
           }}
         >
           {/* Festive Background Overlay — strictly on home / catalog landing pages, never on cart, product details, or checkout pages */}
-          {!isCartPage && !isProductDetailPageContext && !isCheckoutPage && (
+          {!isCartPage && !isProductDetailPageContext && !isCheckoutPage && !isSupportPage && (
             <FestiveBackgroundOverlay
               festivalTheme={theme?.festival_theme}
               backgroundColor={theme?.primary_bg}
@@ -1528,12 +1551,13 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
                     style={{
                       position: "relative",
                       width: "100%",
+                      maxWidth: "100%",
                       height: 0,
                       margin: 0,
                       padding: 0,
                       pointerEvents: "none",
                       zIndex: 25,
-                      overflow: "visible",
+                      overflow: "hidden",
                       opacity: 0.6,
                     }}
                   >
@@ -1880,12 +1904,12 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
   const checkoutOuterMaxWidth = isFullWidth
     ? "100%"
     : configuredMaxWidth
-    ? typeof configuredMaxWidth === "number"
-      ? `${configuredMaxWidth}px`
-      : String(configuredMaxWidth).endsWith("%") || String(configuredMaxWidth).endsWith("px")
-      ? String(configuredMaxWidth)
-      : `${configuredMaxWidth}px`
-    : "1240px";
+      ? typeof configuredMaxWidth === "number"
+        ? `${configuredMaxWidth}px`
+        : String(configuredMaxWidth).endsWith("%") || String(configuredMaxWidth).endsWith("px")
+          ? String(configuredMaxWidth)
+          : `${configuredMaxWidth}px`
+      : "1240px";
 
   const stepsProps = checkoutStepsBlock?.props || {};
 
@@ -1924,9 +1948,9 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
   const isStepperSelected = Boolean(
     selectedBlockId &&
     (selectedBlockId === "checkout_steps" ||
-     selectedBlockId === "checkoutsteps" ||
-     selectedBlockId === checkoutStepsBlock?.id ||
-     selectedBlockId === checkoutStepsBlock?.type)
+      selectedBlockId === "checkoutsteps" ||
+      selectedBlockId === checkoutStepsBlock?.id ||
+      selectedBlockId === checkoutStepsBlock?.type)
   );
 
   return (
@@ -2051,8 +2075,8 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
                             stepsAlign === "center"
                               ? "center"
                               : stepsAlign === "right"
-                              ? "flex-end"
-                              : "flex-start",
+                                ? "flex-end"
+                                : "flex-start",
                           gap: "10px",
                           opacity: 1,
                           width: "100%",
@@ -2395,53 +2419,53 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
                     </div>
                   </div>
 
-                <div
-                  style={{
-                    minWidth: 0,
-                    display: "grid",
-                    gap: "12px",
-                    alignContent: "start",
-                    position: isCompactCheckout ? "static" : "sticky",
-                    top: isCompactCheckout ? undefined : "84px",
-                  }}
-                >
-                  {summaryBlock
-                    ? renderBlock({ ...summaryBlock, id: "checkout_order_summary" }, blocksToRender.indexOf(summaryBlock), {
-                      mode: "checkout_summary",
-                      compact: false,
-                      paymentMethod: paymentData.method,
-                      show_summary: true,
-                      show_items: false,
-                      show_promo: false,
-                      show_gift_card: false,
-                      review_mode: true,
-                    })
-                    : null}
+                  <div
+                    style={{
+                      minWidth: 0,
+                      display: "grid",
+                      gap: "12px",
+                      alignContent: "start",
+                      position: isCompactCheckout ? "static" : "sticky",
+                      top: isCompactCheckout ? undefined : "84px",
+                    }}
+                  >
+                    {summaryBlock
+                      ? renderBlock({ ...summaryBlock, id: "checkout_order_summary" }, blocksToRender.indexOf(summaryBlock), {
+                        mode: "checkout_summary",
+                        compact: false,
+                        paymentMethod: paymentData.method,
+                        show_summary: true,
+                        show_items: false,
+                        show_promo: false,
+                        show_gift_card: false,
+                        review_mode: true,
+                      })
+                      : null}
 
-                  {placeOrderBlock
-                    ? renderBlock(placeOrderBlock, blocksToRender.indexOf(placeOrderBlock), {
-                      ...reviewProps,
-                      compact: false,
-                      buttonLabel:
-                        reviewProps.button_label ||
-                        placeOrderBlock.props?.buttonLabel ||
-                        (paymentData.method.toUpperCase() === "COD"
-                          ? (reviewProps.button_label || "Place Order")
-                          : (reviewProps.pay_now_button_label || "Pay Now")),
-                      accentColor: reviewProps.button_bg_color || accentColor,
-                      text_color: reviewProps.button_text_color,
-                      border_radius: reviewProps.button_border_radius ?? reviewProps.button_radius,
-                      button_border_radius: reviewProps.button_border_radius ?? reviewProps.button_radius,
-                      button_height: reviewProps.button_height,
-                      helperText: reviewProps.helper_text,
-                      reviewMode: true,
-                      disabled: false,
-                    })
-                    : null}
+                    {placeOrderBlock
+                      ? renderBlock(placeOrderBlock, blocksToRender.indexOf(placeOrderBlock), {
+                        ...reviewProps,
+                        compact: false,
+                        buttonLabel:
+                          reviewProps.button_label ||
+                          placeOrderBlock.props?.buttonLabel ||
+                          (paymentData.method.toUpperCase() === "COD"
+                            ? (reviewProps.button_label || "Place Order")
+                            : (reviewProps.pay_now_button_label || "Pay Now")),
+                        accentColor: reviewProps.button_bg_color || accentColor,
+                        text_color: reviewProps.button_text_color,
+                        border_radius: reviewProps.button_border_radius ?? reviewProps.button_radius,
+                        button_border_radius: reviewProps.button_border_radius ?? reviewProps.button_radius,
+                        button_height: reviewProps.button_height,
+                        helperText: reviewProps.helper_text,
+                        reviewMode: true,
+                        disabled: false,
+                      })
+                      : null}
+                  </div>
                 </div>
               </div>
-            </div>
-          </EditorBlockWrapper>
+            </EditorBlockWrapper>
           ) : null}
 
           {extraBlocks.length > 0 ? (

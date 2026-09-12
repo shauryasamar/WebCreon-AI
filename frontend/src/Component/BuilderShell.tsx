@@ -329,8 +329,10 @@ export default function BuilderShell({
             className="builder-preview-scroll"
             style={{
               height: "100%",
+              width: "100%",
               minWidth: 0,
-              overflow: "auto",
+              overflowY: "auto",
+              overflowX: "hidden",
               background: "#ffffff",
             }}
           >
@@ -409,8 +411,10 @@ export default function BuilderShell({
               className="builder-preview-scroll"
               style={{
                 height: "100%",
+                width: "100%",
                 minWidth: 0,
-                overflow: "auto",
+                overflowY: "auto",
+                overflowX: "hidden",
                 position: "relative",
                 background: deviceBg || "#ffffff",
               }}

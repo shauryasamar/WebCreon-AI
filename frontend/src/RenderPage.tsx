@@ -204,11 +204,11 @@ const initialPaymentData: PaymentData = {
 function isDeliveryValid(data: DeliveryData) {
   return Boolean(
     data &&
-      data.fullName?.trim() &&
-      data.phone?.trim() &&
-      data.address?.trim() &&
-      data.city?.trim() &&
-      data.pincode?.trim()
+    data.fullName?.trim() &&
+    data.phone?.trim() &&
+    data.address?.trim() &&
+    data.city?.trim() &&
+    data.pincode?.trim()
   );
 }
 
@@ -375,12 +375,12 @@ const RenderPage: React.FC<RenderPageProps> = ({
     fetch(`${API_BASE_URL}/sites/${siteId}/categories/public`)
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => setCategories(Array.isArray(data) ? data : []))
-      .catch(() => {});
+      .catch(() => { });
 
     fetch(`${API_BASE_URL}/sites/${siteId}/collections/public`)
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => setCollections(Array.isArray(data) ? data : []))
-      .catch(() => {});
+      .catch(() => { });
   }, [siteId]);
 
   const [checkoutStep, setCheckoutStep] = useState<CheckoutStep>("delivery");
@@ -475,7 +475,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
             });
           }
         })
-        .catch(() => {});
+        .catch(() => { });
     } catch {
       sessionStorage.removeItem(siteKey);
       localStorage.removeItem(siteKey);
@@ -542,6 +542,15 @@ const RenderPage: React.FC<RenderPageProps> = ({
     page?.page_type === "cart" ||
     page?.role === "cart";
 
+  const isSupportPage =
+    page?.slug === "support" ||
+    page?.route === "/support" ||
+    page?.page_type === "support" ||
+    page?.role === "support" ||
+    resolvedBlocks.some((b) =>
+      ["customer_support", "customersupport", "support_page", "supportpage", "support_desk", "supportdesk", "support"].includes(String(b.type || "").toLowerCase())
+    );
+
   const isProductDetailPageContext =
     Boolean(selectedProduct) ||
     page?.role === "product_detail" ||
@@ -572,9 +581,9 @@ const RenderPage: React.FC<RenderPageProps> = ({
         (b) =>
           (b.type === "product_carousel" || b.type === "brand_store_grid") &&
           (String(b.id || "").toLowerCase() === cleanId ||
-           String(b.id || "").toLowerCase() === cleanTitle ||
-           String((b as any).name || "").toLowerCase() === cleanTitle ||
-           String(b.props?.title || "").toLowerCase() === cleanTitle)
+            String(b.id || "").toLowerCase() === cleanTitle ||
+            String((b as any).name || "").toLowerCase() === cleanTitle ||
+            String(b.props?.title || "").toLowerCase() === cleanTitle)
       ) || null
     );
   }, [sectionTitleParam, currentSectionIdParam, resolvedBlocks, page]);
@@ -897,13 +906,13 @@ const RenderPage: React.FC<RenderPageProps> = ({
   }, [sectionTitleParam, activeSectionBlock, searchQuery, filters, categories, collections]);
 
   const dynamicSubtitle = useMemo(() => {
-    if (sectionTitleParam) return `${resolvedTotalCount.toLocaleString()} Items`;
-    if (activeSectionBlock) return activeSectionBlock.props?.subtitle || `${resolvedTotalCount.toLocaleString()} Items`;
+    if (sectionTitleParam) return "Curated Selection";
+    if (activeSectionBlock) return activeSectionBlock.props?.subtitle || "Featured Selection";
     if (searchQuery.trim()) return "Search Results";
     if (filters.categoryId) return "Category";
     if (filters.collections.length > 0) return "Collection";
     return "Browse Products";
-  }, [sectionTitleParam, activeSectionBlock, searchQuery, filters, resolvedTotalCount]);
+  }, [sectionTitleParam, activeSectionBlock, searchQuery, filters]);
 
   const detailRelevantBlocks = useMemo(() => {
     if (!isProductDetailPageContext) return resolvedBlocks;
@@ -1059,6 +1068,13 @@ const RenderPage: React.FC<RenderPageProps> = ({
         return false;
       }
 
+      if (isSupportPage) {
+        const isSupportLike = ["customer_support", "customersupport", "support_page", "supportpage", "support_desk", "supportdesk", "support"].includes(type);
+        if (type === "navbar") return true;
+        if (isSupportLike) return true;
+        return false;
+      }
+
       const isProductDetailLike =
         PRODUCT_DETAIL_TYPES.has(type) || dataSource === "product";
       if (isProductDetailPageContext && isProductDetailLike) {
@@ -1069,7 +1085,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
 
       return true;
     });
-  }, [detailRelevantBlocks, isCheckoutPage, isCartPage, isProductDetailPageContext, isDedicatedSectionOrSearchView, page]);
+  }, [detailRelevantBlocks, isCheckoutPage, isCartPage, isSupportPage, isProductDetailPageContext, isDedicatedSectionOrSearchView, page]);
 
   const renderBlock = (
     block: Block,
@@ -1220,6 +1236,10 @@ const RenderPage: React.FC<RenderPageProps> = ({
       (theme as any)?.name?.toLowerCase()?.includes("glass");
 
     const isThemeDark = theme?.mode === "dark" || isColorDarkHex(theme?.primary_bg);
+    const resolvedAccent = theme?.accent_color || (isThemeDark ? "#60a5fa" : "#2563eb");
+    const scrollTrackBg = theme?.primary_bg || (isThemeDark ? "#0f172a" : "#f1f5f9");
+    const scrollThumbColor = resolvedAccent;
+    const scrollThumbHover = isThemeDark ? "#ffffff" : "#0f172a";
 
     const glassBackground = isThemeDark
       ? "radial-gradient(circle at 10% 15%, rgba(56, 189, 248, 0.18) 0%, transparent 45%), radial-gradient(circle at 90% 60%, rgba(139, 92, 246, 0.18) 0%, transparent 50%), radial-gradient(circle at 50% 90%, rgba(236, 72, 153, 0.12) 0%, transparent 45%), #090d16"
@@ -1232,9 +1252,13 @@ const RenderPage: React.FC<RenderPageProps> = ({
           style={{
             position: "relative",
             width: "100%",
-            minHeight: isCartPage ? "calc(100vh - 220px)" : "100%",
-            display: isCartPage ? "flex" : undefined,
-            flexDirection: isCartPage ? "column" : undefined,
+            maxWidth: "100%",
+            minHeight: isCartPage ? "calc(100vh - 220px)" : (isSupportPage ? "100vh" : "100%"),
+            height: isSupportPage ? "100vh" : undefined,
+            maxHeight: isSupportPage ? "100vh" : undefined,
+            overflow: isSupportPage ? "hidden" : undefined,
+            display: isCartPage || isSupportPage ? "flex" : undefined,
+            flexDirection: isCartPage || isSupportPage ? "column" : undefined,
             justifyContent: isCartPage ? "flex-start" : undefined,
             paddingTop: 0,
             boxSizing: "border-box",
@@ -1243,7 +1267,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
           }}
         >
           {/* Festive Background Overlay — strictly on home / catalog landing pages, never on cart, product details, or checkout pages */}
-          {!isCartPage && !isProductDetailPageContext && !isCheckoutPage && (
+          {!isCartPage && !isProductDetailPageContext && !isCheckoutPage && !isSupportPage && (
             <FestiveBackgroundOverlay
               festivalTheme={theme?.festival_theme}
               backgroundColor={theme?.primary_bg}
@@ -1265,12 +1289,13 @@ const RenderPage: React.FC<RenderPageProps> = ({
                     style={{
                       position: "relative",
                       width: "100%",
+                      maxWidth: "100%",
                       height: 0,
                       margin: 0,
                       padding: 0,
                       pointerEvents: "none",
                       zIndex: 25,
-                      overflow: "visible",
+                      overflow: "hidden",
                       opacity: 0.6,
                     }}
                   >
@@ -1750,12 +1775,12 @@ const RenderPage: React.FC<RenderPageProps> = ({
   const checkoutOuterMaxWidth = isFullWidth
     ? "100%"
     : configuredMaxWidth
-    ? typeof configuredMaxWidth === "number"
-      ? `${configuredMaxWidth}px`
-      : String(configuredMaxWidth).endsWith("%") || String(configuredMaxWidth).endsWith("px")
-      ? String(configuredMaxWidth)
-      : `${configuredMaxWidth}px`
-    : "1240px";
+      ? typeof configuredMaxWidth === "number"
+        ? `${configuredMaxWidth}px`
+        : String(configuredMaxWidth).endsWith("%") || String(configuredMaxWidth).endsWith("px")
+          ? String(configuredMaxWidth)
+          : `${configuredMaxWidth}px`
+      : "1240px";
 
   const stepsProps = checkoutStepsBlock?.props || {};
 
@@ -1876,8 +1901,8 @@ const RenderPage: React.FC<RenderPageProps> = ({
                         stepsAlign === "center"
                           ? "center"
                           : stepsAlign === "right"
-                          ? "flex-end"
-                          : "flex-start",
+                            ? "flex-end"
+                            : "flex-start",
                       gap: "8px",
                       padding: isCompactCheckout ? "8px 10px" : "10px 14px",
                       borderRadius: "12px",
@@ -1892,8 +1917,8 @@ const RenderPage: React.FC<RenderPageProps> = ({
                       color: isActive
                         ? textColor
                         : isCompleted
-                        ? "#10b981"
-                        : subtleText,
+                          ? "#10b981"
+                          : subtleText,
                       cursor: isDisabled ? "not-allowed" : "pointer",
                       opacity: isDisabled ? 0.45 : 1,
                       transition: "all 0.15s ease",
@@ -1908,10 +1933,10 @@ const RenderPage: React.FC<RenderPageProps> = ({
                         background: isCompleted
                           ? "#10b981"
                           : isActive
-                          ? accentColor
-                          : isLight
-                          ? "#e5e7eb"
-                          : "rgba(255,255,255,0.15)",
+                            ? accentColor
+                            : isLight
+                              ? "#e5e7eb"
+                              : "rgba(255,255,255,0.15)",
                         color: isCompleted || isActive ? "#ffffff" : subtleText,
                         fontSize: "11px",
                         fontWeight: 700,
@@ -1937,20 +1962,20 @@ const RenderPage: React.FC<RenderPageProps> = ({
                   </button>
                 );
               })}
+            </div>
           </div>
-        </div>
 
-        {checkoutStep === "delivery" ? (
-          <div
-            style={{
-              minWidth: 0,
-              display: "grid",
-              gap: "14px",
-              alignContent: "start",
-            }}
-          >
-            {deliveryBlock
-              ? renderBlock(deliveryBlock, blocksToRender.indexOf(deliveryBlock), {
+          {checkoutStep === "delivery" ? (
+            <div
+              style={{
+                minWidth: 0,
+                display: "grid",
+                gap: "14px",
+                alignContent: "start",
+              }}
+            >
+              {deliveryBlock
+                ? renderBlock(deliveryBlock, blocksToRender.indexOf(deliveryBlock), {
                   siteId,
                   compact: false,
                   currentStep: "delivery",
@@ -1995,246 +2020,20 @@ const RenderPage: React.FC<RenderPageProps> = ({
                   },
                   continueDisabled: !canContinueDelivery,
                 })
-              : null}
-          </div>
-        ) : null}
-
-        {checkoutStep === "payment" ? (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: paymentLayoutColumns,
-              gap: isCompactCheckout ? "14px" : "18px",
-              alignItems: "start",
-            }}
-          >
-            <aside
-              style={{
-                minWidth: 0,
-                display: "grid",
-                gap: "12px",
-                alignContent: "start",
-                position: isCompactCheckout ? "static" : "sticky",
-                top: isCompactCheckout ? undefined : "84px",
-              }}
-            >
-              {summaryBlock
-                ? renderBlock(summaryBlock, blocksToRender.indexOf(summaryBlock), {
-                    mode: "checkout_summary",
-                    compact: false,
-                    paymentMethod: paymentData.method,
-                    show_promo: true,
-                    show_summary: true,
-                    appliedCoupon,
-                    onCouponApplied: setAppliedCoupon,
-                    onCouponRemoved: () => setAppliedCoupon(null),
-                  })
-                : null}
-            </aside>
-
-            <div
-              style={{
-                minWidth: 0,
-                display: "grid",
-                gap: "14px",
-                alignContent: "start",
-              }}
-            >
-              {paymentBlock
-                ? renderBlock(paymentBlock, blocksToRender.indexOf(paymentBlock), {
-                    compact: false,
-                    currentStep: "payment",
-                    paymentData,
-                    onPaymentDataChange: setPaymentData,
-                    onBack: () => goToStep("delivery"),
-                    onContinue: () => canContinuePayment && goToStep("review"),
-                    continueDisabled: !canContinuePayment,
-                  })
                 : null}
             </div>
-          </div>
-        ) : null}
+          ) : null}
 
-        {checkoutStep === "review" ? (
-          <div
-            style={{
-              borderRadius: reviewProps.border_radius !== undefined ? `${reviewProps.border_radius}px` : "16px",
-              border: reviewProps.soft_border_color ? `1px solid ${reviewProps.soft_border_color}` : shellBorder,
-              background: reviewProps.background_color || shellBg,
-              boxShadow: isLight
-                ? "0 1px 2px rgba(16,24,40,0.04)"
-                : "0 10px 24px rgba(0,0,0,0.16)",
-              padding: reviewProps.padding !== undefined ? `${reviewProps.padding}px` : (isCompactCheckout ? "16px" : "18px"),
-              maxWidth: reviewProps.max_width && reviewProps.max_width !== "100%"
-                ? (String(reviewProps.max_width).endsWith("px") ? reviewProps.max_width : `${reviewProps.max_width}px`)
-                : "100%",
-              margin: "0 auto",
-              boxSizing: "border-box",
-              width: "100%",
-            }}
-          >
-            <div
-              style={{
-                marginBottom: "18px",
-                paddingBottom: "12px",
-                borderBottom: cardDivider,
-              }}
-            >
-              <h3
-                style={{
-                  margin: 0,
-                  fontSize: "24px",
-                  lineHeight: 1.1,
-                  color: reviewProps.section_title_color || (isColorDarkHex(reviewProps.background_color || shellBg) ? "#f8fafc" : "#0f172a"),
-                  fontWeight: 700,
-                }}
-              >
-                {reviewProps.section_title || "Review & Pay"}
-              </h3>
-            </div>
-
+          {checkoutStep === "payment" ? (
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: reviewLayoutColumns,
-                gap: reviewProps.gap !== undefined ? `${reviewProps.gap}px` : "16px",
+                gridTemplateColumns: paymentLayoutColumns,
+                gap: isCompactCheckout ? "14px" : "18px",
                 alignItems: "start",
               }}
             >
-              <div
-                style={{
-                  display: "grid",
-                  gap: reviewProps.gap !== undefined ? `${reviewProps.gap}px` : "14px",
-                }}
-              >
-                {selectedItemsCard}
-
-                <div style={infoCardStyle}>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: "12px",
-                      alignItems: "center",
-                      marginBottom: "10px",
-                    }}
-                  >
-                    <h4
-                      style={{
-                        margin: 0,
-                        fontSize: "15px",
-                        fontWeight: 700,
-                        color: deliveryText,
-                      }}
-                    >
-                      {reviewDeliveryTitle}
-                    </h4>
-
-                    <button
-                      type="button"
-                      onClick={() => goToStep("delivery")}
-                      style={{
-                        border: "none",
-                        background: "transparent",
-                        color: reviewAccentColor,
-                        fontSize: "12px",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        padding: 0,
-                      }}
-                    >
-                      {reviewChangeLabel}
-                    </button>
-                  </div>
-
-                  <div
-                    style={{
-                      color: reviewCardMuted,
-                      fontSize: "14px",
-                      lineHeight: 1.65,
-                    }}
-                  >
-                    <div style={{ color: deliveryText, fontWeight: 700 }}>
-                      {selectedAddress?.fullName || deliveryData.fullName || "—"}
-                    </div>
-                    <div>{selectedAddress?.phone || deliveryData.phone || "—"}</div>
-                    <div>{selectedAddress?.email || deliveryData.email || "—"}</div>
-                    <div>{selectedAddress?.address || deliveryData.address || "—"}</div>
-                    <div>
-                      {selectedAddress?.city || deliveryData.city || "—"}
-                      {(selectedAddress?.pincode || deliveryData.pincode)
-                        ? ` - ${selectedAddress?.pincode || deliveryData.pincode}`
-                        : ""}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={infoCardStyle}>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: "12px",
-                      alignItems: "center",
-                      marginBottom: "10px",
-                    }}
-                  >
-                    <h4
-                      style={{
-                        margin: 0,
-                        fontSize: "15px",
-                        fontWeight: 700,
-                        color: reviewCardText,
-                      }}
-                    >
-                      {reviewPaymentTitle}
-                    </h4>
-
-                    <button
-                      type="button"
-                      onClick={() => goToStep("payment")}
-                      style={{
-                        border: "none",
-                        background: "transparent",
-                        color: reviewAccentColor,
-                        fontSize: "12px",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        padding: 0,
-                      }}
-                    >
-                      {reviewChangeLabel}
-                    </button>
-                  </div>
-
-                  <div
-                    style={{
-                      color: reviewCardMuted,
-                      fontSize: "14px",
-                      lineHeight: 1.65,
-                    }}
-                  >
-                    <div style={{ color: reviewCardText, fontWeight: 700 }}>
-                      {paymentData.method.toUpperCase() === "UPI"
-                        ? "UPI (Google Pay, PhonePe, Paytm, QR)"
-                        : paymentData.method.toUpperCase() === "CARD"
-                        ? "Credit / Debit Card"
-                        : paymentData.method.toUpperCase() === "NETBANKING"
-                        ? "Netbanking"
-                        : paymentData.method.toUpperCase() === "COD"
-                        ? "Cash on Delivery (COD)"
-                        : paymentData.method || "—"}
-                    </div>
-                    <div>
-                      {paymentData.method.toUpperCase() === "COD"
-                        ? "Pay in cash upon package delivery."
-                        : (reviewProps.helper_text || "You will complete payment securely on the next step.")}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div
+              <aside
                 style={{
                   minWidth: 0,
                   display: "grid",
@@ -2246,6 +2045,232 @@ const RenderPage: React.FC<RenderPageProps> = ({
               >
                 {summaryBlock
                   ? renderBlock(summaryBlock, blocksToRender.indexOf(summaryBlock), {
+                    mode: "checkout_summary",
+                    compact: false,
+                    paymentMethod: paymentData.method,
+                    show_promo: true,
+                    show_summary: true,
+                    appliedCoupon,
+                    onCouponApplied: setAppliedCoupon,
+                    onCouponRemoved: () => setAppliedCoupon(null),
+                  })
+                  : null}
+              </aside>
+
+              <div
+                style={{
+                  minWidth: 0,
+                  display: "grid",
+                  gap: "14px",
+                  alignContent: "start",
+                }}
+              >
+                {paymentBlock
+                  ? renderBlock(paymentBlock, blocksToRender.indexOf(paymentBlock), {
+                    compact: false,
+                    currentStep: "payment",
+                    paymentData,
+                    onPaymentDataChange: setPaymentData,
+                    onBack: () => goToStep("delivery"),
+                    onContinue: () => canContinuePayment && goToStep("review"),
+                    continueDisabled: !canContinuePayment,
+                  })
+                  : null}
+              </div>
+            </div>
+          ) : null}
+
+          {checkoutStep === "review" ? (
+            <div
+              style={{
+                borderRadius: reviewProps.border_radius !== undefined ? `${reviewProps.border_radius}px` : "16px",
+                border: reviewProps.soft_border_color ? `1px solid ${reviewProps.soft_border_color}` : shellBorder,
+                background: reviewProps.background_color || shellBg,
+                boxShadow: isLight
+                  ? "0 1px 2px rgba(16,24,40,0.04)"
+                  : "0 10px 24px rgba(0,0,0,0.16)",
+                padding: reviewProps.padding !== undefined ? `${reviewProps.padding}px` : (isCompactCheckout ? "16px" : "18px"),
+                maxWidth: reviewProps.max_width && reviewProps.max_width !== "100%"
+                  ? (String(reviewProps.max_width).endsWith("px") ? reviewProps.max_width : `${reviewProps.max_width}px`)
+                  : "100%",
+                margin: "0 auto",
+                boxSizing: "border-box",
+                width: "100%",
+              }}
+            >
+              <div
+                style={{
+                  marginBottom: "18px",
+                  paddingBottom: "12px",
+                  borderBottom: cardDivider,
+                }}
+              >
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: "24px",
+                    lineHeight: 1.1,
+                    color: reviewProps.section_title_color || (isColorDarkHex(reviewProps.background_color || shellBg) ? "#f8fafc" : "#0f172a"),
+                    fontWeight: 700,
+                  }}
+                >
+                  {reviewProps.section_title || "Review & Pay"}
+                </h3>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: reviewLayoutColumns,
+                  gap: reviewProps.gap !== undefined ? `${reviewProps.gap}px` : "16px",
+                  alignItems: "start",
+                }}
+              >
+                <div
+                  style={{
+                    display: "grid",
+                    gap: reviewProps.gap !== undefined ? `${reviewProps.gap}px` : "14px",
+                  }}
+                >
+                  {selectedItemsCard}
+
+                  <div style={infoCardStyle}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: "12px",
+                        alignItems: "center",
+                        marginBottom: "10px",
+                      }}
+                    >
+                      <h4
+                        style={{
+                          margin: 0,
+                          fontSize: "15px",
+                          fontWeight: 700,
+                          color: deliveryText,
+                        }}
+                      >
+                        {reviewDeliveryTitle}
+                      </h4>
+
+                      <button
+                        type="button"
+                        onClick={() => goToStep("delivery")}
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          color: reviewAccentColor,
+                          fontSize: "12px",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          padding: 0,
+                        }}
+                      >
+                        {reviewChangeLabel}
+                      </button>
+                    </div>
+
+                    <div
+                      style={{
+                        color: reviewCardMuted,
+                        fontSize: "14px",
+                        lineHeight: 1.65,
+                      }}
+                    >
+                      <div style={{ color: deliveryText, fontWeight: 700 }}>
+                        {selectedAddress?.fullName || deliveryData.fullName || "—"}
+                      </div>
+                      <div>{selectedAddress?.phone || deliveryData.phone || "—"}</div>
+                      <div>{selectedAddress?.email || deliveryData.email || "—"}</div>
+                      <div>{selectedAddress?.address || deliveryData.address || "—"}</div>
+                      <div>
+                        {selectedAddress?.city || deliveryData.city || "—"}
+                        {(selectedAddress?.pincode || deliveryData.pincode)
+                          ? ` - ${selectedAddress?.pincode || deliveryData.pincode}`
+                          : ""}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={infoCardStyle}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: "12px",
+                        alignItems: "center",
+                        marginBottom: "10px",
+                      }}
+                    >
+                      <h4
+                        style={{
+                          margin: 0,
+                          fontSize: "15px",
+                          fontWeight: 700,
+                          color: reviewCardText,
+                        }}
+                      >
+                        {reviewPaymentTitle}
+                      </h4>
+
+                      <button
+                        type="button"
+                        onClick={() => goToStep("payment")}
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          color: reviewAccentColor,
+                          fontSize: "12px",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          padding: 0,
+                        }}
+                      >
+                        {reviewChangeLabel}
+                      </button>
+                    </div>
+
+                    <div
+                      style={{
+                        color: reviewCardMuted,
+                        fontSize: "14px",
+                        lineHeight: 1.65,
+                      }}
+                    >
+                      <div style={{ color: reviewCardText, fontWeight: 700 }}>
+                        {paymentData.method.toUpperCase() === "UPI"
+                          ? "UPI (Google Pay, PhonePe, Paytm, QR)"
+                          : paymentData.method.toUpperCase() === "CARD"
+                            ? "Credit / Debit Card"
+                            : paymentData.method.toUpperCase() === "NETBANKING"
+                              ? "Netbanking"
+                              : paymentData.method.toUpperCase() === "COD"
+                                ? "Cash on Delivery (COD)"
+                                : paymentData.method || "—"}
+                      </div>
+                      <div>
+                        {paymentData.method.toUpperCase() === "COD"
+                          ? "Pay in cash upon package delivery."
+                          : (reviewProps.helper_text || "You will complete payment securely on the next step.")}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    minWidth: 0,
+                    display: "grid",
+                    gap: "12px",
+                    alignContent: "start",
+                    position: isCompactCheckout ? "static" : "sticky",
+                    top: isCompactCheckout ? undefined : "84px",
+                  }}
+                >
+                  {summaryBlock
+                    ? renderBlock(summaryBlock, blocksToRender.indexOf(summaryBlock), {
                       mode: "checkout_summary",
                       compact: false,
                       paymentMethod: paymentData.method,
@@ -2256,10 +2281,10 @@ const RenderPage: React.FC<RenderPageProps> = ({
                       review_mode: true,
                       appliedCoupon,
                     })
-                  : null}
+                    : null}
 
-                {placeOrderBlock
-                  ? renderBlock(placeOrderBlock, blocksToRender.indexOf(placeOrderBlock), {
+                  {placeOrderBlock
+                    ? renderBlock(placeOrderBlock, blocksToRender.indexOf(placeOrderBlock), {
                       ...reviewProps,
                       compact: false,
                       buttonLabel:
@@ -2293,13 +2318,13 @@ const RenderPage: React.FC<RenderPageProps> = ({
                         setPlacedOrder(order);
                       },
                     })
-                  : null}
+                    : null}
+                </div>
               </div>
             </div>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
-    </div>
     </ThemeProvider>
   );
 };

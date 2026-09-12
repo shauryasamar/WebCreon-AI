@@ -160,13 +160,6 @@ export const FilterSidebar = ({
 
         {/* Right: Actions */}
         <div className="product-toolbar-actions">
-          {/* Desktop-only Item count */}
-          {!isMobile && (
-            <span className="product-toolbar-count">
-              {itemCount.toLocaleString()} item{itemCount !== 1 ? "s" : ""}
-            </span>
-          )}
-
           {/* Filter button */}
           {showFilterButton && (
             isMobile ? (
@@ -177,7 +170,7 @@ export const FilterSidebar = ({
                 aria-label="Filter products and categories"
                 title="Filter & Categories"
               >
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="4" y1="21" x2="4" y2="14" />
                   <line x1="4" y1="10" x2="4" y2="3" />
                   <line x1="12" y1="21" x2="12" y2="12" />
@@ -236,7 +229,7 @@ export const FilterSidebar = ({
                   color: sortBy !== "newest" ? accentColor : textPrimary,
                 }}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M11 5h10M11 9h7M11 13h4" />
                   <path d="M3 17l3 3 3-3" />
                   <path d="M6 18V4" />
@@ -267,9 +260,9 @@ export const FilterSidebar = ({
                   <path d="M6 18V4" />
                 </svg>
                 <span>
-                  Sort by: <strong>{currentSort.label}</strong>
+                  Sort by: <strong style={{ fontWeight: 600 }}>{currentSort.label}</strong>
                 </span>
-                <span style={{ fontSize: "9px", marginLeft: "2px", transition: "transform 200ms", transform: sortOpen ? "rotate(180deg)" : "rotate(0)" }}>▼</span>
+                <span style={{ fontSize: "8px", marginLeft: "3px", opacity: 0.75, transition: "transform 200ms", transform: sortOpen ? "rotate(180deg)" : "rotate(0)" }}>▼</span>
               </button>
             )}
 
@@ -484,6 +477,11 @@ export const FilterSidebar = ({
       )}
 
       <style>{`
+        .product-toolbar-wrapper,
+        .product-toolbar-wrapper * {
+          box-sizing: border-box;
+          font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
         .product-toolbar-wrapper {
           width: 100%;
           margin-bottom: 20px;
@@ -498,67 +496,69 @@ export const FilterSidebar = ({
           flex-wrap: wrap;
         }
         .product-toolbar-title-group {
-          min-width: 180px;
+          min-width: 160px;
         }
         .product-toolbar-subtitle {
           margin: 0 0 2px;
           font-size: 11px;
-          font-weight: 700;
-          letter-spacing: 0.12em;
+          font-weight: 600;
+          letter-spacing: 0.08em;
           text-transform: uppercase;
           color: ${textSecondary};
         }
         .product-toolbar-title {
           margin: 0;
-          font-size: 22px;
-          font-weight: 800;
-          letter-spacing: -0.03em;
+          font-size: 20px;
+          font-weight: 700;
+          letter-spacing: -0.02em;
           color: ${textPrimary};
           display: flex;
           align-items: baseline;
         }
         .product-toolbar-title-count {
           font-size: 13.5px;
-          font-weight: 600;
+          font-weight: 500;
           color: ${textSecondary};
           margin-left: 6px;
         }
         .product-toolbar-actions {
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 8px;
           flex-wrap: wrap;
-        }
-        .product-toolbar-count {
-          font-size: 13px;
-          color: ${textSecondary};
-          font-weight: 500;
         }
         .product-toolbar-btn {
           display: inline-flex;
           align-items: center;
-          gap: 7px;
-          padding: 9px 16px;
-          border-radius: 999px;
+          gap: 6px;
+          padding: 6px 12px;
+          height: 34px;
+          border-radius: 8px;
           border: 1px solid ${borderColor};
           background: ${btnBg};
           color: ${textPrimary};
-          font-size: 13px;
-          font-weight: 600;
+          font-size: 12.5px;
+          font-weight: 500;
           cursor: pointer;
-          transition: all 180ms ease;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+          transition: all 160ms ease;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+          user-select: none;
         }
         .product-toolbar-btn:hover {
-          transform: translateY(-1px);
+          border-color: ${accentColor};
+          background: ${hoverBg};
+        }
+        .product-toolbar-btn:active {
+          transform: scale(0.98);
         }
         .product-toolbar-badge {
           background: ${accentColor};
           color: #fff;
           font-size: 10px;
-          font-weight: 800;
-          padding: 1px 7px;
-          min-height: 16px;
+          font-weight: 700;
+          padding: 0 6px;
+          height: 16px;
+          min-width: 16px;
           border-radius: 999px;
           margin-left: 2px;
           display: inline-flex;
@@ -567,11 +567,11 @@ export const FilterSidebar = ({
           line-height: 1;
         }
         .product-toolbar-icon-btn {
-          width: 38px;
-          height: 38px;
-          min-width: 38px;
+          width: 34px;
+          height: 34px;
+          min-width: 34px;
           padding: 0;
-          border-radius: 12px;
+          border-radius: 8px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -580,12 +580,13 @@ export const FilterSidebar = ({
           color: ${textPrimary};
           cursor: pointer;
           position: relative;
-          box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+          box-shadow: 0 1px 2px rgba(0,0,0,0.03);
           transition: all 140ms ease;
           outline: none;
         }
         .product-toolbar-icon-btn:hover {
-          transform: translateY(-1px);
+          border-color: ${accentColor};
+          background: ${hoverBg};
         }
         .product-toolbar-icon-btn:active {
           transform: scale(0.96);
@@ -596,38 +597,44 @@ export const FilterSidebar = ({
           right: -4px;
           background: ${accentColor};
           color: #ffffff;
-          font-size: 10px;
-          font-weight: 800;
-          min-width: 17px;
-          height: 17px;
+          font-size: 9.5px;
+          font-weight: 700;
+          min-width: 16px;
+          height: 16px;
           border-radius: 999px;
           display: flex;
           align-items: center;
           justify-content: center;
           line-height: 1;
-          padding: 0 4px;
+          padding: 0 3px;
           box-sizing: border-box;
-          box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+          box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .product-sort-dropdown,
+        .product-sort-dropdown * {
+          font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
         .product-sort-dropdown {
           position: absolute;
-          top: calc(100% + 8px);
+          top: calc(100% + 6px);
           right: 0;
-          width: 280px;
+          width: 250px;
           max-width: calc(100vw - 32px);
-          border-radius: 16px;
+          border-radius: 12px;
           border: 1px solid ${borderColor};
           background: ${dropdownBg};
-          box-shadow: ${isDark ? "0 20px 45px rgba(0,0,0,0.6)" : "0 20px 45px rgba(15,23,42,0.18)"};
-          padding: 8px;
+          box-shadow: ${isDark ? "0 16px 36px rgba(0,0,0,0.55)" : "0 12px 30px rgba(15,23,42,0.12)"};
+          padding: 6px;
           z-index: 99999;
-          animation: sortDropIn 200ms ease;
+          animation: sortDropIn 160ms ease;
         }
         .product-sort-header {
-          padding: 10px 14px 8px;
-          font-size: 14px;
+          padding: 8px 10px 6px;
+          font-size: 11px;
           font-weight: 700;
-          color: ${textPrimary};
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: ${textSecondary};
           border-bottom: 1px solid ${borderColor};
           margin-bottom: 4px;
         }
@@ -636,11 +643,11 @@ export const FilterSidebar = ({
           align-items: center;
           justify-content: space-between;
           width: 100%;
-          padding: 10px 14px;
-          border-radius: 10px;
+          padding: 8px 10px;
+          border-radius: 8px;
           border: none;
           cursor: pointer;
-          transition: background 150ms ease;
+          transition: background 140ms ease;
           text-align: left;
         }
 
@@ -658,14 +665,14 @@ export const FilterSidebar = ({
             flex: 1 !important;
           }
           .product-toolbar-title {
-            font-size: 17px !important;
+            font-size: 16px !important;
             white-space: nowrap !important;
             overflow: hidden !important;
             text-overflow: ellipsis !important;
           }
           .product-toolbar-subtitle {
             font-size: 10px !important;
-            letter-spacing: 0.1em !important;
+            letter-spacing: 0.08em !important;
             margin-bottom: 1px !important;
           }
           .product-toolbar-actions {
@@ -675,9 +682,6 @@ export const FilterSidebar = ({
             flex-shrink: 0 !important;
             flex-wrap: nowrap !important;
             width: auto !important;
-          }
-          .product-toolbar-count {
-            display: none !important;
           }
         }
 
@@ -697,7 +701,7 @@ export const FilterSidebar = ({
         }
         .is-mobile-preview .product-toolbar-title,
         .product-toolbar-wrapper.is-mobile .product-toolbar-title {
-          font-size: 17px !important;
+          font-size: 16px !important;
           white-space: nowrap !important;
           overflow: hidden !important;
           text-overflow: ellipsis !important;
@@ -705,7 +709,7 @@ export const FilterSidebar = ({
         .is-mobile-preview .product-toolbar-subtitle,
         .product-toolbar-wrapper.is-mobile .product-toolbar-subtitle {
           font-size: 10px !important;
-          letter-spacing: 0.1em !important;
+          letter-spacing: 0.08em !important;
           margin-bottom: 1px !important;
         }
         .is-mobile-preview .product-toolbar-actions,
@@ -717,13 +721,9 @@ export const FilterSidebar = ({
           flex-wrap: nowrap !important;
           width: auto !important;
         }
-        .is-mobile-preview .product-toolbar-count,
-        .product-toolbar-wrapper.is-mobile .product-toolbar-count {
-          display: none !important;
-        }
 
         @keyframes sortDropIn {
-          from { opacity: 0; transform: translateY(-6px); }
+          from { opacity: 0; transform: translateY(-4px); }
           to { opacity: 1; transform: translateY(0); }
         }
         @keyframes sortSheetSlideUp {

@@ -229,10 +229,10 @@ function getFooterEditorProps(siteDefinition: SiteDefinition) {
     social_links: Array.isArray(f.social_links) && f.social_links.length > 0
       ? f.social_links
       : [
-          { platform: "Instagram", url: "https://instagram.com" },
-          { platform: "Twitter / X", url: "https://x.com" },
-          { platform: "Facebook", url: "https://facebook.com" },
-        ],
+        { platform: "Instagram", url: "https://instagram.com" },
+        { platform: "Twitter / X", url: "https://x.com" },
+        { platform: "Facebook", url: "https://facebook.com" },
+      ],
     social_icon_variant: f.social_icon_variant || "pill",
     footer_bg: f.footer_bg || t.footer_bg,
     footer_text_color: f.footer_text_color || t.footer_text_color,
@@ -399,6 +399,7 @@ function StorefrontShell({
   storefrontNavbarMode,
   navbarFixedBounds,
   appBase,
+  page,
   children,
 }: {
   siteDefinition: SiteDefinition;
@@ -411,11 +412,20 @@ function StorefrontShell({
   storefrontNavbarMode: "static" | "sticky" | "fixed";
   navbarFixedBounds?: NavbarFixedBounds;
   appBase: string;
+  page?: any;
   children: React.ReactNode;
 }) {
   const navbarProps = getNavbarEditorProps(siteDefinition);
   const navbarIsSelected = selectedBlockId === NAVBAR_BLOCK_ID || selectedBlockId === "navbar";
   const footerIsSelected = selectedBlockId === FOOTER_BLOCK_ID || selectedBlockId === "footer";
+  const isSupportPath =
+    Boolean(
+      page?.route === "/support" ||
+      page?.role === "support" ||
+      page?.id === "support" ||
+      (typeof window !== "undefined" &&
+        (window.location.pathname.endsWith("/support") || window.location.pathname.includes("/support")))
+    );
 
   const navbarBlockRef = useRef<HTMLDivElement | null>(null);
   const footerBlockRef = useRef<HTMLDivElement | null>(null);
@@ -497,9 +507,10 @@ function StorefrontShell({
       style={{
         position: "relative",
         minWidth: 0,
+        width: "100%",
+        maxWidth: "100%",
         zIndex: 1,
         isolation: "isolate",
-        overflow: "visible",
       }}
     >
       <FestiveBackgroundOverlay
@@ -569,147 +580,149 @@ function StorefrontShell({
 
 
       {/* Global Footer Block */}
-      <div
-        ref={footerBlockRef}
-        data-editor-block-id={FOOTER_BLOCK_ID}
-        data-editor-block-type="footer"
-        onClick={(e) => {
-          if (!editMode) return;
-          e.stopPropagation();
-          onSelectBlock(FOOTER_BLOCK_ID);
-        }}
-        style={{
-          position: "relative",
-          cursor: editMode ? "pointer" : "default",
-          zIndex: editMode && footerIsSelected ? 50 : 5,
-          isolation: "isolate",
-          overflow: "visible",
-        }}
-      >
+      {(!isSupportPath || (editMode && footerIsSelected)) && (
         <div
-          style={{
-            position: "absolute",
-            inset: "-2px",
-            border: editMode && footerIsSelected ? "2px solid #2563eb" : "1.5px dashed transparent",
-            borderRadius: "10px",
-            pointerEvents: "none",
-            zIndex: 40,
-            transition: "all 0.15s ease",
-            boxShadow: editMode && footerIsSelected
-              ? "0 0 0 1px rgba(255, 255, 255, 0.9), 0 0 0 3.5px rgba(37, 99, 235, 0.22)"
-              : "none",
+          ref={footerBlockRef}
+          data-editor-block-id={FOOTER_BLOCK_ID}
+          data-editor-block-type="footer"
+          onClick={(e) => {
+            if (!editMode) return;
+            e.stopPropagation();
+            onSelectBlock(FOOTER_BLOCK_ID);
           }}
-        />
-
-        {editMode && footerIsSelected && (
-          <>
-            <div
-              style={{
-                position: "absolute",
-                top: "-5px",
-                left: "-5px",
-                width: "7px",
-                height: "7px",
-                background: "#ffffff",
-                border: "1.5px solid #2563eb",
-                borderRadius: "2px",
-                zIndex: 42,
-                pointerEvents: "none",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
-              }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                top: "-5px",
-                right: "-5px",
-                width: "7px",
-                height: "7px",
-                background: "#ffffff",
-                border: "1.5px solid #2563eb",
-                borderRadius: "2px",
-                zIndex: 42,
-                pointerEvents: "none",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
-              }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                bottom: "-5px",
-                left: "-5px",
-                width: "7px",
-                height: "7px",
-                background: "#ffffff",
-                border: "1.5px solid #2563eb",
-                borderRadius: "2px",
-                zIndex: 42,
-                pointerEvents: "none",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
-              }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                bottom: "-5px",
-                right: "-5px",
-                width: "7px",
-                height: "7px",
-                background: "#ffffff",
-                border: "1.5px solid #2563eb",
-                borderRadius: "2px",
-                zIndex: 42,
-                pointerEvents: "none",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
-              }}
-            />
-          </>
-        )}
-
-        <div
           style={{
-            position: "absolute",
-            top: "10px",
-            left: "14px",
-            zIndex: 41,
-            padding: "3px 10px 3px 8px",
-            borderRadius: "6px",
-            background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
-            border: "1px solid rgba(255, 255, 255, 0.12)",
-            color: "#f8fafc",
-            fontSize: "11px",
-            fontWeight: 600,
-            letterSpacing: "0.02em",
-            pointerEvents: "none",
-            opacity: editMode && footerIsSelected ? 1 : 0,
-            transform: editMode && footerIsSelected ? "translateY(0)" : "translateY(-4px)",
-            transition: "all 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
-            boxShadow: "0 4px 14px rgba(15, 23, 42, 0.22), 0 1px 3px rgba(0,0,0,0.12)",
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
+            position: "relative",
+            cursor: editMode ? "pointer" : "default",
+            zIndex: editMode && footerIsSelected ? 50 : 5,
+            isolation: "isolate",
+            overflow: "visible",
           }}
         >
-          <span
+          <div
             style={{
-              width: "5.5px",
-              height: "5.5px",
-              borderRadius: "50%",
-              background: "#38bdf8",
-              boxShadow: "0 0 6px rgba(56, 189, 248, 0.7)",
-              flexShrink: 0,
+              position: "absolute",
+              inset: "-2px",
+              border: editMode && footerIsSelected ? "2px solid #2563eb" : "1.5px dashed transparent",
+              borderRadius: "10px",
+              pointerEvents: "none",
+              zIndex: 40,
+              transition: "all 0.15s ease",
+              boxShadow: editMode && footerIsSelected
+                ? "0 0 0 1px rgba(255, 255, 255, 0.9), 0 0 0 3.5px rgba(37, 99, 235, 0.22)"
+                : "none",
             }}
           />
-          Footer
-        </div>
 
-        <Footer
-          {...getFooterEditorProps(siteDefinition)}
-          theme={siteDefinition.theme}
-          appBase={appBase}
-          siteSlug={siteSlug}
-        />
-      </div>
+          {editMode && footerIsSelected && (
+            <>
+              <div
+                style={{
+                  position: "absolute",
+                  top: "-5px",
+                  left: "-5px",
+                  width: "7px",
+                  height: "7px",
+                  background: "#ffffff",
+                  border: "1.5px solid #2563eb",
+                  borderRadius: "2px",
+                  zIndex: 42,
+                  pointerEvents: "none",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  top: "-5px",
+                  right: "-5px",
+                  width: "7px",
+                  height: "7px",
+                  background: "#ffffff",
+                  border: "1.5px solid #2563eb",
+                  borderRadius: "2px",
+                  zIndex: 42,
+                  pointerEvents: "none",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "-5px",
+                  left: "-5px",
+                  width: "7px",
+                  height: "7px",
+                  background: "#ffffff",
+                  border: "1.5px solid #2563eb",
+                  borderRadius: "2px",
+                  zIndex: 42,
+                  pointerEvents: "none",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "-5px",
+                  right: "-5px",
+                  width: "7px",
+                  height: "7px",
+                  background: "#ffffff",
+                  border: "1.5px solid #2563eb",
+                  borderRadius: "2px",
+                  zIndex: 42,
+                  pointerEvents: "none",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                }}
+              />
+            </>
+          )}
+
+          <div
+            style={{
+              position: "absolute",
+              top: "10px",
+              left: "14px",
+              zIndex: 41,
+              padding: "3px 10px 3px 8px",
+              borderRadius: "6px",
+              background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
+              border: "1px solid rgba(255, 255, 255, 0.12)",
+              color: "#f8fafc",
+              fontSize: "11px",
+              fontWeight: 600,
+              letterSpacing: "0.02em",
+              pointerEvents: "none",
+              opacity: editMode && footerIsSelected ? 1 : 0,
+              transform: editMode && footerIsSelected ? "translateY(0)" : "translateY(-4px)",
+              transition: "all 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
+              boxShadow: "0 4px 14px rgba(15, 23, 42, 0.22), 0 1px 3px rgba(0,0,0,0.12)",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            <span
+              style={{
+                width: "5.5px",
+                height: "5.5px",
+                borderRadius: "50%",
+                background: "#38bdf8",
+                boxShadow: "0 0 6px rgba(56, 189, 248, 0.7)",
+                flexShrink: 0,
+              }}
+            />
+            Footer
+          </div>
+
+          <Footer
+            {...getFooterEditorProps(siteDefinition)}
+            theme={siteDefinition.theme}
+            appBase={appBase}
+            siteSlug={siteSlug}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -770,6 +783,7 @@ function StorefrontPage({
       storefrontNavbarMode={storefrontNavbarMode}
       navbarFixedBounds={navbarFixedBounds}
       appBase={appBase}
+      page={page}
     >
       {editMode ? (
         <Suspense
@@ -1119,8 +1133,15 @@ function BuilderPageContent() {
     location.search.includes("preview=1")
   );
   // Only use the cache when its slug/id exactly matches the current URL param.
-  // A mismatch means a *different* site's data is cached (cross-site bleed or stale).
+  // In admin builder mode (!isStoreRoute), only accept if verified in current admin's memory cache
   const initialCachedSite = (() => {
+    if (!isStoreRoute) {
+      const verifiedList = getSavedSitesMemoryCache();
+      if (siteId && verifiedList.some((s) => s.id === siteId)) {
+        return verifiedList.find((s) => s.id === siteId) || null;
+      }
+      return null;
+    }
     const raw =
       getInitialCachedSite(siteSlugParam) ||
       getInitialCachedSite(siteId) ||
@@ -1138,16 +1159,16 @@ function BuilderPageContent() {
   const [siteDefinition, setSiteDefinition] = useState<SiteDefinition | null>(
     initialCachedSite
       ? ((isStoreRoute && !isPreviewMode) || isTargetSiteToHeal
-          ? (initialCachedSite.site_definition || null)
-          : (initialCachedSite.draft_definition || initialCachedSite.site_definition))
+        ? (initialCachedSite.site_definition || null)
+        : (initialCachedSite.draft_definition || initialCachedSite.site_definition))
       : null
   );
   const [draftSiteDefinition, setDraftSiteDefinition] =
     useState<SiteDefinition | null>(
       initialCachedSite
         ? ((isStoreRoute && !isPreviewMode) || isTargetSiteToHeal
-            ? (initialCachedSite.site_definition || null)
-            : (initialCachedSite.draft_definition || initialCachedSite.site_definition))
+          ? (initialCachedSite.site_definition || null)
+          : (initialCachedSite.draft_definition || initialCachedSite.site_definition))
         : null
     );
   const [publishedSiteDefinition, setPublishedSiteDefinition] =
@@ -1313,7 +1334,7 @@ function BuilderPageContent() {
           siteSlugMemoryCache.set(currentSlug, cached);
           try {
             localStorage.setItem(`wc_site_snapshot_${currentSlug}`, JSON.stringify(cached));
-          } catch (_) {}
+          } catch (_) { }
         }
       }
       if (currentSiteId) {
@@ -1323,7 +1344,7 @@ function BuilderPageContent() {
           siteSlugMemoryCache.set(currentSiteId, cached);
           try {
             localStorage.setItem(`wc_site_snapshot_${currentSiteId}`, JSON.stringify(cached));
-          } catch (_) {}
+          } catch (_) { }
         }
       }
     } catch (err: any) {
@@ -1740,11 +1761,19 @@ function BuilderPageContent() {
 
     // Immediately isolate tenant state when route siteId / siteSlugParam changes!
     const targetKey = siteSlugParam || siteId || "";
-    const cachedTarget = targetKey
-      ? (siteSlugMemoryCache.get(targetKey) || getInitialCachedSite(targetKey))
-      : null;
+    let cachedTarget: SavedSite | null = null;
+    if (isStoreRoute) {
+      cachedTarget = targetKey
+        ? (siteSlugMemoryCache.get(targetKey) || getInitialCachedSite(targetKey))
+        : null;
+    } else {
+      const verifiedList = getSavedSitesMemoryCache();
+      if (siteId && verifiedList.some((s) => s.id === siteId)) {
+        cachedTarget = verifiedList.find((s) => s.id === siteId) || null;
+      }
+    }
 
-      if (cachedTarget && (cachedTarget.id === siteId || cachedTarget.slug === siteSlugParam)) {
+    if (cachedTarget && (cachedTarget.id === siteId || cachedTarget.slug === siteSlugParam)) {
       const def = isStoreRoute
         ? (cachedTarget.site_definition || cachedTarget.draft_definition)
         : (cachedTarget.draft_definition || cachedTarget.site_definition);
@@ -1778,6 +1807,10 @@ function BuilderPageContent() {
           });
 
           if (!response.ok) {
+            try {
+              localStorage.removeItem(`wc_site_snapshot_${siteId}`);
+              siteSlugMemoryCache.delete(siteId);
+            } catch (_) { }
             throw new Error(`Failed to load site: ${response.status}`);
           }
 
@@ -1839,7 +1872,7 @@ function BuilderPageContent() {
             localStorage.removeItem(`webnirmaan_saved_themes_${data.id}`);
             siteSlugMemoryCache.delete(data.id);
             if (data.slug) siteSlugMemoryCache.delete(data.slug);
-          } catch (_) {}
+          } catch (_) { }
 
           // Heal draft on server asynchronously so PostgreSQL is permanently updated
           const sId = data.id || siteId;
@@ -1849,7 +1882,7 @@ function BuilderPageContent() {
               headers: { "Content-Type": "application/json" },
               credentials: "include",
               body: JSON.stringify({ draft_definition: data.site_definition }),
-            }).catch(() => {});
+            }).catch(() => { });
           }
         }
 
@@ -1953,6 +1986,13 @@ function BuilderPageContent() {
         if (!cancelled) {
           setSiteDefinition(null);
           setDraftSiteDefinition(null);
+          setPublishedSiteDefinition(null);
+          if (siteId) {
+            try {
+              localStorage.removeItem(`wc_site_snapshot_${siteId}`);
+              siteSlugMemoryCache.delete(siteId);
+            } catch (_) { }
+          }
           if (!isStoreRoute) {
             navigate("/admin/sites", { replace: true });
           }
@@ -1996,9 +2036,9 @@ function BuilderPageContent() {
           headers: { "Content-Type": "application/json" },
           body: payload,
           keepalive: true,
-        }).catch(() => {});
+        }).catch(() => { });
       }
-    } catch (_) {}
+    } catch (_) { }
   }, [isStoreRoute, resolvedSiteId, siteId, location.pathname]);
 
 
@@ -2489,7 +2529,7 @@ function BuilderPageContent() {
   useEffect(() => {
     const isInsideFrame = typeof window !== "undefined" && (window.self !== window.top || isPreviewMode);
     const shouldSuppress = isInsideFrame || deviceMode === "mobile";
-    
+
     if (!shouldSuppress) return;
 
     document.documentElement.classList.add("is-mobile-preview");
@@ -2519,6 +2559,7 @@ function BuilderPageContent() {
       userEmail={authAdmin?.email}
       avatarUrl={authAdmin?.avatarUrl}
       gender={authAdmin?.gender}
+      isOwner={isOwner}
       deviceMode={deviceMode}
       onChangeDeviceMode={setDeviceMode}
       showDeviceSwitcher={showDeviceSwitcher}
@@ -2714,16 +2755,16 @@ function BuilderPageContent() {
           location.pathname.includes("/settings/users-roles")
             ? "users-roles"
             : location.pathname.includes("/settings/profile")
-            ? "profile"
-            : location.pathname.includes("/settings/domain")
-            ? "domain"
-            : location.pathname.includes("/settings/billing")
-            ? "billing"
-            : location.pathname.includes("/settings/audit-logs") || location.pathname.includes("/settings/activity")
-            ? "audit-logs"
-            : location.pathname.includes("/settings/help-support")
-            ? "help-support"
-            : null
+              ? "profile"
+              : location.pathname.includes("/settings/domain")
+                ? "domain"
+                : location.pathname.includes("/settings/billing")
+                  ? "billing"
+                  : location.pathname.includes("/settings/audit-logs") || location.pathname.includes("/settings/activity")
+                    ? "audit-logs"
+                    : location.pathname.includes("/settings/help-support")
+                      ? "help-support"
+                      : null
         }
         onSelectSettingsNav={(key) => {
           navigate(`${builderBase}/settings/${key}`);
@@ -2757,734 +2798,734 @@ function BuilderPageContent() {
         deviceMode={deviceMode}
         deviceBg={pageBg}
       >
-      <div
-        style={{
-          minHeight: "100%",
-          width: "100%",
-          maxWidth: "100%",
-          background: pageBg,
-          color: textColor,
-          position: "relative",
-          zIndex: 1,
-        }}
-      >
-        {!activeSiteDefinition && loading ? (
-          <StorefrontSkeleton
-            isProductDetail={Boolean(productSlug)}
-            siteSlug={siteSlug || siteSlugParam || ""}
-          />
-        ) : (
-          <Suspense
-            fallback={
-              <div
-                style={{
-                  minHeight: "50vh",
-                  display: "grid",
-                  placeItems: "center",
-                  color: "#64748b",
-                  fontSize: "14px",
-                }}
-              >
-                Loading page...
-              </div>
-            }
-          >
-            <Routes>
-              {!isStoreRoute && (
-                <>
-                  <Route path="admin" element={<AdminLayout />}>
-                    <Route index element={<Navigate to="products" replace />} />
-                    <Route
-                      path="products"
-                      element={
-                        hasPermission("products:view") ? (
-                          <AdminProducts />
-                        ) : (
-                          <AccessDeniedView requiredPermission="products:view" />
-                        )
-                      }
-                    />
-                    <Route
-                      path="home-sections"
-                      element={
-                        hasPermission("home_sections:view") ? (
-                          <AdminHomeSections />
-                        ) : (
-                          <AccessDeniedView requiredPermission="home_sections:view" />
-                        )
-                      }
-                    />
-                    <Route
-                      path="analytics"
-                      element={
-                        hasPermission("analytics:view") ? (
-                          <AdminAnalytics siteId={resolvedSiteId || siteId} siteName={siteName} />
-                        ) : (
-                          <AccessDeniedView requiredPermission="analytics:view" />
-                        )
-                      }
-                    />
-                    <Route
-                      path="orders"
-                      element={
-                        hasPermission("orders:view") ? (
-                          <AdminOrders />
-                        ) : (
-                          <AccessDeniedView requiredPermission="orders:view" />
-                        )
-                      }
-                    />
-                    <Route
-                      path="pages"
-                      element={
-                        hasPermission("pages:view") ? (
-                          <AdminPages siteId={resolvedSiteId || siteId} siteSlug={siteSlug} />
-                        ) : (
-                          <AccessDeniedView requiredPermission="pages:view" />
-                        )
-                      }
-                    />
-                    <Route
-                      path="support"
-                      element={
-                        hasPermission("support:view") ? (
-                          <AdminSupportDesk />
-                        ) : (
-                          <AccessDeniedView requiredPermission="support:view" />
-                        )
-                      }
-                    />
-                    <Route
-                      path="discounts"
-                      element={
-                        hasPermission("discounts:view") ? (
-                          <AdminCoupons />
-                        ) : (
-                          <AccessDeniedView requiredPermission="discounts:view" />
-                        )
-                      }
-                    />
-
-                    <Route
-                      path="coupons"
-                      element={
-                        hasPermission("discounts:view") ? (
-                          <AdminCoupons />
-                        ) : (
-                          <AccessDeniedView requiredPermission="discounts:view" />
-                        )
-                      }
-                    />
-                    <Route
-                      path="delivery"
-                      element={
-                        hasPermission("delivery:view") ? (
-                          <DeliverySettingsPage />
-                        ) : (
-                          <AccessDeniedView requiredPermission="delivery:view" />
-                        )
-                      }
-                    />
-                    <Route
-                      path="earnings"
-                      element={
-                        hasPermission("earnings:view") ? (
-                          <TenantEarningsPage />
-                        ) : (
-                          <AccessDeniedView requiredPermission="earnings:view" />
-                        )
-                      }
-                    />
-                    <Route
-                      path="payment-settings"
-                      element={
-                        hasPermission("payout_settings:view") ? (
-                          <TenantPaymentSettingsPage />
-                        ) : (
-                          <AccessDeniedView requiredPermission="payout_settings:view" />
-                        )
-                      }
-                    />
-                    <Route
-                      path="checkout-charges"
-                      element={
-                        hasPermission("checkout_charges:view") ? (
-                          <CheckoutChargesPage />
-                        ) : (
-                          <AccessDeniedView requiredPermission="checkout_charges:view" />
-                        )
-                      }
-                    />
-                  </Route>
-                  <Route path="settings" element={<AdminLayout />}>
-                    <Route
-                      index
-                      element={
-                        <Navigate
-                          to={
-                            hasPermission("profile:view")
-                              ? "profile"
-                              : hasPermission("users_roles:view")
-                              ? "users-roles"
-                              : hasPermission("domain_settings:view")
-                              ? "domain"
-                              : hasPermission("billing:view")
-                              ? "billing"
-                              : hasPermission("audit_logs:view")
-                              ? "audit-logs"
-                              : hasPermission("support:view")
-                              ? "help-support"
-                              : "profile"
-                          }
-                          replace
-                        />
-                      }
-                    />
-                    <Route
-                      path="profile"
-                      element={
-                        hasPermission("profile:view") ? (
-                          <AdminProfileSettings />
-                        ) : (
-                          <AccessDeniedView requiredPermission="profile:view" />
-                        )
-                      }
-                    />
-                    <Route
-                      path="general"
-                      element={
-                        hasPermission("general_settings:view") ? (
-                          <AdminGeneralSettings siteId={resolvedSiteId || siteId} />
-                        ) : (
-                          <AccessDeniedView requiredPermission="general_settings:view" />
-                        )
-                      }
-                    />
-                    <Route
-                      path="domain"
-                      element={
-                        hasPermission("domain_settings:view") ? (
-                          <AdminDomainSettings siteId={resolvedSiteId || siteId} />
-                        ) : (
-                          <AccessDeniedView requiredPermission="domain_settings:view" />
-                        )
-                      }
-                    />
-                    <Route
-                      path="users-roles"
-                      element={
-                        hasPermission("users_roles:view") ? (
-                          <AdminUsersAndRoles siteId={resolvedSiteId || siteId} />
-                        ) : (
-                          <AccessDeniedView requiredPermission="users_roles:view" />
-                        )
-                      }
-                    />
-                    <Route
-                      path="billing"
-                      element={
-                        hasPermission("billing:view") ? (
-                          <AdminBillingSettings siteId={resolvedSiteId || siteId} />
-                        ) : (
-                          <AccessDeniedView requiredPermission="billing:view" />
-                        )
-                      }
-                    />
-                    <Route
-                      path="audit-logs"
-                      element={
-                        hasPermission("audit_logs:view") ? (
-                          <AdminAuditLogs siteId={resolvedSiteId || siteId} />
-                        ) : (
-                          <AccessDeniedView requiredPermission="audit_logs:view" />
-                        )
-                      }
-                    />
-                    <Route
-                      path="activity"
-                      element={
-                        hasPermission("audit_logs:view") ? (
-                          <AdminAuditLogs siteId={resolvedSiteId || siteId} />
-                        ) : (
-                          <AccessDeniedView requiredPermission="audit_logs:view" />
-                        )
-                      }
-                    />
-                    <Route
-                      path="help-support"
-                      element={
-                        hasPermission("support:view") ? (
-                          <AdminHelpAndSupport siteId={resolvedSiteId || siteId} />
-                        ) : (
-                          <AccessDeniedView requiredPermission="support:view" />
-                        )
-                      }
-                    />
-                  </Route>
-                </>
-              )}
-
-              {/* Agent PWA — no auth, token in URL */}
-              <Route path="agent/delivery/:shipmentId" element={<AgentDeliveryPage />} />
-
-              {/* Customer tracking page */}
-              <Route path="track/:siteId/:orderId" element={<TrackOrderPage />} />
-
-
-              {ordersPage && (
-                <Route
-                  path="orders"
-                  element={
-                    <StorefrontPage
-                      page={ordersPage}
-                      siteDefinition={activeSiteDefinition}
-                      siteId={resolvedSiteId || siteId || ""}
-                      siteSlug={siteSlug}
-                      siteName={siteName}
-                      selectedProduct={undefined}
-                      editMode={editMode}
-                      adminTopbarVisible={showAdminTopbar}
-                      selectedBlockId={selectedBlockId}
-                      onSelectBlock={handleSelectBlock}
-                      storefrontNavbarMode={storefrontNavbarMode}
-                      navbarFixedBounds={navbarFixedBounds}
-                      appBase={appBase}
-                    />
-                  }
-                />
-              )}
-
-              {profilePage && (
-                <Route
-                  path="profile"
-                  element={
-                    <StorefrontPage
-                      page={profilePage}
-                      siteDefinition={activeSiteDefinition}
-                      siteId={resolvedSiteId || siteId || ""}
-                      siteSlug={siteSlug}
-                      siteName={siteName}
-                      selectedProduct={undefined}
-                      editMode={editMode}
-                      adminTopbarVisible={showAdminTopbar}
-                      selectedBlockId={selectedBlockId}
-                      onSelectBlock={handleSelectBlock}
-                      storefrontNavbarMode={storefrontNavbarMode}
-                      navbarFixedBounds={navbarFixedBounds}
-                      appBase={appBase}
-                    />
-                  }
-                />
-              )}
-
-              {supportPage && (
-                <Route
-                  path="support"
-                  element={
-                    <StorefrontPage
-                      page={supportPage}
-                      siteDefinition={activeSiteDefinition}
-                      siteId={resolvedSiteId || siteId || ""}
-                      siteSlug={siteSlug}
-                      siteName={siteName}
-                      selectedProduct={undefined}
-                      editMode={editMode}
-                      adminTopbarVisible={showAdminTopbar}
-                      selectedBlockId={selectedBlockId}
-                      onSelectBlock={handleSelectBlock}
-                      storefrontNavbarMode={storefrontNavbarMode}
-                      navbarFixedBounds={navbarFixedBounds}
-                      appBase={appBase}
-                    />
-                  }
-                />
-              )}
-
-              <Route
-                path="account"
-                element={<Navigate to="profile" replace />}
-              />
-
-              {loginPage && (
-                <Route
-                  path="login"
-                  element={
-                    <StorefrontPage
-                      page={loginPage}
-                      siteDefinition={activeSiteDefinition}
-                      siteId={resolvedSiteId || siteId || ""}
-                      siteSlug={siteSlug}
-                      siteName={siteName}
-                      selectedProduct={undefined}
-                      editMode={editMode}
-                      adminTopbarVisible={showAdminTopbar}
-                      selectedBlockId={selectedBlockId}
-                      onSelectBlock={handleSelectBlock}
-                      storefrontNavbarMode={storefrontNavbarMode}
-                      navbarFixedBounds={navbarFixedBounds}
-                      appBase={appBase}
-                    />
-                  }
-                />
-              )}
-
-              {signupPage && (
-                <Route
-                  path="signup"
-                  element={
-                    <StorefrontPage
-                      page={signupPage}
-                      siteDefinition={activeSiteDefinition}
-                      siteId={resolvedSiteId || siteId || ""}
-                      siteSlug={siteSlug}
-                      siteName={siteName}
-                      selectedProduct={undefined}
-                      editMode={editMode}
-                      adminTopbarVisible={showAdminTopbar}
-                      selectedBlockId={selectedBlockId}
-                      onSelectBlock={handleSelectBlock}
-                      storefrontNavbarMode={storefrontNavbarMode}
-                      navbarFixedBounds={navbarFixedBounds}
-                      appBase={appBase}
-                    />
-                  }
-                />
-              )}
-
-              {cartPage && (
-                <Route
-                  path="cart"
-                  element={
-                    <StorefrontPage
-                      page={cartPage}
-                      siteDefinition={activeSiteDefinition}
-                      siteId={resolvedSiteId || siteId || ""}
-                      siteSlug={siteSlug}
-                      selectedProduct={undefined}
-                      editMode={editMode}
-                      adminTopbarVisible={showAdminTopbar}
-                      selectedBlockId={selectedBlockId}
-                      onSelectBlock={handleSelectBlock}
-                      storefrontNavbarMode={storefrontNavbarMode}
-                      navbarFixedBounds={navbarFixedBounds}
-                      appBase={appBase}
-                    />
-                  }
-                />
-              )}
-
-              {checkoutPage && (
-                <Route
-                  path="checkout"
-                  element={
-                    <StorefrontPage
-                      page={checkoutPage}
-                      siteDefinition={activeSiteDefinition}
-                      siteId={resolvedSiteId || siteId || ""}
-                      siteSlug={siteSlug}
-                      selectedProduct={undefined}
-                      editMode={editMode}
-                      adminTopbarVisible={showAdminTopbar}
-                      selectedBlockId={selectedBlockId}
-                      onSelectBlock={handleSelectBlock}
-                      storefrontNavbarMode={storefrontNavbarMode}
-                      navbarFixedBounds={navbarFixedBounds}
-                      appBase={appBase}
-                    />
-                  }
-                />
-              )}
-
-              {/* Dynamic Store Pages & Policy CMS Storefront Routes */}
-              <Route
-                path="about"
-                element={
-                  <StorefrontShell
-                    siteDefinition={activeSiteDefinition}
-                    siteId={resolvedSiteId || siteId || ""}
-                    siteSlug={siteSlug}
-                    editMode={editMode}
-                    adminTopbarVisible={showAdminTopbar}
-                    selectedBlockId={selectedBlockId}
-                    onSelectBlock={handleSelectBlock}
-                    storefrontNavbarMode={storefrontNavbarMode}
-                    navbarFixedBounds={navbarFixedBounds}
-                    appBase={appBase}
-                  >
-                    <StorefrontCustomPage
-                      pageSlug="about"
-                      siteDefinition={activeSiteDefinition}
-                      siteId={resolvedSiteId || siteId || ""}
-                      siteSlug={siteSlug}
-                      appBase={appBase}
-                      siteName={siteName}
-                    />
-                  </StorefrontShell>
-                }
-              />
-
-              <Route
-                path="contact"
-                element={
-                  <StorefrontShell
-                    siteDefinition={activeSiteDefinition}
-                    siteId={resolvedSiteId || siteId || ""}
-                    siteSlug={siteSlug}
-                    editMode={editMode}
-                    adminTopbarVisible={showAdminTopbar}
-                    selectedBlockId={selectedBlockId}
-                    onSelectBlock={handleSelectBlock}
-                    storefrontNavbarMode={storefrontNavbarMode}
-                    navbarFixedBounds={navbarFixedBounds}
-                    appBase={appBase}
-                  >
-                    <StorefrontCustomPage
-                      pageSlug="contact"
-                      siteDefinition={activeSiteDefinition}
-                      siteId={resolvedSiteId || siteId || ""}
-                      siteSlug={siteSlug}
-                      appBase={appBase}
-                      siteName={siteName}
-                    />
-                  </StorefrontShell>
-                }
-              />
-
-              <Route
-                path="privacy"
-                element={
-                  <StorefrontShell
-                    siteDefinition={activeSiteDefinition}
-                    siteId={resolvedSiteId || siteId || ""}
-                    siteSlug={siteSlug}
-                    editMode={editMode}
-                    adminTopbarVisible={showAdminTopbar}
-                    selectedBlockId={selectedBlockId}
-                    onSelectBlock={handleSelectBlock}
-                    storefrontNavbarMode={storefrontNavbarMode}
-                    navbarFixedBounds={navbarFixedBounds}
-                    appBase={appBase}
-                  >
-                    <StorefrontCustomPage
-                      pageSlug="privacy"
-                      siteDefinition={activeSiteDefinition}
-                      siteId={resolvedSiteId || siteId || ""}
-                      siteSlug={siteSlug}
-                      appBase={appBase}
-                      siteName={siteName}
-                    />
-                  </StorefrontShell>
-                }
-              />
-
-              <Route
-                path="terms"
-                element={
-                  <StorefrontShell
-                    siteDefinition={activeSiteDefinition}
-                    siteId={resolvedSiteId || siteId || ""}
-                    siteSlug={siteSlug}
-                    editMode={editMode}
-                    adminTopbarVisible={showAdminTopbar}
-                    selectedBlockId={selectedBlockId}
-                    onSelectBlock={handleSelectBlock}
-                    storefrontNavbarMode={storefrontNavbarMode}
-                    navbarFixedBounds={navbarFixedBounds}
-                    appBase={appBase}
-                  >
-                    <StorefrontCustomPage
-                      pageSlug="terms"
-                      siteDefinition={activeSiteDefinition}
-                      siteId={resolvedSiteId || siteId || ""}
-                      siteSlug={siteSlug}
-                      appBase={appBase}
-                      siteName={siteName}
-                    />
-                  </StorefrontShell>
-                }
-              />
-
-              <Route
-                path="story"
-                element={
-                  <StorefrontShell
-                    siteDefinition={activeSiteDefinition}
-                    siteId={resolvedSiteId || siteId || ""}
-                    siteSlug={siteSlug}
-                    editMode={editMode}
-                    adminTopbarVisible={showAdminTopbar}
-                    selectedBlockId={selectedBlockId}
-                    onSelectBlock={handleSelectBlock}
-                    storefrontNavbarMode={storefrontNavbarMode}
-                    navbarFixedBounds={navbarFixedBounds}
-                    appBase={appBase}
-                  >
-                    <StorefrontCustomPage
-                      pageSlug="story"
-                      siteDefinition={activeSiteDefinition}
-                      siteId={resolvedSiteId || siteId || ""}
-                      siteSlug={siteSlug}
-                      appBase={appBase}
-                      siteName={siteName}
-                    />
-                  </StorefrontShell>
-                }
-              />
-
-              <Route
-                path="pages/:customSlug"
-                element={
-                  <StorefrontShell
-                    siteDefinition={activeSiteDefinition}
-                    siteId={resolvedSiteId || siteId || ""}
-                    siteSlug={siteSlug}
-                    editMode={editMode}
-                    adminTopbarVisible={showAdminTopbar}
-                    selectedBlockId={selectedBlockId}
-                    onSelectBlock={handleSelectBlock}
-                    storefrontNavbarMode={storefrontNavbarMode}
-                    navbarFixedBounds={navbarFixedBounds}
-                    appBase={appBase}
-                  >
-                    <StorefrontCustomPage
-                      siteDefinition={activeSiteDefinition}
-                      siteId={resolvedSiteId || siteId || ""}
-                      siteSlug={siteSlug}
-                      appBase={appBase}
-                      siteName={siteName}
-                    />
-                  </StorefrontShell>
-                }
-              />
-
-              {(activeSiteDefinition?.pages || [])
-                .filter((page) => {
-                  if (page.flow === "admin") return false;
-
-                  const sameAsResolvedProductPage =
-                    productDetailPage &&
-                    (page.id === productDetailPage.id ||
-                      isProductDetailRoute(page.route) ||
-                      page.blocks.some((block) =>
-                        isProductDetailBlockType(block.type)
-                      ));
-
-                  if (sameAsResolvedProductPage) return false;
-
-                  const normalized = normalizeRoute(page.route);
-                  if (
-                    normalized === "checkout" ||
-                    normalized === "cart" ||
-                    normalized === "orders" ||
-                    normalized === "profile" ||
-                    normalized === "account" ||
-                    normalized === "login" ||
-                    normalized === "signup" ||
-                    normalized === "about" ||
-                    normalized === "contact" ||
-                    normalized === "privacy" ||
-                    normalized === "terms" ||
-                    normalized === "story"
-                  ) {
-                    return false;
-                  }
-
-                  return true;
-                })
-                .map((page) => {
-                  const normalizedRoute = normalizeRoute(page.route);
-
-
-                  return (
-                    <Route
-                      key={page.id}
-                      path={normalizedRoute}
-                      element={
-                        <StorefrontPage
-                          page={page}
-                          siteDefinition={activeSiteDefinition}
-                          siteId={resolvedSiteId || siteId || ""}
-                          siteSlug={siteSlug}
-                          selectedProduct={undefined}
-                          editMode={editMode}
-                          adminTopbarVisible={showAdminTopbar}
-                          selectedBlockId={selectedBlockId}
-                          onSelectBlock={handleSelectBlock}
-                          storefrontNavbarMode={storefrontNavbarMode}
-                          navbarFixedBounds={navbarFixedBounds}
-                          appBase={appBase}
-                        />
-                      }
-                    />
-                  );
-                })}
-
-
-              {productDetailPage && (
-                <Route
-                  path="products/:productSlug"
-                  element={
-                    <StorefrontPage
-                      key={`product-detail-${productSlug || "unknown"}`}
-                      page={productDetailPage}
-                      siteDefinition={activeSiteDefinition}
-                      selectedProduct={selectedProduct}
-                      siteId={resolvedSiteId || siteId || ""}
-                      siteSlug={siteSlug}
-                      editMode={editMode}
-                      adminTopbarVisible={showAdminTopbar}
-                      selectedBlockId={selectedBlockId}
-                      onSelectBlock={handleSelectBlock}
-                      storefrontNavbarMode={storefrontNavbarMode}
-                      navbarFixedBounds={navbarFixedBounds}
-                      appBase={appBase}
-                    />
-                  }
-                />
-              )}
-            </Routes>
-          </Suspense>
-        )}
-      </div>
-
-
-      <QrLinkPopup
-        open={qrOpen}
-        onClose={() => setQrOpen(false)}
-        customerUrl={
-          siteSlug ? `${window.location.origin}/store/${siteSlug}` : ""
-        }
-      />
-
-      {/* Floating Bottom-Right Corner Publish Button (Appears only when changes exist and user has publish permission) */}
-      {showAdminTopbar && !isStoreRoute && !isAdminRoute && canPublish && (hasUnpublishedChanges || publishing || publishSuccess) && (
-        <button
-          type="button"
-          onClick={handlePublish}
-          disabled={publishing}
+        <div
           style={{
-            position: "fixed",
-            bottom: "24px",
-            right: "24px",
-            zIndex: 9999,
-            padding: "10px 22px",
-            borderRadius: "999px",
-            border: "none",
-            background: "linear-gradient(135deg, #0f62ab, #0a467c)",
-            color: "#fbbf24",
-            fontSize: "13px",
-            fontWeight: 800,
-            cursor: publishing ? "default" : "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            boxShadow: "0 6px 20px rgba(15,98,171,0.45)",
-            transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+            minHeight: "100%",
+            width: "100%",
+            maxWidth: "100%",
+            background: pageBg,
+            color: textColor,
+            position: "relative",
+            zIndex: 1,
           }}
         >
-          {publishing ? "Publishing..." : publishSuccess ? "Published" : "Publish"}
-        </button>
-      )}
+          {!activeSiteDefinition && loading ? (
+            <StorefrontSkeleton
+              isProductDetail={Boolean(productSlug)}
+              siteSlug={siteSlug || siteSlugParam || ""}
+            />
+          ) : (
+            <Suspense
+              fallback={
+                <div
+                  style={{
+                    minHeight: "50vh",
+                    display: "grid",
+                    placeItems: "center",
+                    color: "#64748b",
+                    fontSize: "14px",
+                  }}
+                >
+                  Loading page...
+                </div>
+              }
+            >
+              <Routes>
+                {!isStoreRoute && (
+                  <>
+                    <Route path="admin" element={<AdminLayout />}>
+                      <Route index element={<Navigate to="products" replace />} />
+                      <Route
+                        path="products"
+                        element={
+                          hasPermission("products:view") ? (
+                            <AdminProducts />
+                          ) : (
+                            <AccessDeniedView requiredPermission="products:view" />
+                          )
+                        }
+                      />
+                      <Route
+                        path="home-sections"
+                        element={
+                          hasPermission("home_sections:view") ? (
+                            <AdminHomeSections />
+                          ) : (
+                            <AccessDeniedView requiredPermission="home_sections:view" />
+                          )
+                        }
+                      />
+                      <Route
+                        path="analytics"
+                        element={
+                          hasPermission("analytics:view") ? (
+                            <AdminAnalytics siteId={resolvedSiteId || siteId} siteName={siteName} />
+                          ) : (
+                            <AccessDeniedView requiredPermission="analytics:view" />
+                          )
+                        }
+                      />
+                      <Route
+                        path="orders"
+                        element={
+                          hasPermission("orders:view") ? (
+                            <AdminOrders />
+                          ) : (
+                            <AccessDeniedView requiredPermission="orders:view" />
+                          )
+                        }
+                      />
+                      <Route
+                        path="pages"
+                        element={
+                          hasPermission("pages:view") ? (
+                            <AdminPages siteId={resolvedSiteId || siteId} siteSlug={siteSlug} />
+                          ) : (
+                            <AccessDeniedView requiredPermission="pages:view" />
+                          )
+                        }
+                      />
+                      <Route
+                        path="support"
+                        element={
+                          hasPermission("support:view") ? (
+                            <AdminSupportDesk />
+                          ) : (
+                            <AccessDeniedView requiredPermission="support:view" />
+                          )
+                        }
+                      />
+                      <Route
+                        path="discounts"
+                        element={
+                          hasPermission("discounts:view") ? (
+                            <AdminCoupons />
+                          ) : (
+                            <AccessDeniedView requiredPermission="discounts:view" />
+                          )
+                        }
+                      />
+
+                      <Route
+                        path="coupons"
+                        element={
+                          hasPermission("discounts:view") ? (
+                            <AdminCoupons />
+                          ) : (
+                            <AccessDeniedView requiredPermission="discounts:view" />
+                          )
+                        }
+                      />
+                      <Route
+                        path="delivery"
+                        element={
+                          hasPermission("delivery:view") ? (
+                            <DeliverySettingsPage />
+                          ) : (
+                            <AccessDeniedView requiredPermission="delivery:view" />
+                          )
+                        }
+                      />
+                      <Route
+                        path="earnings"
+                        element={
+                          hasPermission("earnings:view") ? (
+                            <TenantEarningsPage />
+                          ) : (
+                            <AccessDeniedView requiredPermission="earnings:view" />
+                          )
+                        }
+                      />
+                      <Route
+                        path="payment-settings"
+                        element={
+                          hasPermission("payout_settings:view") ? (
+                            <TenantPaymentSettingsPage />
+                          ) : (
+                            <AccessDeniedView requiredPermission="payout_settings:view" />
+                          )
+                        }
+                      />
+                      <Route
+                        path="checkout-charges"
+                        element={
+                          hasPermission("checkout_charges:view") ? (
+                            <CheckoutChargesPage />
+                          ) : (
+                            <AccessDeniedView requiredPermission="checkout_charges:view" />
+                          )
+                        }
+                      />
+                    </Route>
+                    <Route path="settings" element={<AdminLayout />}>
+                      <Route
+                        index
+                        element={
+                          <Navigate
+                            to={
+                              hasPermission("profile:view")
+                                ? "profile"
+                                : hasPermission("users_roles:view")
+                                  ? "users-roles"
+                                  : hasPermission("domain_settings:view")
+                                    ? "domain"
+                                    : hasPermission("billing:view")
+                                      ? "billing"
+                                      : hasPermission("audit_logs:view")
+                                        ? "audit-logs"
+                                        : hasPermission("support:view")
+                                          ? "help-support"
+                                          : "profile"
+                            }
+                            replace
+                          />
+                        }
+                      />
+                      <Route
+                        path="profile"
+                        element={
+                          hasPermission("profile:view") ? (
+                            <AdminProfileSettings />
+                          ) : (
+                            <AccessDeniedView requiredPermission="profile:view" />
+                          )
+                        }
+                      />
+                      <Route
+                        path="general"
+                        element={
+                          hasPermission("general_settings:view") ? (
+                            <AdminGeneralSettings siteId={resolvedSiteId || siteId} />
+                          ) : (
+                            <AccessDeniedView requiredPermission="general_settings:view" />
+                          )
+                        }
+                      />
+                      <Route
+                        path="domain"
+                        element={
+                          hasPermission("domain_settings:view") ? (
+                            <AdminDomainSettings siteId={resolvedSiteId || siteId} />
+                          ) : (
+                            <AccessDeniedView requiredPermission="domain_settings:view" />
+                          )
+                        }
+                      />
+                      <Route
+                        path="users-roles"
+                        element={
+                          hasPermission("users_roles:view") ? (
+                            <AdminUsersAndRoles siteId={resolvedSiteId || siteId} />
+                          ) : (
+                            <AccessDeniedView requiredPermission="users_roles:view" />
+                          )
+                        }
+                      />
+                      <Route
+                        path="billing"
+                        element={
+                          hasPermission("billing:view") ? (
+                            <AdminBillingSettings siteId={resolvedSiteId || siteId} />
+                          ) : (
+                            <AccessDeniedView requiredPermission="billing:view" />
+                          )
+                        }
+                      />
+                      <Route
+                        path="audit-logs"
+                        element={
+                          hasPermission("audit_logs:view") ? (
+                            <AdminAuditLogs siteId={resolvedSiteId || siteId} />
+                          ) : (
+                            <AccessDeniedView requiredPermission="audit_logs:view" />
+                          )
+                        }
+                      />
+                      <Route
+                        path="activity"
+                        element={
+                          hasPermission("audit_logs:view") ? (
+                            <AdminAuditLogs siteId={resolvedSiteId || siteId} />
+                          ) : (
+                            <AccessDeniedView requiredPermission="audit_logs:view" />
+                          )
+                        }
+                      />
+                      <Route
+                        path="help-support"
+                        element={
+                          hasPermission("support:view") ? (
+                            <AdminHelpAndSupport siteId={resolvedSiteId || siteId} />
+                          ) : (
+                            <AccessDeniedView requiredPermission="support:view" />
+                          )
+                        }
+                      />
+                    </Route>
+                  </>
+                )}
+
+                {/* Agent PWA — no auth, token in URL */}
+                <Route path="agent/delivery/:shipmentId" element={<AgentDeliveryPage />} />
+
+                {/* Customer tracking page */}
+                <Route path="track/:siteId/:orderId" element={<TrackOrderPage />} />
+
+
+                {ordersPage && (
+                  <Route
+                    path="orders"
+                    element={
+                      <StorefrontPage
+                        page={ordersPage}
+                        siteDefinition={activeSiteDefinition}
+                        siteId={resolvedSiteId || siteId || ""}
+                        siteSlug={siteSlug}
+                        siteName={siteName}
+                        selectedProduct={undefined}
+                        editMode={editMode}
+                        adminTopbarVisible={showAdminTopbar}
+                        selectedBlockId={selectedBlockId}
+                        onSelectBlock={handleSelectBlock}
+                        storefrontNavbarMode={storefrontNavbarMode}
+                        navbarFixedBounds={navbarFixedBounds}
+                        appBase={appBase}
+                      />
+                    }
+                  />
+                )}
+
+                {profilePage && (
+                  <Route
+                    path="profile"
+                    element={
+                      <StorefrontPage
+                        page={profilePage}
+                        siteDefinition={activeSiteDefinition}
+                        siteId={resolvedSiteId || siteId || ""}
+                        siteSlug={siteSlug}
+                        siteName={siteName}
+                        selectedProduct={undefined}
+                        editMode={editMode}
+                        adminTopbarVisible={showAdminTopbar}
+                        selectedBlockId={selectedBlockId}
+                        onSelectBlock={handleSelectBlock}
+                        storefrontNavbarMode={storefrontNavbarMode}
+                        navbarFixedBounds={navbarFixedBounds}
+                        appBase={appBase}
+                      />
+                    }
+                  />
+                )}
+
+                {supportPage && (
+                  <Route
+                    path="support"
+                    element={
+                      <StorefrontPage
+                        page={supportPage}
+                        siteDefinition={activeSiteDefinition}
+                        siteId={resolvedSiteId || siteId || ""}
+                        siteSlug={siteSlug}
+                        siteName={siteName}
+                        selectedProduct={undefined}
+                        editMode={editMode}
+                        adminTopbarVisible={showAdminTopbar}
+                        selectedBlockId={selectedBlockId}
+                        onSelectBlock={handleSelectBlock}
+                        storefrontNavbarMode={storefrontNavbarMode}
+                        navbarFixedBounds={navbarFixedBounds}
+                        appBase={appBase}
+                      />
+                    }
+                  />
+                )}
+
+                <Route
+                  path="account"
+                  element={<Navigate to="profile" replace />}
+                />
+
+                {loginPage && (
+                  <Route
+                    path="login"
+                    element={
+                      <StorefrontPage
+                        page={loginPage}
+                        siteDefinition={activeSiteDefinition}
+                        siteId={resolvedSiteId || siteId || ""}
+                        siteSlug={siteSlug}
+                        siteName={siteName}
+                        selectedProduct={undefined}
+                        editMode={editMode}
+                        adminTopbarVisible={showAdminTopbar}
+                        selectedBlockId={selectedBlockId}
+                        onSelectBlock={handleSelectBlock}
+                        storefrontNavbarMode={storefrontNavbarMode}
+                        navbarFixedBounds={navbarFixedBounds}
+                        appBase={appBase}
+                      />
+                    }
+                  />
+                )}
+
+                {signupPage && (
+                  <Route
+                    path="signup"
+                    element={
+                      <StorefrontPage
+                        page={signupPage}
+                        siteDefinition={activeSiteDefinition}
+                        siteId={resolvedSiteId || siteId || ""}
+                        siteSlug={siteSlug}
+                        siteName={siteName}
+                        selectedProduct={undefined}
+                        editMode={editMode}
+                        adminTopbarVisible={showAdminTopbar}
+                        selectedBlockId={selectedBlockId}
+                        onSelectBlock={handleSelectBlock}
+                        storefrontNavbarMode={storefrontNavbarMode}
+                        navbarFixedBounds={navbarFixedBounds}
+                        appBase={appBase}
+                      />
+                    }
+                  />
+                )}
+
+                {cartPage && (
+                  <Route
+                    path="cart"
+                    element={
+                      <StorefrontPage
+                        page={cartPage}
+                        siteDefinition={activeSiteDefinition}
+                        siteId={resolvedSiteId || siteId || ""}
+                        siteSlug={siteSlug}
+                        selectedProduct={undefined}
+                        editMode={editMode}
+                        adminTopbarVisible={showAdminTopbar}
+                        selectedBlockId={selectedBlockId}
+                        onSelectBlock={handleSelectBlock}
+                        storefrontNavbarMode={storefrontNavbarMode}
+                        navbarFixedBounds={navbarFixedBounds}
+                        appBase={appBase}
+                      />
+                    }
+                  />
+                )}
+
+                {checkoutPage && (
+                  <Route
+                    path="checkout"
+                    element={
+                      <StorefrontPage
+                        page={checkoutPage}
+                        siteDefinition={activeSiteDefinition}
+                        siteId={resolvedSiteId || siteId || ""}
+                        siteSlug={siteSlug}
+                        selectedProduct={undefined}
+                        editMode={editMode}
+                        adminTopbarVisible={showAdminTopbar}
+                        selectedBlockId={selectedBlockId}
+                        onSelectBlock={handleSelectBlock}
+                        storefrontNavbarMode={storefrontNavbarMode}
+                        navbarFixedBounds={navbarFixedBounds}
+                        appBase={appBase}
+                      />
+                    }
+                  />
+                )}
+
+                {/* Dynamic Store Pages & Policy CMS Storefront Routes */}
+                <Route
+                  path="about"
+                  element={
+                    <StorefrontShell
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      editMode={editMode}
+                      adminTopbarVisible={showAdminTopbar}
+                      selectedBlockId={selectedBlockId}
+                      onSelectBlock={handleSelectBlock}
+                      storefrontNavbarMode={storefrontNavbarMode}
+                      navbarFixedBounds={navbarFixedBounds}
+                      appBase={appBase}
+                    >
+                      <StorefrontCustomPage
+                        pageSlug="about"
+                        siteDefinition={activeSiteDefinition}
+                        siteId={resolvedSiteId || siteId || ""}
+                        siteSlug={siteSlug}
+                        appBase={appBase}
+                        siteName={siteName}
+                      />
+                    </StorefrontShell>
+                  }
+                />
+
+                <Route
+                  path="contact"
+                  element={
+                    <StorefrontShell
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      editMode={editMode}
+                      adminTopbarVisible={showAdminTopbar}
+                      selectedBlockId={selectedBlockId}
+                      onSelectBlock={handleSelectBlock}
+                      storefrontNavbarMode={storefrontNavbarMode}
+                      navbarFixedBounds={navbarFixedBounds}
+                      appBase={appBase}
+                    >
+                      <StorefrontCustomPage
+                        pageSlug="contact"
+                        siteDefinition={activeSiteDefinition}
+                        siteId={resolvedSiteId || siteId || ""}
+                        siteSlug={siteSlug}
+                        appBase={appBase}
+                        siteName={siteName}
+                      />
+                    </StorefrontShell>
+                  }
+                />
+
+                <Route
+                  path="privacy"
+                  element={
+                    <StorefrontShell
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      editMode={editMode}
+                      adminTopbarVisible={showAdminTopbar}
+                      selectedBlockId={selectedBlockId}
+                      onSelectBlock={handleSelectBlock}
+                      storefrontNavbarMode={storefrontNavbarMode}
+                      navbarFixedBounds={navbarFixedBounds}
+                      appBase={appBase}
+                    >
+                      <StorefrontCustomPage
+                        pageSlug="privacy"
+                        siteDefinition={activeSiteDefinition}
+                        siteId={resolvedSiteId || siteId || ""}
+                        siteSlug={siteSlug}
+                        appBase={appBase}
+                        siteName={siteName}
+                      />
+                    </StorefrontShell>
+                  }
+                />
+
+                <Route
+                  path="terms"
+                  element={
+                    <StorefrontShell
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      editMode={editMode}
+                      adminTopbarVisible={showAdminTopbar}
+                      selectedBlockId={selectedBlockId}
+                      onSelectBlock={handleSelectBlock}
+                      storefrontNavbarMode={storefrontNavbarMode}
+                      navbarFixedBounds={navbarFixedBounds}
+                      appBase={appBase}
+                    >
+                      <StorefrontCustomPage
+                        pageSlug="terms"
+                        siteDefinition={activeSiteDefinition}
+                        siteId={resolvedSiteId || siteId || ""}
+                        siteSlug={siteSlug}
+                        appBase={appBase}
+                        siteName={siteName}
+                      />
+                    </StorefrontShell>
+                  }
+                />
+
+                <Route
+                  path="story"
+                  element={
+                    <StorefrontShell
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      editMode={editMode}
+                      adminTopbarVisible={showAdminTopbar}
+                      selectedBlockId={selectedBlockId}
+                      onSelectBlock={handleSelectBlock}
+                      storefrontNavbarMode={storefrontNavbarMode}
+                      navbarFixedBounds={navbarFixedBounds}
+                      appBase={appBase}
+                    >
+                      <StorefrontCustomPage
+                        pageSlug="story"
+                        siteDefinition={activeSiteDefinition}
+                        siteId={resolvedSiteId || siteId || ""}
+                        siteSlug={siteSlug}
+                        appBase={appBase}
+                        siteName={siteName}
+                      />
+                    </StorefrontShell>
+                  }
+                />
+
+                <Route
+                  path="pages/:customSlug"
+                  element={
+                    <StorefrontShell
+                      siteDefinition={activeSiteDefinition}
+                      siteId={resolvedSiteId || siteId || ""}
+                      siteSlug={siteSlug}
+                      editMode={editMode}
+                      adminTopbarVisible={showAdminTopbar}
+                      selectedBlockId={selectedBlockId}
+                      onSelectBlock={handleSelectBlock}
+                      storefrontNavbarMode={storefrontNavbarMode}
+                      navbarFixedBounds={navbarFixedBounds}
+                      appBase={appBase}
+                    >
+                      <StorefrontCustomPage
+                        siteDefinition={activeSiteDefinition}
+                        siteId={resolvedSiteId || siteId || ""}
+                        siteSlug={siteSlug}
+                        appBase={appBase}
+                        siteName={siteName}
+                      />
+                    </StorefrontShell>
+                  }
+                />
+
+                {(activeSiteDefinition?.pages || [])
+                  .filter((page) => {
+                    if (page.flow === "admin") return false;
+
+                    const sameAsResolvedProductPage =
+                      productDetailPage &&
+                      (page.id === productDetailPage.id ||
+                        isProductDetailRoute(page.route) ||
+                        page.blocks.some((block) =>
+                          isProductDetailBlockType(block.type)
+                        ));
+
+                    if (sameAsResolvedProductPage) return false;
+
+                    const normalized = normalizeRoute(page.route);
+                    if (
+                      normalized === "checkout" ||
+                      normalized === "cart" ||
+                      normalized === "orders" ||
+                      normalized === "profile" ||
+                      normalized === "account" ||
+                      normalized === "login" ||
+                      normalized === "signup" ||
+                      normalized === "about" ||
+                      normalized === "contact" ||
+                      normalized === "privacy" ||
+                      normalized === "terms" ||
+                      normalized === "story"
+                    ) {
+                      return false;
+                    }
+
+                    return true;
+                  })
+                  .map((page) => {
+                    const normalizedRoute = normalizeRoute(page.route);
+
+
+                    return (
+                      <Route
+                        key={page.id}
+                        path={normalizedRoute}
+                        element={
+                          <StorefrontPage
+                            page={page}
+                            siteDefinition={activeSiteDefinition}
+                            siteId={resolvedSiteId || siteId || ""}
+                            siteSlug={siteSlug}
+                            selectedProduct={undefined}
+                            editMode={editMode}
+                            adminTopbarVisible={showAdminTopbar}
+                            selectedBlockId={selectedBlockId}
+                            onSelectBlock={handleSelectBlock}
+                            storefrontNavbarMode={storefrontNavbarMode}
+                            navbarFixedBounds={navbarFixedBounds}
+                            appBase={appBase}
+                          />
+                        }
+                      />
+                    );
+                  })}
+
+
+                {productDetailPage && (
+                  <Route
+                    path="products/:productSlug"
+                    element={
+                      <StorefrontPage
+                        key={`product-detail-${productSlug || "unknown"}`}
+                        page={productDetailPage}
+                        siteDefinition={activeSiteDefinition}
+                        selectedProduct={selectedProduct}
+                        siteId={resolvedSiteId || siteId || ""}
+                        siteSlug={siteSlug}
+                        editMode={editMode}
+                        adminTopbarVisible={showAdminTopbar}
+                        selectedBlockId={selectedBlockId}
+                        onSelectBlock={handleSelectBlock}
+                        storefrontNavbarMode={storefrontNavbarMode}
+                        navbarFixedBounds={navbarFixedBounds}
+                        appBase={appBase}
+                      />
+                    }
+                  />
+                )}
+              </Routes>
+            </Suspense>
+          )}
+        </div>
+
+
+        <QrLinkPopup
+          open={qrOpen}
+          onClose={() => setQrOpen(false)}
+          customerUrl={
+            siteSlug ? `${window.location.origin}/store/${siteSlug}` : ""
+          }
+        />
+
+        {/* Floating Bottom-Right Corner Publish Button (Appears only when changes exist and user has publish permission) */}
+        {showAdminTopbar && !isStoreRoute && !isAdminRoute && canPublish && (hasUnpublishedChanges || publishing || publishSuccess) && (
+          <button
+            type="button"
+            onClick={handlePublish}
+            disabled={publishing}
+            style={{
+              position: "fixed",
+              bottom: "24px",
+              right: "24px",
+              zIndex: 9999,
+              padding: "10px 22px",
+              borderRadius: "999px",
+              border: "none",
+              background: "linear-gradient(135deg, #0f62ab, #0a467c)",
+              color: "#fbbf24",
+              fontSize: "13px",
+              fontWeight: 800,
+              cursor: publishing ? "default" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              boxShadow: "0 6px 20px rgba(15,98,171,0.45)",
+              transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+            }}
+          >
+            {publishing ? "Publishing..." : publishSuccess ? "Published" : "Publish"}
+          </button>
+        )}
       </BuilderShell>
     </DeviceModeProvider>
   );
@@ -3669,3 +3710,4 @@ export default function BuilderPage() {
     </CartProvider>
   );
 }
+

@@ -331,20 +331,20 @@ export default function CustomerProfilePage({
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          padding: "32px 16px",
+          padding: isMobile ? "8px 12px 28px" : "16px 16px 40px",
           background: isLight ? primaryBg : "transparent",
           color: textColor,
         }}
       >
-        <div style={{ maxWidth: "420px", width: "100%", marginBottom: "16px" }}>
+        <div style={{ maxWidth: "420px", width: "100%", marginBottom: "12px" }}>
           <div
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: "6px",
-              fontSize: "13px",
+              gap: "5px",
+              fontSize: "12.5px",
               color: subtextColor,
-              fontWeight: 500,
+              fontWeight: 600,
             }}
           >
             <span
@@ -367,13 +367,13 @@ export default function CustomerProfilePage({
                 transition: "color 0.15s ease",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "5px",
+                gap: "4px",
                 color: subtextColor,
               }}
               onMouseEnter={(e) => (e.currentTarget.style.color = accentColor)}
               onMouseLeave={(e) => (e.currentTarget.style.color = subtextColor)}
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="19" y1="12" x2="5" y2="12" />
                 <polyline points="12 19 5 12 12 5" />
               </svg>
@@ -447,7 +447,7 @@ export default function CustomerProfilePage({
         minHeight: "calc(100vh - 140px)",
         background: isLight ? primaryBg : "transparent",
         color: textColor,
-        padding: isMobile ? "16px 12px 36px" : "24px 16px 48px",
+        padding: isMobile ? "8px 12px 28px" : "16px 16px 40px",
         boxSizing: "border-box",
         width: "100%",
       }}
@@ -459,7 +459,7 @@ export default function CustomerProfilePage({
           margin: "0 auto",
           display: "flex",
           flexDirection: "column",
-          gap: "16px",
+          gap: isMobile ? "10px" : "14px",
         }}
       >
         {/* Uniform Header Navigation Bar */}
@@ -469,8 +469,8 @@ export default function CustomerProfilePage({
             justifyContent: "space-between",
             alignItems: "center",
             flexWrap: "wrap",
-            gap: "12px",
-            minHeight: "38px",
+            gap: "8px",
+            padding: "0 2px",
             width: "100%",
           }}
         >
@@ -479,10 +479,10 @@ export default function CustomerProfilePage({
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: "6px",
-              fontSize: "13px",
+              gap: "5px",
+              fontSize: "12.5px",
               color: subtextColor,
-              fontWeight: 500,
+              fontWeight: 600,
             }}
           >
             <span
@@ -505,13 +505,13 @@ export default function CustomerProfilePage({
                 transition: "color 0.15s ease",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "5px",
+                gap: "4px",
                 color: subtextColor,
               }}
               onMouseEnter={(e) => (e.currentTarget.style.color = accentColor)}
               onMouseLeave={(e) => (e.currentTarget.style.color = subtextColor)}
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="19" y1="12" x2="5" y2="12" />
                 <polyline points="12 19 5 12 12 5" />
               </svg>
@@ -528,12 +528,12 @@ export default function CustomerProfilePage({
               display: "inline-flex",
               alignItems: "center",
               gap: "6px",
-              padding: "7px 14px",
+              padding: "6px 12px",
               borderRadius: buttonRadius,
               background: "transparent",
               color: signOutColor,
               border: `1px solid ${signOutColor}40`,
-              fontSize: "13px",
+              fontSize: "12.5px",
               fontWeight: 600,
               cursor: "pointer",
               transition: "all 0.15s ease",
@@ -565,25 +565,25 @@ export default function CustomerProfilePage({
             style={{
               display: "flex",
               alignItems: "center",
-              gap: "18px",
-              paddingBottom: "24px",
+              gap: isMobile ? "12px" : "18px",
+              paddingBottom: isMobile ? "16px" : "20px",
               borderBottom: `1px solid ${borderColor}`,
-              marginBottom: "24px",
+              marginBottom: isMobile ? "16px" : "20px",
               flexWrap: "wrap",
             }}
           >
             <div
               style={{
-                width: "64px",
-                height: "64px",
-                borderRadius: "18px",
+                width: isMobile ? "54px" : "64px",
+                height: isMobile ? "54px" : "64px",
+                borderRadius: "16px",
                 overflow: "hidden",
                 background: user?.avatarUrl
                   ? "transparent"
                   : `linear-gradient(135deg, ${accentColor}, #7c3aed)`,
                 display: "grid",
                 placeItems: "center",
-                fontSize: "22px",
+                fontSize: isMobile ? "19px" : "22px",
                 fontWeight: 800,
                 color: "#ffffff",
                 flexShrink: 0,

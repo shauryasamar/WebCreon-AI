@@ -92,17 +92,18 @@ export default function CustomerSignupPage(props: CustomerSignupPageProps = {}) 
 
   const websiteName = propSiteSlug || slug || siteId || "";
   const from = (location.state as LocationState | null)?.from;
+  const resolvedStoreSlug = siteData?.slug || websiteName;
   const redirectTo = useMemo(() => {
-    if (from && from.trim()) {
+    if (from && from.trim() && (from.startsWith("/store/") || from === "/")) {
       return from;
     }
 
-    if (websiteName) {
-      return `/store/${websiteName}/account`;
+    if (resolvedStoreSlug) {
+      return `/store/${resolvedStoreSlug}`;
     }
 
     return "/";
-  }, [from, websiteName]);
+  }, [from, resolvedStoreSlug]);
 
   // Google Identity Services (GIS)
   useEffect(() => {

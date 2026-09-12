@@ -856,9 +856,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
   const [returnDetailMap, setReturnDetailMap] = useState<Record<string, CustomerReturnDetail>>({});
   const [loading, setLoading] = useState(initialCachedOrders.length === 0 && !isInsideEditor);
   const [isUnauthenticated, setIsUnauthenticated] = useState(false);
-  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(
-    isInsideEditor ? (initialCachedOrders[0]?.id || "ORD-89421") : null
-  );
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [detailMap, setDetailMap] = useState<Record<string, OrderDetail>>(
     isInsideEditor ? SAMPLE_PREVIEW_DETAILS : {}
   );
@@ -3109,7 +3107,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
         minHeight: "calc(100vh - 140px)",
         background: isLight ? pageBg : "transparent",
         color: textPrimary,
-        padding: isMobile ? "16px 12px 36px" : "24px 16px 48px",
+        padding: isMobile ? "8px 12px 28px" : "16px 16px 40px",
         boxSizing: "border-box",
         width: "100%",
       }}
@@ -3121,31 +3119,31 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
           margin: "0 auto",
           display: "flex",
           flexDirection: "column",
-          gap: "16px",
+          gap: isMobile ? "10px" : "14px",
         }}
       >
         {/* Uniform Header Navigation Bar */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: "12px",
-            minHeight: "38px",
-            width: "100%",
-          }}
-        >
-          {/* Breadcrumb back-link */}
-          {showBreadcrumb && (
+        {showBreadcrumb && (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "8px",
+              padding: "0 2px",
+              width: "100%",
+            }}
+          >
+            {/* Breadcrumb back-link */}
             <div
               style={{
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "6px",
-                fontSize: "13px",
+                gap: "5px",
+                fontSize: "12.5px",
                 color: textMuted,
-                fontWeight: 500,
+                fontWeight: 600,
               }}
             >
               <span
@@ -3168,13 +3166,13 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                   transition: "color 0.15s ease",
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: "5px",
+                  gap: "4px",
                   color: textMuted,
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.color = accentColor)}
                 onMouseLeave={(e) => (e.currentTarget.style.color = textMuted)}
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="19" y1="12" x2="5" y2="12" />
                   <polyline points="12 19 5 12 12 5" />
                 </svg>
@@ -3183,9 +3181,8 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
               <span>/</span>
               <span style={{ color: textPrimary, fontWeight: 700 }}>Orders</span>
             </div>
-          )}
-
-        </div>
+          </div>
+        )}
 
         {/* Industry-Level Themed Customer Orders Filter Bar */}
         {(showSearch || showFilters) && !loading && orders.length > 0 && (
@@ -3194,12 +3191,12 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
               background: cardBg,
               border: cardBorder,
               borderRadius: effectiveCardRadius,
-              padding: isMobile ? "14px" : "16px 20px",
+              padding: isMobile ? "10px 12px" : "12px 18px",
               marginBottom: "0px",
               boxShadow: isLight ? "0 2px 10px rgba(15,23,42,0.03)" : "0 8px 24px rgba(2,6,23,0.20)",
               display: "flex",
               flexDirection: "column",
-              gap: "14px",
+              gap: isMobile ? "8px" : "12px",
             }}
           >
             {/* Search Input and Filter Controls */}
@@ -4068,236 +4065,301 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                         flexDirection: isMobile ? "column" : "row",
                         justifyContent: "space-between",
                         alignItems: isMobile ? "stretch" : "center",
-                        gap: isMobile ? "12px" : "16px",
+                        gap: isMobile ? "10px" : "16px",
                       }}
                     >
-                      {/* Left: Order icon, number, date */}
-                      <div style={{ display: "flex", alignItems: "center", gap: "14px", minWidth: 0 }}>
-                        <div
-                          style={{
-                            width: "42px",
-                            height: "42px",
-                            borderRadius: effectiveInnerRadius,
-                            background: isLight ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)",
-                            display: "grid",
-                            placeItems: "center",
-                            flexShrink: 0,
-                            color: textPrimary,
-                          }}
-                        >
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
-                            <line x1="3" y1="6" x2="21" y2="6"/>
-                            <path d="M16 10a4 4 0 0 1-8 0"/>
-                          </svg>
-                        </div>
+                      {/* Mobile Row 1 / Desktop Left Column */}
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: isMobile ? "flex-start" : "center",
+                          justifyContent: "space-between",
+                          gap: isMobile ? "10px" : "14px",
+                          minWidth: 0,
+                          flex: isMobile ? "none" : 1,
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "10px" : "14px", minWidth: 0 }}>
+                          <div
+                            style={{
+                              width: isMobile ? "36px" : "42px",
+                              height: isMobile ? "36px" : "42px",
+                              borderRadius: effectiveInnerRadius,
+                              background: isLight ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)",
+                              display: "grid",
+                              placeItems: "center",
+                              flexShrink: 0,
+                              color: textPrimary,
+                            }}
+                          >
+                            <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+                              <line x1="3" y1="6" x2="21" y2="6"/>
+                              <path d="M16 10a4 4 0 0 1-8 0"/>
+                            </svg>
+                          </div>
 
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "3px" }}>
-                            <span
-                              style={{
-                                fontSize: "15px",
-                                fontWeight: 800,
-                                letterSpacing: "-0.01em",
-                                color: textPrimary,
-                              }}
-                            >
-                              Order #{order.id.slice(0, 8)}
-                            </span>
-                            {order.items && order.items.length > 0 && (
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginBottom: isMobile ? "2px" : "3px", lineHeight: 1.2 }}>
                               <span
                                 style={{
-                                  fontSize: "11px",
-                                  fontWeight: 700,
-                                  padding: "2px 8px",
-                                  borderRadius: effectiveBadgeRadius,
-                                  background: isLight ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.08)",
-                                  color: textMuted,
+                                  fontSize: isMobile ? "14.5px" : "15px",
+                                  fontWeight: 800,
+                                  letterSpacing: "-0.01em",
+                                  color: textPrimary,
                                 }}
                               >
-                                {order.items.length} {order.items.length === 1 ? "item" : "items"}
+                                Order #{order.id.slice(0, 8)}
                               </span>
-                            )}
-                          </div>
-                          <div style={{ fontSize: "13px", color: textMuted, display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                            <span>{formatDate(order.created_at)}</span>
-                            {order.payment_method && (
-                              <>
-                                <span>•</span>
-                                <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontWeight: 600 }}>
-                                  <span>{getPaymentMethodIcon(order.payment_method)}</span>
-                                  <span>{formatPaymentMethodName(order.payment_method)}</span>
+                              {order.items && order.items.length > 0 && (
+                                <span
+                                  style={{
+                                    fontSize: "10.5px",
+                                    fontWeight: 700,
+                                    padding: "2px 6px",
+                                    borderRadius: effectiveBadgeRadius,
+                                    background: isLight ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.08)",
+                                    color: textMuted,
+                                  }}
+                                >
+                                  {order.items.length} {order.items.length === 1 ? "item" : "items"}
                                 </span>
-                              </>
-                            )}
+                              )}
+                            </div>
+                            <div style={{ fontSize: "12px", color: textMuted, display: "flex", alignItems: "center", gap: "6px" }}>
+                              <span>{formatDate(order.created_at)}</span>
+                              {!isMobile && order.payment_method && (
+                                <>
+                                  <span>•</span>
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontWeight: 600 }}>
+                                    <span>{getPaymentMethodIcon(order.payment_method)}</span>
+                                    <span>{formatPaymentMethodName(order.payment_method)}</span>
+                                  </span>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
+
+                        {/* Price on Mobile Row 1 */}
+                        {isMobile && (
+                          <div
+                            style={{
+                              fontSize: "16px",
+                              fontWeight: 800,
+                              color: textPrimary,
+                              whiteSpace: "nowrap",
+                              paddingTop: "2px",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {formatPrice(order.total)}
+                          </div>
+                        )}
                       </div>
 
-                      {/* Middle & Right: Status, Price, Chevron */}
+                      {/* Mobile Row 2 / Desktop Right Column */}
                       <div
                         style={{
                           display: "flex",
                           alignItems: "center",
                           justifyContent: isMobile ? "space-between" : "flex-end",
-                          gap: isMobile ? "10px" : "20px",
-                          flexWrap: isMobile ? "wrap" : "nowrap",
+                          gap: isMobile ? "8px" : "16px",
+                          paddingTop: isMobile ? "8px" : 0,
+                          borderTop: isMobile ? `1px solid ${isLight ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.06)"}` : "none",
+                          width: isMobile ? "100%" : "auto",
                         }}
                       >
-                        {/* Status chip */}
-                        {(() => {
-                          const currentRefundInfo = (detailMap[order.id]?.refund_info || order.refund_info);
-                          const isFullyRefunded = order.status === "refunded" || order.payment_status === "refunded" || currentRefundInfo?.status === "completed" || currentRefundInfo?.status_label === "Refunded";
-                          const isPartiallyRefunded = order.payment_status === "partially_refunded" || currentRefundInfo?.status_label === "Partially Refunded";
-                          const isRefundFailed = currentRefundInfo?.status === "failed";
-                          const isRefundProcessing = currentRefundInfo?.status === "processing";
-                          const isRepl = Boolean(
-                            (order.cancel_reason || detailMap[order.id]?.cancel_reason || "").startsWith("Replacement Authorized")
-                          );
-                          const isReplDelivered = isRepl && order.status === "delivered";
-                          const chipColor = isRepl
-                            ? (isReplDelivered ? "#059669" : "#0284c7")
-                            : (isRefundFailed
-                            ? "#ef4444"
-                            : (isFullyRefunded
-                            ? "#059669"
-                            : (isPartiallyRefunded
-                            ? "#0284c7"
-                            : (isRefundProcessing ? "#d97706" : statusColor))));
-                          const chipLabel = isRepl
-                            ? (isReplDelivered ? "Replacement Delivered" : (order.status === "shipped" ? "Re-Dispatch Shipped" : (order.status === "out_for_delivery" ? "Re-Dispatch Out for Delivery" : "Re-Dispatch (In Progress)")))
-                            : (isRefundFailed
-                            ? "Refund Failed"
-                            : (isFullyRefunded
-                            ? "Refunded"
-                            : (isPartiallyRefunded
-                            ? "Partially Refunded"
-                            : (isRefundProcessing ? "Refund in progress" : order.status.replaceAll("_", " ")))));
-
-                          return (
-                            <div
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "6px",
-                                padding: "6px 12px",
-                                borderRadius: effectiveBadgeRadius,
-                                background: `${chipColor}14`,
-                                border: `1px solid ${chipColor}28`,
-                                color: chipColor,
-                                fontSize: "12px",
-                                fontWeight: 800,
-                                textTransform: "capitalize",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              <span
+                        {/* Mobile Payment Pill Tag */}
+                        {isMobile ? (
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            {order.payment_method ? (
+                              <div
                                 style={{
-                                  width: "6px",
-                                  height: "6px",
-                                  borderRadius: "50%",
-                                  background: chipColor,
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "5px",
+                                  padding: "3px 8px",
+                                  borderRadius: "6px",
+                                  background: isLight ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
+                                  border: `1px solid ${isLight ? "rgba(15,23,42,0.07)" : "rgba(255,255,255,0.09)"}`,
+                                  fontSize: "11px",
+                                  fontWeight: 600,
+                                  color: textMuted,
+                                  maxWidth: "100%",
+                                  whiteSpace: "nowrap",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
                                 }}
-                              />
-                              {chipLabel}
-                            </div>
-                          );
-                        })()}
+                                title={formatPaymentMethodName(order.payment_method)}
+                              >
+                                <span>{getPaymentMethodIcon(order.payment_method)}</span>
+                                <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                                  {formatPaymentMethodName(order.payment_method)}
+                                </span>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
 
-                        {/* Delivery OTP Badge on Card — only when OUT FOR DELIVERY for Own Fleet */}
-                        {(() => {
-                          const currentOtp = detail?.delivery_otp || order.delivery_otp || detail?.shipment?.delivery_otp || order.shipment?.delivery_otp;
-                          const isOwnFleet = Boolean(
-                            detail?.shipment?.delivery_mode === "own_agent" ||
-                            detail?.shipment?.mode === "own_agent" ||
-                            order.shipment?.delivery_mode === "own_agent" ||
-                            order.shipment?.mode === "own_agent" ||
-                            Boolean(detail?.shipment?.agent_id) ||
-                            Boolean(order.shipment?.agent_id) ||
-                            Boolean(detail?.shipment?.delivery_partner_name && !detail?.shipment?.courier_name) ||
-                            Boolean(order.shipment?.delivery_partner_name && !order.shipment?.courier_name)
-                          );
-                          const isOfd = Boolean(
-                            order.status === "out_for_delivery" ||
-                            detail?.status === "out_for_delivery" ||
-                            order.shipment?.status === "out_for_delivery" ||
-                            detail?.shipment?.status === "out_for_delivery" ||
-                            order.shipment?.status === "picked_up" ||
-                            detail?.shipment?.status === "picked_up"
-                          );
-                          if (!currentOtp || !isOwnFleet || !isOfd) return null;
+                        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "8px" : "14px", flexShrink: 0 }}>
+                          {/* Status chip */}
+                          {(() => {
+                            const currentRefundInfo = (detailMap[order.id]?.refund_info || order.refund_info);
+                            const isFullyRefunded = order.status === "refunded" || order.payment_status === "refunded" || currentRefundInfo?.status === "completed" || currentRefundInfo?.status_label === "Refunded";
+                            const isPartiallyRefunded = order.payment_status === "partially_refunded" || currentRefundInfo?.status_label === "Partially Refunded";
+                            const isRefundFailed = currentRefundInfo?.status === "failed";
+                            const isRefundProcessing = currentRefundInfo?.status === "processing";
+                            const isRepl = Boolean(
+                              (order.cancel_reason || detailMap[order.id]?.cancel_reason || "").startsWith("Replacement Authorized")
+                            );
+                            const isReplDelivered = isRepl && order.status === "delivered";
+                            const chipColor = isRepl
+                              ? (isReplDelivered ? "#059669" : "#0284c7")
+                              : (isRefundFailed
+                              ? "#ef4444"
+                              : (isFullyRefunded
+                              ? "#059669"
+                              : (isPartiallyRefunded
+                              ? "#0284c7"
+                              : (isRefundProcessing ? "#d97706" : statusColor))));
+                            const chipLabel = isRepl
+                              ? (isReplDelivered ? "Replacement Delivered" : (order.status === "shipped" ? "Re-Dispatch Shipped" : (order.status === "out_for_delivery" ? "Re-Dispatch Out for Delivery" : "Re-Dispatch (In Progress)")))
+                              : (isRefundFailed
+                              ? "Refund Failed"
+                              : (isFullyRefunded
+                              ? "Refunded"
+                              : (isPartiallyRefunded
+                              ? "Partially Refunded"
+                              : (isRefundProcessing ? "Refund in progress" : order.status.replaceAll("_", " ")))));
 
-                          return (
+                            return (
+                              <div
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "5px",
+                                  padding: isMobile ? "4px 10px" : "5px 12px",
+                                  borderRadius: effectiveBadgeRadius,
+                                  background: `${chipColor}14`,
+                                  border: `1px solid ${chipColor}28`,
+                                  color: chipColor,
+                                  fontSize: isMobile ? "11.5px" : "12px",
+                                  fontWeight: 800,
+                                  textTransform: "capitalize",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    width: "5px",
+                                    height: "5px",
+                                    borderRadius: "50%",
+                                    background: chipColor,
+                                  }}
+                                />
+                                {chipLabel}
+                              </div>
+                            );
+                          })()}
+
+                          {/* Delivery OTP Badge on Card — only when OUT FOR DELIVERY for Own Fleet */}
+                          {(() => {
+                            const currentOtp = detail?.delivery_otp || order.delivery_otp || detail?.shipment?.delivery_otp || order.shipment?.delivery_otp;
+                            const isOwnFleet = Boolean(
+                              detail?.shipment?.delivery_mode === "own_agent" ||
+                              detail?.shipment?.mode === "own_agent" ||
+                              order.shipment?.delivery_mode === "own_agent" ||
+                              order.shipment?.mode === "own_agent" ||
+                              Boolean(detail?.shipment?.agent_id) ||
+                              Boolean(order.shipment?.agent_id) ||
+                              Boolean(detail?.shipment?.delivery_partner_name && !detail?.shipment?.courier_name) ||
+                              Boolean(order.shipment?.delivery_partner_name && !order.shipment?.courier_name)
+                            );
+                            const isOfd = Boolean(
+                              order.status === "out_for_delivery" ||
+                              detail?.status === "out_for_delivery" ||
+                              order.shipment?.status === "out_for_delivery" ||
+                              detail?.shipment?.status === "out_for_delivery" ||
+                              order.shipment?.status === "picked_up" ||
+                              detail?.shipment?.status === "picked_up"
+                            );
+                            if (!currentOtp || !isOwnFleet || !isOfd) return null;
+
+                            return (
+                              <div
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "5px",
+                                  padding: "4px 10px",
+                                  borderRadius: "999px",
+                                  background: isLight ? "#ecfdf5" : "rgba(16, 185, 129, 0.12)",
+                                  border: "1px dashed #10b981",
+                                  color: "#059669",
+                                  fontSize: "11.5px",
+                                  fontWeight: 800,
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                <span>OTP:</span>
+                                <span style={{ letterSpacing: "1.5px", fontFamily: "monospace", fontWeight: 900 }}>
+                                  {currentOtp}
+                                </span>
+                              </div>
+                            );
+                          })()}
+
+                          {/* Desktop Price */}
+                          {!isMobile && (
                             <div
                               style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "6px",
-                                padding: "5px 12px",
-                                borderRadius: "999px",
-                                background: isLight ? "#ecfdf5" : "rgba(16, 185, 129, 0.12)",
-                                border: "1px dashed #10b981",
-                                color: "#059669",
-                                fontSize: "12px",
+                                fontSize: "16px",
                                 fontWeight: 800,
+                                color: textPrimary,
                                 whiteSpace: "nowrap",
                               }}
                             >
-                              <span>OTP:</span>
-                              <span style={{ letterSpacing: "2px", fontFamily: "monospace", fontWeight: 900 }}>
-                                {currentOtp}
-                              </span>
+                              {formatPrice(order.total)}
                             </div>
-                          );
-                        })()}
+                          )}
 
-                        {/* Price */}
-                        <div
-                          style={{
-                            fontSize: "16px",
-                            fontWeight: 800,
-                            color: textPrimary,
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {formatPrice(order.total)}
-                        </div>
-
-                        {/* Accordion expand indicator button */}
-                        <div
-                          style={{
-                            width: "32px",
-                            height: "32px",
-                            borderRadius: "10px",
-                            background: isExpanded
-                              ? `${accentColor}18`
-                              : isLight
-                              ? "rgba(0,0,0,0.04)"
-                              : "rgba(255,255,255,0.06)",
-                            color: isExpanded ? accentColor : textMuted,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            flexShrink: 0,
-                            transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-                          }}
-                        >
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
+                          {/* Accordion expand indicator button */}
+                          <div
                             style={{
-                              transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
-                              transition: "transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                              width: isMobile ? "28px" : "32px",
+                              height: isMobile ? "28px" : "32px",
+                              borderRadius: "8px",
+                              background: isExpanded
+                                ? `${accentColor}18`
+                                : isLight
+                                ? "rgba(0,0,0,0.04)"
+                                : "rgba(255,255,255,0.06)",
+                              color: isExpanded ? accentColor : textMuted,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flexShrink: 0,
+                              transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                             }}
                           >
-                            <polyline points="6 9 12 15 18 9" />
-                          </svg>
+                            <svg
+                              width={isMobile ? "14" : "16"}
+                              height={isMobile ? "14" : "16"}
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              style={{
+                                transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                                transition: "transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                              }}
+                            >
+                              <polyline points="6 9 12 15 18 9" />
+                            </svg>
+                          </div>
                         </div>
                       </div>
                     </div>

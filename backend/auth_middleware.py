@@ -340,20 +340,8 @@ def enforce_site_ownership(
     website_access_type = getattr(admin_obj, "website_access_type", "all") or "all"
     role_display = role_obj.name if role_obj else (admin_obj.role or "Staff")
 
-    # Owner or admin with "all" websites access has access to any site
-    if is_owner or website_access_type == "all":
-        role_on_site = "owner" if is_owner else (role_obj.name.lower().replace(" ", "_") if role_obj else "manager")
-        return {
-            "adminId": admin_id,
-            "siteId": str(site_id),
-            "roleOnSite": role_on_site,
-            "name": admin_obj.name,
-            "email": admin_obj.email,
-            "role": role_display,
-            "is_owner": is_owner,
-        }
-
-    # Otherwise specific access required
+    # Check explicit AdminSite link:
+    # Every admin (whether Workspace Owner or Team Member) MUST have an AdminSite record linking them to this site_id
     ownership = session.exec(
         select(AdminSite).where(
             AdminSite.admin_id == admin_uuid,
@@ -362,12 +350,15 @@ def enforce_site_ownership(
     ).first()
 
     if not ownership:
+        site_obj = session.get(Site, site_id)
+        if not site_obj:
+            raise HTTPException(status_code=404, detail="Website not found")
         raise _forbidden("You do not have access to this website")
 
     return {
         "adminId": admin_id,
         "siteId": str(site_id),
-        "roleOnSite": ownership.role_on_site,
+        "roleOnSite": ownership.role_on_site or ("owner" if is_owner else "staff"),
         "name": admin_obj.name,
         "email": admin_obj.email,
         "role": role_display,

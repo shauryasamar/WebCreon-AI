@@ -31,6 +31,7 @@ import { AiWebpageGeneratingAnimation } from "./Component/AiWebpageGeneratingAni
 import { AiAvatar } from "./Component/AiAvatar";
 import { UserAvatar } from "./Component/UserAvatar";
 import BuilderPage, { siteSlugMemoryCache } from "./BuilderPage";
+import { setSavedSitesMemoryCache } from "./utils/savedSitesCache";
 
 import AdminLoginPage from "./pages/AdminLoginPage";
 import AdminSignupPage from "./pages/AdminSignupPage";
@@ -180,18 +181,14 @@ function AdminSitesPage() {
   const navigate = useNavigate();
   const { admin, logoutAdmin, isOwner, hasPermission } = useAdminAuth();
 
-  const ONBOARDING_CHAT_KEY = "webnirmaan_onboarding_chat";
-  const ONBOARDING_SESSION_KEY = "webnirmaan_onboarding_session_id";
-  const ONBOARDING_COLLECTED_KEY = "webnirmaan_onboarding_collected";
+  const adminId = admin?.id || "";
+  const ONBOARDING_CHAT_KEY = adminId ? `wc_onboarding_chat_${adminId}` : "wc_onboarding_chat_guest";
+  const ONBOARDING_SESSION_KEY = adminId ? `wc_onboarding_session_${adminId}` : "wc_onboarding_session_guest";
+  const ONBOARDING_COLLECTED_KEY = adminId ? `wc_onboarding_collected_${adminId}` : "wc_onboarding_collected_guest";
 
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(() => {
-    if (typeof window !== "undefined") {
-      return sessionStorage.getItem(ONBOARDING_SESSION_KEY) || localStorage.getItem(ONBOARDING_SESSION_KEY);
-    }
-    return null;
-  });
+  const [sessionId, setSessionId] = useState<string | null>(null);
   // Never seed saved-sites from localStorage: a stale entry from a previously-logged-in
   // admin account would momentarily expose their sites to the current admin (security gap).
   const [savedSites, setSavedSites] = useState<SavedSite[]>([]);
@@ -207,28 +204,40 @@ function AdminSitesPage() {
   >(null);
   const [activeSettingsNavKey, setActiveSettingsNavKey] = useState<SettingsNavKey | null>(null);
 
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = sessionStorage.getItem(ONBOARDING_CHAT_KEY) || localStorage.getItem(ONBOARDING_CHAT_KEY);
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-      } catch {}
-    }
-    return [];
-  });
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [collectedState, setCollectedState] = useState<Record<string, any>>({});
 
-  const [collectedState, setCollectedState] = useState<Record<string, any>>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = sessionStorage.getItem(ONBOARDING_COLLECTED_KEY) || localStorage.getItem(ONBOARDING_COLLECTED_KEY);
-        if (stored) return JSON.parse(stored);
-      } catch {}
+  // Sync state with current admin ID
+  useEffect(() => {
+    if (typeof window === "undefined" || !adminId) return;
+    try {
+      const stored = sessionStorage.getItem(ONBOARDING_CHAT_KEY) || localStorage.getItem(ONBOARDING_CHAT_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed);
+        } else {
+          setMessages([]);
+        }
+      } else {
+        setMessages([]);
+      }
+
+      const storedSession = sessionStorage.getItem(ONBOARDING_SESSION_KEY) || localStorage.getItem(ONBOARDING_SESSION_KEY);
+      setSessionId(storedSession || null);
+
+      const storedCollected = sessionStorage.getItem(ONBOARDING_COLLECTED_KEY) || localStorage.getItem(ONBOARDING_COLLECTED_KEY);
+      if (storedCollected) {
+        setCollectedState(JSON.parse(storedCollected));
+      } else {
+        setCollectedState({});
+      }
+    } catch {
+      setMessages([]);
+      setSessionId(null);
+      setCollectedState({});
     }
-    return {};
-  });
+  }, [adminId, ONBOARDING_CHAT_KEY, ONBOARDING_SESSION_KEY, ONBOARDING_COLLECTED_KEY]);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -242,7 +251,7 @@ function AdminSitesPage() {
   }, [messages, loading]);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    if (typeof window !== "undefined" && adminId) {
       try {
         if (messages.length > 0) {
           sessionStorage.setItem(ONBOARDING_CHAT_KEY, JSON.stringify(messages));
@@ -258,7 +267,7 @@ function AdminSitesPage() {
         }
       } catch {}
     }
-  }, [messages, sessionId, collectedState]);
+  }, [adminId, messages, sessionId, collectedState, ONBOARDING_CHAT_KEY, ONBOARDING_SESSION_KEY, ONBOARDING_COLLECTED_KEY]);
 
   const handleResetOnboarding = () => {
     setMessages([]);
@@ -287,6 +296,13 @@ function AdminSitesPage() {
       const data = await response.json();
       const sitesList: SavedSite[] = Array.isArray(data) ? data : [];
       setSavedSites(sitesList);
+      setSavedSitesMemoryCache(sitesList);
+
+      // If the user is a team member (non-owner), directly open their first assigned store
+      if (!isOwner && sitesList.length > 0) {
+        navigate(`/builder/${sitesList[0].id}`, { replace: true });
+        return;
+      }
 
       // Pre-populate memory and localStorage snapshot cache for all sites
       sitesList.forEach((site: any) => {
@@ -747,6 +763,7 @@ function AdminSitesPage() {
       userEmail={admin?.email}
       avatarUrl={admin?.avatarUrl}
       gender={admin?.gender}
+      isOwner={isOwner}
     />
   );
 

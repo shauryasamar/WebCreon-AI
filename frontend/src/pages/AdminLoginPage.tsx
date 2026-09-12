@@ -69,12 +69,19 @@ export default function AdminLoginPage() {
         return;
       }
 
-      await refreshAdmin();
+      const authedUser = await refreshAdmin();
+      const isOwnerUser = authedUser?.isOwner ?? (data?.admin?.isOwner ?? true);
 
       const userSites = data?.sites || [];
       const isValidTarget = userSites.some((s: any) => s.id && redirectTarget.includes(s.id));
 
-      if (userSites.length === 0 || !isValidTarget) {
+      if (!isOwnerUser && userSites.length > 0) {
+        if (isValidTarget && redirectTarget.startsWith("/builder/")) {
+          navigate(redirectTarget, { replace: true });
+        } else {
+          navigate(`/builder/${userSites[0].id}`, { replace: true });
+        }
+      } else if (userSites.length === 0 || !isValidTarget) {
         navigate("/admin/sites", { replace: true });
       } else {
         navigate(redirectTarget, { replace: true });
@@ -161,12 +168,19 @@ export default function AdminLoginPage() {
         return;
       }
 
-      await refreshAdmin();
+      const authedUser = await refreshAdmin();
+      const isOwnerUser = authedUser?.isOwner ?? (data?.admin?.isOwner ?? true);
 
       const userSites = data?.sites || [];
       const isValidTarget = userSites.some((s: any) => s.id && redirectTarget.includes(s.id));
 
-      if (userSites.length === 0 || !isValidTarget) {
+      if (!isOwnerUser && userSites.length > 0) {
+        if (isValidTarget && redirectTarget.startsWith("/builder/")) {
+          navigate(redirectTarget, { replace: true });
+        } else {
+          navigate(`/builder/${userSites[0].id}`, { replace: true });
+        }
+      } else if (userSites.length === 0 || !isValidTarget) {
         navigate("/admin/sites", { replace: true });
       } else {
         navigate(redirectTarget, { replace: true });

@@ -114,13 +114,14 @@ export default function CustomerLoginPage(props: CustomerLoginPageProps = {}) {
   const websiteName = propSiteSlug || slug || siteId || "";
   const from = (location.state as LocationState | null)?.from;
 
+  const resolvedStoreSlug = siteData?.slug || websiteName;
   const storeBase = useMemo(
-    () => (websiteName ? `/store/${websiteName}` : "/"),
-    [websiteName]
+    () => (resolvedStoreSlug ? `/store/${resolvedStoreSlug}` : (websiteName ? `/store/${websiteName}` : "/")),
+    [resolvedStoreSlug, websiteName]
   );
 
   const safeRedirect = useMemo(() => {
-    if (from && from.trim() && from.startsWith(storeBase)) {
+    if (from && from.trim() && (from.startsWith("/store/") || from === "/")) {
       return from;
     }
     return storeBase;
@@ -198,8 +199,12 @@ export default function CustomerLoginPage(props: CustomerLoginPageProps = {}) {
     setGoogleSubmitting(true);
     setError("");
     try {
-      await loginWithGoogle(websiteName, idToken);
-      navigate(safeRedirect, { replace: true });
+      const resUser = await loginWithGoogle(websiteName, idToken);
+      const canonicalSlug = resUser?.siteSlug || siteData?.slug || websiteName;
+      const targetDestination = from && from.trim() && (from.startsWith("/store/") || from === "/")
+        ? from
+        : (canonicalSlug ? `/store/${canonicalSlug}` : "/");
+      navigate(targetDestination, { replace: true });
     } catch (err: any) {
       setError(err?.message || "Google sign-in failed.");
     } finally {
@@ -309,11 +314,15 @@ export default function CustomerLoginPage(props: CustomerLoginPageProps = {}) {
     }
 
     try {
-      await login(websiteName, {
+      const resUser = await login(websiteName, {
         email: email.trim(),
         password,
       });
-      navigate(safeRedirect, { replace: true });
+      const canonicalSlug = resUser?.siteSlug || siteData?.slug || websiteName;
+      const targetDestination = from && from.trim() && (from.startsWith("/store/") || from === "/")
+        ? from
+        : (canonicalSlug ? `/store/${canonicalSlug}` : "/");
+      navigate(targetDestination, { replace: true });
     } catch (err: any) {
       setError(err?.message || "Invalid email or password.");
     }

@@ -99,15 +99,26 @@ code {
   background: var(--code-bg);
 } */
 
+html,
+body,
+button,
+input,
+select,
+textarea {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
 html {
   margin: 0;
   padding: 0;
   width: 100%;
+  max-width: 100%;
   min-height: 100%;
   background: #f8fafc;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  overflow-x: hidden;
 }
 
 body {
@@ -134,19 +145,19 @@ body {
 }
 
 /* ==========================================================================
-   Modern Minimal Theme Scrollbars (Replaces thick default OS scrollbars)
+   Modern Minimal Webpage Scrollbar (Refined Neutral Slate - Premium UX)
    ========================================================================== */
 
 /* Modern CSS Standards (Firefox 64+, Chrome 121+, Safari 17.4+) */
-* {
+html {
   scrollbar-width: thin;
-  scrollbar-color: #e9edf2 transparent;
+  scrollbar-color: rgba(15, 23, 42, 0.14) transparent;
 }
 
 /* WebKit / Chromium Browsers (Chrome, Edge, Safari, Brave, Opera) */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -154,21 +165,32 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #e9edf2;
+  background: rgba(15, 23, 42, 0.14);
   border-radius: 9999px;
   transition: background-color 0.15s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #dde3ec;
+  background: rgba(15, 23, 42, 0.25);
 }
 
 ::-webkit-scrollbar-thumb:active {
-  background: #dde3ec;
+  background: rgba(15, 23, 42, 0.38);
 }
 
 ::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* Dark mode adaptive for dark theme containers / stores */
+[data-theme="dark"] ::-webkit-scrollbar-thumb,
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover,
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 /* ==========================================================================
@@ -200,6 +222,7 @@ body.is-mobile-preview *::-webkit-scrollbar {
 }
 
 @media (max-width: 768px) {
+
   html,
   body,
   #root,
@@ -207,6 +230,7 @@ body.is-mobile-preview *::-webkit-scrollbar {
     scrollbar-width: none !important;
     -ms-overflow-style: none !important;
   }
+
   ::-webkit-scrollbar {
     display: none !important;
     width: 0px !important;

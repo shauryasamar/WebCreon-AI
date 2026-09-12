@@ -11,6 +11,7 @@ export type AdminUser = {
   avatarUrl?: string | null;
   role?: string;
   roleId?: string | null;
+  isOwner?: boolean;
   permissions?: string[];
   websiteAccessType?: "all" | "specific";
   status?: string;
@@ -100,14 +101,24 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } finally {
       try {
         if (typeof window !== "undefined") {
-          localStorage.removeItem(ADMIN_STORAGE_KEY);
           Object.keys(sessionStorage).forEach((key) => {
-            if (key.startsWith("webnirmaan_copilot_chat_")) {
+            if (
+              key.startsWith("webnirmaan_copilot_chat_") ||
+              key.startsWith("webnirmaan_onboarding_") ||
+              key.startsWith("wc_onboarding_")
+            ) {
               sessionStorage.removeItem(key);
             }
           });
           Object.keys(localStorage).forEach((key) => {
-            if (key.startsWith("webnirmaan_copilot_chat_")) {
+            if (
+              key.startsWith("webnirmaan_copilot_chat_") ||
+              key.startsWith("webnirmaan_onboarding_") ||
+              key.startsWith("wc_onboarding_") ||
+              key.startsWith("wc_site_snapshot_") ||
+              key.startsWith("wc_theme_") ||
+              key.startsWith("wc_admin_")
+            ) {
               localStorage.removeItem(key);
             }
           });

@@ -354,7 +354,7 @@ export const AdminSupportDesk: React.FC = () => {
             const parsed = JSON.parse(raw);
             if (parsed?.slug) return parsed.slug;
           }
-        } catch (_) {}
+        } catch (_) { }
       }
     }
     return siteId || "";
@@ -388,7 +388,7 @@ export const AdminSupportDesk: React.FC = () => {
             }
           }
         }
-      } catch (_) {}
+      } catch (_) { }
     };
     resolveSlug();
   }, [siteId]);
@@ -456,7 +456,7 @@ export const AdminSupportDesk: React.FC = () => {
             }
             localStorage.removeItem(`wc_site_theme_${k}`);
           });
-        } catch (_) {}
+        } catch (_) { }
 
         // 2. Dispatch global event so Builder, Navbar, Customer Pages & Hooks update immediately without page refresh
         if (typeof window !== "undefined") {
@@ -706,9 +706,9 @@ export const AdminSupportDesk: React.FC = () => {
               };
             });
           }
-        } catch {}
+        } catch { }
       };
-    } catch {}
+    } catch { }
 
     // Fallback sync timer (5s) for ticket status
     const liveTimer = setInterval(() => {
@@ -1787,188 +1787,188 @@ export const AdminSupportDesk: React.FC = () => {
             }}
           >
             {/* Tickets Cards List */}
-          {loading ? (
-            <div style={{ ...plainCardStyle, padding: "32px 16px", textAlign: "center", color: "#64748b", fontSize: "14px" }}>
-              Loading support tickets...
-            </div>
-          ) : tickets.length === 0 ? (
-            <div
-              style={{
-                ...plainCardStyle,
-                padding: "48px 24px",
-                textAlign: "center",
-              }}
-            >
-              <div style={{ display: "inline-flex", padding: "12px", borderRadius: "50%", background: "#eff6ff", color: "#2563eb", marginBottom: "12px" }}>
-                <CheckCircleIcon />
+            {loading ? (
+              <div style={{ ...plainCardStyle, padding: "32px 16px", textAlign: "center", color: "#64748b", fontSize: "14px" }}>
+                Loading support tickets...
               </div>
-              <h3 style={{ margin: "0 0 6px", fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>No Support Tickets Found</h3>
-              <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
-                {searchQuery || activeFilterCount > 0 ? "Try adjusting your search query or filters." : "All customer inquiries and dispute requests have been addressed."}
-              </p>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {tickets.map((t) => {
-                const isUrgent = t.priority === "urgent" || t.priority === "high";
-                const isResolvedOrClosed = t.status === "resolved" || t.status === "closed" || t.status === "done";
-                return (
-                  <div
-                    key={t.id}
-                    onClick={() => handleOpenTicket(t.id)}
-                    style={{
-                      ...plainCardStyle,
-                      border: isUrgent ? "1px solid #fecaca" : "1px solid #e2e8f0",
-                      padding: "16px 18px",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "10px",
-                      cursor: "pointer",
-                      transition: "all 0.15s ease",
-                    }}
-                  >
-                    {/* Top Row: Ticket ID, Order tag, Priority, Status, Date */}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                        <strong style={{ fontSize: "13.5px", color: "#0f172a", fontFamily: "monospace" }}>#{t.ticket_number}</strong>
-                        {t.order_id && (
-                          <span style={{ fontSize: "12px", color: "#2563eb", background: "#eff6ff", border: "1px solid #bfdbfe", padding: "2px 8px", borderRadius: "6px", fontWeight: 600 }}>
-                            Order #{t.order_id.slice(0, 8)}
-                          </span>
-                        )}
-                        <span
-                          style={{
-                            fontSize: "11px",
-                            fontWeight: 700,
-                            padding: "2px 8px",
-                            borderRadius: "6px",
-                            textTransform: "uppercase",
-                            background:
-                              t.priority === "urgent"
-                                ? "#fee2e2"
-                                : t.priority === "high"
-                                ? "#ffedd5"
-                                : "#f1f5f9",
-                            color:
-                              t.priority === "urgent"
-                                ? "#dc2626"
-                                : t.priority === "high"
-                                ? "#c2410c"
-                                : "#475569",
-                          }}
-                        >
-                          {t.priority}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: "11px",
-                            fontWeight: 700,
-                            padding: "2px 8px",
-                            borderRadius: "6px",
-                            textTransform: "capitalize",
-                            background:
-                              t.status === "open"
-                                ? "#dbeafe"
-                                : t.status === "waiting_customer"
-                                ? "#fef3c7"
-                                : isResolvedOrClosed
-                                ? "#dcfce7"
-                                : "#f1f5f9",
-                            color:
-                              t.status === "open"
-                                ? "#1d4ed8"
-                                : t.status === "waiting_customer"
-                                ? "#b45309"
-                                : isResolvedOrClosed
-                                ? "#16a34a"
-                                : "#475569",
-                          }}
-                        >
-                          {t.status === "closed" ? "Closed / Done" : t.status === "resolved" ? "Resolved" : t.status.replace("_", " ")}
-                        </span>
-                      </div>
-
-                      <span style={{ fontSize: "12px", color: "#94a3b8" }}>
-                        {t.created_at ? new Date(t.created_at).toLocaleString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
-                      </span>
-                    </div>
-
-                    {/* Middle Row: Subject & Message Preview */}
-                    <div>
-                      <h4 style={{ margin: "0 0 4px", fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>{t.subject}</h4>
-                      {t.order_items_summary && (
-                        <div style={{ margin: "4px 0 6px", display: "inline-flex", alignItems: "center", gap: "6px", background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", padding: "2px 8px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 700 }}>
-                          {t.order_items_summary.image_url && (
-                            <img src={resolveMediaUrl(t.order_items_summary.image_url)} alt="" style={{ width: "16px", height: "16px", borderRadius: "3px", objectFit: "cover" }} />
-                          )}
-                          <span>Item: {t.order_items_summary.product_name} (Qty: {t.order_items_summary.quantity || 1})</span>
-                        </div>
-                      )}
-                      {t.last_message && (
-                        <p style={{ margin: 0, fontSize: "12.5px", color: "#64748b", lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          <span style={{ fontWeight: 600, color: "#475569" }}>{t.last_message_sender || "Customer"}: </span>
-                          {t.last_message}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Bottom Row: Customer Name, Category, Assigned Agent Selector, Open CTA */}
+            ) : tickets.length === 0 ? (
+              <div
+                style={{
+                  ...plainCardStyle,
+                  padding: "48px 24px",
+                  textAlign: "center",
+                }}
+              >
+                <div style={{ display: "inline-flex", padding: "12px", borderRadius: "50%", background: "#eff6ff", color: "#2563eb", marginBottom: "12px" }}>
+                  <CheckCircleIcon />
+                </div>
+                <h3 style={{ margin: "0 0 6px", fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>No Support Tickets Found</h3>
+                <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+                  {searchQuery || activeFilterCount > 0 ? "Try adjusting your search query or filters." : "All customer inquiries and dispute requests have been addressed."}
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {tickets.map((t) => {
+                  const isUrgent = t.priority === "urgent" || t.priority === "high";
+                  const isResolvedOrClosed = t.status === "resolved" || t.status === "closed" || t.status === "done";
+                  return (
                     <div
+                      key={t.id}
+                      onClick={() => handleOpenTicket(t.id)}
                       style={{
+                        ...plainCardStyle,
+                        border: isUrgent ? "1px solid #fecaca" : "1px solid #e2e8f0",
+                        padding: "16px 18px",
                         display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        paddingTop: "10px",
-                        borderTop: "1px solid #f1f5f9",
-                        flexWrap: "wrap",
-                        gap: "8px",
+                        flexDirection: "column",
+                        gap: "10px",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
                       }}
-                      onClick={(e) => e.stopPropagation()}
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "12.5px", color: "#475569" }}>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
-                          <UserIcon />
-                          <strong>{t.customer.name}</strong> {t.customer.phone ? `(${t.customer.phone})` : ""}
-                        </span>
-                        <span>•</span>
-                        <span>Category: {t.category.replace("_", " ")}</span>
-                      </div>
-
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        {/* Quick Agent Assignment Dropdown */}
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Assigned:</span>
-                          <select
-                            value={t.assigned_agent.id || ""}
-                            onChange={(e) => handleAssignAgent(t.id, e.target.value || null)}
+                      {/* Top Row: Ticket ID, Order tag, Priority, Status, Date */}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                          <strong style={{ fontSize: "13.5px", color: "#0f172a", fontFamily: "monospace" }}>#{t.ticket_number}</strong>
+                          {t.order_id && (
+                            <span style={{ fontSize: "12px", color: "#2563eb", background: "#eff6ff", border: "1px solid #bfdbfe", padding: "2px 8px", borderRadius: "6px", fontWeight: 600 }}>
+                              Order #{t.order_id.slice(0, 8)}
+                            </span>
+                          )}
+                          <span
                             style={{
-                              height: "30px",
+                              fontSize: "11px",
+                              fontWeight: 700,
+                              padding: "2px 8px",
                               borderRadius: "6px",
-                              border: "1px solid #cbd5e1",
-                              fontSize: "12px",
-                              padding: "0 8px",
-                              background: t.assigned_agent.id ? "#eff6ff" : "#ffffff",
-                              color: t.assigned_agent.id ? "#1d4ed8" : "#475569",
-                              fontWeight: 600,
+                              textTransform: "uppercase",
+                              background:
+                                t.priority === "urgent"
+                                  ? "#fee2e2"
+                                  : t.priority === "high"
+                                    ? "#ffedd5"
+                                    : "#f1f5f9",
+                              color:
+                                t.priority === "urgent"
+                                  ? "#dc2626"
+                                  : t.priority === "high"
+                                    ? "#c2410c"
+                                    : "#475569",
                             }}
                           >
-                            <option value="">Unassigned</option>
-                            {agents.map((ag) => (
-                              <option key={ag.id} value={ag.id}>
-                                {ag.name}
-                              </option>
-                            ))}
-                          </select>
+                            {t.priority}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              fontWeight: 700,
+                              padding: "2px 8px",
+                              borderRadius: "6px",
+                              textTransform: "capitalize",
+                              background:
+                                t.status === "open"
+                                  ? "#dbeafe"
+                                  : t.status === "waiting_customer"
+                                    ? "#fef3c7"
+                                    : isResolvedOrClosed
+                                      ? "#dcfce7"
+                                      : "#f1f5f9",
+                              color:
+                                t.status === "open"
+                                  ? "#1d4ed8"
+                                  : t.status === "waiting_customer"
+                                    ? "#b45309"
+                                    : isResolvedOrClosed
+                                      ? "#16a34a"
+                                      : "#475569",
+                            }}
+                          >
+                            {t.status === "closed" ? "Closed / Done" : t.status === "resolved" ? "Resolved" : t.status.replace("_", " ")}
+                          </span>
                         </div>
 
-                        <button
-                          onClick={() => handleOpenTicket(t.id)}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "4px",
-                            background: "#2563eb",
-                            color: "#ffffff",
+                        <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+                          {t.created_at ? new Date(t.created_at).toLocaleString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
+                        </span>
+                      </div>
+
+                      {/* Middle Row: Subject & Message Preview */}
+                      <div>
+                        <h4 style={{ margin: "0 0 4px", fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>{t.subject}</h4>
+                        {t.order_items_summary && (
+                          <div style={{ margin: "4px 0 6px", display: "inline-flex", alignItems: "center", gap: "6px", background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", padding: "2px 8px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 700 }}>
+                            {t.order_items_summary.image_url && (
+                              <img src={resolveMediaUrl(t.order_items_summary.image_url)} alt="" style={{ width: "16px", height: "16px", borderRadius: "3px", objectFit: "cover" }} />
+                            )}
+                            <span>Item: {t.order_items_summary.product_name} (Qty: {t.order_items_summary.quantity || 1})</span>
+                          </div>
+                        )}
+                        {t.last_message && (
+                          <p style={{ margin: 0, fontSize: "12.5px", color: "#64748b", lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            <span style={{ fontWeight: 600, color: "#475569" }}>{t.last_message_sender || "Customer"}: </span>
+                            {t.last_message}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Bottom Row: Customer Name, Category, Assigned Agent Selector, Open CTA */}
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          paddingTop: "10px",
+                          borderTop: "1px solid #f1f5f9",
+                          flexWrap: "wrap",
+                          gap: "8px",
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "12.5px", color: "#475569" }}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                            <UserIcon />
+                            <strong>{t.customer.name}</strong> {t.customer.phone ? `(${t.customer.phone})` : ""}
+                          </span>
+                          <span>•</span>
+                          <span>Category: {t.category.replace("_", " ")}</span>
+                        </div>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          {/* Quick Agent Assignment Dropdown */}
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Assigned:</span>
+                            <select
+                              value={t.assigned_agent.id || ""}
+                              onChange={(e) => handleAssignAgent(t.id, e.target.value || null)}
+                              style={{
+                                height: "30px",
+                                borderRadius: "6px",
+                                border: "1px solid #cbd5e1",
+                                fontSize: "12px",
+                                padding: "0 8px",
+                                background: t.assigned_agent.id ? "#eff6ff" : "#ffffff",
+                                color: t.assigned_agent.id ? "#1d4ed8" : "#475569",
+                                fontWeight: 600,
+                              }}
+                            >
+                              <option value="">Unassigned</option>
+                              {agents.map((ag) => (
+                                <option key={ag.id} value={ag.id}>
+                                  {ag.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <button
+                            onClick={() => handleOpenTicket(t.id)}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              background: "#2563eb",
+                              color: "#ffffff",
                               fontWeight: 700,
                               cursor: "pointer",
                             }}
@@ -2329,214 +2329,214 @@ export const AdminSupportDesk: React.FC = () => {
           <div
             style={{
               display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-                gap: "12px",
-                width: "100%",
-                marginBottom: "14px",
-              }}
-            >
-              <StatCard label="Registered Agents" value={String(agents.length)} />
-              <StatCard label="Active on Duty" value={String(agents.filter((a) => a.is_active).length)} />
-              <StatCard label="Total Resolved Tickets" value={String(agents.reduce((acc, a) => acc + (a.total_resolved_count || 0), 0))} />
-              <StatCard label="Open / Assigned Cases" value={String(agents.reduce((acc, a) => acc + (a.assigned_ticket_count || 0), 0))} />
-            </div>
+              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+              gap: "12px",
+              width: "100%",
+              marginBottom: "14px",
+            }}
+          >
+            <StatCard label="Registered Agents" value={String(agents.length)} />
+            <StatCard label="Active on Duty" value={String(agents.filter((a) => a.is_active).length)} />
+            <StatCard label="Total Resolved Tickets" value={String(agents.reduce((acc, a) => acc + (a.total_resolved_count || 0), 0))} />
+            <StatCard label="Open / Assigned Cases" value={String(agents.reduce((acc, a) => acc + (a.assigned_ticket_count || 0), 0))} />
+          </div>
 
-            <div
-              style={{
-                background: "#ffffff",
-                borderRadius: "8px",
-                border: "1px solid #e2e8f0",
-                overflow: "hidden",
-                width: "100%",
-                boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
-              }}
-            >
-              <div style={{ overflowX: "auto", width: "100%" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", tableLayout: "auto" }}>
-                  <thead>
-                    <tr style={{ background: "#f8fafc" }}>
-                      <th style={{ ...thStyle, width: "32%", minWidth: "150px" }}>Agent Details</th>
-                      <th style={{ ...thStyle, width: "24%", minWidth: "130px" }}>Duty & Tickets</th>
-                      <th style={{ ...thStyle, width: "18%", minWidth: "100px" }}>Cases Handled</th>
-                      <th style={{ ...thStyle, width: "26%", minWidth: "170px", textAlign: "right" }}>Actions</th>
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: "8px",
+              border: "1px solid #e2e8f0",
+              overflow: "hidden",
+              width: "100%",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+            }}
+          >
+            <div style={{ overflowX: "auto", width: "100%" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", tableLayout: "auto" }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc" }}>
+                    <th style={{ ...thStyle, width: "32%", minWidth: "150px" }}>Agent Details</th>
+                    <th style={{ ...thStyle, width: "24%", minWidth: "130px" }}>Duty & Tickets</th>
+                    <th style={{ ...thStyle, width: "18%", minWidth: "100px" }}>Cases Handled</th>
+                    <th style={{ ...thStyle, width: "26%", minWidth: "170px", textAlign: "right" }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {agents.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} style={{ ...tdStyle, textAlign: "center", padding: "32px", color: "#64748b" }}>
+                        No support agents registered yet. Click '+ Add support agent' above to register your first agent.
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {agents.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} style={{ ...tdStyle, textAlign: "center", padding: "32px", color: "#64748b" }}>
-                          No support agents registered yet. Click '+ Add support agent' above to register your first agent.
-                        </td>
-                      </tr>
-                    ) : (
-                      agents.map((agent) => (
-                        <tr key={agent.id}>
-                          {/* Column 1: Agent Details (Name, Phone, Email) */}
-                          <td style={tdStyle}>
-                            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                              <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "13px" }}>{agent.name}</div>
-                              <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11.5px", color: "#64748b", flexWrap: "wrap" }}>
-                                {agent.phone && (
-                                  <>
-                                    <span style={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
-                                      <PhoneIcon />
-                                      {agent.phone.startsWith("+91") ? agent.phone : `+91 ${agent.phone}`}
-                                    </span>
-                                    <span>•</span>
-                                  </>
-                                )}
-                                <span>{agent.email}</span>
-                              </div>
+                  ) : (
+                    agents.map((agent) => (
+                      <tr key={agent.id}>
+                        {/* Column 1: Agent Details (Name, Phone, Email) */}
+                        <td style={tdStyle}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                            <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "13px" }}>{agent.name}</div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11.5px", color: "#64748b", flexWrap: "wrap" }}>
+                              {agent.phone && (
+                                <>
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                                    <PhoneIcon />
+                                    {agent.phone.startsWith("+91") ? agent.phone : `+91 ${agent.phone}`}
+                                  </span>
+                                  <span>•</span>
+                                </>
+                              )}
+                              <span>{agent.email}</span>
                             </div>
-                          </td>
+                          </div>
+                        </td>
 
-                          {/* Column 2: Duty Status & Assigned/Resolved */}
-                          <td style={tdStyle}>
-                            <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                        {/* Column 2: Duty Status & Assigned/Resolved */}
+                        <td style={tdStyle}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: "4px",
+                                padding: "2px 8px",
+                                borderRadius: "4px",
+                                fontSize: "11px",
+                                fontWeight: 600,
+                                background: agent.is_active ? "#f0fdf4" : "#fef2f2",
+                                color: agent.is_active ? "#15803d" : "#b91c1c",
+                                border: `1px solid ${agent.is_active ? "#bbf7d0" : "#fecaca"}`,
+                                width: "fit-content",
+                                minWidth: "fit-content",
+                                whiteSpace: "nowrap",
+                                boxSizing: "border-box",
+                              }}
+                            >
                               <span
                                 style={{
+                                  width: "5px",
+                                  height: "5px",
+                                  borderRadius: "50%",
+                                  background: agent.is_active ? "#16a34a" : "#dc2626",
+                                  flexShrink: 0,
+                                }}
+                              />
+                              <span style={{ whiteSpace: "nowrap" }}>{agent.is_active ? "On Duty" : "Inactive"}</span>
+                            </span>
+                            <div style={{ fontSize: "11.5px", color: "#64748b" }}>
+                              <span style={{ color: (agent.assigned_ticket_count || 0) > 0 ? "#2563eb" : "#64748b", fontWeight: (agent.assigned_ticket_count || 0) > 0 ? 600 : 400 }}>
+                                {agent.assigned_ticket_count || 0} active
+                              </span>
+                              <span> • </span>
+                              <span>{agent.total_resolved_count || 0} done</span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Column 3: Cases Handled */}
+                        <td style={tdStyle}>
+                          {(agent.assigned_ticket_count || 0) > 0 ? (
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                padding: "3px 8px",
+                                borderRadius: "5px",
+                                background: "#fffbeb",
+                                border: "1px solid #fde68a",
+                                color: "#b45309",
+                                fontWeight: 700,
+                                fontSize: "12.5px",
+                              }}
+                            >
+                              {agent.assigned_ticket_count} Active
+                            </span>
+                          ) : (
+                            <span style={{ color: "#94a3b8", fontSize: "12.5px", fontWeight: 500 }}>
+                              {agent.total_resolved_count || 0} Resolved
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Column 4: Actions */}
+                        <td style={{ ...tdStyle, textAlign: "right" }}>
+                          {canEdit ? (
+                            <div style={{ display: "inline-flex", gap: "5px", alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap" }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setResetPasswordAgent(agent);
+                                  setResetPasswordValue("");
+                                }}
+                                style={{
+                                  ...ghostButtonStyle,
+                                  height: "28px",
+                                  padding: "0 8px",
+                                  fontSize: "11.5px",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px",
+                                  borderRadius: "5px",
+                                  whiteSpace: "nowrap",
+                                }}
+                                title="Reset Login Password"
+                              >
+                                <LockIcon />
+                                <span>PIN</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleToggleAgent(agent)}
+                                style={{
+                                  ...ghostButtonStyle,
+                                  height: "28px",
+                                  width: "76px",
+                                  minWidth: "76px",
+                                  padding: "0",
+                                  fontSize: "11.5px",
+                                  color: agent.is_active ? "#b45309" : "#15803d",
+                                  borderColor: agent.is_active ? "#fde68a" : "#bbf7d0",
+                                  background: agent.is_active ? "#fffbeb" : "#f0fdf4",
+                                  borderRadius: "5px",
+                                  whiteSpace: "nowrap",
                                   display: "inline-flex",
                                   alignItems: "center",
                                   justifyContent: "center",
-                                  gap: "4px",
-                                  padding: "2px 8px",
-                                  borderRadius: "4px",
-                                  fontSize: "11px",
-                                  fontWeight: 600,
-                                  background: agent.is_active ? "#f0fdf4" : "#fef2f2",
-                                  color: agent.is_active ? "#15803d" : "#b91c1c",
-                                  border: `1px solid ${agent.is_active ? "#bbf7d0" : "#fecaca"}`,
-                                  width: "fit-content",
-                                  minWidth: "fit-content",
-                                  whiteSpace: "nowrap",
-                                  boxSizing: "border-box",
+                                  textAlign: "center",
                                 }}
+                                title={agent.is_active ? "Deactivate Agent" : "Activate Agent"}
                               >
-                                <span
-                                  style={{
-                                    width: "5px",
-                                    height: "5px",
-                                    borderRadius: "50%",
-                                    background: agent.is_active ? "#16a34a" : "#dc2626",
-                                    flexShrink: 0,
-                                  }}
-                                />
-                                <span style={{ whiteSpace: "nowrap" }}>{agent.is_active ? "On Duty" : "Inactive"}</span>
-                              </span>
-                              <div style={{ fontSize: "11.5px", color: "#64748b" }}>
-                                <span style={{ color: (agent.assigned_ticket_count || 0) > 0 ? "#2563eb" : "#64748b", fontWeight: (agent.assigned_ticket_count || 0) > 0 ? 600 : 400 }}>
-                                  {agent.assigned_ticket_count || 0} active
-                                </span>
-                                <span> • </span>
-                                <span>{agent.total_resolved_count || 0} done</span>
-                              </div>
-                            </div>
-                          </td>
+                                {agent.is_active ? "Deactivate" : "Activate"}
+                              </button>
 
-                          {/* Column 3: Cases Handled */}
-                          <td style={tdStyle}>
-                            {(agent.assigned_ticket_count || 0) > 0 ? (
-                              <span
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAgent(agent.id)}
                                 style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  padding: "3px 8px",
-                                  borderRadius: "5px",
-                                  background: "#fffbeb",
-                                  border: "1px solid #fde68a",
-                                  color: "#b45309",
-                                  fontWeight: 700,
-                                  fontSize: "12.5px",
+                                  ...dangerButtonStyle,
+                                  height: "28px",
+                                  width: "28px",
+                                  padding: "0",
                                 }}
+                                title="Remove Agent"
                               >
-                                {agent.assigned_ticket_count} Active
-                              </span>
-                            ) : (
-                              <span style={{ color: "#94a3b8", fontSize: "12.5px", fontWeight: 500 }}>
-                                {agent.total_resolved_count || 0} Resolved
-                              </span>
-                            )}
-                          </td>
-
-                          {/* Column 4: Actions */}
-                          <td style={{ ...tdStyle, textAlign: "right" }}>
-                            {canEdit ? (
-                              <div style={{ display: "inline-flex", gap: "5px", alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap" }}>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setResetPasswordAgent(agent);
-                                    setResetPasswordValue("");
-                                  }}
-                                  style={{
-                                    ...ghostButtonStyle,
-                                    height: "28px",
-                                    padding: "0 8px",
-                                    fontSize: "11.5px",
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "3px",
-                                    borderRadius: "5px",
-                                    whiteSpace: "nowrap",
-                                  }}
-                                  title="Reset Login Password"
-                                >
-                                  <LockIcon />
-                                  <span>PIN</span>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleAgent(agent)}
-                                  style={{
-                                    ...ghostButtonStyle,
-                                    height: "28px",
-                                    width: "76px",
-                                    minWidth: "76px",
-                                    padding: "0",
-                                    fontSize: "11.5px",
-                                    color: agent.is_active ? "#b45309" : "#15803d",
-                                    borderColor: agent.is_active ? "#fde68a" : "#bbf7d0",
-                                    background: agent.is_active ? "#fffbeb" : "#f0fdf4",
-                                    borderRadius: "5px",
-                                    whiteSpace: "nowrap",
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    textAlign: "center",
-                                  }}
-                                  title={agent.is_active ? "Deactivate Agent" : "Activate Agent"}
-                                >
-                                  {agent.is_active ? "Deactivate" : "Activate"}
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteAgent(agent.id)}
-                                  style={{
-                                    ...dangerButtonStyle,
-                                    height: "28px",
-                                    width: "28px",
-                                    padding: "0",
-                                  }}
-                                  title="Remove Agent"
-                                >
-                                  <TrashIcon />
-                                </button>
-                              </div>
-                            ) : (
-                              <span style={{ fontSize: "11.5px", color: "#94a3b8" }}>View only</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                                <TrashIcon />
+                              </button>
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: "11.5px", color: "#94a3b8" }}>View only</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
       {/* TICKET DETAIL DRAWER / MODAL */}
       {selectedTicketId && (
@@ -3397,8 +3397,8 @@ export const AdminSupportDesk: React.FC = () => {
                                     {isCodOrder
                                       ? "Cash on delivery: verify customer UPI/Bank details collected in chat and record payout."
                                       : detailData.order_360?.refund_summary?.is_fully_refunded
-                                      ? "Order is already fully refunded."
-                                      : `Refund items up to remaining ₹${detailData.order_360?.refund_summary?.remaining_refundable ?? detailData.order_360?.total ?? 0}.`}
+                                        ? "Order is already fully refunded."
+                                        : `Refund items up to remaining ₹${detailData.order_360?.refund_summary?.remaining_refundable ?? detailData.order_360?.total ?? 0}.`}
                                   </p>
                                   <button
                                     onClick={openRefundModal}
@@ -4251,3 +4251,4 @@ export const AdminSupportDesk: React.FC = () => {
 };
 
 export default AdminSupportDesk;
+

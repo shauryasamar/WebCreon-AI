@@ -77,10 +77,15 @@ export default function AdminAcceptInvitePage() {
         throw new Error(data.detail || "Failed to set up account");
       }
 
-      await refreshAdmin();
+      const authedUser = await refreshAdmin();
       setToast({ message: "Account created! Redirecting to Webcreon...", type: "success" });
       setTimeout(() => {
-        navigate("/admin/sites", { replace: true });
+        const sites = data?.sites || [];
+        if (authedUser && !authedUser.isOwner && sites.length > 0) {
+          navigate(`/builder/${sites[0].id}`, { replace: true });
+        } else {
+          navigate("/admin/sites", { replace: true });
+        }
       }, 1000);
     } catch (err: any) {
       setToast({ message: err.message || "Failed to set password", type: "error" });

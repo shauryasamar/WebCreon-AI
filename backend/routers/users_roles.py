@@ -805,11 +805,10 @@ def list_users(
     if not workspace_sites:
         pass  # No sites in this workspace; team members will show with empty site list
 
-    # Collect ALL team members belonging to this owner's workspace / team,
-    # irrespective of which storefront is currently open in the admin builder!
+    # Collect ALL team members belonging to this owner's workspace / team:
     member_ids: Set[UUID] = set()
 
-    # 1. Any admin invited by this workspace owner
+    # 1. Any admin explicitly invited by this workspace owner
     invited = session.exec(
         select(Admin).where(
             Admin.invited_by_admin_id == site_owner.id,
@@ -820,6 +819,7 @@ def list_users(
         member_ids.add(u.id)
 
     # 2. Any admin linked via AdminSite to ANY of the owner's workspace sites
+    # (provided they are not another workspace owner)
     if workspace_sites:
         site_members = session.exec(
             select(AdminSite).where(
@@ -828,29 +828,10 @@ def list_users(
             )
         ).all()
         for sm in site_members:
-            member_ids.add(sm.admin_id)
-
-    # 3. If curr_admin is the owner, ensure ALL non-owner team members are always visible
-    if curr_is_owner:
-        all_admins = session.exec(
-            select(Admin).where(
-                Admin.id != site_owner.id
-            )
-        ).all()
-        for u in all_admins:
-            if not getattr(u, "is_owner", False) and u.role != "Owner":
-                member_ids.add(u.id)
-
-    # Heal any invited user who has no AdminSite records at all
-    for mid in list(member_ids):
-        has_any_link = session.exec(select(AdminSite).where(AdminSite.admin_id == mid)).first()
-        if not has_any_link and workspace_sites:
-            target_site_for_orphan = site_obj or list(workspace_sites.values())[0]
-            u_obj = session.get(Admin, mid)
-            if u_obj:
-                role_str = (u_obj.role or "store_manager").lower().replace(" ", "_")
-                session.add(AdminSite(admin_id=mid, site_id=target_site_for_orphan.id, role_on_site=role_str))
-                session.commit()
+            adm_obj = session.get(Admin, sm.admin_id)
+            if adm_obj and not getattr(adm_obj, "is_owner", False) and adm_obj.role != "Owner":
+                if not adm_obj.invited_by_admin_id or adm_obj.invited_by_admin_id == site_owner.id:
+                    member_ids.add(sm.admin_id)
 
     team_members: List[Admin] = []
     for mid in member_ids:
@@ -908,12 +889,17 @@ def list_users(
         if not mem_role:
             mem_role = roles_by_name.get("Store Manager") or roles_by_name.get("Support Agent")
 
-        # Determine accessible sites for this team member
+        # Determine accessible sites strictly within this workspace owner's storefronts
         if getattr(mem, "website_access_type", "all") == "specific":
-            mem_links = session.exec(select(AdminSite).where(AdminSite.admin_id == mem.id)).all()
+            mem_links = session.exec(
+                select(AdminSite).where(
+                    AdminSite.admin_id == mem.id,
+                    AdminSite.site_id.in_(list(workspace_sites.keys())),
+                )
+            ).all()
             assigned_dict: Dict[UUID, Site] = {}
             for link in mem_links:
-                s_mem = workspace_sites.get(link.site_id) or session.get(Site, link.site_id)
+                s_mem = workspace_sites.get(link.site_id)
                 if s_mem:
                     assigned_dict[s_mem.id] = s_mem
             assigned = list(assigned_dict.values())
@@ -1236,21 +1222,27 @@ def update_user(
         site_links = session.exec(
             select(AdminSite).where(
                 AdminSite.admin_id == admin.id,
+                AdminSite.site_id.in_(list(workspace_sites.keys())),
             )
         ).all()
         assigned_sites = []
         for link in site_links:
-            s_rec = workspace_sites.get(link.site_id) or session.get(Site, link.site_id)
+            s_rec = workspace_sites.get(link.site_id)
             if s_rec and s_rec not in assigned_sites:
                 assigned_sites.append(s_rec)
     else:
         # For "all" access type, return only sites within the owner's workspace
         # (prevents cross-workspace site leakage)
-        user_links = session.exec(select(AdminSite).where(AdminSite.admin_id == admin.id)).all()
+        user_links = session.exec(
+            select(AdminSite).where(
+                AdminSite.admin_id == admin.id,
+                AdminSite.site_id.in_(list(workspace_sites.keys())),
+            )
+        ).all()
         user_site_ids = [lnk.site_id for lnk in user_links]
-        assigned_sites = list(workspace_sites.values()) if not user_site_ids else [
+        assigned_sites = [
             s for s in workspace_sites.values() if s.id in set(user_site_ids)
-        ] or list(workspace_sites.values())
+        ] if user_site_ids else list(workspace_sites.values())
 
     origin = request.headers.get("origin", "http://localhost:5173")
     return {
@@ -1295,9 +1287,18 @@ def deactivate_user(
         request=request,
     )
 
+    curr_adm_id = UUID(current_admin["adminId"])
+    owner_site_links = session.exec(select(AdminSite).where(AdminSite.admin_id == curr_adm_id)).all()
+    owner_site_ids = {l.site_id for l in owner_site_links}
+
     role = session.get(Role, admin.role_id) if admin.role_id else None
-    # Only return sites this user actually has access to
-    admin_site_links = session.exec(select(AdminSite).where(AdminSite.admin_id == admin.id)).all()
+    # Only return sites this user has access to within this workspace
+    admin_site_links = session.exec(
+        select(AdminSite).where(
+            AdminSite.admin_id == admin.id,
+            AdminSite.site_id.in_(list(owner_site_ids)),
+        )
+    ).all() if owner_site_ids else []
     accessible_site_ids = [lnk.site_id for lnk in admin_site_links]
     user_sites = session.exec(select(Site).where(Site.id.in_(accessible_site_ids))).all() if accessible_site_ids else []
     origin = request.headers.get("origin", "http://localhost:5173")
@@ -1341,8 +1342,17 @@ def reactivate_user(
         request=request,
     )
 
+    curr_adm_id = UUID(current_admin["adminId"])
+    owner_site_links = session.exec(select(AdminSite).where(AdminSite.admin_id == curr_adm_id)).all()
+    owner_site_ids = {l.site_id for l in owner_site_links}
+
     role = session.get(Role, admin.role_id) if admin.role_id else None
-    admin_site_links = session.exec(select(AdminSite).where(AdminSite.admin_id == admin.id)).all()
+    admin_site_links = session.exec(
+        select(AdminSite).where(
+            AdminSite.admin_id == admin.id,
+            AdminSite.site_id.in_(list(owner_site_ids)),
+        )
+    ).all() if owner_site_ids else []
     accessible_site_ids = [lnk.site_id for lnk in admin_site_links]
     user_sites = session.exec(select(Site).where(Site.id.in_(accessible_site_ids))).all() if accessible_site_ids else []
     origin = request.headers.get("origin", "http://localhost:5173")
@@ -1375,11 +1385,20 @@ def resend_invite(
     session.commit()
     session.refresh(admin)
 
+    curr_adm_id = UUID(current_admin["adminId"])
+    owner_site_links = session.exec(select(AdminSite).where(AdminSite.admin_id == curr_adm_id)).all()
+    owner_site_ids = {l.site_id for l in owner_site_links}
+
     origin = request.headers.get("origin", "http://localhost:5173")
     invite_url = f"{origin}/admin/accept-invite?token={new_token}"
 
     role = session.get(Role, admin.role_id) if admin.role_id else None
-    admin_site_links = session.exec(select(AdminSite).where(AdminSite.admin_id == admin.id)).all()
+    admin_site_links = session.exec(
+        select(AdminSite).where(
+            AdminSite.admin_id == admin.id,
+            AdminSite.site_id.in_(list(owner_site_ids)),
+        )
+    ).all() if owner_site_ids else []
     accessible_site_ids = [lnk.site_id for lnk in admin_site_links]
     user_sites = session.exec(select(Site).where(Site.id.in_(accessible_site_ids))).all() if accessible_site_ids else []
 

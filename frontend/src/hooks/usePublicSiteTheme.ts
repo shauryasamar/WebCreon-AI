@@ -4,6 +4,7 @@ import { API_BASE_URL } from "../config/api";
 export type PublicSiteData = {
   id?: string;
   site_id?: string;
+  slug?: string;
   siteName: string;
   logo?: string;
   crm_enabled?: boolean;
@@ -136,6 +137,9 @@ export function usePublicSiteTheme(slug?: string) {
         if (themeRes.ok) {
           const tData = await themeRes.json();
           finalSiteData = {
+            id: tData?.id,
+            site_id: tData?.id,
+            slug: tData?.slug || slug,
             siteName: cleanSiteName(tData?.site_name, slug),
             logo: tData?.logo,
             crm_enabled: tData?.crm_enabled !== undefined ? Boolean(tData.crm_enabled) : true,
@@ -174,6 +178,9 @@ export function usePublicSiteTheme(slug?: string) {
           const extractedBrandName = navbarObj.brandName || navbarObj.brand_name || rawName || "";
 
           finalSiteData = {
+            id: data?.id,
+            site_id: data?.id,
+            slug: data?.slug || slug,
             siteName: formattedName,
             logo: extractedLogo,
             crm_enabled: def.crm_enabled !== undefined ? Boolean(def.crm_enabled) : true,

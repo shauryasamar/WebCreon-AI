@@ -2033,6 +2033,11 @@ def place_order(
     session: Session = Depends(get_session),
 ):
     site = get_site_or_404(session, site_id)
+    if not getattr(site, "is_online", True):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Store is temporarily offline for maintenance. New orders cannot be placed at this time.",
+        )
 
     if str(site_id) != user["siteId"]:
         raise HTTPException(
