@@ -4214,6 +4214,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                               (order.cancel_reason || detailMap[order.id]?.cancel_reason || "").startsWith("Replacement Authorized")
                             );
                             const isReplDelivered = isRepl && order.status === "delivered";
+                            const isPreorderOrder = Boolean(order.contains_preorder && !order.preorder_released && order.status !== "cancelled" && order.status !== "delivered");
                             const chipColor = isRepl
                               ? (isReplDelivered ? "#059669" : "#0284c7")
                               : (isRefundFailed
@@ -4222,7 +4223,9 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                               ? "#059669"
                               : (isPartiallyRefunded
                               ? "#0284c7"
-                              : (isRefundProcessing ? "#d97706" : statusColor))));
+                              : (isRefundProcessing
+                              ? "#d97706"
+                              : (isPreorderOrder ? "#d97706" : statusColor)))));
                             const chipLabel = isRepl
                               ? (isReplDelivered ? "Replacement Delivered" : (order.status === "shipped" ? "Re-Dispatch Shipped" : (order.status === "out_for_delivery" ? "Re-Dispatch Out for Delivery" : "Re-Dispatch (In Progress)")))
                               : (isRefundFailed
@@ -4231,7 +4234,9 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                               ? "Refunded"
                               : (isPartiallyRefunded
                               ? "Partially Refunded"
-                              : (isRefundProcessing ? "Refund in progress" : order.status.replaceAll("_", " ")))));
+                              : (isRefundProcessing
+                              ? "Refund in progress"
+                              : (isPreorderOrder ? "Pre-Order Placed" : order.status.replaceAll("_", " "))))));
 
                             return (
                               <div
@@ -4643,6 +4648,29 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                             }}
                                           >
                                             <span>{item.product_name || "Product"}</span>
+                                            {item.is_preorder && (
+                                              <span
+                                                style={{
+                                                  fontSize: "11px",
+                                                  fontWeight: 700,
+                                                  color: "#b45309",
+                                                  background: "#fffbeb",
+                                                  border: "1px solid #fde68a",
+                                                  padding: "2px 7px",
+                                                  borderRadius: effectiveBadgeRadius,
+                                                  display: "inline-flex",
+                                                  alignItems: "center",
+                                                  gap: "4px",
+                                                }}
+                                              >
+                                                <span>Pre-Order</span>
+                                                {item.preorder_release_date && (
+                                                  <span style={{ fontSize: "10px", fontWeight: 500, color: "#92400e" }}>
+                                                    ({new Date(item.preorder_release_date).toLocaleDateString()})
+                                                  </span>
+                                                )}
+                                              </span>
+                                            )}
                                             {isItemReplInTransit && (
                                               <span
                                                 style={{

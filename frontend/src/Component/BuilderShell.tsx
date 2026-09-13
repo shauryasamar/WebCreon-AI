@@ -150,6 +150,8 @@ function MobileDeviceStage({
                 WebkitMaskImage: "-webkit-radial-gradient(white, black)",
                 isolation: "isolate",
                 transform: "translateZ(0)",
+                display: "flex",
+                flexDirection: "column",
               }}
             >
               {children}
@@ -334,6 +336,8 @@ export default function BuilderShell({
               overflowY: "auto",
               overflowX: "hidden",
               background: "#ffffff",
+              display: "flex",
+              flexDirection: "column",
             }}
           >
             {children}
@@ -352,6 +356,9 @@ export default function BuilderShell({
               position: "relative",
               transform: "translateZ(0)",
               background: deviceBg || "#ffffff",
+              display: "flex",
+              flexDirection: "column",
+              flex: "1 0 auto",
             }}
           >
             <main
@@ -366,6 +373,9 @@ export default function BuilderShell({
                 background: deviceBg || "#ffffff",
                 scrollbarWidth: "none",
                 msOverflowStyle: "none",
+                display: "flex",
+                flexDirection: "column",
+                flex: "1 0 auto",
               }}
             >
               {children}
@@ -385,6 +395,8 @@ export default function BuilderShell({
             background: "#f8fafc",
             boxSizing: "border-box",
             overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
           }}
         >
           {/*
@@ -405,6 +417,9 @@ export default function BuilderShell({
               transform: "translateZ(0)",
               background: deviceBg || "#ffffff",
               boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
+              display: "flex",
+              flexDirection: "column",
+              flex: "1 0 auto",
             }}
           >
             <main
@@ -417,6 +432,9 @@ export default function BuilderShell({
                 overflowX: "hidden",
                 position: "relative",
                 background: deviceBg || "#ffffff",
+                display: "flex",
+                flexDirection: "column",
+                flex: "1 0 auto",
               }}
             >
               {children}

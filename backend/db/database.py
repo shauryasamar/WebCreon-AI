@@ -298,6 +298,27 @@ def create_db_and_tables():
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 );
                 CREATE INDEX IF NOT EXISTS ix_site_slug_history_old_slug ON site_slug_history(old_slug);
+
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS is_preorder BOOLEAN NOT NULL DEFAULT FALSE;
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS preorder_release_date TIMESTAMPTZ;
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS preorder_message TEXT;
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS preorder_limit INTEGER;
+                CREATE INDEX IF NOT EXISTS ix_products_is_preorder ON products(is_preorder);
+
+                ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS is_preorder BOOLEAN NOT NULL DEFAULT FALSE;
+                ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS preorder_release_date TIMESTAMPTZ;
+                ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS preorder_message TEXT;
+
+                ALTER TABLE order_items ADD COLUMN IF NOT EXISTS is_preorder BOOLEAN NOT NULL DEFAULT FALSE;
+                ALTER TABLE order_items ADD COLUMN IF NOT EXISTS preorder_release_date TIMESTAMPTZ;
+                ALTER TABLE order_items ADD COLUMN IF NOT EXISTS preorder_message TEXT;
+
+                ALTER TABLE orders ADD COLUMN IF NOT EXISTS contains_preorder BOOLEAN NOT NULL DEFAULT FALSE;
+                ALTER TABLE orders ADD COLUMN IF NOT EXISTS preorder_release_date TIMESTAMPTZ;
+                ALTER TABLE orders ADD COLUMN IF NOT EXISTS preorder_released BOOLEAN NOT NULL DEFAULT FALSE;
+                ALTER TABLE orders ADD COLUMN IF NOT EXISTS preorder_released_at TIMESTAMPTZ;
+                CREATE INDEX IF NOT EXISTS ix_orders_contains_preorder ON orders(contains_preorder);
+                CREATE INDEX IF NOT EXISTS ix_orders_preorder_released ON orders(preorder_released);
             """))
             conn.commit()
     except Exception as e:

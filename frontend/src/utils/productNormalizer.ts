@@ -108,6 +108,24 @@ export function normalizeStorefrontProduct(raw: any): Product {
       raw?.review_count != null ? Number(raw.review_count) : undefined,
     return_window_days:
       raw?.return_window_days != null ? Number(raw.return_window_days) : null,
+    is_preorder: Boolean(raw?.is_preorder),
+    is_preorder_active:
+      typeof raw?.is_preorder_active === "boolean"
+        ? raw.is_preorder_active
+        : Boolean(raw?.is_preorder) && (
+            !raw?.preorder_release_date ||
+            (() => {
+              try {
+                return new Date(raw.preorder_release_date).getTime() > Date.now();
+              } catch {
+                return true;
+              }
+            })()
+          ),
+    preorder_release_date: raw?.preorder_release_date ?? null,
+    preorder_message: raw?.preorder_message ?? null,
+    preorder_limit:
+      raw?.preorder_limit != null ? Number(raw.preorder_limit) : null,
     created_at: raw?.created_at ?? null,
     updated_at: raw?.updated_at ?? null,
   };

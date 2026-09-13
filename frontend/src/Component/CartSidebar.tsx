@@ -1167,6 +1167,28 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
         </p>
       )}
 
+      {cartItems.some((i) => i.is_preorder) && (
+        <div
+          style={{
+            margin: "10px 0 14px",
+            padding: "10px 12px",
+            borderRadius: "10px",
+            background: "rgba(217,119,6,0.08)",
+            border: "1px solid rgba(217,119,6,0.25)",
+            fontSize: "12px",
+            color: "#b45309",
+            display: "flex",
+            alignItems: "flex-start",
+            gap: "8px",
+            lineHeight: 1.4,
+          }}
+        >
+          <div>
+            <strong>Pre-Order Item:</strong> Orders with pre-order items will be dispatched once all items reach official release date.
+          </div>
+        </div>
+      )}
+
       {cartItems.length > 0 ? (
         <Link
           to={checkoutPath}
@@ -1369,6 +1391,31 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                               {item.selectedVariantValue}
                             </p>
                           ) : null}
+
+                          {item.is_preorder && (
+                            <div
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                fontSize: "11px",
+                                fontWeight: 700,
+                                color: "#d97706",
+                                background: "rgba(217,119,6,0.1)",
+                                border: "1px solid rgba(217,119,6,0.25)",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                margin: "2px 0 4px",
+                              }}
+                            >
+                              <span>Pre-Order</span>
+                              {item.preorder_release_date && (
+                                <span style={{ fontSize: "10px", fontWeight: 500, color: palette.textMuted }}>
+                                  (Launch: {new Date(item.preorder_release_date).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true })})
+                                </span>
+                              )}
+                            </div>
+                          )}
 
                           <p
                             style={{
@@ -1683,6 +1730,31 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                               {item.selectedVariantValue}
                             </p>
                           ) : null}
+
+                          {item.is_preorder && (
+                            <div
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                fontSize: "11px",
+                                fontWeight: 700,
+                                color: "#d97706",
+                                background: "rgba(217,119,6,0.1)",
+                                border: "1px solid rgba(217,119,6,0.25)",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                margin: "2px 0 6px",
+                              }}
+                            >
+                              <span>Pre-Order</span>
+                              {item.preorder_release_date && (
+                                <span style={{ fontSize: "10.5px", fontWeight: 500, color: palette.textMuted }}>
+                                  (Expected: {new Date(item.preorder_release_date).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true })})
+                                </span>
+                              )}
+                            </div>
+                          )}
 
                           <p
                             style={{

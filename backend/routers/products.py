@@ -18,7 +18,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from sqlmodel import Session, delete, func, or_, select, update
 from sqlalchemy import case
 
-from auth_middleware import authenticate_customer, check_admin_has_permission, enforce_site_ownership
+from auth_middleware import (
+    authenticate_customer,
+    check_admin_has_permission,
+    enforce_site_ownership,
+    resolve_site_by_slug_or_404,
+)
 from db.database import get_session
 from routers.audit_logs import log_activity
 from models import (
@@ -126,11 +131,8 @@ def make_slug(name: str) -> str:
     return "-".join(name.strip().lower().split())
 
 
-def get_site_or_404(session: Session, site_id: UUID) -> Site:
-    site = session.get(Site, site_id)
-    if not site:
-        raise HTTPException(status_code=404, detail="Site not found")
-    return site
+def get_site_or_404(session: Session, site_id: str | UUID) -> Site:
+    return resolve_site_by_slug_or_404(str(site_id), session)
 
 
 def get_site_product_or_404(
@@ -468,6 +470,11 @@ def to_product_responses_batch(
             "highlights": getattr(product, "highlights", []) or [],
             "variant_option": product.variant_option,
             "return_window_days": product.return_window_days,
+            "is_preorder": bool(getattr(product, "is_preorder", False)),
+            "is_preorder_active": bool(getattr(product, "is_preorder", False)) and (getattr(product, "preorder_release_date", None) is None or getattr(product, "preorder_release_date", None) > utc_now()),
+            "preorder_release_date": getattr(product, "preorder_release_date", None).isoformat() if getattr(product, "preorder_release_date", None) else None,
+            "preorder_message": getattr(product, "preorder_message", None),
+            "preorder_limit": getattr(product, "preorder_limit", None),
             "average_rating": avg_rating,
             "review_count": rev_count,
             "created_at": product.created_at,
@@ -583,6 +590,10 @@ class ProductCreate(BaseModel):
     images: list[str] = Field(default_factory=list)
     variant_option: Optional[ProductVariantOption] = None
     return_window_days: Optional[int] = None
+    is_preorder: bool = False
+    preorder_release_date: Optional[datetime] = None
+    preorder_message: Optional[str] = None
+    preorder_limit: Optional[int] = None
 
     @field_validator("name", "category", "description")
     @classmethod
@@ -668,6 +679,10 @@ class ProductUpdate(BaseModel):
     images: list[str] = Field(default_factory=list)
     variant_option: Optional[ProductVariantOption] = None
     return_window_days: Optional[int] = None
+    is_preorder: bool = False
+    preorder_release_date: Optional[datetime] = None
+    preorder_message: Optional[str] = None
+    preorder_limit: Optional[int] = None
 
     @field_validator("name", "category", "description")
     @classmethod
@@ -755,6 +770,11 @@ class ProductResponse(BaseModel):
     highlights: list[str] = Field(default_factory=list)
     variant_option: Optional[dict[str, Any]] = None
     return_window_days: Optional[int] = None
+    is_preorder: bool = False
+    is_preorder_active: bool = False
+    preorder_release_date: Optional[Any] = None
+    preorder_message: Optional[str] = None
+    preorder_limit: Optional[int] = None
     average_rating: float = 0.0
     review_count: int = 0
     reviews: Optional[list[dict[str, Any]]] = None
@@ -1015,7 +1035,7 @@ def list_products(
 
 @router.get("/public", include_in_schema=False)
 def list_products_public(
-    site_id: UUID,
+    site_id: str,
     response: Response,
     page: Optional[int] = Query(None, ge=1, description="Page number"),
     page_size: Optional[int] = Query(None, ge=1, le=1000, description="Items per page"),
@@ -1030,10 +1050,14 @@ def list_products_public(
     sort_by: Optional[str] = Query(None, description="Sort: newest, price_asc, price_desc, rating_desc, discount_desc"),
     session: Session = Depends(get_session),
 ):
+    site = get_site_or_404(session, site_id)
+    if not getattr(site, "is_online", True):
+        raise HTTPException(status_code=503, detail="Store is currently offline for maintenance.")
+
     response.headers["Cache-Control"] = "public, max-age=15, stale-while-revalidate=60"
 
     cache_key = (
-        f"site:{site_id}:public:"
+        f"site:{site.id}:public:"
         f"p={page}:ps={page_size}:q={search}:c={category_id}:"
         f"pt={','.join(sorted(product_type)) if product_type else ''}:"
         f"col={','.join(sorted(str(cid) for cid in collection_id)) if collection_id else ''}:"
@@ -1045,11 +1069,7 @@ def list_products_public(
         response.headers["X-Cache"] = "HIT"
         return cached_val
 
-    site = get_site_or_404(session, site_id)
-    if not getattr(site, "is_online", True):
-        raise HTTPException(status_code=503, detail="Store is currently offline for maintenance.")
-
-    query = select(Product).where(Product.site_id == site_id, Product.is_active == True)
+    query = select(Product).where(Product.site_id == site.id, Product.is_active == True)
 
     # --- Search ---
     if search and search.strip():
@@ -1174,28 +1194,28 @@ def list_products_public(
 
 @router.get("/public/by-slug/{slug_or_id}")
 def get_public_product_by_slug_or_id(
-    site_id: UUID,
+    site_id: str,
     slug_or_id: str,
     response: Response,
     session: Session = Depends(get_session),
 ):
+    site = get_site_or_404(session, site_id)
+    if not getattr(site, "is_online", True):
+        raise HTTPException(status_code=503, detail="Store is currently offline for maintenance.")
+
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     target = slug_or_id.strip()
     target_clean = re.sub(r"[^a-z0-9]+", "-", target.lower()).strip("-")
 
     # Fast cache lookup
-    cache_key = f"site:{str(site_id)}:slug:{target.lower()}"
+    cache_key = f"site:{str(site.id)}:slug:{target.lower()}"
     cached = catalog_cache.get(cache_key)
     if cached is not None:
         return cached
 
-    site = get_site_or_404(session, site_id)
-    if not getattr(site, "is_online", True):
-        raise HTTPException(status_code=503, detail="Store is currently offline for maintenance.")
-
     # 1. Try exact slug match
     product = session.exec(
-        select(Product).where(Product.site_id == site_id, Product.slug == target, Product.is_active == True)
+        select(Product).where(Product.site_id == site.id, Product.slug == target, Product.is_active == True)
     ).first()
 
     # 2. Try UUID match
@@ -1203,7 +1223,7 @@ def get_public_product_by_slug_or_id(
         try:
             target_uuid = UUID(target)
             product = session.exec(
-                select(Product).where(Product.site_id == site_id, Product.id == target_uuid, Product.is_active == True)
+                select(Product).where(Product.site_id == site.id, Product.id == target_uuid, Product.is_active == True)
             ).first()
         except (ValueError, TypeError):
             pass
@@ -1211,7 +1231,7 @@ def get_public_product_by_slug_or_id(
     # 3. Try name match / slugified name match
     if not product:
         prods = session.exec(
-            select(Product).where(Product.site_id == site_id, Product.is_active == True)
+            select(Product).where(Product.site_id == site.id, Product.is_active == True)
         ).all()
         for p in prods:
             p_slug = (p.slug or "").lower().strip()
@@ -1226,11 +1246,37 @@ def get_public_product_by_slug_or_id(
     res = to_product_response(product, session, include_reviews=True)
     catalog_cache.set(cache_key, res, ttl=60.0)
     if target_clean and target_clean != target.lower():
-        catalog_cache.set(f"site:{str(site_id)}:slug:{target_clean}", res, ttl=60.0)
+        catalog_cache.set(f"site:{str(site.id)}:slug:{target_clean}", res, ttl=60.0)
     if product.slug:
-        catalog_cache.set(f"site:{str(site_id)}:slug:{product.slug.lower()}", res, ttl=60.0)
-    catalog_cache.set(f"site:{str(site_id)}:slug:{str(product.id).lower()}", res, ttl=60.0)
+        catalog_cache.set(f"site:{str(site.id)}:slug:{product.slug.lower()}", res, ttl=60.0)
+    catalog_cache.set(f"site:{str(site.id)}:slug:{str(product.id).lower()}", res, ttl=60.0)
     return res
+
+
+def parse_csv_datetime(val: Optional[str]) -> Optional[datetime]:
+    if not val or not str(val).strip():
+        return None
+    raw = str(val).strip().replace("Z", "+00:00")
+    try:
+        return datetime.fromisoformat(raw)
+    except Exception:
+        pass
+    for fmt in (
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%d",
+        "%d-%m-%Y %H:%M:%S",
+        "%d-%m-%Y %H:%M",
+        "%d-%m-%Y",
+        "%d/%m/%Y %H:%M:%S",
+        "%d/%m/%Y %H:%M",
+        "%d/%m/%Y",
+    ):
+        try:
+            return datetime.strptime(raw, fmt)
+        except Exception:
+            pass
+    return None
 
 
 CSV_HEADERS = [
@@ -1258,6 +1304,10 @@ CSV_HEADERS = [
     "collections",
     "variant_option_name",
     "variant_values",
+    "is_preorder",
+    "preorder_release_date",
+    "preorder_message",
+    "preorder_limit",
 ]
 
 
@@ -1479,6 +1529,10 @@ def export_products_csv(
             ", ".join(col_names),
             var_name,
             var_values_str,
+            "TRUE" if getattr(p, "is_preorder", False) else "FALSE",
+            p.preorder_release_date.strftime("%Y-%m-%d %H:%M") if getattr(p, "preorder_release_date", None) else "",
+            getattr(p, "preorder_message", "") or "",
+            getattr(p, "preorder_limit", "") if getattr(p, "preorder_limit", None) is not None else "",
         ])
 
     csv_data = output.getvalue().encode("utf-8")
@@ -1528,6 +1582,10 @@ def download_sample_csv(
             "Flagship, Electronics, Bestsellers",
             "Storage Capacity",
             "128GB:119999:134900:10|256GB:129999:144900:6|512GB:149999:164900:4",
+            "TRUE",
+            "2026-10-25 11:00",
+            "Official Launch on Oct 25 — Priority Dispatch!",
+            "100",
         ],
         [
             "Apple iPhone 15 Pro (Blue Titanium)",
@@ -1554,6 +1612,10 @@ def download_sample_csv(
             "Flagship, Electronics",
             "Storage Capacity",
             "128GB:119999:134900:8|256GB:129999:144900:5|512GB:149999:164900:2",
+            "FALSE",
+            "",
+            "",
+            "",
         ],
         [
             "Sony WH-1000XM5 Noise Canceling Wireless Headphones (Midnight Black)",
@@ -1580,6 +1642,10 @@ def download_sample_csv(
             "Audio Gear, Bestsellers, Premium",
             "Color Edition",
             "Midnight Black:29990:34990:18|Platinum Silver:29990:34990:12",
+            "FALSE",
+            "",
+            "",
+            "",
         ],
         [
             "Sony WH-1000XM5 Noise Canceling Wireless Headphones (Platinum Silver)",
@@ -1606,6 +1672,10 @@ def download_sample_csv(
             "Audio Gear, Premium",
             "Color Edition",
             "Platinum Silver:29990:34990:20",
+            "FALSE",
+            "",
+            "",
+            "",
         ],
         [
             "Heritage Biker Full-Grain Leather Jacket (Vintage Tan)",
@@ -1632,6 +1702,10 @@ def download_sample_csv(
             "Winter Collection, Bestsellers, Apparel",
             "Size",
             "S:8499:12999:10|M:8499:12999:15|L:8499:12999:12|XL:8999:13999:8",
+            "FALSE",
+            "",
+            "",
+            "",
         ],
         [
             "Heritage Biker Full-Grain Leather Jacket (Obsidian Black)",
@@ -1658,6 +1732,10 @@ def download_sample_csv(
             "Winter Collection, Apparel",
             "Size",
             "S:8499:12999:8|M:8499:12999:12|L:8499:12999:10|XL:8999:13999:5",
+            "FALSE",
+            "",
+            "",
+            "",
         ],
         [
             "Artisan Matte Ceramic Pour-Over Coffee Dripper Set",
@@ -1684,6 +1762,10 @@ def download_sample_csv(
             "Coffee Gear, Home & Living, New Arrivals",
             "Finish & Color",
             "Terracotta Matte:1499:1999:25|Nordic White:1499:1999:20|Charcoal Slate:1499:1999:15",
+            "FALSE",
+            "",
+            "",
+            "",
         ],
         [
             "Keychron Q1 Pro Wireless Custom Mechanical Keyboard",
@@ -1710,6 +1792,10 @@ def download_sample_csv(
             "Computer Gear, Electronics, Premium, Work From Home",
             "Switch Type",
             "K Pro Red (Linear):14999:17999:10|K Pro Brown (Tactile):14999:17999:10|K Pro Banana (Early Bump):15499:18499:5",
+            "FALSE",
+            "",
+            "",
+            "",
         ],
     ]
 
@@ -1992,6 +2078,22 @@ async def import_products_csv(
         except Exception:
             row_return_window = None
 
+        is_preorder_str = row.get("is_preorder")
+        is_preorder = False
+        preorder_release_date = None
+        preorder_message = None
+        preorder_limit = None
+        if is_preorder_str is not None:
+            is_preorder = str(is_preorder_str).strip().lower() in {"true", "1", "yes", "preorder", "pre-order"}
+            if is_preorder:
+                preorder_release_date = parse_csv_datetime(row.get("preorder_release_date"))
+                preorder_message = (row.get("preorder_message") or "").strip() or None
+                if row.get("preorder_limit"):
+                    try:
+                        preorder_limit = max(0, int(str(row.get("preorder_limit")).strip()))
+                    except Exception:
+                        preorder_limit = None
+
         # Check for existing product match (Duplicate Detection & Upsert)
         existing_p: Optional[Product] = None
         if row_sku and row_sku.lower() in sku_map:
@@ -2026,6 +2128,11 @@ async def import_products_csv(
             existing_p.video_position = row_video_pos
             if row_return_window is not None:
                 existing_p.return_window_days = row_return_window
+            if is_preorder_str is not None:
+                existing_p.is_preorder = is_preorder
+                existing_p.preorder_release_date = preorder_release_date
+                existing_p.preorder_message = preorder_message
+                existing_p.preorder_limit = preorder_limit
             existing_p.weight_grams = weight_grams
             if length_cm is not None:
                 existing_p.length_cm = length_cm
@@ -2067,6 +2174,10 @@ async def import_products_csv(
                 sibling_group=row_sibling_group,
                 sibling_label=row_sibling_label,
                 return_window_days=row_return_window,
+                is_preorder=is_preorder,
+                preorder_release_date=preorder_release_date,
+                preorder_message=preorder_message,
+                preorder_limit=preorder_limit,
                 weight_grams=weight_grams,
                 length_cm=length_cm,
                 width_cm=width_cm,
@@ -2373,6 +2484,10 @@ def create_product(
         width_cm=Decimal(str(product_in.width_cm)) if product_in.width_cm is not None else None,
         height_cm=Decimal(str(product_in.height_cm)) if product_in.height_cm is not None else None,
         return_window_days=product_in.return_window_days,
+        is_preorder=product_in.is_preorder,
+        preorder_release_date=product_in.preorder_release_date,
+        preorder_message=product_in.preorder_message,
+        preorder_limit=product_in.preorder_limit,
         images=product_in.images,
         highlights=product_in.highlights or [],
         variant_option=(
@@ -2457,6 +2572,10 @@ def update_product(
     product.width_cm = Decimal(str(product_in.width_cm)) if product_in.width_cm is not None else None
     product.height_cm = Decimal(str(product_in.height_cm)) if product_in.height_cm is not None else None
     product.return_window_days = product_in.return_window_days
+    product.is_preorder = product_in.is_preorder
+    product.preorder_release_date = product_in.preorder_release_date
+    product.preorder_message = product_in.preorder_message
+    product.preorder_limit = product_in.preorder_limit
     product.images = product_in.images
 
     # Handle variant options & ensure price sync between base price and variants

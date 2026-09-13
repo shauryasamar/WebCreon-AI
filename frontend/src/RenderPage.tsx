@@ -1253,13 +1253,14 @@ const RenderPage: React.FC<RenderPageProps> = ({
             position: "relative",
             width: "100%",
             maxWidth: "100%",
-            minHeight: isCartPage ? "calc(100vh - 220px)" : "100%",
+            minHeight: "100%",
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "flex-start",
             height: undefined,
             maxHeight: undefined,
             overflow: undefined,
-            display: isCartPage ? "flex" : undefined,
-            flexDirection: isCartPage ? "column" : undefined,
-            justifyContent: isCartPage ? "flex-start" : undefined,
             paddingTop: 0,
             boxSizing: "border-box",
             background: isFullGlass ? glassBackground : (theme?.primary_bg || (isThemeDark ? "#0f172a" : "#ffffff")),
@@ -1295,7 +1296,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
                       padding: 0,
                       pointerEvents: "none",
                       zIndex: 25,
-                      overflow: "hidden",
+                      overflow: "visible",
                       opacity: 0.6,
                     }}
                   >
@@ -1616,7 +1617,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
       <ThemeProvider theme={theme as any}>
         <div
           style={{
-            minHeight: "100vh",
+            minHeight: "100%",
             padding: isCompactCheckout ? "16px 12px 28px" : "20px 16px 36px",
             background: pageBg,
           }}
@@ -1810,7 +1811,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
       <div
         style={{
           position: "relative",
-          minHeight: "100vh",
+          minHeight: "100%",
           padding: isCompactCheckout ? "16px 12px 28px" : "20px 16px 36px",
           background: pageBg,
         }}

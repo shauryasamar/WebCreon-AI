@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useCustomerAuth } from "../context/CustomerAuthContext";
 import {
@@ -105,6 +105,8 @@ export default function CustomerSignupPage(props: CustomerSignupPageProps = {}) 
     return "/";
   }, [from, resolvedStoreSlug]);
 
+  const gisInitializedRef = useRef(false);
+
   // Google Identity Services (GIS)
   useEffect(() => {
     const clientId =
@@ -116,12 +118,15 @@ export default function CustomerSignupPage(props: CustomerSignupPageProps = {}) 
         initGoogleGIS(clientId);
         return;
       }
-      const script = document.createElement("script");
-      script.src = "https://accounts.google.com/gsi/client";
-      script.async = true;
-      script.defer = true;
-      script.onload = () => initGoogleGIS(clientId);
-      document.head.appendChild(script);
+      if (!document.getElementById("google-gsi-client-script")) {
+        const script = document.createElement("script");
+        script.id = "google-gsi-client-script";
+        script.src = "https://accounts.google.com/gsi/client";
+        script.async = true;
+        script.defer = true;
+        script.onload = () => initGoogleGIS(clientId);
+        document.head.appendChild(script);
+      }
     };
 
     loadGis();
@@ -130,14 +135,17 @@ export default function CustomerSignupPage(props: CustomerSignupPageProps = {}) 
   const initGoogleGIS = (clientId: string) => {
     try {
       if ((window as any).google?.accounts?.id) {
-        (window as any).google.accounts.id.initialize({
-          client_id: clientId,
-          callback: (response: any) => {
-            if (response.credential) {
-              handleGoogleSuccess(response.credential);
-            }
-          },
-        });
+        if (!gisInitializedRef.current) {
+          (window as any).google.accounts.id.initialize({
+            client_id: clientId,
+            callback: (response: any) => {
+              if (response.credential) {
+                handleGoogleSuccess(response.credential);
+              }
+            },
+          });
+          gisInitializedRef.current = true;
+        }
 
         const btnContainer = document.getElementById("customer-signup-google-btn");
         const fallbackBtn = document.getElementById("customer-signup-google-fallback");

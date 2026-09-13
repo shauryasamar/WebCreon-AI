@@ -381,18 +381,60 @@ interface CustomSelectDropdownProps {
   defaultValue?: string;
   options: { label: string; value: string }[];
   placeholder?: string;
+  closeOnSelect?: boolean;
   onChange: (value: string) => void;
 }
+
+const getFontPreviewFamily = (val: string) => {
+  if (val.includes("syne")) return "'Syne', sans-serif";
+  if (val.includes("unbounded")) return "'Unbounded', sans-serif";
+  if (val.includes("syncopate")) return "'Syncopate', sans-serif";
+  if (val.includes("italiana")) return "'Italiana', serif";
+  if (val.includes("tenor")) return "'Tenor Sans', sans-serif";
+  if (val.includes("marcellus")) return "'Marcellus', serif";
+  if (val.includes("instrument")) return "'Instrument Serif', serif";
+  if (val.includes("cinzel")) return "'Cinzel', serif";
+  if (val.includes("playfair")) return "'Playfair Display', serif";
+  if (val.includes("cormorant")) return "'Cormorant Garamond', serif";
+  if (val.includes("jakarta") || val.includes("plus_jakarta")) return "'Plus Jakarta Sans', sans-serif";
+  if (val.includes("dm_sans")) return "'DM Sans', sans-serif";
+  if (val.includes("outfit")) return "'Outfit', sans-serif";
+  if (val.includes("montserrat")) return "'Montserrat', sans-serif";
+  if (val.includes("poppins")) return "'Poppins', sans-serif";
+  if (val.includes("bricolage")) return "'Bricolage Grotesque', sans-serif";
+  if (val.includes("space_grotesk")) return "'Space Grotesk', sans-serif";
+  if (val.includes("bebas")) return "'Bebas Neue', sans-serif";
+  if (val.includes("michroma")) return "'Michroma', sans-serif";
+  if (val.includes("orbitron")) return "'Orbitron', sans-serif";
+  if (val.includes("audiowide")) return "'Audiowide', cursive";
+  if (val.includes("righteous")) return "'Righteous', cursive";
+  if (val.includes("parisienne")) return "'Parisienne', cursive";
+  return "'Inter', sans-serif";
+};
 
 const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
   value,
   defaultValue,
   options,
   placeholder = "Select an option",
+  closeOnSelect = false,
   onChange,
 }) => {
   const [open, setOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (open && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      if (spaceBelow < 240 && rect.top > spaceBelow) {
+        setOpenUpward(true);
+      } else {
+        setOpenUpward(false);
+      }
+    }
+  }, [open]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -416,6 +458,10 @@ const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
     options.find((o) => o.value === defaultValue) ||
     (options.length > 0 ? options[0] : undefined);
 
+  const isFontDropdown = options.some((o) =>
+    ["sans_modern", "playfair_serif", "cinzel_display", "great_vibes", "orbitron_scifi", "dancing_script"].includes(o.value)
+  );
+
   return (
     <div ref={containerRef} style={{ position: "relative", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
       <button
@@ -432,7 +478,7 @@ const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
           color: selectedOption ? "#0f172a" : "#94a3b8",
           fontSize: "11px",
           fontWeight: 500,
-          fontFamily: "'Inter', -apple-system, sans-serif",
+          fontFamily: isFontDropdown && selectedOption ? getFontPreviewFamily(selectedOption.value) : "'Inter', -apple-system, sans-serif",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -474,17 +520,17 @@ const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
         <div
           style={{
             position: "absolute",
-            top: "calc(100% + 2px)",
+            ...(openUpward ? { bottom: "calc(100% + 3px)" } : { top: "calc(100% + 3px)" }),
             left: 0,
             right: 0,
-            zIndex: 9999,
+            zIndex: 99999,
             background: "#ffffff",
-            borderRadius: "5px",
-            border: "1px solid #e2e8f0",
-            boxShadow: "0 8px 20px -4px rgba(0, 0, 0, 0.12), 0 4px 6px -2px rgba(0, 0, 0, 0.04)",
-            maxHeight: "150px",
+            borderRadius: "6px",
+            border: "1px solid #cbd5e1",
+            boxShadow: "0 10px 25px -4px rgba(0, 0, 0, 0.16), 0 4px 10px -2px rgba(0, 0, 0, 0.08)",
+            maxHeight: "230px",
             overflowY: "auto",
-            padding: "2px",
+            padding: "3px",
             boxSizing: "border-box",
           }}
         >
@@ -493,25 +539,29 @@ const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
           ) : (
             options.map((opt) => {
               const isSelected = opt.value === value;
+              const optionFontFamily = isFontDropdown ? getFontPreviewFamily(opt.value) : undefined;
               return (
                 <div
                   key={opt.value}
                   onClick={() => {
                     onChange(opt.value);
-                    setOpen(false);
+                    if (closeOnSelect) {
+                      setOpen(false);
+                    }
                   }}
                   style={{
-                    padding: "3px 6px",
+                    padding: "4px 7px",
                     borderRadius: "4px",
                     fontSize: "11px",
                     fontWeight: isSelected ? 600 : 500,
+                    fontFamily: optionFontFamily || "'Inter', sans-serif",
                     color: isSelected ? "#2563eb" : "#0f172a",
                     background: isSelected ? "rgba(37,99,235,0.08)" : "transparent",
                     cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    gap: "4px",
+                    gap: "6px",
                     transition: "background 0.1s ease",
                     marginBottom: "1px",
                   }}
@@ -522,11 +572,11 @@ const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
                     if (!isSelected) (e.currentTarget as HTMLElement).style.background = "transparent";
                   }}
                 >
-                  <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 }}>
                     {opt.label}
                   </span>
                   {isSelected && (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "10px", height: "10px", color: "#2563eb", flexShrink: 0 }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "11px", height: "11px", color: "#2563eb", flexShrink: 0 }}>
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                   )}
@@ -538,7 +588,7 @@ const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
       )}
     </div>
   );
-}
+};
 
 function colorInputStyle(_isLightMode: boolean): React.CSSProperties {
   return {
@@ -11212,17 +11262,30 @@ function NavbarEditor({
                       value={brandFontFamily}
                       placeholder="Select Font"
                       options={[
-                        { label: "Inter (Sans)", value: "sans_modern" },
-                        { label: "Roboto (Sans)", value: "roboto_sans" },
-                        { label: "Outfit (Tech)", value: "outfit_tech" },
-                        { label: "Plus Jakarta", value: "plus_jakarta" },
-                        { label: "Space Grotesk", value: "space_grotesk" },
-                        { label: "Playfair (Serif)", value: "playfair_serif" },
-                        { label: "Cinzel (Serif)", value: "cinzel_display" },
-                        { label: "Cormorant", value: "cormorant_serif" },
-                        { label: "Montserrat", value: "montserrat_bold" },
-                        { label: "Poppins", value: "poppins_rounded" },
-                        { label: "Abril Fatface", value: "abril_fatface" },
+                        { label: "Inter (Modern Clean - Default)", value: "sans_modern" },
+                        { label: "Syne (Avant-Garde High Fashion)", value: "syne_avantgarde" },
+                        { label: "Unbounded (Ultra-Wide Modern Luxury)", value: "unbounded_logo" },
+                        { label: "Syncopate (Architectural Wide Emblem)", value: "syncopate_wide" },
+                        { label: "Italiana (Italian Luxury Boutique)", value: "italiana_couture" },
+                        { label: "Tenor Sans (Modern Chic Runway Fashion)", value: "tenor_runway" },
+                        { label: "Marcellus (Timeless Roman Apothecary)", value: "marcellus_roman" },
+                        { label: "Instrument Serif (Modern Editorial)", value: "instrument_serif" },
+                        { label: "Cinzel (Royal Roman Heritage)", value: "cinzel_display" },
+                        { label: "Playfair Display (Haute Couture Editorial)", value: "playfair_serif" },
+                        { label: "Cormorant Garamond (Fine Literature)", value: "cormorant_serif" },
+                        { label: "Plus Jakarta Sans (Crisp Neo-Grotesque Tech)", value: "plus_jakarta" },
+                        { label: "DM Sans (Minimalist Scandinavian)", value: "dm_sans" },
+                        { label: "Outfit (Contemporary Geometric)", value: "outfit_geometric" },
+                        { label: "Montserrat (Bold Architectural)", value: "montserrat_bold" },
+                        { label: "Poppins (Clean Friendly Modern)", value: "poppins_rounded" },
+                        { label: "Bricolage Grotesque (Trendy Parisian)", value: "bricolage_grotesque" },
+                        { label: "Space Grotesk (Brutalist Minimalist)", value: "space_grotesk" },
+                        { label: "Bebas Neue (Heavy Urban Streetwear)", value: "bebas_neue" },
+                        { label: "Michroma (Sleek Aerodynamic Tech)", value: "michroma_aerotech" },
+                        { label: "Orbitron (Futuristic Cyberpunk)", value: "orbitron_scifi" },
+                        { label: "Audiowide (Next-Gen Hardware)", value: "audiowide_future" },
+                        { label: "Righteous (Retro 80s Synthwave)", value: "righteous_retro" },
+                        { label: "Parisienne (French Luxury Signature)", value: "parisienne_script" },
                       ]}
                       onChange={(val) => updateField("brand_font_family", val)}
                     />
@@ -11741,6 +11804,7 @@ export default function EditorSidebar({
   const [snapshotFeedback, setSnapshotFeedback] = useState<string | null>(null);
   const [showAllSnapshots, setShowAllSnapshots] = useState(false);
   const [refreshCounter, setRefreshCounter] = useState(0);
+  const [appliedSnapshotId, setAppliedSnapshotId] = useState<string | null>(null);
 
   useEffect(() => {
     const handleUpdate = (e: any) => {
@@ -11783,6 +11847,7 @@ export default function EditorSidebar({
   };
 
   const handleDeleteSnapshot = async (id: string) => {
+    if (appliedSnapshotId === id) setAppliedSnapshotId(null);
     const next = deleteThemeSnapshot(siteDefinition, id);
     onSiteDefinitionChange(next);
     setRefreshCounter((c) => c + 1);
@@ -11803,6 +11868,7 @@ export default function EditorSidebar({
   };
 
   const handleApplySnapshot = async (id: string) => {
+    setAppliedSnapshotId(id);
     const next = applyThemeSnapshot(siteDefinition, id);
     onSiteDefinitionChange(next);
     setRefreshCounter((c) => c + 1);
@@ -12191,6 +12257,15 @@ export default function EditorSidebar({
                 >
                   {(showAllSnapshots ? savedSnapshots : savedSnapshots.slice(0, 3)).map((snap: any) => {
                     const th = snap.theme || {};
+                    const currentTheme = siteDefinition.theme || {};
+                    const isCurrentActive =
+                      appliedSnapshotId === snap.id ||
+                      (!appliedSnapshotId &&
+                        (snap.theme?.mode || "light") === (currentTheme.mode || "light") &&
+                        snap.theme?.primary_bg === currentTheme.primary_bg &&
+                        snap.theme?.accent_color === currentTheme.accent_color &&
+                        (snap.theme?.navbar_bg === currentTheme.navbar_bg || !snap.theme?.navbar_bg));
+
                     return (
                       <div
                         key={snap.id}
@@ -12201,12 +12276,14 @@ export default function EditorSidebar({
                           padding: "4px 6px",
                           minHeight: "29px",
                           borderRadius: "4px",
-                          background: "#f8fafc",
-                          border: "1px solid #e2e8f0",
+                          background: isCurrentActive ? "#f0fdf4" : "#f8fafc",
+                          border: isCurrentActive ? "1.5px solid #10b981" : "1px solid #e2e8f0",
+                          boxShadow: isCurrentActive ? "0 1px 3px rgba(16,185,129,0.12)" : "none",
                           gap: "6px",
                           width: "100%",
                           boxSizing: "border-box",
                           flexShrink: 0,
+                          transition: "all 0.15s ease",
                         }}
                       >
                         <div style={{ display: "flex", alignItems: "center", gap: "5px", flex: 1, minWidth: 0 }}>
@@ -12215,32 +12292,53 @@ export default function EditorSidebar({
                             <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: th.accent_color || "#2563eb", border: "1px solid #cbd5e1" }} title={`Accent: ${th.accent_color || '#2563eb'}`} />
                             <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: th.navbar_bg || "#0f172a", border: "1px solid #cbd5e1" }} title={`Navbar: ${th.navbar_bg || '#0f172a'}`} />
                           </div>
-                          <span style={{ fontSize: "10.5px", fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 }}>
+                          <span style={{ fontSize: "10.5px", fontWeight: isCurrentActive ? 700 : 600, color: isCurrentActive ? "#065f46" : "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 }}>
                             {snap.name}
                           </span>
                         </div>
                         <div style={{ display: "flex", gap: "3px", alignItems: "center", flexShrink: 0 }}>
-                          <button
-                            type="button"
-                            onClick={() => handleApplySnapshot(snap.id)}
-                            style={{
-                              padding: "2px 7px",
-                              height: "20px",
-                              borderRadius: "3px",
-                              border: "none",
-                              background: ADMIN_BLUE,
-                              color: "#ffffff",
-                              fontSize: "9.5px",
-                              fontWeight: 700,
-                              cursor: "pointer",
-                              whiteSpace: "nowrap",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
-                          >
-                            Apply
-                          </button>
+                          {isCurrentActive ? (
+                            <span
+                              style={{
+                                padding: "2px 7px",
+                                height: "20px",
+                                borderRadius: "3px",
+                                background: "#10b981",
+                                color: "#ffffff",
+                                fontSize: "9.5px",
+                                fontWeight: 700,
+                                whiteSpace: "nowrap",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: "2px",
+                              }}
+                            >
+                              ✓ Applied
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleApplySnapshot(snap.id)}
+                              style={{
+                                padding: "2px 7px",
+                                height: "20px",
+                                borderRadius: "3px",
+                                border: "none",
+                                background: ADMIN_BLUE,
+                                color: "#ffffff",
+                                fontSize: "9.5px",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                whiteSpace: "nowrap",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                            >
+                              Apply
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => handleDeleteSnapshot(snap.id)}

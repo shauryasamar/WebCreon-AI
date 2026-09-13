@@ -47,30 +47,54 @@ export type GoogleMapPickerProps = {
 const MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 const DEFAULT_CENTER = { lat: 20.5937, lng: 78.9629 }; // Geographic center of India
 
+let googleMapsLoadingPromise: Promise<void> | null = null;
+
 function loadGoogleMapsScript(apiKey: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (typeof window === "undefined") return;
-    if (window.google?.maps?.places) {
+  if (typeof window === "undefined") return Promise.resolve();
+  if (window.google?.maps?.places && window.google?.maps?.Geocoder && window.google?.maps?.Map) {
+    return Promise.resolve();
+  }
+  if (googleMapsLoadingPromise) {
+    return googleMapsLoadingPromise;
+  }
+
+  googleMapsLoadingPromise = new Promise(async (resolve, reject) => {
+    try {
+      const existing = document.getElementById("google-maps-script");
+      if (!existing) {
+        const script = document.createElement("script");
+        script.id = "google-maps-script";
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async&libraries=places,geometry`;
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+        await new Promise<void>((res, rej) => {
+          script.onload = () => res();
+          script.onerror = () => rej(new Error("Failed to load Google Maps script"));
+        });
+      } else if (!window.google?.maps) {
+        await new Promise<void>((res, rej) => {
+          existing.addEventListener("load", () => res());
+          existing.addEventListener("error", () => rej(new Error("Failed to load Google Maps script")));
+        });
+      }
+
+      if (window.google?.maps && typeof (window.google.maps as any).importLibrary === "function") {
+        await Promise.all([
+          (window.google.maps as any).importLibrary("maps"),
+          (window.google.maps as any).importLibrary("places"),
+          (window.google.maps as any).importLibrary("geocoding"),
+          (window.google.maps as any).importLibrary("marker"),
+        ]);
+      }
       resolve();
-      return;
+    } catch (err) {
+      googleMapsLoadingPromise = null;
+      reject(err);
     }
-    const existing = document.getElementById("google-maps-script");
-    if (existing) {
-      existing.addEventListener("load", () => resolve());
-      existing.addEventListener("error", () =>
-        reject(new Error("Failed to load Google Maps"))
-      );
-      return;
-    }
-    const script = document.createElement("script");
-    script.id = "google-maps-script";
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Failed to load Google Maps"));
-    document.head.appendChild(script);
   });
+
+  return googleMapsLoadingPromise;
 }
 
 export async function geocodeAddressText(
@@ -81,7 +105,15 @@ export async function geocodeAddressText(
   try {
     await loadGoogleMapsScript(MAPS_API_KEY);
     if (!window.google?.maps) return null;
-    const geocoder = new google.maps.Geocoder();
+
+    let GeocoderConstructor = (window.google.maps as any).Geocoder;
+    if (!GeocoderConstructor && typeof (window.google.maps as any).importLibrary === "function") {
+      const geoLib = await (window.google.maps as any).importLibrary("geocoding");
+      GeocoderConstructor = geoLib?.Geocoder || (window.google.maps as any).Geocoder;
+    }
+    if (!GeocoderConstructor) return null;
+
+    const geocoder = new GeocoderConstructor();
     const res = await geocoder.geocode({
       address: addressText,
       componentRestrictions: { country: "in" },

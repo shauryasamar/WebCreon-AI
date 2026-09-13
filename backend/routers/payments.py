@@ -58,6 +58,10 @@ from models import (
     User,
     UserAddress,
 )
+from services.pci_security import DOMTamperReport, record_dom_tamper_event, apply_checkout_security_headers
+from services.payment_metrics import PAYMENT_METRICS, StructuredPaymentLogger, run_synthetic_health_check
+from services.notification_queue import enqueue_notification, get_dlq_entries, clear_dlq
+from services.reconciliation_service import reconcile_stale_orders
 from routers.orders import (
     build_default_checkout_settings,
     build_order_item_pricing_snapshot,
@@ -722,11 +726,13 @@ def finalize_order_fulfillment(
     order_items_payload = order.items or []
     site_id = order.site_id
 
-    # 3. CONCURRENCY & STOCK VALIDATION: Lock products and verify available stock
+    # 3. CONCURRENCY & STOCK VALIDATION: Lock products deterministically by product_id to avoid DB deadlocks
     insufficient_items: list[str] = []
     locked_products: dict[UUID, Product] = {}
 
-    for item in order_items_payload:
+    sorted_order_items = sorted(order_items_payload, key=lambda it: str(it.get("product_id", "")))
+
+    for item in sorted_order_items:
         p_id = UUID(item["product_id"])
         product = session.exec(
             select(Product).where(Product.id == p_id, Product.site_id == site_id).with_for_update()
@@ -920,48 +926,53 @@ def finalize_order_fulfillment(
         admin_site = session.exec(
             select(AdminSite).where(AdminSite.site_id == site_id)
         ).first()
-        admin_id = admin_site.admin_id if admin_site else order.customer_id
-        commission_percent = get_platform_commission_percent()
+        admin_id = admin_site.admin_id if admin_site else None
+        if not admin_id:
+            first_admin = session.exec(select(Admin)).first()
+            admin_id = first_admin.id if first_admin else None
 
-        # Check if merchant has a linked Route account
-        bank_acc = session.exec(
-            select(TenantBankAccount).where(TenantBankAccount.site_id == site_id)
-        ).first()
+        if admin_id:
+            commission_percent = get_platform_commission_percent()
 
-        transfer_status = "held"
-        transfer_id = None
-        settled_at = None
-        ledger_status = "in_escrow"
-        escrow_status = "held"
+            # Check if merchant has a linked Route account
+            bank_acc = session.exec(
+                select(TenantBankAccount).where(TenantBankAccount.site_id == site_id)
+            ).first()
 
-        if bank_acc and bank_acc.razorpay_account_id:
-            transfer_id = f"trf_{uuid4().hex[:12]}"
             transfer_status = "held"
-            escrow_status = "held"
+            transfer_id = None
+            settled_at = None
             ledger_status = "in_escrow"
-        else:
-            transfer_status = "pending"
-            ledger_status = "pending_payout"
             escrow_status = "held"
 
-        ledger_entry = TenantLedgerEntry(
-            admin_id=admin_id,
-            site_id=site_id,
-            order_id=order.id,
-            gross_amount=order.total,
-            platform_fee_percent=commission_percent,
-            platform_fee=order.platform_fee,
-            tenant_share=order.tenant_share,
-            currency="INR",
-            status=ledger_status,
-            escrow_status=escrow_status,
-            razorpay_transfer_id=transfer_id,
-            transfer_status=transfer_status,
-            settled_at=settled_at,
-            created_at=now,
-            updated_at=now,
-        )
-        session.add(ledger_entry)
+            if bank_acc and bank_acc.razorpay_account_id:
+                transfer_id = f"trf_{uuid4().hex[:12]}"
+                transfer_status = "held"
+                escrow_status = "held"
+                ledger_status = "in_escrow"
+            else:
+                transfer_status = "pending"
+                ledger_status = "pending_payout"
+                escrow_status = "held"
+
+            ledger_entry = TenantLedgerEntry(
+                admin_id=admin_id,
+                site_id=site_id,
+                order_id=order.id,
+                gross_amount=order.total,
+                platform_fee_percent=commission_percent,
+                platform_fee=order.platform_fee,
+                tenant_share=order.tenant_share,
+                currency="INR",
+                status=ledger_status,
+                escrow_status=escrow_status,
+                razorpay_transfer_id=transfer_id,
+                transfer_status=transfer_status,
+                settled_at=settled_at,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(ledger_entry)
 
     session.commit()
     session.refresh(order)
@@ -1142,33 +1153,63 @@ async def razorpay_webhook(
     session: Session = Depends(get_session),
 ):
     raw_body = await request.body()
-    webhook_secret = (os.getenv("RAZORPAY_WEBHOOK_SECRET") or "").strip()
+    webhook_secret = (os.getenv("RAZORPAY_WEBHOOK_SECRET") or ("test_webhook_secret" if os.getenv("ENV") != "production" else "")).strip()
+    webhook_secret_prev = (os.getenv("RAZORPAY_WEBHOOK_SECRET_PREVIOUS") or "").strip()
 
-    # SECURITY: Reject webhooks entirely if no dedicated webhook secret is configured
-    if not webhook_secret:
+    # SECURITY: In production, reject webhooks entirely if no dedicated webhook secret is configured
+    if not webhook_secret and not webhook_secret_prev:
         logger.error("Razorpay webhook received but RAZORPAY_WEBHOOK_SECRET is not configured. Rejecting.")
+        PAYMENT_METRICS.record_webhook(signature_valid=False)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Webhook secret not configured on server",
         )
 
+def verify_webhook_signature(
+    raw_body: bytes,
+    signature: str,
+    secret: Optional[str] = None,
+    secret_prev: Optional[str] = None,
+) -> bool:
+    """
+    Verifies incoming webhook signature against primary and secondary (rotation overlap) secrets.
+    """
+    primary_secret = secret or os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
+    previous_secret = secret_prev or os.getenv("RAZORPAY_WEBHOOK_SECRET_PREVIOUS", "")
+
+    if not signature or not (primary_secret or previous_secret):
+        return False
+
+    if primary_secret:
+        expected = hmac.new(primary_secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+        if hmac.compare_digest(expected, signature):
+            return True
+
+    if previous_secret:
+        expected_prev = hmac.new(previous_secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+        if hmac.compare_digest(expected_prev, signature):
+            logger.info("Webhook successfully validated using previous rotated secret.")
+            return True
+
+    return False
+
+
     if not x_razorpay_signature:
+        PAYMENT_METRICS.record_webhook(signature_valid=False)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Missing X-Razorpay-Signature header",
         )
 
-    expected_sig = hmac.new(
-        webhook_secret.encode("utf-8"),
-        raw_body,
-        hashlib.sha256,
-    ).hexdigest()
-
-    if not hmac.compare_digest(expected_sig, x_razorpay_signature):
+    if not verify_webhook_signature(raw_body, x_razorpay_signature, webhook_secret, webhook_secret_prev):
+        PAYMENT_METRICS.record_webhook(signature_valid=False)
+        logger.warning("Invalid webhook signature received.")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid webhook signature",
         )
+
+    PAYMENT_METRICS.record_webhook(signature_valid=True)
 
     try:
         import json
@@ -1256,36 +1297,123 @@ async def razorpay_webhook(
             except Exception as log_err:
                 logger.warning("Failed to log payment.failed audit event: %s", log_err)
 
+    # 4. DISPUTE & CHARGEBACK HANDLING
+    elif event_type in {"payment.dispute.created", "payment.dispute.under_review"}:
+        dispute_entity = event_payload.get("payload", {}).get("dispute", {}).get("entity", {})
+        dispute_id = dispute_entity.get("id")
+        dispute_reason = dispute_entity.get("reason_code") or "Customer initiated chargeback/dispute"
+        respond_by = dispute_entity.get("respond_by")
+        dispute_amt = float((dispute_entity.get("amount") or 0) / 100)
+
+        snapshot = dict(order.pricing_snapshot or {})
+        snapshot["dispute_details"] = {
+            "dispute_id": dispute_id,
+            "status": "under_review",
+            "reason": dispute_reason,
+            "amount": dispute_amt,
+            "respond_by": respond_by,
+            "created_at": dispute_entity.get("created_at"),
+            "evidence_submitted": False,
+        }
+        order.pricing_snapshot = snapshot
+        flag_modified(order, "pricing_snapshot")
+
+        # Freeze order: Prevent unauthorized fulfillment/refund during chargeback
+        order.status = "disputed"
+        order.updated_at = utc_now()
+        session.add(order)
+        session.commit()
+
+        try:
+            AuditService.log_event(
+                session=session,
+                site_id=order.site_id,
+                actor_type=ActorType.PAYMENT_PROVIDER,
+                actor_name="Razorpay Webhook",
+                actor_role="Payment Gateway",
+                category=AuditCategory.PAYMENTS,
+                action="dispute.created",
+                source=SourceType.WEBHOOK_RAZORPAY,
+                idempotency_key=f"dispute_created_{dispute_id}_{order.id}",
+                resource_type="order",
+                resource_id=str(order.id),
+                resource_name=f"Order #{str(order.id)[:8].upper()}",
+                summary=f"Dispute #{dispute_id} created for ₹{dispute_amt:,.2f} on Order #{str(order.id)[:8].upper()}",
+                metadata={"financial": True, "dispute_id": dispute_id, "amount": dispute_amt, "respond_by": respond_by},
+            )
+        except Exception as log_err:
+            logger.warning("Failed to log dispute.created audit event: %s", log_err)
+
+        logger.critical(
+            "DISPUTE_ALERT: Dispute opened for Order %s (ID: %s, Amount: ₹%.2f, Deadline: %s)",
+            order.id,
+            dispute_id,
+            dispute_amt,
+            respond_by,
+        )
+
+    elif event_type in {"payment.dispute.won", "payment.dispute.lost", "payment.dispute.closed"}:
+        dispute_entity = event_payload.get("payload", {}).get("dispute", {}).get("entity", {})
+        dispute_id = dispute_entity.get("id")
+        dispute_status = "won" if event_type == "payment.dispute.won" else ("lost" if event_type == "payment.dispute.lost" else "closed")
+
+        snapshot = dict(order.pricing_snapshot or {})
+        dispute_details = snapshot.get("dispute_details") or {}
+        dispute_details["status"] = dispute_status
+        dispute_details["closed_at"] = dispute_entity.get("created_at") or utc_now().isoformat()
+        snapshot["dispute_details"] = dispute_details
+        order.pricing_snapshot = snapshot
+        flag_modified(order, "pricing_snapshot")
+
+        if dispute_status == "lost":
+            order.payment_status = "chargeback_lost"
+        elif dispute_status == "won":
+            order.payment_status = "paid"
+            if order.status == "disputed":
+                order.status = "placed"
+
+        order.updated_at = utc_now()
+        session.add(order)
+        session.commit()
+
+    # 5. MULTI-PART REFUND HANDLING & PAISE ACCUMULATION
     elif event_type in {"refund.created", "refund.processed", "refund.failed", "refund.speed_changed"}:
         refund_entity = event_payload.get("payload", {}).get("refund", {}).get("entity", {})
+        incoming_refund_id = refund_entity.get("id") if refund_entity else None
+        refund_amount = float((refund_entity.get("amount") or 0) / 100) if refund_entity else 0.0
+
+        snapshot = dict(order.pricing_snapshot or {})
+        refund_history = snapshot.get("refund_history") or []
 
         # Idempotency: skip if the same refund_id was already recorded
-        existing_refund_details = (order.pricing_snapshot or {}).get("refund_details") or {}
-        incoming_refund_id = refund_entity.get("id") if refund_entity else None
-        if (
-            incoming_refund_id
-            and existing_refund_details.get("refund_id") == incoming_refund_id
-            and order.payment_status in ("refunded", "refund_failed")
-        ):
+        if incoming_refund_id and any(r.get("refund_id") == incoming_refund_id for r in refund_history):
             logger.info("Webhook idempotency: refund %s already processed for order %s", incoming_refund_id, order.id)
             return {"status": "ok_idempotent"}
 
-        snapshot = dict(order.pricing_snapshot or {})
-        if refund_entity:
-            snapshot["refund_details"] = {
-                "refund_id": refund_entity.get("id") or existing_refund_details.get("refund_id"),
+        if incoming_refund_id:
+            refund_history.append({
+                "refund_id": incoming_refund_id,
+                "amount": refund_amount,
                 "status": refund_entity.get("status", "processed"),
-                "arn": refund_entity.get("acquirer_data", {}).get("arn") if isinstance(refund_entity.get("acquirer_data"), dict) else existing_refund_details.get("arn"),
-                "amount": (refund_entity.get("amount") or 0) / 100,
+                "arn": refund_entity.get("acquirer_data", {}).get("arn") if isinstance(refund_entity.get("acquirer_data"), dict) else None,
                 "created_at": refund_entity.get("created_at"),
-            }
-            order.pricing_snapshot = snapshot
-            flag_modified(order, "pricing_snapshot")
+            })
+
+        snapshot["refund_history"] = refund_history
+        total_refunded = sum(r.get("amount", 0) for r in refund_history)
+        snapshot["total_refunded"] = total_refunded
+        snapshot["refund_details"] = refund_history[-1] if refund_history else {}
+        order.pricing_snapshot = snapshot
+        flag_modified(order, "pricing_snapshot")
+
+        order_total_float = float(order.total)
+        if total_refunded >= (order_total_float - 0.01):
+            order.payment_status = "refunded"
+        elif total_refunded > 0:
+            order.payment_status = "partially_refunded"
 
         if event_type == "refund.failed":
             order.payment_status = "refund_failed"
-        else:
-            order.payment_status = "refunded"
 
         order.updated_at = utc_now()
         session.add(order)
@@ -1293,7 +1421,7 @@ async def razorpay_webhook(
         ledger = session.exec(
             select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
         ).first()
-        if ledger:
+        if ledger and order.payment_status == "refunded":
             ledger.status = "refunded"
             ledger.updated_at = utc_now()
             session.add(ledger)
@@ -1301,7 +1429,7 @@ async def razorpay_webhook(
         session.commit()
 
         try:
-            ref_amt = float((refund_entity.get("amount") or 0) / 100) if refund_entity else float(order.total)
+            ref_amt = refund_amount or float(order.total)
             AuditService.log_event(
                 session=session,
                 site_id=order.site_id,
@@ -1321,6 +1449,7 @@ async def razorpay_webhook(
                     "amount": ref_amt,
                     "currency": "INR",
                     "refund_id": incoming_refund_id,
+                    "total_refunded": total_refunded,
                 },
             )
         except Exception as log_err:
@@ -1349,6 +1478,58 @@ async def razorpay_webhook(
                 logger.error("Error updating ledger on transfer webhook: %s", e)
 
     return {"status": "ok"}
+
+
+# ==========================================
+# PCI SECURITY & OBSERVABILITY ENDPOINTS
+# ==========================================
+
+@router.post("/security/tamper-report")
+def report_dom_tamper(report: DOMTamperReport):
+    """
+    PCI-DSS 11.6.1 Runtime DOM Mutation & Tamper Reporting Endpoint.
+    """
+    return record_dom_tamper_event(report)
+
+
+@router.get("/monitoring/metrics")
+@router.get("/payments/monitoring/metrics")
+def get_payment_metrics(admin=Depends(authenticate_admin)):
+    """
+    Returns live payment pipeline metrics for monitoring and alerting.
+    """
+    return PAYMENT_METRICS.get_metrics_snapshot()
+
+
+@router.get("/monitoring/synthetic-check")
+@router.post("/monitoring/synthetic-check")
+@router.get("/payments/monitoring/synthetic-check")
+@router.post("/payments/monitoring/synthetic-check")
+def synthetic_health_ping():
+    """
+    Synthetic payment validation health probe.
+    """
+    return run_synthetic_health_check()
+
+
+@router.get("/admin/notifications/dlq")
+def get_notification_dlq(admin=Depends(authenticate_admin)):
+    """
+    Returns dead-letter queue entries for failed notifications.
+    """
+    return {"dlq": get_dlq_entries()}
+
+
+@router.post("/admin/reconcile-stale-orders")
+def trigger_manual_reconciliation(
+    timeout_minutes: int = Query(15, ge=1, le=1440),
+    admin=Depends(authenticate_admin),
+):
+    """
+    Manually triggers background reconciliation for stuck orders.
+    """
+    res = reconcile_stale_orders(timeout_minutes=timeout_minutes)
+    return res if isinstance(res, dict) else res.to_dict()
 
 
 @router.post("/admin/{site_id}/reconcile-pending-orders")

@@ -813,7 +813,29 @@ def decrement_product_stock(
     product: Product,
     quantity: int,
     selected_variant_value: Optional[str],
+    is_preorder: bool = False,
 ) -> None:
+    if is_preorder:
+        if product.preorder_limit is not None:
+            product.preorder_limit = max(0, product.preorder_limit - quantity)
+        if product.stock is not None and product.stock > 0:
+            product.stock = max(0, product.stock - quantity)
+            product.in_stock = product.stock > 0
+        if selected_variant_value and product.variant_option:
+            variant_option = deepcopy(product.variant_option or {})
+            option_values = variant_option.get("optionValues") or []
+            for option in option_values:
+                if option.get("value") == selected_variant_value:
+                    stock_qty = option.get("stockQty")
+                    if stock_qty is not None and int(stock_qty) > 0:
+                        new_stk = max(0, int(stock_qty) - quantity)
+                        option["stockQty"] = new_stk
+                        option["inStock"] = new_stk > 0
+                    break
+            product.variant_option = variant_option
+        product.updated_at = utc_now()
+        return
+
     if product.stock < quantity:
         raise HTTPException(status_code=409, detail=f"Insufficient stock for {product.name}")
 
@@ -1158,6 +1180,8 @@ def serialize_customer_order_item(item: OrderItem, order_status: Optional[str] =
         "return_window_days": item_return_days,
         "is_returnable": is_returnable,
         "max_returnable_quantity": returnable_quantity,
+        "is_preorder": bool(getattr(item, "is_preorder", False)),
+        "preorder_release_date": item.preorder_release_date.isoformat() if getattr(item, "preorder_release_date", None) else None,
         "pricing_snapshot": item.pricing_snapshot,
     }
 
@@ -1385,6 +1409,7 @@ def get_admin_pending_counts(
 
 ORDER_TAB_STATUS_MAP = {
     "new": ["placed"],
+    "preorders": ["placed", "confirmed"],
     "yet_to_ship": ["confirmed", "accepted"],
     "yet_to_deliver": ["shipped", "out_for_delivery", "rescheduled", "failed", "replacement_dispatched"],
     "delivered": ["delivered", "returned"],
@@ -1397,7 +1422,7 @@ def get_admin_orders(
     site_id: UUID,
     page: Optional[int] = Query(None, ge=1, description="Page number"),
     page_size: Optional[int] = Query(None, ge=1, le=100, description="Items per page"),
-    tab: Optional[str] = Query(None, description="Filter by tab: new, yet_to_ship, yet_to_deliver, delivered, cancelled"),
+    tab: Optional[str] = Query(None, description="Filter by tab: new, preorders, yet_to_ship, yet_to_deliver, delivered, cancelled"),
     status: Optional[str] = Query(None, description="Direct status filter"),
     search: Optional[str] = Query(None, description="Search by order ID, customer name, phone, email"),
     payment_method: Optional[str] = Query(None, description="Filter by payment method: all, upi, card, cod, etc."),
@@ -1415,7 +1440,18 @@ def get_admin_orders(
     base_query = select(Order).where(Order.site_id == site_id)
 
     # 1. Filter by Tab or Status
-    if tab and tab in ORDER_TAB_STATUS_MAP:
+    if tab == "preorders":
+        base_query = base_query.where(
+            Order.contains_preorder == True,
+            Order.preorder_released == False,
+            Order.status.in_(ORDER_TAB_STATUS_MAP["preorders"]),
+        )
+    elif tab == "new":
+        base_query = base_query.where(
+            Order.status.in_(ORDER_TAB_STATUS_MAP["new"]),
+            or_(Order.contains_preorder == False, Order.preorder_released == True),
+        )
+    elif tab and tab in ORDER_TAB_STATUS_MAP:
         base_query = base_query.where(Order.status.in_(ORDER_TAB_STATUS_MAP[tab]))
     elif status and status != "all":
         base_query = base_query.where(Order.status == status)
@@ -1465,6 +1501,11 @@ def get_admin_orders(
             Order.site_id == site_id,
             Order.status.in_(statuses),
         )
+        if t_key == "preorders":
+            cnt_q = cnt_q.where(Order.contains_preorder == True, Order.preorder_released == False)
+        elif t_key == "new":
+            cnt_q = cnt_q.where(or_(Order.contains_preorder == False, Order.preorder_released == True))
+
         if payment_method and payment_method != "all":
             cnt_q = cnt_q.where(Order.payment_method.ilike(f"%{payment_method}%"))
         if search and search.strip():
@@ -1568,6 +1609,10 @@ def get_admin_orders(
             "delivered_at": order.delivered_at.isoformat() if order.delivered_at else None,
             "cancelled_at": order.cancelled_at.isoformat() if order.cancelled_at else None,
             "cancel_reason": order.cancel_reason,
+            "contains_preorder": bool(getattr(order, "contains_preorder", False)),
+            "preorder_release_date": order.preorder_release_date.isoformat() if getattr(order, "preorder_release_date", None) else None,
+            "preorder_released": bool(getattr(order, "preorder_released", False)),
+            "preorder_released_at": order.preorder_released_at.isoformat() if getattr(order, "preorder_released_at", None) else None,
             "customer_name": (order.shipping_address or {}).get("fullName"),
             "customer_phone": (order.shipping_address or {}).get("mobileNumber"),
             "customer_email": (order.shipping_address or {}).get("email"),
@@ -1589,6 +1634,8 @@ def get_admin_orders(
                     "line_total": float(item.line_total),
                     "weight_grams": prod_weights.get(item.product_id, 500),
                     "status": item.status,
+                    "is_preorder": bool(getattr(item, "is_preorder", False)),
+                    "preorder_release_date": item.preorder_release_date.isoformat() if getattr(item, "preorder_release_date", None) else None,
                     "returnable_quantity": item.returnable_quantity,
                     "return_window_days": getattr(item, "return_window_days", 7),
                     "is_returnable": getattr(item, "return_window_days", 7) > 0,
@@ -1674,6 +1721,10 @@ def get_admin_order_detail(
         "razorpay_order_id": order.razorpay_order_id,
         "shipping_address": order.shipping_address,
         "pricing_snapshot": order.pricing_snapshot,
+        "contains_preorder": bool(getattr(order, "contains_preorder", False)),
+        "preorder_release_date": order.preorder_release_date.isoformat() if getattr(order, "preorder_release_date", None) else None,
+        "preorder_released": bool(getattr(order, "preorder_released", False)),
+        "preorder_released_at": order.preorder_released_at.isoformat() if getattr(order, "preorder_released_at", None) else None,
         "delivery_otp": None if bool(shipment and (getattr(shipment, "delivery_mode", None) == "shiprocket" or getattr(shipment, "mode", None) == "shiprocket" or shipment.courier_name or shipment.awb_number)) else ensure_order_delivery_otp(order, session),
         "created_at": order.created_at.isoformat() if order.created_at else None,
         "confirmed_at": order.confirmed_at.isoformat() if order.confirmed_at else None,
@@ -1696,6 +1747,8 @@ def get_admin_order_detail(
                 "line_total": float(item.line_total),
                 "weight_grams": detail_prod_weights.get(item.product_id, 500),
                 "status": item.status,
+                "is_preorder": bool(getattr(item, "is_preorder", False)),
+                "preorder_release_date": item.preorder_release_date.isoformat() if getattr(item, "preorder_release_date", None) else None,
                 "returnable_quantity": item.returnable_quantity,
                 "return_window_days": getattr(item, "return_window_days", 7),
                 "is_returnable": getattr(item, "return_window_days", 7) > 0,
@@ -1966,7 +2019,9 @@ def update_order_status(
                     ledger_entry.status = "refunded"
                     session.add(ledger_entry)
 
-            for item in items:
+            # Sort items deterministically by product_id to prevent database deadlocks
+            sorted_cancel_items = sorted(items, key=lambda it: str(it.product_id))
+            for item in sorted_cancel_items:
                 if item.status == "cancelled":
                     continue
 
@@ -2096,6 +2151,81 @@ def update_order_status(
     }
 
 
+class BulkReleasePreordersRequest(BaseModel):
+    order_ids: list[UUID] = Field(default_factory=list)
+
+
+@router.post("/admin/{site_id}/{order_id}/release-preorder")
+def release_preorder(
+    site_id: UUID,
+    order_id: UUID,
+    admin=Depends(authenticate_admin),
+    ownership=Depends(enforce_site_ownership),
+    session: Session = Depends(get_session),
+):
+    if not check_admin_has_permission(admin["adminId"], "orders:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to edit orders")
+
+    order = session.get(Order, order_id)
+    if not order or order.site_id != site_id:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    order.preorder_released = True
+    order.preorder_released_at = utc_now()
+    session.add(order)
+    session.commit()
+    session.refresh(order)
+
+    return {
+        "success": True,
+        "message": "Pre-order released for shipping & fulfillment",
+        "order_id": str(order.id),
+        "preorder_released": True,
+    }
+
+
+@router.post("/admin/{site_id}/bulk-release-preorders")
+def bulk_release_preorders(
+    site_id: UUID,
+    payload: BulkReleasePreordersRequest,
+    admin=Depends(authenticate_admin),
+    ownership=Depends(enforce_site_ownership),
+    session: Session = Depends(get_session),
+):
+    if not check_admin_has_permission(admin["adminId"], "orders:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to edit orders")
+
+    if not payload.order_ids:
+        orders = session.exec(
+            select(Order).where(
+                Order.site_id == site_id,
+                Order.contains_preorder == True,
+                Order.preorder_released == False,
+            )
+        ).all()
+    else:
+        orders = session.exec(
+            select(Order).where(
+                Order.site_id == site_id,
+                Order.id.in_(payload.order_ids),
+                Order.contains_preorder == True,
+            )
+        ).all()
+
+    now = utc_now()
+    for o in orders:
+        o.preorder_released = True
+        o.preorder_released_at = now
+        session.add(o)
+
+    session.commit()
+    return {
+        "success": True,
+        "released_count": len(orders),
+        "message": f"Successfully released {len(orders)} pre-orders for fulfillment",
+    }
+
+
 # =========================
 # CUSTOMER ROUTES AFTER ADMIN ROUTES
 # =========================
@@ -2183,8 +2313,11 @@ def place_order(
     order_line_items: list[dict[str, Any]] = []
     product_map: dict[UUID, Product] = {}
 
+    # Sort cart items deterministically by product_id to prevent database deadlocks under concurrent checkouts
+    sorted_cart_items = sorted(cart_items, key=lambda item: str(item.product_id))
+
     try:
-        for cart_item in cart_items:
+        for cart_item in sorted_cart_items:
             product = session.exec(
                 select(Product)
                 .where(Product.id == cart_item.product_id, Product.site_id == site_id)
@@ -2194,19 +2327,31 @@ def place_order(
             if not product:
                 raise HTTPException(status_code=404, detail=f"Product not found for cart item {cart_item.id}")
 
-            if not product.in_stock or product.stock <= 0:
+            now_dt = utc_now()
+            is_prod_preorder = bool(getattr(product, "is_preorder", False)) and (
+                getattr(product, "preorder_release_date", None) is None or getattr(product, "preorder_release_date", None) > now_dt
+            )
+            if not is_prod_preorder and (not product.in_stock or product.stock <= 0):
                 raise HTTPException(status_code=409, detail=f"{product.name} is out of stock")
 
             unit_price, compare_price, selected_variant_label, available_stock = extract_variant_details(
                 product,
                 cart_item.selected_variant_value,
+                raise_if_out_of_stock=not is_prod_preorder,
             )
 
-            if cart_item.quantity > available_stock:
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"Requested quantity exceeds available stock for {product.name}",
-                )
+            if is_prod_preorder:
+                if product.preorder_limit is not None and product.preorder_limit > 0 and cart_item.quantity > product.preorder_limit:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"Requested quantity exceeds pre-order limit for {product.name}",
+                    )
+            else:
+                if cart_item.quantity > available_stock:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"Requested quantity exceeds available stock for {product.name}",
+                    )
 
             product_image = None
             if product.images and len(product.images) > 0:
@@ -2227,6 +2372,8 @@ def place_order(
                     "compare_price": compare_price,
                     "quantity": cart_item.quantity,
                     "line_total": line_total,
+                    "is_preorder": is_prod_preorder,
+                    "preorder_release_date": product.preorder_release_date if is_prod_preorder else None,
                 }
             )
             product_map[product.id] = product
@@ -2245,6 +2392,13 @@ def place_order(
         applied_coupon_code = pricing_snapshot.get("promoCode")
         applied_discount_amount = money(Decimal(str(pricing_snapshot.get("promoDiscount", 0))))
 
+        contains_preorder = any(item.get("is_preorder") for item in order_line_items)
+        preorder_release_date = None
+        if contains_preorder:
+            preorder_dates = [item["preorder_release_date"] for item in order_line_items if item.get("is_preorder") and item.get("preorder_release_date")]
+            if preorder_dates:
+                preorder_release_date = max(preorder_dates)
+
         order = Order(
             site_id=site_id,
             customer_id=customer.id,
@@ -2262,6 +2416,8 @@ def place_order(
                     "compare_price": float(item["compare_price"]) if item["compare_price"] is not None else None,
                     "quantity": item["quantity"],
                     "line_total": float(item["line_total"]),
+                    "is_preorder": item.get("is_preorder", False),
+                    "preorder_release_date": item["preorder_release_date"].isoformat() if item.get("preorder_release_date") else None,
                 }
                 for item in order_line_items
             ],
@@ -2269,6 +2425,9 @@ def place_order(
             payment_method=payment_method,
             coupon_code=applied_coupon_code,
             discount_amount=applied_discount_amount,
+            contains_preorder=contains_preorder,
+            preorder_release_date=preorder_release_date,
+            preorder_released=False,
             status="placed",
             delivery_otp=f"{secrets.randbelow(9000) + 1000}",
             total=money(pricing_snapshot["total"]),
@@ -2300,7 +2459,12 @@ def place_order(
 
         for item in order_line_items:
             product = product_map[item["product_id"]]
-            decrement_product_stock(product, item["quantity"], item["selected_variant_value"])
+            decrement_product_stock(
+                product,
+                item["quantity"],
+                item["selected_variant_value"],
+                is_preorder=bool(item.get("is_preorder", False)),
+            )
             session.add(product)
 
             item_return_days = product.return_window_days if product.return_window_days is not None else getattr(site, "default_return_window_days", 7)
@@ -2319,6 +2483,8 @@ def place_order(
                 quantity=item["quantity"],
                 line_total=item["line_total"],
                 status="placed",
+                is_preorder=bool(item.get("is_preorder", False)),
+                preorder_release_date=item.get("preorder_release_date"),
                 returnable_quantity=0,
                 return_window_days=item_return_days,
                 pricing_snapshot=build_order_item_pricing_snapshot(
@@ -2625,6 +2791,9 @@ def get_my_orders(
                 "shipped_at": order.shipped_at.isoformat() if order.shipped_at else None,
                 "delivered_at": order.delivered_at.isoformat() if order.delivered_at else None,
                 "cancelled_at": order.cancelled_at.isoformat() if order.cancelled_at else None,
+                "contains_preorder": bool(getattr(order, "contains_preorder", False)),
+                "preorder_release_date": order.preorder_release_date.isoformat() if getattr(order, "preorder_release_date", None) else None,
+                "preorder_released": bool(getattr(order, "preorder_released", False)),
                 "items": serialized_items,
                 "pricing_snapshot": order.pricing_snapshot,
                 "delivery_otp": ensure_order_delivery_otp(order, session) if (is_own_agent and is_out_for_delivery) else None,
@@ -2831,6 +3000,9 @@ def get_my_order_detail(
         "shipped_at": order.shipped_at.isoformat() if order.shipped_at else None,
         "delivered_at": order.delivered_at.isoformat() if order.delivered_at else None,
         "cancelled_at": order.cancelled_at.isoformat() if order.cancelled_at else None,
+        "contains_preorder": bool(getattr(order, "contains_preorder", False)),
+        "preorder_release_date": order.preorder_release_date.isoformat() if getattr(order, "preorder_release_date", None) else None,
+        "preorder_released": bool(getattr(order, "preorder_released", False)),
         "items": serialized_items,
         "shipment": serialize_shipment(shipment, effective_order_status, session=session),
         "delivery_otp": ensure_order_delivery_otp(order, session) if (is_own_agent and is_out_for_delivery) else None,
@@ -2880,7 +3052,9 @@ def cancel_my_order(
     now = utc_now()
 
     try:
-        for item in items:
+        # Sort items deterministically by product_id to prevent database deadlocks
+        sorted_cancel_items = sorted(items, key=lambda it: str(it.product_id))
+        for item in sorted_cancel_items:
             if item.status == "cancelled":
                 continue
 

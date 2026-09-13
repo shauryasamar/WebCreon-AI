@@ -233,7 +233,16 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   const [screenSize, setScreenSize] = useState<{ isMobile: boolean; isTablet: boolean }>(() => {
     if (typeof window === "undefined") return { isMobile: false, isTablet: false };
     const w = window.innerWidth;
-    return { isMobile: w <= 640, isTablet: w <= 960 };
+    const isTouch = typeof navigator !== "undefined" && (navigator.maxTouchPoints > 0 || "ontouchstart" in window);
+    const isIPadOrTablet =
+      typeof navigator !== "undefined" &&
+      (/iPad|Android(?!.*Mobile)|Tablet|PlayBook|Silk/i.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) ||
+        (/Macintosh/i.test(navigator.userAgent) && isTouch));
+    return {
+      isMobile: w <= 640,
+      isTablet: w <= 1040 || (isIPadOrTablet && w <= 1400) || (isTouch && w <= 1400 && w > 640),
+    };
   });
 
   useEffect(() => {
@@ -241,8 +250,14 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
     let timeoutId: any = null;
     const checkBreakpoints = () => {
       const w = window.innerWidth;
+      const isTouch = typeof navigator !== "undefined" && (navigator.maxTouchPoints > 0 || "ontouchstart" in window);
+      const isIPadOrTablet =
+        typeof navigator !== "undefined" &&
+        (/iPad|Android(?!.*Mobile)|Tablet|PlayBook|Silk/i.test(navigator.userAgent) ||
+          (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) ||
+          (/Macintosh/i.test(navigator.userAgent) && isTouch));
       const nextMobile = w <= 640;
-      const nextTablet = w <= 960;
+      const nextTablet = w <= 1040 || (isIPadOrTablet && w <= 1400) || (isTouch && w <= 1400 && w > 640);
       setScreenSize((prev) => {
         if (prev.isMobile === nextMobile && prev.isTablet === nextTablet) {
           return prev;
@@ -257,9 +272,11 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
     };
 
     window.addEventListener("resize", debouncedResize, { passive: true });
+    window.addEventListener("orientationchange", debouncedResize, { passive: true });
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
       window.removeEventListener("resize", debouncedResize);
+      window.removeEventListener("orientationchange", debouncedResize);
     };
   }, []);
 

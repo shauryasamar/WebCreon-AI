@@ -34,6 +34,7 @@ from auth_middleware import (
     resolve_site_by_slug_or_404,
 )
 from db.database import create_db_and_tables, get_session, engine
+# Pre-order schema migrations enabled
 from models import (
     Admin, AdminSite, Site, Product, Category, Collection, Cart, CartItem, Order, OrderItem,
     ProductCollection, ProductReview, ReturnRequest, ReturnItem, ReturnStatusHistory,
@@ -258,8 +259,40 @@ async def _domain_edge_sync_cron_task():
             logger.error("Error in domain edge sync background task: %s", err)
 
 
+async def _order_reconciliation_cron_task():
+    """Periodically reconciles stale/orphaned pending orders (runs every 10 minutes)."""
+    while True:
+        try:
+            await asyncio.sleep(600)  # Check every 10 minutes
+            with Session(engine) as session:
+                from services.reconciliation_service import reconcile_stale_orders
+                result = reconcile_stale_orders(session=session, timeout_minutes=15)
+                if result.get("total_scanned", 0) > 0:
+                    logger.info("Order Reconciliation Background Job: Scanned %d, auto-healed %d orders",
+                                result.get("total_scanned", 0), result.get("healed_count", 0))
+        except asyncio.CancelledError:
+            break
+        except Exception as err:
+            logger.error("Error in order reconciliation background task: %s", err)
+
+
+def validate_production_environment_keys():
+    """Fails boot if ENV=production while Razorpay is running in test mode."""
+    env = os.getenv("ENV", "development").lower()
+    rzp_mode = os.getenv("RAZORPAY_MODE", "test").lower()
+    rzp_key = os.getenv("RAZORPAY_KEY_ID", "")
+    
+    if env == "production":
+        if rzp_mode == "test" or rzp_key.startswith("rzp_test_"):
+            raise RuntimeError(
+                "CRITICAL SECURITY CONFIGURATION ERROR: ENV=production is active but Razorpay is configured with test keys "
+                f"(RAZORPAY_MODE={rzp_mode}, KEY_ID={rzp_key[:10]}...). Server boot aborted to prevent production charge failures."
+            )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    validate_production_environment_keys()
     create_db_and_tables()
     try:
         with engine.connect() as conn:
@@ -284,6 +317,7 @@ async def lifespan(app: FastAPI):
     escrow_task = asyncio.create_task(_mature_escrow_cron_task())
     retention_task = asyncio.create_task(_activity_retention_cron_task())
     domain_sync_task = asyncio.create_task(_domain_edge_sync_cron_task())
+    reconcile_task = asyncio.create_task(_order_reconciliation_cron_task())
     try:
         yield
     finally:
@@ -295,6 +329,7 @@ async def lifespan(app: FastAPI):
         escrow_task.cancel()
         retention_task.cancel()
         domain_sync_task.cancel()
+        reconcile_task.cancel()
         try:
             await escrow_task
         except asyncio.CancelledError:
@@ -305,6 +340,10 @@ async def lifespan(app: FastAPI):
             pass
         try:
             await domain_sync_task
+        except asyncio.CancelledError:
+            pass
+        try:
+            await reconcile_task
         except asyncio.CancelledError:
             pass
 

@@ -1907,7 +1907,12 @@ def inspect_return_request(
     now = utc_now()
 
     try:
-        for line in payload.items:
+        # Sort items deterministically by product_id to prevent database deadlocks
+        sorted_lines = sorted(
+            payload.items,
+            key=lambda l: str(items_map.get(l.return_item_id).product_id) if items_map.get(l.return_item_id) else "",
+        )
+        for line in sorted_lines:
             return_item = items_map.get(line.return_item_id)
             if not return_item:
                 raise HTTPException(status_code=404, detail=f"Return item {line.return_item_id} not found")

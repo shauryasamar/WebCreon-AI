@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
-import { useCart, Product } from "../CartContext";
+import { useCart, Product, isProductPreorderActive } from "../CartContext";
 import FilterSidebar from "./FilterSidebar";
 import { Pagination } from "./Pagination";
 import { resolveThemeTokens } from "../context/ThemeContext";
@@ -236,13 +236,24 @@ const ProductGrid: React.FC<ProductGridProps> = ({
       : "/store"
     : `/builder/${siteId}`;
 
-  const [screenSize, setScreenSize] = useState<{ isMobile: boolean; isTablet: boolean; isLargePhone: boolean }>(() => {
+  const [screenSize, setScreenSize] = useState<{
+    isMobile: boolean;
+    isTablet: boolean;
+    isLargePhone: boolean;
+  }>(() => {
     if (typeof window === "undefined") return { isMobile: false, isTablet: false, isLargePhone: false };
     const w = window.innerWidth;
+    const isTouch = typeof navigator !== "undefined" && (navigator.maxTouchPoints > 0 || "ontouchstart" in window);
+    const isIPadOrTablet =
+      typeof navigator !== "undefined" &&
+      (/iPad|Android(?!.*Mobile)|Tablet|PlayBook|Silk/i.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) ||
+        (/Macintosh/i.test(navigator.userAgent) && isTouch));
+    const isTab = (w > 640 && w <= 1040) || (isIPadOrTablet && w <= 1400) || (isTouch && w <= 1400 && w > 640);
     return {
       isMobile: w <= 640,
       isLargePhone: w > 480 && w <= 640,
-      isTablet: w > 640 && w <= 1024,
+      isTablet: isTab,
     };
   });
 
@@ -251,9 +262,15 @@ const ProductGrid: React.FC<ProductGridProps> = ({
     let timeoutId: any = null;
     const checkBreakpoints = () => {
       const w = window.innerWidth;
+      const isTouch = typeof navigator !== "undefined" && (navigator.maxTouchPoints > 0 || "ontouchstart" in window);
+      const isIPadOrTablet =
+        typeof navigator !== "undefined" &&
+        (/iPad|Android(?!.*Mobile)|Tablet|PlayBook|Silk/i.test(navigator.userAgent) ||
+          (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) ||
+          (/Macintosh/i.test(navigator.userAgent) && isTouch));
       const nextMobile = w <= 640;
       const nextLargePhone = w > 480 && w <= 640;
-      const nextTablet = w > 640 && w <= 1024;
+      const nextTablet = (w > 640 && w <= 1040) || (isIPadOrTablet && w <= 1400) || (isTouch && w <= 1400 && w > 640);
       setScreenSize((prev) => {
         if (
           prev.isMobile === nextMobile &&
@@ -272,9 +289,11 @@ const ProductGrid: React.FC<ProductGridProps> = ({
     };
 
     window.addEventListener("resize", debouncedResize, { passive: true });
+    window.addEventListener("orientationchange", debouncedResize, { passive: true });
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
       window.removeEventListener("resize", debouncedResize);
+      window.removeEventListener("orientationchange", debouncedResize);
     };
   }, []);
 
@@ -761,32 +780,81 @@ const ProductGrid: React.FC<ProductGridProps> = ({
             };
 
             const festTheme = (theme as any)?.festival_theme;
+            const isPreorder = isProductPreorderActive(product);
 
-            const renderDiscountBadge = () => (
-              showDiscount ? (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: isMobile ? "6px" : "10px",
-                    left: isMobile ? "6px" : "10px",
-                    zIndex: 2,
-                    padding: isMobile ? "2px 6px" : "4px 8px",
-                    borderRadius: "999px",
-                    background: "#166534",
-                    color: "#ffffff",
-                    fontSize: isMobile ? "9px" : "10px",
-                    fontWeight: 800,
-                    letterSpacing: "0.04em",
-                    boxShadow: "0 2px 8px rgba(22,101,52,0.25)",
-                  }}
-                >
-                  {product.normalizedDiscountPercent}% OFF
-                </div>
-              ) : null
-            );
+            const renderDiscountBadge = () => {
+              return (
+                show_discount_badge && product.normalizedDiscountPercent > 0 ? (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: isMobile ? "6px" : "10px",
+                      left: isMobile ? "6px" : "10px",
+                      zIndex: 2,
+                      padding: isMobile ? "2px 6px" : "4px 8px",
+                      borderRadius: "999px",
+                      background: "#166534",
+                      color: "#ffffff",
+                      fontSize: isMobile ? "9px" : "10px",
+                      fontWeight: 800,
+                      letterSpacing: "0.04em",
+                      boxShadow: "0 2px 8px rgba(22,101,52,0.25)",
+                    }}
+                  >
+                    {product.normalizedDiscountPercent}% OFF
+                  </div>
+                ) : null
+              );
+            };
 
-            const renderInStockBadge = (centered = false) => (
-              show_stock_badge ? (
+            const renderInStockBadge = (centered = false) => {
+              if (isPreorder) {
+                const releaseDateObj = product?.preorder_release_date ? new Date(product.preorder_release_date) : null;
+                const formattedDate = releaseDateObj && !isNaN(releaseDateObj.getTime())
+                  ? releaseDateObj.toLocaleString(undefined, {
+                      day: "numeric",
+                      month: "short",
+                      hour: "numeric",
+                      minute: "2-digit",
+                      hour12: true,
+                    })
+                  : null;
+
+                return (
+                  <div style={{ display: "inline-flex", flexDirection: "column", alignItems: centered ? "center" : "flex-end", gap: "1px", flexShrink: 0 }}>
+                    <span
+                      style={{
+                        fontSize: isMobile ? "9px" : "11px",
+                        fontWeight: 700,
+                        color: "#d97706",
+                        background: "rgba(217,119,6,0.08)",
+                        padding: isMobile ? "2px 6px" : "3px 10px",
+                        borderRadius: "999px",
+                        border: "1px solid #d97706",
+                        display: "inline-block",
+                        textAlign: "center",
+                        margin: centered ? (isMobile ? "4px auto 0" : "8px auto 0") : undefined,
+                        flexShrink: 0,
+                      }}
+                    >
+                      Pre-Order
+                    </span>
+                    {formattedDate && (
+                      <span
+                        style={{
+                          fontSize: isMobile ? "8.5px" : "9.5px",
+                          fontWeight: 600,
+                          color: "#b45309",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        Till {formattedDate}
+                      </span>
+                    )}
+                  </div>
+                );
+              }
+              return show_stock_badge ? (
                 <span
                   style={{
                     fontSize: isMobile ? "9px" : "11px",
@@ -804,8 +872,8 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                 >
                   {product.normalizedInStock ? "In stock" : "Out of stock"}
                 </span>
-              ) : null
-            );
+              ) : null;
+            };
 
             const targetSlug = product.slug || product.id;
 

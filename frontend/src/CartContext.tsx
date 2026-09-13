@@ -100,13 +100,32 @@ export type Product = {
   sales_count?: number | null;
   salesCount?: number | null;
   return_window_days?: number | null;
+  is_preorder?: boolean;
+  preorder_release_date?: string | null;
+  preorder_message?: string | null;
+  preorder_limit?: number | null;
+  is_preorder_active?: boolean;
   created_at?: string | Date | null;
   updated_at?: string | Date | null;
   reviews?: ProductReview[];
 };
 
+export function isProductPreorderActive(product?: Partial<Product> | null): boolean {
+  if (!product || !product.is_preorder) return false;
+  if (product.is_preorder_active !== undefined) return Boolean(product.is_preorder_active);
+  if (!product.preorder_release_date) return true;
+  try {
+    return new Date(product.preorder_release_date).getTime() > Date.now();
+  } catch {
+    return true;
+  }
+}
+
 export type CartItem = Product & {
   quantity: number;
+  is_preorder?: boolean;
+  preorder_release_date?: string | null;
+  preorder_message?: string | null;
 };
 
 type ProductId = string | number;
@@ -323,16 +342,10 @@ export function CartProvider({
       return;
     }
 
-    // In admin/builder preview mode, skip the backend fetch only if there is
-    // no customer token. If the user is logged in (token exists in localStorage)
-    // we should still fetch their real cart from the backend so the admin
-    // preview reflects the same cart as the customer storefront.
-    if (isAdminMode) {
-      const hasToken = Boolean(getCustomerToken(resolvedSiteId));
-      if (!hasToken) {
-        loadGuestCartIntoState();
-        return;
-      }
+    const hasToken = Boolean(getCustomerToken(resolvedSiteId));
+    if (!hasToken) {
+      loadGuestCartIntoState();
+      return;
     }
 
     setIsCartLoading(true);

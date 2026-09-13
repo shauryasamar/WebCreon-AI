@@ -219,21 +219,23 @@ const getNavbarPositionStyle = (
 const useViewportMode = (): ViewportMode => {
   const getMode = (): ViewportMode => {
     if (typeof window === "undefined") return "desktop";
-    if (window.innerWidth <= 640) return "mobile";
-    if (window.innerWidth <= 960) return "tablet";
+    const w = window.innerWidth;
+    if (w <= 640) return "mobile";
+    if (w <= 1040) return "tablet";
     return "desktop";
   };
 
-
   const [mode, setMode] = useState<ViewportMode>(getMode);
-
 
   useEffect(() => {
     const handleResize = () => setMode(getMode());
     window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    window.addEventListener("orientationchange", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("orientationchange", handleResize);
+    };
   }, []);
-
 
   return mode;
 };
@@ -266,7 +268,6 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   const location = useLocation();
   const { siteId, slug } = useParams<{ siteId?: string; slug?: string }>();
   const { isAuthenticated, refreshMe, logout } = useCustomerAuth();
-
 
   const deviceMode = useDeviceMode();
   const viewportMode = useViewportMode();
@@ -479,31 +480,70 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
   const getBrandFontFamilyStyle = (fontKey: string) => {
     switch (fontKey) {
-      case "playfair_serif":
-      case "elegant_serif":
-        return "'Playfair Display', 'Didot', 'Georgia', serif";
-      case "cinzel_display":
-      case "bold_display":
-        return "'Cinzel', 'Trajan Pro', 'Didot', serif";
-      case "cormorant_serif":
-        return "'Cormorant Garamond', 'Garamond', 'Baskerville', serif";
+      // Modern High-Concept & Luxury Sans
+      case "syne_avantgarde":
+        return "'Syne', 'Outfit', sans-serif";
+      case "unbounded_logo":
+        return "'Unbounded', 'Syne', sans-serif";
+      case "syncopate_wide":
+        return "'Syncopate', 'Montserrat', sans-serif";
+      case "tenor_runway":
+        return "'Tenor Sans', 'Inter', sans-serif";
+      case "dm_sans":
+        return "'DM Sans', 'Inter', sans-serif";
       case "outfit_geometric":
+      case "outfit_tech":
       case "geometric":
         return "'Outfit', 'Poppins', 'Montserrat', sans-serif";
       case "jakarta_sans":
+      case "plus_jakarta":
         return "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
       case "montserrat_bold":
         return "'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-      case "dancing_script":
-      case "stylish_script":
-        return "'Dancing Script', 'Brush Script MT', cursive";
-      case "great_vibes":
-        return "'Great Vibes', 'Allura', cursive";
-      case "abril_fatface":
-        return "'Abril Fatface', 'Playfair Display', 'Georgia', serif";
-      case "monospace":
-        return "'Fira Code', 'JetBrains Mono', 'Courier New', monospace";
+      case "poppins_rounded":
+        return "'Poppins', 'Outfit', sans-serif";
+      case "bricolage_grotesque":
+        return "'Bricolage Grotesque', sans-serif";
+      case "space_grotesk":
+        return "'Space Grotesk', 'Inter', sans-serif";
+
+      // Italian, French & Royal Heritage Serifs
+      case "italiana_couture":
+        return "'Italiana', 'Playfair Display', serif";
+      case "marcellus_roman":
+        return "'Marcellus', 'Cinzel', serif";
+      case "cinzel_display":
+      case "bold_display":
+        return "'Cinzel', 'Trajan Pro', serif";
+      case "playfair_serif":
+      case "elegant_serif":
+        return "'Playfair Display', 'Georgia', serif";
+      case "instrument_serif":
+        return "'Instrument Serif', 'Playfair Display', serif";
+      case "cormorant_serif":
+        return "'Cormorant Garamond', 'Garamond', serif";
+
+      // Modern Streetwear & Bold Impact
+      case "bebas_neue":
+        return "'Bebas Neue', 'Impact', sans-serif";
+
+      // Tech, EV & Cyber
+      case "michroma_aerotech":
+        return "'Michroma', 'Orbitron', sans-serif";
+      case "orbitron_scifi":
+        return "'Orbitron', sans-serif";
+      case "audiowide_future":
+        return "'Audiowide', 'Orbitron', cursive";
+
+      // Retro & Signature
+      case "righteous_retro":
+        return "'Righteous', cursive";
+      case "parisienne_script":
+        return "'Parisienne', cursive";
+
+      // Modern Clean (Default)
       case "modern_sans":
+      case "sans_modern":
       default:
         return "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
     }
@@ -2094,7 +2134,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
               if (!showText) return null;
 
               const isCinzel = brandFontFamily === "cinzel_display" || brandFontFamily === "bold_display";
-              const isSerif = brandFontFamily === "playfair_serif" || brandFontFamily === "elegant_serif" || brandFontFamily === "cormorant_serif" || brandFontFamily === "abril_fatface";
+              const isSerif = brandFontFamily === "playfair_serif" || brandFontFamily === "elegant_serif" || brandFontFamily === "cormorant_serif" || brandFontFamily === "italiana_couture" || brandFontFamily === "marcellus_roman" || brandFontFamily === "instrument_serif";
+              const isUppercaseDisplay = isCinzel || brandFontFamily === "bebas_neue" || brandFontFamily === "orbitron_scifi" || brandFontFamily === "michroma_aerotech" || brandFontFamily === "syncopate_wide";
+              const isWideTracked = isUppercaseDisplay || brandFontFamily === "unbounded_logo" || brandFontFamily === "syne_avantgarde" || brandFontFamily === "tenor_runway" || brandFontFamily === "space_grotesk" || brandFontFamily === "montserrat_bold";
 
               return (
                 <span
@@ -2103,8 +2145,8 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     fontSize: isMobile ? `${Math.max(13, Math.min(16, Math.round(brandFontSizeNum * 0.85)))}px` : `${brandFontSizeNum}px`,
                     fontWeight: Number(brandFontWeight) || brandFontWeight || 700,
                     fontStyle: brandFontStyle === "italic" ? "italic" : "normal",
-                    letterSpacing: isCinzel ? "0.08em" : (isSerif ? "0.04em" : "normal"),
-                    textTransform: isCinzel ? "uppercase" : "none",
+                    letterSpacing: isWideTracked ? "0.06em" : isSerif ? "0.025em" : "normal",
+                    textTransform: isUppercaseDisplay ? "uppercase" : "none",
                     color: brandTextColor,
                     whiteSpace: "nowrap",
                     overflow: "hidden",

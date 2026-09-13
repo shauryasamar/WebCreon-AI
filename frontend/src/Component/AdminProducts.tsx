@@ -65,6 +65,10 @@ type Product = {
   slug?: string | null;
   variant_option?: ProductVariantOption | null;
   return_window_days?: number | null;
+  is_preorder?: boolean;
+  preorder_release_date?: string | null;
+  preorder_message?: string | null;
+  preorder_limit?: number | null;
 };
 
 type VariantRow = {
@@ -103,6 +107,10 @@ type ProductFormValues = {
   optionName: string;
   optionValuesText: string;
   return_window_days: string;
+  is_preorder: boolean;
+  preorder_release_date: string;
+  preorder_message: string;
+  preorder_limit: string;
 };
 
 type FormErrors = Partial<
@@ -152,6 +160,10 @@ const normalizeProduct = (p: any): Product => ({
   slug: p.slug ?? null,
   variant_option: p.variant_option ?? null,
   return_window_days: p.return_window_days != null ? Number(p.return_window_days) : null,
+  is_preorder: Boolean(p.is_preorder),
+  preorder_release_date: p.preorder_release_date ?? null,
+  preorder_message: p.preorder_message ?? null,
+  preorder_limit: p.preorder_limit != null ? Number(p.preorder_limit) : null,
 });
 
 const buildVariantRowsFromText = (
@@ -666,6 +678,10 @@ const AdminProducts = () => {
     optionName: "",
     optionValuesText: "",
     return_window_days: "",
+    is_preorder: false,
+    preorder_release_date: "",
+    preorder_message: "",
+    preorder_limit: "",
   });
 
   const parseImages = (text: string): string[] => {
@@ -855,6 +871,10 @@ const AdminProducts = () => {
       optionName: "",
       optionValuesText: "",
       return_window_days: "",
+      is_preorder: false,
+      preorder_release_date: "",
+      preorder_message: "",
+      preorder_limit: "",
     });
   };
 
@@ -913,6 +933,10 @@ const AdminProducts = () => {
       optionName: product.variant_option?.optionName ?? "",
       optionValuesText: optionValues.map((v) => v.value).join(", "),
       return_window_days: product.return_window_days != null ? String(product.return_window_days) : "",
+      is_preorder: Boolean(product.is_preorder),
+      preorder_release_date: product.preorder_release_date ? product.preorder_release_date.slice(0, 16) : "",
+      preorder_message: product.preorder_message ?? "",
+      preorder_limit: product.preorder_limit != null ? String(product.preorder_limit) : "",
     });
     setShowForm(true);
   };
@@ -1884,6 +1908,10 @@ const AdminProducts = () => {
       images: parseImages(formValues.imagesText),
       variant_option: hasVariantOptions ? buildVariantOption(finalVariantRows) : null,
       return_window_days: formValues.return_window_days === "" ? null : Number(formValues.return_window_days),
+      is_preorder: formValues.is_preorder,
+      preorder_release_date: formValues.is_preorder && formValues.preorder_release_date ? formValues.preorder_release_date : null,
+      preorder_message: formValues.is_preorder && formValues.preorder_message.trim() ? formValues.preorder_message.trim() : null,
+      preorder_limit: formValues.is_preorder && formValues.preorder_limit.trim() ? Number(formValues.preorder_limit) : null,
     };
 
     try {
@@ -3587,6 +3615,84 @@ const AdminProducts = () => {
                     </span>
                   </div>
 
+                  {/* Card 5b: Pre-Order Setup */}
+                  <div
+                    style={{
+                      background: formValues.is_preorder ? "#eff6ff" : "#ffffff",
+                      borderRadius: "8px",
+                      border: formValues.is_preorder ? "1.5px solid #3b82f6" : "1px solid #e2e8f0",
+                      padding: "14px 16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "12px",
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        borderBottom: "1px solid #e2e8f0",
+                        paddingBottom: "8px",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span
+                          style={{
+                            fontSize: "13px",
+                            fontWeight: 700,
+                            color: formValues.is_preorder ? "#1d4ed8" : "#0f172a",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.04em",
+                          }}
+                        >
+                          Pre-Order Configuration
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span style={{ fontSize: "12px", fontWeight: 600, color: formValues.is_preorder ? "#2563eb" : "#64748b" }}>
+                          {formValues.is_preorder ? "Enabled" : "Disabled"}
+                        </span>
+                        <ToggleSwitch
+                          checked={formValues.is_preorder}
+                          onChange={(val) => handleFormChange("is_preorder", val)}
+                        />
+                      </div>
+                    </div>
+
+                    {formValues.is_preorder && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "4px" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                          <FormField
+                            label="Expected Release / Shipping Date"
+                            type="datetime-local"
+                            value={formValues.preorder_release_date}
+                            onChange={(v) => handleFormChange("preorder_release_date", v)}
+                          />
+                          <FormField
+                            label="Pre-Order Stock Cap (Optional)"
+                            type="number"
+                            value={formValues.preorder_limit}
+                            onChange={(v) => handleFormChange("preorder_limit", v)}
+                            placeholder="Defaults to base stock"
+                          />
+                        </div>
+
+                        <FormField
+                          label="Custom Pre-Order Notice / Disclaimer"
+                          value={formValues.preorder_message}
+                          onChange={(v) => handleFormChange("preorder_message", v)}
+                          placeholder="e.g. Official Launch Oct 25 — Ships immediately upon launch!"
+                        />
+                        <div style={{ fontSize: "11px", color: "#475569", lineHeight: 1.4, background: "#ffffff", padding: "8px 10px", borderRadius: "6px", border: "1px solid #bfdbfe" }}>
+                          <b>How it works:</b> Customers can order now before stock arrives. Orders are collected under the <b>Pre-Orders</b> tab. When launch date arrives, it automatically reverts to a standard product with remaining available stock.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Card 6: Organization, Taxonomy & Policies */}
                   <div
                     style={{
@@ -4812,6 +4918,21 @@ const AdminProducts = () => {
                             }}
                           >
                             <span>{product.name}</span>
+                            {product.is_preorder && (
+                              <span
+                                style={{
+                                  fontSize: "10px",
+                                  padding: "1px 6px",
+                                  borderRadius: "4px",
+                                  background: "#eff6ff",
+                                  color: "#1d4ed8",
+                                  border: "1px solid #bfdbfe",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                PRE-ORDER
+                              </span>
+                            )}
                             {!product.is_active && (
                               <span
                                 style={{
@@ -5495,7 +5616,7 @@ const AdminProducts = () => {
                 }}
               >
                 <div style={{ fontSize: "12.5px", color: "#1e40af" }}>
-                  <strong>Need a template?</strong> Download our pre-filled CSV sample with columns & demo data.
+                  <strong>Need a template?</strong> Download our pre-filled CSV sample with pre-orders, variants, & demo data.
                 </div>
                 <button
                   type="button"
@@ -5716,7 +5837,7 @@ const FormField = ({
   label: string;
   value: string;
   onChange: (v: string) => void;
-  type?: "text" | "number";
+  type?: string;
   multiline?: boolean;
   placeholder?: string;
   error?: string;

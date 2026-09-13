@@ -493,14 +493,14 @@ function StorefrontShell({
       ? measuredNavbarHeight
       : Number(siteDefinition.theme?.navbar_height || 72);
 
+  const fixedNavbarTopOffset = adminTopbarVisible
+    ? BUILDER_TOPBAR_HEIGHT
+    : 0;
+
   const contentTopOffset =
     (storefrontNavbarMode === "fixed" || storefrontNavbarMode === "sticky")
       ? resolvedNavbarHeight
       : 0;
-
-  const fixedNavbarTopOffset = adminTopbarVisible
-    ? BUILDER_TOPBAR_HEIGHT
-    : 0;
 
   return (
     <div
@@ -509,8 +509,13 @@ function StorefrontShell({
         minWidth: 0,
         width: "100%",
         maxWidth: "100%",
+        minHeight: editMode ? "100%" : "100dvh",
+        flex: "1 0 auto",
+        display: "flex",
+        flexDirection: "column",
         zIndex: 1,
         isolation: "isolate",
+        background: siteDefinition.theme?.primary_bg || "#ffffff",
       }}
     >
       <FestiveBackgroundOverlay
@@ -531,6 +536,7 @@ function StorefrontShell({
           position: (storefrontNavbarMode === "fixed" || storefrontNavbarMode === "sticky") ? "static" : "relative",
           zIndex: 1000,
           overflow: "visible",
+          flexShrink: 0,
         }}
       >
         <Navbar
@@ -573,6 +579,10 @@ function StorefrontShell({
           zIndex: 1,
           overflow: "visible",
           paddingTop: `${contentTopOffset}px`,
+          flex: "1 0 auto",
+          display: "flex",
+          flexDirection: "column",
+          minHeight: "0",
         }}
       >
         {children}
@@ -596,6 +606,9 @@ function StorefrontShell({
             zIndex: editMode && footerIsSelected ? 50 : 5,
             isolation: "isolate",
             overflow: "visible",
+            marginTop: "auto",
+            width: "100%",
+            flexShrink: 0,
           }}
         >
           <div
@@ -1157,19 +1170,11 @@ function BuilderPageContent() {
   );
   const isTargetSiteToHeal = (initialCachedSite?.id === "9e86e420-7776-4383-8cc1-fe3d9f6cf36a" || siteId === "9e86e420-7776-4383-8cc1-fe3d9f6cf36a");
   const [siteDefinition, setSiteDefinition] = useState<SiteDefinition | null>(
-    initialCachedSite
-      ? ((isStoreRoute && !isPreviewMode) || isTargetSiteToHeal
-        ? (initialCachedSite.site_definition || null)
-        : (initialCachedSite.draft_definition || initialCachedSite.site_definition))
-      : null
+    initialCachedSite?.site_definition || initialCachedSite?.draft_definition || null
   );
   const [draftSiteDefinition, setDraftSiteDefinition] =
     useState<SiteDefinition | null>(
-      initialCachedSite
-        ? ((isStoreRoute && !isPreviewMode) || isTargetSiteToHeal
-          ? (initialCachedSite.site_definition || null)
-          : (initialCachedSite.draft_definition || initialCachedSite.site_definition))
-        : null
+      initialCachedSite?.site_definition || initialCachedSite?.draft_definition || null
     );
   const [publishedSiteDefinition, setPublishedSiteDefinition] =
     useState<SiteDefinition | null>(
@@ -1211,9 +1216,10 @@ function BuilderPageContent() {
   }, []);
 
   const hasUnpublishedChanges = useMemo(() => {
-    if (!draftSiteDefinition || !siteDefinition) return false;
-    return JSON.stringify(draftSiteDefinition) !== JSON.stringify(siteDefinition);
-  }, [draftSiteDefinition, siteDefinition]);
+    const base = publishedSiteDefinition || siteDefinition;
+    if (!draftSiteDefinition || !base) return false;
+    return JSON.stringify(draftSiteDefinition) !== JSON.stringify(base);
+  }, [draftSiteDefinition, publishedSiteDefinition, siteDefinition]);
 
   // Real-time synchronization when CRM is toggled from AdminSupportDesk
   useEffect(() => {
@@ -1265,7 +1271,8 @@ function BuilderPageContent() {
       const updatedSite = await response.json();
       const finalDef = updatedSite.site_definition || draftSiteDefinition;
       setSiteDefinition(finalDef);
-      setDraftSiteDefinition(updatedSite.draft_definition || finalDef);
+      setDraftSiteDefinition(finalDef);
+      setPublishedSiteDefinition(finalDef);
       setPublishSuccess(true);
       setTimeout(() => setPublishSuccess(false), 3000);
 
@@ -1774,9 +1781,7 @@ function BuilderPageContent() {
     }
 
     if (cachedTarget && (cachedTarget.id === siteId || cachedTarget.slug === siteSlugParam)) {
-      const def = isStoreRoute
-        ? (cachedTarget.site_definition || cachedTarget.draft_definition)
-        : (cachedTarget.draft_definition || cachedTarget.site_definition);
+      const def = cachedTarget.site_definition || cachedTarget.draft_definition;
       setSiteDefinition(def || null);
       setDraftSiteDefinition(def || null);
       setPublishedSiteDefinition(cachedTarget.site_definition || null);
@@ -1844,9 +1849,7 @@ function BuilderPageContent() {
 
         setPublishedSiteDefinition(data.site_definition || null);
 
-        let parsedSiteDefinition: SiteDefinition = (isStoreRoute && !isPreviewMode)
-          ? (data.site_definition || data.draft_definition)
-          : (data.draft_definition || data.site_definition);
+        let parsedSiteDefinition: SiteDefinition = (data.site_definition || data.draft_definition);
 
         // Auto-heal cross-tenant contamination:
         // 1. If this site is 9e86e420-7776-4383-8cc1-fe3d9f6cf36a (user's affected site)
@@ -1869,7 +1872,6 @@ function BuilderPageContent() {
           try {
             localStorage.removeItem(`wc_site_snapshot_${data.id}`);
             if (data.slug) localStorage.removeItem(`wc_site_snapshot_${data.slug}`);
-            localStorage.removeItem(`webnirmaan_saved_themes_${data.id}`);
             siteSlugMemoryCache.delete(data.id);
             if (data.slug) siteSlugMemoryCache.delete(data.slug);
           } catch (_) { }
@@ -2800,13 +2802,16 @@ function BuilderPageContent() {
       >
         <div
           style={{
-            minHeight: "100%",
+            minHeight: editMode ? "100%" : "100dvh",
             width: "100%",
             maxWidth: "100%",
             background: pageBg,
             color: textColor,
             position: "relative",
             zIndex: 1,
+            display: "flex",
+            flexDirection: "column",
+            flex: "1 0 auto",
           }}
         >
           {!activeSiteDefinition && loading ? (

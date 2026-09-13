@@ -473,19 +473,36 @@ export function applyThemeToPages(pages: EditorPage[], targetTheme: any): Editor
         if (targetTheme.footer_bg) updatedProps.footer_bg = targetTheme.footer_bg;
         if (targetTheme.footer_text_color) updatedProps.footer_text_color = targetTheme.footer_text_color;
       } else if (isHero) {
-        if (targetTheme.hero_bg) updatedProps.hero_bg = targetTheme.hero_bg;
-        if (targetTheme.hero_text_color) updatedProps.hero_text_color = targetTheme.hero_text_color;
-        if (targetTheme.hero_accent) updatedProps.accent_color = targetTheme.hero_accent;
+        const resolvedHeroBg = targetTheme.hero_bg || targetTheme.primary_bg || targetTheme.secondary_bg;
+        if (resolvedHeroBg) {
+          updatedProps.hero_bg = resolvedHeroBg;
+          updatedProps.background_color = resolvedHeroBg;
+        }
+        const resolvedHeroText = targetTheme.hero_text_color || targetTheme.text_color;
+        if (resolvedHeroText) {
+          updatedProps.hero_text_color = resolvedHeroText;
+          updatedProps.text_color = resolvedHeroText;
+        }
+        const resolvedHeroAccent = targetTheme.hero_accent || targetTheme.accent_color;
+        if (resolvedHeroAccent) {
+          updatedProps.accent_color = resolvedHeroAccent;
+        }
 
         if (Array.isArray(updatedProps.slides)) {
           updatedProps.slides = updatedProps.slides.map((slide: any) => {
             const nextSlide = { ...slide };
             if (!nextSlide.background_image) {
-              delete nextSlide.background_color;
-              delete nextSlide.hero_bg;
-              delete nextSlide.hero_text_color;
-              delete nextSlide.text_color;
-              delete nextSlide.accent_color;
+              if (resolvedHeroBg) {
+                nextSlide.background_color = resolvedHeroBg;
+                nextSlide.hero_bg = resolvedHeroBg;
+              }
+              if (resolvedHeroText) {
+                nextSlide.hero_text_color = resolvedHeroText;
+                nextSlide.text_color = resolvedHeroText;
+              }
+              if (resolvedHeroAccent) {
+                nextSlide.accent_color = resolvedHeroAccent;
+              }
             }
             return nextSlide;
           });
@@ -2091,15 +2108,26 @@ export function updateThemeValues(
   if (nextPatch.navbar_bg && !nextPatch.navbar_outer_bg) {
     nextPatch.navbar_outer_bg = nextPatch.navbar_bg;
   }
+  if (!nextPatch.hero_bg && (nextPatch.primary_bg || nextPatch.secondary_bg)) {
+    nextPatch.hero_bg = nextPatch.primary_bg || nextPatch.secondary_bg;
+  }
+  if (!nextPatch.hero_text_color && nextPatch.text_color) {
+    nextPatch.hero_text_color = nextPatch.text_color;
+  }
+  if (!nextPatch.hero_accent && nextPatch.accent_color) {
+    nextPatch.hero_accent = nextPatch.accent_color;
+  }
   const updatedTheme = {
     ...siteDefinition.theme,
     ...nextPatch,
   };
 
+  const nextPages = applyThemeToPages(siteDefinition.pages || [], updatedTheme);
+
   const nextDef: EditorSiteDefinition = {
     ...siteDefinition,
     theme: updatedTheme,
-    pages: siteDefinition.pages,
+    pages: nextPages,
   };
 
   if (themePatch.brandName !== undefined || themePatch.brand_name !== undefined) {
@@ -2121,8 +2149,7 @@ export function updateThemeValues(
 
   return nextDef;
 }
-
-export function applyThemeMode(
+export function applyThemeMode(
   siteDefinition: EditorSiteDefinition,
   mode: ThemeMode
 ): EditorSiteDefinition {
@@ -2143,11 +2170,12 @@ export function applyThemeMode(
     festival_theme: currentTheme.festival_theme || "none",
   };
 
+  const nextPages = applyThemeToPages(siteDefinition.pages || [], updatedTheme);
+
   return {
     ...siteDefinition,
     theme: updatedTheme,
-    // Do NOT wipe out pages, layout positions, custom slides, or photos!
-    pages: siteDefinition.pages,
+    pages: nextPages,
   };
 }
 
@@ -2163,10 +2191,12 @@ export function applyFestivalTheme(
     festival_theme: preset,
   };
 
+  const nextPages = applyThemeToPages(siteDefinition.pages || [], updatedTheme);
+
   return {
     ...siteDefinition,
     theme: updatedTheme,
-    pages: siteDefinition.pages,
+    pages: nextPages,
   };
 }
 
@@ -2193,6 +2223,7 @@ export function getSiteStorageId(siteDefinition?: EditorSiteDefinition): string 
 
 export function getSavedThemeSnapshots(siteDefinition: EditorSiteDefinition): any[] {
   const siteId = getSiteStorageId(siteDefinition);
+  const slug = (siteDefinition as any)?.slug || (siteDefinition as any)?.site?.slug;
   let inStorage: any[] = [];
 
   if (typeof window !== "undefined") {
@@ -2200,6 +2231,7 @@ export function getSavedThemeSnapshots(siteDefinition: EditorSiteDefinition): an
       // Clean up legacy global keys to prevent cross-tenant theme contamination
       localStorage.removeItem("webnirmaan_saved_themes_global");
       localStorage.removeItem("webnirmaan_saved_themes_default_site");
+      localStorage.removeItem("webnirmaan_saved_themes_latest");
 
       if (siteId && siteId !== "default_site") {
         const rawSpecific = localStorage.getItem(`webnirmaan_saved_themes_${siteId}`);
@@ -2209,7 +2241,6 @@ export function getSavedThemeSnapshots(siteDefinition: EditorSiteDefinition): an
         }
       }
 
-      const slug = (siteDefinition as any)?.slug || (siteDefinition as any)?.site?.slug;
       if (slug && slug !== siteId && slug !== "default_site") {
         const rawSlug = localStorage.getItem(`webnirmaan_saved_themes_${slug}`);
         if (rawSlug) {
@@ -2230,6 +2261,31 @@ export function getSavedThemeSnapshots(siteDefinition: EditorSiteDefinition): an
       map.set(item.id, item);
     }
   });
+
+  // Auto-seed initial generated theme as the first snapshot if no snapshots exist yet
+  if (map.size === 0 && siteDefinition?.theme && Object.keys(siteDefinition.theme).length > 0) {
+    const brand = siteDefinition?.site?.brand_name || (siteDefinition as any)?.site_name || "Original";
+    const initialSnapshot = {
+      id: `theme_initial_${siteId || "site"}`,
+      name: `${brand} (Original)`,
+      created_at: new Date().toISOString(),
+      is_initial: true,
+      theme: { ...siteDefinition.theme },
+    };
+    map.set(initialSnapshot.id, initialSnapshot);
+
+    if (typeof window !== "undefined") {
+      try {
+        const toPersist = [initialSnapshot];
+        if (siteId && siteId !== "default_site") {
+          localStorage.setItem(`webnirmaan_saved_themes_${siteId}`, JSON.stringify(toPersist));
+        }
+        if (slug && slug !== siteId && slug !== "default_site") {
+          localStorage.setItem(`webnirmaan_saved_themes_${slug}`, JSON.stringify(toPersist));
+        }
+      } catch { }
+    }
+  }
 
   return Array.from(map.values()).slice(0, 30);
 }
@@ -2311,7 +2367,6 @@ export function saveThemeSnapshot(
       }
     });
   }
-
   const themeToSave: Record<string, any> = {
     ...cleanBaseTheme,
     ...(heroBlockBg ? { hero_bg: heroBlockBg } : {}),
@@ -2325,6 +2380,16 @@ export function saveThemeSnapshot(
     ...(pdBtnText ? { product_detail_btn_text: pdBtnText } : {}),
     ...cleanCustomPatch,
   };
+
+  if (!themeToSave.hero_bg && (themeToSave.primary_bg || themeToSave.secondary_bg)) {
+    themeToSave.hero_bg = themeToSave.primary_bg || themeToSave.secondary_bg;
+  }
+  if (!themeToSave.hero_text_color && themeToSave.text_color) {
+    themeToSave.hero_text_color = themeToSave.text_color;
+  }
+  if (!themeToSave.hero_accent && themeToSave.accent_color) {
+    themeToSave.hero_accent = themeToSave.accent_color;
+  }
 
   if (themeToSave.navbar_bg && !themeToSave.navbar_outer_bg) {
     themeToSave.navbar_outer_bg = themeToSave.navbar_bg;
@@ -2353,7 +2418,7 @@ export function saveThemeSnapshot(
       window.dispatchEvent(new CustomEvent("webnirmaan_theme_saved", { detail: { siteId, slug, snapshots: updatedList } }));
     } catch { }
   }
-  const finalTheme: Record<string, any> = {
+  const finalTheme: Record<string, any> = {
     ...siteDefinition.theme,
     ...themeToSave,
   };
@@ -2361,10 +2426,12 @@ export function saveThemeSnapshot(
     finalTheme.navbar_outer_bg = finalTheme.navbar_bg;
   }
 
+  const nextPages = applyThemeToPages(siteDefinition.pages || [], finalTheme);
+
   return {
     ...siteDefinition,
     theme: finalTheme,
-    pages: siteDefinition.pages,
+    pages: nextPages,
     saved_themes: updatedList,
   } as any;
 }

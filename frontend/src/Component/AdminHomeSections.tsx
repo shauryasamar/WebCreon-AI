@@ -451,26 +451,36 @@ export const AdminHomeSections: React.FC = () => {
                 b.type === "section_group_carousel"
             );
 
-            loadedSections = dynamicBlocks.map((b: any, index: number) => ({
-              id: b.id || `sec_${Date.now()}_${index}`,
-              type: b.type === "section_group_carousel" ? "section_group_carousel" : "product_carousel",
-              title: b.props?.title || b.name || "Featured Section",
-              subtitle: b.props?.subtitle || "",
-              viewAllLink: b.props?.viewAllLink || "",
-              layout: b.props?.layout || "carousel",
-              cardShape: b.props?.cardShape || "portrait",
-              cardStyle: b.props?.cardStyle || "default",
-              limit: b.props?.limit || 10,
-              isActive: b.props?.isActive !== false,
-              order: index + 1,
-              rules: b.props?.rules || {
-                category: b.props?.categoryName,
-                collection_id: b.props?.collectionId,
-                brand: b.props?.brandName,
-                sort_by: b.props?.sortBy || "newest",
-              },
-              items: Array.isArray(b.props?.items) ? b.props.items : [],
-            }));
+            loadedSections = dynamicBlocks.map((b: any, index: number) => {
+              const isSectionGroup = b.type === "section_group_carousel";
+              let sectionTitle = "";
+              if (b.props?.title !== undefined && b.props?.title !== null) {
+                sectionTitle = b.props.title;
+              } else if (!isSectionGroup) {
+                sectionTitle = b.name && b.name !== "Featured Section" ? b.name : "Featured Products";
+              }
+
+              return {
+                id: b.id || `sec_${Date.now()}_${index}`,
+                type: (isSectionGroup ? "section_group_carousel" : "product_carousel") as "product_carousel" | "section_group_carousel",
+                title: sectionTitle,
+                subtitle: b.props?.subtitle || "",
+                viewAllLink: b.props?.viewAllLink || "",
+                layout: b.props?.layout || "carousel",
+                cardShape: b.props?.cardShape || "portrait",
+                cardStyle: b.props?.cardStyle || "default",
+                limit: b.props?.limit || 10,
+                isActive: b.props?.isActive !== false,
+                order: index + 1,
+                rules: b.props?.rules || {
+                  category: b.props?.categoryName,
+                  collection_id: b.props?.collectionId,
+                  brand: b.props?.brandName,
+                  sort_by: b.props?.sortBy || "newest",
+                },
+                items: Array.isArray(b.props?.items) ? b.props.items : [],
+              };
+            });
           }
         }
 
@@ -1030,6 +1040,24 @@ export const AdminHomeSections: React.FC = () => {
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
     >
+      <style>{`
+        .wc-tiny-scrollbar::-webkit-scrollbar {
+          width: 5px;
+          height: 5px;
+        }
+        .wc-tiny-scrollbar::-webkit-scrollbar-track {
+          background: #f1f5f9;
+          border-radius: 4px;
+        }
+        .wc-tiny-scrollbar::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 4px;
+        }
+        .wc-tiny-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8;
+        }
+      `}</style>
+
       {toastMessage && (
         <GlassToast
           message={toastMessage}
@@ -2028,10 +2056,12 @@ export const AdminHomeSections: React.FC = () => {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))",
-                gap: "14px",
+                gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
+                gap: "16px",
                 padding: "16px 20px",
                 background: "#f8fafc",
+                maxHeight: "calc(100vh - 180px)",
+                overflowY: "auto",
               }}
             >
               {/* Left Column: General Configuration */}
@@ -2560,7 +2590,7 @@ export const AdminHomeSections: React.FC = () => {
                           Collection Cards ({(activeSection.items || []).length})
                         </span>
                         <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
-                          Drag handle icon to reorder. Click header to expand.
+                          Drag handle icon to reorder. Click card to edit details.
                         </div>
                       </div>
 
@@ -2583,7 +2613,7 @@ export const AdminHomeSections: React.FC = () => {
                           setExpandedTileIds((prev) => new Set(prev).add(newTileId));
                         }}
                         style={{
-                          padding: "5px 12px",
+                          padding: "6px 14px",
                           borderRadius: "6px",
                           background: "#2563eb",
                           color: "#ffffff",
@@ -2593,7 +2623,8 @@ export const AdminHomeSections: React.FC = () => {
                           cursor: "pointer",
                           display: "inline-flex",
                           alignItems: "center",
-                          gap: "4px",
+                          gap: "5px",
+                          boxShadow: "0 1px 2px rgba(37,99,235,0.2)",
                         }}
                       >
                         <PlusIcon />
@@ -2601,7 +2632,7 @@ export const AdminHomeSections: React.FC = () => {
                       </button>
                     </div>
 
-                    {/* Accordion Tiles List */}
+                    {/* Accordion Tiles List (Scrollable & dynamic without overlap) */}
                     {(activeSection.items || []).length === 0 ? (
                       <div
                         style={{
@@ -2617,7 +2648,21 @@ export const AdminHomeSections: React.FC = () => {
                         No collection cards added yet. Click <strong>+ Add Card</strong> to create your first card with an uploaded picture and target category, brand, or collection.
                       </div>
                     ) : (
-                      <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "480px", overflowY: "auto", paddingRight: "2px" }}>
+                      <div
+                        className="wc-tiny-scrollbar"
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "10px",
+                          maxHeight: "560px",
+                          overflowY: "auto",
+                          overflowX: "hidden",
+                          paddingRight: "6px",
+                          paddingBottom: "4px",
+                          scrollbarWidth: "thin",
+                          scrollbarColor: "#cbd5e1 #f1f5f9",
+                        }}
+                      >
                         {(activeSection.items || []).map((tile, tIdx) => {
                           const tileMatches = countMatchingProducts(tile);
                           const isOpen = expandedTileIds.has(tile.id);
@@ -2625,18 +2670,19 @@ export const AdminHomeSections: React.FC = () => {
                           return (
                             <div
                               key={tile.id || tIdx}
-                              draggable
-                              onDragStart={() => handleDragStart(tIdx)}
                               onDragOver={handleDragOver}
                               onDrop={() => handleDrop(tIdx)}
                               style={{
+                                flexShrink: 0,
+                                width: "100%",
+                                boxSizing: "border-box",
                                 background: "#ffffff",
-                                border: isOpen ? "1px solid #93c5fd" : "1px solid #e2e8f0",
+                                border: isOpen ? "1.5px solid #3b82f6" : "1px solid #e2e8f0",
                                 borderRadius: "8px",
                                 overflow: "hidden",
-                                boxShadow: isOpen ? "0 2px 6px rgba(37,99,235,0.08)" : "none",
-                                opacity: draggedTileIndex === tIdx ? 0.4 : 1,
-                                transition: "all 0.15s ease",
+                                boxShadow: isOpen ? "0 3px 10px rgba(37,99,235,0.1)" : "0 1px 2px rgba(0,0,0,0.02)",
+                                opacity: draggedTileIndex === tIdx ? 0.45 : 1,
+                                transition: "border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease",
                               }}
                             >
                               {/* Accordion Header (Clickable with Drag Handle) */}
@@ -2645,17 +2691,31 @@ export const AdminHomeSections: React.FC = () => {
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "space-between",
-                                  padding: "9px 12px",
+                                  padding: "10px 12px",
                                   background: isOpen ? "#eff6ff" : "#f8fafc",
                                   cursor: "pointer",
                                   userSelect: "none",
+                                  gap: "8px",
                                 }}
                                 onClick={() => toggleTileAccordion(tile.id)}
                               >
                                 {/* Left Side: Drag Grip + Thumbnail + Title + Matching pill */}
-                                <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0, flex: 1 }}>
                                   <div
-                                    style={{ display: "grid", placeItems: "center", cursor: "grab", padding: "2px" }}
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.stopPropagation();
+                                      handleDragStart(tIdx);
+                                    }}
+                                    onDragEnd={() => setDraggedTileIndex(null)}
+                                    style={{
+                                      display: "grid",
+                                      placeItems: "center",
+                                      cursor: "grab",
+                                      padding: "4px",
+                                      borderRadius: "4px",
+                                      color: "#94a3b8",
+                                    }}
                                     title="Drag to rearrange"
                                     onClick={(e) => e.stopPropagation()}
                                   >
@@ -2667,13 +2727,13 @@ export const AdminHomeSections: React.FC = () => {
                                     <img
                                       src={getThumbnailUrl(tile.imageUrl, 80, 80)}
                                       alt="thumb"
-                                      style={{ width: "26px", height: "26px", objectFit: "cover", borderRadius: "4px", border: "1px solid #cbd5e1" }}
+                                      style={{ width: "28px", height: "28px", objectFit: "cover", borderRadius: "4px", border: "1px solid #cbd5e1", flexShrink: 0 }}
                                     />
                                   ) : (
                                     <div
                                       style={{
-                                        width: "26px",
-                                        height: "26px",
+                                        width: "28px",
+                                        height: "28px",
                                         borderRadius: "4px",
                                         border: "1px dashed #cbd5e1",
                                         background: "#ffffff",
@@ -2681,6 +2741,7 @@ export const AdminHomeSections: React.FC = () => {
                                         placeItems: "center",
                                         fontSize: "9px",
                                         color: "#94a3b8",
+                                        flexShrink: 0,
                                       }}
                                     >
                                       Img
@@ -2701,6 +2762,8 @@ export const AdminHomeSections: React.FC = () => {
                                         borderRadius: "4px",
                                         background: "#f1f5f9",
                                         color: "#475569",
+                                        whiteSpace: "nowrap",
+                                        flexShrink: 0,
                                       }}
                                     >
                                       {tile.subtitle}
@@ -2716,6 +2779,8 @@ export const AdminHomeSections: React.FC = () => {
                                       background: tileMatches > 0 ? "#f0fdf4" : "#fef2f2",
                                       color: tileMatches > 0 ? "#15803d" : "#b91c1c",
                                       border: tileMatches > 0 ? "1px solid #bbf7d0" : "1px solid #fecaca",
+                                      whiteSpace: "nowrap",
+                                      flexShrink: 0,
                                     }}
                                   >
                                     {tileMatches} items
@@ -2723,7 +2788,7 @@ export const AdminHomeSections: React.FC = () => {
                                 </div>
 
                                 {/* Right Side: Remove Button + Expand Chevron */}
-                                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
                                   <button
                                     type="button"
                                     onClick={(e) => {
@@ -2732,8 +2797,9 @@ export const AdminHomeSections: React.FC = () => {
                                       setActiveSection({ ...activeSection, items: next });
                                     }}
                                     style={{
-                                      padding: "3px 7px",
+                                      padding: "3px 8px",
                                       fontSize: "11px",
+                                      fontWeight: 600,
                                       border: "1px solid #fecaca",
                                       background: "#fef2f2",
                                       color: "#dc2626",
@@ -2755,12 +2821,13 @@ export const AdminHomeSections: React.FC = () => {
                               {isOpen && (
                                 <div
                                   style={{
-                                    padding: "12px 14px",
+                                    padding: "14px 16px",
                                     borderTop: "1px solid #e2e8f0",
-                                    background: "#ffffff",
+                                    background: "#fafafa",
                                     display: "flex",
                                     flexDirection: "column",
-                                    gap: "10px",
+                                    gap: "12px",
+                                    boxSizing: "border-box",
                                   }}
                                 >
                                   {/* Tile Image Upload with Client-Side Optimizer */}
@@ -2768,18 +2835,18 @@ export const AdminHomeSections: React.FC = () => {
                                     <label style={labelStyle}>Card Image (Uploaded & Optimized)</label>
                                     <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                                       {tile.imageUrl ? (
-                                        <div style={{ position: "relative", width: "44px", height: "44px", flexShrink: 0 }}>
+                                        <div style={{ position: "relative", width: "48px", height: "48px", flexShrink: 0 }}>
                                           <img
                                             src={getThumbnailUrl(tile.imageUrl, 120, 120)}
                                             alt="tile"
-                                            style={{ width: "44px", height: "44px", objectFit: "cover", borderRadius: "6px", border: "1px solid #cbd5e1" }}
+                                            style={{ width: "48px", height: "48px", objectFit: "cover", borderRadius: "6px", border: "1px solid #cbd5e1" }}
                                           />
                                         </div>
                                       ) : (
                                         <div
                                           style={{
-                                            width: "44px",
-                                            height: "44px",
+                                            width: "48px",
+                                            height: "48px",
                                             borderRadius: "6px",
                                             border: "1px dashed #cbd5e1",
                                             background: "#f8fafc",
@@ -2838,7 +2905,7 @@ export const AdminHomeSections: React.FC = () => {
                                   </div>
 
                                   {/* Title & Badge */}
-                                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px" }}>
                                     <div>
                                       <label style={labelStyle}>
                                         Title <span style={{ color: "#ef4444" }}>*</span>
@@ -2873,7 +2940,7 @@ export const AdminHomeSections: React.FC = () => {
                                   </div>
 
                                   {/* Category, Brand, Collection targeting */}
-                                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
+                                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "10px" }}>
                                     <div>
                                       <label style={labelStyle}>Category</label>
                                       <select

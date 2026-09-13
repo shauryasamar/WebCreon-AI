@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { useCart, Product } from "../CartContext";
+import { useCart, Product, isProductPreorderActive } from "../CartContext";
 import { optimizeImageUrl } from "../utils/imageOptimizer";
 import { resolveThemeTokens, isColorDarkHex } from "../context/ThemeContext";
 import { useDeviceMode } from "../context/DeviceModeContext";
@@ -279,17 +279,37 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
       : "/store"
     : `/builder/${siteId}`;
 
-  // ── Mobile Viewport Detection ──────────────────────────────────────────────
+  // ── Mobile & Tablet Viewport Detection ─────────────────────────────────────
   const deviceMode = useDeviceMode();
   const [innerIsMobile, setInnerIsMobile] = React.useState<boolean>(() => {
     if (typeof window === "undefined") return false;
-    return window.innerWidth <= 640;
+    const w = window.innerWidth;
+    const isTouch = typeof navigator !== "undefined" && (navigator.maxTouchPoints > 0 || "ontouchstart" in window);
+    const isIPadOrTablet =
+      typeof navigator !== "undefined" &&
+      (/iPad|Android(?!.*Mobile)|Tablet|PlayBook|Silk/i.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) ||
+        (/Macintosh/i.test(navigator.userAgent) && isTouch));
+    return w <= 640 || (isIPadOrTablet && w <= 1400) || (isTouch && w <= 1040);
   });
   React.useEffect(() => {
     if (typeof window === "undefined") return;
-    const check = () => setInnerIsMobile(window.innerWidth <= 640);
+    const check = () => {
+      const w = window.innerWidth;
+      const isTouch = typeof navigator !== "undefined" && (navigator.maxTouchPoints > 0 || "ontouchstart" in window);
+      const isIPadOrTablet =
+        typeof navigator !== "undefined" &&
+        (/iPad|Android(?!.*Mobile)|Tablet|PlayBook|Silk/i.test(navigator.userAgent) ||
+          (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) ||
+          (/Macintosh/i.test(navigator.userAgent) && isTouch));
+      setInnerIsMobile(w <= 640 || (isIPadOrTablet && w <= 1400) || (isTouch && w <= 1040));
+    };
     window.addEventListener("resize", check, { passive: true });
-    return () => window.removeEventListener("resize", check);
+    window.addEventListener("orientationchange", check, { passive: true });
+    return () => {
+      window.removeEventListener("resize", check);
+      window.removeEventListener("orientationchange", check);
+    };
   }, []);
   const isMobile = deviceMode === "mobile" || innerIsMobile;
 
@@ -654,8 +674,10 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
       );
     };
 
-    const renderDiscountBadge = () =>
-      showDiscount ? (
+    const isPreorder = isProductPreorderActive(product);
+
+    const renderDiscountBadge = () => {
+      return show_discount_badge && product.normalizedDiscountPercent > 0 ? (
         <div
           style={{
             position: "absolute",
@@ -675,9 +697,56 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
           {product.normalizedDiscountPercent}% OFF
         </div>
       ) : null;
+    };
 
-    const renderInStockBadge = (centered = false) =>
-      show_stock_badge ? (
+    const renderInStockBadge = (centered = false) => {
+      if (isPreorder) {
+        const releaseDateObj = product?.preorder_release_date ? new Date(product.preorder_release_date) : null;
+        const formattedDate = releaseDateObj && !isNaN(releaseDateObj.getTime())
+          ? releaseDateObj.toLocaleString(undefined, {
+              day: "numeric",
+              month: "short",
+              hour: "numeric",
+              minute: "2-digit",
+              hour12: true,
+            })
+          : null;
+
+        return (
+          <div style={{ display: "inline-flex", flexDirection: "column", alignItems: centered ? "center" : "flex-end", gap: "1px", flexShrink: 0 }}>
+            <span
+              style={{
+                fontSize: scalePx(10.5, 8),
+                fontWeight: 700,
+                color: "#d97706",
+                background: "rgba(217,119,6,0.08)",
+                padding: `${scalePx(3, 2)} ${scalePx(8, 5)}`,
+                borderRadius: "999px",
+                border: "1px solid #d97706",
+                display: "inline-block",
+                textAlign: "center",
+                margin: centered ? `${scalePx(5, 3)} auto 0` : undefined,
+                flexShrink: 0,
+              }}
+            >
+              Pre-Order
+            </span>
+            {formattedDate && (
+              <span
+                style={{
+                  fontSize: scalePx(9, 7.5),
+                  fontWeight: 600,
+                  color: "#b45309",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Till {formattedDate}
+              </span>
+            )}
+          </div>
+        );
+      }
+      return show_stock_badge ? (
         <span
           style={{
             fontSize: scalePx(10.5, 8),
@@ -696,6 +765,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
           {product.normalizedInStock ? "In stock" : "Out of stock"}
         </span>
       ) : null;
+    };
 
     const cardBaseStyle: React.CSSProperties = {
       cursor: isDisabled ? "not-allowed" : "pointer",

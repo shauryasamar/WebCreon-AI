@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { API_BASE_URL as API_BASE } from "../config/api";
 import { Pagination } from "./Pagination";
@@ -25,6 +25,7 @@ type OrderStatus =
 
 type TabKey =
   | "new"
+  | "preorders"
   | "yet_to_ship"
   | "yet_to_deliver"
   | "delivered"
@@ -72,6 +73,9 @@ type OrderItem = {
   returnable_quantity?: number;
   pricing_snapshot?: any;
   weight_grams?: number;
+  is_preorder?: boolean;
+  preorder_release_date?: string | null;
+  preorder_message?: string | null;
 };
 
 type Shipment = {
@@ -144,6 +148,10 @@ type AdminOrderListItem = {
   item_count?: number;
   pricing_snapshot?: any;
   delivery_otp?: string | null;
+  contains_preorder?: boolean;
+  preorder_release_date?: string | null;
+  preorder_released?: boolean;
+  preorder_released_at?: string | null;
 };
 
 type AdminOrderDetail = {
@@ -162,6 +170,10 @@ type AdminOrderDetail = {
   shipping_address?: ShippingAddress | null;
   pricing_snapshot?: any;
   delivery_otp?: string | null;
+  contains_preorder?: boolean;
+  preorder_release_date?: string | null;
+  preorder_released?: boolean;
+  preorder_released_at?: string | null;
   created_at: string;
   confirmed_at?: string | null;
   shipped_at?: string | null;
@@ -396,6 +408,7 @@ const labelStyle: React.CSSProperties = {
 
 const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "new", label: "New" },
+  { key: "preorders", label: "Pre-Orders" },
   { key: "yet_to_ship", label: "Yet to Ship" },
   { key: "yet_to_deliver", label: "Yet to Deliver" },
   { key: "delivered", label: "Delivered" },
@@ -672,8 +685,10 @@ const getStatusTone = (status: string, isRepl?: boolean) => {
 
 const matchesTab = (order: AdminOrderListItem, tab: TabKey) => {
   switch (tab) {
+    case "preorders":
+      return Boolean(order.contains_preorder && !order.preorder_released && (order.status === "placed" || order.status === "confirmed"));
     case "new":
-      return order.status === "placed";
+      return order.status === "placed" && (!order.contains_preorder || Boolean(order.preorder_released));
     case "yet_to_ship":
       return order.status === "confirmed" || order.status === "accepted";
     case "yet_to_deliver":
@@ -769,9 +784,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
 
   const params = useParams<{ siteId?: string; id?: string }>();
   const siteId = propSiteId || params.siteId || params.id || "";
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [mode, setMode] = useState<"orders" | "returns">("orders");
-  const [activeTab, setActiveTab] = useState<TabKey>("yet_to_deliver");
+  const [activeTab, setActiveTab] = useState<TabKey>("new");
   const [orders, setOrders] = useState<AdminOrderListItem[]>(initialOrders);
   const [detailsMap, setDetailsMap] = useState<Record<string, AdminOrderDetail>>({});
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
@@ -791,6 +806,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
   const [adminCancelReason, setAdminCancelReason] = useState<string>(ADMIN_CANCEL_PRESETS[0]);
   const [adminCancelCustomNote, setAdminCancelCustomNote] = useState<string>("");
   const [copiedLinkMap, setCopiedLinkMap] = useState<Record<string, boolean>>({});
+  const [isBulkActionLoading, setIsBulkActionLoading] = useState<boolean>(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
   const showToast = (message: string, type: "success" | "error" | "info" = "info") => {
@@ -1371,12 +1387,23 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
   // Deep-linking support for direct order/return links (e.g. from Earnings/Ledger page)
   const targetOrderId = searchParams.get("orderId");
   const targetReturnId = searchParams.get("returnId");
+  const handledDeepLinkRef = useRef<string | null>(null);
 
   useEffect(() => {
+    const deepLinkKey = targetOrderId ? `order:${targetOrderId}` : targetReturnId ? `return:${targetReturnId}` : null;
+    if (!deepLinkKey) {
+      handledDeepLinkRef.current = null;
+      return;
+    }
+
+    // Only process once per deep-link key unless searchParams change
+    if (handledDeepLinkRef.current === deepLinkKey) return;
+
     if (targetOrderId && orders.length > 0) {
       const found = orders.find(
         (o) => o.id === targetOrderId || o.id.toLowerCase() === targetOrderId.toLowerCase() || o.id.startsWith(targetOrderId)
       );
+      handledDeepLinkRef.current = deepLinkKey;
       if (found) {
         setMode("orders");
         if (found.status === "placed") setActiveTab("new");
@@ -1409,6 +1436,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
       const found = adminReturns.find(
         (r) => r.id === targetReturnId || r.id.toLowerCase() === targetReturnId.toLowerCase() || r.id.startsWith(targetReturnId)
       );
+      handledDeepLinkRef.current = deepLinkKey;
       if (found) {
         setMode("returns");
         setActiveReturnTab(found.status);
@@ -1471,6 +1499,12 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
     setPaymentFilter("all");
     setFulfillmentFilter("all");
     setCurrentPage(1);
+    if (searchParams.has("orderId") || searchParams.has("returnId")) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("orderId");
+      nextParams.delete("returnId");
+      setSearchParams(nextParams, { replace: true });
+    }
   };
 
   const matchesOrderDateFilter = (createdAt?: string | null) => {
@@ -1615,6 +1649,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
     if (Object.keys(serverTabCounts).length > 0) {
       return {
         new: serverTabCounts.new ?? 0,
+        preorders: serverTabCounts.preorders ?? 0,
         yet_to_ship: serverTabCounts.yet_to_ship ?? 0,
         yet_to_deliver: serverTabCounts.yet_to_deliver ?? 0,
         delivered: serverTabCounts.delivered ?? 0,
@@ -1664,6 +1699,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
 
     return {
       new: orders.filter((o) => matchesTab(o, "new") && matchesNonTab(o)).length,
+      preorders: orders.filter((o) => matchesTab(o, "preorders") && matchesNonTab(o)).length,
       yet_to_ship: orders.filter((o) => matchesTab(o, "yet_to_ship") && matchesNonTab(o)).length,
       yet_to_deliver: orders.filter((o) => matchesTab(o, "yet_to_deliver") && matchesNonTab(o)).length,
       delivered: orders.filter((o) => matchesTab(o, "delivered") && matchesNonTab(o)).length,
@@ -1961,6 +1997,49 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
     await updateStatus(orderId, "confirmed");
   };
 
+  const handleReleasePreorder = async (orderId: string) => {
+    if (!siteId) return;
+    setActionLoadingId(orderId);
+    try {
+      const res = await fetchJson(`${API_BASE}/orders/admin/${siteId}/${orderId}/release-preorder`, {
+        method: "POST",
+      });
+      showToast(res?.message || "Pre-order released for shipping", "success");
+      await syncOrderAfterAction(orderId);
+    } catch (err: any) {
+      showToast(err.message || "Failed to release pre-order", "error");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleBulkReleasePreorders = async () => {
+    if (!siteId) return;
+    if (!window.confirm("Release all pending pre-orders for shipping? This will move them to your standard fulfillment queue.")) return;
+    setIsBulkActionLoading(true);
+    try {
+      const res = await fetchJson(`${API_BASE}/orders/admin/${siteId}/bulk-release-preorders`, {
+        method: "POST",
+        body: JSON.stringify({ order_ids: [] }),
+      });
+      showToast(res?.message || "All pre-orders released for shipping", "success");
+      await loadOrdersForSite(
+        currentPage,
+        pageSize,
+        activeTab,
+        searchQuery,
+        paymentFilter,
+        dateFilter,
+        customFromDate,
+        customToDate
+      );
+    } catch (err: any) {
+      showToast(err.message || "Failed to bulk release pre-orders", "error");
+    } finally {
+      setIsBulkActionLoading(false);
+    }
+  };
+
 
   const handleMarkShipped = async (orderId: string) => {
     const order = orders.find((item) => item.id === orderId);
@@ -2208,6 +2287,51 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
       color: "#0f172a",
     };
 
+
+    if (activeTab === "preorders" || (order.contains_preorder && !order.preorder_released)) {
+      return (
+        <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+          {canUpdateOrders && (
+            <button
+              disabled={actionLoadingId === order.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleReleasePreorder(order.id);
+              }}
+              style={{
+                ...actionButtonStyle,
+                padding: "5px 12px",
+                background: "#fef3c7",
+                color: "#92400e",
+                border: "1px solid #fde68a",
+                fontWeight: 700,
+              }}
+              title="Release pre-order for standard shipping and fulfillment"
+            >
+              {actionLoadingId === order.id ? "Releasing..." : "Release for Shipping"}
+            </button>
+          )}
+          {canCancelOrders && (
+            <button
+              disabled={actionLoadingId === order.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCancel(order.id);
+              }}
+              style={{
+                ...actionButtonStyle,
+                padding: "5px 10px",
+                background: "#fef2f2",
+                color: "#b91c1c",
+                border: "1px solid #fecaca",
+              }}
+            >
+              Reject
+            </button>
+          )}
+        </div>
+      );
+    }
 
     if (activeTab === "new") {
       return (
@@ -2562,6 +2686,12 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
                   setCurrentPage(1);
+                  if (searchParams.has("orderId") || searchParams.has("returnId")) {
+                    const nextParams = new URLSearchParams(searchParams);
+                    nextParams.delete("orderId");
+                    nextParams.delete("returnId");
+                    setSearchParams(nextParams, { replace: true });
+                  }
                 }}
                 placeholder={
                   mode === "orders"
@@ -2584,6 +2714,12 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                   onClick={() => {
                     setSearchQuery("");
                     setCurrentPage(1);
+                    if (searchParams.has("orderId") || searchParams.has("returnId")) {
+                      const nextParams = new URLSearchParams(searchParams);
+                      nextParams.delete("orderId");
+                      nextParams.delete("returnId");
+                      setSearchParams(nextParams, { replace: true });
+                    }
                   }}
                   style={{
                     position: "absolute",
@@ -3025,6 +3161,59 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
             })}
           </div>
 
+          {activeTab === "preorders" && (
+            <div
+              style={{
+                margin: "0 0 12px 0",
+                padding: "8px 12px",
+                borderRadius: "6px",
+                background: "#fefce8",
+                border: "1px solid #fef08a",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: "8px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span
+                  style={{
+                    width: "7px",
+                    height: "7px",
+                    borderRadius: "50%",
+                    background: "#d97706",
+                    display: "inline-block",
+                    flexShrink: 0,
+                  }}
+                />
+                <span style={{ fontSize: "12.5px", color: "#854d0e", fontWeight: 500 }}>
+                  Pre-orders are held here until launch or release.
+                </span>
+              </div>
+              {filteredOrders.length > 0 && canUpdateOrders && (
+                <button
+                  type="button"
+                  disabled={isBulkActionLoading}
+                  onClick={handleBulkReleasePreorders}
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: "5px",
+                    border: "1px solid #d97706",
+                    background: "#d97706",
+                    color: "#ffffff",
+                    fontWeight: 600,
+                    fontSize: "11.5px",
+                    cursor: isBulkActionLoading ? "wait" : "pointer",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+                  }}
+                >
+                  {isBulkActionLoading ? "Releasing..." : "Release All"}
+                </button>
+              )}
+            </div>
+          )}
+
           <div style={{ ...plainCardStyle, overflow: "hidden" }}>
             {loading ? (
               <div style={{ padding: "20px 16px", fontSize: "14px", color: "#64748b" }}>
@@ -3126,6 +3315,25 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                               >
                                 #{order.id.slice(0, 8).toUpperCase()}
                               </span>
+                              {order.contains_preorder && (
+                                <span
+                                  style={{
+                                    fontSize: "10.5px",
+                                    fontWeight: 700,
+                                    color: order.preorder_released ? "#047857" : "#b45309",
+                                    background: order.preorder_released ? "#ecfdf5" : "#fef3c7",
+                                    border: `1px solid ${order.preorder_released ? "#a7f3d0" : "#fde68a"}`,
+                                    padding: "1px 6px",
+                                    borderRadius: "4px",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "3px",
+                                  }}
+                                  title={order.preorder_release_date ? `Release date: ${new Date(order.preorder_release_date).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}` : "Pre-order reservation"}
+                                >
+                                  <span>{order.preorder_released ? "Pre-Order Released" : "Pre-Order"}</span>
+                                </span>
+                              )}
                               {isReplActive && (
                                 <span
                                     style={{
@@ -3428,6 +3636,29 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                 <span style={{ fontSize: "13.5px", fontWeight: 700, color: "#0f172a" }}>
                                                   {item.product_name}
                                                 </span>
+                                                {item.is_preorder && (
+                                                  <span
+                                                    style={{
+                                                      fontSize: "11px",
+                                                      fontWeight: 700,
+                                                      color: "#b45309",
+                                                      background: "#fffbeb",
+                                                      border: "1px solid #fde68a",
+                                                      padding: "2px 7px",
+                                                      borderRadius: "4px",
+                                                      display: "inline-flex",
+                                                      alignItems: "center",
+                                                      gap: "4px",
+                                                    }}
+                                                  >
+                                                    <span>Pre-Order</span>
+                                                    {item.preorder_release_date && (
+                                                      <span style={{ fontSize: "10px", fontWeight: 500, color: "#92400e" }}>
+                                                        (Release: {new Date(item.preorder_release_date).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true })})
+                                                      </span>
+                                                    )}
+                                                  </span>
+                                                )}
                                                 {isItemBeingReplaced && (
                                                   <span style={{ fontSize: "11px", fontWeight: 700, color: "#0284c7", background: "#e0f2fe", border: "1px solid #7dd3fc", padding: "2px 7px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
                                                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>

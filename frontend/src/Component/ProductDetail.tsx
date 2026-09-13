@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { useCart, Product, ProductReview } from "../CartContext";
+import { useCart, Product, ProductReview, isProductPreorderActive } from "../CartContext";
 import { API_BASE_URL } from "../config/api";
 import { useCustomerAuth } from "../context/CustomerAuthContext";
 import { resolveThemeTokens } from "../context/ThemeContext";
@@ -11,6 +12,8 @@ import { useDeviceMode } from "../context/DeviceModeContext";
 const MAX_CACHE_ENTRIES = 150;
 const productDetailMemoryCache = new Map<string, Product>();
 const siteSlugToIdCache = new Map<string, string>();
+const isUuidString = (val?: string | null) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(val || "").trim());
 
 function getCachedProduct(target?: string | null): Product | null {
   if (!target) return null;
@@ -121,7 +124,9 @@ type ProductDetailProps = {
   max_width?: string;
   image_aspect_ratio?: string;
   image_fit?: "cover" | "contain";
+  image_position?: string;
 
+  editMode?: boolean;
   theme?: {
     mode?: string;
     primary_bg?: string;
@@ -626,6 +631,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   max_width,
   image_aspect_ratio,
   image_fit,
+  image_position,
+  editMode,
   theme,
 }) => {
   const { addToCart, products, cartItems, defaultReturnWindowDays = 7 } = useCart();
@@ -728,13 +735,43 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
       : "");
 
   const deviceMode = useDeviceMode();
+  const isEditMode = Boolean(
+    editMode ||
+    (typeof window !== "undefined" && (
+      window.location.pathname.includes("/builder/") ||
+      window.location.pathname.includes("/admin")
+    ))
+  );
   const [screenSize, setScreenSize] = useState<{ isMobile: boolean; isTablet: boolean }>(() => {
     if (typeof window === "undefined") return { isMobile: false, isTablet: false };
     const w = window.innerWidth;
-    return { isMobile: w < 768, isTablet: w >= 768 && w < 1024 };
+    return {
+      isMobile: w <= 1040,
+      isTablet: w > 640 && w <= 1040,
+    };
   });
 
-  const isMobile = deviceMode === "mobile" || screenSize.isMobile;
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const updateSize = () => {
+      const w = window.innerWidth;
+      setScreenSize({
+        isMobile: w <= 1040,
+        isTablet: w > 640 && w <= 1040,
+      });
+    };
+
+    window.addEventListener("resize", updateSize, { passive: true });
+    window.addEventListener("orientationchange", updateSize, { passive: true });
+    return () => {
+      window.removeEventListener("resize", updateSize);
+      window.removeEventListener("orientationchange", updateSize);
+    };
+  }, []);
+
+  const isMobile =
+    deviceMode === "mobile" ||
+    screenSize.isMobile;
   const isTablet = deviceMode === "mobile" ? false : screenSize.isTablet;
   const [reviews, setReviews] = useState<ProductReview[]>(
     Array.isArray(anyProduct?.reviews) ? (anyProduct.reviews as ProductReview[]) : []
@@ -769,8 +806,104 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   const [loadingMoreReviews, setLoadingMoreReviews] = useState(false);
   const [hasMoreReviews, setHasMoreReviews] = useState(false);
   const [reviewPreviewModalImage, setReviewPreviewModalImage] = useState<string | null>(null);
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number>(0);
+  const [isReviewUploading, setIsReviewUploading] = useState<boolean>(false);
   const inlineBuyRef = React.useRef<HTMLDivElement>(null);
   const [showBottomSticky, setShowBottomSticky] = useState(true);
+  const [stickyTopOffset, setStickyTopOffset] = useState<number>(() => {
+    if (typeof document !== "undefined") {
+      const navEl =
+        document.getElementById("storefront-navbar") ||
+        document.querySelector(".storefront-navbar, header, [data-editor-block-type='navbar'], nav") as HTMLElement | null;
+      if (navEl) {
+        const height = navEl.offsetHeight || Math.round(navEl.getBoundingClientRect().height);
+        if (height > 10) return height + 16;
+      }
+    }
+    return 88;
+  });
+
+  useEffect(() => {
+    if (isMobile) return;
+    const updateStickyTop = () => {
+      try {
+        const navEl =
+          (document.getElementById("storefront-navbar") ||
+          document.querySelector(".storefront-navbar, header, [data-editor-block-type='navbar'], nav")) as HTMLElement | null;
+        if (navEl) {
+          const height = navEl.offsetHeight || Math.round(navEl.getBoundingClientRect().height);
+          const nextVal = height > 10 ? height + 16 : 88;
+          setStickyTopOffset((prev) => (Math.abs(prev - nextVal) > 2 ? nextVal : prev));
+        }
+      } catch (_) {}
+    };
+
+    updateStickyTop();
+    window.addEventListener("resize", updateStickyTop);
+    const timer1 = setTimeout(updateStickyTop, 100);
+    const timer2 = setTimeout(updateStickyTop, 500);
+    return () => {
+      window.removeEventListener("resize", updateStickyTop);
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+    };
+  }, [isMobile]);
+
+  const customerReviewPhotos = useMemo(() => {
+    const photos: {
+      url: string;
+      rawUrl: string;
+      reviewer: string;
+      rating: number;
+      date?: string;
+      reviewText?: string;
+    }[] = [];
+    reviews.forEach((r) => {
+      if (Array.isArray(r.review_images)) {
+        r.review_images.forEach((img) => {
+          if (img && typeof img === "string" && img.trim()) {
+            const resolvedUrl = optimizeImageUrl(img, 1600, 1600);
+            if (resolvedUrl) {
+              photos.push({
+                url: resolvedUrl,
+                rawUrl: img,
+                reviewer: r.customer_name || "Customer",
+                rating: r.rating || 5,
+                date: r.created_at,
+                reviewText: r.review_text,
+              });
+            }
+          }
+        });
+      }
+    });
+    return photos;
+  }, [reviews]);
+
+  useEffect(() => {
+    if (!reviewPreviewModalImage) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setReviewPreviewModalImage(null);
+      } else if (e.key === "ArrowLeft") {
+        if (customerReviewPhotos.length > 1 && selectedPhotoIndex > 0) {
+          const prevIdx = selectedPhotoIndex - 1;
+          setSelectedPhotoIndex(prevIdx);
+          setReviewPreviewModalImage(customerReviewPhotos[prevIdx].url);
+        }
+      } else if (e.key === "ArrowRight") {
+        if (customerReviewPhotos.length > 1 && selectedPhotoIndex < customerReviewPhotos.length - 1) {
+          const nextIdx = selectedPhotoIndex + 1;
+          setSelectedPhotoIndex(nextIdx);
+          setReviewPreviewModalImage(customerReviewPhotos[nextIdx].url);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [reviewPreviewModalImage, selectedPhotoIndex, customerReviewPhotos]);
 
   useEffect(() => {
     if (!isMobile) return;
@@ -912,7 +1045,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
       }
     }
     return [];
-  }, [fetchedSiblings, anyProduct?.siblings, anyProduct?.sibling_group, products, productSlug, anyProduct.id, anyProduct.slug]);
+  }, [fetchedSiblings, product?.siblings, product?.sibling_group, products, productSlug, product?.id, product?.slug]);
 
   useEffect(() => {
     if (Array.isArray(resolvedSiblings)) {
@@ -978,7 +1111,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
         }
       }
     }
-  }, [resolvedSiblings, anyProduct?.sibling_group, anyProduct?.category, anyProduct?.brand, siteId, propSiteId]);
+  }, [resolvedSiblings, product?.sibling_group, product?.category, product?.brand, siteId, propSiteId]);
 
   useEffect(() => {
     setIsVideoActive(videoPos === 0 && Boolean(videoInfo.src));
@@ -992,7 +1125,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     setReviewImages([]);
     setReviewUploadError("");
     setReviewMessage("");
-  }, [productSlug, anyProduct?.id, videoInfo.src, videoPos]);
+  }, [productSlug, product?.id, videoInfo.src, videoPos]);
 
   const normalizedImages: string[] = useMemo(() => {
     const rawList = Array.isArray(anyProduct?.images)
@@ -1026,7 +1159,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
       return [optimizeImageUrl(anyProduct.image, 900, 900)];
     }
     return [];
-  }, [anyProduct]);
+  }, [anyProduct?.images, anyProduct?.image]);
 
   const activeDisplayImage = selectedImage || normalizedImages[0] || "";
 
@@ -1078,6 +1211,19 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     return (product?.collections || []).filter((c: any) => c && c.is_badge);
   }, [product?.collections]);
 
+  const resolvedMaxWidth = resolveContainerWidth(max_width);
+  const resolvedImageAspect = image_aspect_ratio || "1 / 1";
+  const resolvedImageFit = image_fit || "cover";
+
+  const parsedAspectNum = useMemo(() => {
+    if (!resolvedImageAspect) return 1;
+    const parts = resolvedImageAspect.split(/[\/:]/).map((s) => parseFloat(s.trim()));
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1]) && parts[1] > 0) {
+      return parts[0] / parts[1]; // width / height
+    }
+    return 1;
+  }, [resolvedImageAspect]);
+
   const variantOption: VariantOption | null = parsedVariantOption
     ? {
         optionType: parsedVariantOption.optionType,
@@ -1126,8 +1272,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
             null;
         }
 
-        // If currentSiteId is a slug (e.g. "underaura"), resolve the UUID with memory cache
-        if (currentSiteId && (!currentSiteId.includes("-") || currentSiteId.length !== 36)) {
+        // If currentSiteId is a slug (e.g. "underaura" or "underaura-1786299820532"), resolve the UUID with memory cache
+        if (currentSiteId && !isUuidString(currentSiteId)) {
           if (siteSlugToIdCache.has(currentSiteId)) {
             currentSiteId = siteSlugToIdCache.get(currentSiteId)!;
           } else {
@@ -1197,45 +1343,11 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     };
   }, [normalizedTarget, product, failedSlug, siteId, propSiteId, productSlug]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    let timeoutId: any = null;
-    const checkBreakpoints = () => {
-      const w = window.innerWidth;
-      const nextMobile = w < 768;
-      const nextTablet = w >= 768 && w < 1024;
-      setScreenSize((prev) => {
-        if (prev.isMobile === nextMobile && prev.isTablet === nextTablet) {
-          return prev;
-        }
-        return { isMobile: nextMobile, isTablet: nextTablet };
-      });
-    };
 
-    const debouncedResize = () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      timeoutId = setTimeout(checkBreakpoints, 150);
-    };
-
-    window.addEventListener("resize", debouncedResize, { passive: true });
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      window.removeEventListener("resize", debouncedResize);
-    };
-  }, []);
-
-  useEffect(() => {
-    setReviews(Array.isArray(anyProduct?.reviews) ? anyProduct.reviews : []);
-    setAverageRating(Number(anyProduct?.average_rating ?? 0));
-    setReviewCount(Number(anyProduct?.review_count ?? 0));
-    if (Array.isArray(anyProduct?.siblings)) {
-      setFetchedSiblings(anyProduct.siblings);
-    }
-  }, [anyProduct]);
 
   useEffect(() => {
     setSelectedImage(null);
-  }, [productSlug, anyProduct?.id]);
+  }, [productSlug, product?.id]);
 
   useEffect(() => {
     setSelectedOption(firstAvailableVariant);
@@ -1331,7 +1443,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     };
 
     loadEligibleOrderItem();
-  }, [isAuthenticated, product, siteId]);
+  }, [isAuthenticated, product?.id, siteId]);
 
   const {
     isDark,
@@ -1723,13 +1835,17 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     return sameProduct && sameVariant ? sum + item.quantity : sum;
   }, 0);
 
+  const isPreorder = isProductPreorderActive(product);
+
   const remainingQty =
     typeof availableQty === "number" ? Math.max(availableQty - quantityAlreadyInCart, 0) : null;
 
-  const isEntireProductOutOfStock = !normalizedInStock;
-  const isCartLimitReached = typeof remainingQty === "number" ? remainingQty <= 0 : false;
+  const isEntireProductOutOfStock = isPreorder ? false : !normalizedInStock;
+  const isCartLimitReached = isPreorder ? false : (typeof remainingQty === "number" ? remainingQty <= 0 : false);
 
-  const stockMessage = isEntireProductOutOfStock
+  const stockMessage = isPreorder
+    ? "Pre-order open"
+    : isEntireProductOutOfStock
     ? "Out of stock"
     : selectedVariantOutOfStock && selectedOption
     ? `${selectedOption} is out of stock`
@@ -1746,9 +1862,9 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   const maxAllowedQty =
     typeof remainingQty === "number" && remainingQty > 0 ? remainingQty : null;
 
-  const isAtMaxQty = typeof maxAllowedQty === "number" ? quantity >= maxAllowedQty : false;
+  const isAtMaxQty = isPreorder ? false : (typeof maxAllowedQty === "number" ? quantity >= maxAllowedQty : false);
 
-  const canAddToCart = normalizedInStock && (!hasVariants || Boolean(selectedOption));
+  const canAddToCart = (isPreorder || normalizedInStock) && (!hasVariants || Boolean(selectedOption));
   const finalCanAddToCart =
     canAddToCart && !selectedVariantOutOfStock && !isCartLimitReached;
 
@@ -1803,8 +1919,10 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     }
 
     setReviewUploadError("");
+    setIsReviewUploading(true);
 
     try {
+      // Fast client-side image compression to WebP (max 1200x1200px at 0.80 quality)
       const compressedFile = await compressImageFile(file, 1200, 1200, 0.80);
       const formData = new FormData();
       formData.append("file", compressedFile);
@@ -1832,6 +1950,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
       setReviewUploadError(
         error instanceof Error ? error.message : "Failed to upload image"
       );
+    } finally {
+      setIsReviewUploading(false);
     }
   };
 
@@ -1949,21 +2069,31 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   const mainGridColumns = isMobile
     ? "1fr"
     : isTablet
-    ? "minmax(0, 380px) minmax(0, 1fr)"
-    : "minmax(0, 460px) minmax(0, 1fr)";
+    ? "minmax(0, 1fr) minmax(0, 1.15fr)"
+    : "minmax(0, 480px) minmax(0, 1fr)";
   const buyGridColumns = isMobile ? "108px minmax(0, 1fr)" : "116px minmax(0, 1fr)";
   const reviewGridColumns = isMobile ? "1fr" : "minmax(280px, 360px) minmax(0, 1fr)";
   const supportGridColumns = isMobile ? "repeat(3, minmax(0, 1fr))" : "repeat(3, minmax(0, 1fr))";
 
-  const resolvedAddToCartText = add_to_cart_label || "Add to cart";
-  const resolvedMaxWidth = resolveContainerWidth(max_width);
-  const resolvedImageAspect = image_aspect_ratio || "1 / 1";
-  const resolvedImageFit = image_fit || "cover";
+  const resolvedAddToCartText = isPreorder
+    ? "Pre-Order Now"
+    : add_to_cart_label || "Add to cart";
+
+  // On tablet (w > 640px and <= 1040px), keep the image container 100% full-width
+  // but comfortably cap vertical height so 3:4 and 4:5 tall formats take less screen space.
+  // Phone remains 100% natural aspect ratio without any capping.
+  const tabletImageMaxHeight = isTablet
+    ? parsedAspectNum < 0.95
+      ? "58vh"
+      : parsedAspectNum > 1.2
+      ? "44vh"
+      : "54vh"
+    : undefined;
 
   return (
     <section
       style={{
-        maxWidth: isMobile ? "100%" : resolvedMaxWidth,
+        maxWidth: resolvedMaxWidth || "100%",
         width: "100%",
         boxSizing: "border-box",
         margin: "0 auto",
@@ -1975,7 +2105,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
           display: "grid",
           gridTemplateColumns: mainGridColumns,
           gap: isMobile ? "14px" : "20px",
-          alignItems: "start",
+          alignItems: "stretch",
         }}
       >
         <div
@@ -1985,8 +2115,9 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
             flexDirection: "column",
             gap: "10px",
             position: isMobile ? "static" : "sticky",
-            top: isMobile ? "0px" : "14px",
+            top: isMobile ? "0px" : `${stickyTopOffset}px`,
             alignSelf: "start",
+            width: "100%",
           }}
         >
           <div
@@ -1996,6 +2127,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
               boxShadow: softShadow,
               padding: isMobile ? "8px" : "10px",
               overflow: "hidden",
+              width: "100%",
             }}
           >
             <div
@@ -2006,6 +2138,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 overflow: "hidden",
                 background: mediaBg,
                 aspectRatio: resolvedImageAspect,
+                maxHeight: tabletImageMaxHeight,
               }}
             >
               {/* Top-Right Share Icon Button (Mobile Only) */}
@@ -2198,10 +2331,16 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                       ) : item.src ? (
                         <img
                           src={item.src}
-                          alt={`${product.name} - view ${idx + 1}`}
+                          alt={`${product?.name || "Product"} - view ${idx + 1}`}
                           loading={idx === 0 ? "eager" : "lazy"}
                           decoding="async"
-                          style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, objectPosition: "top center", display: "block" }}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: resolvedImageFit,
+                            objectPosition: image_position || (isTablet && parsedAspectNum < 0.95 ? "top center" : "center"),
+                            display: "block",
+                          }}
                         />
                       ) : (
                         <div
@@ -2286,11 +2425,13 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
 
           <div
             style={{
-              display: isMobile ? "flex" : "grid",
-              overflowX: isMobile ? "auto" : "visible",
-              gridTemplateColumns: isMobile ? undefined : `repeat(${Math.max(mediaItems.length, 4)}, minmax(0, 1fr))`,
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "center",
               gap: isMobile ? "6px" : "8px",
-              scrollbarWidth: "none",
+              width: "100%",
+              margin: "0 auto",
               paddingBottom: isMobile ? "2px" : "0",
             }}
           >
@@ -2312,8 +2453,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                     }}
                     style={{
                       padding: 0,
-                      width: isMobile ? "54px" : "auto",
-                      height: isMobile ? "54px" : "auto",
+                      width: isMobile ? "54px" : isTablet ? "62px" : "68px",
+                      height: isMobile ? "54px" : isTablet ? "62px" : "68px",
                       flexShrink: 0,
                       borderRadius: isMobile ? "10px" : "12px",
                       overflow: "hidden",
@@ -2327,6 +2468,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                       alignItems: "center",
                       justifyContent: "center",
                       gap: "2px",
+                      transition: "all 0.15s ease",
                     }}
                   >
                     <span style={{ fontSize: isMobile ? "16px" : "18px" }}>▶️</span>
@@ -2357,8 +2499,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                   }}
                   style={{
                     padding: 0,
-                    width: isMobile ? "54px" : "auto",
-                    height: isMobile ? "54px" : "auto",
+                    width: isMobile ? "54px" : isTablet ? "62px" : "68px",
+                    height: isMobile ? "54px" : isTablet ? "62px" : "68px",
                     flexShrink: 0,
                     borderRadius: isMobile ? "10px" : "12px",
                     overflow: "hidden",
@@ -2367,14 +2509,15 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                     boxShadow: isActive ? activeRing : "none",
                     cursor: "pointer",
                     aspectRatio: "1 / 1",
+                    transition: "all 0.15s ease",
                   }}
                 >
                   <img
                     src={getThumbnailUrl(image, 140, 140)}
-                    alt={`${product.name} view ${index + 1}`}
+                    alt={`${product?.name || "Product"} view ${index + 1}`}
                     loading="lazy"
                     decoding="async"
-                    style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top center", display: "block" }}
+                    style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block" }}
                   />
                 </button>
               );
@@ -2386,8 +2529,9 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
           style={{
             minWidth: 0,
             position: isMobile ? "static" : "sticky",
-            top: isMobile ? "0px" : "14px",
+            top: isMobile ? "0px" : `${stickyTopOffset}px`,
             alignSelf: "start",
+            width: "100%",
           }}
         >
           <div
@@ -2404,7 +2548,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
           >
             <div style={{ display: "grid", gap: "10px", paddingBottom: "14px", borderBottom: subtleBorder }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                {show_brand_name && product.brand && (
+                {show_brand_name && product?.brand && (
                   <span
                     style={{
                       fontSize: "11px",
@@ -2418,7 +2562,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                   </span>
                 )}
 
-                {show_brand_name && product.category && (
+                {show_brand_name && product?.category && (
                   <span
                     style={{
                       fontSize: "11px",
@@ -2531,7 +2675,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                   color: pageText,
                 }}
               >
-                {product.name}
+                {product?.name || ""}
               </h1>
 
               {renderHeroHighlights(
@@ -2624,24 +2768,29 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 <span
                   style={{
                     fontSize: "11px",
-                    fontWeight: 700,
-                    color:
-                      isEntireProductOutOfStock || selectedVariantOutOfStock || isCartLimitReached
-                        ? (isLight ? "#b91c1c" : "#f87171")
-                        : (isLight ? "#15803d" : "#4ade80"),
-                    background:
-                      isEntireProductOutOfStock || selectedVariantOutOfStock || isCartLimitReached
-                        ? (isLight ? "rgba(239,68,68,0.10)" : "rgba(248,113,113,0.15)")
-                        : (isLight ? "rgba(34,197,94,0.10)" : "rgba(74,222,128,0.15)"),
-                    border:
-                      isEntireProductOutOfStock || selectedVariantOutOfStock || isCartLimitReached
-                        ? (isLight ? "1px solid rgba(239,68,68,0.14)" : "1px solid rgba(248,113,113,0.25)")
-                        : (isLight ? "1px solid rgba(34,197,94,0.14)" : "1px solid rgba(74,222,128,0.25)"),
-                    padding: "6px 10px",
+                    fontWeight: 600,
+                    color: isPreorder
+                      ? pageText
+                      : isEntireProductOutOfStock || selectedVariantOutOfStock || isCartLimitReached
+                      ? (isLight ? "#b91c1c" : "#f87171")
+                      : (isLight ? "#15803d" : "#4ade80"),
+                    background: isPreorder
+                      ? (isLight ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.08)")
+                      : isEntireProductOutOfStock || selectedVariantOutOfStock || isCartLimitReached
+                      ? (isLight ? "rgba(239,68,68,0.10)" : "rgba(248,113,113,0.15)")
+                      : (isLight ? "rgba(34,197,94,0.10)" : "rgba(74,222,128,0.15)"),
+                    border: isPreorder
+                      ? subtleBorder
+                      : isEntireProductOutOfStock || selectedVariantOutOfStock || isCartLimitReached
+                      ? (isLight ? "1px solid rgba(239,68,68,0.14)" : "1px solid rgba(248,113,113,0.25)")
+                      : (isLight ? "1px solid rgba(34,197,94,0.14)" : "1px solid rgba(74,222,128,0.25)"),
+                    padding: "4px 10px",
                     borderRadius: "999px",
                   }}
                 >
-                  {isEntireProductOutOfStock
+                  {isPreorder
+                    ? "Pre-Order"
+                    : isEntireProductOutOfStock
                     ? "Out of stock"
                     : selectedVariantOutOfStock && selectedOption
                     ? `${selectedOption} is out of stock`
@@ -2651,6 +2800,106 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 </span>
               </div>
             </div>
+
+            {/* Pre-Order Launch Reservation Banner */}
+            {isPreorder && (() => {
+              const releaseDateObj = product?.preorder_release_date ? new Date(product.preorder_release_date) : null;
+              const formattedDate = releaseDateObj && !isNaN(releaseDateObj.getTime())
+                ? releaseDateObj.toLocaleDateString(undefined, {
+                    weekday: "short",
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : null;
+              const formattedTime = releaseDateObj && !isNaN(releaseDateObj.getTime())
+                ? releaseDateObj.toLocaleTimeString(undefined, {
+                    hour: "numeric",
+                    minute: "2-digit",
+                    hour12: true,
+                  })
+                : null;
+
+              const countdownText = (() => {
+                if (!releaseDateObj || isNaN(releaseDateObj.getTime())) return null;
+                const diffMs = releaseDateObj.getTime() - Date.now();
+                if (diffMs <= 0) return null;
+                const d = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                const h = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const m = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                if (d > 0) return `${d}d ${h}h left`;
+                if (h > 0) return `${h}h ${m}m left`;
+                return `${m}m left`;
+              })();
+
+              const customMessage = product?.preorder_message?.trim();
+              const isDateRedundant = customMessage && releaseDateObj && (
+                customMessage.includes(String(releaseDateObj.getDate())) ||
+                customMessage.toLowerCase().includes("official launch") ||
+                customMessage.toLowerCase().includes("release date")
+              );
+
+              return (
+                <div
+                  style={{
+                    padding: isMobile ? "10px 12px" : "12px 14px",
+                    borderRadius: isMobile ? "10px" : "12px",
+                    background: softSectionBg,
+                    border: subtleBorder,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "5px",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "6px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span
+                        style={{
+                          width: "6px",
+                          height: "6px",
+                          borderRadius: "50%",
+                          background: "#2563eb",
+                          display: "inline-block",
+                        }}
+                      />
+                      <span style={{ fontSize: "12px", fontWeight: 700, color: pageText, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                        Pre-Order
+                      </span>
+                    </div>
+
+                    {countdownText && (
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          padding: "2px 8px",
+                          borderRadius: "999px",
+                          background: isLight ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)",
+                          color: subtleText,
+                          border: subtleBorder,
+                        }}
+                      >
+                        {countdownText}
+                      </span>
+                    )}
+                  </div>
+
+                  {formattedDate && (
+                    <div style={{ fontSize: "12.5px", color: pageText, display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: "5px" }}>
+                      <span style={{ color: mutedText }}>Estimated Dispatch:</span>
+                      <strong style={{ fontWeight: 600 }}>{formattedDate}{formattedTime ? ` (${formattedTime})` : ""}</strong>
+                    </div>
+                  )}
+
+                  {customMessage && !isDateRedundant && (
+                    <div style={{ fontSize: "11.5px", color: subtleText, lineHeight: 1.4 }}>
+                      {customMessage}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Sibling Products / Color Family Switcher (Amazon & Flipkart Style) */}
             {resolvedSiblings.length > 1 && (
@@ -3087,7 +3336,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                       ? "Already added"
                       : `Select ${optionLabel}`
                     : added
-                    ? "Added to cart"
+                    ? isPreorder ? "Pre-Order Placed" : "Added to cart"
                     : resolvedAddToCartText}
                 </button>
               </div>
@@ -3425,12 +3674,18 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
             </div>
 
             <div>
-              <p style={{ margin: "0 0 8px", fontSize: "12px", fontWeight: 700, color: pageText }}>
-                Review images
+              <p style={{ margin: "0 0 8px", fontSize: "12px", fontWeight: 700, color: pageText, display: "flex", alignItems: "center", gap: "6px" }}>
+                <span>Review images</span>
+                {isReviewUploading && (
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: "#2563eb" }}>
+                    (Compressing & uploading...)
+                  </span>
+                )}
               </p>
               <input
                 type="file"
                 accept="image/png,image/jpeg,image/jpg,image/webp"
+                disabled={isReviewUploading}
                 multiple
                 onChange={async (e) => {
                   const files = Array.from(e.target.files || []);
@@ -3442,6 +3697,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 style={{
                   ...reviewInputBase,
                   padding: "10px 12px",
+                  cursor: isReviewUploading ? "not-allowed" : "pointer",
                 }}
               />
               {reviewUploadError ? (
@@ -3453,18 +3709,44 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
               {reviewImages.length ? (
                 <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "10px" }}>
                   {reviewImages.map((img, uploadIdx) => (
-                    <img
-                      key={`review-upload-preview-${uploadIdx}`}
-                      src={optimizeImageUrl(img, 200, 200)}
-                      alt="review upload"
-                      style={{
-                        width: "56px",
-                        height: "56px",
-                        objectFit: "cover",
-                        borderRadius: "10px",
-                        border: subtleBorder,
-                      }}
-                    />
+                    <div key={`review-upload-preview-${uploadIdx}`} style={{ position: "relative" }}>
+                      <img
+                        src={optimizeImageUrl(img, 200, 200)}
+                        alt="review upload"
+                        style={{
+                          width: "56px",
+                          height: "56px",
+                          objectFit: "cover",
+                          borderRadius: "10px",
+                          border: subtleBorder,
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setReviewImages((prev) => prev.filter((_, i) => i !== uploadIdx))}
+                        style={{
+                          position: "absolute",
+                          top: "-4px",
+                          right: "-4px",
+                          width: "18px",
+                          height: "18px",
+                          borderRadius: "50%",
+                          background: "#dc2626",
+                          color: "#ffffff",
+                          border: "none",
+                          fontSize: "10px",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: 0,
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+                        }}
+                        title="Remove image"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   ))}
                 </div>
               ) : null}
@@ -3473,7 +3755,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
             <button
               type="button"
               onClick={submitReview}
-              disabled={!canSubmitReview}
+              disabled={!canSubmitReview || isReviewUploading}
               style={{
                 minHeight: "42px",
                 borderRadius: "12px",
@@ -3482,14 +3764,14 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 color: "#ffffff",
                 fontWeight: 700,
                 fontSize: "13px",
-                cursor: canSubmitReview ? "pointer" : "not-allowed",
+                cursor: canSubmitReview && !isReviewUploading ? "pointer" : "not-allowed",
                 boxShadow: isLight
                   ? "0 12px 24px rgba(37,99,235,0.20)"
                   : "0 12px 24px rgba(37,99,235,0.24)",
-                opacity: canSubmitReview ? 1 : 0.65,
+                opacity: canSubmitReview && !isReviewUploading ? 1 : 0.65,
               }}
             >
-              {reviewSubmitting ? "Submitting..." : "Submit review"}
+              {reviewSubmitting ? "Submitting..." : isReviewUploading ? "Uploading photos..." : "Submit review"}
             </button>
 
             {reviewMessage ? (
@@ -3497,7 +3779,79 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
             ) : null}
           </div>
 
-          <div style={{ display: "grid", gap: "10px" }}>
+          <div style={{ display: "grid", gap: "12px" }}>
+            {/* Customer Photos Gallery Strip (Scrollable, fits 5-6 images per view) */}
+            {customerReviewPhotos.length > 0 && (
+              <div
+                style={{
+                  background: reviewCardBg,
+                  borderRadius: "16px",
+                  border: subtleBorder,
+                  padding: "14px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: "13px", fontWeight: 700, color: pageText }}>
+                    Customer Photos ({customerReviewPhotos.length})
+                  </span>
+                  <span style={{ fontSize: "11px", color: subtleText }}>
+                    Scroll to view all
+                  </span>
+                </div>
+
+                <div
+                  className="wc-tiny-scrollbar"
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    overflowX: "auto",
+                    paddingBottom: "4px",
+                    scrollbarWidth: "thin",
+                  }}
+                >
+                  {customerReviewPhotos.map((photo, pIdx) => (
+                    <button
+                      key={`customer-photo-strip-${pIdx}`}
+                      type="button"
+                      onClick={() => {
+                        setSelectedPhotoIndex(pIdx);
+                        setReviewPreviewModalImage(photo.url);
+                      }}
+                      title={`Photo by ${photo.reviewer} - Click to expand`}
+                      style={{
+                        flexShrink: 0,
+                        width: isMobile ? "68px" : "84px",
+                        height: isMobile ? "68px" : "84px",
+                        borderRadius: "10px",
+                        overflow: "hidden",
+                        border: subtleBorder,
+                        padding: 0,
+                        cursor: "pointer",
+                        background: mediaBg,
+                        position: "relative",
+                        transition: "transform 0.15s ease",
+                      }}
+                    >
+                      <img
+                        src={optimizeImageUrl(photo.url, 200, 200)}
+                        alt={`Customer upload ${pIdx + 1}`}
+                        loading="lazy"
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          display: "block",
+                        }}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {reviews.length === 0 ? (
               <div
                 style={{
@@ -3573,12 +3927,20 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                     {Array.isArray(review.review_images) && review.review_images.length > 0 ? (
                       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "10px" }}>
                         {review.review_images.map((img, imgIdx) => {
-                          const resolvedImgUrl = optimizeImageUrl(img, 400, 400);
+                          const fullUrl = optimizeImageUrl(img, 1600, 1600);
+                          const matchingGlobalIdx = customerReviewPhotos.findIndex(
+                            (p) => p.rawUrl === img || p.url === fullUrl || p.url === img
+                          );
                           return (
                             <button
                               key={`review-image-${imgIdx}`}
                               type="button"
-                              onClick={() => setReviewPreviewModalImage(resolvedImgUrl)}
+                              onClick={() => {
+                                if (matchingGlobalIdx >= 0) {
+                                  setSelectedPhotoIndex(matchingGlobalIdx);
+                                }
+                                setReviewPreviewModalImage(fullUrl);
+                              }}
                               title="Click to zoom image"
                               style={{
                                 padding: 0,
@@ -3593,7 +3955,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                               }}
                             >
                               <img
-                                src={resolvedImgUrl}
+                                src={optimizeImageUrl(img, 200, 200)}
                                 alt="Customer review attachment"
                                 loading="lazy"
                                 style={{
@@ -3688,351 +4050,459 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
         </div>
       </div>
     )}
-      {/* Review Image Preview Lightbox Modal */}
-      {reviewPreviewModalImage && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 999999,
-            background: "rgba(0, 0, 0, 0.85)",
-            backdropFilter: "blur(10px)",
-            WebkitBackdropFilter: "blur(10px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "20px",
-          }}
-          onClick={() => setReviewPreviewModalImage(null)}
-        >
+
+      {/* Review Image Preview Lightbox Modal (Direct Body Portal & Maximum Stacking Context) */}
+      {reviewPreviewModalImage &&
+        typeof document !== "undefined" &&
+        createPortal(
           <div
             style={{
-              position: "relative",
-              maxWidth: "90vw",
-              maxHeight: "90vh",
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 2147483647,
+              background: "rgba(0, 0, 0, 0.92)",
+              backdropFilter: "blur(14px)",
+              WebkitBackdropFilter: "blur(14px)",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
+              justifyContent: "center",
+              padding: isMobile ? "16px" : "24px",
             }}
-            onClick={(e) => e.stopPropagation()}
+            onClick={() => setReviewPreviewModalImage(null)}
           >
-            <button
-              type="button"
-              onClick={() => setReviewPreviewModalImage(null)}
-              title="Close image"
+            {/* Top Bar with counter & safe close button */}
+            <div
               style={{
-                position: "absolute",
-                top: "-42px",
-                right: "0px",
-                background: "rgba(255, 255, 255, 0.2)",
-                border: "none",
-                borderRadius: "50%",
-                width: "36px",
-                height: "36px",
-                color: "#ffffff",
-                fontSize: "18px",
+                position: "fixed",
+                top: isMobile ? "14px" : "20px",
+                left: isMobile ? "14px" : "24px",
+                right: isMobile ? "14px" : "24px",
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
+                justifyContent: "space-between",
+                zIndex: 2147483647,
+                pointerEvents: "none",
               }}
             >
-              ✕
-            </button>
-            <img
-              src={reviewPreviewModalImage}
-              alt="Review full photo"
-              style={{
-                maxWidth: "100%",
-                maxHeight: "85vh",
-                borderRadius: "16px",
-                objectFit: "contain",
-                boxShadow: "0 20px 40px rgba(0,0,0,0.5)",
-              }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Share Product Modal - Dynamically Themed & Clean Vector Logos */}
-      {showShareModal && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 999999,
-            background: "rgba(0, 0, 0, 0.65)",
-            backdropFilter: "blur(8px)",
-            WebkitBackdropFilter: "blur(8px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "16px",
-          }}
-          onClick={() => setShowShareModal(false)}
-        >
-          <div
-            style={{
-              background: panelBg,
-              color: pageText,
-              borderRadius: "22px",
-              padding: "24px 22px",
-              width: "100%",
-              maxWidth: "430px",
-              boxShadow: isPanelDark
-                ? "0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.12)"
-                : "0 25px 50px -12px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(15, 23, 42, 0.08)",
-              border: subtleBorder,
-              position: "relative",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              {customerReviewPhotos.length > 0 ? (
                 <span
                   style={{
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    color: "#ffffff",
+                    background: "rgba(0, 0, 0, 0.65)",
+                    backdropFilter: "blur(8px)",
+                    padding: "6px 14px",
+                    borderRadius: "999px",
+                    border: "1px solid rgba(255, 255, 255, 0.22)",
+                    pointerEvents: "auto",
                     display: "inline-flex",
                     alignItems: "center",
-                    justifyContent: "center",
-                    width: "32px",
-                    height: "32px",
-                    borderRadius: "10px",
-                    background: isPanelDark ? "rgba(255,255,255,0.08)" : "rgba(15,23,42,0.05)",
-                    color: accentColor,
+                    gap: "8px",
                   }}
                 >
-                  <LinkChainIcon size={16} color={accentColor} />
+                  <span>
+                    {selectedPhotoIndex + 1} / {customerReviewPhotos.length}
+                  </span>
+                  {customerReviewPhotos[selectedPhotoIndex]?.reviewer && (
+                    <span style={{ opacity: 0.85 }}>
+                      • {customerReviewPhotos[selectedPhotoIndex].reviewer}
+                    </span>
+                  )}
                 </span>
-                <span style={{ fontSize: "16px", fontWeight: 800, color: pageText, letterSpacing: "-0.02em" }}>
-                  Share Product
-                </span>
-              </div>
+              ) : (
+                <span />
+              )}
+
               <button
                 type="button"
-                onClick={() => setShowShareModal(false)}
+                onClick={() => setReviewPreviewModalImage(null)}
+                title="Close image"
                 style={{
-                  background: isPanelDark ? "rgba(255,255,255,0.08)" : "rgba(15,23,42,0.06)",
-                  border: "none",
-                  fontSize: "14px",
-                  color: mutedText,
-                  cursor: "pointer",
-                  width: "28px",
-                  height: "28px",
+                  background: "rgba(255, 255, 255, 0.22)",
+                  backdropFilter: "blur(8px)",
+                  border: "1px solid rgba(255, 255, 255, 0.3)",
                   borderRadius: "50%",
+                  width: "42px",
+                  height: "42px",
+                  color: "#ffffff",
+                  fontSize: "20px",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  lineHeight: 1,
-                  transition: "opacity 0.15s ease",
+                  cursor: "pointer",
+                  pointerEvents: "auto",
+                  transition: "background 0.15s ease",
                 }}
               >
                 ✕
               </button>
             </div>
 
-            {/* Mini Product Card Preview */}
+            {/* Main Photo Center Container with Prev / Next Navigation Arrows */}
             <div
               style={{
+                position: "relative",
+                maxWidth: "92vw",
+                maxHeight: "84vh",
                 display: "flex",
                 alignItems: "center",
-                gap: "12px",
-                padding: "10px 12px",
-                borderRadius: "12px",
-                background: softSectionBg,
-                border: subtleBorder,
-                marginBottom: "16px",
+                justifyContent: "center",
               }}
+              onClick={(e) => e.stopPropagation()}
             >
-              {selectedImage && (
-                <img
-                  src={selectedImage}
-                  alt={product.name}
-                  style={{ width: "46px", height: "46px", borderRadius: "8px", objectFit: "cover", flexShrink: 0 }}
-                />
+              {/* Prev Button */}
+              {customerReviewPhotos.length > 1 && selectedPhotoIndex > 0 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const prevIdx = selectedPhotoIndex - 1;
+                    setSelectedPhotoIndex(prevIdx);
+                    setReviewPreviewModalImage(customerReviewPhotos[prevIdx].url);
+                  }}
+                  style={{
+                    position: "absolute",
+                    left: isMobile ? "8px" : "-60px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    zIndex: 2147483647,
+                    width: isMobile ? "38px" : "46px",
+                    height: isMobile ? "38px" : "46px",
+                    borderRadius: "50%",
+                    background: "rgba(0, 0, 0, 0.65)",
+                    backdropFilter: "blur(8px)",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                    color: "#ffffff",
+                    fontSize: "24px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                  title="Previous photo"
+                >
+                  ‹
+                </button>
               )}
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontSize: "13px", fontWeight: 700, color: pageText, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {product.name}
-                </div>
-                <div style={{ fontSize: "12.5px", fontWeight: 800, color: accentColor, marginTop: "2px" }}>
-                  ₹{effectivePrice.toLocaleString("en-IN")}
-                </div>
-              </div>
-            </div>
 
-            {/* Social Quick Share Tiles with Official Logos */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px", marginBottom: "16px" }}>
-              <a
-                href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Check out ${product.name} (₹${effectivePrice}): ` + getProductShareUrl())}`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <img
+                src={reviewPreviewModalImage}
+                alt="Review full photo"
                 style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "12px 4px",
+                  maxWidth: "100%",
+                  maxHeight: "82vh",
                   borderRadius: "14px",
-                  background: isPanelDark ? "rgba(37, 211, 102, 0.12)" : "#f0fdf4",
-                  border: `1px solid ${isPanelDark ? "rgba(37, 211, 102, 0.28)" : "rgba(37, 211, 102, 0.35)"}`,
-                  textDecoration: "none",
-                  transition: "transform 0.15s ease",
+                  objectFit: "contain",
+                  boxShadow: "0 25px 50px rgba(0,0,0,0.7)",
                 }}
-              >
-                <WhatsAppOfficialIcon size={22} />
-                <span style={{ fontSize: "11px", fontWeight: 700, color: isPanelDark ? "#4ade80" : "#15803d" }}>WhatsApp</span>
-              </a>
-
-              <a
-                href={`https://t.me/share/url?url=${encodeURIComponent(getProductShareUrl())}&text=${encodeURIComponent(`Check out ${product.name} for ₹${effectivePrice}!`)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "12px 4px",
-                  borderRadius: "14px",
-                  background: isPanelDark ? "rgba(34, 158, 217, 0.12)" : "#f0f9ff",
-                  border: `1px solid ${isPanelDark ? "rgba(34, 158, 217, 0.28)" : "rgba(34, 158, 217, 0.35)"}`,
-                  textDecoration: "none",
-                  transition: "transform 0.15s ease",
-                }}
-              >
-                <TelegramOfficialIcon size={22} />
-                <span style={{ fontSize: "11px", fontWeight: 700, color: isPanelDark ? "#38bdf8" : "#0284c7" }}>Telegram</span>
-              </a>
-
-              <a
-                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Check out ${product.name} for ₹${effectivePrice}!`)}&url=${encodeURIComponent(getProductShareUrl())}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "12px 4px",
-                  borderRadius: "14px",
-                  background: isPanelDark ? "rgba(255, 255, 255, 0.06)" : "rgba(15, 23, 42, 0.04)",
-                  border: subtleBorder,
-                  textDecoration: "none",
-                  transition: "transform 0.15s ease",
-                }}
-              >
-                <XTwitterOfficialIcon size={19} color={pageText} />
-                <span style={{ fontSize: "11px", fontWeight: 700, color: pageText }}>X / Twitter</span>
-              </a>
-
-              <a
-                href={`mailto:?subject=${encodeURIComponent(`Check out ${product.name}`)}&body=${encodeURIComponent(`I thought you might like this product: ${product.name} (₹${effectivePrice})\n\n${getProductShareUrl()}`)}`}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "12px 4px",
-                  borderRadius: "14px",
-                  background: isPanelDark ? "rgba(239, 68, 68, 0.12)" : "#fef2f2",
-                  border: `1px solid ${isPanelDark ? "rgba(239, 68, 68, 0.28)" : "rgba(239, 68, 68, 0.35)"}`,
-                  textDecoration: "none",
-                  transition: "transform 0.15s ease",
-                }}
-              >
-                <EmailOfficialIcon size={20} color={isPanelDark ? "#f87171" : "#dc2626"} />
-                <span style={{ fontSize: "11px", fontWeight: 700, color: isPanelDark ? "#f87171" : "#dc2626" }}>Email</span>
-              </a>
-            </div>
-
-            {/* Copy Link Input Bar */}
-            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              <input
-                type="text"
-                readOnly
-                value={getProductShareUrl()}
-                style={{
-                  flex: 1,
-                  padding: "10px 12px",
-                  borderRadius: "10px",
-                  border: subtleBorder,
-                  background: isPanelDark ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.04)",
-                  color: pageText,
-                  fontSize: "12px",
-                  outline: "none",
-                }}
-                onClick={(e) => (e.target as HTMLInputElement).select()}
               />
-              <button
-                type="button"
-                onClick={() => copyToClipboard(getProductShareUrl())}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "10px 16px",
-                  borderRadius: "10px",
-                  background: copiedLink ? "#16a34a" : accentColor,
-                  color: activeBtnTextColor || "#ffffff",
-                  border: "none",
-                  fontSize: "12px",
-                  fontWeight: 800,
-                  cursor: "pointer",
-                  transition: "all 0.18s ease",
-                  whiteSpace: "nowrap",
-                  boxShadow: copiedLink ? "0 2px 8px rgba(22, 163, 74, 0.3)" : "0 2px 8px rgba(0,0,0,0.12)",
-                }}
-              >
-                {copiedLink ? (
-                  <>
-                    <span>✓</span>
-                    <span>Copied!</span>
-                  </>
-                ) : (
-                  <>
-                    <LinkChainIcon size={14} color={activeBtnTextColor || "#ffffff"} />
-                    <span>Copy Link</span>
-                  </>
-                )}
-              </button>
-            </div>
 
-            {/* System / More Share Options */}
-            {typeof navigator !== "undefined" && navigator.share && (
-              <button
-                type="button"
-                onClick={handleNativeShare}
+              {/* Next Button */}
+              {customerReviewPhotos.length > 1 && selectedPhotoIndex < customerReviewPhotos.length - 1 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const nextIdx = selectedPhotoIndex + 1;
+                    setSelectedPhotoIndex(nextIdx);
+                    setReviewPreviewModalImage(customerReviewPhotos[nextIdx].url);
+                  }}
+                  style={{
+                    position: "absolute",
+                    right: isMobile ? "8px" : "-60px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    zIndex: 2147483647,
+                    width: isMobile ? "38px" : "46px",
+                    height: isMobile ? "38px" : "46px",
+                    borderRadius: "50%",
+                    background: "rgba(0, 0, 0, 0.65)",
+                    backdropFilter: "blur(8px)",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                    color: "#ffffff",
+                    fontSize: "24px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                  title="Next photo"
+                >
+                  ›
+                </button>
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* Share Product Modal - Dynamically Themed & Clean Vector Logos */}
+      {showShareModal &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 2147483647,
+              background: "rgba(0, 0, 0, 0.45)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "16px",
+            }}
+            onClick={() => setShowShareModal(false)}
+          >
+            <div
+              style={{
+                background: panelBg,
+                color: pageText,
+                borderRadius: "22px",
+                padding: "24px 22px",
+                width: "100%",
+                maxWidth: "430px",
+                boxShadow: isPanelDark
+                  ? "0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.12)"
+                  : "0 25px 50px -12px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(15, 23, 42, 0.08)",
+                border: subtleBorder,
+                position: "relative",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: "32px",
+                      height: "32px",
+                      borderRadius: "10px",
+                      background: isPanelDark ? "rgba(255,255,255,0.08)" : "rgba(15,23,42,0.05)",
+                      color: accentColor,
+                    }}
+                  >
+                    <LinkChainIcon size={16} color={accentColor} />
+                  </span>
+                  <span style={{ fontSize: "16px", fontWeight: 800, color: pageText, letterSpacing: "-0.02em" }}>
+                    Share Product
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowShareModal(false)}
+                  style={{
+                    background: isPanelDark ? "rgba(255,255,255,0.08)" : "rgba(15,23,42,0.06)",
+                    border: "none",
+                    fontSize: "14px",
+                    color: mutedText,
+                    cursor: "pointer",
+                    width: "28px",
+                    height: "28px",
+                    borderRadius: "50%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    lineHeight: 1,
+                    transition: "opacity 0.15s ease",
+                  }}
+                  title="Close modal"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Social Channels 4-Column Grid - Simple, Clean & Consistent Theme */}
+              <div
                 style={{
-                  marginTop: "12px",
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "10px",
-                  background: isPanelDark ? "rgba(255,255,255,0.05)" : "rgba(15,23,42,0.04)",
-                  border: subtleBorder,
-                  color: mutedText,
-                  fontSize: "12px",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "6px",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(4, 1fr)",
+                  gap: "10px",
+                  marginBottom: "16px",
                 }}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="18" cy="5" r="3" />
-                  <circle cx="6" cy="12" r="3" />
-                  <circle cx="18" cy="19" r="3" />
-                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-                  <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-                </svg>
-                <span>More Device Share Options</span>
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+                {/* WhatsApp */}
+                <a
+                  href={`https://wa.me/?text=${encodeURIComponent(`Check out ${product?.name || "Product"} (₹${effectivePrice}) on our store: ${getProductShareUrl()}`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "12px 4px",
+                    borderRadius: "14px",
+                    background: isPanelDark ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.03)",
+                    border: subtleBorder,
+                    textDecoration: "none",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <WhatsAppOfficialIcon size={20} />
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: pageText }}>WhatsApp</span>
+                </a>
+
+                {/* Telegram */}
+                <a
+                  href={`https://t.me/share/url?url=${encodeURIComponent(getProductShareUrl())}&text=${encodeURIComponent(`Check out ${product?.name || "Product"} (₹${effectivePrice})`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "12px 4px",
+                    borderRadius: "14px",
+                    background: isPanelDark ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.03)",
+                    border: subtleBorder,
+                    textDecoration: "none",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <TelegramOfficialIcon size={20} />
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: pageText }}>Telegram</span>
+                </a>
+
+                {/* X / Twitter */}
+                <a
+                  href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Check out ${product?.name || "Product"} (₹${effectivePrice})`)}&url=${encodeURIComponent(getProductShareUrl())}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "12px 4px",
+                    borderRadius: "14px",
+                    background: isPanelDark ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.03)",
+                    border: subtleBorder,
+                    textDecoration: "none",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <XTwitterOfficialIcon size={18} color={pageText} />
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: pageText }}>X (Twitter)</span>
+                </a>
+
+                {/* Email */}
+                <a
+                  href={`mailto:?subject=${encodeURIComponent(`Check out ${product?.name || "Product"}`)}&body=${encodeURIComponent(`I thought you might like this product: ${product?.name || "Product"} (₹${effectivePrice})\n\n${getProductShareUrl()}`)}`}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "12px 4px",
+                    borderRadius: "14px",
+                    background: isPanelDark ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.03)",
+                    border: subtleBorder,
+                    textDecoration: "none",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <EmailOfficialIcon size={20} color={pageText} />
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: pageText }}>Email</span>
+                </a>
+              </div>
+
+              {/* Copy Link Input Bar */}
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <input
+                  type="text"
+                  readOnly
+                  value={getProductShareUrl()}
+                  style={{
+                    flex: 1,
+                    padding: "10px 12px",
+                    borderRadius: "10px",
+                    border: subtleBorder,
+                    background: isPanelDark ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.04)",
+                    color: pageText,
+                    fontSize: "12px",
+                    outline: "none",
+                  }}
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                />
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(getProductShareUrl())}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "10px 16px",
+                    borderRadius: "10px",
+                    background: copiedLink ? "#16a34a" : accentColor,
+                    color: activeBtnTextColor || "#ffffff",
+                    border: "none",
+                    fontSize: "12px",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    transition: "all 0.18s ease",
+                    whiteSpace: "nowrap",
+                    boxShadow: copiedLink ? "0 2px 8px rgba(22, 163, 74, 0.3)" : "0 2px 8px rgba(0,0,0,0.12)",
+                  }}
+                >
+                  {copiedLink ? (
+                    <>
+                      <span>✓</span>
+                      <span>Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <LinkChainIcon size={14} color={activeBtnTextColor || "#ffffff"} />
+                      <span>Copy Link</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* System / More Share Options */}
+              {typeof navigator !== "undefined" && navigator.share && (
+                <button
+                  type="button"
+                  onClick={handleNativeShare}
+                  style={{
+                    marginTop: "12px",
+                    width: "100%",
+                    padding: "10px",
+                    borderRadius: "10px",
+                    background: isPanelDark ? "rgba(255,255,255,0.05)" : "rgba(15,23,42,0.04)",
+                    border: subtleBorder,
+                    color: mutedText,
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="18" cy="5" r="3" />
+                    <circle cx="6" cy="12" r="3" />
+                    <circle cx="18" cy="19" r="3" />
+                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                  </svg>
+                  <span>More Device Share Options</span>
+                </button>
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
       {/* Attached Bottom Purchase Bar on Mobile (Zero corner radius, perfectly aligned with card buttons) */}
       {isMobile && (
         <div
@@ -4197,7 +4667,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 ? "Already added"
                 : `Select ${optionLabel}`
               : added
-              ? "Added to cart"
+              ? isPreorder ? "Pre-Order Placed" : "Added to cart"
               : resolvedAddToCartText}
           </button>
         </div>

@@ -117,6 +117,15 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
       if (themePatch.navbar_bg && !themePatch.navbar_outer_bg) {
         themePatch.navbar_outer_bg = themePatch.navbar_bg;
       }
+      if (!themePatch.hero_bg) {
+        themePatch.hero_bg = themePatch.primary_bg || themePatch.secondary_bg;
+      }
+      if (!themePatch.hero_text_color) {
+        themePatch.hero_text_color = themePatch.text_color;
+      }
+      if (!themePatch.hero_accent) {
+        themePatch.hero_accent = themePatch.accent_color;
+      }
       const updatedDef = saveThemeSnapshot(siteDefinition as any, themeName, themePatch);
       onSiteDefinitionChange(updatedDef);
     }
@@ -159,6 +168,15 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
     }
     if (themePatch.navbar_bg && !themePatch.navbar_outer_bg) {
       themePatch.navbar_outer_bg = themePatch.navbar_bg;
+    }
+    if (!themePatch.hero_bg) {
+      themePatch.hero_bg = themePatch.primary_bg || themePatch.secondary_bg;
+    }
+    if (!themePatch.hero_text_color) {
+      themePatch.hero_text_color = themePatch.text_color;
+    }
+    if (!themePatch.hero_accent) {
+      themePatch.hero_accent = themePatch.accent_color;
     }
 
     // Apply theme patch via updateThemeValues so all pages and components purge old block-level color locks

@@ -355,6 +355,22 @@ class Product(SQLModel, table=True):
         default=None,
         sa_column=Column(JSONB, nullable=True),
     )
+    is_preorder: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, default=False),
+    )
+    preorder_release_date: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    preorder_message: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String(255), nullable=True),
+    )
+    preorder_limit: Optional[int] = Field(
+        default=None,
+        sa_column=Column(Integer, nullable=True),
+    )
 
     created_at: datetime = Field(
         default_factory=utc_now,
@@ -460,6 +476,15 @@ class CartItem(SQLModel, table=True):
     product_image: Optional[str] = Field(default=None)
     product_slug: Optional[str] = Field(default=None)
 
+    is_preorder: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, default=False),
+    )
+    preorder_release_date: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+
     created_at: datetime = Field(
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False),
@@ -509,6 +534,22 @@ class Order(SQLModel, table=True):
     discount_amount: Decimal = Field(
         default=Decimal("0.00"),
         sa_column=Column(Numeric(12, 2), nullable=False, default=Decimal("0.00")),
+    )
+    contains_preorder: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, default=False),
+    )
+    preorder_release_date: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    preorder_released: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, default=False),
+    )
+    preorder_released_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
     )
     total: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
     confirmed_at: Optional[datetime] = Field(
@@ -574,6 +615,14 @@ class OrderItem(SQLModel, table=True):
     quantity: int = Field(nullable=False)
     line_total: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
     status: str = Field(default="placed", max_length=40, nullable=False)
+    is_preorder: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, default=False),
+    )
+    preorder_release_date: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
     returnable_quantity: int = Field(default=0, nullable=False)
     return_window_days: int = Field(
         default=7,

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from sqlmodel import Session, select
 
-from auth_middleware import authenticate_customer
+from auth_middleware import authenticate_customer, resolve_site_by_slug_or_404
 from db.database import get_session
 from models import DeliverySettings, Site, User, UserAddress
 
@@ -24,11 +24,8 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def get_site_or_404(session: Session, site_id: UUID) -> Site:
-    site = session.get(Site, site_id)
-    if not site:
-        raise HTTPException(status_code=404, detail="Site not found")
-    return site
+def get_site_or_404(session: Session, site_id: str | UUID) -> Site:
+    return resolve_site_by_slug_or_404(str(site_id), session)
 
 
 def get_user_for_site_or_404(session: Session, site_id: UUID, user_id: UUID) -> User:
@@ -200,49 +197,49 @@ class AddressListResponse(BaseModel):
 
 @router.get("/addresses/{site_id}", response_model=AddressListResponse)
 def get_addresses(
-    site_id: UUID,
+    site_id: str,
     user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
-    get_site_or_404(session, site_id)
+    site = get_site_or_404(session, site_id)
 
-    if str(site_id) != user["siteId"]:
+    if str(site.id) != str(user["siteId"]) and str(site.slug) != str(user["siteId"]):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Customer token does not match requested site",
         )
 
-    customer = get_user_for_site_or_404(session, site_id, UUID(user["userId"]))
-    addresses = fetch_user_addresses(session, site_id, customer.id)
+    customer = get_user_for_site_or_404(session, site.id, UUID(user["userId"]))
+    addresses = fetch_user_addresses(session, site.id, customer.id)
 
     return {"addresses": [serialize_address(address) for address in addresses]}
 
 
 @router.post("/addresses/{site_id}", response_model=AddressResponse)
 def create_address(
-    site_id: UUID,
+    site_id: str,
     payload: CreateAddressRequest,
     user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
-    get_site_or_404(session, site_id)
+    site = get_site_or_404(session, site_id)
 
-    if str(site_id) != user["siteId"]:
+    if str(site.id) != str(user["siteId"]) and str(site.slug) != str(user["siteId"]):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Customer token does not match requested site",
         )
 
-    customer = get_user_for_site_or_404(session, site_id, UUID(user["userId"]))
+    customer = get_user_for_site_or_404(session, site.id, UUID(user["userId"]))
 
-    existing_addresses = fetch_user_addresses(session, site_id, customer.id)
+    existing_addresses = fetch_user_addresses(session, site.id, customer.id)
     should_be_default = payload.is_default or len(existing_addresses) == 0
 
     if should_be_default:
-        unset_existing_default(session, site_id, customer.id)
+        unset_existing_default(session, site.id, customer.id)
 
     address = UserAddress(
-        site_id=site_id,
+        site_id=site.id,
         user_id=customer.id,
         full_name=payload.full_name,
         mobile_number=payload.mobile_number,
@@ -252,10 +249,10 @@ def create_address(
         email=payload.email,
         address_type=payload.address_type,
         is_default=should_be_default,
-        is_active=True,
         latitude=payload.latitude,
         longitude=payload.longitude,
         geo_accuracy=payload.geo_accuracy,
+        updated_at=utc_now(),
     )
     session.add(address)
     session.commit()
@@ -266,25 +263,25 @@ def create_address(
 
 @router.put("/addresses/{site_id}/{address_id}", response_model=AddressResponse)
 def update_address(
-    site_id: UUID,
+    site_id: str,
     address_id: UUID,
     payload: UpdateAddressRequest,
     user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
-    get_site_or_404(session, site_id)
+    site = get_site_or_404(session, site_id)
 
-    if str(site_id) != user["siteId"]:
+    if str(site.id) != str(user["siteId"]) and str(site.slug) != str(user["siteId"]):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Customer token does not match requested site",
         )
 
-    customer = get_user_for_site_or_404(session, site_id, UUID(user["userId"]))
-    address = get_address_for_user_or_404(session, site_id, customer.id, address_id)
+    customer = get_user_for_site_or_404(session, site.id, UUID(user["userId"]))
+    address = get_address_for_user_or_404(session, site.id, customer.id, address_id)
 
     if payload.is_default:
-        unset_existing_default(session, site_id, customer.id, exclude_id=address.id)
+        unset_existing_default(session, site.id, customer.id, exclude_id=address.id)
 
     address.full_name = payload.full_name
     address.mobile_number = payload.mobile_number
@@ -310,21 +307,21 @@ def update_address(
 
 @router.delete("/addresses/{site_id}/{address_id}")
 def delete_address(
-    site_id: UUID,
+    site_id: str,
     address_id: UUID,
     user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
-    get_site_or_404(session, site_id)
+    site = get_site_or_404(session, site_id)
 
-    if str(site_id) != user["siteId"]:
+    if str(site.id) != str(user["siteId"]) and str(site.slug) != str(user["siteId"]):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Customer token does not match requested site",
         )
 
-    customer = get_user_for_site_or_404(session, site_id, UUID(user["userId"]))
-    address = get_address_for_user_or_404(session, site_id, customer.id, address_id)
+    customer = get_user_for_site_or_404(session, site.id, UUID(user["userId"]))
+    address = get_address_for_user_or_404(session, site.id, customer.id, address_id)
     was_default = address.is_default
 
     address.is_active = False
@@ -338,7 +335,7 @@ def delete_address(
         next_address = session.exec(
             select(UserAddress)
             .where(
-                UserAddress.site_id == site_id,
+                UserAddress.site_id == site.id,
                 UserAddress.user_id == customer.id,
                 UserAddress.is_active == True,
             )
@@ -356,23 +353,23 @@ def delete_address(
 
 @router.post("/addresses/{site_id}/{address_id}/default", response_model=AddressResponse)
 def set_default_address(
-    site_id: UUID,
+    site_id: str,
     address_id: UUID,
     user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
-    get_site_or_404(session, site_id)
+    site = get_site_or_404(session, site_id)
 
-    if str(site_id) != user["siteId"]:
+    if str(site.id) != str(user["siteId"]) and str(site.slug) != str(user["siteId"]):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Customer token does not match requested site",
         )
 
-    customer = get_user_for_site_or_404(session, site_id, UUID(user["userId"]))
-    address = get_address_for_user_or_404(session, site_id, customer.id, address_id)
+    customer = get_user_for_site_or_404(session, site.id, UUID(user["userId"]))
+    address = get_address_for_user_or_404(session, site.id, customer.id, address_id)
 
-    unset_existing_default(session, site_id, customer.id, exclude_id=address.id)
+    unset_existing_default(session, site.id, customer.id, exclude_id=address.id)
 
     address.is_default = True
     address.updated_at = utc_now()
@@ -400,7 +397,7 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 @router.get("/deliverability/{site_id}")
 def check_deliverability(
-    site_id: UUID,
+    site_id: str,
     lat: float = Query(..., description="Customer latitude"),
     lng: float = Query(..., description="Customer longitude"),
     session: Session = Depends(get_session),
@@ -409,10 +406,10 @@ def check_deliverability(
     the admin-configured delivery radius. Calculates Haversine distance
     from the store's pinned location for own fleet and/or Shiprocket courier."""
 
-    get_site_or_404(session, site_id)
+    site = get_site_or_404(session, site_id)
 
     settings = session.exec(
-        select(DeliverySettings).where(DeliverySettings.site_id == site_id)
+        select(DeliverySettings).where(DeliverySettings.site_id == site.id)
     ).first()
 
     if not settings:

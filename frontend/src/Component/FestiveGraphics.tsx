@@ -12,49 +12,70 @@ export interface FestiveGraphicProps extends React.SVGProps<SVGSVGElement> {
  */
 const useResponsiveSvgWidth = () => {
   const [width, setWidth] = React.useState<number>(() => {
-    if (typeof window !== "undefined" && window.innerWidth) {
-      return window.innerWidth;
+    if (typeof window !== "undefined") {
+      const clientW = document.documentElement?.clientWidth || window.innerWidth;
+      return Math.min(clientW || 1200, 2560);
     }
     return 1200;
   });
   const svgRef = React.useRef<SVGSVGElement | null>(null);
+  const lastWidthRef = React.useRef<number>(width);
 
   React.useEffect(() => {
     const el = svgRef.current;
     if (!el) return;
 
     const measure = () => {
+      // Always measure the parent container or viewport, NEVER the dynamic SVG itself
       const parent = el.parentElement;
-      const w = parent ? parent.getBoundingClientRect().width : el.getBoundingClientRect().width;
-      if (w > 20) {
-        setWidth(Math.round(w));
+      const rawW =
+        parent && parent.clientWidth > 0
+          ? parent.clientWidth
+          : (typeof window !== "undefined"
+              ? document.documentElement?.clientWidth || window.innerWidth
+              : 1200);
+
+      // Clamp width to valid viewport bounds to prevent WebKit recursive layout expansion
+      const maxAllowed =
+        typeof window !== "undefined"
+          ? Math.max(window.innerWidth, document.documentElement?.clientWidth || 0)
+          : 2560;
+      const safeWidth = Math.max(280, Math.min(Math.round(rawW), maxAllowed || 1200));
+
+      // Guard against subpixel oscillation (require at least 4px change) to prevent Safari layout loops
+      if (Math.abs(safeWidth - lastWidthRef.current) >= 4) {
+        lastWidthRef.current = safeWidth;
+        setWidth(safeWidth);
       }
     };
 
-    measure();
+    // Initial measure
+    const rId = requestAnimationFrame(measure);
 
     let ro: ResizeObserver | null = null;
     if (typeof ResizeObserver !== "undefined") {
-      ro = new ResizeObserver((entries) => {
-        for (const entry of entries) {
-          const crWidth = entry.contentRect.width;
-          if (crWidth > 20) {
-            setWidth(Math.round(crWidth));
-          }
-        }
+      ro = new ResizeObserver(() => {
+        measure();
       });
+      // ONLY observe the parent container to avoid SVG viewBox self-observation loops in WebKit
       if (el.parentElement) {
         ro.observe(el.parentElement);
+      } else if (document.body) {
+        ro.observe(document.body);
       }
-      ro.observe(el);
     }
 
-    const onResize = () => measure();
+    const onResize = () => {
+      measure();
+    };
     window.addEventListener("resize", onResize, { passive: true });
+    window.addEventListener("orientationchange", onResize, { passive: true });
 
     return () => {
+      cancelAnimationFrame(rId);
       if (ro) ro.disconnect();
       window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
     };
   }, []);
 
