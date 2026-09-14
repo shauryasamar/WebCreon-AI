@@ -2,6 +2,8 @@ import React, { useMemo, useState } from "react";
 import { API_BASE_URL } from "../config/api";
 import { isColorDarkHex } from "../context/ThemeContext";
 import { useRazorpay } from "../hooks/useRazorpay";
+import { getCustomerAuthHeaders } from "../utils/customerAuthFetch";
+import { useCart } from "../CartContext";
 
 type ThemeInput =
   | "dark"
@@ -58,11 +60,15 @@ type PlaceOrderCtaProps = {
   theme?: ThemeInput;
   text_color?: string;
   border_radius?: number;
+  button_border_radius?: number;
+  button_height?: number;
   padding?: number;
   max_width?: number;
   reviewMode?: boolean;
   selectedAddressId?: string | null;
   paymentData?: PaymentData;
+  promoCode?: string;
+  helperText?: string;
   onOrderPlaced?: (payload: OrderPlacedPayload) => void;
 };
 
@@ -78,6 +84,19 @@ function isErrorResponse(data: unknown): data is ErrorResponse {
   return typeof data === "object" && data !== null && "detail" in data;
 }
 
+function extractApiErrorMessage(data: unknown, fallback: string): string {
+  if (typeof data === "string" && data.trim()) return data.trim();
+  if (data && typeof data === "object") {
+    const obj = data as Record<string, any>;
+    if (typeof obj.detail === "string" && obj.detail.trim()) return obj.detail.trim();
+    if (Array.isArray(obj.detail)) {
+      return obj.detail.map((e: any) => e.msg || e.message || JSON.stringify(e)).join(", ");
+    }
+    if (typeof obj.message === "string" && obj.message.trim()) return obj.message.trim();
+  }
+  return fallback;
+}
+
 export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
   siteId,
   buttonLabel = "Place order",
@@ -88,16 +107,30 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
   theme,
   text_color,
   border_radius,
+  button_border_radius,
+  button_height,
   padding,
   max_width,
   reviewMode = false,
   selectedAddressId,
   paymentData,
+  promoCode,
+  helperText: customHelperText,
   onOrderPlaced,
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const { openRazorpay } = useRazorpay();
+  const { clearCart } = useCart();
+  const paymentHandledRef = React.useRef(false);
+
+  const cleanupRazorpayDom = () => {
+    try {
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+      document.querySelectorAll(".razorpay-container, .razorpay-backdrop").forEach((el) => el.remove());
+    } catch {}
+  };
 
   const resolvedMode =
     typeof theme === "string" ? theme : theme?.mode === "light" ? "light" : "dark";
@@ -113,7 +146,8 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
     (typeof theme === "object" && (theme as any)?.place_order_btn_text) ||
     (isColorDarkHex(resolvedAccent) ? "#ffffff" : "#0f172a");
 
-  const resolvedRadius = border_radius ?? 14;
+  const resolvedRadius = button_border_radius ?? border_radius ?? 14;
+  const resolvedMinHeight = button_height ? `${button_height}px` : (compact ? "52px" : "56px");
   const resolvedPaddingY = padding ?? (compact ? 14 : 16);
   const resolvedPaddingX = compact ? 18 : 22;
   const helperTextColor =
@@ -132,12 +166,14 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
 
     if (errorMessage) return errorMessage;
 
+    if (customHelperText) return customHelperText;
+
     if (reviewMode) {
       return "Review the delivery and payment details, then complete the order.";
     }
 
     return "";
-  }, [errorMessage, isSubmitting, paymentData?.method, reviewMode]);
+  }, [errorMessage, isSubmitting, paymentData?.method, reviewMode, customHelperText]);
 
   const handlePlaceOrder = async () => {
     if (finalDisabled) return;
@@ -164,6 +200,7 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
     }
 
     try {
+      paymentHandledRef.current = false;
       setIsSubmitting(true);
       setErrorMessage("");
 
@@ -172,10 +209,11 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
         const response = await fetch(`${API_BASE_URL}/orders/${siteId}/place`, {
           method: "POST",
           credentials: "include",
-          headers: { "Content-Type": "application/json" },
+          headers: getCustomerAuthHeaders(siteId, { "Content-Type": "application/json" }),
           body: JSON.stringify({
             address_id: selectedAddressId,
             payment_method: "cod",
+            promo_code: promoCode || undefined,
           }),
         });
 
@@ -186,15 +224,21 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
         }
 
         if (!response.ok) {
-          if (isErrorResponse(data) && typeof data.detail === "string") {
-            throw new Error(data.detail);
-          }
-          throw new Error(`Failed to place COD order (${response.status})`);
+          throw new Error(extractApiErrorMessage(data, `Failed to place COD order (${response.status})`));
         }
 
         if (!isPlaceOrderApiResponse(data)) {
           throw new Error("Invalid place order response");
         }
+
+        paymentHandledRef.current = true;
+        setIsSubmitting(false);
+        try {
+          await clearCart();
+        } catch {}
+        try {
+          window.dispatchEvent(new CustomEvent("wc_customer_notification_refresh"));
+        } catch {}
 
         onOrderPlaced?.({
           orderId: data.order_id || "",
@@ -208,10 +252,11 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
       const initResponse = await fetch(`${API_BASE_URL}/orders/${siteId}/create-payment-order`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: getCustomerAuthHeaders(siteId, { "Content-Type": "application/json" }),
         body: JSON.stringify({
           address_id: selectedAddressId,
           payment_method: normalizedMethod,
+          promo_code: promoCode || undefined,
         }),
       });
 
@@ -222,10 +267,7 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
       }
 
       if (!initResponse.ok) {
-        if (isErrorResponse(initData) && typeof initData.detail === "string") {
-          throw new Error(initData.detail);
-        }
-        throw new Error(`Failed to initialize payment (${initResponse.status})`);
+        throw new Error(extractApiErrorMessage(initData, `Failed to initialize payment (${initResponse.status})`));
       }
 
       if (!isCreatePaymentOrderApiResponse(initData)) {
@@ -233,6 +275,20 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
       }
 
       const { order_id, razorpay_order_id, amount, currency, key_id } = initData;
+
+      // Persist pending order in storage to handle mobile bank page redirects
+      const pendingOrderData = {
+        siteId,
+        order_id,
+        razorpay_order_id,
+        timestamp: Date.now(),
+      };
+      try {
+        sessionStorage.setItem(`pending_checkout_order_${siteId}`, JSON.stringify(pendingOrderData));
+        localStorage.setItem(`pending_checkout_order_${siteId}`, JSON.stringify(pendingOrderData));
+        sessionStorage.setItem("pending_checkout_order", JSON.stringify(pendingOrderData));
+        localStorage.setItem("pending_checkout_order", JSON.stringify(pendingOrderData));
+      } catch {}
 
       // Validate VPA so email addresses don't break Razorpay's UPI modal
       const rawVpa = paymentData?.upiId?.trim() || "";
@@ -243,137 +299,203 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
       const isCard = normalizedMethod.includes("card");
       const isNetbanking = normalizedMethod.includes("netbank") || normalizedMethod.includes("bank");
       const isWallet = normalizedMethod.includes("wallet");
+      const isUpi = normalizedMethod.includes("upi");
 
-      const targetMethod = isCard ? "card" : isNetbanking ? "netbanking" : isWallet ? "wallet" : "upi";
-      const targetName = isCard ? "Card" : isNetbanking ? "Netbanking" : isWallet ? "Wallet" : "UPI";
+      const targetMethod = isCard ? "card" : isNetbanking ? "netbanking" : isWallet ? "wallet" : isUpi ? "upi" : undefined;
+      const targetName = isCard ? "Card" : isNetbanking ? "Netbanking" : isWallet ? "Wallet" : isUpi ? "UPI" : "Payment";
 
-      // Launch Razorpay Checkout locked exclusively to the chosen instrument
-      await openRazorpay({
-        key: key_id,
-        amount: amount,
-        currency: currency || "INR",
-        name: "WebCreon Store",
-        description: `Order #${order_id.slice(0, 8).toUpperCase()}`,
-        order_id: razorpay_order_id.startsWith("order_mock_") ? undefined : razorpay_order_id,
-        prefill: {
-          contact: "+918825255108",
-          email: "customer@example.com",
-          method: targetMethod,
-          vpa: validVpa,
-        },
-        config: {
-          display: {
-            blocks: {
-              chosen_only: {
-                name: `Pay with ${targetName}`,
-                instruments: [{ method: targetMethod }],
+      const methodConfig = targetMethod
+        ? {
+            display: {
+              blocks: {
+                selectedMethodBlock: {
+                  name: `Pay via ${targetName}`,
+                  instruments: [
+                    {
+                      method: targetMethod,
+                    },
+                  ],
+                },
+              },
+              sequence: ["block.selectedMethodBlock"],
+              preferences: {
+                show_default_blocks: false,
               },
             },
-            sequence: ["block.chosen_only"],
-            preferences: {
-              show_default_blocks: false, // Completely hides all other options & sidebar
+          }
+        : undefined;
+
+      // Safety net: if Razorpay's SDK times out internally and never calls
+      // handler / ondismiss / onPaymentFailed, this timer resets the loading
+      // state so the page doesn't freeze forever. 5 minutes is generous.
+      let safetyTimer: ReturnType<typeof setTimeout> | null = null;
+      safetyTimer = setTimeout(() => {
+        if (!paymentHandledRef.current) {
+          paymentHandledRef.current = true; // prevent double-fire
+          setIsSubmitting(false);
+          setErrorMessage("Payment session timed out. Please refresh and try again.");
+        }
+      }, 5 * 60 * 1000);
+
+      try {
+        // Launch standard in-app Razorpay modal dedicated to selected method
+        await openRazorpay({
+          key: key_id,
+          amount: amount,
+          currency: currency || "INR",
+          name: "WebCreon Store",
+          description: `Order #${order_id.slice(0, 8).toUpperCase()}`,
+          order_id: razorpay_order_id.startsWith("order_mock_") ? undefined : razorpay_order_id,
+          config: methodConfig,
+          prefill: {
+            method: targetMethod || undefined,
+            vpa: validVpa || undefined,
+          },
+          theme: {
+            color: resolvedAccent,
+          },
+          modal: {
+            ondismiss: async () => {
+              // If payment was already verified and completed in handler, ignore dismissal
+              if (paymentHandledRef.current) return;
+              if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null; }
+
+              setIsSubmitting(false);
+              // Check if payment was completed before closing modal (e.g. mobile netbanking return)
+              if (order_id && siteId) {
+                try {
+                  const checkRes = await fetch(`${API_BASE_URL}/orders/${siteId}/verify-payment`, {
+                    method: "POST",
+                    credentials: "include",
+                    headers: getCustomerAuthHeaders(siteId, { "Content-Type": "application/json" }),
+                    body: JSON.stringify({
+                      order_id: order_id,
+                      razorpay_order_id: razorpay_order_id,
+                    }),
+                  });
+                  if (checkRes.ok) {
+                    const checkData = await checkRes.json();
+                    if (checkData.status === "placed" && checkData.payment_status === "paid") {
+                      paymentHandledRef.current = true;
+                      cleanupRazorpayDom();
+                      try {
+                        sessionStorage.removeItem(`pending_checkout_order_${siteId}`);
+                        localStorage.removeItem(`pending_checkout_order_${siteId}`);
+                        sessionStorage.removeItem("pending_checkout_order");
+                        localStorage.removeItem("pending_checkout_order");
+                      } catch {}
+                      try {
+                        await clearCart();
+                      } catch {}
+                      try {
+                        window.dispatchEvent(new CustomEvent("wc_customer_notification_refresh"));
+                      } catch {}
+                      onOrderPlaced?.({
+                        orderId: checkData.order_id || order_id,
+                        status: "placed",
+                        total: checkData.total,
+                      });
+                      return;
+                    } else if (checkData.is_refunded || checkData.status === "cancelled") {
+                      const refundMsg = checkData.message || "Item went out of stock right as payment completed. A 100% automated refund has been initiated back to your source account.";
+                      setErrorMessage(refundMsg);
+                      return;
+                    }
+                  }
+                } catch {
+                  // Ignore background check errors
+                }
+              }
+              setErrorMessage("Payment was cancelled or dismissed. You can try again.");
             },
           },
-        },
-        theme: {
-          color: resolvedAccent,
-        },
-        modal: {
-          ondismiss: async () => {
-            setIsSubmitting(false);
-            // Check if payment was completed before closing modal (e.g. mobile netbanking return)
-            if (order_id && siteId) {
-              try {
-                const checkRes = await fetch(`${API_BASE_URL}/orders/${siteId}/verify-payment`, {
-                  method: "POST",
-                  credentials: "include",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    order_id: order_id,
-                    razorpay_order_id: razorpay_order_id,
-                  }),
-                });
-                if (checkRes.ok) {
-                  const checkData = await checkRes.json();
-                  if (checkData.status === "placed" && checkData.payment_status === "paid") {
-                    onOrderPlaced?.({
-                      orderId: checkData.order_id || order_id,
-                      status: "placed",
-                      total: checkData.total,
-                    });
-                    return;
-                  } else if (checkData.is_refunded || checkData.status === "cancelled") {
-                    const refundMsg = checkData.message || "Item went out of stock right as payment completed. A 100% automated refund has been initiated back to your source account.";
-                    setErrorMessage(refundMsg);
-                    alert(refundMsg);
-                    return;
-                  }
-                }
-              } catch {
-                // Ignore background check errors
+          handler: async (paymentResponse: {
+            razorpay_payment_id: string;
+            razorpay_order_id?: string;
+            razorpay_signature: string;
+          }) => {
+            if (paymentHandledRef.current) return;
+            paymentHandledRef.current = true;
+            if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null; }
+
+            try {
+              const verifyRes = await fetch(`${API_BASE_URL}/orders/${siteId}/verify-payment`, {
+                method: "POST",
+                credentials: "include",
+                headers: getCustomerAuthHeaders(siteId, { "Content-Type": "application/json" }),
+                body: JSON.stringify({
+                  order_id: order_id,
+                  razorpay_order_id: paymentResponse.razorpay_order_id || razorpay_order_id,
+                  razorpay_payment_id: paymentResponse.razorpay_payment_id,
+                  razorpay_signature: paymentResponse.razorpay_signature || "test_signature",
+                }),
+              });
+
+              const verifyRaw = await verifyRes.text();
+              let verifyData: any = null;
+              try { verifyData = JSON.parse(verifyRaw); } catch { verifyData = verifyRaw; }
+
+              if (!verifyRes.ok) {
+                throw new Error(verifyData?.detail || "Payment signature verification failed");
               }
+
+              if (verifyData?.is_refunded || verifyData?.status === "cancelled") {
+                const refundMsg = verifyData.message || "Item went out of stock right as payment completed. A 100% automated refund has been initiated back to your source account.";
+                setErrorMessage(refundMsg);
+                return;
+              }
+
+              cleanupRazorpayDom();
+              try {
+                sessionStorage.removeItem(`pending_checkout_order_${siteId}`);
+                localStorage.removeItem(`pending_checkout_order_${siteId}`);
+                sessionStorage.removeItem("pending_checkout_order");
+                localStorage.removeItem("pending_checkout_order");
+              } catch {}
+
+              try {
+                await clearCart();
+              } catch {}
+
+              try {
+                window.dispatchEvent(new CustomEvent("wc_customer_notification_refresh"));
+              } catch {}
+
+              onOrderPlaced?.({
+                orderId: verifyData.order_id || order_id,
+                status: verifyData.status || "placed",
+                total: verifyData.total,
+              });
+            } catch (vErr: any) {
+              paymentHandledRef.current = false;
+              cleanupRazorpayDom();
+              const msg = vErr.message || "Failed to confirm payment";
+              setErrorMessage(msg);
+            } finally {
+              setIsSubmitting(false);
             }
-            setErrorMessage("Payment was cancelled or dismissed. You can try again.");
           },
-        },
-        handler: async (paymentResponse: {
-          razorpay_payment_id: string;
-          razorpay_order_id?: string;
-          razorpay_signature: string;
-        }) => {
-          try {
-            const verifyRes = await fetch(`${API_BASE_URL}/orders/${siteId}/verify-payment`, {
-              method: "POST",
-              credentials: "include",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                order_id: order_id,
-                razorpay_order_id: paymentResponse.razorpay_order_id || razorpay_order_id,
-                razorpay_payment_id: paymentResponse.razorpay_payment_id,
-                razorpay_signature: paymentResponse.razorpay_signature || "test_signature",
-              }),
-            });
-
-            const verifyRaw = await verifyRes.text();
-            let verifyData: any = null;
-            try { verifyData = JSON.parse(verifyRaw); } catch { verifyData = verifyRaw; }
-
-            if (!verifyRes.ok) {
-              throw new Error(verifyData?.detail || "Payment signature verification failed");
-            }
-
-            if (verifyData?.is_refunded || verifyData?.status === "cancelled") {
-              const refundMsg = verifyData.message || "Item went out of stock right as payment completed. A 100% automated refund has been initiated back to your source account.";
-              setErrorMessage(refundMsg);
-              alert(refundMsg);
-              return;
-            }
-
-            onOrderPlaced?.({
-              orderId: verifyData.order_id || order_id,
-              status: verifyData.status || "placed",
-              total: verifyData.total,
-            });
-          } catch (vErr: any) {
-            const msg = vErr.message || "Failed to confirm payment";
-            setErrorMessage(msg);
-            alert(msg);
-          } finally {
+          onPaymentFailed: (error: any) => {
+            paymentHandledRef.current = false;
+            cleanupRazorpayDom();
+            if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null; }
             setIsSubmitting(false);
-          }
-        },
-        onPaymentFailed: (error: any) => {
-          setIsSubmitting(false);
-          const failMsg = error?.description || "Payment failed. Please try with another payment method.";
-          setErrorMessage(failMsg);
-          alert(failMsg);
-        },
-      });
+            const failMsg = error?.description || "Payment failed. Please try with another payment method.";
+            setErrorMessage(failMsg);
+          },
+        });
+      } catch (innerError) {
+        // openRazorpay itself threw (SDK load failure etc.)
+        cleanupRazorpayDom();
+        if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null; }
+        throw innerError; // re-throw so the outer catch handles it
+      }
     } catch (error) {
+      paymentHandledRef.current = false;
+      cleanupRazorpayDom();
       setIsSubmitting(false);
       const errTxt = error instanceof Error ? error.message : "Failed to initiate payment";
       setErrorMessage(errTxt);
-      alert(errTxt);
     }
   };
 
@@ -407,7 +529,6 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
               gap: "8px",
             }}
           >
-            <span style={{ fontSize: "16px" }}>⚠️</span>
             <span>{errorMessage}</span>
           </div>
         ) : helperText ? (
@@ -429,7 +550,7 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
           disabled={finalDisabled}
           style={{
             width: "100%",
-            minHeight: compact ? "52px" : "56px",
+            minHeight: resolvedMinHeight,
             padding: `${resolvedPaddingY}px ${resolvedPaddingX}px`,
             borderRadius: `${resolvedRadius}px`,
             border: "none",

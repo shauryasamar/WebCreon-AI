@@ -1,5 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { isColorDarkHex } from "../context/ThemeContext";
+import { useDeviceMode } from "../context/DeviceModeContext";
+import { resolveMobileDrawerTheme } from "../utils/mobileDrawerTheme";
+import { useDrawerDragToClose } from "../utils/useDrawerDragToClose";
 
 type SortOption = {
   value: string;
@@ -23,6 +27,7 @@ type FilterSidebarProps = {
   sortBy?: string;
   onSortChange?: (sort: string) => void;
   onFilterClick?: () => void;
+  showFilterButton?: boolean;
   theme?: {
     mode?: string;
     text_color?: string;
@@ -42,10 +47,64 @@ export const FilterSidebar = ({
   sortBy = "newest",
   onSortChange,
   onFilterClick,
+  showFilterButton = true,
   theme,
 }: FilterSidebarProps) => {
+  const deviceMode = useDeviceMode();
+  const [innerIsMobile, setInnerIsMobile] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerWidth <= 640;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const check = () => setInnerIsMobile(window.innerWidth <= 640);
+    window.addEventListener("resize", check, { passive: true });
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  const isMobile = deviceMode === "mobile" || innerIsMobile;
   const [sortOpen, setSortOpen] = useState(false);
+
+  const { dragHandleProps, drawerStyle, isDragging } = useDrawerDragToClose({
+    onClose: () => setSortOpen(false),
+    isOpen: sortOpen && isMobile,
+  });
   const sortRef = useRef<HTMLDivElement>(null);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  const [isInsidePreviewStage, setIsInsidePreviewStage] = useState(false);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (!sortOpen) return;
+    // In builder admin preview, portal to the phone preview stage container if available
+    const previewStage = sortRef.current?.closest(".builder-preview-stage") as HTMLElement | null;
+    if (deviceMode === "mobile" && previewStage) {
+      setPortalTarget(previewStage);
+      setIsInsidePreviewStage(true);
+    } else {
+      setPortalTarget(document.body);
+      setIsInsidePreviewStage(false);
+    }
+  }, [deviceMode, sortOpen]);
+
+  useEffect(() => {
+    if (!sortOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSortOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [sortOpen]);
+
+  useEffect(() => {
+    if (!sortOpen || !isMobile || isInsidePreviewStage) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [sortOpen, isMobile, isInsidePreviewStage]);
 
   const isDark =
     ((theme as any)?.filter_bg ? isColorDarkHex((theme as any).filter_bg) : false) ||
@@ -67,10 +126,12 @@ export const FilterSidebar = ({
   const dropdownBg = (theme as any)?.filter_card_bg || (theme as any)?.dialog_bg || (theme as any)?.surface_bg || (theme as any)?.card_bg || resolvedPrimaryBg;
   const hoverBg = `${accentColor}1c`;
 
+  const mobileTheme = resolveMobileDrawerTheme(theme);
+
   const currentSort = SORT_OPTIONS.find((o) => o.value === sortBy) || SORT_OPTIONS[0];
 
   useEffect(() => {
-    if (!sortOpen) return;
+    if (!sortOpen || isMobile) return;
     const handleClickOutside = (e: MouseEvent) => {
       if (sortRef.current && !sortRef.current.contains(e.target as Node)) {
         setSortOpen(false);
@@ -78,7 +139,7 @@ export const FilterSidebar = ({
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [sortOpen]);
+  }, [sortOpen, isMobile]);
 
   const displayTitle =
     (title &&
@@ -89,50 +150,133 @@ export const FilterSidebar = ({
       : null) || "Newest Arrivals";
 
   return (
-    <div className="product-toolbar-wrapper">
+    <div className={`product-toolbar-wrapper ${isMobile ? "is-mobile" : ""}`}>
       <div className="product-toolbar-container">
         {/* Left: Subtitle & Title */}
         <div className="product-toolbar-title-group">
           <p className="product-toolbar-subtitle">
             {subtitle || "Browse Products"}
           </p>
-          <h2 className="product-toolbar-title">
+          <h2 className="product-toolbar-title" title={displayTitle}>
             {displayTitle}
+            {itemCount > 0 && (
+              <span className="product-toolbar-title-count">
+                ({itemCount.toLocaleString()})
+              </span>
+            )}
           </h2>
         </div>
 
-        {/* Right: Item Count + Filter Button + Sort Dropdown */}
+        {/* Right: Actions */}
         <div className="product-toolbar-actions">
-          {/* Item count */}
-          <span className="product-toolbar-count">
-            {itemCount} item{itemCount !== 1 ? "s" : ""}
-          </span>
+          {/* Filter button */}
+          {showFilterButton && (
+            isMobile ? (
+              <button
+                type="button"
+                onClick={onFilterClick}
+                className="product-toolbar-icon-btn"
+                aria-label="Filter products and categories"
+                title="Filter & Categories"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="4" y1="21" x2="4" y2="14" />
+                  <line x1="4" y1="10" x2="4" y2="3" />
+                  <line x1="12" y1="21" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12" y2="3" />
+                  <line x1="20" y1="21" x2="20" y2="16" />
+                  <line x1="20" y1="12" x2="20" y2="3" />
+                  <line x1="1" y1="14" x2="7" y2="14" />
+                  <line x1="9" y1="8" x2="15" y2="8" />
+                  <line x1="17" y1="16" x2="23" y2="16" />
+                </svg>
+                {activeFilterCount > 0 && (
+                  <span className="product-toolbar-icon-badge">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onFilterClick}
+                className="product-toolbar-btn product-toolbar-filter-btn"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <line x1="4" y1="21" x2="4" y2="14" />
+                  <line x1="4" y1="10" x2="4" y2="3" />
+                  <line x1="12" y1="21" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12" y2="3" />
+                  <line x1="20" y1="21" x2="20" y2="16" />
+                  <line x1="20" y1="12" x2="20" y2="3" />
+                  <line x1="1" y1="14" x2="7" y2="14" />
+                  <line x1="9" y1="8" x2="15" y2="8" />
+                  <line x1="17" y1="16" x2="23" y2="16" />
+                </svg>
+                <span>Filter & Categories</span>
+                {activeFilterCount > 0 && (
+                  <span className="product-toolbar-badge">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+            )
+          )}
 
-          {/* Filter & Categories button */}
-          <button
-            onClick={onFilterClick}
-            className="product-toolbar-btn"
-          >
-            <span>☰</span>
-            <span>Filter & Categories</span>
-            {activeFilterCount > 0 && (
-              <span className="product-toolbar-badge">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
-
-          {/* Sort by dropdown */}
+          {/* Sort button */}
           <div ref={sortRef} style={{ position: "relative" }}>
-            <button
-              onClick={() => setSortOpen(!sortOpen)}
-              className="product-toolbar-btn"
-            >
-              <span>Sort by: <strong>{currentSort.label}</strong></span>
-              <span style={{ fontSize: "10px", transition: "transform 200ms", transform: sortOpen ? "rotate(180deg)" : "rotate(0)" }}>▾</span>
-            </button>
+            {isMobile ? (
+              <button
+                type="button"
+                onClick={() => setSortOpen(!sortOpen)}
+                className="product-toolbar-icon-btn"
+                aria-label={`Sort by: ${currentSort.label}`}
+                title={`Sort by: ${currentSort.label}`}
+                style={{
+                  borderColor: sortBy !== "newest" ? accentColor : borderColor,
+                  background: sortBy !== "newest" ? `${accentColor}16` : btnBg,
+                  color: sortBy !== "newest" ? accentColor : textPrimary,
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 5h10M11 9h7M11 13h4" />
+                  <path d="M3 17l3 3 3-3" />
+                  <path d="M6 18V4" />
+                </svg>
+                {sortBy !== "newest" && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: "5px",
+                      right: "5px",
+                      width: "6px",
+                      height: "6px",
+                      borderRadius: "999px",
+                      background: accentColor,
+                    }}
+                  />
+                )}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setSortOpen(!sortOpen)}
+                className="product-toolbar-btn product-toolbar-sort-btn"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <path d="M11 5h10M11 9h7M11 13h4" />
+                  <path d="M3 17l3 3 3-3" />
+                  <path d="M6 18V4" />
+                </svg>
+                <span>
+                  Sort by: <strong style={{ fontWeight: 600 }}>{currentSort.label}</strong>
+                </span>
+                <span style={{ fontSize: "8px", marginLeft: "3px", opacity: 0.75, transition: "transform 200ms", transform: sortOpen ? "rotate(180deg)" : "rotate(0)" }}>▼</span>
+              </button>
+            )}
 
-            {sortOpen && (
+            {/* Desktop Popover Dropdown */}
+            {sortOpen && !isMobile && (
               <div className="product-sort-dropdown">
                 <div className="product-sort-header">
                   Sort by
@@ -142,6 +286,7 @@ export const FilterSidebar = ({
                   return (
                     <button
                       key={opt.value}
+                      type="button"
                       onClick={() => {
                         onSortChange?.(opt.value);
                         setSortOpen(false);
@@ -171,11 +316,203 @@ export const FilterSidebar = ({
         </div>
       </div>
 
+      {/* Modern Mobile Bottom Sheet (Both real mobile and in admin mobile preview chassis) */}
+      {sortOpen && isMobile && (
+        createPortal(
+          <div
+            className="mobile-sort-sheet-overlay"
+            onClick={() => setSortOpen(false)}
+            style={{
+              position: isInsidePreviewStage ? "absolute" : "fixed",
+              inset: 0,
+              zIndex: 999999,
+              background: mobileTheme.overlayBg,
+              backdropFilter: "blur(4px)",
+              WebkitBackdropFilter: "blur(4px)",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "flex-end",
+              animation: "sortFadeIn 200ms ease-out",
+              borderRadius: isInsidePreviewStage ? "30px" : undefined,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              className="mobile-sort-sheet"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: "100%",
+                maxWidth: "540px",
+                margin: "0 auto",
+                maxHeight: "85%",
+                background: mobileTheme.drawerBg,
+                borderTopLeftRadius: "22px",
+                borderTopRightRadius: "22px",
+                border: `1px solid ${mobileTheme.drawerBorder}`,
+                borderBottom: "none",
+                boxShadow: mobileTheme.boxShadow,
+                display: "flex",
+                flexDirection: "column",
+                animation: isDragging ? "none" : "sortSheetSlideUp 240ms cubic-bezier(0.16, 1, 0.3, 1)",
+                boxSizing: "border-box",
+                overflow: "hidden",
+                paddingBottom: "max(env(safe-area-inset-bottom, 12px), 12px)",
+                ...drawerStyle,
+              }}
+            >
+              {/* Grab Pill Handle (Draggable to close) */}
+              <div
+                {...dragHandleProps}
+                style={{
+                  padding: "10px 0 8px",
+                  display: "flex",
+                  justifyContent: "center",
+                  cursor: "grab",
+                  touchAction: "none",
+                  ...dragHandleProps.style,
+                }}
+              >
+                <div
+                  style={{
+                    width: "38px",
+                    height: "4px",
+                    borderRadius: "999px",
+                    background: mobileTheme.pillColor,
+                  }}
+                />
+              </div>
+
+              {/* Sheet Header */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "14px 18px 12px",
+                  borderBottom: `1px solid ${mobileTheme.cardBorder}`,
+                  background: mobileTheme.isDark ? "rgba(255, 255, 255, 0.02)" : "transparent",
+                }}
+              >
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: mobileTheme.textPrimary, letterSpacing: "-0.01em" }}>
+                    Sort by
+                  </h3>
+                  <p style={{ margin: "2px 0 0", fontSize: "12px", color: mobileTheme.textSecondary }}>
+                    Choose your preferred product order
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSortOpen(false)}
+                  style={{
+                    width: "28px",
+                    height: "28px",
+                    borderRadius: "50%",
+                    background: mobileTheme.closeBtnBg,
+                    border: "none",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    color: mobileTheme.textPrimary,
+                    fontSize: "14px",
+                    fontWeight: 700,
+                    padding: 0,
+                  }}
+                  aria-label="Close sort menu"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Options List */}
+              <div
+                style={{
+                  padding: "10px 14px 28px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                  overflowY: "auto",
+                }}
+              >
+                {SORT_OPTIONS.map((opt) => {
+                  const isActive = sortBy === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => {
+                        onSortChange?.(opt.value);
+                        setSortOpen(false);
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "12px 14px",
+                        borderRadius: "14px",
+                        border: `1.5px solid ${isActive ? mobileTheme.accentColor : mobileTheme.cardBorder}`,
+                        background: isActive ? mobileTheme.itemActiveBg : mobileTheme.itemBg,
+                        cursor: "pointer",
+                        textAlign: "left",
+                        transition: "all 140ms ease",
+                        outline: "none",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: "14px", fontWeight: isActive ? 700 : 600, color: isActive ? mobileTheme.accentColor : mobileTheme.textPrimary }}>
+                          {opt.label}
+                        </div>
+                        <div style={{ fontSize: "11.5px", color: mobileTheme.textSecondary, marginTop: "2px" }}>
+                          {opt.description}
+                        </div>
+                      </div>
+
+                      {/* Radio Indicator */}
+                      <div
+                        style={{
+                          width: "20px",
+                          height: "20px",
+                          borderRadius: "999px",
+                          border: `2px solid ${isActive ? mobileTheme.accentColor : mobileTheme.textSecondary}`,
+                          display: "grid",
+                          placeItems: "center",
+                          flexShrink: 0,
+                          marginLeft: "12px",
+                          background: isActive ? `${mobileTheme.accentColor}20` : "transparent",
+                        }}
+                      >
+                        {isActive && (
+                          <div
+                            style={{
+                              width: "8px",
+                              height: "8px",
+                              borderRadius: "999px",
+                              background: mobileTheme.accentColor,
+                            }}
+                          />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>,
+          portalTarget || document.body
+        )
+      )}
+
       <style>{`
+        .product-toolbar-wrapper,
+        .product-toolbar-wrapper * {
+          box-sizing: border-box;
+          font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
         .product-toolbar-wrapper {
           width: 100%;
-          margin-bottom: 24px;
-          padding-bottom: 14px;
+          margin-bottom: 20px;
+          padding-bottom: 12px;
           border-bottom: 1px solid ${borderColor};
         }
         .product-toolbar-container {
@@ -186,80 +523,145 @@ export const FilterSidebar = ({
           flex-wrap: wrap;
         }
         .product-toolbar-title-group {
-          min-width: 200px;
+          min-width: 160px;
         }
         .product-toolbar-subtitle {
           margin: 0 0 2px;
           font-size: 11px;
-          font-weight: 700;
-          letter-spacing: 0.12em;
+          font-weight: 600;
+          letter-spacing: 0.08em;
           text-transform: uppercase;
           color: ${textSecondary};
         }
         .product-toolbar-title {
           margin: 0;
-          font-size: 24px;
-          font-weight: 800;
-          letter-spacing: -0.03em;
+          font-size: 20px;
+          font-weight: 700;
+          letter-spacing: -0.02em;
           color: ${textPrimary};
+          display: flex;
+          align-items: baseline;
+        }
+        .product-toolbar-title-count {
+          font-size: 13.5px;
+          font-weight: 500;
+          color: ${textSecondary};
+          margin-left: 6px;
         }
         .product-toolbar-actions {
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 8px;
           flex-wrap: wrap;
-        }
-        .product-toolbar-count {
-          font-size: 13px;
-          color: ${textSecondary};
-          font-weight: 500;
         }
         .product-toolbar-btn {
           display: inline-flex;
           align-items: center;
           gap: 6px;
-          padding: 9px 16px;
-          border-radius: 999px;
+          padding: 6px 12px;
+          height: 34px;
+          border-radius: 8px;
           border: 1px solid ${borderColor};
           background: ${btnBg};
           color: ${textPrimary};
-          font-size: 13px;
-          font-weight: 600;
+          font-size: 12.5px;
+          font-weight: 500;
           cursor: pointer;
-          transition: all 180ms ease;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+          transition: all 160ms ease;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+          user-select: none;
         }
         .product-toolbar-btn:hover {
-          transform: translateY(-1px);
+          border-color: ${accentColor};
+          background: ${hoverBg};
+        }
+        .product-toolbar-btn:active {
+          transform: scale(0.98);
         }
         .product-toolbar-badge {
           background: ${accentColor};
           color: #fff;
           font-size: 10px;
-          font-weight: 800;
-          padding: 2px 7px;
+          font-weight: 700;
+          padding: 0 6px;
+          height: 16px;
+          min-width: 16px;
           border-radius: 999px;
           margin-left: 2px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          line-height: 1;
+        }
+        .product-toolbar-icon-btn {
+          width: 34px;
+          height: 34px;
+          min-width: 34px;
+          padding: 0;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid ${borderColor};
+          background: ${btnBg};
+          color: ${textPrimary};
+          cursor: pointer;
+          position: relative;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+          transition: all 140ms ease;
+          outline: none;
+        }
+        .product-toolbar-icon-btn:hover {
+          border-color: ${accentColor};
+          background: ${hoverBg};
+        }
+        .product-toolbar-icon-btn:active {
+          transform: scale(0.96);
+        }
+        .product-toolbar-icon-badge {
+          position: absolute;
+          top: -4px;
+          right: -4px;
+          background: ${accentColor};
+          color: #ffffff;
+          font-size: 9.5px;
+          font-weight: 700;
+          min-width: 16px;
+          height: 16px;
+          border-radius: 999px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          line-height: 1;
+          padding: 0 3px;
+          box-sizing: border-box;
+          box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .product-sort-dropdown,
+        .product-sort-dropdown * {
+          font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
         .product-sort-dropdown {
           position: absolute;
-          top: calc(100% + 8px);
+          top: calc(100% + 6px);
           right: 0;
-          width: 280px;
+          width: 250px;
           max-width: calc(100vw - 32px);
-          border-radius: 16px;
+          border-radius: 12px;
           border: 1px solid ${borderColor};
           background: ${dropdownBg};
-          box-shadow: ${isDark ? "0 20px 45px rgba(0,0,0,0.6)" : "0 20px 45px rgba(15,23,42,0.18)"};
-          padding: 8px;
+          box-shadow: ${isDark ? "0 16px 36px rgba(0,0,0,0.55)" : "0 12px 30px rgba(15,23,42,0.12)"};
+          padding: 6px;
           z-index: 99999;
-          animation: sortDropIn 200ms ease;
+          animation: sortDropIn 160ms ease;
         }
         .product-sort-header {
-          padding: 10px 14px 8px;
-          font-size: 14px;
+          padding: 8px 10px 6px;
+          font-size: 11px;
           font-weight: 700;
-          color: ${textPrimary};
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: ${textSecondary};
           border-bottom: 1px solid ${borderColor};
           margin-bottom: 4px;
         }
@@ -268,42 +670,106 @@ export const FilterSidebar = ({
           align-items: center;
           justify-content: space-between;
           width: 100%;
-          padding: 10px 14px;
-          border-radius: 10px;
+          padding: 8px 10px;
+          border-radius: 8px;
           border: none;
           cursor: pointer;
-          transition: background 150ms ease;
+          transition: background 140ms ease;
           text-align: left;
         }
 
+        /* Responsive Mobile Layout: Single row with Title on left & Icons on right */
         @media (max-width: 640px) {
           .product-toolbar-container {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 12px;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 10px !important;
+            flex-wrap: nowrap !important;
+          }
+          .product-toolbar-title-group {
+            min-width: 0 !important;
+            flex: 1 !important;
+          }
+          .product-toolbar-title {
+            font-size: 16px !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+          }
+          .product-toolbar-subtitle {
+            font-size: 10px !important;
+            letter-spacing: 0.08em !important;
+            margin-bottom: 1px !important;
           }
           .product-toolbar-actions {
-            width: 100%;
-            justify-content: space-between;
-          }
-          .product-toolbar-btn {
-            flex: 1;
-            justify-content: center;
-            padding: 10px 12px;
-            font-size: 12px;
-          }
-          .product-toolbar-count {
-            display: none;
-          }
-          .product-sort-dropdown {
-            right: 0;
-            left: auto;
-            width: min(280px, calc(100vw - 24px));
+            display: flex !important;
+            align-items: center !important;
+            gap: 8px !important;
+            flex-shrink: 0 !important;
+            flex-wrap: nowrap !important;
+            width: auto !important;
           }
         }
+
+        /* Mobile Preview Chassis in Builder: Exact same Single Row with Icons */
+        .is-mobile-preview .product-toolbar-container,
+        .product-toolbar-wrapper.is-mobile .product-toolbar-container {
+          flex-direction: row !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          gap: 10px !important;
+          flex-wrap: nowrap !important;
+        }
+        .is-mobile-preview .product-toolbar-title-group,
+        .product-toolbar-wrapper.is-mobile .product-toolbar-title-group {
+          min-width: 0 !important;
+          flex: 1 !important;
+        }
+        .is-mobile-preview .product-toolbar-title,
+        .product-toolbar-wrapper.is-mobile .product-toolbar-title {
+          font-size: 16px !important;
+          white-space: nowrap !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+        }
+        .is-mobile-preview .product-toolbar-subtitle,
+        .product-toolbar-wrapper.is-mobile .product-toolbar-subtitle {
+          font-size: 10px !important;
+          letter-spacing: 0.08em !important;
+          margin-bottom: 1px !important;
+        }
+        .is-mobile-preview .product-toolbar-actions,
+        .product-toolbar-wrapper.is-mobile .product-toolbar-actions {
+          display: flex !important;
+          align-items: center !important;
+          gap: 8px !important;
+          flex-shrink: 0 !important;
+          flex-wrap: nowrap !important;
+          width: auto !important;
+        }
+
         @keyframes sortDropIn {
-          from { opacity: 0; transform: translateY(-6px); }
+          from { opacity: 0; transform: translateY(-4px); }
           to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes sortSheetSlideUp {
+          from {
+            transform: translateY(100%);
+            opacity: 0.8;
+          }
+          to {
+            transform: translateY(0);
+            opacity: 1;
+          }
+        }
+        @keyframes sortFadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
         }
       `}</style>
     </div>

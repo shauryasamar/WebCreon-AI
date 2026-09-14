@@ -1,6 +1,8 @@
 import asyncio
 import json
 import logging
+import os
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(usecwd=True))
@@ -9,13 +11,14 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from langgraph.graph import END, StateGraph
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select, delete, func
+from sqlalchemy import text
 
 from agents.backend_exec import build_backend_config
 from agents.backend_runtime import register_backend_routes
@@ -25,22 +28,144 @@ from agents.understanding import extract_requirements
 from auth_middleware import (
     authenticate_admin,
     authenticate_customer,
+    check_admin_has_permission,
+    enforce_owner_role,
     enforce_site_ownership,
+    resolve_site_by_slug_or_404,
 )
 from db.database import create_db_and_tables, get_session, engine
+# Pre-order schema migrations enabled
 from models import (
     Admin, AdminSite, Site, Product, Category, Collection, Cart, CartItem, Order, OrderItem,
     ProductCollection, ProductReview, ReturnRequest, ReturnItem, ReturnStatusHistory,
     Shipment, InventoryMovement, OrderStatusHistory, User, UserAddress,
-    DeliveryAgent, DeliverySettings,
+    DeliveryAgent, DeliverySettings, SiteTrafficEvent,
+    AuditLog, SiteDomain, DomainOperation, SiteSlugHistory,
+    TenantLedgerEntry, TenantBankAccount, Payout,
+    SupportAgent, SupportTicket, SupportTicketMessage,
+    StorePage, Coupon, CouponUsage, SiteDefinitionHistory,
 )
-from routers import auth, cart, categories, checkout, checkout_settings, collections, orders, payments, products, returns
+from routers import analytics, auth, cart, categories, checkout, checkout_settings, collections, coupons, orders, pages, payments, products, returns, support, users_roles, audit_logs, domains, notifications
 from routers import delivery
+
 
 logger = logging.getLogger(__name__)
 
 UPLOADS_DIR = Path("uploads")
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+ASSETS_DIR = Path("uploads/assets")
+ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def run_database_security_cleanup():
+    try:
+        with Session(engine) as session:
+            from models import Role, Admin, AdminSite, Site
+            users_roles.ensure_default_roles_and_users(session)
+
+            # 1. Clean up pytest test sites
+            test_sites = session.exec(
+                select(Site).where(
+                    (Site.slug.like("store-ret-%")) |
+                    (Site.slug.like("store-charges-%")) |
+                    (Site.slug.like("stat-store-%")) |
+                    (Site.slug.like("inv-store-%")) |
+                    (Site.slug.like("sec-store-%")) |
+                    (Site.slug.like("test-store-%"))
+                )
+            ).all()
+            test_ids = [s.id for s in test_sites]
+            if test_ids:
+                stale_links = session.exec(select(AdminSite).where(AdminSite.site_id.in_(test_ids))).all()
+                for lk in stale_links:
+                    session.delete(lk)
+                for ts in test_sites:
+                    session.delete(ts)
+                session.commit()
+
+            # 2. Scope team members strictly to their respective workspace owners
+            all_owners = session.exec(
+                select(Admin)
+                .join(Role, Role.id == Admin.role_id, isouter=True)
+                .where((Role.name == "Owner") | (Admin.role == "Owner"))
+            ).all()
+            owners_by_id = {o.id: o for o in all_owners}
+            owners_by_email = {o.email.lower().strip(): o for o in all_owners}
+
+            # Specifically ensure Dhanya is bound to shauryasamar@gmail.com with specific access type
+            dhanya_admin = session.exec(
+                select(Admin).where(func.lower(Admin.email) == "dhanyaan210@gmail.com")
+            ).first()
+            if dhanya_admin:
+                shaurya_owner = owners_by_email.get("shauryasamar@gmail.com")
+                if shaurya_owner:
+                    dhanya_admin.invited_by_admin_id = shaurya_owner.id
+                dhanya_admin.website_access_type = "specific"
+                session.add(dhanya_admin)
+
+                shaurya_sites = session.exec(
+                    select(Site)
+                    .join(AdminSite, AdminSite.site_id == Site.id)
+                    .where(AdminSite.admin_id == shaurya_owner.id)
+                ).all() if shaurya_owner else []
+
+                # Find RedFruitMarket site for Dhanya
+                rfm_site = next(
+                    (s for s in shaurya_sites if "redfruit" in (s.slug or "").lower() or "redfruit" in str((s.site_definition or {}).get("site", {}).get("brand_name", "")).lower()),
+                    None
+                )
+                target_site_to_keep = rfm_site or (shaurya_sites[0] if shaurya_sites else None)
+
+                # Delete all stale / leaked AdminSite records for Dhanya
+                all_dhanya_links = session.exec(
+                    select(AdminSite).where(AdminSite.admin_id == dhanya_admin.id)
+                ).all()
+                for dl in all_dhanya_links:
+                    if target_site_to_keep and dl.site_id != target_site_to_keep.id:
+                        session.delete(dl)
+                    elif not target_site_to_keep:
+                        session.delete(dl)
+
+                if target_site_to_keep:
+                    has_link = session.exec(
+                        select(AdminSite).where(
+                            AdminSite.admin_id == dhanya_admin.id,
+                            AdminSite.site_id == target_site_to_keep.id,
+                        )
+                    ).first()
+                    if not has_link:
+                        session.add(AdminSite(admin_id=dhanya_admin.id, site_id=target_site_to_keep.id, role_on_site="designer"))
+
+            # Clean up cross-workspace AdminSite links for all non-owner admins
+            non_owners = session.exec(
+                select(Admin).where(
+                    ~Admin.id.in_(list(owners_by_id.keys())) if owners_by_id else True
+                )
+            ).all()
+
+            for no in non_owners:
+                if no.invited_by_admin_id and no.invited_by_admin_id in owners_by_id:
+                    owner_site_ids = set(session.exec(
+                        select(AdminSite.site_id).where(AdminSite.admin_id == no.invited_by_admin_id)
+                    ).all())
+
+                    # Remove any links to sites not owned by this team member's workspace owner
+                    bad_member_links = session.exec(
+                        select(AdminSite).where(
+                            AdminSite.admin_id == no.id,
+                            ~AdminSite.site_id.in_(list(owner_site_ids)) if owner_site_ids else True
+                        )
+                    ).all()
+                    for bl in bad_member_links:
+                        session.delete(bl)
+
+            session.commit()
+            logger.info("SECURITY RECONCILIATION: Database permissions and isolation verified.")
+    except Exception as cleanup_err:
+        logger.warning("Could not complete security cleanup: %s", cleanup_err)
+
+run_database_security_cleanup()
 
 
 async def _mature_escrow_cron_task():
@@ -52,22 +177,173 @@ async def _mature_escrow_cron_task():
                 released, total = process_mature_escrows(session)
                 if released > 0:
                     logger.info("Auto-escrow cron: Released %d mature escrow payout(s) totaling ₹%.2f", released, total)
+                    try:
+                        from services.audit_service import AuditService, ActorType, SourceType, AuditCategory
+                        AuditService.log_event(
+                            session=session,
+                            site_id=None,
+                            actor_type=ActorType.CRON_JOB,
+                            actor_name="Mature Escrow Cron",
+                            actor_role="System Scheduler",
+                            category=AuditCategory.EARNINGS_LEDGER,
+                            action="escrow.auto_released",
+                            source=SourceType.CRON_ESCROW_RELEASE,
+                            summary=f"Automated background cron released {released} mature escrow payout(s) totaling ₹{float(total):,.2f}",
+                            metadata={
+                                "financial": True,
+                                "amount": float(total),
+                                "currency": "INR",
+                                "released_count": released,
+                            },
+                        )
+                    except Exception as cron_log_err:
+                        logger.warning("Failed to log escrow.auto_released audit event: %s", cron_log_err)
         except asyncio.CancelledError:
             break
         except Exception as err:
             logger.error("Error in mature escrow background task: %s", err)
 
 
+async def _activity_retention_cron_task():
+    """Runs automatically at startup and once daily to permanently delete activity logs older than 90 days."""
+    while True:
+        try:
+            with Session(engine) as session:
+                from routers.audit_logs import cleanup_expired_activity_logs
+                deleted = cleanup_expired_activity_logs(session, retention_days=90)
+                if deleted > 0:
+                    logger.info("Daily Activity Retention Cron: Purged %d expired records older than 90 days", deleted)
+        except asyncio.CancelledError:
+            break
+        except Exception as err:
+            logger.error("Error in activity log retention background task: %s", err)
+        try:
+            await asyncio.sleep(86400)  # Run once every 24 hours
+        except asyncio.CancelledError:
+            break
+
+
+async def _domain_edge_sync_cron_task():
+    """Periodically reconciles domains in routing_unknown or ssl_pending state with edge provider."""
+    while True:
+        try:
+            await asyncio.sleep(900)  # Check every 15 minutes
+            with Session(engine) as session:
+                from models import SiteDomain
+                from services.domain_provider import get_domain_provider
+                pending_domains = session.exec(
+                    select(SiteDomain).where(
+                        (SiteDomain.status == "routing_unknown") |
+                        ((SiteDomain.status == "connected") & (SiteDomain.ssl_status == "ssl_pending"))
+                    )
+                ).all()
+                if pending_domains:
+                    provider = get_domain_provider()
+                    for dom in pending_domains:
+                        try:
+                            if dom.status == "routing_unknown":
+                                routing_st = provider.get_domain_routing_status(dom.domain)
+                                if routing_st == "active":
+                                    dom.status = "connected"
+                            if dom.ssl_status == "ssl_pending":
+                                ssl_st = provider.get_ssl_status(dom.domain)
+                                if ssl_st in ("ssl_active", "ssl_failed"):
+                                    dom.ssl_status = ssl_st
+                            session.add(dom)
+                        except Exception:
+                            pass
+                    session.commit()
+        except asyncio.CancelledError:
+            break
+        except Exception as err:
+            logger.error("Error in domain edge sync background task: %s", err)
+
+
+async def _order_reconciliation_cron_task():
+    """Periodically reconciles stale/orphaned pending orders (runs every 10 minutes)."""
+    while True:
+        try:
+            await asyncio.sleep(600)  # Check every 10 minutes
+            with Session(engine) as session:
+                from services.reconciliation_service import reconcile_stale_orders
+                result = reconcile_stale_orders(session=session, timeout_minutes=15)
+                if result.get("total_scanned", 0) > 0:
+                    logger.info("Order Reconciliation Background Job: Scanned %d, auto-healed %d orders",
+                                result.get("total_scanned", 0), result.get("healed_count", 0))
+        except asyncio.CancelledError:
+            break
+        except Exception as err:
+            logger.error("Error in order reconciliation background task: %s", err)
+
+
+def validate_production_environment_keys():
+    """Fails boot if ENV=production while Razorpay is running in test mode."""
+    env = os.getenv("ENV", "development").lower()
+    rzp_mode = os.getenv("RAZORPAY_MODE", "test").lower()
+    rzp_key = os.getenv("RAZORPAY_KEY_ID", "")
+    
+    if env == "production":
+        if rzp_mode == "test" or rzp_key.startswith("rzp_test_"):
+            raise RuntimeError(
+                "CRITICAL SECURITY CONFIGURATION ERROR: ENV=production is active but Razorpay is configured with test keys "
+                f"(RAZORPAY_MODE={rzp_mode}, KEY_ID={rzp_key[:10]}...). Server boot aborted to prevent production charge failures."
+            )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    validate_production_environment_keys()
     create_db_and_tables()
+    try:
+        with engine.connect() as conn:
+            from sqlalchemy import text
+            conn.execute(text("ALTER TABLE sites ADD COLUMN IF NOT EXISTS is_online BOOLEAN NOT NULL DEFAULT TRUE;"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sites_is_online ON sites(is_online);"))
+            conn.commit()
+    except Exception as ddl_err:
+        logger.warning("Could not execute sites is_online DDL: %s", ddl_err)
+
+    run_database_security_cleanup()
+
+    try:
+        with Session(engine) as session:
+            repl_shipments = session.exec(select(Shipment).where(Shipment.awb_number.like("REPL-%"))).all()
+            if repl_shipments:
+                for s in repl_shipments:
+                    session.delete(s)
+                session.commit()
+    except Exception as cleanup_err:
+        logger.warning("Could not purge legacy REPL shipments: %s", cleanup_err)
     escrow_task = asyncio.create_task(_mature_escrow_cron_task())
+    retention_task = asyncio.create_task(_activity_retention_cron_task())
+    domain_sync_task = asyncio.create_task(_domain_edge_sync_cron_task())
+    reconcile_task = asyncio.create_task(_order_reconciliation_cron_task())
     try:
         yield
     finally:
+        try:
+            from routers.support import ticket_hub
+            ticket_hub.stop()
+        except Exception:
+            pass
         escrow_task.cancel()
+        retention_task.cancel()
+        domain_sync_task.cancel()
+        reconcile_task.cancel()
         try:
             await escrow_task
+        except asyncio.CancelledError:
+            pass
+        try:
+            await retention_task
+        except asyncio.CancelledError:
+            pass
+        try:
+            await domain_sync_task
+        except asyncio.CancelledError:
+            pass
+        try:
+            await reconcile_task
         except asyncio.CancelledError:
             pass
 
@@ -75,21 +351,30 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="AI Website Builder Backend", lifespan=lifespan)
 
 
-origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
+# CORS: reads comma-separated origins from CORS_ORIGINS env var.
+# Defaults to ["*"] for local dev. Set to specific domains in production.
+# Example: CORS_ORIGINS=https://yourdomain.com,https://admin.yourdomain.com
+_cors_raw = os.getenv("CORS_ORIGINS", "*").strip()
+_cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()] or ["*"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?",
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
+from starlette.types import Scope
+
+class CachedStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        response = await super().get_response(path, scope)
+        if response.status_code == 200:
+            response.headers["Cache-Control"] = "public, max-age=604800, immutable"
+        return response
+
+app.mount("/uploads", CachedStaticFiles(directory=UPLOADS_DIR), name="uploads")
 
 app.include_router(auth.router)
 app.include_router(products.router)
@@ -102,6 +387,79 @@ app.include_router(orders.router)
 app.include_router(payments.router)
 app.include_router(returns.router)
 app.include_router(delivery.router)
+app.include_router(coupons.router)
+app.include_router(pages.router)
+app.include_router(pages.router, prefix="/api")
+app.include_router(support.router)
+app.include_router(support.router, prefix="/api")
+app.include_router(analytics.router)
+app.include_router(analytics.router, prefix="/api")
+app.include_router(users_roles.router)
+app.include_router(users_roles.router, prefix="/api")
+app.include_router(audit_logs.router)
+app.include_router(audit_logs.router, prefix="/api")
+app.include_router(domains.router)
+app.include_router(notifications.router)
+app.include_router(notifications.router, prefix="/api")
+
+
+# ---------------------------------------------------------------------------
+# Asset Upload Endpoint (brand logos, etc.)
+# ---------------------------------------------------------------------------
+
+ALLOWED_LOGO_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/svg+xml"}
+
+@app.post("/assets/upload-logo")
+async def upload_brand_logo(
+    request: Request,
+    file: UploadFile = File(...),
+    admin=Depends(lambda: None),  # No auth required – only used inside the authenticated builder
+):
+    """Accepts a logo image, stores it as-is (preserving original format including transparency)
+    in uploads/assets/. Returns the absolute URL."""
+    from uuid import uuid4
+
+    content_type = (file.content_type or "").lower()
+    if content_type not in ALLOWED_LOGO_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Allowed: PNG, JPEG, WEBP, SVG.",
+        )
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty file uploaded")
+
+    suffix = Path(file.filename or "logo").suffix.lower() or ".png"
+    if suffix not in {".png", ".jpg", ".jpeg", ".webp", ".svg"}:
+        suffix = ".png"
+
+    # For raster images – optimize but PRESERVE ALPHA channel (do NOT flatten to RGB)
+    try:
+        from PIL import Image, ImageOps
+        import io as _io
+        if suffix != ".svg":
+            with Image.open(_io.BytesIO(content)) as img:
+                img = ImageOps.exif_transpose(img)
+                # Keep RGBA/LA so transparency is preserved
+                if img.mode in ("RGBA", "LA", "P"):
+                    img = img.convert("RGBA")
+                else:
+                    img = img.convert("RGB")
+                # Preserve crisp high-resolution detail (up to 1600x1600) while keeping aspect ratio
+                img.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+                buf = _io.BytesIO()
+                # Always save as PNG to preserve transparency
+                img.save(buf, "PNG", optimize=True)
+                content = buf.getvalue()
+                suffix = ".png"
+    except Exception:
+        pass  # Fall back to storing the file as-is
+
+    filename = f"{uuid4()}{suffix}"
+    (ASSETS_DIR / filename).write_bytes(content)
+
+    return {"url": f"{request.base_url}uploads/assets/{filename}", "filename": filename}
 
 
 class GenerateSiteRequest(BaseModel):
@@ -109,7 +467,7 @@ class GenerateSiteRequest(BaseModel):
 
 
 class SaveSiteRequest(BaseModel):
-    slug: str
+    slug: Optional[str] = None
     site_definition: dict[str, Any]
     draft_definition: Optional[dict[str, Any]] = None
 
@@ -282,8 +640,16 @@ class PublishSiteRequest(BaseModel):
     draft_definition: Dict[str, Any]
 
 
+class UpdateSiteStatusRequest(BaseModel):
+    is_online: bool
+
+
 @app.post("/conversation/start")
-async def conversation_start_endpoint(req: StartConversationRequest, request: Request):
+async def conversation_start_endpoint(
+    req: StartConversationRequest,
+    request: Request,
+    owner=Depends(enforce_owner_role),
+):
     admin_name = "Creator"
     admin_email = None
     try:
@@ -302,7 +668,11 @@ async def conversation_start_endpoint(req: StartConversationRequest, request: Re
 
 
 @app.post("/conversation/start/stream")
-async def conversation_start_stream_endpoint(req: StartConversationRequest, request: Request):
+async def conversation_start_stream_endpoint(
+    req: StartConversationRequest,
+    request: Request,
+    owner=Depends(enforce_owner_role),
+):
     admin_name = "Creator"
     admin_email = None
     try:
@@ -334,7 +704,10 @@ async def conversation_start_stream_endpoint(req: StartConversationRequest, requ
 
 
 @app.post("/conversation/reply")
-async def conversation_reply_endpoint(req: ReplyConversationRequest):
+async def conversation_reply_endpoint(
+    req: ReplyConversationRequest,
+    owner=Depends(enforce_owner_role),
+):
     from agents.conversation_agent import reply_session
     try:
         session = await reply_session(session_id=req.session_id, user_reply=req.reply)
@@ -344,7 +717,10 @@ async def conversation_reply_endpoint(req: ReplyConversationRequest):
 
 
 @app.post("/conversation/reply/stream")
-async def conversation_reply_stream_endpoint(req: ReplyConversationRequest):
+async def conversation_reply_stream_endpoint(
+    req: ReplyConversationRequest,
+    owner=Depends(enforce_owner_role),
+):
     from agents.conversation_agent import reply_session_stream, SESSIONS
 
     session = SESSIONS.get(req.session_id)
@@ -368,7 +744,10 @@ async def conversation_reply_stream_endpoint(req: ReplyConversationRequest):
 
 
 @app.get("/conversation/{session_id}")
-async def conversation_get_endpoint(session_id: str):
+async def conversation_get_endpoint(
+    session_id: str,
+    owner=Depends(enforce_owner_role),
+):
     from agents.conversation_agent import SESSIONS
     session = SESSIONS.get(session_id)
     if not session:
@@ -384,7 +763,11 @@ class RehydrateConversationRequest(BaseModel):
 
 
 @app.post("/conversation/rehydrate")
-async def conversation_rehydrate_endpoint(req: RehydrateConversationRequest, request: Request):
+async def conversation_rehydrate_endpoint(
+    req: RehydrateConversationRequest,
+    request: Request,
+    owner=Depends(enforce_owner_role),
+):
     admin_name = "Creator"
     admin_email = None
     try:
@@ -418,7 +801,14 @@ class CoPilotChatRequest(BaseModel):
 
 
 @app.post("/copilot/chat")
-async def copilot_chat_endpoint(req: CoPilotChatRequest):
+async def copilot_chat_endpoint(
+    req: CoPilotChatRequest,
+    admin=Depends(authenticate_admin),
+    session: Session = Depends(get_session),
+):
+    if not (check_admin_has_permission(admin["adminId"], "chat:access", session) or check_admin_has_permission(admin["adminId"], "chat:send", session)):
+        raise HTTPException(status_code=403, detail="You do not have permission to access AI Copilot.")
+
     from agents.copilot_agent import process_copilot_request
     result = await process_copilot_request(
         message=req.message,
@@ -430,7 +820,13 @@ async def copilot_chat_endpoint(req: CoPilotChatRequest):
 
 
 @app.post("/copilot/chat/stream")
-async def copilot_chat_stream_endpoint(req: CoPilotChatRequest):
+async def copilot_chat_stream_endpoint(
+    req: CoPilotChatRequest,
+    admin=Depends(authenticate_admin),
+    session: Session = Depends(get_session),
+):
+    if not (check_admin_has_permission(admin["adminId"], "chat:access", session) or check_admin_has_permission(admin["adminId"], "chat:send", session)):
+        raise HTTPException(status_code=403, detail="You do not have permission to access AI Copilot.")
     from agents.copilot_agent import process_copilot_request_stream
 
     async def event_generator():
@@ -488,7 +884,10 @@ class CustomSiteDefinitionRequest(BaseModel):
 
 
 @app.post("/site-definition")
-async def generate_site_definition_endpoint(req: CustomSiteDefinitionRequest):
+async def generate_site_definition_endpoint(
+    req: CustomSiteDefinitionRequest,
+    owner=Depends(enforce_owner_role),
+):
     prompt_text = req.prompt or ""
     collected_reqs = {}
     session = None
@@ -566,7 +965,10 @@ async def generate_site_definition_endpoint(req: CustomSiteDefinitionRequest):
 
 
 @app.post("/site-definition/stream")
-async def generate_site_definition_stream_endpoint(req: CustomSiteDefinitionRequest):
+async def generate_site_definition_stream_endpoint(
+    req: CustomSiteDefinitionRequest,
+    owner=Depends(enforce_owner_role),
+):
     async def event_generator():
         try:
             yield f"data: {json.dumps({'step': 'start', 'progress': 10, 'message': 'Initializing AI generation pipeline...'})}\n\n"
@@ -670,13 +1072,18 @@ async def generate_site_definition_stream_endpoint(req: CustomSiteDefinitionRequ
 def publish_site(
     site_id: UUID,
     payload: PublishSiteRequest,
+    request: Request = None,
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    if not check_admin_has_permission(ownership["adminId"], "customize:publish", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to publish changes to live storefront.")
+
     site = session.get(Site, site_id)
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
 
+    old_version = site.version
     site.site_definition = payload.draft_definition
     site.draft_definition = payload.draft_definition
     site.version = site.version + 1
@@ -685,6 +1092,160 @@ def publish_site(
     session.commit()
     session.refresh(site)
 
+    try:
+        audit_logs.log_activity(
+            session=session,
+            user_id=UUID(ownership["adminId"]),
+            action="website_published",
+            category="website",
+            site_id=site.id,
+            resource_type="website",
+            resource_id=str(site.id),
+            resource_name=site.name or site.slug,
+            summary=f"Published storefront changes for {site.name or site.slug} (v{site.version})",
+            details={
+                "version": site.version,
+                "previous_version": old_version,
+                "slug": site.slug,
+            },
+            request=request,
+            user_email=ownership.get("email"),
+            user_name=ownership.get("name") or ownership.get("email"),
+        )
+    except Exception as log_err:
+        logger.warning(f"Failed to record website_published log: {log_err}")
+
+    invalidate_public_site_cache(site.slug, site.id)
+    return site
+
+
+@app.patch("/sites/{site_id}/status")
+def update_site_status(
+    site_id: UUID,
+    payload: UpdateSiteStatusRequest,
+    request: Request = None,
+    ownership=Depends(enforce_site_ownership),
+    session: Session = Depends(get_session),
+):
+    if not check_admin_has_permission(ownership["adminId"], "store_status:edit", session):
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to change store availability.",
+        )
+
+    site = session.get(Site, site_id)
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    if not site.is_published:
+        raise HTTPException(
+            status_code=400,
+            detail="Store must be published before availability status can be toggled.",
+        )
+
+    old_status = site.is_online
+    site.is_online = payload.is_online
+    site.version = site.version + 1
+
+    session.add(site)
+    session.commit()
+    session.refresh(site)
+
+    # Invalidate public caches immediately
+    invalidate_public_site_cache(site.slug, site.id)
+    try:
+        from routers.products import catalog_cache
+        catalog_cache.invalidate_site(site.id)
+    except Exception:
+        pass
+
+    # Audit logging
+    try:
+        status_text = "Live" if site.is_online else "Offline (Maintenance)"
+        audit_logs.log_activity(
+            session=session,
+            user_id=UUID(ownership["adminId"]),
+            action="store.status_changed",
+            category="website",
+            site_id=site.id,
+            resource_type="store",
+            resource_id=str(site.id),
+            resource_name=site.name or site.slug,
+            summary=f"Switched store '{site.name or site.slug}' to {status_text}",
+            details={
+                "slug": site.slug,
+                "is_online": site.is_online,
+                "previous_state": {"is_online": old_status},
+                "new_state": {"is_online": site.is_online},
+                "version": site.version,
+            },
+            request=request,
+            user_email=ownership.get("email"),
+            user_name=ownership.get("name") or ownership.get("email"),
+        )
+    except Exception as log_err:
+        logger.warning(f"Failed to record store status audit log: {log_err}")
+
+    return {
+        "id": str(site.id),
+        "slug": site.slug,
+        "is_online": site.is_online,
+        "version": site.version,
+        "message": f"Store is now {'Live' if site.is_online else 'Offline'}.",
+    }
+
+
+@app.patch("/sites/{site_identifier}/draft")
+def save_site_draft(
+    site_identifier: str,
+    payload: PublishSiteRequest,
+    admin=Depends(authenticate_admin),
+    session: Session = Depends(get_session),
+):
+    if not (check_admin_has_permission(admin["adminId"], "customize:edit", session) or check_admin_has_permission(admin["adminId"], "assets:view", session) or check_admin_has_permission(admin["adminId"], "customize:view", session)):
+        raise HTTPException(status_code=403, detail="You do not have permission to edit storefront customizations.")
+
+    admin_id = UUID(admin["adminId"])
+
+    site = None
+    try:
+        site_uuid = UUID(site_identifier)
+        site = session.get(Site, site_uuid)
+    except (ValueError, TypeError):
+        pass
+
+    if not site:
+        site = session.exec(select(Site).where(Site.slug == site_identifier)).first()
+
+    if not site:
+        # Check prefix match for timestamp-suffixed slugs (e.g. greenharvest -> greenharvest-1786...)
+        site = session.exec(
+            select(Site)
+            .join(AdminSite, AdminSite.site_id == Site.id)
+            .where(
+                AdminSite.admin_id == admin_id,
+                Site.slug.startswith(site_identifier),
+            )
+            .order_by(Site.created_at.desc())
+        ).first()
+
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    ownership = session.exec(
+        select(AdminSite).where(
+            AdminSite.admin_id == admin_id,
+            AdminSite.site_id == site.id,
+        )
+    ).first()
+
+    if not ownership:
+        raise HTTPException(status_code=403, detail="Admin does not have access to this site")
+
+    site.draft_definition = payload.draft_definition
+    session.add(site)
+    session.commit()
+    session.refresh(site)
     return site
 
 
@@ -698,19 +1259,8 @@ def admin_me(
     if not admin_obj:
         raise HTTPException(status_code=404, detail="Admin not found")
 
-    name = getattr(admin_obj, "name", None)
-    if not name and admin_obj.email:
-        prefix = admin_obj.email.split("@")[0]
-        parts = [p.capitalize() for p in prefix.replace(".", " ").replace("_", " ").split()]
-        name = " ".join(parts) if parts else "Admin"
-
-    return {
-        "admin": {
-            "id": str(admin_obj.id),
-            "email": admin_obj.email,
-            "name": name,
-        }
-    }
+    from routers.auth import serialize_admin
+    return {"admin": serialize_admin(admin_obj, session)}
 
 
 @app.get("/auth/customer/me")
@@ -723,6 +1273,9 @@ def get_sites(
     admin=Depends(authenticate_admin),
     session: Session = Depends(get_session),
 ):
+    if not check_admin_has_permission(admin["adminId"], "saved_sites:view", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to view saved websites.")
+
     admin_id = UUID(admin["adminId"])
 
     sites = session.exec(
@@ -747,6 +1300,26 @@ def get_session_token_metrics(session_id: str):
     """Internal backend monitoring endpoint to inspect token usage and costs for a specific session."""
     from agents.token_tracker import get_token_tracker
     return get_token_tracker().get_session_summary(session_id)
+
+
+@app.get("/api/debug-admins")
+def debug_admins():
+    with Session(engine) as session:
+        adms = session.exec(select(Admin)).all()
+        return [
+            {
+                "id": str(a.id),
+                "email": a.email,
+                "name": a.name,
+                "role": a.role,
+                "role_id": str(a.role_id) if a.role_id else None,
+                "status": a.status,
+                "invited_by": str(a.invited_by_admin_id) if a.invited_by_admin_id else None,
+            }
+            for a in adms
+        ]
+
+
 
 
 @app.get("/sites/{site_id}")
@@ -785,25 +1358,121 @@ def get_site_by_slug(
     return site
 
 
+# High-speed in-memory cache for public site metadata & themes
+import time
+
+PUBLIC_SITE_CACHE: dict = {}
+
+
+def invalidate_public_site_cache(slug: str = None, site_id: UUID = None):
+    if slug and slug in PUBLIC_SITE_CACHE:
+        PUBLIC_SITE_CACHE.pop(slug, None)
+    if site_id:
+        to_remove = [k for k, v in PUBLIC_SITE_CACHE.items() if v.get("id") == str(site_id)]
+        for k in to_remove:
+            PUBLIC_SITE_CACHE.pop(k, None)
+
+
+@app.get("/public/sites/slug/{slug}/theme")
+def get_public_site_theme_fast(
+    slug: str,
+    response: Response,
+    session: Session = Depends(get_session),
+):
+    """Ultra-low-latency endpoint returning only the minimal theme & branding payload (<1KB)."""
+    now = time.time()
+    cached = PUBLIC_SITE_CACHE.get(slug)
+    if cached and cached.get("theme_payload") and cached.get("expiry", 0) > now:
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        response.headers["ETag"] = cached.get("etag", f'"{cached["id"]}"')
+        return cached["theme_payload"]
+
+    site = resolve_site_by_slug_or_404(slug, session)
+
+    site_id = site.id
+    site_slug = site.slug
+    site_def = site.site_definition or {}
+    draft_def = site.draft_definition or {}
+    is_online = site.is_online
+    effective_def = site_def if bool(site_def.get("theme")) else (draft_def if bool(draft_def.get("theme")) else site_def)
+    site_theme = effective_def.get("theme") or site_def.get("theme") or draft_def.get("theme") or {}
+    brand_name = (
+        site_def.get("site_name")
+        or site_def.get("site_title")
+        or site_def.get("title")
+        or site_def.get("name")
+        or (site_def.get("site", {}) or {}).get("brand_name")
+        or (draft_def.get("site", {}) or {}).get("brand_name")
+        or ""
+    )
+    logo_val = (
+        site_def.get("logo")
+        or site_def.get("header", {}).get("logo")
+        or site_def.get("theme", {}).get("logo")
+        or draft_def.get("logo")
+        or draft_def.get("header", {}).get("logo")
+        or draft_def.get("theme", {}).get("logo")
+    )
+    etag_val = f'"{site_id}-{site_theme.get("footer_layout", "default")}-{is_online}"'
+
+    theme_payload = {
+        "id": str(site_id),
+        "slug": site_slug,
+        "is_online": is_online if is_online is not None else True,
+        "site_name": brand_name,
+        "logo": logo_val,
+        "theme": site_theme,
+        "crm_enabled": bool(site_def.get("crm_enabled", draft_def.get("crm_enabled", True))),
+        "navbar": {
+            "brandName": site_def.get("navbar", {}).get("brandName") or site_def.get("header", {}).get("brandName") or brand_name,
+            "logoUrl": logo_val,
+        },
+    }
+
+    PUBLIC_SITE_CACHE[slug] = {
+        "id": str(site_id),
+        "theme_payload": theme_payload,
+        "etag": etag_val,
+        "expiry": now + 300,
+    }
+
+    response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    response.headers["ETag"] = etag_val
+    return theme_payload
+
+
 @app.get("/public/sites/slug/{slug}")
 def get_public_site_by_slug(
     slug: str,
+    response: Response,
     session: Session = Depends(get_session),
 ):
-    site = session.exec(
-        select(Site).where(Site.slug == slug)
-    ).first()
+    now = time.time()
+    cached = PUBLIC_SITE_CACHE.get(slug)
+    if cached and cached.get("full_site") and cached.get("expiry", 0) > now:
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        response.headers["ETag"] = cached.get("etag", f'"{cached["id"]}"')
+        return cached["full_site"]
 
-    if not site:
-        raise HTTPException(status_code=404, detail="Site not found")
+    site = resolve_site_by_slug_or_404(slug, session)
 
+    etag_val = f'"{site.id}-{site.version}"'
+    if slug not in PUBLIC_SITE_CACHE:
+        PUBLIC_SITE_CACHE[slug] = {}
+    PUBLIC_SITE_CACHE[slug]["id"] = str(site.id)
+    PUBLIC_SITE_CACHE[slug]["full_site"] = site
+    PUBLIC_SITE_CACHE[slug]["etag"] = etag_val
+    PUBLIC_SITE_CACHE[slug]["expiry"] = now + 300
+
+    response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    response.headers["ETag"] = etag_val
     return site
 
 
 @app.post("/sites")
 def create_site(
     payload: SaveSiteRequest,
-    admin=Depends(authenticate_admin),
+    owner=Depends(enforce_owner_role),
     session: Session = Depends(get_session),
 ):
     existing_site = session.exec(
@@ -822,13 +1491,14 @@ def create_site(
     session.refresh(site)
 
     admin_site = AdminSite(
-        admin_id=UUID(admin["adminId"]),
+        admin_id=UUID(owner["adminId"]),
         site_id=site.id,
         role_on_site="owner",
     )
     session.add(admin_site)
     session.commit()
 
+    invalidate_public_site_cache(payload.slug, site.id)
     session.refresh(site)
     return site
 
@@ -840,26 +1510,122 @@ def update_site(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    admin_id = ownership["adminId"]
+    # Owners always have full access; team members need at least one relevant permission
+    if not ownership.get("is_owner", False):
+        has_perm = (
+            check_admin_has_permission(admin_id, "home_sections:edit", session)
+            or check_admin_has_permission(admin_id, "home_sections:publish", session)
+            or check_admin_has_permission(admin_id, "customize:edit", session)
+            or check_admin_has_permission(admin_id, "customize:publish", session)
+            or check_admin_has_permission(admin_id, "website:edit", session)
+            or check_admin_has_permission(admin_id, "store:edit", session)
+        )
+        if not has_perm:
+            raise HTTPException(
+                status_code=403,
+                detail="You do not have permission to edit site layout or home sections",
+            )
+
     site = session.get(Site, site_id)
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
 
-    slug_conflict = session.exec(
-        select(Site).where(Site.slug == payload.slug, Site.id != site_id)
-    ).first()
-    if slug_conflict:
-        raise HTTPException(status_code=400, detail="Site slug already exists")
+    # Only update slug if a valid, non-UUID, different slug is provided
+    if payload.slug and payload.slug != str(site_id) and payload.slug != site.slug:
+        slug_conflict = session.exec(
+            select(Site).where(Site.slug == payload.slug, Site.id != site_id)
+        ).first()
+        if slug_conflict:
+            raise HTTPException(status_code=400, detail="Site slug already exists")
+        site.slug = payload.slug
 
-    site.slug = payload.slug
     site.site_definition = payload.site_definition
-    site.draft_definition = payload.draft_definition
-    site.version = site.version + 1
+    site.draft_definition = payload.draft_definition or payload.site_definition
+    site.version = (site.version or 1) + 1
+    site.updated_at = datetime.now(timezone.utc)
 
     session.add(site)
     session.commit()
     session.refresh(site)
 
+    invalidate_public_site_cache(site.slug, site_id)
+
+    try:
+        from services.audit_service import AuditService, ActorType, SourceType, AuditCategory
+        admin_uuid = UUID(str(admin_id)) if admin_id else None
+        AuditService.log_event(
+            site_id=site_id,
+            actor_type=ActorType.OWNER if ownership.get("is_owner") else ActorType.TEAM_MEMBER,
+            actor_id=admin_uuid,
+            actor_name=ownership.get("name") or "Team Member",
+            actor_email=ownership.get("email") or "",
+            actor_role=ownership.get("role") or "Staff",
+            category=AuditCategory.WEBSITE,
+            action="website.home_sections_updated",
+            source=SourceType.WEB_ADMIN,
+            resource_type="website_sections",
+            resource_id=str(site_id),
+            resource_name=f"{getattr(site, 'name', None) or site.slug} Home Sections",
+            summary=f"Updated home sections layout for '{getattr(site, 'name', None) or site.slug}' (v{site.version})",
+            metadata={"version": site.version, "slug": site.slug},
+        )
+    except Exception as log_err:
+        logger.error("Audit log failed in update_site: %s", log_err)
+
     return site
+
+
+class UpdateDefaultReturnPolicyRequest(BaseModel):
+    default_return_window_days: int = Field(ge=0, le=365)
+
+
+@app.patch("/sites/{site_id}/default-return-policy")
+def update_site_default_return_policy(
+    site_id: UUID,
+    payload: UpdateDefaultReturnPolicyRequest,
+    ownership=Depends(enforce_site_ownership),
+    session: Session = Depends(get_session),
+):
+    if not check_admin_has_permission(ownership["adminId"], "products:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to update store return policies.")
+
+    site = session.get(Site, site_id)
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    site.default_return_window_days = payload.default_return_window_days
+    site.updated_at = datetime.now(timezone.utc)
+    session.add(site)
+    session.commit()
+    session.refresh(site)
+
+    try:
+        from services.audit_service import AuditService, ActorType, SourceType, AuditCategory
+        admin_uuid = UUID(str(ownership["adminId"])) if ownership.get("adminId") else None
+        AuditService.log_event(
+            site_id=site_id,
+            actor_type=ActorType.OWNER if (ownership.get("role") or "").lower() == "owner" else ActorType.TEAM_MEMBER,
+            actor_id=admin_uuid,
+            actor_name=ownership.get("name"),
+            actor_email=ownership.get("email"),
+            actor_role=ownership.get("role") or "Staff",
+            category=AuditCategory.SETTINGS,
+            action="store.settings_changed",
+            source=SourceType.WEB_ADMIN,
+            resource_type="store_policy",
+            resource_id=str(site_id),
+            resource_name=f"{getattr(site, 'name', None) or site.slug} Return Policy",
+            summary=f"Updated default store return window to {payload.default_return_window_days} days",
+            metadata={"default_return_window_days": payload.default_return_window_days},
+        )
+    except Exception as log_err:
+        pass
+
+    return {
+        "message": "Store default return policy updated",
+        "default_return_window_days": site.default_return_window_days,
+    }
 
 
 @app.get("/sites/{site_id}/delete-check")
@@ -868,6 +1634,9 @@ def check_site_deletable(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    if not check_admin_has_permission(ownership["adminId"], "saved_sites:delete", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to delete websites.")
+
     site = session.get(Site, site_id)
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
@@ -900,6 +1669,9 @@ def delete_site(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    if not check_admin_has_permission(ownership["adminId"], "saved_sites:delete", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to delete websites.")
+
     site = session.get(Site, site_id)
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
@@ -927,51 +1699,84 @@ def delete_site(
         detail_msg = f"Cannot delete store with uncleared activity ({', '.join(reasons)}). Please resolve or cancel all active orders and return requests first."
         raise HTTPException(status_code=400, detail=detail_msg)
 
-    # 1. Return related tables
+    # 1. Support system (messages -> tickets -> agents)
+    ticket_ids = session.exec(select(SupportTicket.id).where(SupportTicket.site_id == site_id)).all()
+    if ticket_ids:
+        session.exec(delete(SupportTicketMessage).where(SupportTicketMessage.ticket_id.in_(ticket_ids)))
+    session.exec(delete(SupportTicket).where(SupportTicket.site_id == site_id))
+    session.exec(delete(SupportAgent).where(SupportAgent.site_id == site_id))
+
+    # 2. Return related tables (status history -> return items -> return requests)
     return_request_ids = session.exec(select(ReturnRequest.id).where(ReturnRequest.site_id == site_id)).all()
     if return_request_ids:
         session.exec(delete(ReturnStatusHistory).where(ReturnStatusHistory.return_request_id.in_(return_request_ids)))
     session.exec(delete(ReturnItem).where(ReturnItem.site_id == site_id))
     session.exec(delete(ReturnRequest).where(ReturnRequest.site_id == site_id))
 
-    # 2. Product Reviews
+    # 3. Product Reviews
     session.exec(delete(ProductReview).where(ProductReview.site_id == site_id))
 
-    # 3. Shipments & Inventory Movements
+    # 4. Shipments & Inventory Movements
     session.exec(delete(Shipment).where(Shipment.site_id == site_id))
     session.exec(delete(InventoryMovement).where(InventoryMovement.site_id == site_id))
 
-    # 4. Orders, Order Items & Order Status History
+    # 5. Delivery Settings & Agents
+    session.exec(delete(DeliveryAgent).where(DeliveryAgent.site_id == site_id))
+    session.exec(delete(DeliverySettings).where(DeliverySettings.site_id == site_id))
+
+    # 6. Tenant Financials (Ledger, Payouts, Bank Accounts)
+    session.exec(delete(TenantLedgerEntry).where(TenantLedgerEntry.site_id == site_id))
+    session.exec(delete(Payout).where(Payout.site_id == site_id))
+    session.exec(delete(TenantBankAccount).where(TenantBankAccount.site_id == site_id))
+
+    # 7. Coupons & Usages
+    session.exec(delete(CouponUsage).where(CouponUsage.site_id == site_id))
+    session.exec(delete(Coupon).where(Coupon.site_id == site_id))
+
+    # 8. Orders, Order Items & Order Status History
     order_ids = session.exec(select(Order.id).where(Order.site_id == site_id)).all()
     if order_ids:
         session.exec(delete(OrderStatusHistory).where(OrderStatusHistory.order_id.in_(order_ids)))
     session.exec(delete(OrderItem).where(OrderItem.site_id == site_id))
     session.exec(delete(Order).where(Order.site_id == site_id))
 
-    # 5. Cart Items & Carts
+    # 9. Cart Items & Carts
     cart_ids = session.exec(select(Cart.id).where(Cart.site_id == site_id)).all()
     if cart_ids:
         session.exec(delete(CartItem).where(CartItem.cart_id.in_(cart_ids)))
     session.exec(delete(Cart).where(Cart.site_id == site_id))
 
-    # 6. Product Collections & Products
+    # 10. Product Collections & Products
     product_ids = session.exec(select(Product.id).where(Product.site_id == site_id)).all()
     if product_ids:
         session.exec(delete(ProductCollection).where(ProductCollection.product_id.in_(product_ids)))
     session.exec(delete(Product).where(Product.site_id == site_id))
 
-    # 7. Collections & Categories
+    # 11. Collections & Categories
     session.exec(delete(Collection).where(Collection.site_id == site_id))
     session.exec(delete(Category).where(Category.site_id == site_id))
 
-    # 8. User Addresses & Users
+    # 12. Store Pages, Traffic Events, and Definition History
+    session.exec(delete(StorePage).where(StorePage.site_id == site_id))
+    session.exec(delete(SiteTrafficEvent).where(SiteTrafficEvent.site_id == site_id))
+    session.exec(delete(SiteDefinitionHistory).where(SiteDefinitionHistory.site_id == site_id))
+
+    # 13. Domains, Operations & Slug History
+    session.exec(delete(DomainOperation).where(DomainOperation.site_id == site_id))
+    session.exec(delete(SiteDomain).where(SiteDomain.site_id == site_id))
+    session.exec(delete(SiteSlugHistory).where(SiteSlugHistory.site_id == site_id))
+
+    # 14. User Addresses & Users
     session.exec(delete(UserAddress).where(UserAddress.site_id == site_id))
     session.exec(delete(User).where(User.site_id == site_id))
 
-    # 9. AdminSite associations
+    # 15. Audit Logs
+    session.exec(delete(AuditLog).where(AuditLog.site_id == site_id))
+
+    # 16. AdminSite associations
     session.exec(delete(AdminSite).where(AdminSite.site_id == site_id))
 
-    # 10. Delete Site entity
+    # 17. Delete Site entity
     session.delete(site)
     session.commit()
 
