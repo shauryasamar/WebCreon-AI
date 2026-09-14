@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useCart } from "../CartContext";
 import { useCustomerAuth } from "../context/CustomerAuthContext";
@@ -12,6 +12,7 @@ import {
   ChristmasGraphics,
   EidGraphics,
 } from "./FestiveGraphics";
+import { NotificationCenter } from "./NotificationCenter";
 
 export type NavbarTheme = {
   name?: string;
@@ -280,6 +281,16 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchActive, setSearchActive] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationsUnreadCount, setNotificationsUnreadCount] = useState(0);
+  const handleUnreadCountChange = useCallback((cnt: number) => {
+    setNotificationsUnreadCount((prev) => (prev === cnt ? prev : cnt));
+  }, []);
+  const handleCloseNotifications = useCallback(() => {
+    setNotificationsOpen(false);
+  }, []);
+  const notificationButtonRef = useRef<HTMLButtonElement | null>(null);
+  const notificationMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [liveCrmOverride, setLiveCrmOverride] = useState<boolean | null>(null);
 
@@ -1172,6 +1183,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   useEffect(() => {
     setAccountMenuOpen(false);
     setMobileMenuOpen(false);
+    setNotificationsOpen(false);
   }, [location.pathname]);
 
 
@@ -1240,6 +1252,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
         setAccountMenuOpen(false);
         setMobileMenuOpen(false);
         setMobileSearchOpen(false);
+        setNotificationsOpen(false);
         accountButtonRef.current?.focus();
       }
     };
@@ -1406,10 +1419,24 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   };
 
 
-  const dropdownBg = theme?.dialog_bg || theme?.surface_bg || theme?.primary_bg || (light ? "#ffffff" : "#0f172a");
-  const dropdownBorderColor = (theme as any)?.border_color || (light ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.12)");
+  const isSiteThemeDark =
+    theme?.mode === "dark" ||
+    Boolean(theme?.primary_bg && isColorDarkHex(theme.primary_bg));
 
-  const isDropdownLight = !isColorDarkHex(dropdownBg);
+  const resolvedDialogBg =
+    theme?.dialog_bg ||
+    theme?.surface_bg ||
+    (isSiteThemeDark ? (theme?.card_bg || "#0f172a") : "#ffffff");
+
+  const resolvedDialogBorder =
+    (theme as any)?.border_color ||
+    (isSiteThemeDark ? "rgba(255,255,255,0.12)" : "#e2e8f0");
+
+  const isDialogDark = isColorDarkHex(resolvedDialogBg);
+  const dropdownBg = resolvedDialogBg;
+  const dropdownBorderColor = resolvedDialogBorder;
+
+  const isDropdownLight = !isDialogDark;
   const dropdownTextColor = isDropdownLight ? "#0f172a" : "#ffffff";
   const dropdownMutedText = isDropdownLight ? "#64748b" : "rgba(255,255,255,0.7)";
   const dropdownIconBg = isDropdownLight ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)";
@@ -1960,6 +1987,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     onClick={() => setMobileMenuOpen((prev) => !prev)}
                     style={{
                       ...mobileMenuButtonStyle,
+                      position: "relative",
                       display: searchActive ? "none" : "flex",
                     }}
                   >
@@ -1977,6 +2005,11 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         </>
                       )}
                     </svg>
+                    {notificationsUnreadCount > 0 && (
+                      <span style={cartBadgeStyle}>
+                        {notificationsUnreadCount > 9 ? "9+" : notificationsUnreadCount}
+                      </span>
+                    )}
                   </button>
                   {mobileMenuOpen && (
                     <div
@@ -1993,10 +2026,26 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                         style={menuItemStyle}
                         onClick={() => {
                           setMobileMenuOpen(false);
-                          handleDummyNotification();
+                          setNotificationsOpen(true);
                         }}
                       >
-                        Notifications
+                        <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+                          <span>Notifications</span>
+                          {notificationsUnreadCount > 0 && (
+                            <span
+                              style={{
+                                fontSize: "11px",
+                                fontWeight: 700,
+                                background: accentColor || "#2563eb",
+                                color: "#ffffff",
+                                padding: "2px 7px",
+                                borderRadius: "999px",
+                              }}
+                            >
+                              {notificationsUnreadCount}
+                            </span>
+                          )}
+                        </span>
                       </button>
                       <button
                         type="button"
@@ -2061,6 +2110,69 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                   )}
                 </div>
               ) : null;
+
+            const renderNotificationActionItem = () => {
+              if (isMobile) {
+                // On mobile phones, hide the bell button from the navbar to save space.
+                // The unread badge is displayed directly on the "More" button, and
+                // Notifications is the first item inside the More menu.
+                // We keep NotificationCenter rendered so that tapping it opens the mobile bottom sheet.
+                return (
+                  <NotificationCenter
+                    siteSlug={siteSlug || slug}
+                    siteId={siteId ? String(siteId) : undefined}
+                    isOpen={notificationsOpen}
+                    onClose={handleCloseNotifications}
+                    anchorRef={mobileMenuButtonRef}
+                    isDark={isDialogDark}
+                    accentColor={accentColor || "#2563eb"}
+                    dialogBg={resolvedDialogBg}
+                    borderColor={resolvedDialogBorder}
+                    onUnreadCountChange={handleUnreadCountChange}
+                    isMobile={isMobile}
+                    theme={theme}
+                  />
+                );
+              }
+
+              return (
+                <div ref={notificationMenuRef} style={{ position: "relative", flexShrink: 0 }}>
+                  <button
+                    ref={notificationButtonRef}
+                    type="button"
+                    aria-label="Notifications"
+                    onClick={() => {
+                      setAccountMenuOpen(false);
+                      setMobileSearchOpen(false);
+                      setSearchActive(false);
+                      setNotificationsOpen((prev) => !prev);
+                    }}
+                    style={actionButtonStyle}
+                  >
+                    {renderNotificationActionIcon()}
+                    {notificationsUnreadCount > 0 && (
+                      <span style={cartBadgeStyle}>
+                        {notificationsUnreadCount > 9 ? "9+" : notificationsUnreadCount}
+                      </span>
+                    )}
+                  </button>
+                  <NotificationCenter
+                    siteSlug={siteSlug || slug}
+                    siteId={siteId ? String(siteId) : undefined}
+                    isOpen={notificationsOpen}
+                    onClose={handleCloseNotifications}
+                    anchorRef={notificationButtonRef}
+                    isDark={isDialogDark}
+                    accentColor={accentColor || "#2563eb"}
+                    dialogBg={resolvedDialogBg}
+                    borderColor={resolvedDialogBorder}
+                    onUnreadCountChange={handleUnreadCountChange}
+                    isMobile={isMobile}
+                    theme={theme}
+                  />
+                </div>
+              );
+            };
 
             const renderBrandLogo = (customFallback?: React.ReactNode) => {
               const showLogo = brandDisplayMode === "both" || brandDisplayMode === "logo_only";
@@ -2274,15 +2386,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     </button>
                   )}
 
-                  {!isMobile && (
-                    <button
-                      type="button"
-                      onClick={handleDummyNotification}
-                      style={actionButtonStyle}
-                    >
-                      {renderNotificationActionIcon()}
-                    </button>
-                  )}
+                  {renderNotificationActionItem()}
 
                   {showAccount && !isMobile && (
                     <div ref={accountMenuRef} style={{ position: "relative", flexShrink: 0 }}>
@@ -2491,15 +2595,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     </button>
                   )}
 
-                  {!isMobile && (
-                    <button
-                      type="button"
-                      onClick={handleDummyNotification}
-                      style={actionButtonStyle}
-                    >
-                      {renderNotificationActionIcon()}
-                    </button>
-                  )}
+                  {renderNotificationActionItem()}
 
                   {showAccount && !isMobile && (
                     <div ref={accountMenuRef} style={{ position: "relative", flexShrink: 0 }}>
@@ -2723,15 +2819,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     </button>
                   )}
 
-                  {!isMobile && (
-                    <button
-                      type="button"
-                      onClick={handleDummyNotification}
-                      style={actionButtonStyle}
-                    >
-                      {renderNotificationActionIcon()}
-                    </button>
-                  )}
+                  {renderNotificationActionItem()}
 
                   {showAccount && !isMobile && (
                     <div ref={accountMenuRef} style={{ position: "relative", flexShrink: 0 }}>
@@ -2972,15 +3060,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     </button>
                   )}
 
-                  {!isMobile && (
-                    <button
-                      type="button"
-                      onClick={handleDummyNotification}
-                      style={actionButtonStyle}
-                    >
-                      {renderNotificationActionIcon()}
-                    </button>
-                  )}
+                  {renderNotificationActionItem()}
 
                   {showAccount && !isMobile && (
                     <div ref={accountMenuRef} style={{ position: "relative", flexShrink: 0 }}>
@@ -3189,15 +3269,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                   </button>
                 )}
 
-                {!isMobile && (
-                  <button
-                    type="button"
-                    onClick={handleDummyNotification}
-                    style={actionButtonStyle}
-                  >
-                    {renderNotificationActionIcon()}
-                  </button>
-                )}
+                {renderNotificationActionItem()}
 
                 {showAccount && !isMobile && (
                   <div ref={accountMenuRef} style={{ position: "relative", flexShrink: 0 }}>

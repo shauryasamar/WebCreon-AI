@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { Pagination } from "../Component/Pagination";
 import { resolveThemeTokens } from "../context/ThemeContext";
@@ -836,6 +836,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       ? Boolean((propTheme as any).crm_enabled)
       : true;
   const navigate = useNavigate();
+  const location = useLocation();
 
   const isInsideEditor =
     Boolean(restProps.editMode) ||
@@ -1082,7 +1083,15 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
   }, [orders, returns, dateFilter, customFromDate, customToDate, appliedSearchQuery]);
 
   const filteredOrders = useMemo(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const targetOrderId = searchParams.get("orderId");
+
     return orders.filter((order) => {
+      // 0. URL Deep Link Bypass: If an order is explicitly targeted via query params, never filter it out
+      if (targetOrderId && (order.id === targetOrderId || order.id?.toLowerCase() === targetOrderId?.toLowerCase())) {
+        return true;
+      }
+
       // 1. Status Filter
       const s = (order.status || "").toLowerCase();
       const hasReturn = Boolean(order.refund_info || (returns && returns.some((r) => r.order_id === order.id)) || ["returned", "refunded"].includes(s));
@@ -1150,12 +1159,29 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       // default: newest first
       return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
     });
-  }, [orders, returns, statusTab, dateFilter, customFromDate, customToDate, appliedSearchQuery, sortBy]);
+  }, [orders, returns, statusTab, dateFilter, customFromDate, customToDate, appliedSearchQuery, sortBy, location.search]);
 
   const paginatedOrders = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filteredOrders.slice(start, start + pageSize);
   }, [filteredOrders, currentPage, pageSize]);
+
+  // If a specific order is targeted via URL, ensure currentPage shows that order
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const targetOrderId = searchParams.get("orderId");
+    if (targetOrderId && filteredOrders.length > 0) {
+      const idx = filteredOrders.findIndex(
+        (o) => o.id === targetOrderId || o.id?.toLowerCase() === targetOrderId?.toLowerCase()
+      );
+      if (idx >= 0) {
+        const targetPage = Math.floor(idx / pageSize) + 1;
+        if (currentPage !== targetPage) {
+          setCurrentPage(targetPage);
+        }
+      }
+    }
+  }, [location.search, filteredOrders, pageSize, currentPage]);
 
   const effectiveTotalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
 
@@ -1319,12 +1345,85 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
   }, [siteId, isInsideEditor]);
 
   useEffect(() => {
-    window.scrollTo({
-      top: 0,
-      left: 0,
-      behavior: "instant" as ScrollBehavior,
-    });
+    // Only scroll to top on initial mount if not deep-linking to a specific order
+    const params = new URLSearchParams(location.search);
+    if (!params.get("orderId") && !params.get("returnId")) {
+      window.scrollTo({
+        top: 0,
+        left: 0,
+        behavior: "instant" as ScrollBehavior,
+      });
+    }
   }, []);
+
+  // Deep-linking from notification or URL params: Auto-expand, filter sync, and smooth scroll
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const targetOrderId = searchParams.get("orderId");
+    const targetTab = searchParams.get("tab");
+    const targetReturnId = searchParams.get("returnId");
+
+    if (!targetOrderId && !targetReturnId && !targetTab) return;
+
+    if (targetTab && ["all", "active", "delivered", "returns", "cancelled"].includes(targetTab)) {
+      setStatusTab(targetTab as any);
+    }
+
+    if (targetOrderId) {
+      const matched = orders.find(
+        (o) => o.id === targetOrderId || o.id?.toLowerCase() === targetOrderId?.toLowerCase()
+      );
+      if (matched && !targetTab) {
+        const s = (matched.status || "").toLowerCase();
+        const hasReturn = Boolean(
+          matched.refund_info ||
+          (returns && returns.some((r) => r.order_id === matched.id)) ||
+          ["returned", "refunded"].includes(s)
+        );
+        if (hasReturn && !["placed", "confirmed", "processing", "shipped", "out_for_delivery"].includes(s)) {
+          setStatusTab("returns");
+        } else if (statusTab !== "all") {
+          setStatusTab("all");
+        }
+      }
+
+      setExpandedOrderId(targetOrderId);
+      loadOrderDetail(targetOrderId, true);
+    }
+
+    if (targetReturnId) {
+      setStatusTab("returns");
+      setExpandedReturnId(targetReturnId);
+      loadReturnDetail(targetReturnId);
+    }
+
+    const scrollTimer = setTimeout(() => {
+      const targetDomId = targetOrderId
+        ? `order-card-${targetOrderId}`
+        : targetReturnId
+        ? `return-card-${targetReturnId}`
+        : null;
+
+      if (targetDomId) {
+        const el = document.getElementById(targetDomId);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          const origTransition = el.style.transition;
+          const origShadow = el.style.boxShadow;
+          el.style.transition = "box-shadow 0.4s ease, border-color 0.4s ease";
+          el.style.boxShadow = `0 0 0 3px ${accentColor || "#2563eb"}66, 0 14px 34px rgba(0,0,0,0.15)`;
+          setTimeout(() => {
+            if (el) {
+              el.style.transition = origTransition;
+              el.style.boxShadow = origShadow;
+            }
+          }, 2500);
+        }
+      }
+    }, 450);
+
+    return () => clearTimeout(scrollTimer);
+  }, [location.search, orders.length, returns.length]);
 
   const loadOrderDetail = async (orderId: string, force = false) => {
     if (isInsideEditor && SAMPLE_PREVIEW_DETAILS[orderId]) {
@@ -2329,6 +2428,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
 
     return (
       <div
+        id={`return-card-${latestReturn.id}`}
         style={{
           border: cardBorder,
           borderRadius: effectiveInnerRadius,
@@ -3049,6 +3149,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                         const color = getStatusColor(ret.status);
                         return (
                           <div
+                            id={`return-card-${ret.id}`}
                             key={ret.id}
                             style={{
                               display: "flex",
@@ -4027,6 +4128,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
 
               return (
                 <div
+                  id={`order-card-${order.id}`}
                   key={order.id}
                   style={{
                     background: cardBg,

@@ -395,6 +395,7 @@ export const ALL_COMPONENT_OVERRIDE_KEYS = [
   "filter_bg", "filter_card_bg", "filter_text_color", "filter_border_color", "filter_accent_color",
   "pagination_bg", "pagination_text_color", "pagination_active_bg", "pagination_border_color",
   "review_card_bg", "review_text_color", "review_border_color",
+  "support_bg", "support_card_bg", "support_text_color", "support_accent_color", "support_border_color", "customer_bubble_bg", "customer_bubble_text", "agent_bubble_bg", "agent_bubble_text",
   "grid_bg", "grid_text_color", "outer_bg_color"
 ];
 

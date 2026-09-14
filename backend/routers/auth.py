@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
@@ -6,6 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 from sqlmodel import Session, select, func
+
+logger = logging.getLogger("auth_router")
 
 from auth_middleware import (
     authenticate_admin,
@@ -29,6 +32,9 @@ from services.email_service import (
     send_admin_password_reset_email,
     send_customer_password_reset_email,
 )
+from services.notification_service import dispatch_customer_event
+from services.email_adapter import dispatch_tenant_email
+from services.email_templates import render_email_template
 from routers.audit_logs import log_audit_event
 
 
@@ -859,6 +865,26 @@ def customer_signup(
     session.commit()
     session.refresh(user)
 
+    # Dispatch welcome in-app notification & welcome email
+    try:
+        dispatch_customer_event(
+            session=session,
+            site_id=site.id,
+            customer_id=user.id,
+            event_type="account.created",
+            category="account",
+            title="Welcome to Our Store!",
+            message=f"Welcome to {site.name}! Your account has been created successfully.",
+            action_url=f"/store/{site.slug}/profile",
+            send_email=True,
+            email_recipient=user.email,
+            email_template_key="welcome_email",
+            email_template_vars={"customer_name": user.name, "store_name": site.name, "store_url": f"/store/{site.slug}"},
+        )
+        session.commit()
+    except Exception as e:
+        logger.warning(f"Could not dispatch signup welcome notification: {e}")
+
     token = create_customer_token(str(user.id), str(site.id))
 
     response = JSONResponse(
@@ -1148,7 +1174,41 @@ def customer_forgot_password(
     store_name = store_definition.get("siteName") or store_slug.replace("-", " ").title()
     reset_link = f"{origin}/store/{store_slug}/login?reset_email={email}&token={raw_token}"
 
-    send_customer_password_reset_email(email, store_name, reset_link, otp_code)
+    # Render store branded email and dispatch with store sender identity
+    subject, html_body = render_email_template(
+        "customer_password_reset",
+        {
+            "store_name": store_name,
+            "customer_name": user.name or "Valued Customer",
+            "otp_code": otp_code,
+            "reset_link": reset_link,
+        },
+    )
+    dispatch_tenant_email(
+        session=session,
+        site_id=site.id,
+        to_email=email,
+        subject=subject,
+        html_content=html_body,
+        store_name=store_name,
+    )
+
+    # Also log in-app security notice
+    try:
+        dispatch_customer_event(
+            session=session,
+            site_id=site.id,
+            customer_id=user.id,
+            event_type="account.password_reset",
+            category="account",
+            title="Password Reset Code Requested",
+            message=f"A 6-digit password reset verification code was requested for your account.",
+            action_url=f"/store/{store_slug}/login",
+            send_email=False,
+        )
+        session.commit()
+    except Exception as notif_err:
+        logger.warning(f"Could not dispatch in-app reset notice: {notif_err}")
 
     return {
         "message": f"A 6-digit verification code has been dispatched to {email}.",
@@ -1208,6 +1268,26 @@ def customer_reset_password(
     session.add(user)
     session.commit()
     session.refresh(user)
+
+    # In-app and email security confirmation
+    try:
+        dispatch_customer_event(
+            session=session,
+            site_id=site.id,
+            customer_id=user.id,
+            event_type="account.password_changed",
+            category="account",
+            title="Password Changed Successfully",
+            message="Your account password was successfully updated.",
+            action_url=f"/store/{site.slug}/profile",
+            send_email=True,
+            email_recipient=user.email,
+            email_template_key="password_changed_security",
+            email_template_vars={"customer_name": user.name or "Valued Customer", "store_name": site.name},
+        )
+        session.commit()
+    except Exception as notif_err:
+        logger.warning(f"Could not dispatch password change confirmation: {notif_err}")
 
     # Auto log the customer in
     token = create_customer_token(str(user.id), str(site.id))

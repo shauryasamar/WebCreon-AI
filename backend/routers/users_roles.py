@@ -169,6 +169,14 @@ PERMISSION_CATALOG = [
                 ],
             },
             {
+                "module": "Notifications",
+                "key": "notifications",
+                "permissions": [
+                    {"id": "notifications:view", "name": "View", "description": "View in-app notification settings and email configuration"},
+                    {"id": "notifications:edit", "name": "Edit", "description": "Configure store email sender identity and test SMTP settings"},
+                ],
+            },
+            {
                 "module": "Store Status",
                 "key": "store_status",
                 "permissions": [

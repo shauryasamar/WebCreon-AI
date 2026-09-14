@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useCart, Product } from "./CartContext";
 import { componentRegistry } from "./componentRegistry";
 import { getCheckoutAddresses, SavedAddress } from "./addressService";
@@ -239,11 +239,12 @@ const RenderPage: React.FC<RenderPageProps> = ({
   theme,
   appBase,
 }) => {
-  const { products, cartItems, appliedCoupon, setAppliedCoupon, clearAppliedCoupon } = useCart();
+  const { products, cartItems, appliedCoupon, setAppliedCoupon, clearAppliedCoupon, clearCart } = useCart();
   const { isAuthenticated, loading: authLoading } = useCustomerAuth();
   const deviceMode = useDeviceMode();
 
   const location = useLocation();
+  const navigate = useNavigate();
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
 
   const initialSearchQuery = searchParams.get("search") || "";
@@ -468,6 +469,8 @@ const RenderPage: React.FC<RenderPageProps> = ({
             localStorage.removeItem(siteKey);
             sessionStorage.removeItem("pending_checkout_order");
             localStorage.removeItem("pending_checkout_order");
+            try { clearAppliedCoupon(); } catch {}
+            try { clearCart(); } catch {}
             setPlacedOrder({
               orderId: data.order_id || pending.order_id,
               status: "placed",
@@ -1732,15 +1735,19 @@ const RenderPage: React.FC<RenderPageProps> = ({
                   if (path.startsWith("/builder/")) {
                     const segments = path.split("/").filter(Boolean);
                     const currentSiteId = segments[1] || siteId;
-                    window.location.href = `/builder/${currentSiteId}`;
+                    navigate(`/builder/${currentSiteId}`);
+                  } else if (appBase) {
+                    navigate(appBase);
                   } else if (path.startsWith("/store/")) {
                     const segments = path.split("/").filter(Boolean);
-                    const currentSlug = segments[1];
-                    window.location.href = `/store/${currentSlug}`;
+                    const currentSlug = segments[1] || siteSlug || siteId;
+                    navigate(`/store/${currentSlug}`);
+                  } else if (siteSlug) {
+                    navigate(`/store/${siteSlug}`);
                   } else if (siteId) {
-                    window.location.href = `/builder/${siteId}`;
+                    navigate(`/store/${siteId}`);
                   } else {
-                    window.location.href = "/";
+                    navigate("/");
                   }
                 }}
                 style={{
@@ -2315,7 +2322,8 @@ const RenderPage: React.FC<RenderPageProps> = ({
                         status: string;
                         total?: number;
                       }) => {
-                        clearAppliedCoupon();
+                        try { clearAppliedCoupon(); } catch {}
+                        try { clearCart(); } catch {}
                         setPlacedOrder(order);
                       },
                     })

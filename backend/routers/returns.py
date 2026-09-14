@@ -33,6 +33,7 @@ from models import (
     TenantLedgerEntry,
     User,
 )
+from services.notification_service import dispatch_customer_event
 
 logger = logging.getLogger(__name__)
 
@@ -965,6 +966,38 @@ def create_return_request(
         session.commit()
         session.refresh(return_request)
 
+        # Dispatch return.requested event
+        try:
+            cust_user = session.get(User, customer_id)
+            order_short = str(order.id)[:8].upper()
+            if site and cust_user:
+                dispatch_customer_event(
+                    session=session,
+                    site_id=site.id,
+                    customer_id=cust_user.id,
+                    event_type="return.requested",
+                    category="return",
+                    title=f"Return Requested - Order #{order_short}",
+                    message=f"Your return request for Order #{order_short} has been submitted and is under review.",
+                    related_entity_type="return_request",
+                    related_entity_id=str(return_request.id),
+                    action_url=f"/store/{site.slug}/orders?orderId={order.id}",
+                    metadata={"returnRequestId": str(return_request.id), "orderId": str(order.id)},
+                    idempotency_key=f"{site.id}:return.requested:{return_request.id}",
+                    send_email=True,
+                    email_recipient=cust_user.email,
+                    email_template_key="return_requested",
+                    email_template_vars={
+                        "order_number": order_short,
+                        "order_id": str(order.id),
+                        "customer_name": cust_user.name or "Valued Customer",
+                        "store_name": site.name,
+                    },
+                )
+                session.commit()
+        except Exception as notif_err:
+            logger.warning(f"Could not dispatch return.requested notification: {notif_err}")
+
         items = session.exec(
             select(ReturnItem)
             .where(ReturnItem.return_request_id == return_request.id)
@@ -1370,6 +1403,64 @@ def review_return_request(
             )
 
         session.commit()
+
+        try:
+            site_obj = session.get(Site, site_id)
+            cust_user = session.get(User, return_request.customer_id)
+            order_short = str(return_request.order_id)[:8].upper()
+            if site_obj and cust_user:
+                if payload.action == "approve":
+                    dispatch_customer_event(
+                        session=session,
+                        site_id=site_obj.id,
+                        customer_id=cust_user.id,
+                        event_type="return.approved",
+                        category="return",
+                        title=f"Return Approved - Order #{order_short}",
+                        message=f"Your return request for Order #{order_short} has been approved. Please prepare the items for pickup.",
+                        related_entity_type="return_request",
+                        related_entity_id=str(return_request.id),
+                        action_url=f"/store/{site_obj.slug}/orders?orderId={return_request.order_id}",
+                        metadata={"returnRequestId": str(return_request.id), "orderId": str(return_request.order_id)},
+                        idempotency_key=f"{site_obj.id}:return.approved:{return_request.id}",
+                        send_email=True,
+                        email_recipient=cust_user.email,
+                        email_template_key="return_approved",
+                        email_template_vars={
+                            "order_number": order_short,
+                            "order_id": str(return_request.order_id),
+                            "customer_name": cust_user.name or "Valued Customer",
+                            "store_name": site_obj.name,
+                        },
+                    )
+                else:
+                    dispatch_customer_event(
+                        session=session,
+                        site_id=site_obj.id,
+                        customer_id=cust_user.id,
+                        event_type="return.rejected",
+                        category="return",
+                        title=f"Return Request Rejected - Order #{order_short}",
+                        message=f"Your return request for Order #{order_short} was not approved: {payload.rejection_reason.strip() if payload.rejection_reason else 'Return guidelines not met.'}",
+                        related_entity_type="return_request",
+                        related_entity_id=str(return_request.id),
+                        action_url=f"/store/{site_obj.slug}/orders?orderId={return_request.order_id}",
+                        metadata={"returnRequestId": str(return_request.id), "orderId": str(return_request.order_id), "rejectionReason": payload.rejection_reason},
+                        idempotency_key=f"{site_obj.id}:return.rejected:{return_request.id}",
+                        send_email=True,
+                        email_recipient=cust_user.email,
+                        email_template_key="return_rejected",
+                        email_template_vars={
+                            "order_number": order_short,
+                            "order_id": str(return_request.order_id),
+                            "customer_name": cust_user.name or "Valued Customer",
+                            "store_name": site_obj.name,
+                            "rejection_reason": payload.rejection_reason or "Return policy requirements not met.",
+                        },
+                    )
+                session.commit()
+        except Exception as notif_err:
+            logger.warning(f"Could not dispatch return review notification: {notif_err}")
 
         try:
             is_approved = payload.action == "approve"
@@ -1830,6 +1921,38 @@ def receive_return_request(
         session.refresh(return_request)
 
         try:
+            site_obj = session.get(Site, site_id)
+            cust_user = session.get(User, return_request.customer_id)
+            order_short = str(return_request.order_id)[:8].upper()
+            if site_obj and cust_user:
+                dispatch_customer_event(
+                    session=session,
+                    site_id=site_obj.id,
+                    customer_id=cust_user.id,
+                    event_type="return.received",
+                    category="return",
+                    title=f"Return Items Received - Order #{order_short}",
+                    message=f"We have received your returned items for Order #{order_short}. They are currently undergoing inspection.",
+                    related_entity_type="return_request",
+                    related_entity_id=str(return_request.id),
+                    action_url=f"/store/{site_obj.slug}/orders?orderId={return_request.order_id}",
+                    metadata={"returnRequestId": str(return_request.id), "orderId": str(return_request.order_id)},
+                    idempotency_key=f"{site_obj.id}:return.received:{return_request.id}",
+                    send_email=True,
+                    email_recipient=cust_user.email,
+                    email_template_key="return_received",
+                    email_template_vars={
+                        "order_number": order_short,
+                        "order_id": str(return_request.order_id),
+                        "customer_name": cust_user.name or "Valued Customer",
+                        "store_name": site_obj.name,
+                    },
+                )
+                session.commit()
+        except Exception as notif_err:
+            logger.warning(f"Could not dispatch return.received notification: {notif_err}")
+
+        try:
             admin_uuid = UUID(admin["adminId"]) if admin.get("adminId") else None
             log_activity(
                 session=session,
@@ -2228,6 +2351,40 @@ def refund_return_request(
         )
 
         session.commit()
+
+        try:
+            site_obj = session.get(Site, site_id)
+            cust_user = session.get(User, return_request.customer_id)
+            order_short = str(return_request.order_id)[:8].upper()
+            if site_obj and cust_user:
+                dispatch_customer_event(
+                    session=session,
+                    site_id=site_obj.id,
+                    customer_id=cust_user.id,
+                    event_type="refund.completed",
+                    category="refund",
+                    title=f"Refund Completed - Order #{order_short}",
+                    message=f"A refund of ₹{final_amount:,.2f} has been processed for Order #{order_short} via {payload.refund_method}.",
+                    related_entity_type="return_request",
+                    related_entity_id=str(return_request.id),
+                    action_url=f"/store/{site_obj.slug}/orders?orderId={return_request.order_id}",
+                    metadata={"returnRequestId": str(return_request.id), "orderId": str(return_request.order_id), "refundAmount": str(final_amount), "refundMethod": payload.refund_method},
+                    idempotency_key=f"{site_obj.id}:refund.completed:{return_request.id}:{final_amount}",
+                    send_email=True,
+                    email_recipient=cust_user.email,
+                    email_template_key="refund_completed",
+                    email_template_vars={
+                        "order_number": order_short,
+                        "order_id": str(return_request.order_id),
+                        "customer_name": cust_user.name or "Valued Customer",
+                        "store_name": site_obj.name,
+                        "refund_amount": f"₹{final_amount:,.2f}",
+                        "refund_method": payload.refund_method,
+                    },
+                )
+                session.commit()
+        except Exception as notif_err:
+            logger.warning(f"Could not dispatch refund.completed notification: {notif_err}")
 
         try:
             admin_uuid = UUID(admin["adminId"]) if admin.get("adminId") else None

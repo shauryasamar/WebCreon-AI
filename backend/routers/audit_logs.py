@@ -3,11 +3,13 @@ from __future__ import annotations
 import csv
 import io
 import logging
+import zipfile
 from datetime import datetime, timezone, timedelta
 from typing import Any, Optional, Dict, List
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi.responses import StreamingResponse
 from sqlmodel import Session, select, col, or_, and_, desc, func, distinct, delete
 from auth_middleware import authenticate_admin, check_admin_has_permission
 from db.database import get_session
@@ -70,6 +72,11 @@ CATEGORY_DEFINITIONS = {
         "prefixes": ["ticket.", "support."],
         "legacy": ["support", "tickets", "support_crm", "crm"],
     },
+    "notifications": {
+        "label": "Notifications & Emails",
+        "prefixes": ["notification.", "email.", "sms.", "push."],
+        "legacy": ["notifications", "notification", "email", "emails"],
+    },
     "order": {
         "label": "Orders & Returns",
         "prefixes": ["order.", "return.", "shipment.", "order_", "return_"],
@@ -99,6 +106,7 @@ ACTION_TITLE_MAP = {
     "product.created": "Created Product",
     "product.updated": "Updated Product",
     "product.deleted": "Deleted Product",
+    "product.bulk_import": "Bulk Imported Products",
     "product.price_changed": "Product Price Changed",
     "product.stock_changed": "Product Stock Changed",
     "product.status_changed": "Product Status Changed",
@@ -185,6 +193,10 @@ ACTION_TITLE_MAP = {
     "support.agent_updated": "Support Agent Updated",
     "support.agent_deleted": "Support Agent Removed",
     "ticket.reopened": "Support Ticket Re-Opened",
+    # Notifications & Emails
+    "notification.email_sent": "Transactional Email Dispatched",
+    "notification.email_failed": "Transactional Email Delivery Failed",
+    "notification.in_app_sent": "In-App Notification Sent",
 }
 
 
@@ -605,9 +617,17 @@ def get_activity_feed(
                 AuditLog.actor_name.ilike(f"%{target_user}%"),
             ))
 
-    # 6. Status Filter
+    # 6. Status Filter (Errors vs Non-Errors / Success / Warnings)
     if status_filter and status_filter != "all":
-        query = query.where(AuditLog.status == status_filter)
+        st_lower = status_filter.lower()
+        if st_lower in ("error", "errors", "failed", "failure"):
+            query = query.where(AuditLog.status.in_(["failure", "failed", "error"]))
+        elif st_lower in ("success", "ok", "non_error", "non_errors"):
+            query = query.where(AuditLog.status.in_(["success", "delivered", "sent"]))
+        elif st_lower in ("warning", "warnings"):
+            query = query.where(AuditLog.status == "warning")
+        else:
+            query = query.where(AuditLog.status == status_filter)
 
     # 7. Search Query (user name, email, description, action code, resource name, summary)
     if q and q.strip():
@@ -813,9 +833,15 @@ def export_activity_csv(
     category: Optional[str] = Query(None),
     source: Optional[str] = Query(None),
     user: Optional[str] = Query(None),
+    user_id: Optional[str] = Query(None),
     actor: Optional[str] = Query(None),
     q: Optional[str] = Query(None),
-    date_range: Optional[str] = Query("30d"),
+    status_filter: Optional[str] = Query(None, alias="status"),
+    date_range: Optional[str] = Query("90d"),
+    from_date: Optional[str] = Query(None),
+    to_date: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
     admin: dict = Depends(authenticate_admin),
     session: Session = Depends(get_session),
 ):
@@ -843,9 +869,66 @@ def export_activity_csv(
             )
         )
 
-    if category and category != "all":
-        query = query.where(AuditLog.category == category)
+    # Date Filtering (Default: Full 90-day retention window)
+    now_utc = datetime.now(timezone.utc)
+    if date_range == "today":
+        cutoff = now_utc - timedelta(hours=24)
+        query = query.where(AuditLog.created_at >= cutoff)
+    elif date_range == "7d":
+        cutoff = now_utc - timedelta(days=7)
+        query = query.where(AuditLog.created_at >= cutoff)
+    elif date_range == "30d":
+        cutoff = now_utc - timedelta(days=30)
+        query = query.where(AuditLog.created_at >= cutoff)
+    elif date_range == "90d":
+        cutoff = now_utc - timedelta(days=90)
+        query = query.where(AuditLog.created_at >= cutoff)
+    elif date_range == "custom":
+        f_date = from_date or start_date
+        t_date = to_date or end_date
+        if f_date:
+            try:
+                dt_from = datetime.fromisoformat(f_date.replace("Z", "+00:00"))
+                query = query.where(AuditLog.created_at >= dt_from)
+            except Exception:
+                pass
+        if t_date:
+            try:
+                dt_to = datetime.fromisoformat(t_date.replace("Z", "+00:00"))
+                query = query.where(AuditLog.created_at <= dt_to)
+            except Exception:
+                pass
+    elif from_date or to_date or start_date or end_date:
+        f_date = from_date or start_date
+        t_date = to_date or end_date
+        if f_date:
+            try:
+                dt_from = datetime.fromisoformat(f_date.replace("Z", "+00:00"))
+                query = query.where(AuditLog.created_at >= dt_from)
+            except Exception:
+                pass
+        if t_date:
+            try:
+                dt_to = datetime.fromisoformat(t_date.replace("Z", "+00:00"))
+                query = query.where(AuditLog.created_at <= dt_to)
+            except Exception:
+                pass
+    else:
+        cutoff = now_utc - timedelta(days=90)
+        query = query.where(AuditLog.created_at >= cutoff)
 
+    # Category Filtering (matching CATEGORY_DEFINITIONS)
+    if category and category != "all":
+        cat_lower = category.lower()
+        if cat_lower in CATEGORY_DEFINITIONS:
+            prefixes = CATEGORY_DEFINITIONS[cat_lower]["prefixes"]
+            prefix_clauses = [AuditLog.action.startswith(p) for p in prefixes]
+            legacy_keys = CATEGORY_DEFINITIONS[cat_lower]["legacy"] + [cat_lower]
+            query = query.where(or_(AuditLog.category.in_(legacy_keys), *prefix_clauses))
+        else:
+            query = query.where(AuditLog.category == category)
+
+    # Source / Origin Filtering
     if source and source != "all":
         src_lower = source.lower()
         if src_lower in ("users", "user", "owner", "team_member", "dashboard", "admin"):
@@ -868,46 +951,82 @@ def export_activity_csv(
                 AuditLog.actor_type == "PAYMENT_PROVIDER",
                 AuditLog.source.ilike("%razorpay%"),
             ))
+        elif src_lower in ("ai", "copilot"):
+            query = query.where(or_(
+                AuditLog.actor_type == "AI",
+                AuditLog.source.ilike("%ai%"),
+            ))
         elif src_lower in ("cron", "system", "scheduled", "background"):
             query = query.where(or_(
-                AuditLog.actor_type.in_(["CRON_JOB", "BACKGROUND_JOB", "SCHEDULED_TASK", "SYSTEM"]),
+                AuditLog.actor_type.in_(["CRON_JOB", "BACKGROUND_JOB", "SCHEDULED_TASK", "SYSTEM", "AUTOMATION"]),
                 AuditLog.source.ilike("%cron%"),
                 AuditLog.source.ilike("%system%"),
+                AuditLog.source.ilike("%background%"),
+            ))
+        else:
+            query = query.where(or_(
+                AuditLog.source == source,
+                AuditLog.actor_type == source,
             ))
 
-    target_user = user or actor
+    # User / Actor Filtering
+    target_user = user or user_id or actor
     if target_user and target_user != "all":
-        query = query.where(or_(
-            AuditLog.actor_email.ilike(f"%{target_user}%"),
-            AuditLog.actor_name.ilike(f"%{target_user}%"),
-        ))
+        try:
+            target_admin_uuid = UUID(str(target_user))
+            query = query.where(or_(
+                AuditLog.admin_id == target_admin_uuid,
+                AuditLog.actor_email.ilike(f"%{target_user}%"),
+                AuditLog.actor_name.ilike(f"%{target_user}%"),
+            ))
+        except ValueError:
+            query = query.where(or_(
+                AuditLog.actor_email.ilike(f"%{target_user}%"),
+                AuditLog.actor_name.ilike(f"%{target_user}%"),
+            ))
 
+    # Status Filtering (Errors vs Non-Errors / Success / Warnings)
+    if status_filter and status_filter != "all":
+        st_lower = status_filter.lower()
+        if st_lower in ("error", "errors", "failed", "failure"):
+            query = query.where(AuditLog.status.in_(["failure", "failed", "error"]))
+        elif st_lower in ("success", "ok", "non_error", "non_errors"):
+            query = query.where(AuditLog.status.in_(["success", "delivered", "sent"]))
+        elif st_lower in ("warning", "warnings"):
+            query = query.where(AuditLog.status == "warning")
+        else:
+            query = query.where(AuditLog.status == status_filter)
+
+    # Search query
     if q and q.strip():
         term = f"%{q.strip()}%"
         query = query.where(or_(
             AuditLog.description.ilike(term),
             AuditLog.action.ilike(term),
             AuditLog.actor_name.ilike(term),
+            AuditLog.actor_email.ilike(term),
             AuditLog.resource_name.ilike(term),
+            AuditLog.resource_type.ilike(term),
             AuditLog.summary.ilike(term),
         ))
 
-    logs = session.exec(query.order_by(desc(AuditLog.created_at)).limit(2000)).all()
-
-    # Pre-fetch site brand names for display
-    site_ids_to_lookup = {r.site_id for r in logs if r.site_id}
+    # Pre-fetch site brand names for display cache
     sites_map = {}
-    if site_ids_to_lookup:
-        site_records = session.exec(select(Site).where(Site.id.in_(site_ids_to_lookup))).all()
-        for s in site_records:
-            brand_name = (
-                (s.site_definition or {}).get("site", {}).get("brand_name")
-                or (s.site_definition or {}).get("site", {}).get("title")
-                or (s.site_definition or {}).get("brand_name")
-                or s.slug
-            )
-            sites_map[s.id] = brand_name
+    if accessible_site_ids:
+        try:
+            site_records = session.exec(select(Site).where(Site.id.in_(accessible_site_ids))).all()
+            for s in site_records:
+                brand_name = (
+                    (s.site_definition or {}).get("site", {}).get("brand_name")
+                    or (s.site_definition or {}).get("site", {}).get("title")
+                    or (s.site_definition or {}).get("brand_name")
+                    or s.slug
+                )
+                sites_map[s.id] = brand_name
+        except Exception:
+            pass
 
+    # Pre-fetch workspace admins for display cache
     admins_by_id = {}
     if workspace_member_ids:
         try:
@@ -927,60 +1046,85 @@ def export_activity_csv(
         except Exception:
             pass
 
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow([
-        "Timestamp (UTC)", "Website", "Activity", "Action Code", "Source", "Actor Type",
-        "Category", "Performed By", "Role", "Email", "Resource", "Summary", "Status", "IP Address"
-    ])
+    def generate_zip_stream():
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
+            csv_internal_name = f"activity_log_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
 
-    for log in logs:
-        site_name_display = sites_map.get(log.site_id, "Account-wide") if log.site_id else "Account-wide"
-        admin_info = admins_by_id.get(str(log.admin_id)) if log.admin_id else None
-        display_actor_name = log.actor_name
-        if not display_actor_name or display_actor_name.strip().lower() == "staff":
-            if admin_info:
-                display_actor_name = admin_info["name"]
-            elif log.actor_email:
-                display_actor_name = log.actor_email.split("@")[0].title()
-            else:
-                display_actor_name = "Staff"
+            csv_output = io.StringIO()
+            writer = csv.writer(csv_output)
+            writer.writerow([
+                "Timestamp (UTC)", "Website", "Activity", "Action Code", "Source", "Actor Type",
+                "Category", "Performed By", "Role", "Email", "Resource", "Summary", "Status", "IP Address"
+            ])
 
-        display_actor_role = log.actor_role
-        if not display_actor_role or display_actor_role.strip().lower() == "staff":
-            if admin_info:
-                display_actor_role = admin_info["role"]
-            else:
-                display_actor_role = "Staff"
+            BATCH_SIZE = 2000
+            offset = 0
+            while True:
+                batch_query = query.order_by(desc(AuditLog.created_at)).offset(offset).limit(BATCH_SIZE)
+                batch = session.exec(batch_query).all()
+                if not batch:
+                    break
 
-        display_actor_email = log.actor_email or (admin_info["email"] if admin_info else "")
+                for log in batch:
+                    site_name_display = sites_map.get(log.site_id, "Account-wide") if log.site_id else "Account-wide"
+                    admin_info = admins_by_id.get(str(log.admin_id)) if log.admin_id else None
+                    display_actor_name = log.actor_name
+                    if not display_actor_name or display_actor_name.strip().lower() == "staff":
+                        if admin_info:
+                            display_actor_name = admin_info["name"]
+                        elif log.actor_email:
+                            display_actor_name = log.actor_email.split("@")[0].title()
+                        else:
+                            display_actor_name = "Staff"
 
-        clean_summary = log.summary or log.description
-        if clean_summary:
-            if "performed Product Updated" in clean_summary or "Staff performed" in clean_summary:
-                clean_summary = log.description or (f"Updated product '{log.resource_name}'" if log.resource_name else format_activity_title(log.action))
+                    display_actor_role = log.actor_role
+                    if not display_actor_role or display_actor_role.strip().lower() == "staff":
+                        if admin_info:
+                            display_actor_role = admin_info["role"]
+                        else:
+                            display_actor_role = "Staff"
 
-        writer.writerow([
-            log.created_at.strftime("%Y-%m-%d %H:%M:%S") if log.created_at else "",
-            site_name_display,
-            format_activity_title(log.action),
-            log.action,
-            log.source or "web_app",
-            log.actor_type or "USER",
-            get_category_label(log.category),
-            display_actor_name,
-            display_actor_role,
-            display_actor_email,
-            log.resource_name or "",
-            clean_summary or "",
-            log.status or "success",
-            log.ip_address or "",
-        ])
+                    display_actor_email = log.actor_email or (admin_info["email"] if admin_info else "")
 
-    csv_data = output.getvalue()
-    filename = f"activity_log_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
-    return Response(
-        content=csv_data,
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+                    clean_summary = log.summary or log.description
+                    if clean_summary:
+                        if "performed Product Updated" in clean_summary or "Staff performed" in clean_summary:
+                            clean_summary = log.description or (f"Updated product '{log.resource_name}'" if log.resource_name else format_activity_title(log.action))
+
+                    writer.writerow([
+                        log.created_at.strftime("%Y-%m-%d %H:%M:%S") if log.created_at else "",
+                        site_name_display,
+                        format_activity_title(log.action),
+                        log.action,
+                        log.source or "web_app",
+                        log.actor_type or "USER",
+                        get_category_label(log.category),
+                        display_actor_name,
+                        display_actor_role,
+                        display_actor_email,
+                        log.resource_name or "",
+                        clean_summary or "",
+                        log.status or "success",
+                        log.ip_address or "",
+                    ])
+
+                offset += len(batch)
+                if len(batch) < BATCH_SIZE:
+                    break
+
+            zf.writestr(csv_internal_name, csv_output.getvalue())
+
+        zip_buffer.seek(0)
+        yield zip_buffer.getvalue()
+
+    filename = f"activity_logs_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.zip"
+    return StreamingResponse(
+        generate_zip_stream(),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}",
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )

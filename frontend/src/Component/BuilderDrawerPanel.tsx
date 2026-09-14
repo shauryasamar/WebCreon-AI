@@ -38,7 +38,8 @@ export type AdminNavKey =
   | "delivery"
   | "earnings"
   | "payment-settings"
-  | "checkout-charges";
+  | "checkout-charges"
+  | "notifications";
 
 type AdminNavItem = {
   key: AdminNavKey;
@@ -57,6 +58,7 @@ const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { key: "checkout-charges", label: "Checkout Charges" },
   { key: "earnings", label: "Earnings & Ledger" },
   { key: "payment-settings", label: "Payout Settings" },
+  { key: "notifications", label: "Notifications & Email" },
 ];
 
 
@@ -456,6 +458,13 @@ function AdminNavIcon({ navKey, isSelected }: { navKey: AdminNavKey; isSelected:
           <line x1="19" y1="5" x2="5" y2="19" />
           <circle cx="6.5" cy="6.5" r="2.5" />
           <circle cx="17.5" cy="17.5" r="2.5" />
+        </svg>
+      );
+    case "notifications":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
       );
     default:
@@ -1093,6 +1102,7 @@ export default function BuilderDrawerPanel({
           "checkout-charges": "checkout_charges:view",
           earnings: "earnings:view",
           "payment-settings": "payout_settings:view",
+          notifications: "notifications:view",
         };
         return hasPermission(permMap[item.key]);
       });

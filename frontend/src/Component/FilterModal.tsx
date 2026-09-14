@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { createPortal } from "react-dom";
 import { isColorDarkHex } from "../context/ThemeContext";
 import { useDeviceMode } from "../context/DeviceModeContext";
+import { resolveMobileDrawerTheme } from "../utils/mobileDrawerTheme";
+import { useDrawerDragToClose } from "../utils/useDrawerDragToClose";
 
 export type FilterState = {
   categoryId: string | null;
@@ -169,6 +171,13 @@ const FilterModal: React.FC<FilterModalProps> = ({
 
   const accentColor = theme?.accent_color || "#3b82f6";
   const activeBg = `${accentColor}1c`;
+
+  const mobileTheme = resolveMobileDrawerTheme(theme);
+
+  const { dragHandleProps, drawerStyle, isDragging } = useDrawerDragToClose({
+    onClose,
+    isOpen: open && isMobile,
+  });
 
   useEffect(() => {
     if (open) {
@@ -1165,25 +1174,30 @@ const FilterModal: React.FC<FilterModalProps> = ({
       <div
         ref={modalRef}
         className="filter-modal-dialog"
+        style={isMobile ? drawerStyle : undefined}
       >
-        {/* Grab Handle for Touch UI on Mobile */}
+        {/* Grab Handle for Touch UI on Mobile (Draggable to close) */}
         {isMobile && (
           <div
+            {...dragHandleProps}
             style={{
               width: "100%",
               display: "flex",
               justifyContent: "center",
-              padding: "7px 0 2px 0",
+              padding: "10px 0 8px 0",
               flexShrink: 0,
-              background: bg,
+              background: mobileTheme.drawerBg,
+              cursor: "grab",
+              touchAction: "none",
+              ...dragHandleProps.style,
             }}
           >
             <div
               style={{
-                width: "36px",
+                width: "38px",
                 height: "4px",
-                borderRadius: "2px",
-                background: isDark ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.18)",
+                borderRadius: "999px",
+                background: mobileTheme.pillColor,
               }}
             />
           </div>
@@ -1192,7 +1206,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
         {/* --- Header --- */}
         <div className="filter-modal-header">
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <h2 style={{ margin: 0, fontSize: isMobile ? "15px" : "16px", fontWeight: 800, color: textPrimary, letterSpacing: "-0.01em" }}>
+            <h2 style={{ margin: 0, fontSize: "16px", fontWeight: isMobile ? 700 : 800, color: isMobile ? mobileTheme.textPrimary : textPrimary, letterSpacing: "-0.01em" }}>
               Filters
             </h2>
             {totalActiveCount > 0 && (
@@ -1204,7 +1218,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
                   height: "18px",
                   padding: "0 6px",
                   borderRadius: "999px",
-                  background: accentColor,
+                  background: isMobile ? mobileTheme.accentColor : accentColor,
                   color: "#ffffff",
                   display: "inline-flex",
                   alignItems: "center",
@@ -1227,7 +1241,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
                   border: "none",
                   fontSize: "12px",
                   fontWeight: 600,
-                  color: accentColor,
+                  color: isMobile ? mobileTheme.accentColor : accentColor,
                   cursor: "pointer",
                   padding: "4px 6px",
                 }}
@@ -1238,16 +1252,18 @@ const FilterModal: React.FC<FilterModalProps> = ({
             <button
               onClick={onClose}
               style={{
-                background: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.05)",
+                background: isMobile ? mobileTheme.closeBtnBg : (isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.05)"),
                 border: "none",
-                fontSize: "13px",
-                color: textSecondary,
+                fontSize: "14px",
+                fontWeight: 700,
+                color: isMobile ? mobileTheme.textPrimary : textSecondary,
                 cursor: "pointer",
                 width: "28px",
                 height: "28px",
-                borderRadius: "999px",
-                display: "grid",
-                placeItems: "center",
+                borderRadius: "50%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
                 lineHeight: 1,
               }}
               aria-label="Close"
@@ -1511,22 +1527,31 @@ const FilterModal: React.FC<FilterModalProps> = ({
             padding: 0 !important;
             align-items: flex-end !important;
             justify-content: center !important;
+            background: ${mobileTheme.overlayBg} !important;
+            backdrop-filter: blur(4px) !important;
+            -webkit-backdrop-filter: blur(4px) !important;
           }
           .filter-modal-dialog {
             width: 100% !important;
-            max-width: 100% !important;
-            height: 84% !important;
-            min-height: 84% !important;
-            max-height: 84% !important;
-            border-radius: 20px 20px 0 0 !important;
+            max-width: 540px !important;
+            margin: 0 auto !important;
+            height: 75vh !important;
+            min-height: 75vh !important;
+            max-height: 85vh !important;
+            background: ${mobileTheme.drawerBg} !important;
+            border-top-left-radius: 22px !important;
+            border-top-right-radius: 22px !important;
+            border-bottom-left-radius: 0 !important;
+            border-bottom-right-radius: 0 !important;
+            border: 1px solid ${mobileTheme.drawerBorder} !important;
             border-bottom: none !important;
-            border-left: none !important;
-            border-right: none !important;
-            box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.35) !important;
+            box-shadow: ${mobileTheme.boxShadow} !important;
             animation: filterModalSlideUp 240ms cubic-bezier(0.16, 1, 0.3, 1) !important;
           }
           .filter-modal-header {
-            padding: 10px 14px !important;
+            padding: 14px 18px 12px !important;
+            border-bottom: 1px solid ${mobileTheme.cardBorder} !important;
+            background: ${mobileTheme.drawerBg} !important;
           }
           .filter-modal-body {
             flex-direction: row !important;
@@ -1538,7 +1563,8 @@ const FilterModal: React.FC<FilterModalProps> = ({
             width: 114px !important;
             min-width: 114px !important;
             max-width: 114px !important;
-            border-right: 1px solid ${borderColor} !important;
+            border-right: 1px solid ${mobileTheme.cardBorder} !important;
+            background: ${mobileTheme.isDark ? "rgba(255, 255, 255, 0.02)" : "rgba(0, 0, 0, 0.02)"} !important;
             border-bottom: none !important;
             padding: 8px 5px !important;
             flex-direction: column !important;
@@ -1550,12 +1576,15 @@ const FilterModal: React.FC<FilterModalProps> = ({
           .filter-modal-right-content {
             flex: 1 !important;
             padding: 12px 12px !important;
+            background: ${mobileTheme.drawerBg} !important;
             overflow-y: auto !important;
             height: 100% !important;
           }
           .filter-modal-footer {
             padding: 10px 14px !important;
-            padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
+            padding-bottom: max(12px, env(safe-area-inset-bottom, 12px)) !important;
+            background: ${mobileTheme.drawerBg} !important;
+            border-top: 1px solid ${mobileTheme.cardBorder} !important;
           }
         }
 
@@ -1565,24 +1594,33 @@ const FilterModal: React.FC<FilterModalProps> = ({
           padding: 0 !important;
           align-items: flex-end !important;
           justify-content: center !important;
+          background: ${mobileTheme.overlayBg} !important;
+          backdrop-filter: blur(4px) !important;
+          -webkit-backdrop-filter: blur(4px) !important;
         }
         .filter-modal-overlay.is-mobile .filter-modal-dialog,
         .is-mobile-preview .filter-modal-dialog {
           width: 100% !important;
-          max-width: 100% !important;
-          height: 84% !important;
-          min-height: 84% !important;
-          max-height: 84% !important;
-          border-radius: 20px 20px 0 0 !important;
+          max-width: 540px !important;
+          margin: 0 auto !important;
+          height: 75vh !important;
+          min-height: 75vh !important;
+          max-height: 85vh !important;
+          background: ${mobileTheme.drawerBg} !important;
+          border-top-left-radius: 22px !important;
+          border-top-right-radius: 22px !important;
+          border-bottom-left-radius: 0 !important;
+          border-bottom-right-radius: 0 !important;
+          border: 1px solid ${mobileTheme.drawerBorder} !important;
           border-bottom: none !important;
-          border-left: none !important;
-          border-right: none !important;
-          box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.35) !important;
+          box-shadow: ${mobileTheme.boxShadow} !important;
           animation: filterModalSlideUp 240ms cubic-bezier(0.16, 1, 0.3, 1) !important;
         }
         .filter-modal-overlay.is-mobile .filter-modal-header,
         .is-mobile-preview .filter-modal-header {
-          padding: 10px 14px !important;
+          padding: 14px 18px 12px !important;
+          border-bottom: 1px solid ${mobileTheme.cardBorder} !important;
+          background: ${mobileTheme.drawerBg} !important;
         }
         .filter-modal-overlay.is-mobile .filter-modal-body,
         .is-mobile-preview .filter-modal-body {
@@ -1596,7 +1634,8 @@ const FilterModal: React.FC<FilterModalProps> = ({
           width: 114px !important;
           min-width: 114px !important;
           max-width: 114px !important;
-          border-right: 1px solid ${borderColor} !important;
+          border-right: 1px solid ${mobileTheme.cardBorder} !important;
+          background: ${mobileTheme.isDark ? "rgba(255, 255, 255, 0.02)" : "rgba(0, 0, 0, 0.02)"} !important;
           border-bottom: none !important;
           padding: 8px 5px !important;
           flex-direction: column !important;
@@ -1609,13 +1648,16 @@ const FilterModal: React.FC<FilterModalProps> = ({
         .is-mobile-preview .filter-modal-right-content {
           flex: 1 !important;
           padding: 12px 12px !important;
+          background: ${mobileTheme.drawerBg} !important;
           overflow-y: auto !important;
           height: 100% !important;
         }
         .filter-modal-overlay.is-mobile .filter-modal-footer,
         .is-mobile-preview .filter-modal-footer {
           padding: 10px 14px !important;
-          padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
+          padding-bottom: max(12px, env(safe-area-inset-bottom, 12px)) !important;
+          background: ${mobileTheme.drawerBg} !important;
+          border-top: 1px solid ${mobileTheme.cardBorder} !important;
         }
       `}</style>
     </div>,

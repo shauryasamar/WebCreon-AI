@@ -40,6 +40,7 @@ from models import (
     User,
 )
 from services.audit_service import AuditService, ActorType, SourceType, AuditCategory
+from services.notification_service import dispatch_customer_event
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +190,41 @@ def _mark_order_delivered(order: Order, session: Session, auto_commit: bool = Tr
         changed_by_type="system",
     )
     session.add(history)
+
+    # Dispatch customer order.delivered event
+    try:
+        customer = session.get(User, order.customer_id)
+        order_short = str(order.id)[:8].upper()
+        if site and customer:
+            dispatch_customer_event(
+                session=session,
+                site_id=site.id,
+                customer_id=customer.id,
+                event_type="order.delivered",
+                category="delivery",
+                title=f"Order #{order_short} Delivered",
+                message=f"Your order #{order_short} has been delivered successfully. Thank you for shopping with us!",
+                related_entity_type="order",
+                related_entity_id=str(order.id),
+                action_url=f"/store/{site.slug}/orders?orderId={order.id}",
+                metadata={"orderId": str(order.id), "status": "delivered", "total": float(order.total)},
+                idempotency_key=f"{site.id}:order.delivered:{order.id}",
+                send_email=True,
+                email_recipient=customer.email,
+                email_template_key="order_delivered",
+                email_template_vars={
+                    "order_number": order_short,
+                    "order_id": str(order.id),
+                    "total": f"{float(order.total):.2f}",
+                    "items": order.items,
+                    "order_url": f"/store/{site.slug}/orders?orderId={order.id}",
+                    "customer_name": customer.name or "Valued Customer",
+                    "store_name": site.name,
+                },
+            )
+    except Exception as notif_err:
+        logger.warning(f"Could not dispatch order.delivered notification: {notif_err}")
+
     if auto_commit:
         session.commit()
 

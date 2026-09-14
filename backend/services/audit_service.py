@@ -69,6 +69,7 @@ class AuditCategory:
     WEBSITE = "website"
     DISCOUNTS = "discounts"
     SUPPORT = "support"
+    NOTIFICATIONS = "notifications"
 
 
 # Sensitive keys that must NEVER be written to audit logs

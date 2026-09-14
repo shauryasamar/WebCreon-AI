@@ -1465,20 +1465,34 @@ def export_products_csv(
 
         products = session.exec(base_query.order_by(order_clause)).all()
 
+    # Enterprise Optimization: Pre-fetch collections & product associations in 2 indexed queries (Fixes N+1 query issue)
+    site_collections = session.exec(select(Collection).where(Collection.site_id == site_id)).all()
+    col_name_by_id = {c.id: c.name for c in site_collections}
+
+    prod_ids = [p.id for p in products if p.id]
+    product_collections_map: dict[UUID, list[str]] = {}
+    if prod_ids:
+        for i in range(0, len(prod_ids), 1000):
+            chunk_ids = prod_ids[i:i + 1000]
+            assoc_rows = session.exec(
+                select(ProductCollection.product_id, ProductCollection.collection_id).where(
+                    ProductCollection.product_id.in_(chunk_ids)
+                )
+            ).all()
+            for pid, cid in assoc_rows:
+                cname = col_name_by_id.get(cid)
+                if cname:
+                    if pid not in product_collections_map:
+                        product_collections_map[pid] = []
+                    product_collections_map[pid].append(cname)
+
     output = io.StringIO()
     output.write("\ufeff")  # UTF-8 BOM for Excel
     writer = csv.writer(output)
     writer.writerow(CSV_HEADERS)
 
     for p in products:
-        col_names = []
-        assoc_rows = session.exec(
-            select(ProductCollection).where(ProductCollection.product_id == p.id)
-        ).all()
-        for assoc in assoc_rows:
-            col = session.get(Collection, assoc.collection_id)
-            if col:
-                col_names.append(col.name)
+        col_names = product_collections_map.get(p.id, [])
 
         var_name = ""
         var_values_str = ""
@@ -1829,8 +1843,8 @@ async def import_products_csv(
         raise HTTPException(status_code=400, detail="Only .csv files are supported")
 
     content = await file.read()
-    if len(content) > 25 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="File too large. Maximum CSV size is 25MB (~50,000 products).")
+    if len(content) > 100 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large. Maximum CSV size is 100MB (~100,000+ products).")
 
     try:
         text_content = content.decode("utf-8-sig", errors="replace")
@@ -1844,23 +1858,30 @@ async def import_products_csv(
 
     errors: list[dict[str, Any]] = []
 
-    # 1. Pre-fetch existing Categories, Collections & Products
+    # 1. Pre-fetch existing Categories & Collections for site
     existing_categories = session.exec(select(Category).where(Category.site_id == site_id)).all()
     cat_map = {c.name.strip().lower(): c for c in existing_categories}
 
     existing_collections = session.exec(select(Collection).where(Collection.site_id == site_id)).all()
     col_map = {c.name.strip().lower(): c for c in existing_collections}
 
+    # Enterprise High-Speed Lookup: Fetch site products in 1 single indexed query
     existing_products = session.exec(select(Product).where(Product.site_id == site_id)).all()
     sku_map: dict[str, Product] = {p.sku.strip().lower(): p for p in existing_products if p.sku}
     name_map: dict[str, Product] = {p.name.strip().lower(): p for p in existing_products if p.name}
 
-    # Pre-fetch existing product-collection associations to prevent duplicates
-    existing_assocs = session.exec(
-        select(ProductCollection).where(
-            ProductCollection.product_id.in_([p.id for p in existing_products])
-        )
-    ).all() if existing_products else []
+    # Pre-fetch existing product-collection associations in 1 batched query
+    existing_pids = [p.id for p in existing_products]
+    existing_assocs: list[ProductCollection] = []
+    if existing_pids:
+        for i in range(0, len(existing_pids), 1000):
+            chunk_pids = existing_pids[i:i + 1000]
+            assocs = session.exec(
+                select(ProductCollection).where(
+                    ProductCollection.product_id.in_(chunk_pids)
+                )
+            ).all()
+            existing_assocs.extend(assocs)
     seen_assocs: set[tuple[UUID, UUID]] = {(a.product_id, a.collection_id) for a in existing_assocs}
 
     # 2. Collect unique missing categories & collections in ONE pre-pass
@@ -1899,8 +1920,8 @@ async def import_products_csv(
             session.refresh(v)
             col_map[k] = v
 
-    # 3. Process Products in Enterprise Chunks (CHUNK_SIZE = 250)
-    CHUNK_SIZE = 250
+    # 3. Process Products in Enterprise Chunks (CHUNK_SIZE = 1000 for high-speed commits)
+    CHUNK_SIZE = 1000
     created_count = 0
     updated_count = 0
     product_chunk: list[Product] = []
@@ -2213,6 +2234,29 @@ async def import_products_csv(
     # Commit any remaining items in final chunk
     commit_chunk()
     catalog_cache.invalidate_site(site_id)
+
+    # Log bulk import activity
+    try:
+        log_activity(
+            session=session,
+            action="product.bulk_import",
+            category="products",
+            description=f"Bulk imported {created_count + updated_count} products ({created_count} created, {updated_count} updated)",
+            site_id=site_id,
+            admin_id=admin_id,
+            resource_type="Product",
+            resource_id=str(site_id),
+            resource_name=f"Bulk Import ({file.filename})",
+            changes={
+                "created_count": created_count,
+                "updated_count": updated_count,
+                "error_count": len(errors),
+                "filename": file.filename,
+                "default_status": default_status,
+            },
+        )
+    except Exception:
+        pass
 
     return {
         "success": True,

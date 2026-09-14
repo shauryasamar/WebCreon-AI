@@ -1565,4 +1565,91 @@ class SiteSlugHistory(SQLModel, table=True):
     old_slug: str = Field(index=True, unique=True, nullable=False)
     reserved_until: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
     created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+
+
+class CustomerNotification(SQLModel, table=True):
+    __tablename__ = "customer_notifications"
+    __table_args__ = (
+        Index("ix_cust_notif_site_customer_created", "site_id", "customer_id", "created_at"),
+        Index("ix_cust_notif_site_customer_unread", "site_id", "customer_id", "is_read"),
+        Index("ix_cust_notif_idempotency", "site_id", "idempotency_key", unique=True),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    site_id: UUID = Field(foreign_key="sites.id", index=True, nullable=False)
+    customer_id: UUID = Field(foreign_key="users.id", index=True, nullable=False)
+
+    event_type: str = Field(max_length=80, nullable=False, index=True)
+    category: str = Field(max_length=40, nullable=False, index=True)  # order, payment, delivery, return, refund, support, account, system
+    title: str = Field(max_length=255, nullable=False)
+    message: str = Field(sa_column=Column(Text, nullable=False))
+
+    is_read: bool = Field(default=False, sa_column=Column(Boolean, nullable=False, default=False, index=True))
+    read_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+
+    related_entity_type: Optional[str] = Field(default=None, max_length=50, nullable=True)  # order, return_request, support_ticket, user
+    related_entity_id: Optional[str] = Field(default=None, max_length=100, nullable=True)
+    action_url: Optional[str] = Field(default=None, max_length=500, nullable=True)
+
+    metadata_: Optional[dict[str, Any]] = Field(default=None, sa_column=Column("metadata", JSONB, nullable=True))
+    idempotency_key: str = Field(max_length=160, nullable=False)
+
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False, index=True))
+
+
+class StoreEmailSettings(SQLModel, table=True):
+    __tablename__ = "store_email_settings"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    site_id: UUID = Field(foreign_key="sites.id", index=True, nullable=False, unique=True)
+
+    sender_name: Optional[str] = Field(default=None, max_length=255, nullable=True)
+    sender_email: Optional[str] = Field(default=None, max_length=255, nullable=True)
+    reply_to_email: Optional[str] = Field(default=None, max_length=255, nullable=True)
+
+    provider_type: str = Field(default="smtp", max_length=50, nullable=False)  # smtp | ses | sendgrid
+    smtp_host: Optional[str] = Field(default=None, max_length=255, nullable=True)
+    smtp_port: int = Field(default=587, nullable=False)
+    smtp_user: Optional[str] = Field(default=None, max_length=255, nullable=True)
+    smtp_password_encrypted: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    smtp_use_tls: bool = Field(default=True, sa_column=Column(Boolean, nullable=False, default=True))
+    smtp_use_ssl: bool = Field(default=False, sa_column=Column(Boolean, nullable=False, default=False))
+
+    verification_status: str = Field(default="not_configured", max_length=40, nullable=False)  # not_configured | pending_verification | verified | failed
+    verification_token: Optional[str] = Field(default=None, max_length=128, nullable=True)
+    verification_error: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    last_verified_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+
+    is_enabled: bool = Field(default=True, sa_column=Column(Boolean, nullable=False, default=True))
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False, onupdate=utc_now))
+
+
+class NotificationDeliveryLog(SQLModel, table=True):
+    __tablename__ = "notification_delivery_logs"
+    __table_args__ = (
+        Index("ix_notif_log_site_created", "site_id", "created_at"),
+        Index("ix_notif_log_site_status", "site_id", "status"),
+        Index("ix_notif_log_idempotency", "site_id", "idempotency_key", unique=True),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    site_id: UUID = Field(foreign_key="sites.id", index=True, nullable=False)
+    customer_id: Optional[UUID] = Field(default=None, foreign_key="users.id", nullable=True)
+
+    channel: str = Field(max_length=30, nullable=False)  # in_app | email
+    recipient: str = Field(max_length=255, nullable=False)
+    event_type: str = Field(max_length=80, nullable=False)
+    subject: Optional[str] = Field(default=None, max_length=255, nullable=True)
+
+    status: str = Field(default="queued", max_length=30, nullable=False)  # queued | processing | sent | delivered | failed | dead_letter
+    attempts: int = Field(default=0, nullable=False)
+    max_attempts: int = Field(default=3, nullable=False)
+    last_error: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    locked_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    idempotency_key: str = Field(max_length=160, nullable=False)
+
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    sent_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+
 

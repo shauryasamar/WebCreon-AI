@@ -512,42 +512,6 @@ export default function TenantEarningsPage() {
         />
       )}
 
-      {/* Unconfigured Bank Alert (Only shown if bank settings are missing) */}
-      {data && !data.bank_configured && (
-        <div
-          style={{
-            background: "#ffffff",
-            border: "1px solid #fde68a",
-            borderRadius: "8px",
-            padding: "10px 16px",
-            marginBottom: "12px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "12px",
-            fontSize: "13px",
-          }}
-        >
-          <div style={{ color: "#92400e" }}>
-            <strong>Bank account not linked.</strong> Add your account details to receive automatic 48-hour order payouts.
-          </div>
-          <Link
-            to={`/builder/${siteId}/admin/payment-settings`}
-            style={{
-              padding: "5px 12px",
-              borderRadius: "6px",
-              background: "#0f172a",
-              color: "#ffffff",
-              fontSize: "12px",
-              fontWeight: 600,
-              textDecoration: "none",
-            }}
-          >
-            Configure Bank →
-          </Link>
-        </div>
-      )}
-
       {/* Top Header Card: Action Controls on Left + Search & Filter on Right (Matching Orders Page Top Bar) */}
       <div
         style={{
@@ -583,17 +547,15 @@ export default function TenantEarningsPage() {
                 type="button"
                 style={{
                   borderRadius: "6px",
-                  padding: "5px 14px",
+                  padding: "6px 16px",
                   border: "none",
                   background: "#ffffff",
                   color: "#0f172a",
                   boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
-                  fontSize: "12.5px",
+                  fontSize: "13px",
                   fontWeight: 700,
                   cursor: "default",
-                  textTransform: "capitalize",
                   transition: "all 0.15s ease",
-                  fontFamily: "'Inter', sans-serif",
                 }}
               >
                 Earnings & Ledger
@@ -995,6 +957,48 @@ export default function TenantEarningsPage() {
           </div>
         )}
       </div>
+
+      {/* Unconfigured Bank Alert (Subtle, placed right after navbar) */}
+      {data && !data.bank_configured && (
+        <div
+          style={{
+            background: "#fafaf9",
+            border: "1px solid #e7e5e4",
+            borderRadius: "8px",
+            padding: "9px 14px",
+            marginBottom: "12px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px",
+            fontSize: "12.5px",
+            boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#44403c" }}>
+            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#f59e0b", flexShrink: 0 }} />
+            <span>
+              <strong style={{ fontWeight: 600, color: "#1c1917" }}>Bank account not linked.</strong> Add your account details to receive automatic 48-hour order payouts.
+            </span>
+          </div>
+          <Link
+            to={`/builder/${siteId}/admin/payment-settings`}
+            style={{
+              padding: "5px 12px",
+              borderRadius: "6px",
+              background: "#0f172a",
+              color: "#ffffff",
+              fontSize: "12px",
+              fontWeight: 600,
+              textDecoration: "none",
+              whiteSpace: "nowrap",
+              transition: "background 0.15s ease",
+            }}
+          >
+            Configure Bank →
+          </Link>
+        </div>
+      )}
 
       {/* Collection Metric Summary Boxes (Placed ABOVE the Tabs) */}
       <div

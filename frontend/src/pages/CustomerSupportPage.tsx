@@ -4,6 +4,7 @@ import { API_BASE_URL } from "../config/api";
 import { getCustomerAuthHeaders } from "../utils/customerAuthFetch";
 import { usePublicSiteTheme } from "../hooks/usePublicSiteTheme";
 import { useDeviceMode } from "../context/DeviceModeContext";
+import { resolveThemeTokens, isColorDarkHex } from "../context/ThemeContext";
 import {
   parseMessageWithMedia,
   AdaptiveSupportImage,
@@ -449,12 +450,22 @@ export default function CustomerSupportPage({
   const supportPhone = blockProps?.supportPhone || blockProps?.support_phone || "";
   const supportHours = blockProps?.supportHours || blockProps?.support_hours || blockProps?.operatingHours || blockProps?.operating_hours || "";
 
-  // Scroll to top on initial mount
+  // Scroll to top on initial mount & lock outer page scrolling on desktop storefront
   useEffect(() => {
     if (!isAdmin) {
       window.scrollTo(0, 0);
     }
-  }, [isAdmin]);
+    if (!isAdmin && !isMobile) {
+      const origOverflow = document.body.style.overflow;
+      const origHtmlOverflow = document.documentElement.style.overflow;
+      document.body.style.overflow = "hidden";
+      document.documentElement.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = origOverflow;
+        document.documentElement.style.overflow = origHtmlOverflow;
+      };
+    }
+  }, [isAdmin, isMobile]);
 
   const { siteData } = usePublicSiteTheme(activeSlug);
   const [liveCrmOverride, setLiveCrmOverride] = useState<boolean | null>(null);
@@ -488,8 +499,9 @@ export default function CustomerSupportPage({
             : siteData?.crm_enabled !== undefined
               ? Boolean(siteData.crm_enabled)
               : true;
-  const activeTheme = propTheme || siteData?.theme || {};
-  const isLight = activeTheme.mode !== "dark";
+  const activeTheme: Record<string, any> = (propTheme || siteData?.theme || {}) as Record<string, any>;
+  const themeTokens = resolveThemeTokens(activeTheme);
+  const isLight = !themeTokens.isDark;
 
   const parseDimension = (val: any, fallback: string) => {
     if (val === undefined || val === null || val === "") return fallback;
@@ -515,24 +527,24 @@ export default function CustomerSupportPage({
   const buttonRadius = parseDimension(blockProps?.button_radius ?? blockProps?.buttonRadius, "8px");
   const badgeRadius = parseDimension(blockProps?.badge_radius, "4px");
 
-  // Consistent, solid theme colors without dark transparency clashes
-  const accentColor = blockProps?.accent_color || activeTheme.accent_color || "#2563eb";
-  const primaryBg = blockProps?.primary_bg || (isLight ? (activeTheme.primary_bg || "#f8fafc") : "#0b1120");
-  const cardBg = blockProps?.card_bg || (isLight ? (activeTheme.card_bg || "#ffffff") : "#131c31");
-  const surfaceBg = isLight ? "#f1f5f9" : "#1a243d";
+  // Consistent theme colors inheriting dynamically from active store theme
+  const accentColor = blockProps?.accent_color || activeTheme.accent_color || themeTokens.accentColor;
+  const primaryBg = blockProps?.primary_bg || activeTheme.primary_bg || themeTokens.primaryBg;
+  const cardBg = blockProps?.card_bg || activeTheme.card_bg || themeTokens.cardBg;
+  const surfaceBg = blockProps?.surface_bg || activeTheme.secondary_bg || themeTokens.secondaryBg;
   const chatBg = blockProps?.chat_bg || cardBg;
-  const textColor = blockProps?.text_color || (isLight ? (activeTheme.text_color || "#0f172a") : "#f8fafc");
-  const titleColor = blockProps?.title_color || (isLight ? (activeTheme.text_color || "#0f172a") : "#f8fafc");
-  const textMuted = blockProps?.subtext_color || (isLight ? "#64748b" : "#94a3b8");
-  const borderColor = blockProps?.border_color || (isLight ? (activeTheme.border_color || "#e2e8f0") : "rgba(255, 255, 255, 0.12)");
-  const buttonTextColor = blockProps?.button_text_color || "#ffffff";
-  const inputBg = blockProps?.input_bg || (isLight ? "#ffffff" : "#1a243d");
+  const textColor = blockProps?.text_color || activeTheme.text_color || themeTokens.textColor;
+  const titleColor = blockProps?.title_color || activeTheme.text_color || themeTokens.textColor;
+  const textMuted = blockProps?.subtext_color || activeTheme.muted_text || activeTheme.muted_text_color || themeTokens.mutedTextColor;
+  const borderColor = blockProps?.border_color || activeTheme.border_color || themeTokens.borderColor;
+  const buttonTextColor = blockProps?.button_text_color || activeTheme.accent_text || themeTokens.accentText || "#ffffff";
+  const inputBg = blockProps?.input_bg || (isLight ? "#ffffff" : (activeTheme.secondary_bg || themeTokens.inputBg));
   const inputBorder = blockProps?.input_border || borderColor;
   const inputTextColor = blockProps?.input_text_color || textColor;
   const customerBubbleBg = blockProps?.customer_bubble_bg || accentColor;
-  const customerBubbleText = blockProps?.customer_bubble_text || "#ffffff";
-  const agentBubbleBg = blockProps?.agent_bubble_bg || (isLight ? "#f1f5f9" : "#1e293b");
-  const agentBubbleText = blockProps?.agent_bubble_text || textColor;
+  const customerBubbleText = blockProps?.customer_bubble_text || (isColorDarkHex(customerBubbleBg) ? "#ffffff" : "#0f172a");
+  const agentBubbleBg = blockProps?.agent_bubble_bg || surfaceBg;
+  const agentBubbleText = blockProps?.agent_bubble_text || (isColorDarkHex(agentBubbleBg) ? "#f8fafc" : "#0f172a");
   const allowOrderSelection = blockProps?.allowOrderSelection !== false;
   const allowAttachments = blockProps?.allowAttachments !== false;
   const showContactInfo = blockProps?.showContactInfo !== false;
@@ -553,6 +565,7 @@ export default function CustomerSupportPage({
 
   // Active Chat State with pagination and memory cap
   const [ticketDetail, setTicketDetail] = useState<any | null>(null);
+  const activeTicket = useMemo(() => ticketDetail || (selectedTicketId ? tickets.find((t) => String(t.id) === String(selectedTicketId)) : null) || null, [ticketDetail, selectedTicketId, tickets]);
   const [messages, setMessages] = useState<any[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
   const [messagesLoadingOlder, setMessagesLoadingOlder] = useState(false);
@@ -638,6 +651,7 @@ export default function CustomerSupportPage({
   const urlTab = searchParams.get("tab");
   const urlOrderId = searchParams.get("orderId");
   const urlItemId = searchParams.get("itemId");
+  const urlTicketId = searchParams.get("ticketId") || searchParams.get("ticket_id") || searchParams.get("id");
 
   // New Request State & Product Selection
   const [ticketSearchQuery, setTicketSearchQuery] = useState("");
@@ -684,10 +698,18 @@ export default function CustomerSupportPage({
 
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // Deep-linking from URL (?tab=new&orderId=...&itemId=...)
+  // Deep-linking from URL (?tab=new&orderId=...&itemId=... or ?tab=inquiries&ticketId=...)
   useEffect(() => {
-    if (urlTab === "new" || urlOrderId) {
+    if (urlTicketId) {
+      setActiveTab("inquiries");
+      setSelectedTicketId(urlTicketId);
+      if (isMobile) {
+        setChatOpen(true);
+      }
+    } else if (urlTab === "new" || urlOrderId) {
       setActiveTab("new");
+    } else if (urlTab === "inquiries") {
+      setActiveTab("inquiries");
     }
     if (urlOrderId) {
       setSelectedOrderId(urlOrderId);
@@ -695,7 +717,7 @@ export default function CustomerSupportPage({
     if (urlItemId) {
       setSelectedOrderItemId(urlItemId);
     }
-  }, [urlTab, urlOrderId, urlItemId]);
+  }, [urlTab, urlOrderId, urlItemId, urlTicketId, isMobile]);
 
   // Active Order & Items computed
   const activeOrder = useMemo(() => {
@@ -827,7 +849,7 @@ export default function CustomerSupportPage({
       } else {
         const list = (cachedData.tickets || []).slice(0, 40);
         setTickets(list);
-        if (!selectedTicketId && list.length > 0 && !isMobile) {
+        if (!selectedTicketId && !urlTicketId && list.length > 0 && !isMobile) {
           setSelectedTicketId(list[0].id);
         }
       }
@@ -869,7 +891,7 @@ export default function CustomerSupportPage({
         } else {
           const list = incomingTickets.slice(0, 40);
           setTickets(list);
-          if (!selectedTicketId && list.length > 0 && !isMobile) {
+          if (!selectedTicketId && !urlTicketId && list.length > 0 && !isMobile) {
             setSelectedTicketId(list[0].id);
           }
         }
@@ -902,7 +924,7 @@ export default function CustomerSupportPage({
           } else {
             const list2 = incoming2.slice(0, 40);
             setTickets(list2);
-            if (!selectedTicketId && list2.length > 0 && !isMobile) {
+            if (!selectedTicketId && !urlTicketId && list2.length > 0 && !isMobile) {
               setSelectedTicketId(list2[0].id);
             }
           }
@@ -1047,7 +1069,8 @@ export default function CustomerSupportPage({
 
   // Paginated chat messages (20 messages per batch) with scroll-to-top older message loading
   const loadTicketDetail = async (ticketId: string, page = 1, isOlder = false, isSilent = false) => {
-    if (!effectiveSiteId || !ticketId) return;
+    const targetSiteId = siteData?.site_id || siteData?.id || effectiveSiteId;
+    if (!targetSiteId || !ticketId) return;
     if (isOlder) {
       setMessagesLoadingOlder(true);
     } else if (!isSilent) {
@@ -1058,26 +1081,35 @@ export default function CustomerSupportPage({
 
     try {
       const res = await fetch(
-        `${API_BASE_URL}/sites/${effectiveSiteId}/support/tickets/${ticketId}?page=${page}&page_size=20`,
+        `${API_BASE_URL}/sites/${targetSiteId}/support/tickets/${ticketId}?page=${page}&page_size=20`,
         {
           credentials: "include",
-          headers: getCustomerAuthHeaders(effectiveSiteId),
+          headers: getCustomerAuthHeaders(targetSiteId),
         }
       );
       if (res.ok) {
         const data = await res.json();
-        setTicketDetail((prev: any) => {
-          if (
-            prev &&
-            prev.id === data.ticket?.id &&
-            prev.status === data.ticket?.status &&
-            prev.resolution_note === data.ticket?.resolution_note &&
-            prev.resolved_at === data.ticket?.resolved_at
-          ) {
-            return prev;
-          }
-          return data.ticket;
-        });
+        if (data.ticket) {
+          setTicketDetail((prev: any) => {
+            if (
+              prev &&
+              prev.id === data.ticket?.id &&
+              prev.status === data.ticket?.status &&
+              prev.resolution_note === data.ticket?.resolution_note &&
+              prev.resolved_at === data.ticket?.resolved_at
+            ) {
+              return prev;
+            }
+            return data.ticket;
+          });
+
+          setTickets((prev) => {
+            if (prev.some((t) => String(t.id) === String(data.ticket.id))) {
+              return prev.map((t) => (String(t.id) === String(data.ticket.id) ? { ...t, ...data.ticket } : t));
+            }
+            return [data.ticket, ...prev].slice(0, 40);
+          });
+        }
 
         const incoming: any[] = Array.isArray(data.messages) ? data.messages : [];
         const pagination = data.pagination || {};
@@ -1214,11 +1246,12 @@ export default function CustomerSupportPage({
 
   // Real-time Instant Live Sync via Server-Sent Events (SSE) & read receipt updates
   useEffect(() => {
-    if (activeTab !== "inquiries" || !selectedTicketId || !effectiveSiteId) return;
+    const targetSiteId = siteData?.site_id || siteData?.id || effectiveSiteId;
+    if (activeTab !== "inquiries" || !selectedTicketId || !targetSiteId) return;
     loadTicketDetail(selectedTicketId, 1, false, false);
 
     // Open real-time sub-millisecond SSE stream for instant delivery and WhatsApp seen receipt updates
-    const sseUrl = `${API_BASE_URL}/sites/${effectiveSiteId}/support/tickets/${selectedTicketId}/stream`;
+    const sseUrl = `${API_BASE_URL}/sites/${targetSiteId}/support/tickets/${selectedTicketId}/stream`;
     let es: EventSource | null = null;
     try {
       es = new EventSource(sseUrl, { withCredentials: true });
@@ -1266,7 +1299,7 @@ export default function CustomerSupportPage({
       if (es) es.close();
       clearInterval(liveTimer);
     };
-  }, [selectedTicketId, activeTab, effectiveSiteId]);
+  }, [selectedTicketId, activeTab, effectiveSiteId, siteData?.site_id, siteData?.id]);
 
   // Scroll chat messages container down when changing tickets or opening chat
   const lastTicketIdRef = useRef<string | null>(null);
@@ -1286,8 +1319,9 @@ export default function CustomerSupportPage({
   const handleSendReply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (sendingReply) return;
+    const targetSiteId = siteData?.site_id || siteData?.id || effectiveSiteId;
     const trimmed = replyText.trim();
-    if ((!trimmed && !chatImage) || !selectedTicketId || !effectiveSiteId) return;
+    if ((!trimmed && !chatImage) || !selectedTicketId || !targetSiteId) return;
 
     // Immediately keep input focused synchronously so mobile keyboard never closes
     if (chatInputRef.current) {
@@ -1333,10 +1367,10 @@ export default function CustomerSupportPage({
       }
 
       const res = await fetch(
-        `${API_BASE_URL}/sites/${effectiveSiteId}/support/tickets/${selectedTicketId}/messages`,
+        `${API_BASE_URL}/sites/${targetSiteId}/support/tickets/${selectedTicketId}/messages`,
         {
           method: "POST",
-          headers: getCustomerAuthHeaders(effectiveSiteId, { "Content-Type": "application/json" }),
+          headers: getCustomerAuthHeaders(targetSiteId, { "Content-Type": "application/json" }),
           credentials: "include",
           body: JSON.stringify({
             message: trimmed || (attachmentUrls.length > 0 ? "Attached photo" : ""),
@@ -1386,16 +1420,17 @@ export default function CustomerSupportPage({
   };
 
   const handleCloseTicket = async () => {
-    if (!selectedTicketId || !effectiveSiteId) return;
+    const targetSiteId = siteData?.site_id || siteData?.id || effectiveSiteId;
+    if (!selectedTicketId || !targetSiteId) return;
     if (!window.confirm("Are you sure you want to end this chat?")) return;
 
     setClosingTicket(true);
     try {
       const res = await fetch(
-        `${API_BASE_URL}/sites/${effectiveSiteId}/support/tickets/${selectedTicketId}/close`,
+        `${API_BASE_URL}/sites/${targetSiteId}/support/tickets/${selectedTicketId}/close`,
         {
           method: "POST",
-          headers: getCustomerAuthHeaders(effectiveSiteId, { "Content-Type": "application/json" }),
+          headers: getCustomerAuthHeaders(targetSiteId, { "Content-Type": "application/json" }),
           credentials: "include",
         }
       );
@@ -1610,22 +1645,22 @@ export default function CustomerSupportPage({
         .custom-chat-scroll {
           overflow-y: auto !important;
           -webkit-overflow-scrolling: touch !important;
-          touch-action: pan-y !important;
           overscroll-behavior: contain !important;
           scrollbar-width: thin !important;
+          scrollbar-color: rgba(100, 116, 139, 0.5) transparent !important;
         }
         .custom-chat-scroll::-webkit-scrollbar {
-          width: 5px;
+          width: 7px;
         }
         .custom-chat-scroll::-webkit-scrollbar-track {
           background: transparent;
         }
         .custom-chat-scroll::-webkit-scrollbar-thumb {
-          background: rgba(140, 140, 140, 0.2);
+          background: rgba(100, 116, 139, 0.5);
           border-radius: 999px;
         }
         .custom-chat-scroll::-webkit-scrollbar-thumb:hover {
-          background: rgba(140, 140, 140, 0.4);
+          background: rgba(100, 116, 139, 0.8);
         }
       `}</style>
       <div
@@ -1641,6 +1676,7 @@ export default function CustomerSupportPage({
           height: (!isAdmin && !isMobile) || (isMobile && chatOpen) ? "100%" : "auto",
           maxHeight: (!isAdmin && !isMobile) || (isMobile && chatOpen) ? "100%" : "none",
           overflow: (!isAdmin && !isMobile) || (isMobile && chatOpen) ? "hidden" : "visible",
+          boxSizing: "border-box",
         }}
       >
         {/* Toast Notification */}
@@ -1948,14 +1984,22 @@ export default function CustomerSupportPage({
                   background: cardBg,
                   borderRadius: isMobile && chatOpen && isKeyboardActive ? "0px" : cardRadius,
                   border: isMobile && chatOpen && isKeyboardActive ? "none" : `1px solid ${borderColor}`,
-                  padding: isMobile && chatOpen ? "0px" : cardPadding,
-                  gap: isMobile ? "0px" : "10px",
+                  padding: isMobile ? (chatOpen ? "0px" : cardPadding) : "0px",
+                  gap: "0px",
                   boxSizing: "border-box",
                   width: "100%",
                   flex: (!isAdmin && !isMobile) || (isMobile && chatOpen) ? "1 1 0%" : "none",
-                  minHeight: isDesktopAdmin ? "440px" : (!isMobile ? (!isAdmin ? "0px" : "540px") : 0),
-                  height: isDesktopAdmin ? "480px" : (!isMobile ? (!isAdmin ? "100%" : "580px") : (chatOpen ? "100%" : "auto")),
-                  maxHeight: isDesktopAdmin ? "none" : (!isMobile ? (!isAdmin ? "100%" : "700px") : (chatOpen ? "100%" : "none")),
+                  minHeight: isDesktopAdmin ? "440px" : 0,
+                  height: isDesktopAdmin
+                    ? "480px"
+                    : (!isMobile
+                        ? (!isAdmin ? undefined : "580px")
+                        : (chatOpen ? "100%" : "auto")),
+                  maxHeight: isDesktopAdmin
+                    ? "none"
+                    : (!isMobile
+                        ? (!isAdmin ? undefined : "700px")
+                        : (chatOpen ? "100%" : "none")),
                   display: "flex",
                   overflow: !isMobile ? "hidden" : (chatOpen ? "hidden" : "visible"),
                   boxShadow: isMobile ? "none" : "0 4px 20px rgba(0,0,0,0.03)",
@@ -1965,20 +2009,20 @@ export default function CustomerSupportPage({
                 {(!isMobile || !chatOpen) && (
                   <div
                     style={{
-                      width: isMobile ? "100%" : "290px",
-                      minWidth: isMobile ? "100%" : "270px",
-                      maxWidth: isMobile ? "100%" : "310px",
-                      border: isMobile ? "none" : `1px solid ${borderColor}`,
-                      borderRadius: isMobile ? 0 : innerRadius,
+                      width: isMobile ? "100%" : "300px",
+                      minWidth: isMobile ? "100%" : "280px",
+                      maxWidth: isMobile ? "100%" : "340px",
+                      border: "none",
+                      borderRight: isMobile ? "none" : `1px solid ${borderColor}`,
+                      borderRadius: isMobile ? 0 : `${cardRadius} 0 0 ${cardRadius}`,
                       display: "flex",
                       flexDirection: "column",
                       flexShrink: 0,
-                      flex: isMobile ? (chatOpen ? "1 1 0%" : "none") : "0 0 290px",
-                      height: "100%",
+                      flex: isMobile ? (chatOpen ? "1 1 0%" : "none") : "0 0 300px",
                       minHeight: 0,
-                      maxHeight: isMobile ? (chatOpen ? "100%" : "none") : "100%",
+                      maxHeight: "100%",
                       background: cardBg,
-                      overflow: isMobile ? (chatOpen ? "hidden" : "visible") : "hidden",
+                      overflow: "hidden",
                     }}
                   >
                     {/* List Header & Search Filter */}
@@ -2109,12 +2153,13 @@ export default function CustomerSupportPage({
                       onScroll={handleTicketsScroll}
                       className={isMobile && !chatOpen ? undefined : "custom-chat-scroll"}
                       style={{
-                        flex: isMobile && !chatOpen ? "none" : 1,
+                        flex: isMobile && !chatOpen ? "none" : "1 1 0%",
                         minHeight: 0,
+                        maxHeight: isMobile && !chatOpen ? "none" : "100%",
                         overflowY: isMobile && !chatOpen ? "visible" : "auto",
+                        overflowX: "hidden",
                         WebkitOverflowScrolling: "touch",
                         overscrollBehavior: "contain",
-                        touchAction: "pan-y",
                         padding: "6px 8px",
                         display: "flex",
                         flexDirection: "column",
@@ -2195,6 +2240,7 @@ export default function CustomerSupportPage({
                                 key={t.id}
                                 onClick={() => {
                                   setSelectedTicketId(t.id);
+                                  setTicketDetail(t);
                                   if (isMobile) {
                                     setChatOpen(true);
                                   }
@@ -2216,8 +2262,10 @@ export default function CustomerSupportPage({
                                   borderLeft: isSelected
                                     ? `3.5px solid ${accentColor}`
                                     : `1px solid ${borderColor}`,
-                                  transition: "all 0.12s ease",
-                                  boxShadow: isSelected ? `0 2px 6px ${accentColor}15` : "none",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: "3px",
+                                  transition: "all 0.15s ease",
                                 }}
                                 onMouseEnter={(e) => {
                                   if (!isSelected) {
@@ -2232,70 +2280,54 @@ export default function CustomerSupportPage({
                                   }
                                 }}
                               >
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2px" }}>
-                                  <span style={{ fontSize: "10.5px", fontWeight: 800, color: isSelected ? accentColor : textColor, fontFamily: "monospace" }}>
-                                    #{t.ticket_number}
+                                {/* Ticket number & status pill */}
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                  <span style={{ fontSize: "10px", fontWeight: 700, color: accentColor }}>
+                                    #{t.ticket_number || t.id.slice(0, 8)}
                                   </span>
                                   <span
                                     style={{
-                                      fontSize: "8.5px",
+                                      fontSize: "9px",
                                       fontWeight: 700,
                                       padding: "1px 5px",
                                       borderRadius: badgeRadius,
                                       background: st.bg,
                                       color: st.text,
-                                      border: `1px solid ${st.border}`,
                                     }}
                                   >
                                     {st.label}
                                   </span>
                                 </div>
 
+                                {/* Subject */}
                                 <div
                                   style={{
                                     fontSize: "11.5px",
                                     fontWeight: isSelected ? 700 : 600,
                                     color: textColor,
-                                    marginBottom: "2px",
                                     lineHeight: 1.25,
-                                    whiteSpace: "nowrap",
                                     overflow: "hidden",
                                     textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
                                   }}
                                 >
-                                  {t.subject}
+                                  {t.subject || "No Subject"}
                                 </div>
 
-                                {allowOrderSelection && t.order_items_summary && (
-                                  <div
-                                    style={{
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      gap: "3px",
-                                      fontSize: "9.5px",
-                                      fontWeight: 600,
-                                      color: accentColor,
-                                      background: `${accentColor}10`,
-                                      border: `1px solid ${accentColor}25`,
-                                      padding: "1px 5px",
-                                      borderRadius: badgeRadius,
-                                      marginBottom: "2px",
-                                      maxWidth: "100%",
-                                      overflow: "hidden",
-                                      textOverflow: "ellipsis",
-                                      whiteSpace: "nowrap",
-                                    }}
-                                  >
-                                    <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {/* Order & Category tag */}
+                                {t.order_items_summary && (
+                                  <div style={{ fontSize: "10px", color: textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    <span style={{ background: isLight ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.05)", padding: "1px 4px", borderRadius: "3px" }}>
                                       {t.order_items_summary.product_name}
                                     </span>
                                   </div>
                                 )}
 
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "9.5px", color: textMuted }}>
+                                {/* Category & Created date */}
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1px", fontSize: "9.5px", color: textMuted }}>
                                   <span style={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
-                                    {renderCategoryIcon(t.category, 10)}
-                                    <span>{t.category ? t.category.replace(/_/g, " ") : "General"}</span>
+                                    {renderCategoryIcon(t.category, 9)}
+                                    <span style={{ textTransform: "capitalize" }}>{t.category ? t.category.replace(/_/g, " ") : "General"}</span>
                                   </span>
                                   <span>{t.created_at ? formatTicketDate(t.created_at) : ""}</span>
                                 </div>
@@ -2311,14 +2343,19 @@ export default function CustomerSupportPage({
                         </div>
                       )}
 
-                      {ticketsPage < ticketsTotalPages && tickets.length > 0 && (
+                      {/* Load More Button for older tickets if pagination has remaining */}
+                      {ticketsPage < ticketsTotalPages && (
                         <button
                           type="button"
+                          onClick={() => {
+                            if (!ticketsLoading && !ticketsLoadingMore) {
+                              loadTickets(ticketsPage + 1, true);
+                            }
+                          }}
                           disabled={ticketsLoadingMore}
-                          onClick={() => loadTickets(ticketsPage + 1, true)}
                           style={{
-                            padding: "7px 12px",
-                            margin: "6px 4px 4px",
+                            margin: "6px 0",
+                            padding: "6px 10px",
                             borderRadius: buttonRadius,
                             border: `1px solid ${borderColor}`,
                             background: isLight ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)",
@@ -2354,18 +2391,17 @@ export default function CustomerSupportPage({
                     style={{
                       flex: "1 1 0%",
                       minWidth: 0,
+                      minHeight: 0,
+                      maxHeight: "100%",
                       display: "flex",
                       flexDirection: "column",
                       background: chatBg,
-                      borderRadius: isMobile ? 0 : chatRadius,
-                      border: isMobile ? "none" : `1px solid ${borderColor}`,
+                      borderRadius: isMobile ? 0 : `0 ${cardRadius} ${cardRadius} 0`,
+                      border: "none",
                       overflow: "hidden",
-                      height: "100%",
-                      minHeight: 0,
-                      maxHeight: "100%",
                     }}
                   >
-                    {selectedTicketId && ticketDetail ? (
+                    {selectedTicketId && activeTicket ? (
                       <>
                         {/* Clean, Modern Chat Header Bar (Organized & Uncluttered on Mobile & Desktop) */}
                         <div
@@ -2443,13 +2479,13 @@ export default function CustomerSupportPage({
                                   height: "8px",
                                   borderRadius: "50%",
                                   background:
-                                    ticketDetail.status === "closed"
+                                    activeTicket.status === "closed"
                                       ? "#94a3b8"
-                                      : ticketDetail.status === "resolved"
+                                      : activeTicket.status === "resolved"
                                         ? "#16a34a"
-                                        : ticketDetail.status === "in_progress"
+                                        : activeTicket.status === "in_progress"
                                           ? "#7c3aed"
-                                          : ticketDetail.status === "waiting_customer"
+                                          : activeTicket.status === "waiting_customer"
                                             ? "#d97706"
                                             : accentColor,
                                   border: `1.5px solid ${isLight ? "#ffffff" : "#1e293b"}`,
@@ -2469,7 +2505,7 @@ export default function CustomerSupportPage({
                                     flexShrink: 0,
                                   }}
                                 >
-                                  #{ticketDetail.ticket_number}
+                                  #{activeTicket.ticket_number}
                                 </span>
                                 <span
                                   style={{
@@ -2481,13 +2517,13 @@ export default function CustomerSupportPage({
                                     textOverflow: "ellipsis",
                                   }}
                                 >
-                                  {ticketDetail.subject}
+                                  {activeTicket.subject}
                                 </span>
                               </div>
 
                               {/* Subtitle with Real Ticket Status & Essential Info */}
                               <div style={{ fontSize: "10px", color: textMuted, marginTop: "1px", display: "flex", alignItems: "center", gap: "4px", overflow: "hidden", whiteSpace: "nowrap" }}>
-                                {ticketDetail.status === "closed" ? (
+                                {activeTicket.status === "closed" ? (
                                   <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", color: "#64748b", fontWeight: 600 }}>
                                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                       <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
@@ -2495,19 +2531,19 @@ export default function CustomerSupportPage({
                                     </svg>
                                     <span>Closed</span>
                                   </span>
-                                ) : ticketDetail.status === "resolved" ? (
+                                ) : activeTicket.status === "resolved" ? (
                                   <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", color: "#16a34a", fontWeight: 600 }}>
                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                                       <polyline points="20 6 9 17 4 12" />
                                     </svg>
                                     <span>Resolved</span>
                                   </span>
-                                ) : ticketDetail.status === "in_progress" ? (
+                                ) : activeTicket.status === "in_progress" ? (
                                   <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", color: "#7c3aed", fontWeight: 600 }}>
                                     <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#7c3aed" }} />
                                     <span>In Progress</span>
                                   </span>
-                                ) : ticketDetail.status === "waiting_customer" ? (
+                                ) : activeTicket.status === "waiting_customer" ? (
                                   <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", color: "#d97706", fontWeight: 600 }}>
                                     <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#d97706" }} />
                                     <span>Specialist Replied</span>
@@ -2518,12 +2554,12 @@ export default function CustomerSupportPage({
                                     <span>Open</span>
                                   </span>
                                 )}
-                                {ticketDetail.category && (
+                                {activeTicket.category && (
                                   <>
                                     <span>•</span>
                                     <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                      {renderCategoryIcon(ticketDetail.category, 10)}
-                                      <span>{ticketDetail.category.replace(/_/g, " ")}</span>
+                                      {renderCategoryIcon(activeTicket.category, 10)}
+                                      <span>{activeTicket.category.replace(/_/g, " ")}</span>
                                     </span>
                                   </>
                                 )}
@@ -2534,7 +2570,7 @@ export default function CustomerSupportPage({
                           {/* Actions on Right: End Chat Button */}
                           <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
                             {/* End Chat Button */}
-                            {ticketDetail.status !== "resolved" && ticketDetail.status !== "closed" && (
+                            {activeTicket.status !== "resolved" && activeTicket.status !== "closed" && (
                               <button
                                 type="button"
                                 onClick={handleCloseTicket}
@@ -2563,11 +2599,11 @@ export default function CustomerSupportPage({
                         </div>
 
                         {/* Linked Order Context Bar (if attached) */}
-                        {ticketDetail.order_items_summary && (
+                        {activeTicket.order_items_summary && (
                           <div
                             style={{
                               padding: "4px 12px",
-                              background: isLight ? "#f8fafc" : "#131c31",
+                              background: surfaceBg,
                               borderBottom: `1px solid ${borderColor}`,
                               display: "flex",
                               alignItems: "center",
@@ -2578,9 +2614,9 @@ export default function CustomerSupportPage({
                             }}
                           >
                             <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0, flex: 1 }}>
-                              {ticketDetail.order_items_summary.image_url ? (
+                              {activeTicket.order_items_summary.image_url ? (
                                 <img
-                                  src={ticketDetail.order_items_summary.image_url}
+                                  src={activeTicket.order_items_summary.image_url}
                                   alt=""
                                   style={{
                                     width: "22px",
@@ -2591,7 +2627,7 @@ export default function CustomerSupportPage({
                                     flexShrink: 0,
                                     cursor: "zoom-in",
                                   }}
-                                  onClick={() => setActiveZoomPhoto(ticketDetail.order_items_summary.image_url)}
+                                  onClick={() => setActiveZoomPhoto(activeTicket.order_items_summary.image_url)}
                                 />
                               ) : (
                                 <div style={{ width: "22px", height: "22px", borderRadius: "4px", background: surfaceBg, display: "grid", placeItems: "center", color: textMuted, flexShrink: 0 }}>
@@ -2604,23 +2640,23 @@ export default function CustomerSupportPage({
                               )}
                               <div style={{ minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                 <span style={{ fontWeight: 700, color: textColor }}>
-                                  {ticketDetail.order_items_summary.product_name}
+                                  {activeTicket.order_items_summary.product_name}
                                 </span>
-                                {ticketDetail.order_items_summary.variant_title && (
+                                {activeTicket.order_items_summary.variant_title && (
                                   <span style={{ color: textMuted, marginLeft: "4px" }}>
-                                    ({ticketDetail.order_items_summary.variant_title})
+                                    ({activeTicket.order_items_summary.variant_title})
                                   </span>
                                 )}
-                                {ticketDetail.order_items_summary.price ? (
+                                {activeTicket.order_items_summary.price ? (
                                   <span style={{ color: accentColor, fontWeight: 700, marginLeft: "6px" }}>
-                                    ₹{ticketDetail.order_items_summary.price}
+                                    ₹{activeTicket.order_items_summary.price}
                                   </span>
                                 ) : null}
                               </div>
                             </div>
-                            {ticketDetail.order_id && (
+                            {activeTicket.order_id && (
                               <span style={{ fontSize: "10px", color: textMuted, fontFamily: "monospace", flexShrink: 0 }}>
-                                Order #{ticketDetail.order_id.slice(0, 8)}
+                                Order #{activeTicket.order_id.slice(0, 8)}
                               </span>
                             )}
                           </div>
@@ -2634,9 +2670,11 @@ export default function CustomerSupportPage({
                           onMouseDown={handleDismissKeyboard}
                           className="custom-chat-scroll"
                           style={{
-                            flex: 1,
+                            flex: "1 1 0%",
                             minHeight: 0,
+                            maxHeight: "100%",
                             overflowY: "auto",
+                            overflowX: "hidden",
                             WebkitOverflowScrolling: "touch",
                             overscrollBehavior: "contain",
                             padding: isMobile ? "8px 8px" : "10px 16px",
@@ -2952,7 +2990,7 @@ export default function CustomerSupportPage({
                         )}
 
                         {/* Message Input Bar or Closed State */}
-                        {ticketDetail.status === "closed" && !isAdminPhoneView ? (
+                        {activeTicket.status === "closed" && !isAdminPhoneView ? (
                           <div
                             style={{
                               padding: "12px 18px",
@@ -2995,11 +3033,11 @@ export default function CustomerSupportPage({
                           </div>
                         ) : (
                           <>
-                            {ticketDetail.status === "closed" && isAdminPhoneView && (
+                            {activeTicket.status === "closed" && isAdminPhoneView && (
                               <div
                                 style={{
                                   padding: "6px 14px",
-                                  background: isLight ? "rgba(100,116,139,0.08)" : "rgba(100,116,139,0.18)",
+                                  background: surfaceBg,
                                   borderTop: `1px solid ${borderColor}`,
                                   display: "flex",
                                   justifyContent: "space-between",
@@ -3189,6 +3227,27 @@ export default function CustomerSupportPage({
                           </>
                         )}
                       </>
+                    ) : selectedTicketId && (chatLoading || ticketsLoading) ? (
+                      /* Loading State when Deep-linked or Ticket is being fetched */
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 20px", textAlign: "center" }}>
+                        <div
+                          style={{
+                            width: "36px",
+                            height: "36px",
+                            borderRadius: "50%",
+                            border: `3px solid ${borderColor}`,
+                            borderTopColor: accentColor,
+                            animation: "spin 0.8s linear infinite",
+                            marginBottom: "14px",
+                          }}
+                        />
+                        <div style={{ fontSize: "14.5px", fontWeight: 700, color: titleColor, marginBottom: "4px" }}>
+                          Loading Conversation...
+                        </div>
+                        <p style={{ fontSize: "12px", color: textMuted, margin: 0 }}>
+                          Fetching ticket details and messages
+                        </p>
+                      </div>
                     ) : (
                       /* Zero State: No Ticket Selected on Desktop */
                       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 20px", textAlign: "center" }}>

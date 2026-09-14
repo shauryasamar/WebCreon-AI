@@ -5657,8 +5657,10 @@ const AdminProducts = () => {
                 </span>
                 <span style={{ fontSize: "12px", color: "#64748b" }}>
                   {importFile
-                    ? `${(importFile.size / 1024).toFixed(1)} KB`
-                    : "Supports UTF-8 encoded .csv files up to 25MB (~50,000 products)"}
+                    ? importFile.size > 1024 * 1024
+                      ? `${(importFile.size / (1024 * 1024)).toFixed(2)} MB`
+                      : `${(importFile.size / 1024).toFixed(1)} KB`
+                    : "Supports UTF-8 encoded .csv files up to 100MB (~100,000+ products)"}
                 </span>
                 <input
                   id="csv-file-input"

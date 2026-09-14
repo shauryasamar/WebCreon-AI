@@ -319,6 +319,72 @@ def create_db_and_tables():
                 ALTER TABLE orders ADD COLUMN IF NOT EXISTS preorder_released_at TIMESTAMPTZ;
                 CREATE INDEX IF NOT EXISTS ix_orders_contains_preorder ON orders(contains_preorder);
                 CREATE INDEX IF NOT EXISTS ix_orders_preorder_released ON orders(preorder_released);
+
+                CREATE TABLE IF NOT EXISTS customer_notifications (
+                    id UUID PRIMARY KEY,
+                    site_id UUID NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                    customer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    event_type VARCHAR(80) NOT NULL,
+                    category VARCHAR(40) NOT NULL,
+                    title VARCHAR(255) NOT NULL,
+                    message TEXT NOT NULL,
+                    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+                    read_at TIMESTAMPTZ,
+                    related_entity_type VARCHAR(50),
+                    related_entity_id VARCHAR(100),
+                    action_url VARCHAR(500),
+                    metadata JSONB,
+                    idempotency_key VARCHAR(160) NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                CREATE INDEX IF NOT EXISTS ix_cust_notif_site_customer_created ON customer_notifications(site_id, customer_id, created_at DESC);
+                CREATE INDEX IF NOT EXISTS ix_cust_notif_site_customer_unread ON customer_notifications(site_id, customer_id, is_read);
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_cust_notif_site_idempotency ON customer_notifications(site_id, idempotency_key);
+
+                CREATE TABLE IF NOT EXISTS store_email_settings (
+                    id UUID PRIMARY KEY,
+                    site_id UUID NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                    sender_name VARCHAR(255),
+                    sender_email VARCHAR(255),
+                    reply_to_email VARCHAR(255),
+                    provider_type VARCHAR(50) NOT NULL DEFAULT 'smtp',
+                    smtp_host VARCHAR(255),
+                    smtp_port INTEGER NOT NULL DEFAULT 587,
+                    smtp_user VARCHAR(255),
+                    smtp_password_encrypted TEXT,
+                    smtp_use_tls BOOLEAN NOT NULL DEFAULT TRUE,
+                    smtp_use_ssl BOOLEAN NOT NULL DEFAULT FALSE,
+                    verification_status VARCHAR(40) NOT NULL DEFAULT 'not_configured',
+                    verification_token VARCHAR(128),
+                    verification_error TEXT,
+                    last_verified_at TIMESTAMPTZ,
+                    is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CONSTRAINT uq_store_email_settings_site UNIQUE (site_id)
+                );
+                CREATE INDEX IF NOT EXISTS ix_store_email_settings_site_id ON store_email_settings(site_id);
+
+                CREATE TABLE IF NOT EXISTS notification_delivery_logs (
+                    id UUID PRIMARY KEY,
+                    site_id UUID NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                    customer_id UUID REFERENCES users(id) ON DELETE SET NULL,
+                    channel VARCHAR(30) NOT NULL,
+                    recipient VARCHAR(255) NOT NULL,
+                    event_type VARCHAR(80) NOT NULL,
+                    subject VARCHAR(255),
+                    status VARCHAR(30) NOT NULL DEFAULT 'queued',
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    max_attempts INTEGER NOT NULL DEFAULT 3,
+                    last_error TEXT,
+                    locked_at TIMESTAMPTZ,
+                    idempotency_key VARCHAR(160) NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    sent_at TIMESTAMPTZ
+                );
+                CREATE INDEX IF NOT EXISTS ix_notif_log_site_created ON notification_delivery_logs(site_id, created_at DESC);
+                CREATE INDEX IF NOT EXISTS ix_notif_log_site_status ON notification_delivery_logs(site_id, status);
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_notif_log_site_idempotency ON notification_delivery_logs(site_id, idempotency_key);
             """))
             conn.commit()
     except Exception as e:

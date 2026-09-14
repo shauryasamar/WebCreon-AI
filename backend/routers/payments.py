@@ -61,6 +61,7 @@ from models import (
 from services.pci_security import DOMTamperReport, record_dom_tamper_event, apply_checkout_security_headers
 from services.payment_metrics import PAYMENT_METRICS, StructuredPaymentLogger, run_synthetic_health_check
 from services.notification_queue import enqueue_notification, get_dlq_entries, clear_dlq
+from services.notification_service import dispatch_customer_event
 from services.reconciliation_service import reconcile_stale_orders
 from routers.orders import (
     build_default_checkout_settings,
@@ -976,6 +977,51 @@ def finalize_order_fulfillment(
 
     session.commit()
     session.refresh(order)
+
+    # Dispatch payment success and order confirmation event (In-App & Email)
+    try:
+        site = session.get(Site, site_id)
+        customer = session.get(User, order.customer_id)
+        order_short = str(order.id)[:8].upper()
+        if site and customer:
+            order_items = session.exec(select(OrderItem).where(OrderItem.order_id == order.id)).all()
+            dispatch_customer_event(
+                session=session,
+                site_id=site.id,
+                customer_id=customer.id,
+                event_type="order.placed",
+                category="order",
+                title=f"Order #{order_short} Placed Successfully",
+                message=f"Payment of ₹{float(order.total):.2f} received. Your order #{order_short} is confirmed.",
+                related_entity_type="order",
+                related_entity_id=str(order.id),
+                action_url=f"/store/{site.slug}/orders?orderId={order.id}",
+                metadata={"orderId": str(order.id), "paymentId": payment_id, "total": float(order.total)},
+                idempotency_key=f"{site.id}:payment.success:{order.id}",
+                send_email=True,
+                email_recipient=customer.email,
+                email_template_key="order_placed_receipt",
+                email_template_vars={
+                    "order_number": order_short,
+                    "order_id": str(order.id),
+                    "total": f"{float(order.total):.2f}",
+                    "items": [
+                        {
+                            "product_name": it.product_name,
+                            "quantity": it.quantity,
+                            "line_total": f"{float(it.line_total):.2f}",
+                        }
+                        for it in order_items
+                    ],
+                    "order_url": f"/store/{site.slug}/orders?orderId={order.id}",
+                    "customer_name": customer.name or "Valued Customer",
+                    "store_name": site.name,
+                },
+            )
+            session.commit()
+    except Exception as notif_err:
+        logger.warning(f"Could not dispatch payment.success notification: {notif_err}")
+
     return True, None
 
 

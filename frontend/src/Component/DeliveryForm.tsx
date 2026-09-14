@@ -9,7 +9,7 @@ import {
   checkDeliverability,
   DeliverabilityResult,
 } from "../addressService";
-import { isColorDarkHex } from "../context/ThemeContext";
+import { isColorDarkHex, resolveThemeTokens } from "../context/ThemeContext";
 import { GoogleMapPicker, GeoPickerResult, geocodeAddressText } from "./GoogleMapPicker";
 import { useDeviceMode } from "../context/DeviceModeContext";
 
@@ -431,23 +431,20 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
   ]);
 
   const themeObject = typeof theme === "object" ? theme : undefined;
+  const themeTokens = resolveThemeTokens(themeObject);
   const isDark =
     theme === "dark" ||
-    themeObject?.mode === "dark" ||
-    (themeObject?.primary_bg ? isColorDarkHex(themeObject.primary_bg) : false) ||
-    (themeObject?.text_color ? !isColorDarkHex(themeObject.text_color) : false);
+    themeTokens.isDark;
 
   const resolvedAccent =
     accentColor ||
-    themeObject?.accent_color ||
     (themeObject as any)?.delivery_form_btn_bg ||
-    (isDark ? "#3b82f6" : "#2563eb");
+    themeTokens.accentColor;
 
   const resolvedText =
     text_color ||
     (themeObject as any)?.delivery_form_text ||
-    themeObject?.text_color ||
-    (isDark ? "#f8fafc" : "#0f172a");
+    themeTokens.textColor;
 
   const resolvedPadding = padding ?? (compact ? 16 : 18);
   const resolvedGap = gap ?? 16;
@@ -469,45 +466,47 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
     const finalContainerBg =
       background_color ||
       (themeObject as any)?.delivery_form_bg ||
-      (isDark ? "#0f172a" : "#ffffff");
+      (themeObject as any)?.checkout_card_bg ||
+      themeTokens.cardBg;
 
     const finalCardBg =
       card_color ||
       (themeObject as any)?.card_bg ||
-      (isDark ? "#1e293b" : "#ffffff");
+      themeTokens.panelBg ||
+      themeTokens.secondaryBg;
 
     const finalSelectedCardBg =
       selected_card_bg ||
-      (isDark ? "#1e3a8a" : "#eff6ff");
+      (isDark ? (themeTokens.secondaryBg || "#1e3a8a") : "#eff6ff");
 
     const finalBorder =
       border_color ||
       (themeObject as any)?.delivery_form_border ||
-      (isDark ? "#334155" : "#e2e8f0");
+      themeTokens.borderColor;
 
     const finalSoftBorder =
       soft_border_color ||
-      (isDark ? "#1e293b" : "#f1f5f9");
+      themeTokens.softBorderColor;
 
     const finalText = resolvedText;
 
     const finalTextMuted =
       muted_text_color ||
-      themeObject?.muted_text_color ||
-      (isDark ? "#94a3b8" : "#64748b");
+      (themeObject as any)?.delivery_form_muted_text ||
+      themeTokens.mutedTextColor;
 
     const finalTextSoft =
       soft_text_color ||
-      (isDark ? "#64748b" : "#94a3b8");
+      themeTokens.softTextColor;
 
     const finalPlaceholder =
       placeholder_color ||
-      (isDark ? "#64748b" : "#94a3b8");
+      themeTokens.softTextColor;
 
     const finalInputBg =
       input_color ||
       (themeObject as any)?.delivery_form_input_bg ||
-      (isDark ? "#0f172a" : "#ffffff");
+      themeTokens.inputBg;
 
     const finalButtonBg =
       button_bg_color ||
@@ -517,6 +516,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
     const finalButtonText =
       button_text_color ||
       (themeObject as any)?.delivery_form_btn_text ||
+      themeTokens.accentText ||
       "#ffffff";
 
     return {

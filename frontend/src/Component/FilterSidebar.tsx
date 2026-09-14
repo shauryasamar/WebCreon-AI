@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { isColorDarkHex } from "../context/ThemeContext";
 import { useDeviceMode } from "../context/DeviceModeContext";
+import { resolveMobileDrawerTheme } from "../utils/mobileDrawerTheme";
+import { useDrawerDragToClose } from "../utils/useDrawerDragToClose";
 
 type SortOption = {
   value: string;
@@ -63,6 +65,11 @@ export const FilterSidebar = ({
 
   const isMobile = deviceMode === "mobile" || innerIsMobile;
   const [sortOpen, setSortOpen] = useState(false);
+
+  const { dragHandleProps, drawerStyle, isDragging } = useDrawerDragToClose({
+    onClose: () => setSortOpen(false),
+    isOpen: sortOpen && isMobile,
+  });
   const sortRef = useRef<HTMLDivElement>(null);
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const [isInsidePreviewStage, setIsInsidePreviewStage] = useState(false);
@@ -118,6 +125,8 @@ export const FilterSidebar = ({
 
   const dropdownBg = (theme as any)?.filter_card_bg || (theme as any)?.dialog_bg || (theme as any)?.surface_bg || (theme as any)?.card_bg || resolvedPrimaryBg;
   const hoverBg = `${accentColor}1c`;
+
+  const mobileTheme = resolveMobileDrawerTheme(theme);
 
   const currentSort = SORT_OPTIONS.find((o) => o.value === sortBy) || SORT_OPTIONS[0];
 
@@ -317,7 +326,7 @@ export const FilterSidebar = ({
               position: isInsidePreviewStage ? "absolute" : "fixed",
               inset: 0,
               zIndex: 999999,
-              background: "rgba(0, 0, 0, 0.6)",
+              background: mobileTheme.overlayBg,
               backdropFilter: "blur(4px)",
               WebkitBackdropFilter: "blur(4px)",
               display: "flex",
@@ -333,25 +342,42 @@ export const FilterSidebar = ({
               onClick={(e) => e.stopPropagation()}
               style={{
                 width: "100%",
+                maxWidth: "540px",
+                margin: "0 auto",
                 maxHeight: "85%",
-                background: dropdownBg,
-                borderRadius: "24px 24px 0 0",
-                borderTop: `1px solid ${borderColor}`,
-                boxShadow: "0 -10px 40px rgba(0, 0, 0, 0.35)",
+                background: mobileTheme.drawerBg,
+                borderTopLeftRadius: "22px",
+                borderTopRightRadius: "22px",
+                border: `1px solid ${mobileTheme.drawerBorder}`,
+                borderBottom: "none",
+                boxShadow: mobileTheme.boxShadow,
                 display: "flex",
                 flexDirection: "column",
-                animation: "sortSheetSlideUp 240ms cubic-bezier(0.16, 1, 0.3, 1)",
+                animation: isDragging ? "none" : "sortSheetSlideUp 240ms cubic-bezier(0.16, 1, 0.3, 1)",
                 boxSizing: "border-box",
+                overflow: "hidden",
+                paddingBottom: "max(env(safe-area-inset-bottom, 12px), 12px)",
+                ...drawerStyle,
               }}
             >
-              {/* Grab Pill Handle */}
-              <div style={{ padding: "10px 0 4px", display: "flex", justifyContent: "center" }}>
+              {/* Grab Pill Handle (Draggable to close) */}
+              <div
+                {...dragHandleProps}
+                style={{
+                  padding: "10px 0 8px",
+                  display: "flex",
+                  justifyContent: "center",
+                  cursor: "grab",
+                  touchAction: "none",
+                  ...dragHandleProps.style,
+                }}
+              >
                 <div
                   style={{
-                    width: "36px",
-                    height: "4.5px",
+                    width: "38px",
+                    height: "4px",
                     borderRadius: "999px",
-                    background: isDark ? "rgba(255, 255, 255, 0.22)" : "rgba(0, 0, 0, 0.18)",
+                    background: mobileTheme.pillColor,
                   }}
                 />
               </div>
@@ -362,15 +388,16 @@ export const FilterSidebar = ({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  padding: "8px 18px 14px",
-                  borderBottom: `1px solid ${borderColor}`,
+                  padding: "14px 18px 12px",
+                  borderBottom: `1px solid ${mobileTheme.cardBorder}`,
+                  background: mobileTheme.isDark ? "rgba(255, 255, 255, 0.02)" : "transparent",
                 }}
               >
                 <div>
-                  <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 800, color: textPrimary, letterSpacing: "-0.01em" }}>
+                  <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: mobileTheme.textPrimary, letterSpacing: "-0.01em" }}>
                     Sort by
                   </h3>
-                  <p style={{ margin: "2px 0 0", fontSize: "12px", color: textSecondary }}>
+                  <p style={{ margin: "2px 0 0", fontSize: "12px", color: mobileTheme.textSecondary }}>
                     Choose your preferred product order
                   </p>
                 </div>
@@ -378,23 +405,23 @@ export const FilterSidebar = ({
                   type="button"
                   onClick={() => setSortOpen(false)}
                   style={{
-                    width: "32px",
-                    height: "32px",
-                    borderRadius: "999px",
-                    background: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.05)",
+                    width: "28px",
+                    height: "28px",
+                    borderRadius: "50%",
+                    background: mobileTheme.closeBtnBg,
                     border: "none",
-                    display: "grid",
-                    placeItems: "center",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                     cursor: "pointer",
-                    color: textSecondary,
+                    color: mobileTheme.textPrimary,
+                    fontSize: "14px",
+                    fontWeight: 700,
                     padding: 0,
                   }}
                   aria-label="Close sort menu"
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
+                  ✕
                 </button>
               </div>
 
@@ -424,8 +451,8 @@ export const FilterSidebar = ({
                         justifyContent: "space-between",
                         padding: "12px 14px",
                         borderRadius: "14px",
-                        border: `1.5px solid ${isActive ? accentColor : borderColor}`,
-                        background: isActive ? `${accentColor}18` : (isDark ? "rgba(255, 255, 255, 0.04)" : "rgba(0, 0, 0, 0.02)"),
+                        border: `1.5px solid ${isActive ? mobileTheme.accentColor : mobileTheme.cardBorder}`,
+                        background: isActive ? mobileTheme.itemActiveBg : mobileTheme.itemBg,
                         cursor: "pointer",
                         textAlign: "left",
                         transition: "all 140ms ease",
@@ -433,10 +460,10 @@ export const FilterSidebar = ({
                       }}
                     >
                       <div>
-                        <div style={{ fontSize: "14px", fontWeight: isActive ? 700 : 600, color: isActive ? accentColor : textPrimary }}>
+                        <div style={{ fontSize: "14px", fontWeight: isActive ? 700 : 600, color: isActive ? mobileTheme.accentColor : mobileTheme.textPrimary }}>
                           {opt.label}
                         </div>
-                        <div style={{ fontSize: "11.5px", color: textSecondary, marginTop: "2px" }}>
+                        <div style={{ fontSize: "11.5px", color: mobileTheme.textSecondary, marginTop: "2px" }}>
                           {opt.description}
                         </div>
                       </div>
@@ -447,12 +474,12 @@ export const FilterSidebar = ({
                           width: "20px",
                           height: "20px",
                           borderRadius: "999px",
-                          border: `2px solid ${isActive ? accentColor : textSecondary}`,
+                          border: `2px solid ${isActive ? mobileTheme.accentColor : mobileTheme.textSecondary}`,
                           display: "grid",
                           placeItems: "center",
                           flexShrink: 0,
                           marginLeft: "12px",
-                          background: isActive ? `${accentColor}20` : "transparent",
+                          background: isActive ? `${mobileTheme.accentColor}20` : "transparent",
                         }}
                       >
                         {isActive && (
@@ -461,7 +488,7 @@ export const FilterSidebar = ({
                               width: "8px",
                               height: "8px",
                               borderRadius: "999px",
-                              background: accentColor,
+                              background: mobileTheme.accentColor,
                             }}
                           />
                         )}

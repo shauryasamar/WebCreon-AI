@@ -41,6 +41,7 @@ from models import (
     UserAddress,
 )
 from services.shiprocket import ShiprocketClient
+from services.notification_service import dispatch_customer_event
 
 router = APIRouter(
     prefix="/orders",
@@ -2137,6 +2138,53 @@ def update_order_status(
             )
         except Exception as log_err:
             logger.warning(f"Failed to record activity log for order status update: {log_err}")
+
+        # Dispatch Customer Event (In-App & Email)
+        try:
+            site = session.get(Site, site_id)
+            customer = session.get(User, order.customer_id)
+            order_short = str(order.id)[:8].upper()
+            status_event_map = {
+                "confirmed": ("order.confirmed", "Order Confirmed", f"Your order #{order_short} has been confirmed by {site.name if site else 'the store'}.", "order_confirmed"),
+                "shipped": ("order.shipped", "Order Shipped", f"Your order #{order_short} has been shipped.", "order_shipped"),
+                "out_for_delivery": ("order.out_for_delivery", "Out for Delivery", f"Your order #{order_short} is out for delivery! OTP: {order.delivery_otp or ''}.", "order_out_for_delivery"),
+                "delivered": ("order.delivered", "Order Delivered", f"Your order #{order_short} has been delivered successfully.", "order_delivered"),
+                "cancelled": ("order.cancelled", "Order Cancelled", f"Your order #{order_short} has been cancelled." + (f" Reason: {payload.cancel_reason}" if payload.cancel_reason else ""), "order_cancelled"),
+            }
+            if payload.status in status_event_map and customer and site:
+                ev_type, ev_title, ev_msg, tpl_key = status_event_map[payload.status]
+                dispatch_customer_event(
+                    session=session,
+                    site_id=site.id,
+                    customer_id=customer.id,
+                    event_type=ev_type,
+                    category="delivery" if payload.status in ("out_for_delivery", "delivered") else "order",
+                    title=f"Order #{order_short} - {ev_title}",
+                    message=ev_msg,
+                    related_entity_type="order",
+                    related_entity_id=str(order.id),
+                    action_url=f"/store/{site.slug}/orders?orderId={order.id}",
+                    metadata={"orderId": str(order.id), "status": payload.status, "total": float(order.total)},
+                    idempotency_key=f"{site.id}:{ev_type}:{order.id}:{payload.status}",
+                    send_email=True,
+                    email_recipient=customer.email,
+                    email_template_key=tpl_key,
+                    email_template_vars={
+                        "order_number": order_short,
+                        "order_id": str(order.id),
+                        "total": f"{float(order.total):.2f}",
+                        "items": order.items,
+                        "courier_name": shipment.courier_name or payload.delivery_partner_name if shipment else payload.delivery_partner_name,
+                        "awb_number": shipment.awb_number if shipment else None,
+                        "delivery_otp": order.delivery_otp,
+                        "order_url": f"/store/{site.slug}/orders?orderId={order.id}",
+                        "customer_name": customer.name or "Valued Customer",
+                        "store_name": site.name,
+                    },
+                )
+                session.commit()
+        except Exception as notif_err:
+            logger.warning(f"Could not dispatch order status update customer notification: {notif_err}")
     except HTTPException:
         session.rollback()
         raise
@@ -2522,6 +2570,46 @@ def place_order(
 
         session.commit()
         session.refresh(order)
+
+        # Dispatch order.placed event (In-App notification & Order receipt email)
+        try:
+            order_short = str(order.id)[:8].upper()
+            dispatch_customer_event(
+                session=session,
+                site_id=site.id,
+                customer_id=customer.id,
+                event_type="order.placed",
+                category="order",
+                title=f"Order #{order_short} Placed",
+                message=f"Your order #{order_short} for ₹{float(order.total):.2f} has been placed successfully.",
+                related_entity_type="order",
+                related_entity_id=str(order.id),
+                action_url=f"/store/{site.slug}/orders?orderId={order.id}",
+                metadata={"orderId": str(order.id), "total": float(order.total), "paymentMethod": order.payment_method},
+                idempotency_key=f"{site.id}:order.placed:{order.id}",
+                send_email=True,
+                email_recipient=customer.email,
+                email_template_key="order_placed_receipt",
+                email_template_vars={
+                    "order_number": order_short,
+                    "order_id": str(order.id),
+                    "total": f"{float(order.total):.2f}",
+                    "items": [
+                        {
+                            "product_name": it["product_name"],
+                            "quantity": it["quantity"],
+                            "line_total": f"{float(it['line_total']):.2f}",
+                        }
+                        for it in order_line_items
+                    ],
+                    "order_url": f"/store/{site.slug}/orders?orderId={order.id}",
+                    "customer_name": customer.name or "Valued Customer",
+                    "store_name": site.name,
+                },
+            )
+            session.commit()
+        except Exception as notif_err:
+            logger.warning(f"Could not dispatch order.placed notification: {notif_err}")
 
         return {
             "message": "Order placed successfully",
@@ -3175,6 +3263,51 @@ def cancel_my_order(
         )
 
         session.commit()
+
+        # Dispatch order.cancelled notification (In-App + Email)
+        try:
+            site = session.get(Site, site_id)
+            order_short = str(order.id)[:8].upper()
+            refund_note = ""
+            if getattr(order, "payment_status", None) == "refunded":
+                refund_note = f" Your refund of \u20b9{float(order.total):.2f} has been initiated."
+            elif getattr(order, "payment_status", None) == "refund_pending":
+                refund_note = " Your refund is being processed and will reflect within 5-7 business days."
+            cancel_msg = f"Your order #{order_short} has been cancelled."
+            if payload.cancel_reason:
+                cancel_msg += f" Reason: {payload.cancel_reason}."
+            cancel_msg += refund_note
+            dispatch_customer_event(
+                session=session,
+                site_id=site_id,
+                customer_id=customer.id,
+                event_type="order.cancelled",
+                category="order",
+                title=f"Order #{order_short} Cancelled",
+                message=cancel_msg,
+                related_entity_type="order",
+                related_entity_id=str(order.id),
+                action_url=f"/store/{site.slug}/orders?orderId={order.id}" if site else None,
+                metadata={"orderId": str(order.id), "total": float(order.total), "cancel_reason": payload.cancel_reason},
+                idempotency_key=f"{site_id}:order.cancelled:{order.id}",
+                send_email=True,
+                email_recipient=customer.email,
+                email_template_key="order_cancelled",
+                email_template_vars={
+                    "order_number": order_short,
+                    "order_id": str(order.id),
+                    "total": f"{float(order.total):.2f}",
+                    "cancel_reason": payload.cancel_reason or "Customer requested cancellation",
+                    "refund_note": refund_note.strip(),
+                    "order_url": f"/store/{site.slug}/orders?orderId={order.id}" if site else "#",
+                    "customer_name": customer.name or "Valued Customer",
+                    "store_name": site.name if site else "WebCreon Store",
+                },
+            )
+            session.commit()
+        except Exception as notif_err:
+            logger.warning(f"Could not dispatch order.cancelled notification: {notif_err}")
+
         return {
             "message": "Order cancelled successfully",
             "order_id": str(order.id),

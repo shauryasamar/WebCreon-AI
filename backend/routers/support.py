@@ -59,6 +59,7 @@ from models import (
     utc_now,
 )
 from services.audit_service import AuditService, ActorType, SourceType, AuditCategory
+from services.notification_service import dispatch_customer_event
 
 logger = logging.getLogger(__name__)
 
@@ -921,6 +922,30 @@ def support_agent_reply_ticket(
         "message": msg_dict,
     })
 
+    if not payload.is_internal_note:
+        try:
+            site_obj = session.get(Site, ticket.site_id)
+            cust_user = session.get(User, ticket.customer_id)
+            if site_obj and cust_user:
+                dispatch_customer_event(
+                    session=session,
+                    site_id=site_obj.id,
+                    customer_id=cust_user.id,
+                    event_type="support.agent_replied",
+                    category="support",
+                    title=f"New Reply on Ticket #{ticket.ticket_number}",
+                    message=f"{agent.name}: {payload.message.strip()[:100]}",
+                    related_entity_type="support_ticket",
+                    related_entity_id=str(ticket.id),
+                    action_url=f"/store/{site_obj.slug}/support?ticketId={ticket.id}",
+                    metadata={"ticketId": str(ticket.id), "ticketNumber": ticket.ticket_number, "senderName": agent.name},
+                    idempotency_key=f"{site_obj.id}:support.agent_replied:{msg.id}",
+                    send_email=False,
+                )
+                session.commit()
+        except Exception as notif_err:
+            logger.warning(f"Failed to dispatch agent replied notification: {notif_err}")
+
     return {
         "success": True,
         "message": msg_dict,
@@ -1755,6 +1780,36 @@ def create_customer_ticket(
     )
     session.add(init_msg)
     session.commit()
+
+    try:
+        if site and customer_user:
+            dispatch_customer_event(
+                session=session,
+                site_id=site.id,
+                customer_id=customer_user.id,
+                event_type="support.ticket_created",
+                category="support",
+                title=f"Support Ticket #{ticket.ticket_number} Created",
+                message=f"Your ticket '{ticket.subject}' has been submitted. Our support team will respond shortly.",
+                related_entity_type="support_ticket",
+                related_entity_id=str(ticket.id),
+                action_url=f"/store/{site.slug}/support?ticketId={ticket.id}",
+                metadata={"ticketId": str(ticket.id), "ticketNumber": ticket.ticket_number},
+                idempotency_key=f"{site.id}:support.ticket_created:{ticket.id}",
+                send_email=True,
+                email_recipient=customer_user.email,
+                email_template_key="support_ticket_created",
+                email_template_vars={
+                    "ticket_number": ticket.ticket_number,
+                    "subject": ticket.subject,
+                    "customer_name": customer_user.name or "Valued Customer",
+                    "store_name": site.name,
+                    "ticket_url": f"/store/{site.slug}/support?ticketId={ticket.id}",
+                },
+            )
+            session.commit()
+    except Exception as notif_err:
+        logger.warning(f"Failed to dispatch ticket created notification: {notif_err}")
 
     return {
         "success": True,
@@ -2629,6 +2684,30 @@ def admin_reply_ticket(
         "message": msg_dict,
     })
 
+    if not payload.is_internal_note:
+        try:
+            site_obj = session.get(Site, site_id)
+            cust_user = session.get(User, ticket.customer_id)
+            if site_obj and cust_user:
+                dispatch_customer_event(
+                    session=session,
+                    site_id=site_obj.id,
+                    customer_id=cust_user.id,
+                    event_type="support.agent_replied",
+                    category="support",
+                    title=f"New Reply on Ticket #{ticket.ticket_number}",
+                    message=f"{sender_name}: {payload.message.strip()[:100]}",
+                    related_entity_type="support_ticket",
+                    related_entity_id=str(ticket.id),
+                    action_url=f"/store/{site_obj.slug}/support?ticketId={ticket.id}",
+                    metadata={"ticketId": str(ticket.id), "ticketNumber": ticket.ticket_number, "senderName": sender_name},
+                    idempotency_key=f"{site_obj.id}:support.agent_replied:{msg.id}",
+                    send_email=False,
+                )
+                session.commit()
+        except Exception as notif_err:
+            logger.warning(f"Failed to dispatch agent replied notification: {notif_err}")
+
     return {
         "success": True,
         "message": msg_dict,
@@ -3170,6 +3249,37 @@ def execute_ticket_resolution_action(
         "message": msg_dict,
         "ticket_status": ticket.status,
     })
+
+    try:
+        site_obj = session.get(Site, site_id)
+        cust_user = session.get(User, ticket.customer_id)
+        if site_obj and cust_user:
+            dispatch_customer_event(
+                session=session,
+                site_id=site_obj.id,
+                customer_id=cust_user.id,
+                event_type="support.ticket_resolved",
+                category="support",
+                title=f"Support Ticket #{ticket.ticket_number} Updated",
+                message=f"Your ticket #{ticket.ticket_number} has an update: {action_msg[:120]}",
+                related_entity_type="support_ticket",
+                related_entity_id=str(ticket.id),
+                action_url=f"/store/{site_obj.slug}/support?ticketId={ticket.id}",
+                metadata={"ticketId": str(ticket.id), "ticketNumber": ticket.ticket_number, "actionType": payload.action_type},
+                idempotency_key=f"{site_obj.id}:support.ticket_resolved:{ticket.id}:{ticket.status}:{len(ticket.subject or '')}",
+                send_email=True,
+                email_recipient=cust_user.email,
+                email_template_key="support_ticket_resolved",
+                email_template_vars={
+                    "ticket_number": ticket.ticket_number,
+                    "customer_name": cust_user.name or "Valued Customer",
+                    "store_name": site_obj.name,
+                    "ticket_url": f"/store/{site_obj.slug}/support?ticketId={ticket.id}",
+                },
+            )
+            session.commit()
+    except Exception as notif_err:
+        logger.warning(f"Failed to dispatch ticket resolved notification: {notif_err}")
 
     return {
         "success": True,

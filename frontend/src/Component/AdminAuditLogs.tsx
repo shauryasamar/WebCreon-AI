@@ -59,6 +59,7 @@ const CATEGORIES = [
   { id: "discounts", label: "Discounts & Promo" },
   { id: "support", label: "Support & CRM" },
   { id: "delivery", label: "Delivery & Shipping" },
+  { id: "notifications", label: "Notifications & Emails" },
   { id: "website", label: "Home Sections & Pages" },
   { id: "settings", label: "Checkout Charges & Policies" },
   { id: "financial", label: "Earnings & Ledger / Payouts" },
@@ -83,6 +84,13 @@ const DATE_RANGES = [
   { id: "30d", label: "Last 30 Days" },
   { id: "90d", label: "Last 90 Days" },
   { id: "custom", label: "Custom Range" },
+];
+
+const STATUS_OPTIONS = [
+  { id: "all", label: "All Statuses" },
+  { id: "success", label: "Success / Non-Errors" },
+  { id: "failed", label: "Errors / Failures" },
+  { id: "warning", label: "Warnings" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -300,6 +308,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
   const [selectedUser, setSelectedUser] = useState("all");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedSource, setSelectedSource] = useState("all");
+  const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedSite, setSelectedSite] = useState<string>(effectiveSiteId || "all");
   const [dateRange, setDateRange] = useState("30d");
   const [startDate, setStartDate] = useState("");
@@ -372,6 +381,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
       if (searchQuery.trim()) params.set("q", searchQuery.trim());
       if (selectedCategory !== "all") params.set("category", selectedCategory);
       if (selectedSource !== "all") params.set("source", selectedSource);
+      if (selectedStatus !== "all") params.set("status", selectedStatus);
       if (selectedUser !== "all") {
         params.set("user", selectedUser);
         params.set("user_id", selectedUser);
@@ -448,7 +458,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
     }
     setPage(1);
     fetchActivity(1, pageSize);
-  }, [selectedUser, selectedCategory, selectedSource, selectedSite, dateRange, startDate, endDate]);
+  }, [selectedUser, selectedCategory, selectedSource, selectedStatus, selectedSite, dateRange, startDate, endDate]);
 
   // Debounced search
   useEffect(() => {
@@ -464,6 +474,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
     setSelectedUser("all");
     setSelectedCategory("all");
     setSelectedSource("all");
+    setSelectedStatus("all");
     if (!effectiveSiteId) setSelectedSite("all");
     setDateRange("30d");
     setStartDate("");
@@ -477,22 +488,24 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
       selectedUser !== "all" ||
       selectedCategory !== "all" ||
       selectedSource !== "all" ||
+      selectedStatus !== "all" ||
       (!effectiveSiteId && selectedSite !== "all") ||
       dateRange !== "30d" ||
       Boolean(startDate) ||
       Boolean(endDate)
     );
-  }, [searchQuery, selectedUser, selectedCategory, selectedSource, selectedSite, effectiveSiteId, dateRange, startDate, endDate]);
+  }, [searchQuery, selectedUser, selectedCategory, selectedSource, selectedStatus, selectedSite, effectiveSiteId, dateRange, startDate, endDate]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (selectedCategory !== "all") count++;
     if (selectedSource !== "all") count++;
+    if (selectedStatus !== "all") count++;
     if (selectedUser !== "all") count++;
     if (!effectiveSiteId && selectedSite !== "all") count++;
     if (dateRange !== "30d" || Boolean(startDate) || Boolean(endDate)) count++;
     return count;
-  }, [selectedCategory, selectedSource, selectedUser, selectedSite, effectiveSiteId, dateRange, startDate, endDate]);
+  }, [selectedCategory, selectedSource, selectedStatus, selectedUser, selectedSite, effectiveSiteId, dateRange, startDate, endDate]);
 
 
   const handleExportCsv = () => {
@@ -500,12 +513,22 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
     if (searchQuery.trim()) params.set("q", searchQuery.trim());
     if (selectedCategory !== "all") params.set("category", selectedCategory);
     if (selectedSource !== "all") params.set("source", selectedSource);
-    if (selectedUser !== "all") params.set("user_id", selectedUser);
+    if (selectedStatus !== "all") params.set("status", selectedStatus);
+    if (selectedUser !== "all") {
+      params.set("user", selectedUser);
+      params.set("user_id", selectedUser);
+    }
     if (selectedSite && selectedSite !== "all") params.set("site_id", selectedSite);
     params.set("date_range", dateRange);
     if (dateRange === "custom") {
-      if (startDate) params.set("start_date", startDate);
-      if (endDate) params.set("end_date", endDate);
+      if (startDate) {
+        params.set("start_date", startDate);
+        params.set("from_date", startDate);
+      }
+      if (endDate) {
+        params.set("end_date", endDate);
+        params.set("to_date", endDate);
+      }
     }
 
     const targetSite = (selectedSite && selectedSite !== "all")
@@ -524,7 +547,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
       : `${API_BASE_URL}/admin/activity/export-csv?${params.toString()}`;
 
     window.open(endpoint, "_blank");
-    setToast({ message: "Exporting activity log to CSV...", type: "info" });
+    setToast({ message: "Exporting compressed activity log (.zip)...", type: "info" });
   };
 
   if (!canView) {
@@ -786,6 +809,32 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
 
                   <div>
                     <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#475569", marginBottom: "6px" }}>
+                      Status / Outcome
+                    </label>
+                    <select
+                      value={selectedStatus}
+                      onChange={(e) => setSelectedStatus(e.target.value)}
+                      style={{
+                        width: "100%",
+                        height: "34px",
+                        padding: "0 8px",
+                        borderRadius: "6px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "13px",
+                        background: "#ffffff",
+                        outline: "none",
+                      }}
+                    >
+                      {STATUS_OPTIONS.map((st) => (
+                        <option key={st.id} value={st.id}>
+                          {st.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#475569", marginBottom: "6px" }}>
                       User / Actor
                     </label>
                     <select
@@ -1009,6 +1058,22 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
               </span>
             )}
 
+            {selectedStatus !== "all" && (
+              <span style={chipStyle}>
+                <span>
+                  Status: {STATUS_OPTIONS.find((s) => s.id === selectedStatus)?.label || selectedStatus}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedStatus("all")}
+                  style={chipCloseStyle}
+                  title="Remove status filter"
+                >
+                  <XMarkIcon />
+                </button>
+              </span>
+            )}
+
             {selectedUser !== "all" && (
               <span style={chipStyle}>
                 <span>
@@ -1173,8 +1238,8 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
               type="button"
               onClick={handleExportCsv}
               disabled={loading || totalCount === 0}
-              title="Export activity logs to CSV"
-              aria-label="Export activity logs to CSV"
+              title="Export activity logs (ZIP Archive)"
+              aria-label="Export activity logs (ZIP Archive)"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -1346,7 +1411,12 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                         width: "6px",
                         height: "6px",
                         borderRadius: "50%",
-                        background: log.status === "failure" ? "#ef4444" : "#22c55e",
+                        background:
+                          log.status === "failure" || log.status === "failed" || log.status === "error"
+                            ? "#ef4444"
+                            : log.status === "warning"
+                            ? "#f59e0b"
+                            : "#22c55e",
                         flexShrink: 0,
                       }}
                       title={`Status: ${log.status}`}
@@ -1543,6 +1613,35 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                           {log.description || log.summary || summaryText}
                         </div>
                       </div>
+
+                      {/* Prominent Error Details Banner (if error / failed) */}
+                      {(log.status === "failure" || log.status === "failed" || log.status === "error" || Boolean(log.details?.error) || Boolean(log.details?.error_message) || Boolean(log.details?.last_error) || Boolean(log.details?.failure_reason)) && (
+                        <div
+                          style={{
+                            padding: "8px 12px",
+                            background: "#fef2f2",
+                            border: "1px solid #fecaca",
+                            borderRadius: "6px",
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: "8px",
+                            color: "#991b1b",
+                            fontSize: "12.5px",
+                          }}
+                        >
+                          <div style={{ fontWeight: 700, flexShrink: 0 }}>Error Details:</div>
+                          <div style={{ wordBreak: "break-word", flex: 1, fontWeight: 500 }}>
+                            {log.details?.error ||
+                              log.details?.error_message ||
+                              log.details?.last_error ||
+                              log.details?.failure_reason ||
+                              log.details?.reason ||
+                              log.details?.detail ||
+                              log.details?.message ||
+                              (log.status !== "success" ? log.description : "Operation encountered a delivery/execution failure.")}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Compact Context Details Strip */}
                       <div

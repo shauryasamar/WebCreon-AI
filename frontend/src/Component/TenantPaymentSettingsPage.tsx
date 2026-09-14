@@ -350,6 +350,78 @@ export default function TenantPaymentSettingsPage() {
 
   return (
     <div style={{ width: "100%", maxWidth: "100%", color: "#0f172a", boxSizing: "border-box" }}>
+      {/* 1. Top Navbar Header */}
+      <div
+        style={{
+          background: "#ffffff",
+          border: "1px solid #e2e8f0",
+          borderRadius: "10px",
+          padding: "10px 14px",
+          marginBottom: "16px",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "10px",
+        }}
+      >
+        <div
+          style={{
+            display: "inline-flex",
+            background: "#f1f5f9",
+            padding: "3px",
+            borderRadius: "8px",
+            border: "1px solid #e2e8f0",
+          }}
+        >
+          <button
+            type="button"
+            style={{
+              borderRadius: "6px",
+              padding: "6px 16px",
+              border: "none",
+              background: "#ffffff",
+              color: "#0f172a",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
+              fontSize: "13px",
+              fontWeight: 700,
+              cursor: "default",
+            }}
+          >
+            Payout Settings
+          </button>
+        </div>
+
+        {/* Right Action Area: Save Settings */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <button
+            type="button"
+            onClick={() => handleSave()}
+            disabled={!canEdit || saving}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "7px 16px",
+              borderRadius: "6px",
+              border: "none",
+              background: !canEdit ? "#94a3b8" : (hasUnsavedChanges ? "#2563eb" : "#0f172a"),
+              color: "#ffffff",
+              fontWeight: 700,
+              fontSize: "13px",
+              cursor: !canEdit ? "not-allowed" : saving ? "wait" : "pointer",
+              boxShadow: hasUnsavedChanges && canEdit ? "0 1px 3px rgba(37,99,235,0.3)" : "none",
+              opacity: saving ? 0.7 : 1,
+              whiteSpace: "nowrap",
+              transition: "background 0.15s ease",
+            }}
+          >
+            {saving ? "Saving..." : "Save Settings"}
+          </button>
+        </div>
+      </div>
+
       {/* Floating Top Glass Toast Notifications */}
       {successMessage && (
         <GlassToast
@@ -368,112 +440,50 @@ export default function TenantPaymentSettingsPage() {
         />
       )}
 
-      {/* Top Header Controls Bar */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: "12px",
-          marginBottom: "16px",
-          flexWrap: "wrap",
-        }}
-      >
-        {/* Left: Title & Status */}
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-          <h1 style={{ margin: 0, fontSize: "20px", fontWeight: 700, color: "#0f172a" }}>
-            Payout Settings
-          </h1>
-          {settings.is_configured ? (
-            <span
-              style={{
-                fontSize: "11px",
-                fontWeight: 700,
-                padding: "2px 8px",
-                borderRadius: "10px",
-                background: "#f0fdf4",
-                color: "#15803d",
-                border: "1px solid #bbf7d0",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "4px",
-              }}
-            >
-              ✓ Active Route: {settings.bank_name || "Bank"} (•••{settings.account_number_last4})
-            </span>
-          ) : (
-            <span
-              style={{
-                fontSize: "11px",
-                fontWeight: 700,
-                padding: "2px 8px",
-                borderRadius: "10px",
-                background: "#fffbeb",
-                color: "#b45309",
-                border: "1px solid #fde68a",
-              }}
-            >
-              Not Configured
-            </span>
-          )}
-        </div>
-
-        {/* Right: Actions */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <Link
-            to={`/builder/${siteId}/admin/earnings`}
-            style={{
-              padding: "7px 14px",
-              borderRadius: "6px",
-              border: "1px solid #e2e8f0",
-              background: "#ffffff",
-              color: "#475569",
-              fontSize: "13px",
-              fontWeight: 600,
-              textDecoration: "none",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-              transition: "all 0.15s ease",
-            }}
-          >
-            View Ledger →
-          </Link>
-          <button
-            type="button"
-            onClick={() => handleSave()}
-            disabled={!canEdit || saving}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              borderRadius: "6px",
-              border: "none",
-              background: !canEdit ? "#94a3b8" : saving ? "#94a3b8" : hasUnsavedChanges ? "#2563eb" : "#0f172a",
-              color: "#ffffff",
-              padding: "8px 18px",
-              fontSize: "13px",
-              fontWeight: 700,
-              cursor: !canEdit ? "not-allowed" : saving ? "wait" : "pointer",
-              transition: "background 0.15s ease",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {saving ? "Saving..." : "Save Settings"}
-          </button>
-        </div>
-      </div>
-
       {/* Main Settings Form Container */}
       <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
         {/* Section 1: Primary Bank Details */}
         <div style={cardStyle}>
           <div style={cardHeaderStyle}>
-            <div style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
-              Bank Account Details
-            </div>
-            <div style={{ fontSize: "12px", color: "#64748b" }}>
-              Primary deposit destination for customer orders
+            <div>
+              <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#0f172a", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <span>Bank Account Details</span>
+                {settings.is_configured ? (
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 700,
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      background: "#f0fdf4",
+                      color: "#15803d",
+                      border: "1px solid #bbf7d0",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    ✓ Active: {settings.bank_name || "Bank"} (•••{settings.account_number_last4})
+                  </span>
+                ) : (
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 700,
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      background: "#f8fafc",
+                      color: "#64748b",
+                      border: "1px solid #e2e8f0",
+                    }}
+                  >
+                    Not Configured
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                Primary deposit destination for customer orders
+              </div>
             </div>
           </div>
 

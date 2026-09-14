@@ -32,6 +32,7 @@ import CheckoutChargesPage from "./Component/CheckoutChargesPage";
 import TenantPaymentSettingsPage from "./Component/TenantPaymentSettingsPage";
 import TenantEarningsPage from "./Component/TenantEarningsPage";
 import DeliverySettingsPage from "./Component/DeliverySettingsPage";
+import AdminNotificationsSettings from "./Component/AdminNotificationsSettings";
 import AdminSupportDesk from "./Component/AdminSupportDesk";
 import AdminProfileSettings from "./Component/AdminProfileSettings";
 import AdminPages from "./Component/AdminPages";
@@ -1520,7 +1521,9 @@ function BuilderPageContent() {
   const activeAdminNavKey: AdminNavKey | null = (!isStoreRoute && location.pathname.startsWith(`${builderBase}/admin`))
     ? location.pathname.includes("/payment-settings")
       ? "payment-settings"
-      : location.pathname.includes("/delivery")
+      : location.pathname.includes("/notifications")
+        ? "notifications"
+        : location.pathname.includes("/delivery")
         ? "delivery"
         : location.pathname.includes("/earnings")
           ? "earnings"
@@ -2958,6 +2961,16 @@ function BuilderPageContent() {
                             <CheckoutChargesPage />
                           ) : (
                             <AccessDeniedView requiredPermission="checkout_charges:view" />
+                          )
+                        }
+                      />
+                      <Route
+                        path="notifications"
+                        element={
+                          hasPermission("notifications:view") ? (
+                            <AdminNotificationsSettings siteId={resolvedSiteId || siteId || ""} />
+                          ) : (
+                            <AccessDeniedView requiredPermission="notifications:view" />
                           )
                         }
                       />

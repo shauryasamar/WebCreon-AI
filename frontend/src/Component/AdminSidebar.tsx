@@ -58,6 +58,10 @@ const AdminSidebar = () => {
       label: "Payout Settings",
       to: `/builder/${siteId}/admin/payment-settings`,
     },
+    {
+      label: "Notifications & Email",
+      to: `/builder/${siteId}/admin/notifications`,
+    },
   ];
 
   return (

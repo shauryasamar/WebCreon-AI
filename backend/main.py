@@ -45,7 +45,7 @@ from models import (
     SupportAgent, SupportTicket, SupportTicketMessage,
     StorePage, Coupon, CouponUsage, SiteDefinitionHistory,
 )
-from routers import analytics, auth, cart, categories, checkout, checkout_settings, collections, coupons, orders, pages, payments, products, returns, support, users_roles, audit_logs, domains
+from routers import analytics, auth, cart, categories, checkout, checkout_settings, collections, coupons, orders, pages, payments, products, returns, support, users_roles, audit_logs, domains, notifications
 from routers import delivery
 
 
@@ -399,6 +399,8 @@ app.include_router(users_roles.router, prefix="/api")
 app.include_router(audit_logs.router)
 app.include_router(audit_logs.router, prefix="/api")
 app.include_router(domains.router)
+app.include_router(notifications.router)
+app.include_router(notifications.router, prefix="/api")
 
 
 # ---------------------------------------------------------------------------
