@@ -127,6 +127,14 @@ export type CartItem = Product & {
   is_preorder?: boolean;
   preorder_release_date?: string | null;
   preorder_message?: string | null;
+  is_available?: boolean;
+  is_out_of_stock?: boolean;
+  is_low_stock?: boolean;
+  is_quantity_exceeded?: boolean;
+  available_stock?: number | null;
+  availability_status?: string;
+  availability_message?: string | null;
+  is_blocking?: boolean;
 };
 
 type ProductId = string | number;
@@ -145,6 +153,8 @@ type CartContextType = {
   cartItems: CartItem[];
   cartCount: number;
   cartTotal: number;
+  hasUnavailableItems: boolean;
+  unavailableCount: number;
   isCartLoading: boolean;
   isProductsLoading?: boolean;
   appliedCoupon: ValidatedCoupon | null;
@@ -160,6 +170,7 @@ type CartContextType = {
     quantity: number,
     variantValue?: string | null
   ) => Promise<void>;
+  removeUnavailableItems: () => Promise<void>;
   clearCart: () => Promise<void>;
   refreshCart: () => Promise<void>;
   defaultReturnWindowDays?: number;
@@ -193,6 +204,14 @@ type BackendCartItem = {
   hsn_code?: string | null;
   tax_rate_override?: number | null;
   line_total: number;
+  is_available?: boolean;
+  is_out_of_stock?: boolean;
+  is_low_stock?: boolean;
+  is_quantity_exceeded?: boolean;
+  available_stock?: number | null;
+  availability_status?: string;
+  availability_message?: string | null;
+  is_blocking?: boolean;
 };
 
 type BackendCartResponse = {
@@ -202,6 +221,9 @@ type BackendCartResponse = {
   items: BackendCartItem[];
   subtotal: number;
   total_items: number;
+  has_unavailable_items?: boolean;
+  unavailable_items_count?: number;
+  blocking_summary?: string | null;
 };
 
 const getSelectedVariantValue = (product: Product) =>
@@ -223,6 +245,14 @@ const mapBackendCartItemToCartItem = (item: BackendCartItem): CartItem => ({
   hsn_code: item.hsn_code ?? null,
   tax_rate_override: item.tax_rate_override ?? null,
   quantity: item.quantity,
+  is_available: item.is_available ?? true,
+  is_out_of_stock: item.is_out_of_stock ?? false,
+  is_low_stock: item.is_low_stock ?? false,
+  is_quantity_exceeded: item.is_quantity_exceeded ?? false,
+  available_stock: item.available_stock ?? null,
+  availability_status: item.availability_status ?? "in_stock",
+  availability_message: item.availability_message ?? null,
+  is_blocking: item.is_blocking ?? false,
 });
 
 const buildGuestStorageKey = (siteId?: string) =>
@@ -704,6 +734,47 @@ export function CartProvider({
     }
   }, [applyCartResponse, clearAppliedCoupon, resolvedSiteId]);
 
+  const removeUnavailableItems = useCallback(async () => {
+    if (!resolvedSiteId) return;
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/cart/${resolvedSiteId}/unavailable-items`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: getCustomerAuthHeaders(resolvedSiteId),
+      });
+
+      if (res.status === 401 || res.status === 403) {
+        const nextItems = readGuestCart(resolvedSiteId).filter((item) => !item.is_blocking);
+        writeGuestCart(resolvedSiteId, nextItems);
+        setCartItems(nextItems);
+        setCartItemIds({});
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error("Failed to remove unavailable cart items");
+      }
+
+      const data: BackendCartResponse = await res.json();
+      applyCartResponse(data);
+    } catch (error) {
+      console.error("Failed to remove unavailable cart items", error);
+      const nextItems = cartItems.filter((item) => !item.is_blocking);
+      setCartItems(nextItems);
+    }
+  }, [applyCartResponse, cartItems, resolvedSiteId]);
+
+  const hasUnavailableItems = useMemo(
+    () => cartItems.some((item) => item.is_blocking || item.is_out_of_stock || item.is_available === false || item.is_quantity_exceeded),
+    [cartItems]
+  );
+
+  const unavailableCount = useMemo(
+    () => cartItems.filter((item) => item.is_blocking || item.is_out_of_stock || item.is_available === false || item.is_quantity_exceeded).length,
+    [cartItems]
+  );
+
   const cartCount = useMemo(
     () => cartItems.reduce((sum, item) => sum + item.quantity, 0),
     [cartItems]
@@ -720,6 +791,8 @@ export function CartProvider({
       cartItems,
       cartCount,
       cartTotal,
+      hasUnavailableItems,
+      unavailableCount,
       isCartLoading,
       isProductsLoading,
       appliedCoupon,
@@ -728,6 +801,7 @@ export function CartProvider({
       addToCart,
       removeFromCart,
       updateQuantity,
+      removeUnavailableItems,
       clearCart,
       refreshCart,
       defaultReturnWindowDays,
@@ -737,6 +811,8 @@ export function CartProvider({
       cartItems,
       cartCount,
       cartTotal,
+      hasUnavailableItems,
+      unavailableCount,
       isCartLoading,
       isProductsLoading,
       appliedCoupon,
@@ -745,6 +821,7 @@ export function CartProvider({
       addToCart,
       removeFromCart,
       updateQuantity,
+      removeUnavailableItems,
       clearCart,
       refreshCart,
       defaultReturnWindowDays,

@@ -854,23 +854,25 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                   </div>
                 );
               }
+              const stockQty = Number(product.stock ?? 0);
+              const isLowStock = product.normalizedInStock && stockQty > 0 && stockQty <= 5;
               return show_stock_badge ? (
                 <span
                   style={{
                     fontSize: isMobile ? "9px" : "11px",
                     fontWeight: 700,
-                    color: product.normalizedInStock ? "#16a34a" : "#dc2626",
-                    background: product.normalizedInStock ? "rgba(22,163,74,0.06)" : "rgba(220,38,38,0.06)",
+                    color: isLowStock ? "#d97706" : product.normalizedInStock ? "#16a34a" : "#dc2626",
+                    background: isLowStock ? "rgba(217,119,6,0.08)" : product.normalizedInStock ? "rgba(22,163,74,0.06)" : "rgba(220,38,38,0.06)",
                     padding: isMobile ? "2px 6px" : "3px 10px",
                     borderRadius: "999px",
-                    border: product.normalizedInStock ? "1px solid #16a34a" : "1px solid #dc2626",
+                    border: isLowStock ? "1px solid rgba(217,119,6,0.3)" : product.normalizedInStock ? "1px solid #16a34a" : "1px solid #dc2626",
                     display: "inline-block",
                     textAlign: "center",
                     margin: centered ? (isMobile ? "4px auto 0" : "8px auto 0") : undefined,
                     flexShrink: 0,
                   }}
                 >
-                  {product.normalizedInStock ? "In stock" : "Out of stock"}
+                  {isLowStock ? `Only ${stockQty} left in stock` : product.normalizedInStock ? "In stock" : "Out of stock"}
                 </span>
               ) : null;
             };

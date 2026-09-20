@@ -430,6 +430,9 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     products,
     updateQuantity,
     removeFromCart,
+    removeUnavailableItems,
+    hasUnavailableItems,
+    unavailableCount,
     clearCart,
     appliedCoupon: cartContextCoupon,
     setAppliedCoupon: setCartContextCoupon,
@@ -1257,7 +1260,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
         </div>
       )}
 
-      {cartItems.length > 0 ? (
+      {cartItems.length > 0 && !hasUnavailableItems ? (
         <Link
           to={checkoutPath}
           style={{
@@ -1292,9 +1295,10 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
             fontSize: "14px",
             fontWeight: 700,
             cursor: "not-allowed",
+            opacity: 0.85,
           }}
         >
-          {checkoutLabel}
+          {hasUnavailableItems ? "Remove unavailable items to proceed" : checkoutLabel}
         </button>
       )}
     </div>
@@ -1394,73 +1398,128 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                 />
                 {shouldShowItems ? (
                   <div style={{ display: "grid", gap: "12px" }}>
-                    {cartItems.map((item, index) => (
-                      <div
-                        key={`${item.id}-${item.selectedVariantValue || "default"}-${index}`}
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: summaryItemGrid,
-                          gap: "12px",
-                          alignItems: "center",
-                          padding: "12px",
-                          borderRadius: `${innerRadius}px`,
-                          background: palette.cardBg,
-                          border: `1px solid ${palette.cardBorder}`,
-                          boxShadow: palette.cardShadow,
-                        }}
-                      >
+                    {cartItems.map((item, index) => {
+                      const isItemUnavailable = Boolean(item.is_blocking || item.is_out_of_stock || item.is_available === false || item.is_quantity_exceeded);
+                      const overlayLabel = item.is_available === false
+                        ? "Unavailable"
+                        : item.is_out_of_stock
+                        ? "Out of Stock"
+                        : item.is_quantity_exceeded
+                        ? `Only ${item.available_stock} Left`
+                        : null;
+
+                      return (
                         <div
+                          key={`${item.id}-${item.selectedVariantValue || "default"}-${index}`}
                           style={{
-                            width: "56px",
-                            height: "56px",
-                            borderRadius: "12px",
-                            overflow: "hidden",
-                            background: palette.mutedBg,
+                            display: "grid",
+                            gridTemplateColumns: summaryItemGrid,
+                            gap: "12px",
+                            alignItems: "center",
+                            padding: "12px",
+                            borderRadius: `${innerRadius}px`,
+                            background: isItemUnavailable
+                              ? (isColorDarkHex(palette.cardBg) ? "rgba(239,68,68,0.05)" : "#fffbfb")
+                              : palette.cardBg,
+                            border: isItemUnavailable
+                              ? "1px solid rgba(220,38,38,0.25)"
+                              : `1px solid ${palette.cardBorder}`,
+                            boxShadow: palette.cardShadow,
+                            transition: "all 0.2s ease",
                           }}
                         >
-                          <img
-                            src={getThumbnailUrl(item.image, 140, 140)}
-                            alt={item.name}
-                            loading="eager"
-                            decoding="async"
+                          <div
                             style={{
-                              width: "100%",
-                              height: "100%",
-                              objectFit: "cover",
-                              display: "block",
-                            }}
-                          />
-                        </div>
-
-                        <div style={{ minWidth: 0 }}>
-                          <p
-                            style={{
-                              margin: "0 0 4px",
-                              fontSize: "14px",
-                              fontWeight: 700,
-                              color: palette.text,
-                              lineHeight: 1.3,
+                              position: "relative",
+                              width: "56px",
+                              height: "56px",
+                              borderRadius: "12px",
+                              overflow: "hidden",
+                              background: palette.mutedBg,
+                              flexShrink: 0,
                             }}
                           >
-                            {item.name}
-                          </p>
+                            <img
+                              src={getThumbnailUrl(item.image, 140, 140)}
+                              alt={item.name}
+                              loading="eager"
+                              decoding="async"
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "cover",
+                                display: "block",
+                                filter: isItemUnavailable ? "grayscale(0.55) blur(1.5px)" : "none",
+                                opacity: isItemUnavailable ? 0.65 : 1,
+                                transform: isItemUnavailable ? "scale(1.06)" : "none",
+                                transition: "all 0.25s ease",
+                              }}
+                            />
+                            {overlayLabel && (
+                              <div
+                                style={{
+                                  position: "absolute",
+                                  inset: 0,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  background: "rgba(15,23,42,0.48)",
+                                  backdropFilter: "blur(2.5px)",
+                                  padding: "2px",
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontSize: "8.5px",
+                                    fontWeight: 800,
+                                    letterSpacing: "0.03em",
+                                    textTransform: "uppercase",
+                                    color: "#ffffff",
+                                    background: "rgba(0,0,0,0.72)",
+                                    border: "1px solid rgba(255,255,255,0.25)",
+                                    borderRadius: "999px",
+                                    padding: "2px 5px",
+                                    textAlign: "center",
+                                    lineHeight: 1.1,
+                                    boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+                                  }}
+                                >
+                                  {overlayLabel}
+                                </span>
+                              </div>
+                            )}
+                          </div>
 
-                          {item.selectedVariantValue ? (
+                          <div style={{ minWidth: 0 }}>
                             <p
                               style={{
                                 margin: "0 0 4px",
-                                fontSize: "12px",
-                                color: palette.textMuted,
-                                lineHeight: 1.4,
+                                fontSize: "14px",
+                                fontWeight: 700,
+                                color: palette.text,
+                                lineHeight: 1.3,
                                 wordBreak: "break-word",
                               }}
                             >
-                              {item.selectedVariantLabel || "Option"}:{" "}
-                              {item.selectedVariantValue}
+                              {item.name}
                             </p>
-                          ) : null}
 
-                          {item.is_preorder && (
+                            {item.selectedVariantValue ? (
+                              <p
+                                style={{
+                                  margin: "0 0 4px",
+                                  fontSize: "12px",
+                                  color: palette.textMuted,
+                                  lineHeight: 1.4,
+                                  wordBreak: "break-word",
+                                }}
+                              >
+                                {item.selectedVariantLabel || "Option"}:{" "}
+                                {item.selectedVariantValue}
+                              </p>
+                            ) : null}
+
+                          {item.is_preorder ? (
                             <div
                               style={{
                                 display: "inline-flex",
@@ -1483,7 +1542,75 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                                 </span>
                               )}
                             </div>
-                          )}
+                          ) : item.is_available === false ? (
+                            <div
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                fontSize: "10.5px",
+                                fontWeight: 700,
+                                color: "#64748b",
+                                background: "rgba(100,116,139,0.1)",
+                                border: "1px solid rgba(100,116,139,0.25)",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                margin: "2px 0 4px",
+                              }}
+                            >
+                              Unavailable
+                            </div>
+                          ) : item.is_out_of_stock ? (
+                            <div
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                fontSize: "10.5px",
+                                fontWeight: 700,
+                                color: "#dc2626",
+                                background: "rgba(220,38,38,0.08)",
+                                border: "1px solid rgba(220,38,38,0.25)",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                margin: "2px 0 4px",
+                              }}
+                            >
+                              Out of Stock
+                            </div>
+                          ) : item.is_quantity_exceeded ? (
+                            <div
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                fontSize: "10.5px",
+                                fontWeight: 700,
+                                color: "#d97706",
+                                background: "rgba(217,119,6,0.1)",
+                                border: "1px solid rgba(217,119,6,0.25)",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                margin: "2px 0 4px",
+                              }}
+                            >
+                              Only {item.available_stock} left
+                            </div>
+                          ) : item.is_low_stock ? (
+                            <div
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                fontSize: "10.5px",
+                                fontWeight: 700,
+                                color: "#d97706",
+                                background: "rgba(217,119,6,0.08)",
+                                border: "1px solid rgba(217,119,6,0.2)",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                margin: "2px 0 4px",
+                              }}
+                            >
+                              Only {item.available_stock} left
+                            </div>
+                          ) : null}
 
                           <p
                             style={{
@@ -1509,7 +1636,8 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                           ₹{item.price * item.quantity}
                         </p>
                       </div>
-                    ))}
+                    );
+                  })}
                   </div>
                 ) : null}
 
@@ -1720,46 +1848,99 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                   accentColor={resolvedAccentColor}
                   palette={palette}
                 />
-                {cartItems.map((item, index) => (
-                  <div
-                    key={`${item.id}-${item.selectedVariantValue || "default"}-${index}`}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: isMobile
-                        ? "72px minmax(0, 1fr)"
-                        : "92px minmax(0, 1fr)",
-                      gap: isMobile ? "12px" : "14px",
-                      alignItems: "start",
-                      padding: isMobile ? "12px" : "14px",
-                      borderRadius: `${innerRadius}px`,
-                      background: palette.cardBg,
-                      border: `1px solid ${palette.cardBorder}`,
-                      boxShadow: palette.cardShadow,
-                    }}
-                  >
+                {cartItems.map((item, index) => {
+                  const isItemUnavailable = Boolean(item.is_blocking || item.is_out_of_stock || item.is_available === false || item.is_quantity_exceeded);
+                  const overlayLabel = item.is_available === false
+                    ? "Unavailable"
+                    : item.is_out_of_stock
+                    ? "Out of Stock"
+                    : item.is_quantity_exceeded
+                    ? `Only ${item.available_stock} Left`
+                    : null;
+
+                  return (
                     <div
+                      key={`${item.id}-${item.selectedVariantValue || "default"}-${index}`}
                       style={{
-                        width: isMobile ? "72px" : "92px",
-                        height: isMobile ? "72px" : "92px",
-                        borderRadius: isMobile ? "14px" : "16px",
-                        overflow: "hidden",
-                        background: palette.mutedBg,
-                        flexShrink: 0,
+                        display: "grid",
+                        gridTemplateColumns: isMobile
+                          ? "72px minmax(0, 1fr)"
+                          : "92px minmax(0, 1fr)",
+                        gap: isMobile ? "12px" : "14px",
+                        alignItems: "start",
+                        padding: isMobile ? "12px" : "14px",
+                        borderRadius: `${innerRadius}px`,
+                        background: isItemUnavailable
+                          ? (isColorDarkHex(palette.cardBg) ? "rgba(239,68,68,0.05)" : "#fffbfb")
+                          : palette.cardBg,
+                        border: isItemUnavailable
+                          ? "1px solid rgba(220,38,38,0.25)"
+                          : `1px solid ${palette.cardBorder}`,
+                        boxShadow: palette.cardShadow,
+                        transition: "all 0.2s ease",
                       }}
                     >
-                      <img
-                        src={getThumbnailUrl(item.image, 180, 180)}
-                        alt={item.name}
-                        loading="eager"
-                        decoding="async"
+                      <div
                         style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                          display: "block",
+                          position: "relative",
+                          width: isMobile ? "72px" : "92px",
+                          height: isMobile ? "72px" : "92px",
+                          borderRadius: isMobile ? "14px" : "16px",
+                          overflow: "hidden",
+                          background: palette.mutedBg,
+                          flexShrink: 0,
                         }}
-                      />
-                    </div>
+                      >
+                        <img
+                          src={getThumbnailUrl(item.image, 180, 180)}
+                          alt={item.name}
+                          loading="eager"
+                          decoding="async"
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            display: "block",
+                            filter: isItemUnavailable ? "grayscale(0.55) blur(1.5px)" : "none",
+                            opacity: isItemUnavailable ? 0.65 : 1,
+                            transform: isItemUnavailable ? "scale(1.06)" : "none",
+                            transition: "all 0.25s ease",
+                          }}
+                        />
+                        {overlayLabel && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              inset: 0,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              background: "rgba(15,23,42,0.48)",
+                              backdropFilter: "blur(2.5px)",
+                              padding: "4px",
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: isMobile ? "9px" : "10px",
+                                fontWeight: 800,
+                                letterSpacing: "0.03em",
+                                textTransform: "uppercase",
+                                color: "#ffffff",
+                                background: "rgba(0,0,0,0.72)",
+                                border: "1px solid rgba(255,255,255,0.25)",
+                                borderRadius: "999px",
+                                padding: isMobile ? "2px 6px" : "3px 8px",
+                                textAlign: "center",
+                                lineHeight: 1.1,
+                                boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+                              }}
+                            >
+                              {overlayLabel}
+                            </span>
+                          </div>
+                        )}
+                      </div>
 
                     <div style={{ minWidth: 0 }}>
                       <div
@@ -1799,7 +1980,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                             </p>
                           ) : null}
 
-                          {item.is_preorder && (
+                          {item.is_preorder ? (
                             <div
                               style={{
                                 display: "inline-flex",
@@ -1822,7 +2003,75 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                                 </span>
                               )}
                             </div>
-                          )}
+                          ) : item.is_available === false ? (
+                            <div
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                fontSize: "11px",
+                                fontWeight: 700,
+                                color: "#64748b",
+                                background: "rgba(100,116,139,0.1)",
+                                border: "1px solid rgba(100,116,139,0.25)",
+                                padding: "2px 8px",
+                                borderRadius: "6px",
+                                margin: "2px 0 6px",
+                              }}
+                            >
+                              Currently Unavailable
+                            </div>
+                          ) : item.is_out_of_stock ? (
+                            <div
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                fontSize: "11px",
+                                fontWeight: 700,
+                                color: "#dc2626",
+                                background: "rgba(220,38,38,0.08)",
+                                border: "1px solid rgba(220,38,38,0.25)",
+                                padding: "2px 8px",
+                                borderRadius: "6px",
+                                margin: "2px 0 6px",
+                              }}
+                            >
+                              Out of Stock
+                            </div>
+                          ) : item.is_quantity_exceeded ? (
+                            <div
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                fontSize: "11px",
+                                fontWeight: 700,
+                                color: "#d97706",
+                                background: "rgba(217,119,6,0.1)",
+                                border: "1px solid rgba(217,119,6,0.25)",
+                                padding: "2px 8px",
+                                borderRadius: "6px",
+                                margin: "2px 0 6px",
+                              }}
+                            >
+                              Only {item.available_stock} left in stock
+                            </div>
+                          ) : item.is_low_stock ? (
+                            <div
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                fontSize: "11px",
+                                fontWeight: 700,
+                                color: "#d97706",
+                                background: "rgba(217,119,6,0.08)",
+                                border: "1px solid rgba(217,119,6,0.2)",
+                                padding: "2px 8px",
+                                borderRadius: "6px",
+                                margin: "2px 0 6px",
+                              }}
+                            >
+                              Only {item.available_stock} left
+                            </div>
+                          ) : null}
 
                           <p
                             style={{
@@ -1960,7 +2209,8 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                       </div>
                     </div>
                   </div>
-                ))}
+                );
+              })}
               </div>
 
               <div

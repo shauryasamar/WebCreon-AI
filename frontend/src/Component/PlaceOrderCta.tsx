@@ -121,7 +121,7 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const { openRazorpay } = useRazorpay();
-  const { clearCart } = useCart();
+  const { clearCart, refreshCart } = useCart();
   const paymentHandledRef = React.useRef(false);
 
   const cleanupRazorpayDom = () => {
@@ -495,6 +495,9 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
       setIsSubmitting(false);
       const errTxt = error instanceof Error ? error.message : "Failed to initiate payment";
       setErrorMessage(errTxt);
+      try {
+        await refreshCart();
+      } catch {}
     }
   };
 

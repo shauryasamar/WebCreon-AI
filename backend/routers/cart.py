@@ -73,8 +73,65 @@ def get_cart_item_or_404(
     return item
 
 
+from datetime import datetime, timezone
+
 def serialize_cart_item(item: CartItem, product: Optional[Product] = None) -> dict[str, Any]:
     rel_date = getattr(item, "preorder_release_date", None)
+    
+    is_available = True
+    is_out_of_stock = False
+    is_low_stock = False
+    is_quantity_exceeded = False
+    available_stock = 0
+    availability_status = "in_stock"
+    availability_message = None
+    is_blocking = False
+
+    now_dt = datetime.now(timezone.utc)
+    is_preorder = bool(getattr(item, "is_preorder", False)) and (
+        rel_date is None or rel_date > now_dt
+    )
+
+    if product is None:
+        is_available = False
+        is_blocking = True
+        availability_status = "discontinued"
+        availability_message = "This item has been removed from the store."
+    elif not getattr(product, "is_active", True):
+        is_available = False
+        is_blocking = True
+        availability_status = "draft"
+        availability_message = "This item is currently unavailable."
+    else:
+        try:
+            _, _, _, variant_stock = extract_variant_details(
+                product,
+                item.selected_variant_value,
+                raise_if_out_of_stock=False,
+            )
+            available_stock = int(variant_stock if variant_stock is not None else (product.stock or 0))
+        except Exception:
+            available_stock = int(product.stock or 0)
+
+        if not is_preorder:
+            if not getattr(product, "in_stock", True) or available_stock <= 0:
+                is_out_of_stock = True
+                is_blocking = True
+                availability_status = "out_of_stock"
+                availability_message = "Out of stock"
+            elif item.quantity > available_stock:
+                is_quantity_exceeded = True
+                is_blocking = True
+                availability_status = "insufficient_stock"
+                availability_message = f"Only {available_stock} left in stock (you have {item.quantity} in cart)"
+            elif 1 <= available_stock <= 5:
+                is_low_stock = True
+                availability_status = "low_stock"
+                availability_message = f"Only {available_stock} left in stock"
+        else:
+            availability_status = "preorder"
+            availability_message = "Pre-Order"
+
     return {
         "id": item.id,
         "product_id": item.product_id,
@@ -88,9 +145,17 @@ def serialize_cart_item(item: CartItem, product: Optional[Product] = None) -> di
         "product_slug": item.product_slug,
         "hsn_code": (product.hsn_code if product else getattr(item, "hsn_code", None)),
         "tax_rate_override": decimal_to_float(product.tax_rate_override) if (product and product.tax_rate_override is not None) else None,
-        "is_preorder": bool(getattr(item, "is_preorder", False)),
+        "is_preorder": is_preorder,
         "preorder_release_date": rel_date.isoformat() if rel_date else None,
         "line_total": float(item.unit_price * item.quantity),
+        "is_available": is_available,
+        "is_out_of_stock": is_out_of_stock,
+        "is_low_stock": is_low_stock,
+        "is_quantity_exceeded": is_quantity_exceeded,
+        "available_stock": available_stock,
+        "availability_status": availability_status,
+        "availability_message": availability_message,
+        "is_blocking": is_blocking,
     }
 
 
@@ -104,13 +169,25 @@ def build_cart_response(cart: Cart, items: list[CartItem], session: Optional[Ses
         products = session.exec(select(Product).where(Product.id.in_(prod_ids))).all()
         prod_map = {p.id: p for p in products}
 
+    serialized_items = [serialize_cart_item(item, prod_map.get(item.product_id)) for item in items]
+    has_unavailable_items = any(it.get("is_blocking", False) for it in serialized_items)
+    unavailable_count = sum(1 for it in serialized_items if it.get("is_blocking", False))
+    blocking_summary = (
+        f"{unavailable_count} item{'s' if unavailable_count > 1 else ''} in your cart {'is' if unavailable_count == 1 else 'are'} currently unavailable or out of stock."
+        if has_unavailable_items
+        else None
+    )
+
     return {
         "id": cart.id,
         "site_id": cart.site_id,
         "user_id": cart.user_id,
-        "items": [serialize_cart_item(item, prod_map.get(item.product_id)) for item in items],
+        "items": serialized_items,
         "subtotal": float(subtotal),
         "total_items": total_items,
+        "has_unavailable_items": has_unavailable_items,
+        "unavailable_items_count": unavailable_count,
+        "blocking_summary": blocking_summary,
     }
 
 
@@ -185,6 +262,16 @@ class CartItemResponse(BaseModel):
     preorder_release_date: Optional[str] = None
     line_total: float
 
+    # Live stock & availability metadata
+    is_available: bool = True
+    is_out_of_stock: bool = False
+    is_low_stock: bool = False
+    is_quantity_exceeded: bool = False
+    available_stock: Optional[int] = None
+    availability_status: str = "in_stock"
+    availability_message: Optional[str] = None
+    is_blocking: bool = False
+
 
 class CartResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -195,6 +282,11 @@ class CartResponse(BaseModel):
     items: list[CartItemResponse]
     subtotal: float
     total_items: int
+
+    # Live cart health status
+    has_unavailable_items: bool = False
+    unavailable_items_count: int = 0
+    blocking_summary: Optional[str] = None
 
 
 @router.get("/{site_id}", response_model=CartResponse)
@@ -423,3 +515,42 @@ def clear_cart(
     session.refresh(cart)
 
     return build_cart_response(cart, [])
+
+
+@router.delete("/{site_id}/unavailable-items", response_model=CartResponse)
+def remove_unavailable_cart_items(
+    site_id: str,
+    user=Depends(authenticate_customer),
+    session: Session = Depends(get_session),
+):
+    site = get_site_or_404(session, site_id)
+
+    if str(site.id) != str(user["siteId"]) and str(site.slug) != str(user["siteId"]):
+        raise HTTPException(status_code=403, detail="Customer token does not match requested site")
+
+    customer = get_user_for_site_or_404(session, site.id, UUID(user["userId"]))
+    cart = get_or_create_cart(session, site.id, customer.id)
+
+    items = session.exec(
+        select(CartItem).where(CartItem.cart_id == cart.id)
+    ).all()
+
+    if items:
+        prod_ids = [it.product_id for it in items]
+        products = session.exec(select(Product).where(Product.id.in_(prod_ids))).all()
+        prod_map = {p.id: p for p in products}
+
+        for item in items:
+            p = prod_map.get(item.product_id)
+            serialized = serialize_cart_item(item, p)
+            if serialized.get("is_blocking", False):
+                session.delete(item)
+
+        session.commit()
+        session.refresh(cart)
+
+    remaining_items = session.exec(
+        select(CartItem).where(CartItem.cart_id == cart.id)
+    ).all()
+
+    return build_cart_response(cart, remaining_items, session=session)

@@ -1857,6 +1857,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
       remainingQty > 0 &&
       remainingQty <= 5
     ? `Only ${remainingQty} left in ${selectedOption}`
+    : typeof remainingQty === "number" && remainingQty > 0 && remainingQty <= 5
+    ? `Only ${remainingQty} left in stock`
     : "";
 
   const maxAllowedQty =

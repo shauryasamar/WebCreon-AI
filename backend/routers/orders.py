@@ -2650,6 +2650,7 @@ def place_order(
     # Sort cart items deterministically by product_id to prevent database deadlocks under concurrent checkouts
     sorted_cart_items = sorted(cart_items, key=lambda item: str(item.product_id))
 
+    validation_errors: list[str] = []
     try:
         for cart_item in sorted_cart_items:
             product = session.exec(
@@ -2659,33 +2660,39 @@ def place_order(
             ).first()
 
             if not product:
-                raise HTTPException(status_code=404, detail=f"Product not found for cart item {cart_item.id}")
+                validation_errors.append(f"Product '{cart_item.product_name}' was removed from the store")
+                continue
+
+            if not getattr(product, "is_active", True):
+                validation_errors.append(f"'{product.name}' is currently unavailable")
+                continue
 
             now_dt = utc_now()
             is_prod_preorder = bool(getattr(product, "is_preorder", False)) and (
                 getattr(product, "preorder_release_date", None) is None or getattr(product, "preorder_release_date", None) > now_dt
             )
             if not is_prod_preorder and (not product.in_stock or product.stock <= 0):
-                raise HTTPException(status_code=409, detail=f"{product.name} is out of stock")
+                validation_errors.append(f"'{product.name}' is out of stock")
+                continue
 
-            unit_price, compare_price, selected_variant_label, available_stock = extract_variant_details(
-                product,
-                cart_item.selected_variant_value,
-                raise_if_out_of_stock=not is_prod_preorder,
-            )
+            try:
+                unit_price, compare_price, selected_variant_label, available_stock = extract_variant_details(
+                    product,
+                    cart_item.selected_variant_value,
+                    raise_if_out_of_stock=not is_prod_preorder,
+                )
+            except Exception as e:
+                validation_errors.append(f"'{product.name}' variant is unavailable: {e}")
+                continue
 
             if is_prod_preorder:
                 if product.preorder_limit is not None and product.preorder_limit > 0 and cart_item.quantity > product.preorder_limit:
-                    raise HTTPException(
-                        status_code=409,
-                        detail=f"Requested quantity exceeds pre-order limit for {product.name}",
-                    )
+                    validation_errors.append(f"Requested quantity for '{product.name}' exceeds pre-order limit ({product.preorder_limit})")
+                    continue
             else:
                 if cart_item.quantity > available_stock:
-                    raise HTTPException(
-                        status_code=409,
-                        detail=f"Requested quantity exceeds available stock for {product.name}",
-                    )
+                    validation_errors.append(f"Requested quantity for '{product.name}' ({cart_item.quantity}) exceeds available stock ({available_stock})")
+                    continue
 
             product_image = None
             if product.images and len(product.images) > 0:
@@ -2711,6 +2718,12 @@ def place_order(
                 }
             )
             product_map[product.id] = product
+
+        if validation_errors:
+            raise HTTPException(
+                status_code=409,
+                detail="; ".join(validation_errors),
+            )
 
         pricing_snapshot = evaluate_pricing(
             cart_items=order_line_items,

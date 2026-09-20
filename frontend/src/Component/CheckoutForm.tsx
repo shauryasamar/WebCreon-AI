@@ -35,7 +35,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
   theme = "dark",
   accentColor = "#2563eb",
 }) => {
-  const { cartItems, cartTotal, clearCart } = useCart();
+  const { cartItems, cartTotal, clearCart, hasUnavailableItems } = useCart();
 
   const [formData, setFormData] = useState({
     fullName: "",
@@ -392,29 +392,29 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
 
                     <button
                       type="submit"
-                      disabled={cartItems.length === 0}
+                      disabled={cartItems.length === 0 || hasUnavailableItems}
                       style={{
                         minHeight: "48px",
                         padding: "12px 18px",
                         borderRadius: "14px",
                         border: "none",
                         background:
-                          cartItems.length > 0 ? accentColor : palette.disabledBg,
+                          cartItems.length > 0 && !hasUnavailableItems ? accentColor : palette.disabledBg,
                         color:
-                          cartItems.length > 0
+                          cartItems.length > 0 && !hasUnavailableItems
                             ? "#ffffff"
                             : palette.disabledText,
                         fontWeight: 700,
                         fontSize: "14px",
                         cursor:
-                          cartItems.length > 0 ? "pointer" : "not-allowed",
+                          cartItems.length > 0 && !hasUnavailableItems ? "pointer" : "not-allowed",
                         boxShadow:
-                          cartItems.length > 0
+                          cartItems.length > 0 && !hasUnavailableItems
                             ? "0 14px 28px rgba(0,0,0,0.18)"
                             : "none",
                       }}
                     >
-                      {place_order_label}
+                      {hasUnavailableItems ? "Remove unavailable items to proceed" : place_order_label}
                     </button>
                   </div>
                 </form>
@@ -463,75 +463,124 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
                     {empty_label}
                   </p>
                 ) : (
-                  cartItems.map((item) => (
-                    <div
-                      key={item.id}
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "56px minmax(0, 1fr) auto",
-                        gap: "12px",
-                        alignItems: "center",
-                        padding: "10px 0",
-                        borderBottom: `1px solid ${palette.softBorder}`,
-                      }}
-                    >
+                  cartItems.map((item) => {
+                    const isItemUnavailable = Boolean(item.is_blocking || item.is_out_of_stock || item.is_available === false || item.is_quantity_exceeded);
+                    const overlayLabel = item.is_available === false
+                      ? "Unavailable"
+                      : item.is_out_of_stock
+                      ? "Out of Stock"
+                      : item.is_quantity_exceeded
+                      ? `Only ${item.available_stock} Left`
+                      : null;
+
+                    return (
                       <div
+                        key={item.id}
                         style={{
-                          width: "56px",
-                          height: "56px",
-                          borderRadius: "14px",
-                          overflow: "hidden",
-                          background: palette.cardAltBg,
+                          display: "grid",
+                          gridTemplateColumns: "56px minmax(0, 1fr) auto",
+                          gap: "12px",
+                          alignItems: "center",
+                          padding: "10px 0",
+                          borderBottom: `1px solid ${palette.softBorder}`,
                         }}
                       >
-                        <img
-                          src={getThumbnailUrl(item.image, 140, 140)}
-                          alt={item.name}
-                          loading="eager"
-                          decoding="async"
+                        <div
                           style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                            display: "block",
+                            position: "relative",
+                            width: "56px",
+                            height: "56px",
+                            borderRadius: "14px",
+                            overflow: "hidden",
+                            background: palette.cardAltBg,
                           }}
-                        />
-                      </div>
+                        >
+                          <img
+                            src={getThumbnailUrl(item.image, 140, 140)}
+                            alt={item.name}
+                            loading="eager"
+                            decoding="async"
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                              display: "block",
+                              filter: isItemUnavailable ? "grayscale(0.55) blur(1.5px)" : "none",
+                              opacity: isItemUnavailable ? 0.65 : 1,
+                              transform: isItemUnavailable ? "scale(1.06)" : "none",
+                              transition: "all 0.25s ease",
+                            }}
+                          />
+                          {overlayLabel && (
+                            <div
+                              style={{
+                                position: "absolute",
+                                inset: 0,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                background: "rgba(15,23,42,0.48)",
+                                backdropFilter: "blur(2.5px)",
+                                padding: "2px",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontSize: "8.5px",
+                                  fontWeight: 800,
+                                  letterSpacing: "0.03em",
+                                  textTransform: "uppercase",
+                                  color: "#ffffff",
+                                  background: "rgba(0,0,0,0.72)",
+                                  border: "1px solid rgba(255,255,255,0.25)",
+                                  borderRadius: "999px",
+                                  padding: "2px 5px",
+                                  textAlign: "center",
+                                  lineHeight: 1.1,
+                                  boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+                                }}
+                              >
+                                {overlayLabel}
+                              </span>
+                            </div>
+                          )}
+                        </div>
 
-                      <div style={{ minWidth: 0 }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div
+                            style={{
+                              fontWeight: 700,
+                              fontSize: "14px",
+                              color: palette.text,
+                              lineHeight: 1.3,
+                            }}
+                          >
+                            {item.name}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: "13px",
+                              color: palette.textMuted,
+                              marginTop: "4px",
+                            }}
+                          >
+                            Qty {item.quantity}
+                          </div>
+                        </div>
+
                         <div
                           style={{
                             fontWeight: 700,
                             fontSize: "14px",
                             color: palette.text,
-                            lineHeight: 1.3,
+                            whiteSpace: "nowrap",
                           }}
                         >
-                          {item.name}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: "13px",
-                            color: palette.textMuted,
-                            marginTop: "4px",
-                          }}
-                        >
-                          Qty {item.quantity}
+                          ₹{item.price * item.quantity}
                         </div>
                       </div>
-
-                      <div
-                        style={{
-                          fontWeight: 700,
-                          fontSize: "14px",
-                          color: palette.text,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        ₹{item.price * item.quantity}
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
 

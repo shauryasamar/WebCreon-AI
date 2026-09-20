@@ -603,29 +603,46 @@ def create_payment_order(
 
     order_line_items: list[dict[str, Any]] = []
     product_map: dict[UUID, Product] = {}
+    validation_errors: list[str] = []
+    # Sort cart items deterministically by product_id to prevent database deadlocks under concurrent checkouts
+    sorted_cart_items = sorted(cart_items, key=lambda item: str(item.product_id))
 
-    for cart_item in cart_items:
+    for cart_item in sorted_cart_items:
         product = session.exec(
             select(Product)
             .where(Product.id == cart_item.product_id, Product.site_id == site_id)
+            .with_for_update()
         ).first()
 
         if not product:
-            raise HTTPException(status_code=404, detail=f"Product not found for cart item {cart_item.id}")
+            validation_errors.append(f"Product '{cart_item.product_name}' was removed from the store")
+            continue
 
-        if not product.in_stock or product.stock <= 0:
-            raise HTTPException(status_code=409, detail=f"{product.name} is out of stock")
+        if not getattr(product, "is_active", True):
+            validation_errors.append(f"'{product.name}' is currently unavailable")
+            continue
 
-        unit_price, compare_price, selected_variant_label, available_stock = extract_variant_details(
-            product,
-            cart_item.selected_variant_value,
+        now_dt = datetime.now(timezone.utc)
+        is_prod_preorder = bool(getattr(product, "is_preorder", False)) and (
+            getattr(product, "preorder_release_date", None) is None or getattr(product, "preorder_release_date", None) > now_dt
         )
+        if not is_prod_preorder and (not product.in_stock or product.stock <= 0):
+            validation_errors.append(f"'{product.name}' is out of stock")
+            continue
 
-        if cart_item.quantity > available_stock:
-            raise HTTPException(
-                status_code=409,
-                detail=f"Requested quantity exceeds available stock for {product.name}",
+        try:
+            unit_price, compare_price, selected_variant_label, available_stock = extract_variant_details(
+                product,
+                cart_item.selected_variant_value,
+                raise_if_out_of_stock=not is_prod_preorder,
             )
+        except Exception as e:
+            validation_errors.append(f"'{product.name}' variant is unavailable: {e}")
+            continue
+
+        if not is_prod_preorder and cart_item.quantity > available_stock:
+            validation_errors.append(f"Requested quantity for '{product.name}' ({cart_item.quantity}) exceeds available stock ({available_stock})")
+            continue
 
         product_image = product.images[0] if (product.images and len(product.images) > 0) else None
         line_total = money(unit_price * cart_item.quantity)
@@ -644,6 +661,12 @@ def create_payment_order(
             "line_total": line_total,
         })
         product_map[product.id] = product
+
+    if validation_errors:
+        raise HTTPException(
+            status_code=409,
+            detail="; ".join(validation_errors),
+        )
 
     shipping_address_snapshot = serialize_address_snapshot(address)
     pricing_snapshot = evaluate_pricing(
