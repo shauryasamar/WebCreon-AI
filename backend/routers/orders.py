@@ -29,19 +29,40 @@ from models import (
     DeliveryAgent,
     DeliverySettings,
     InventoryMovement,
+    InvoiceSequence,
+    MerchantTaxProfile,
     Order,
     OrderItem,
     OrderStatusHistory,
+    PlatformTaxInvoice,
     Product,
     ProductCollection,
     Shipment,
     Site,
+    TaxCreditNote,
+    TaxInvoice,
+    TaxMaster,
     TenantLedgerEntry,
     User,
     UserAddress,
 )
+import os
+from fastapi.responses import FileResponse
 from services.shiprocket import ShiprocketClient
 from services.notification_service import dispatch_customer_event
+from services.tax_engine import (
+    LineItemTaxInput,
+    LineItemTaxResult,
+    calculate_cart_taxes,
+    get_financial_year,
+    resolve_gst_state_code,
+)
+from services.pdf_invoice_service import (
+    issue_tax_invoice_for_order,
+    generate_rule46_invoice_pdf,
+    generate_platform_fee_invoice_pdf,
+)
+from services.settlement_tax_service import compute_live_fy_gross_sales
 
 router = APIRouter(
     prefix="/orders",
@@ -426,9 +447,9 @@ def can_transition_order_status(current_status: str, next_status: str) -> bool:
 def build_default_checkout_settings() -> dict[str, Any]:
     return {
         "taxSettings": {
-            "enabled": True,
+            "enabled": False,
             "label": "GST",
-            "rate": "5",
+            "rate": "0",
             "applyOnShipping": False,
         },
         "charges": [
@@ -954,6 +975,7 @@ def evaluate_pricing(
     site_id: Optional[UUID] = None,
     session: Optional[Session] = None,
     customer_email: Optional[str] = None,
+    shipping_address: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     subtotal = sum((item["line_total"] for item in cart_items), Decimal("0.00"))
     applied_promo_code, promo_discount, coupon_obj = evaluate_promo_discount(
@@ -983,6 +1005,7 @@ def evaluate_pricing(
 
     applied_charges: list[dict[str, Any]] = []
     waived_charges: list[dict[str, Any]] = []
+    shipping_charge = Decimal("0.00")
 
     for charge in [*auto_applied, *selected_optional]:
         if not matches_apply_condition(charge, subtotal_after_discount, payment_method):
@@ -1016,6 +1039,8 @@ def evaluate_pricing(
 
         if final_amount > 0:
             applied_charges.append(charge_snapshot)
+            if charge.get("code") == "shipping_fee":
+                shipping_charge += final_amount
 
     charges_total = sum(
         (Decimal(str(charge["finalAmount"])) for charge in applied_charges),
@@ -1023,13 +1048,217 @@ def evaluate_pricing(
     )
 
     tax_settings = checkout_settings.get("taxSettings") or {}
-    tax_enabled = bool(tax_settings.get("enabled"))
-    tax_rate = to_number(tax_settings.get("rate"))
-    apply_on_shipping = bool(tax_settings.get("applyOnShipping"))
-    tax_base = subtotal_after_discount + charges_total if apply_on_shipping else subtotal_after_discount
-    tax_amount = money((tax_base * tax_rate) / Decimal("100")) if tax_enabled else Decimal("0.00")
+    tax_enabled = bool(tax_settings.get("enabled", False))
+    fallback_tax_rate = to_number(tax_settings.get("rate", 0.0))
+    apply_on_shipping = bool(tax_settings.get("applyOnShipping", True))
 
-    total = max(subtotal_after_discount + charges_total + tax_amount, Decimal("0.00"))
+    if session and site_id:
+        site = session.get(Site, site_id)
+        merchant_tax_profile = session.exec(
+            select(MerchantTaxProfile).where(MerchantTaxProfile.site_id == site_id)
+        ).first()
+
+        origin_state_code = "27"
+        is_composition = False
+        is_unregistered = False
+
+        if merchant_tax_profile:
+            origin_state_code = merchant_tax_profile.state_code or (
+                merchant_tax_profile.gstin[:2] if merchant_tax_profile.gstin else "27"
+            )
+            reg_type_str = str(getattr(merchant_tax_profile.registration_type, "value", merchant_tax_profile.registration_type) or "").lower()
+            is_composition = bool(merchant_tax_profile.is_composition_dealer or reg_type_str in ("composition", "composition_scheme"))
+            is_unregistered = bool(reg_type_str in ("unregistered", "enrolled_eco"))
+            allow_interstate = bool(getattr(merchant_tax_profile, "allow_interstate_sales", True))
+
+        dest_state_code = origin_state_code
+        if shipping_address:
+            dest_state_code = resolve_gst_state_code(
+                state_code=shipping_address.get("state_code") or shipping_address.get("stateCode"),
+                state_name=shipping_address.get("state") or shipping_address.get("state_name") or shipping_address.get("stateName"),
+                postal_code=shipping_address.get("postal_code") or shipping_address.get("postalCode"),
+                default=origin_state_code,
+            )
+
+        is_regular_gst = bool(
+            merchant_tax_profile
+            and not is_composition
+            and not is_unregistered
+            and bool(merchant_tax_profile.gstin)
+        )
+
+        if merchant_tax_profile and not is_regular_gst and (is_composition or is_unregistered or not allow_interstate):
+            if origin_state_code != dest_state_code:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Inter-state supply is restricted for unregistered or composition merchants under GST law (Notification 34/2023-CT). Please configure a Regular GSTIN to ship nationwide.",
+                )
+
+        store_default_hsn = (
+            getattr(merchant_tax_profile, "default_hsn_code", None)
+            or (getattr(site, "default_hsn_code", None) if site else None)
+        )
+        store_default_tax_rate = (
+            getattr(merchant_tax_profile, "default_tax_rate", None)
+            or (getattr(site, "default_tax_rate", None) if site else None)
+        )
+
+        line_tax_inputs: list[LineItemTaxInput] = []
+        for idx, item in enumerate(cart_items):
+            prod_id = item.get("product_id")
+            prod = session.get(Product, prod_id) if prod_id else None
+
+            hsn_code = (
+                getattr(prod, "hsn_code", None)
+                or store_default_hsn
+                or "999999"
+            )
+            gst_rate = Decimal(str(store_default_tax_rate)) if store_default_tax_rate is not None else fallback_tax_rate
+            is_inclusive = True
+
+            if prod:
+                is_inclusive = getattr(prod, "price_inclusive_of_gst", True)
+                if prod.tax_rate_override is not None:
+                    gst_rate = Decimal(str(prod.tax_rate_override))
+                elif prod.hsn_sac_id:
+                    tax_master = session.get(TaxMaster, prod.hsn_sac_id)
+                    if tax_master:
+                        hsn_code = tax_master.code
+                        gst_rate = Decimal(str(tax_master.gst_rate))
+                elif prod.hsn_code or store_default_hsn:
+                    effective_hsn = (prod.hsn_code or store_default_hsn).strip()
+                    hsn_code = effective_hsn
+                    tax_master = session.exec(
+                        select(TaxMaster).where(
+                            (TaxMaster.code == effective_hsn) | (TaxMaster.code.startswith(effective_hsn[:4]))
+                        )
+                    ).first()
+                    if tax_master:
+                        gst_rate = Decimal(str(tax_master.gst_rate))
+                    else:
+                        prefix4 = effective_hsn[:4]
+                        if prefix4 in ("8517", "8518", "8504", "8471", "8528", "8525", "8544", "8501", "8502"):
+                            gst_rate = Decimal("18.00")
+                        elif prefix4 in ("6109", "6203", "6204", "6104", "6105", "6205"):
+                            item_price_num = float(getattr(prod, "price", 0) or 0)
+                            gst_rate = Decimal("5.00") if item_price_num <= 1000 else Decimal("12.00")
+                        elif prefix4 in ("6403", "6404", "6402", "6401"):
+                            item_price_num = float(getattr(prod, "price", 0) or 0)
+                            gst_rate = Decimal("5.00") if item_price_num <= 1000 else Decimal("18.00")
+                        elif prefix4 in ("0801", "0802", "0806", "2106", "0902", "1905", "0402", "0405"):
+                            gst_rate = Decimal("5.00")
+                        elif prefix4 in ("0803", "0804", "0805", "0808", "0810", "0701", "0702", "0703", "0709", "0800"):
+                            gst_rate = Decimal("0.00")
+                        elif prefix4 in ("3304", "3305", "3307", "3401"):
+                            gst_rate = Decimal("18.00")
+                        elif store_default_tax_rate is not None:
+                            gst_rate = Decimal(str(store_default_tax_rate))
+
+            line_tot = Decimal(str(item.get("line_total", 0)))
+            item_discount = Decimal("0.00")
+            if subtotal > Decimal("0.00") and promo_discount > Decimal("0.00"):
+                item_discount = money(promo_discount * (line_tot / subtotal))
+
+            # If merchant is composition or unregistered, statutory GST collected is 0%
+            effective_item_gst_rate = Decimal("0.00") if (is_composition or is_unregistered) else gst_rate
+
+            line_tax_inputs.append(
+                LineItemTaxInput(
+                    item_id=str(item.get("cart_item_id") or prod_id or idx),
+                    product_name=str(item.get("product_name") or (prod.name if prod else "Product")),
+                    hsn_code=hsn_code,
+                    unit_price=Decimal(str(item.get("unit_price", 0))),
+                    quantity=int(item.get("quantity", 1)),
+                    is_inclusive=is_inclusive,
+                    gst_rate=effective_item_gst_rate,
+                    cess_rate=Decimal("0.00"),
+                    discount_amount=item_discount,
+                )
+            )
+
+        # Under Section 15(2)(c) and Section 8(a) of CGST Act, all incidental checkout charges (shipping, handling, packaging) form part of composite taxable supply
+        effective_ancillary_charges = charges_total
+        cart_tax_result = calculate_cart_taxes(
+            items=line_tax_inputs,
+            origin_state_code=origin_state_code,
+            destination_state_code=dest_state_code,
+            shipping_charge=effective_ancillary_charges,
+            shipping_inclusive=True,
+            is_composition=is_composition,
+            is_unregistered=is_unregistered,
+        )
+
+        tax_amount = cart_tax_result.total_tax_amount + cart_tax_result.shipping_total_tax
+        other_charges = Decimal("0.00")
+        total = max(cart_tax_result.grand_total + other_charges, Decimal("0.00"))
+
+        line_item_taxes = [
+            {
+                "itemId": r.item_id,
+                "productName": r.product_name,
+                "hsnCode": r.hsn_code,
+                "unitPrice": float(r.unit_price),
+                "quantity": r.quantity,
+                "grossLineTotal": float(r.gross_line_total),
+                "discountAmount": float(r.discount_amount),
+                "taxableAmount": float(r.taxable_amount),
+                "gstRate": float(r.gst_rate),
+                "cgstRate": float(r.cgst_rate),
+                "cgstAmount": float(r.cgst_amount),
+                "sgstRate": float(r.sgst_rate),
+                "sgstAmount": float(r.sgst_amount),
+                "igstRate": float(r.igst_rate),
+                "igstAmount": float(r.igst_amount),
+                "cessRate": float(r.cess_rate),
+                "cessAmount": float(r.cess_amount),
+                "totalTax": float(r.total_tax),
+                "finalLineTotal": float(r.final_line_total),
+                "isInterstate": r.is_interstate,
+            }
+            for r in cart_tax_result.line_items
+        ]
+
+        tax_payload = {
+            "enabled": tax_enabled,
+            "label": tax_settings.get("label") or "GST",
+            "rate": float(cart_tax_result.line_items[0].gst_rate if cart_tax_result.line_items else fallback_tax_rate),
+            "applyOnShipping": apply_on_shipping,
+            "amount": float(tax_amount),
+            "taxableAmount": float(cart_tax_result.taxable_subtotal + cart_tax_result.shipping_taxable),
+            "cgst": float(cart_tax_result.cgst_total + cart_tax_result.shipping_cgst),
+            "sgst": float(cart_tax_result.sgst_total + cart_tax_result.shipping_sgst),
+            "igst": float(cart_tax_result.igst_total + cart_tax_result.shipping_igst),
+            "cess": float(cart_tax_result.cess_total),
+            "originState": cart_tax_result.origin_state_code,
+            "destinationState": cart_tax_result.destination_state_code,
+            "isInterstate": cart_tax_result.is_interstate,
+            "isComposition": cart_tax_result.is_composition,
+            "isUnregistered": cart_tax_result.is_unregistered,
+            "warnings": cart_tax_result.warnings,
+        }
+    else:
+        tax_base = subtotal_after_discount + charges_total if apply_on_shipping else subtotal_after_discount
+        tax_amount = money((tax_base * fallback_tax_rate) / Decimal("100")) if tax_enabled else Decimal("0.00")
+        total = max(subtotal_after_discount + charges_total + tax_amount, Decimal("0.00"))
+        line_item_taxes = []
+        tax_payload = {
+            "enabled": tax_enabled,
+            "label": tax_settings.get("label") or "Tax",
+            "rate": float(fallback_tax_rate),
+            "applyOnShipping": apply_on_shipping,
+            "amount": float(tax_amount),
+            "taxableAmount": float(tax_base),
+            "cgst": float(money(tax_amount / Decimal("2.00"))),
+            "sgst": float(money(tax_amount - money(tax_amount / Decimal("2.00")))),
+            "igst": 0.0,
+            "cess": 0.0,
+            "originState": "27",
+            "destinationState": "27",
+            "isInterstate": False,
+            "isComposition": False,
+            "isUnregistered": False,
+            "warnings": [],
+        }
 
     return {
         "currency": "INR",
@@ -1040,13 +1269,9 @@ def evaluate_pricing(
         "selectedOptionalChargeIds": selected_optional_charge_ids,
         "charges": applied_charges,
         "waivedCharges": waived_charges,
-        "tax": {
-            "enabled": tax_enabled,
-            "label": tax_settings.get("label") or "Tax",
-            "rate": float(tax_rate),
-            "applyOnShipping": apply_on_shipping,
-            "amount": float(tax_amount),
-        },
+        "tax": tax_payload,
+        "lineItemTaxes": line_item_taxes,
+        "taxableSubtotal": float(cart_tax_result.taxable_subtotal) if (session and site_id) else float(subtotal_after_discount),
         "discounts": (
             [{
                 "code": "promo_code",
@@ -1069,6 +1294,8 @@ def build_order_item_pricing_snapshot(
     quantity: int,
     order_subtotal: Decimal,
     pricing_snapshot: dict[str, Any],
+    product_id: Optional[Any] = None,
+    cart_item_id: Optional[Any] = None,
 ) -> dict[str, Any]:
     ratio = Decimal("0.00")
     if order_subtotal > 0:
@@ -1077,6 +1304,14 @@ def build_order_item_pricing_snapshot(
     tax_dict = pricing_snapshot.get("tax") if isinstance(pricing_snapshot.get("tax"), dict) else {}
     tax_amount = money(Decimal(str(tax_dict.get("amount", 0))) * ratio)
     promo_discount = money(Decimal(str(pricing_snapshot.get("promoDiscount", 0))) * ratio)
+
+    line_taxes = pricing_snapshot.get("lineItemTaxes") or []
+    matching_line = None
+    target_ids = {str(x) for x in (cart_item_id, product_id) if x is not None}
+    for lt in line_taxes:
+        if str(lt.get("itemId")) in target_ids:
+            matching_line = lt
+            break
 
     shipping_allocated = Decimal("0.00")
     cod_fee_allocated = Decimal("0.00")
@@ -1121,12 +1356,12 @@ def build_order_item_pricing_snapshot(
         line_total - promo_discount + tax_amount + refundable_charges_allocated + non_refundable_charges_allocated
     )
 
-    return {
+    result = {
         "unit_price": float(money(line_total / quantity)),
         "quantity": quantity,
         "gross_line_total": float(line_total),
         "discount_allocated": float(promo_discount),
-        "tax_amount": float(tax_amount),
+        "tax_amount": float(matching_line["totalTax"]) if matching_line else float(tax_amount),
         "shipping_allocated": float(shipping_allocated),
         "cod_fee_allocated": float(cod_fee_allocated),
         "other_charges_allocated": float(other_charges_allocated),
@@ -1136,6 +1371,43 @@ def build_order_item_pricing_snapshot(
         "final_paid_for_line": float(final_paid_for_line),
         "charges_breakdown": charges_breakdown,
     }
+
+    if matching_line:
+        result.update({
+            "hsn_code": matching_line.get("hsnCode", "999999"),
+            "taxable_amount": matching_line.get("taxableAmount", float(line_total - promo_discount)),
+            "gst_rate": matching_line.get("gstRate", 18.0),
+            "cgst_rate": matching_line.get("cgstRate", 0.0),
+            "cgst_amount": matching_line.get("cgstAmount", 0.0),
+            "sgst_rate": matching_line.get("sgstRate", 0.0),
+            "sgst_amount": matching_line.get("sgstAmount", 0.0),
+            "igst_rate": matching_line.get("igstRate", 0.0),
+            "igst_amount": matching_line.get("igstAmount", 0.0),
+            "cess_rate": matching_line.get("cessRate", 0.0),
+            "cess_amount": matching_line.get("cessAmount", 0.0),
+            "total_tax": matching_line.get("totalTax", float(tax_amount)),
+            "is_interstate": matching_line.get("isInterstate", False),
+        })
+    else:
+        is_inter = bool(tax_dict.get("isInterstate", False))
+        result.update({
+            "hsn_code": "999999",
+            "taxable_amount": float(line_total - promo_discount),
+            "gst_rate": float(tax_dict.get("rate", 18.0)),
+            "cgst_rate": 0.0 if is_inter else float(tax_dict.get("rate", 18.0)) / 2.0,
+            "cgst_amount": 0.0 if is_inter else float(money(tax_amount / Decimal("2.00"))),
+            "sgst_rate": 0.0 if is_inter else float(tax_dict.get("rate", 18.0)) / 2.0,
+            "sgst_amount": 0.0 if is_inter else float(money(tax_amount - money(tax_amount / Decimal("2.00")))),
+            "igst_rate": float(tax_dict.get("rate", 18.0)) if is_inter else 0.0,
+            "igst_amount": float(tax_amount) if is_inter else 0.0,
+            "cess_rate": 0.0,
+            "cess_amount": 0.0,
+            "total_tax": float(tax_amount),
+            "is_interstate": is_inter,
+        })
+    return result
+
+
 
 
 def serialize_customer_order_item(item: OrderItem, order_status: Optional[str] = None) -> dict[str, Any]:
@@ -1935,9 +2207,12 @@ def update_order_status(
                 default=0,
             )
 
+            MIN_DISPUTE_BUFFER_HOURS = 24
+
             if max_days == 0:
-                order.return_window_closes_at = now
-                order.escrow_status = "unheld"
+                # Non-returnable item: enforce minimum 24-hour dispute buffer post-delivery for unboxing inspection
+                order.return_window_closes_at = now + timedelta(hours=MIN_DISPUTE_BUFFER_HOURS)
+                order.escrow_status = "held"
             else:
                 order.return_window_closes_at = now + timedelta(days=max_days)
                 order.escrow_status = "held"
@@ -1947,13 +2222,9 @@ def update_order_status(
             ).first()
             if ledger_entry:
                 ledger_entry.escrow_release_due_at = order.return_window_closes_at
-                if max_days == 0:
-                    ledger_entry.escrow_status = "unheld"
-                    ledger_entry.status = "paid"
-                    ledger_entry.settled_at = now
+                ledger_entry.escrow_status = "held"
                 if getattr(order, "payment_method", "").lower() in ("cod", "cash_on_delivery"):
                     order.payment_status = "paid"
-                    ledger_entry.status = "paid"
                 session.add(ledger_entry)
 
             if not shipment:
@@ -2012,13 +2283,28 @@ def update_order_status(
                         print(f"Razorpay refund warning on admin cancellation: {rerr}")
 
                 order.payment_status = "refunded"
+                order.escrow_status = "reversed"
 
                 ledger_entry = session.exec(
-                    select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
+                    select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id, TenantLedgerEntry.entry_type == "order_sale")
                 ).first()
+                if not ledger_entry:
+                    ledger_entry = session.exec(
+                        select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
+                    ).first()
                 if ledger_entry:
                     ledger_entry.status = "refunded"
+                    ledger_entry.escrow_status = "reversed"
+                    ledger_entry.updated_at = now
                     session.add(ledger_entry)
+
+            # Synchronize Section 194-O FY sales on cancellation
+            profile = session.exec(
+                select(MerchantTaxProfile).where(MerchantTaxProfile.site_id == order.site_id)
+            ).first()
+            if profile:
+                profile.fy_gross_sales_amount = compute_live_fy_gross_sales(session, order.site_id, profile.current_fy)
+                session.add(profile)
 
             # Sort items deterministically by product_id to prevent database deadlocks
             sorted_cancel_items = sorted(items, key=lambda it: str(it.product_id))
@@ -2435,10 +2721,29 @@ def place_order(
             site_id=site_id,
             session=session,
             customer_email=customer.email,
+            shipping_address=serialize_address_snapshot(address),
         )
 
         applied_coupon_code = pricing_snapshot.get("promoCode")
         applied_discount_amount = money(Decimal(str(pricing_snapshot.get("promoDiscount", 0))))
+
+        gross_amount = money(pricing_snapshot["total"])
+        if payment_method == "cod":
+            del_settings = session.exec(
+                select(DeliverySettings).where(DeliverySettings.site_id == site_id)
+            ).first()
+            if del_settings:
+                if getattr(del_settings, "enable_cod", True) is False:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Cash on Delivery is currently disabled by the store. Please choose Online Payment.",
+                    )
+                max_cod = float(getattr(del_settings, "max_cod_amount", 5000.0) or 5000.0)
+                if float(gross_amount) > max_cod:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Cash on Delivery is only available for orders up to ₹{max_cod:,.2f}. Please choose Online Payment.",
+                    )
 
         contains_preorder = any(item.get("is_preorder") for item in order_line_items)
         preorder_release_date = None
@@ -2540,6 +2845,8 @@ def place_order(
                     quantity=item["quantity"],
                     order_subtotal=order_subtotal,
                     pricing_snapshot=pricing_snapshot,
+                    product_id=item["product_id"],
+                    cart_item_id=item.get("cart_item_id"),
                 ),
             )
             session.add(order_item)
@@ -2570,6 +2877,29 @@ def place_order(
 
         session.commit()
         session.refresh(order)
+
+        # Record statutory settlement ledger entry for COD orders
+        try:
+            from services.settlement_tax_service import compute_and_record_order_settlement
+            site_admin = session.get(Site, site_id)
+            admin_id = site_admin.admin_id if site_admin else None
+            compute_and_record_order_settlement(
+                session=session,
+                order=order,
+                admin_id=admin_id,
+                ledger_status="pending_cod",
+                escrow_status="held",
+            )
+            session.commit()
+            session.refresh(order)
+        except Exception as set_err:
+            logger.warning(f"Could not record COD settlement ledger entry: {set_err}")
+
+        # Auto-issue Rule 46 Tax Invoice
+        try:
+            issue_tax_invoice_for_order(session, order, save_pdf=True)
+        except Exception as inv_err:
+            logger.warning(f"Failed to auto-issue tax invoice for order {order.id}: {inv_err}")
 
         # Dispatch order.placed event (In-App notification & Order receipt email)
         try:
@@ -3251,6 +3581,14 @@ def cancel_my_order(
                 ledger_entry.status = "refunded" if refund_succeeded else "refund_pending"
                 session.add(ledger_entry)
 
+        # Synchronize Section 194-O FY sales on cancellation
+        profile = session.exec(
+            select(MerchantTaxProfile).where(MerchantTaxProfile.site_id == order.site_id)
+        ).first()
+        if profile:
+            profile.fy_gross_sales_amount = compute_live_fy_gross_sales(session, order.site_id, profile.current_fy)
+            session.add(profile)
+
         session.add(order)
 
         session.add(
@@ -3344,3 +3682,142 @@ def discard_unpaid_order(
         return {"message": "Draft order session discarded"}
 
     return {"message": "Order is not in pending state"}
+
+
+@router.get("/{order_id}/invoice/pdf")
+@router.get("/{site_id}/{order_id}/invoice/pdf")
+def get_order_invoice_pdf(
+    order_id: UUID,
+    site_id: Optional[UUID] = None,
+    session: Session = Depends(get_session),
+):
+    """
+    Streams a statutory Rule 46 GST Tax Invoice PDF.
+    Auto-generates if not yet created.
+    """
+    order = session.get(Order, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    invoice = session.exec(
+        select(TaxInvoice).where(TaxInvoice.order_id == order_id)
+    ).first()
+
+    if not invoice:
+        invoice = issue_tax_invoice_for_order(session, order, save_pdf=True)
+        session.commit()
+
+    pdf_path = invoice.pdf_storage_path or f"uploads/invoices/{order.id}.pdf"
+    generate_rule46_invoice_pdf(invoice, output_path=pdf_path, session=session)
+
+    is_composition = (
+        invoice.total_tax_amount <= Decimal("0.00")
+        and invoice.cgst_amount <= Decimal("0.00")
+        and invoice.sgst_amount <= Decimal("0.00")
+        and invoice.igst_amount <= Decimal("0.00")
+    )
+    doc_prefix = "BillOfSupply" if is_composition else "Invoice"
+    clean_filename = f"{doc_prefix}_{invoice.invoice_number.replace('/', '_')}.pdf"
+    return FileResponse(
+        path=pdf_path,
+        media_type="application/pdf",
+        filename=clean_filename,
+    )
+
+
+@router.get("/{order_id}/platform-invoice/pdf")
+@router.get("/{site_id}/{order_id}/platform-invoice/pdf")
+def get_order_platform_invoice_pdf(
+    order_id: UUID,
+    site_id: Optional[UUID] = None,
+    session: Session = Depends(get_session),
+):
+    """
+    Streams the official B2B Platform Service Tax Invoice from WebCreon to the Merchant.
+    Covers platform fees (SAC 998313, 18% GST), Section 52 TCS withholding, and settlement breakdown.
+    """
+    order = session.get(Order, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    site = session.get(Site, order.site_id) if order.site_id else None
+    ledger_entry = session.exec(
+        select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order_id)
+    ).first()
+
+    pdf_path = f"uploads/invoices/platform_fee_{order.id}.pdf"
+    generate_platform_fee_invoice_pdf(
+        order=order,
+        site=site,
+        ledger_entry=ledger_entry,
+        output_path=pdf_path,
+        session=session,
+    )
+
+    clean_filename = f"WebCreon_Platform_Invoice_{str(order.id)[:8].upper()}.pdf"
+    return FileResponse(
+        path=pdf_path,
+        media_type="application/pdf",
+        filename=clean_filename,
+    )
+
+
+
+@router.get("/{order_id}/invoice/json")
+@router.get("/{site_id}/{order_id}/invoice/json")
+def get_order_invoice_json(
+    order_id: UUID,
+    site_id: Optional[UUID] = None,
+    session: Session = Depends(get_session),
+):
+    """
+    Returns structured statutory Rule 46 invoice details for web display.
+    """
+    order = session.get(Order, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    invoice = session.exec(
+        select(TaxInvoice).where(TaxInvoice.order_id == order_id)
+    ).first()
+
+    if not invoice:
+        invoice = issue_tax_invoice_for_order(session, order, save_pdf=True)
+        session.commit()
+
+    return {
+        "invoice_id": str(invoice.id),
+        "order_id": str(invoice.order_id),
+        "site_id": str(invoice.site_id),
+        "invoice_number": invoice.invoice_number,
+        "financial_year": invoice.financial_year,
+        "invoice_date": invoice.invoice_date.isoformat(),
+        "supplier": {
+            "legal_name": invoice.supplier_legal_name,
+            "trade_name": invoice.supplier_trade_name,
+            "gstin": invoice.supplier_gstin,
+            "pan": invoice.supplier_pan,
+            "address": invoice.supplier_address,
+            "state_code": invoice.supplier_state_code,
+        },
+        "recipient": {
+            "name": invoice.recipient_name,
+            "address": invoice.recipient_address,
+            "state_code": invoice.recipient_state_code,
+            "place_of_supply": invoice.place_of_supply_state_code,
+        },
+        "eco": {
+            "legal_name": invoice.eco_legal_name,
+            "gstin": invoice.eco_gstin,
+        },
+        "taxable_value": float(invoice.taxable_value),
+        "cgst_amount": float(invoice.cgst_amount),
+        "sgst_amount": float(invoice.sgst_amount),
+        "igst_amount": float(invoice.igst_amount),
+        "cess_amount": float(invoice.cess_amount),
+        "total_tax_amount": float(invoice.total_tax_amount),
+        "total_invoice_value": float(invoice.total_invoice_value),
+        "document_type": "BILL OF SUPPLY" if invoice.total_tax_amount <= Decimal("0.00") else "TAX INVOICE",
+        "items": invoice.items_snapshot,
+        "pdf_url": f"/orders/{order.id}/invoice/pdf",
+    }

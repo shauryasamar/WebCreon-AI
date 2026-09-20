@@ -45,6 +45,7 @@ import {
   AdminBillingSettings,
   AdminIntegrationsSettings,
   AdminHelpAndSupport,
+  AdminTaxSettings,
 } from "./Component/AdminSettingsViews";
 import AccessDeniedView from "./Component/AccessDeniedView";
 import StorefrontCustomPage from "./Component/StorefrontCustomPage";
@@ -1523,25 +1524,27 @@ function BuilderPageContent() {
       ? "payment-settings"
       : location.pathname.includes("/notifications")
         ? "notifications"
-        : location.pathname.includes("/delivery")
-        ? "delivery"
-        : location.pathname.includes("/earnings")
-          ? "earnings"
-          : location.pathname.includes("/discounts") || location.pathname.includes("/coupons")
-            ? "discounts"
-            : location.pathname.includes("/checkout-charges")
-              ? "checkout-charges"
-              : location.pathname.includes("/analytics")
-                ? "analytics"
-                : location.pathname.includes("/orders")
-                  ? "orders"
-                  : location.pathname.includes("/pages")
-                    ? "pages"
-                    : location.pathname.includes("/support")
-                      ? "support"
-                      : location.pathname.includes("/home-sections")
-                        ? "home-sections"
-                        : "products"
+        : location.pathname.includes("/tax-compliance")
+          ? "tax-compliance"
+          : location.pathname.includes("/delivery")
+          ? "delivery"
+          : location.pathname.includes("/earnings")
+            ? "earnings"
+            : location.pathname.includes("/discounts") || location.pathname.includes("/coupons")
+              ? "discounts"
+              : location.pathname.includes("/checkout-charges")
+                ? "checkout-charges"
+                : location.pathname.includes("/analytics")
+                  ? "analytics"
+                  : location.pathname.includes("/orders")
+                    ? "orders"
+                    : location.pathname.includes("/pages")
+                      ? "pages"
+                      : location.pathname.includes("/support")
+                        ? "support"
+                        : location.pathname.includes("/home-sections")
+                          ? "home-sections"
+                          : "products"
     : null;
 
   const storefrontNavbarMode =
@@ -2754,7 +2757,11 @@ function BuilderPageContent() {
         onDeleteSite={handleDeleteSite}
         activeAdminNavKey={activeAdminNavKey}
         onSelectAdminNav={(key) => {
-          navigate(`${builderBase}/admin/${key}`);
+          if (key === "tax-compliance") {
+            navigate(`${builderBase}/admin/checkout-charges?tab=tax`);
+          } else {
+            navigate(`${builderBase}/admin/${key}`);
+          }
         }}
         activeSettingsNavKey={
           location.pathname.includes("/settings/users-roles")
@@ -2938,7 +2945,7 @@ function BuilderPageContent() {
                         path="earnings"
                         element={
                           hasPermission("earnings:view") ? (
-                            <TenantEarningsPage />
+                            <TenantEarningsPage siteId={resolvedSiteId || siteId || ""} />
                           ) : (
                             <AccessDeniedView requiredPermission="earnings:view" />
                           )
@@ -2948,7 +2955,7 @@ function BuilderPageContent() {
                         path="payment-settings"
                         element={
                           hasPermission("payout_settings:view") ? (
-                            <TenantPaymentSettingsPage />
+                            <TenantPaymentSettingsPage siteId={resolvedSiteId || siteId || ""} />
                           ) : (
                             <AccessDeniedView requiredPermission="payout_settings:view" />
                           )
@@ -2958,7 +2965,7 @@ function BuilderPageContent() {
                         path="checkout-charges"
                         element={
                           hasPermission("checkout_charges:view") ? (
-                            <CheckoutChargesPage />
+                            <CheckoutChargesPage siteId={resolvedSiteId || siteId || ""} />
                           ) : (
                             <AccessDeniedView requiredPermission="checkout_charges:view" />
                           )
@@ -2973,6 +2980,10 @@ function BuilderPageContent() {
                             <AccessDeniedView requiredPermission="notifications:view" />
                           )
                         }
+                      />
+                      <Route
+                        path="tax-compliance"
+                        element={<Navigate to="../checkout-charges?tab=tax" replace />}
                       />
                     </Route>
                     <Route path="settings" element={<AdminLayout />}>

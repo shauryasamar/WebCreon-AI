@@ -5558,7 +5558,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                         fontSize: "14px",
                                       }}
                                     >
-                                      <span style={{ color: textMuted }}>Tax</span>
+                                      <span style={{ color: textMuted }}>GST (Included in total)</span>
                                       <span>{formatPrice(detail.pricing_snapshot?.tax?.amount || 0)}</span>
                                     </div>
 
@@ -5938,6 +5938,37 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                     Need Help with Order
                                   </button>
                                 )}
+
+                                {/* Customer Download Bill / Invoice Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    window.open(`${API_BASE_URL}/orders/${order.id}/invoice/pdf`, "_blank");
+                                  }}
+                                  style={{
+                                    border: `1px solid ${customBorderColor || (isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)")}`,
+                                    background: isLight ? "#ffffff" : "rgba(255,255,255,0.05)",
+                                    color: textPrimary,
+                                    borderRadius: "14px",
+                                    padding: "12px 16px",
+                                    fontSize: "14px",
+                                    fontWeight: 700,
+                                    cursor: "pointer",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "8px",
+                                    boxShadow: isLight ? "0 1px 2px rgba(0,0,0,0.04)" : "none",
+                                  }}
+                                >
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                                    <polyline points="10 9 9 9 8 9"></polyline>
+                                  </svg>
+                                  Download Invoice
+                                </button>
 
                                 {isDelivered && hasExistingReturn && canReturn ? (
                                   <div

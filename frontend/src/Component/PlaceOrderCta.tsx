@@ -128,7 +128,6 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
     try {
       document.body.style.overflow = "";
       document.documentElement.style.overflow = "";
-      document.querySelectorAll(".razorpay-container, .razorpay-backdrop").forEach((el) => el.remove());
     } catch {}
   };
 

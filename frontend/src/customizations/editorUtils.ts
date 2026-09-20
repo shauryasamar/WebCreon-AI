@@ -2422,6 +2422,7 @@ export function saveThemeSnapshot(
   const finalTheme: Record<string, any> = {
     ...siteDefinition.theme,
     ...themeToSave,
+    active_snapshot_id: snapshot.id,
   };
   if (finalTheme.navbar_bg && !finalTheme.navbar_outer_bg) {
     finalTheme.navbar_outer_bg = finalTheme.navbar_bg;
@@ -2464,6 +2465,7 @@ export function applyThemeSnapshot(
     ...baseDefaults,
     ...cleanPatchProps,
     mode,
+    active_snapshot_id: snapshotId,
   };
 
   const nextPages = applyThemeToPages(siteDefinition.pages || [], updatedTheme);

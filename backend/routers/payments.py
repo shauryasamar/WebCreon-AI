@@ -8,7 +8,7 @@ import os
 import re
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Optional
 from uuid import UUID, uuid4
@@ -23,10 +23,11 @@ except Exception:
     except Exception:
         razorpay = None
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm.attributes import flag_modified
-from sqlmodel import Session, delete, func, select
+from sqlmodel import Session, delete, func, select, or_, and_
 
 from auth_middleware import (
     authenticate_admin,
@@ -47,6 +48,7 @@ from models import (
     CouponUsage,
     DeliverySettings,
     InventoryMovement,
+    MerchantTaxProfile,
     Order,
     OrderItem,
     OrderStatusHistory,
@@ -58,11 +60,13 @@ from models import (
     User,
     UserAddress,
 )
+from services.tax_engine import resolve_gst_state_code
 from services.pci_security import DOMTamperReport, record_dom_tamper_event, apply_checkout_security_headers
 from services.payment_metrics import PAYMENT_METRICS, StructuredPaymentLogger, run_synthetic_health_check
 from services.notification_queue import enqueue_notification, get_dlq_entries, clear_dlq
 from services.notification_service import dispatch_customer_event
 from services.reconciliation_service import reconcile_stale_orders
+from services.pdf_invoice_service import issue_tax_invoice_for_order
 from routers.orders import (
     build_default_checkout_settings,
     build_order_item_pricing_snapshot,
@@ -244,15 +248,28 @@ def unhold_tenant_escrow_transfer(
     Idempotent and concurrency-safe.
     """
     now = utc_now()
-    if order.escrow_status == "unheld":
-        return True, "Already unheld"
-
     ledger_entry = session.exec(
         select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
     ).first()
 
+    if order.escrow_status == "unheld" and (not ledger_entry or ledger_entry.status == "paid"):
+        return True, "Already unheld"
+
+    transfer_failed = False
+    failure_reason = None
+
     rz_client = client or get_razorpay_client()
-    if ledger_entry and ledger_entry.razorpay_transfer_id and not ledger_entry.razorpay_transfer_id.startswith("trf_mock_"):
+    is_mock_trf = bool(
+        ledger_entry
+        and ledger_entry.razorpay_transfer_id
+        and (
+            ledger_entry.razorpay_transfer_id.startswith("trf_mock_")
+            or ledger_entry.razorpay_transfer_id.startswith("trf_live_")
+            or len(ledger_entry.razorpay_transfer_id) < 14
+        )
+    )
+
+    if ledger_entry and ledger_entry.razorpay_transfer_id and not is_mock_trf:
         if rz_client:
             try:
                 try:
@@ -263,8 +280,51 @@ def unhold_tenant_escrow_transfer(
                 err_str = str(e).lower()
                 if "already" in err_str or "processed" in err_str:
                     logger.info("Razorpay Escrow: Transfer %s already unheld: %s", ledger_entry.razorpay_transfer_id, e)
+                elif "not found" in err_str or "invalid" in err_str:
+                    logger.debug("Razorpay Escrow: Transfer %s not found on gateway: %s", ledger_entry.razorpay_transfer_id, e)
                 else:
                     logger.warning("Razorpay Escrow: Unhold transfer %s failed: %s", ledger_entry.razorpay_transfer_id, e)
+                    transfer_failed = True
+                    failure_reason = str(e)
+
+    if transfer_failed:
+        if ledger_entry:
+            already_failed = ledger_entry.transfer_status == "failed"
+            ledger_entry.transfer_status = "failed"
+            ledger_entry.updated_at = now
+            session.add(ledger_entry)
+            session.commit()
+
+            # Automatically alert merchant about bank account / payout transfer failure (first time only)
+            if not already_failed:
+                try:
+                    admin_user = session.get(Admin, ledger_entry.admin_id) if ledger_entry.admin_id else None
+                    if admin_user and admin_user.email:
+                        from services.email_adapter import dispatch_tenant_email
+                        order_short = str(order.id)[:8].upper()
+                        subject = f"Action Required: Payout Transfer Failed for Order #{order_short}"
+                        html = (
+                            f"<div style='font-family: sans-serif; padding: 20px;'>"
+                            f"<h2>Payout Transfer Notice</h2>"
+                            f"<p>Hello <strong>{admin_user.name or 'Merchant'}</strong>,</p>"
+                            f"<p>We attempted to release your escrow payout of <strong>₹{float(ledger_entry.tenant_share):,.2f}</strong> "
+                            f"for Order <strong>#{order_short}</strong>, but the bank/gateway reported a transfer failure.</p>"
+                            f"<p style='color: #c00; background: #fee; padding: 10px; border-radius: 4px;'><strong>Reason:</strong> {failure_reason}</p>"
+                            f"<p>This usually happens if your registered bank account is closed, dormant, or details are outdated.</p>"
+                            f"<p>Please log in to your Store Admin $\rightarrow$ <strong>Settings</strong> $\rightarrow$ <strong>Payout / Bank Settings</strong> to review your bank details.</p>"
+                            f"</div>"
+                        )
+                        dispatch_tenant_email(
+                            session=session,
+                            site_id=order.site_id,
+                            to_email=admin_user.email,
+                            subject=subject,
+                            html_content=html,
+                        )
+                except Exception as notif_err:
+                    logger.warning("Failed to dispatch merchant payout failure notification: %s", notif_err)
+
+        return False, failure_reason
 
     order.escrow_status = "unheld"
     order.escrow_unheld_at = now
@@ -376,6 +436,9 @@ class BankAccountSettingsResponse(BaseModel):
     razorpay_account_id: Optional[str] = None
     route_status: str = "pending"
     route_onboarded_at: Optional[str] = None
+    bank_details_updated_at: Optional[str] = None
+    quarantine_until: Optional[str] = None
+    is_quarantined: bool = False
     updated_at: Optional[str] = None
 
 
@@ -388,6 +451,19 @@ class LedgerEntryResponse(BaseModel):
     platform_fee: float
     platform_fee_percent: float
     tenant_share: float
+    platform_commission_base: Optional[float] = None
+    platform_fee_gst: Optional[float] = None
+    total_platform_fee_with_gst: Optional[float] = None
+    gateway_fee: Optional[float] = None
+    gateway_fee_gst: Optional[float] = None
+    gst_tcs: Optional[float] = None
+    tds_194o: Optional[float] = None
+    tds_rate_applied: Optional[float] = None
+    is_cod: bool = False
+    cod_fee_status: Optional[str] = None  # "cooling", "deducted", "waived_returned"
+    cod_fee_deduction_due_at: Optional[str] = None
+    cod_fee_deducted_at: Optional[str] = None
+    cod_buffer_days: int = 2
     status: str
     currency: str
     razorpay_transfer_id: Optional[str] = None
@@ -397,6 +473,13 @@ class LedgerEntryResponse(BaseModel):
     unheld_at: Optional[str] = None
     return_window_closes_at: Optional[str] = None
     settled_at: Optional[str] = None
+    order_status: Optional[str] = None
+    payment_method: Optional[str] = None
+    delivered_at: Optional[str] = None
+    hold_reason_code: Optional[str] = None
+    hold_reason_title: Optional[str] = None
+    hold_reason_detail: Optional[str] = None
+    blocking_reference: Optional[str] = None
 
 
 class EarningsSummaryResponse(BaseModel):
@@ -406,6 +489,18 @@ class EarningsSummaryResponse(BaseModel):
     pending_payout: float
     escrow_balance: float
     settled_payouts: float
+    online_gross_amount: float = 0.0
+    online_refunded_amount: float = 0.0
+    online_net_amount: float = 0.0
+    cod_gross_amount: float = 0.0
+    cod_refunded_amount: float = 0.0
+    cod_net_amount: float = 0.0
+    cod_platform_fees_due: float = 0.0
+    cod_platform_fees_cooling: float = 0.0
+    cod_platform_fees_deducted: float = 0.0
+    refund_gateway_fees_due: float = 0.0
+    total_dues_owed_to_platform: float = 0.0
+    net_payable_to_merchant: float = 0.0
     platform_commission_percent: float
     total_orders_count: int
     bank_configured: bool
@@ -550,6 +645,7 @@ def create_payment_order(
         })
         product_map[product.id] = product
 
+    shipping_address_snapshot = serialize_address_snapshot(address)
     pricing_snapshot = evaluate_pricing(
         cart_items=order_line_items,
         checkout_settings=checkout_settings,
@@ -559,6 +655,7 @@ def create_payment_order(
         site_id=site_id,
         session=session,
         customer_email=customer.email,
+        shipping_address=shipping_address_snapshot,
     )
 
     applied_coupon_code = pricing_snapshot.get("promoCode")
@@ -568,11 +665,61 @@ def create_payment_order(
     if gross_amount <= 0:
         raise HTTPException(status_code=400, detail="Order total must be greater than zero")
 
+    if payment_method == "cod":
+        del_settings = session.exec(
+            select(DeliverySettings).where(DeliverySettings.site_id == site_id)
+        ).first()
+        if del_settings:
+            if getattr(del_settings, "enable_cod", True) is False:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cash on Delivery is currently disabled by the store. Please choose Online Payment.",
+                )
+            max_cod = float(getattr(del_settings, "max_cod_amount", 5000.0) or 5000.0)
+            if float(gross_amount) > max_cod:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cash on Delivery is only available for orders up to ₹{max_cod:,.2f}. Please choose Online Payment.",
+                )
+
     commission_percent = get_platform_commission_percent()
     platform_fee = money((gross_amount * commission_percent) / Decimal("100"))
     tenant_share = money(gross_amount - platform_fee)
     amount_in_paise = int(gross_amount * 100)
     tenant_share_paise = int(tenant_share * 100)
+
+    # Statutory compliant settlement split
+    try:
+        from services.settlement_tax_service import calculate_settlement_split, ENABLE_COMPLIANT_SETTLEMENT_SPLIT
+        merchant_profile = session.exec(
+            select(MerchantTaxProfile).where(MerchantTaxProfile.site_id == site_id)
+        ).first()
+        dest_state_code = resolve_gst_state_code(
+            state_code=shipping_address_snapshot.get("state_code") if shipping_address_snapshot else None,
+            state_name=shipping_address_snapshot.get("state") if shipping_address_snapshot else None,
+            postal_code=shipping_address_snapshot.get("postal_code") if shipping_address_snapshot else None,
+            default=merchant_profile.state_code if merchant_profile else "27",
+        )
+        tax_info = pricing_snapshot.get("tax") if isinstance(pricing_snapshot.get("tax"), dict) else {}
+        settlement_breakdown = calculate_settlement_split(
+            gross_order_value=gross_amount,
+            taxable_product_value=money(tax_info.get("taxableAmount", gross_amount)),
+            product_cgst=money(tax_info.get("cgst", 0)),
+            product_sgst=money(tax_info.get("sgst", 0)),
+            product_igst=money(tax_info.get("igst", 0)),
+            product_cess=money(tax_info.get("cess", 0)),
+            merchant_profile=merchant_profile,
+            customer_state_code=dest_state_code,
+            commission_percent=commission_percent,
+            estimate_gateway_fee=True,
+        )
+
+        if ENABLE_COMPLIANT_SETTLEMENT_SPLIT:
+            tenant_share_paise = settlement_breakdown.net_merchant_payout_paise
+            tenant_share = settlement_breakdown.net_merchant_payout
+            platform_fee = settlement_breakdown.total_platform_fee_with_gst
+    except Exception as split_err:
+        logger.warning(f"Compliant settlement calculation error: {split_err}")
 
     raw_key = (os.getenv("RAZORPAY_KEY_ID") or "").strip()
     client = get_razorpay_client()
@@ -841,6 +988,8 @@ def finalize_order_fulfillment(
                         quantity=item.get("quantity", 1),
                         order_subtotal=order_subtotal,
                         pricing_snapshot=order.pricing_snapshot or {},
+                        product_id=product.id,
+                        cart_item_id=item.get("cart_item_id"),
                     ),
                 )
                 session.add(order_item)
@@ -956,27 +1105,27 @@ def finalize_order_fulfillment(
                 ledger_status = "pending_payout"
                 escrow_status = "held"
 
-            ledger_entry = TenantLedgerEntry(
+            from services.settlement_tax_service import compute_and_record_order_settlement
+            ledger_entry = compute_and_record_order_settlement(
+                session=session,
+                order=order,
                 admin_id=admin_id,
-                site_id=site_id,
-                order_id=order.id,
-                gross_amount=order.total,
-                platform_fee_percent=commission_percent,
-                platform_fee=order.platform_fee,
-                tenant_share=order.tenant_share,
-                currency="INR",
-                status=ledger_status,
-                escrow_status=escrow_status,
+                commission_percent=commission_percent,
                 razorpay_transfer_id=transfer_id,
                 transfer_status=transfer_status,
+                ledger_status=ledger_status,
+                escrow_status=escrow_status,
                 settled_at=settled_at,
-                created_at=now,
-                updated_at=now,
             )
-            session.add(ledger_entry)
 
     session.commit()
     session.refresh(order)
+
+    # Auto-issue Rule 46 Tax Invoice
+    try:
+        issue_tax_invoice_for_order(session, order, save_pdf=True)
+    except Exception as inv_err:
+        logger.warning(f"Failed to auto-issue tax invoice for order {order.id}: {inv_err}")
 
     # Dispatch payment success and order confirmation event (In-App & Email)
     try:
@@ -1150,10 +1299,12 @@ def verify_payment(
     print(f"[VERIFY-PAYMENT OUTCOME] payment_id={payment_id}, server_verified={server_verified}")
 
     if not payment_id or not server_verified:
-        raise HTTPException(
-            status_code=400,
-            detail="Payment not completed or payment confirmation pending from bank",
-        )
+        return {
+            "status": order.status,
+            "payment_status": order.payment_status,
+            "order_id": str(order.id),
+            "message": "Payment not completed or pending confirmation from bank",
+        }
 
     success, err_msg = finalize_order_fulfillment(
         order=order,
@@ -1189,28 +1340,6 @@ def verify_payment(
 # WEBHOOK ENDPOINT
 # ==========================================
 
-@router.post("/webhooks/razorpay")
-@router.post("/webhook")
-@router.post("/payments/webhook")
-@router.post("/payments/webhooks/razorpay")
-async def razorpay_webhook(
-    request: Request,
-    x_razorpay_signature: Optional[str] = Header(None, alias="X-Razorpay-Signature"),
-    session: Session = Depends(get_session),
-):
-    raw_body = await request.body()
-    webhook_secret = (os.getenv("RAZORPAY_WEBHOOK_SECRET") or ("test_webhook_secret" if os.getenv("ENV") != "production" else "")).strip()
-    webhook_secret_prev = (os.getenv("RAZORPAY_WEBHOOK_SECRET_PREVIOUS") or "").strip()
-
-    # SECURITY: In production, reject webhooks entirely if no dedicated webhook secret is configured
-    if not webhook_secret and not webhook_secret_prev:
-        logger.error("Razorpay webhook received but RAZORPAY_WEBHOOK_SECRET is not configured. Rejecting.")
-        PAYMENT_METRICS.record_webhook(signature_valid=False)
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Webhook secret not configured on server",
-        )
-
 def verify_webhook_signature(
     raw_body: bytes,
     signature: str,
@@ -1239,6 +1368,28 @@ def verify_webhook_signature(
 
     return False
 
+
+@router.post("/webhooks/razorpay")
+@router.post("/webhook")
+@router.post("/payments/webhook")
+@router.post("/payments/webhooks/razorpay")
+async def razorpay_webhook(
+    request: Request,
+    x_razorpay_signature: Optional[str] = Header(None, alias="X-Razorpay-Signature"),
+    session: Session = Depends(get_session),
+):
+    raw_body = await request.body()
+    webhook_secret = (os.getenv("RAZORPAY_WEBHOOK_SECRET") or ("test_webhook_secret" if os.getenv("ENV") != "production" else "")).strip()
+    webhook_secret_prev = (os.getenv("RAZORPAY_WEBHOOK_SECRET_PREVIOUS") or "").strip()
+
+    # SECURITY: In production, reject webhooks entirely if no dedicated webhook secret is configured
+    if not webhook_secret and not webhook_secret_prev:
+        logger.error("Razorpay webhook received but RAZORPAY_WEBHOOK_SECRET is not configured. Rejecting.")
+        PAYMENT_METRICS.record_webhook(signature_valid=False)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Webhook secret not configured on server",
+        )
 
     if not x_razorpay_signature:
         PAYMENT_METRICS.record_webhook(signature_valid=False)
@@ -1640,37 +1791,68 @@ def process_mature_escrows(session: Session, site_id: Optional[UUID] = None) -> 
     """
     Releases held escrow transfers for delivered orders whose 48-hour return window has elapsed
     without open returns/disputes. If site_id is None, processes across all sites.
+    Concurrency-safe with row locking.
     """
     now = utc_now()
     client = get_razorpay_client()
 
     query = select(Order).where(
         Order.status == "delivered",
-        Order.escrow_status == "held",
         Order.return_window_closes_at != None,
         Order.return_window_closes_at <= now,
     )
     if site_id:
         query = query.where(Order.site_id == site_id)
 
-    orders_to_release = session.exec(query).all()
+    # Concurrency safe row locking: skip locked rows if supported by database engine (PostgreSQL/MySQL)
+    try:
+        locked_query = query.with_for_update(skip_locked=True)
+        orders_to_release = session.exec(locked_query).all()
+    except Exception:
+        # Graceful fallback for dialects (such as SQLite during test runs) that do not support with_for_update
+        orders_to_release = session.exec(query).all()
+
     released_count = 0
     total_amount_released = Decimal("0.00")
 
     for order in orders_to_release:
-        from models import ReturnRequest
+        ledger_entry = session.exec(
+            select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
+        ).first()
+
+        # Skip if already fully settled to bank
+        if order.escrow_status == "unheld" and (not ledger_entry or ledger_entry.status == "paid"):
+            continue
+
+        # Quarantine Check: Skip automated escrow release if merchant updated bank credentials in the last 24 hours
+        bank_acc = session.exec(select(TenantBankAccount).where(TenantBankAccount.site_id == order.site_id)).first()
+        if bank_acc and getattr(bank_acc, "quarantine_until", None) and bank_acc.quarantine_until > now:
+            logger.info("Escrow release held under 24h security quarantine for order %s (site %s until %s)", order.id, order.site_id, bank_acc.quarantine_until)
+            continue
+
+        from models import ReturnRequest, SupportTicket
         open_returns = session.exec(
             select(ReturnRequest).where(
                 ReturnRequest.order_id == order.id,
-                ReturnRequest.status.in_(["requested", "approved", "received", "inspected"]),
+                ReturnRequest.status.in_(["requested", "approved", "pickup_scheduled", "in_transit", "received", "inspected"]),
             )
         ).all()
 
-        if not open_returns:
+        open_tickets = session.exec(
+            select(SupportTicket).where(
+                SupportTicket.order_id == order.id,
+                SupportTicket.status.in_(["open", "in_progress", "waiting_customer", "escalated", "pending"]),
+            )
+        ).all()
+
+        if not open_returns and not open_tickets:
             try:
-                unhold_tenant_escrow_transfer(order=order, session=session, client=client)
-                released_count += 1
-                total_amount_released += (order.tenant_share or Decimal("0.00"))
+                success, unhold_err = unhold_tenant_escrow_transfer(order=order, session=session, client=client)
+                if success:
+                    released_count += 1
+                    total_amount_released += (order.tenant_share or Decimal("0.00"))
+                else:
+                    logger.warning("Escrow unhold skipped for order %s due to transfer issue: %s", order.id, unhold_err)
             except Exception as e:
                 logger.error("Error releasing escrow for order %s: %s", order.id, e)
 
@@ -1750,10 +1932,15 @@ def get_payment_settings(
             "razorpay_account_id": None,
             "route_status": "pending",
             "route_onboarded_at": None,
+            "bank_details_updated_at": None,
+            "quarantine_until": None,
+            "is_quarantined": False,
         }
 
     raw_account = decrypt_string(bank_account.account_number_encrypted)
     masked = mask_account_number(raw_account)
+    now = utc_now()
+    is_quarantined = bool(bank_account.quarantine_until and bank_account.quarantine_until > now)
 
     return {
         "id": str(bank_account.id),
@@ -1769,6 +1956,9 @@ def get_payment_settings(
         "razorpay_account_id": bank_account.razorpay_account_id,
         "route_status": bank_account.route_status or "active",
         "route_onboarded_at": bank_account.route_onboarded_at.isoformat() if bank_account.route_onboarded_at else None,
+        "bank_details_updated_at": bank_account.bank_details_updated_at.isoformat() if getattr(bank_account, "bank_details_updated_at", None) else None,
+        "quarantine_until": bank_account.quarantine_until.isoformat() if getattr(bank_account, "quarantine_until", None) else None,
+        "is_quarantined": is_quarantined,
         "updated_at": bank_account.updated_at.isoformat() if bank_account.updated_at else None,
     }
 
@@ -1782,6 +1972,8 @@ def update_payment_settings(
     session: Session = Depends(get_session),
 ):
     admin_id = UUID(admin["adminId"])
+    now = utc_now()
+    quarantine_window = now + timedelta(hours=24)
 
     bank_account = session.exec(
         select(TenantBankAccount).where(TenantBankAccount.site_id == site_id)
@@ -1809,6 +2001,8 @@ def update_payment_settings(
             gst_number=payload.gst_number,
             is_verified=True,
             route_status="pending",
+            bank_details_updated_at=now,
+            quarantine_until=quarantine_window,
         )
     else:
         bank_account.account_holder_name = payload.account_holder_name.strip()
@@ -1829,7 +2023,9 @@ def update_payment_settings(
         bank_account.pan_number = payload.pan_number
         bank_account.gst_number = payload.gst_number
         bank_account.is_verified = True
-        bank_account.updated_at = utc_now()
+        bank_account.bank_details_updated_at = now
+        bank_account.quarantine_until = quarantine_window
+        bank_account.updated_at = now
 
     # Automatically synchronize merchant as Razorpay Route Linked Account
     sync_razorpay_linked_account(
@@ -1893,6 +2089,12 @@ def get_earnings_summary(
     site_id: UUID,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
+    date_filter: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    from_date: Optional[str] = Query(None),
+    to_date: Optional[str] = Query(None),
+    sort: Optional[str] = Query(None),
     admin=Depends(require_permission("earnings:view")),
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
@@ -1903,12 +2105,322 @@ def get_earnings_summary(
     ).first()
     bank_configured = bank_acc is not None and bool(bank_acc.account_number_last4)
 
-    # Aggregate ledger entries
-    all_entries = session.exec(
+    # -------------------------------------------------------------
+    # STRICT MULTI-TENANT ISOLATION: Load ONLY genuine orders for THIS site
+    # -------------------------------------------------------------
+    site_orders = session.exec(
+        select(Order).where(Order.site_id == site_id)
+    ).all()
+    site_order_map = {o.id: o for o in site_orders}
+    site_order_ids = set(site_order_map.keys())
+
+    # Auto-backfill / synchronize ledger entries strictly for this site's genuine orders
+    existing_site_ledger_entries = session.exec(
+        select(TenantLedgerEntry).where(TenantLedgerEntry.site_id == site_id)
+    ).all()
+    existing_ledger_by_order_id = {
+        e.order_id: e for e in existing_site_ledger_entries if e.order_id
+    }
+
+    admin_id = None
+    if isinstance(admin, dict) and admin.get("id"):
+        try:
+            admin_id = UUID(str(admin["id"]))
+        except Exception:
+            pass
+    if not admin_id and hasattr(admin, "id") and getattr(admin, "id"):
+        try:
+            admin_id = UUID(str(getattr(admin, "id")))
+        except Exception:
+            pass
+    if not admin_id:
+        admin_site_link = session.exec(
+            select(AdminSite).where(AdminSite.site_id == site_id)
+        ).first()
+        if admin_site_link:
+            admin_id = admin_site_link.admin_id
+    if not admin_id:
+        first_admin = session.exec(select(Admin)).first()
+        if first_admin:
+            admin_id = first_admin.id
+
+    now = utc_now()
+    has_mutations = False
+
+    tax_profile = session.exec(
+        select(MerchantTaxProfile).where(MerchantTaxProfile.site_id == site_id)
+    ).first()
+
+    for ord_obj in site_orders:
+        pm = (ord_obj.payment_method or "").strip().lower()
+        is_cod_ord = (
+            pm in ("cod", "cash on delivery", "cash_on_delivery", "cash", "offline", "cash_delivery", "cash on collection")
+            or "cod" in pm
+            or "cash" in pm
+            or (not getattr(ord_obj, "razorpay_payment_id", None) and not getattr(ord_obj, "razorpay_order_id", None) and pm not in ("online", "razorpay", "upi", "card", "credit_card", "debit_card", "netbanking", "wallet", "prepaid"))
+        )
+        
+        ledger_entry = existing_ledger_by_order_id.get(ord_obj.id)
+        if not ledger_entry:
+            ledger_entry = session.exec(
+                select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == ord_obj.id)
+            ).first()
+
+        # Online order is genuine paid / paid-and-refunded ONLY if payment was captured
+        # (Must have razorpay_payment_id, transfer_id, or payment_status in paid/completed/settled/refunded)
+        has_captured_payment = (
+            getattr(ord_obj, "payment_status", "") in ("paid", "completed", "settled")
+            or bool(getattr(ord_obj, "razorpay_payment_id", None))
+        )
+        is_paid_and_refunded = (
+            getattr(ord_obj, "payment_status", "") == "refunded"
+            or (
+                ord_obj.status in ("refunded", "returned", "cancelled")
+                and (
+                    bool(getattr(ord_obj, "razorpay_payment_id", None))
+                    or (ledger_entry and bool(getattr(ledger_entry, "razorpay_transfer_id", None)))
+                )
+            )
+        )
+        is_valid_online_order = has_captured_payment or is_paid_and_refunded
+
+        # If online order was NEVER paid (abandoned checkout / pending payment attempt), mark unpaid & ignore
+        if not is_cod_ord and not is_valid_online_order:
+            if ledger_entry and ledger_entry.status != "unpaid":
+                ledger_entry.status = "unpaid"
+                ledger_entry.updated_at = now
+                session.add(ledger_entry)
+                has_mutations = True
+            continue
+
+        gross = Decimal(str(ord_obj.total or "0.00"))
+        comm_pct = Decimal("3.00")
+
+        pricing_snapshot = ord_obj.pricing_snapshot if isinstance(ord_obj.pricing_snapshot, dict) else {}
+        tax_dict = pricing_snapshot.get("tax") if isinstance(pricing_snapshot.get("tax"), dict) else {}
+        pricing_details = pricing_snapshot.get("pricing_details") if isinstance(pricing_snapshot.get("pricing_details"), dict) else {}
+        taxable_val = Decimal(str(
+            tax_dict.get("taxableAmount")
+            or pricing_details.get("taxable_amount")
+            or pricing_snapshot.get("taxableSubtotal")
+            or getattr(ord_obj, "subtotal", None)
+            or ord_obj.total
+        ))
+        cgst_val = Decimal(str(tax_dict.get("cgst") or pricing_details.get("cgst_amount") or 0))
+        sgst_val = Decimal(str(tax_dict.get("sgst") or pricing_details.get("sgst_amount") or 0))
+        igst_val = Decimal(str(tax_dict.get("igst") or pricing_details.get("igst_amount") or 0))
+        cess_val = Decimal(str(tax_dict.get("cess") or pricing_details.get("cess_amount") or 0))
+
+        shipping_addr = ord_obj.shipping_address if isinstance(ord_obj.shipping_address, dict) else {}
+        dest_state = resolve_gst_state_code(
+            state_code=shipping_addr.get("state_code") or shipping_addr.get("stateCode"),
+            state_name=shipping_addr.get("state") or shipping_addr.get("state_name"),
+            postal_code=shipping_addr.get("postal_code") or shipping_addr.get("postalCode"),
+            default=tax_profile.state_code if tax_profile else "27",
+        )
+
+        from services.settlement_tax_service import calculate_settlement_split
+        breakdown = calculate_settlement_split(
+            gross_order_value=gross,
+            taxable_product_value=taxable_val,
+            product_cgst=cgst_val,
+            product_sgst=sgst_val,
+            product_igst=igst_val,
+            product_cess=cess_val,
+            merchant_profile=tax_profile,
+            customer_state_code=dest_state,
+            commission_percent=comm_pct,
+            estimate_gateway_fee=not is_cod_ord,
+        )
+
+        is_order_returned = ord_obj.status in ("cancelled", "returned", "refunded") or getattr(ord_obj, "payment_status", None) == "refunded"
+
+        if not ledger_entry:
+            initial_status = "pending_cod" if is_cod_ord else ("refunded" if is_order_returned else ("paid" if ord_obj.status == "delivered" else "in_escrow"))
+            initial_escrow = "reversed" if is_order_returned else ("unheld" if ord_obj.status == "delivered" else "held")
+            new_entry = TenantLedgerEntry(
+                id=uuid4(),
+                admin_id=admin_id or uuid4(),
+                site_id=site_id,
+                order_id=ord_obj.id,
+                gross_amount=gross,
+                platform_fee_percent=comm_pct,
+                platform_fee=breakdown.total_platform_fee_with_gst,
+                tenant_share=gross if is_cod_ord else breakdown.net_merchant_payout,
+                currency="INR",
+                status=initial_status,
+                escrow_status=initial_escrow,
+                entry_type="order_sale",
+                gross_order_value=breakdown.gross_order_value,
+                taxable_product_value=breakdown.taxable_product_value,
+                platform_commission_base=breakdown.platform_commission_base,
+                platform_fee_gst_cgst=breakdown.platform_fee_gst_cgst,
+                platform_fee_gst_sgst=breakdown.platform_fee_gst_sgst,
+                platform_fee_gst_igst=breakdown.platform_fee_gst_igst,
+                total_platform_fee_with_gst=breakdown.total_platform_fee_with_gst,
+                gst_tcs_cgst=breakdown.gst_tcs_cgst,
+                gst_tcs_sgst=breakdown.gst_tcs_sgst,
+                gst_tcs_igst=breakdown.gst_tcs_igst,
+                total_gst_tcs=breakdown.total_gst_tcs,
+                tds_rate_applied=breakdown.tds_rate_applied,
+                income_tax_tds_194o=breakdown.income_tax_tds_194o,
+                gateway_fee=breakdown.gateway_fee,
+                gateway_fee_gst=breakdown.gateway_fee_gst,
+                net_merchant_payout=breakdown.net_merchant_payout,
+                created_at=ord_obj.created_at or now,
+                updated_at=now,
+            )
+            session.add(new_entry)
+            existing_ledger_by_order_id[ord_obj.id] = new_entry
+            has_mutations = True
+        else:
+            changed = False
+            if ord_obj.created_at and ledger_entry.created_at != ord_obj.created_at:
+                ledger_entry.created_at = ord_obj.created_at
+                changed = True
+            if ledger_entry.site_id != site_id:
+                ledger_entry.site_id = site_id
+                changed = True
+            if is_order_returned and ledger_entry.status != "refunded":
+                ledger_entry.status = "refunded"
+                ledger_entry.escrow_status = "reversed"
+                changed = True
+            elif is_cod_ord and ledger_entry.status in ("in_escrow", "held", "pending_payout", "unpaid"):
+                ledger_entry.status = "pending_cod"
+                changed = True
+            elif not is_cod_ord and is_valid_online_order and ledger_entry.status == "unpaid":
+                ledger_entry.status = "refunded" if is_order_returned else "in_escrow"
+                changed = True
+
+            # Always sync and reconcile statutory fee, GST, TCS, TDS, Gateway fee and payout fields
+            if ledger_entry.platform_fee != breakdown.total_platform_fee_with_gst:
+                ledger_entry.platform_fee = breakdown.total_platform_fee_with_gst
+                changed = True
+            if ledger_entry.platform_fee_percent != comm_pct:
+                ledger_entry.platform_fee_percent = comm_pct
+                changed = True
+            expected_tenant_share = gross if is_cod_ord else breakdown.net_merchant_payout
+            if ledger_entry.tenant_share != expected_tenant_share:
+                ledger_entry.tenant_share = expected_tenant_share
+                changed = True
+            if ledger_entry.gross_order_value != breakdown.gross_order_value:
+                ledger_entry.gross_order_value = breakdown.gross_order_value
+                changed = True
+            if ledger_entry.taxable_product_value != breakdown.taxable_product_value:
+                ledger_entry.taxable_product_value = breakdown.taxable_product_value
+                changed = True
+            if getattr(ledger_entry, "product_cgst", None) != breakdown.product_cgst:
+                ledger_entry.product_cgst = breakdown.product_cgst
+                changed = True
+            if getattr(ledger_entry, "product_sgst", None) != breakdown.product_sgst:
+                ledger_entry.product_sgst = breakdown.product_sgst
+                changed = True
+            if getattr(ledger_entry, "product_igst", None) != breakdown.product_igst:
+                ledger_entry.product_igst = breakdown.product_igst
+                changed = True
+            if getattr(ledger_entry, "product_cess", None) != breakdown.product_cess:
+                ledger_entry.product_cess = breakdown.product_cess
+                changed = True
+            if getattr(ledger_entry, "platform_commission_base", None) != breakdown.platform_commission_base:
+                ledger_entry.platform_commission_base = breakdown.platform_commission_base
+                changed = True
+            if getattr(ledger_entry, "platform_fee_gst_cgst", None) != breakdown.platform_fee_gst_cgst:
+                ledger_entry.platform_fee_gst_cgst = breakdown.platform_fee_gst_cgst
+                changed = True
+            if getattr(ledger_entry, "platform_fee_gst_sgst", None) != breakdown.platform_fee_gst_sgst:
+                ledger_entry.platform_fee_gst_sgst = breakdown.platform_fee_gst_sgst
+                changed = True
+            if getattr(ledger_entry, "platform_fee_gst_igst", None) != breakdown.platform_fee_gst_igst:
+                ledger_entry.platform_fee_gst_igst = breakdown.platform_fee_gst_igst
+                changed = True
+            if getattr(ledger_entry, "total_platform_fee_with_gst", None) != breakdown.total_platform_fee_with_gst:
+                ledger_entry.total_platform_fee_with_gst = breakdown.total_platform_fee_with_gst
+                changed = True
+            if getattr(ledger_entry, "gst_tcs_cgst", None) != breakdown.gst_tcs_cgst:
+                ledger_entry.gst_tcs_cgst = breakdown.gst_tcs_cgst
+                changed = True
+            if getattr(ledger_entry, "gst_tcs_sgst", None) != breakdown.gst_tcs_sgst:
+                ledger_entry.gst_tcs_sgst = breakdown.gst_tcs_sgst
+                changed = True
+            if getattr(ledger_entry, "gst_tcs_igst", None) != breakdown.gst_tcs_igst:
+                ledger_entry.gst_tcs_igst = breakdown.gst_tcs_igst
+                changed = True
+            if getattr(ledger_entry, "total_gst_tcs", None) != breakdown.total_gst_tcs:
+                ledger_entry.total_gst_tcs = breakdown.total_gst_tcs
+                changed = True
+            if getattr(ledger_entry, "income_tax_tds_194o", None) != breakdown.income_tax_tds_194o:
+                ledger_entry.income_tax_tds_194o = breakdown.income_tax_tds_194o
+                ledger_entry.tds_rate_applied = breakdown.tds_rate_applied
+                changed = True
+            if not is_cod_ord:
+                if getattr(ledger_entry, "gateway_fee", None) != breakdown.gateway_fee:
+                    ledger_entry.gateway_fee = breakdown.gateway_fee
+                    changed = True
+                if getattr(ledger_entry, "gateway_fee_gst", None) != breakdown.gateway_fee_gst:
+                    ledger_entry.gateway_fee_gst = breakdown.gateway_fee_gst
+                    changed = True
+            if getattr(ledger_entry, "net_merchant_payout", None) != breakdown.net_merchant_payout:
+                ledger_entry.net_merchant_payout = breakdown.net_merchant_payout
+                changed = True
+            if changed:
+                ledger_entry.updated_at = now
+                session.add(ledger_entry)
+                has_mutations = True
+
+    if has_mutations:
+        session.commit()
+
+    # Load candidate ledger entries for this site
+    candidate_entries = session.exec(
         select(TenantLedgerEntry)
-        .where(TenantLedgerEntry.site_id == site_id)
+        .where(
+            TenantLedgerEntry.site_id == site_id,
+            TenantLedgerEntry.status != "unpaid"
+        )
         .order_by(TenantLedgerEntry.created_at.desc())
     ).all()
+
+    # Strict multi-tenant security verification: keep ONLY records linked to genuine valid orders of this site
+    all_entries = []
+    for e in candidate_entries:
+        if getattr(e, "entry_type", "") == "fee_adjustment_refund":
+            if e.site_id == site_id:
+                all_entries.append(e)
+        elif e.order_id in site_order_ids:
+            ord_item = site_order_map.get(e.order_id)
+            if ord_item:
+                pm = (ord_item.payment_method or "").strip().lower()
+                is_cod = (
+                    pm in ("cod", "cash on delivery", "cash_on_delivery", "cash", "offline", "cash_delivery", "cash on collection")
+                    or "cod" in pm
+                    or "cash" in pm
+                    or (not getattr(ord_item, "razorpay_payment_id", None) and not getattr(ord_item, "razorpay_order_id", None) and pm not in ("online", "razorpay", "upi", "card", "credit_card", "debit_card", "netbanking", "wallet", "prepaid"))
+                )
+                has_captured = (
+                    getattr(ord_item, "payment_status", "") in ("paid", "completed", "settled")
+                    or bool(getattr(ord_item, "razorpay_payment_id", None))
+                )
+                is_refunded_online = (
+                    getattr(ord_item, "payment_status", "") == "refunded"
+                    or (
+                        ord_item.status in ("refunded", "returned", "cancelled")
+                        and (
+                            bool(getattr(ord_item, "razorpay_payment_id", None))
+                            or bool(getattr(e, "razorpay_transfer_id", None))
+                        )
+                    )
+                    or (e.status == "refunded" and bool(getattr(e, "razorpay_transfer_id", None)))
+                )
+                if is_cod or has_captured or is_refunded_online:
+                    all_entries.append(e)
+
+    def _entry_sort_key(e_item: TenantLedgerEntry) -> datetime:
+        ord_rec = site_order_map.get(e_item.order_id)
+        if ord_rec and ord_rec.created_at:
+            return ord_rec.created_at
+        return e_item.created_at or datetime.min.replace(tzinfo=timezone.utc)
+
+    all_entries.sort(key=_entry_sort_key, reverse=True)
 
     gross_gmv = Decimal("0.00")
     total_platform_fees = Decimal("0.00")
@@ -1917,52 +2429,240 @@ def get_earnings_summary(
     escrow_balance = Decimal("0.00")
     settled_payouts = Decimal("0.00")
 
-    now = utc_now()
+    online_gross_amount = Decimal("0.00")
+    online_refunded_amount = Decimal("0.00")
+
+    cod_gross_amount = Decimal("0.00")
+    cod_refunded_amount = Decimal("0.00")
+    cod_platform_fees_due = Decimal("0.00")
+    cod_platform_fees_cooling = Decimal("0.00")
+    cod_platform_fees_deducted = Decimal("0.00")
+    refund_gateway_fees_due = Decimal("0.00")
+
+    def _is_entry_cod(o_item: Optional[Order], e_item: Optional[TenantLedgerEntry]) -> bool:
+        if e_item and getattr(e_item, "status", None) == "pending_cod":
+            return True
+        if not o_item and e_item and getattr(e_item, "order_id", None):
+            o_item = site_order_map.get(e_item.order_id)
+        if not o_item:
+            return False
+        p_str = (o_item.payment_method or "").strip().lower()
+        if p_str in ("cod", "cash on delivery", "cash_on_delivery", "cash", "offline", "cash_delivery", "cash on collection") or "cod" in p_str or "cash" in p_str:
+            return True
+        if not getattr(o_item, "razorpay_payment_id", None) and not getattr(o_item, "razorpay_order_id", None) and p_str not in ("online", "razorpay", "upi", "card", "credit_card", "debit_card", "netbanking", "wallet", "prepaid"):
+            return True
+        return False
+
+    # Parse date filters
+    from_dt = None
+    to_dt = None
+    if from_date:
+        try:
+            from_dt = datetime.fromisoformat(from_date.replace("Z", "+00:00")).astimezone(timezone.utc)
+        except Exception:
+            try:
+                from_dt = datetime.strptime(from_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            except Exception:
+                pass
+    if to_date:
+        try:
+            to_dt = datetime.fromisoformat(to_date.replace("Z", "+00:00")).astimezone(timezone.utc)
+        except Exception:
+            try:
+                to_dt = datetime.strptime(to_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, microsecond=999999, tzinfo=timezone.utc)
+            except Exception:
+                pass
+
+    def _matches_date_filter(e_date: datetime) -> bool:
+        if not date_filter or date_filter == "all":
+            return True
+        if e_date.tzinfo is None:
+            e_date = e_date.replace(tzinfo=timezone.utc)
+        if date_filter == "today":
+            start_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            return e_date >= start_today
+        elif date_filter == "last_7_days":
+            return e_date >= (now - timedelta(days=7))
+        elif date_filter == "last_30_days":
+            return e_date >= (now - timedelta(days=30))
+        elif date_filter == "custom":
+            if from_dt and e_date < from_dt:
+                return False
+            if to_dt and e_date > to_dt:
+                return False
+            return True
+        return True
+
     for entry in all_entries:
+        # Track non-refundable gateway fee debit adjustments from refunds/cancellations
+        if getattr(entry, "entry_type", "") == "fee_adjustment_refund" and entry.status != "refunded":
+            refund_gateway_fees_due += abs(entry.tenant_share)
+
         # Auto-reconcile status if underlying order was cancelled, delivered, or return window matured
-        order = session.get(Order, entry.order_id)
+        order = site_order_map.get(entry.order_id)
+        is_order_cod = _is_entry_cod(order, entry)
+        if is_order_cod and entry.status in ("in_escrow", "held"):
+            entry.status = "pending_cod"
+            session.add(entry)
+
+        is_returned_or_cancelled = (
+            (order and order.status in ("cancelled", "returned", "refunded"))
+            or (order and getattr(order, "payment_status", None) == "refunded")
+            or entry.status in ("refunded", "reversed")
+            or getattr(entry, "escrow_status", None) == "reversed"
+        )
+
         if order:
             if order.status == "cancelled" or getattr(order, "payment_status", None) == "refunded":
                 if entry.status != "refunded":
                     entry.status = "refunded"
                     entry.escrow_status = "reversed"
                     session.add(entry)
-            elif order.status == "delivered" and entry.status not in ("paid", "refunded"):
-                # Escrow matures ONLY after order is delivered AND the return window has passed
+            elif order.status == "delivered" and entry.status not in ("paid", "refunded") and not is_order_cod:
+                # Online Escrow matures ONLY after order is delivered AND the return window has passed
                 window_closes = order.return_window_closes_at
                 if window_closes and now >= window_closes:
-                    from models import ReturnRequest
+                    from models import ReturnRequest, SupportTicket
                     open_returns = session.exec(
                         select(ReturnRequest).where(
                             ReturnRequest.order_id == order.id,
                             ReturnRequest.status.in_(["requested", "approved", "pickup_scheduled", "in_transit", "received", "inspected"])
                         )
                     ).all()
-                    if not open_returns and entry.escrow_status == "held":
-                        entry.escrow_status = "unheld"
-                        entry.status = "pending_payout"
-                        order.escrow_status = "unheld"
-                        session.add(entry)
-                        session.add(order)
+                    open_tickets = session.exec(
+                        select(SupportTicket).where(
+                            SupportTicket.order_id == order.id,
+                            SupportTicket.status.in_(["open", "in_progress", "waiting_customer", "escalated", "pending"])
+                        )
+                    ).all()
+                    if not open_returns and not open_tickets:
+                        try:
+                            unhold_tenant_escrow_transfer(order=order, session=session)
+                        except Exception as e:
+                            logger.error("Auto unhold in get_earnings failed for order %s: %s", order.id, e)
 
-        if entry.status != "refunded":
-            gross_gmv += entry.gross_amount
-            total_platform_fees += entry.platform_fee
-            total_net_earnings += entry.tenant_share
+        # Get entry date for period-based metrics accumulation
+        e_date = order.created_at if (order and order.created_at) else (entry.created_at or datetime.min.replace(tzinfo=timezone.utc))
+        if e_date.tzinfo is None:
+            e_date = e_date.replace(tzinfo=timezone.utc)
 
-            if entry.status in ("in_escrow", "held") or (getattr(entry, "escrow_status", "held") == "held" and entry.status != "paid"):
-                escrow_balance += entry.tenant_share
-            elif entry.status == "paid":
-                settled_payouts += entry.tenant_share
-            elif entry.status == "pending_payout":
-                pending_payout += entry.tenant_share
+        if not _matches_date_filter(e_date):
+            continue
+
+        if is_order_cod:
+            cod_gross_amount += entry.gross_amount
+            if is_returned_or_cancelled:
+                cod_refunded_amount += entry.gross_amount
+            else:
+                gross_gmv += entry.gross_amount
+                total_platform_fees += entry.platform_fee
+                total_net_earnings += entry.tenant_share
+
+                entry_cod_dues = (
+                    entry.platform_fee
+                    + Decimal(str(getattr(entry, "income_tax_tds_194o", 0) or 0))
+                    + Decimal(str(getattr(entry, "total_gst_tcs", 0) or 0))
+                )
+
+                window_closes = order.return_window_closes_at if order else None
+                cod_ded_due = (window_closes + timedelta(days=2)) if window_closes else (order.delivered_at + timedelta(days=9) if (order and order.delivered_at) else None)
+                if order and order.status == "delivered" and cod_ded_due and now >= cod_ded_due:
+                    # Matured: return period + 2 days safety buffer elapsed!
+                    cod_platform_fees_deducted += entry_cod_dues
+                else:
+                    # Still in cooling buffer
+                    cod_platform_fees_cooling += entry_cod_dues
+                    cod_platform_fees_due += entry_cod_dues
+        else:
+            online_gross_amount += entry.gross_amount
+            if is_returned_or_cancelled:
+                online_refunded_amount += entry.gross_amount
+            else:
+                gross_gmv += entry.gross_amount
+                total_platform_fees += entry.platform_fee
+                total_net_earnings += entry.tenant_share
+
+                if entry.status in ("in_escrow", "held") or (getattr(entry, "escrow_status", "held") == "held" and entry.status != "paid"):
+                    escrow_balance += entry.tenant_share
+                elif entry.status == "paid":
+                    settled_payouts += entry.tenant_share
+                elif entry.status == "pending_payout":
+                    pending_payout += entry.tenant_share
+
+    online_net_amount = max(Decimal("0.00"), online_gross_amount - online_refunded_amount)
+    cod_net_amount = max(Decimal("0.00"), cod_gross_amount - cod_refunded_amount)
 
     session.commit()
 
-    total_count = len(all_entries)
+    total_dues_owed_to_platform = cod_platform_fees_due + refund_gateway_fees_due
+    net_payable_to_merchant = max(Decimal("0.00"), pending_payout - total_dues_owed_to_platform)
+
+    # Apply search, date_filter, status, and sorting to table entries
+    filtered_entries = []
+
+    search_q = (search or "").strip().lower().replace("#", "")
+
+    for e in all_entries:
+        ord_obj = site_order_map.get(e.order_id)
+        is_cod = _is_entry_cod(ord_obj, e)
+        e_date = ord_obj.created_at if (ord_obj and ord_obj.created_at) else (e.created_at or datetime.min.replace(tzinfo=timezone.utc))
+        if e_date.tzinfo is None:
+            e_date = e_date.replace(tzinfo=timezone.utc)
+
+        # 1. Date Filter
+        if not _matches_date_filter(e_date):
+            continue
+
+        # 2. Status Filter
+        if status and status != "all":
+            is_settled = (e.status == "paid" and getattr(e, "escrow_status", "held") == "unheld")
+            is_escrow = (getattr(e, "escrow_status", "held") == "held" and e.status not in ("paid", "refunded") and not is_cod)
+            is_refunded = (e.status in ("refunded", "reversed") or getattr(e, "escrow_status", "held") == "reversed" or (ord_obj and ord_obj.status in ("cancelled", "returned", "refunded")))
+
+            if status == "settled" and not is_settled:
+                continue
+            elif status == "escrow" and not is_escrow:
+                continue
+            elif status == "refunded" and not is_refunded:
+                continue
+            elif status == "pending" and e.status != "pending_payout":
+                continue
+            elif status == "cod" and not is_cod:
+                continue
+
+        # 3. Search Query
+        if search_q:
+            ord_id_str = str(e.order_id or "").lower()
+            ord_num_str = ord_id_str[:8].upper()
+            transfer_str = str(getattr(e, "razorpay_transfer_id", "") or "").lower()
+            gross_str = str(e.gross_amount)
+            net_str = str(e.tenant_share)
+
+            if not (
+                search_q in ord_id_str
+                or search_q in ord_num_str.lower()
+                or search_q in transfer_str
+                or search_q in gross_str
+                or search_q in net_str
+            ):
+                continue
+
+        filtered_entries.append(e)
+
+    # 4. Sorting
+    if sort == "date_asc":
+        filtered_entries.sort(key=lambda x: (site_order_map.get(x.order_id).created_at if (site_order_map.get(x.order_id) and site_order_map.get(x.order_id).created_at) else (x.created_at or datetime.min.replace(tzinfo=timezone.utc))), reverse=False)
+    elif sort == "amount_desc":
+        filtered_entries.sort(key=lambda x: x.tenant_share, reverse=True)
+    elif sort == "amount_asc":
+        filtered_entries.sort(key=lambda x: x.tenant_share, reverse=False)
+    else:  # date_desc
+        filtered_entries.sort(key=_entry_sort_key, reverse=True)
+
+    total_count = len(filtered_entries)
     total_pages = max(1, (total_count + limit - 1) // limit)
     offset = (page - 1) * limit
-    paginated_entries = all_entries[offset : offset + limit]
+    paginated_entries = filtered_entries[offset : offset + limit]
 
     orders_map = {
         o.id: o
@@ -1971,28 +2671,171 @@ def get_earnings_summary(
         ).all()
     } if paginated_entries else {}
 
-    serialized_entries = [
-        LedgerEntryResponse(
-            id=str(e.id),
-            order_id=str(e.order_id),
-            order_number=str(e.order_id)[:8].upper(),
-            created_at=e.created_at.isoformat(),
-            gross_amount=float(e.gross_amount),
-            platform_fee=float(e.platform_fee),
-            platform_fee_percent=float(e.platform_fee_percent),
-            tenant_share=float(e.tenant_share),
-            status=e.status,
-            currency=e.currency,
-            razorpay_transfer_id=e.razorpay_transfer_id,
-            transfer_status=e.transfer_status,
-            escrow_status=getattr(e, "escrow_status", "held"),
-            escrow_release_due_at=e.escrow_release_due_at.isoformat() if e.escrow_release_due_at else None,
-            unheld_at=e.unheld_at.isoformat() if getattr(e, "unheld_at", None) else None,
-            return_window_closes_at=orders_map[e.order_id].return_window_closes_at.isoformat() if e.order_id in orders_map and orders_map[e.order_id].return_window_closes_at else None,
-            settled_at=e.settled_at.isoformat() if e.settled_at else None,
+    paginated_order_ids = [e.order_id for e in paginated_entries]
+    from models import ReturnRequest, SupportTicket
+    open_returns_list = session.exec(
+        select(ReturnRequest).where(
+            ReturnRequest.order_id.in_(paginated_order_ids),
+            ReturnRequest.status.in_(["requested", "approved", "pickup_scheduled", "in_transit", "received", "inspected"])
         )
-        for e in paginated_entries
-    ]
+    ).all() if paginated_order_ids else []
+    returns_by_order = {}
+    for r in open_returns_list:
+        returns_by_order.setdefault(r.order_id, []).append(r)
+
+    open_tickets_list = session.exec(
+        select(SupportTicket).where(
+            SupportTicket.order_id.in_(paginated_order_ids),
+            SupportTicket.status.in_(["open", "in_progress", "waiting_customer", "escalated", "pending"])
+        )
+    ).all() if paginated_order_ids else []
+    tickets_by_order = {}
+    for t in open_tickets_list:
+        tickets_by_order.setdefault(t.order_id, []).append(t)
+
+    serialized_entries = []
+    for e in paginated_entries:
+        ord = orders_map.get(e.order_id)
+        is_cod = _is_entry_cod(ord, e)
+
+        code = "cooling_period"
+        title = "In Escrow Hold"
+        detail = "Pending payout clearance."
+        block_ref = None
+        cod_fee_status = None
+        cod_fee_due_str = None
+        cod_fee_deducted_str = None
+
+        if is_cod:
+            window_closes = ord.return_window_closes_at if ord else None
+            cod_ded_due = (window_closes + timedelta(days=2)) if window_closes else (ord.delivered_at + timedelta(days=9) if (ord and ord.delivered_at) else None)
+            is_returned_or_cancelled = (ord and ord.status in ("cancelled", "returned", "refunded")) or e.status == "refunded"
+
+            if is_returned_or_cancelled:
+                cod_fee_status = "waived_returned"
+                code = "cod_fee_waived"
+                title = "COD Order Returned · Fee Waived"
+                detail = "Order was returned or cancelled. Platform fee is 100% waived (₹0.00 charged)."
+            elif ord and ord.status == "delivered" and cod_ded_due and now >= cod_ded_due:
+                cod_fee_status = "deducted"
+                cod_fee_deducted_str = cod_ded_due.isoformat()
+                code = "cod_fee_settled"
+                title = "COD Platform Fee Deducted"
+                detail = f"Order delivered and buyer return protection + 2-day safety buffer elapsed. Fee of ₹{float(e.platform_fee):.2f} (incl. GST) deducted."
+            else:
+                cod_fee_status = "cooling"
+                if cod_ded_due:
+                    cod_fee_due_str = cod_ded_due.isoformat()
+                    delta = cod_ded_due - now
+                    hrs_left = max(1, int(delta.total_seconds() // 3600))
+                    days_left = hrs_left // 24
+                    time_str = f"{days_left}d {hrs_left % 24}h" if days_left else f"{hrs_left} hrs"
+                    code = "cod_buffer_cooling"
+                    title = f"COD Safety Buffer ({time_str} left)"
+                    detail = f"Cash in hand. Platform fee of ₹{float(e.platform_fee):.2f} is held under return protection + 2-day safety buffer until {cod_ded_due.strftime('%b %d, %Y at %I:%M %p UTC')}."
+                elif ord and ord.status not in ("delivered", "completed"):
+                    code = "cod_in_transit"
+                    title = f"COD In Transit ({ord.status.replace('_', ' ').capitalize()})"
+                    detail = "Order in transit. Buyer return window and 2-day safety buffer countdown begins upon delivery."
+                else:
+                    code = "cod_buffer_cooling"
+                    title = "COD Safety Buffer Active"
+                    detail = "Cash in hand. Protected under order return window + 2-day safety buffer."
+        elif e.status == "paid" and getattr(e, "escrow_status", "held") == "unheld":
+            code = "settled"
+            title = "Settled to Bank"
+            detail = "Funds disbursed to merchant bank account."
+        elif e.status == "refunded" or getattr(e, "escrow_status", "held") == "reversed":
+            code = "refunded"
+            title = "Refunded / Reversed"
+            detail = "Order was refunded or cancelled; funds reversed to customer."
+        elif returns_by_order.get(e.order_id):
+            r_obj = returns_by_order[e.order_id][0]
+            code = "return_dispute"
+            title = "On Hold · Return Request"
+            detail = f"Customer submitted return request ({r_obj.reason or 'Inspection in progress'}). Escrow locked until return resolution."
+            block_ref = f"Return #{str(r_obj.id)[:8]}"
+        elif tickets_by_order.get(e.order_id):
+            t_obj = tickets_by_order[e.order_id][0]
+            code = "support_ticket"
+            title = "On Hold · Support Inquiry"
+            detail = f"Open customer support case #{t_obj.ticket_number or str(t_obj.id)[:8]} ({t_obj.subject or 'Inquiry'}). Escrow locked until resolved."
+            block_ref = t_obj.ticket_number or f"Ticket #{str(t_obj.id)[:8]}"
+        elif bank_acc and getattr(bank_acc, "quarantine_until", None) and bank_acc.quarantine_until > now:
+            code = "bank_quarantine"
+            title = "On Hold · Bank Cooldown"
+            detail = f"Bank credentials updated recently. Payouts locked until {bank_acc.quarantine_until.strftime('%b %d, %H:%M UTC')}."
+        elif ord and ord.status not in ("delivered", "completed"):
+            code = "in_transit"
+            title = f"On Hold · Awaiting Delivery ({ord.status.replace('_', ' ').capitalize()})"
+            detail = f"Order status is '{ord.status}'. Escrow return protection countdown begins once marked delivered."
+        elif ord and ord.return_window_closes_at and ord.return_window_closes_at > now:
+            code = "cooling_period"
+            delta = ord.return_window_closes_at - now
+            hours_left = max(1, int(delta.total_seconds() // 3600))
+            if hours_left >= 24:
+                days = hours_left // 24
+                rem_h = hours_left % 24
+                time_str = f"{days}d {rem_h}h" if rem_h else f"{days} days"
+            else:
+                time_str = f"{hours_left} hrs"
+            title = f"In Escrow Hold · Return Window ({time_str} left)"
+            detail = f"Order delivered. Mandatory buyer protection cooling window closes on {ord.return_window_closes_at.strftime('%b %d, %Y at %I:%M %p UTC')} ({time_str} remaining)."
+        elif getattr(e, "escrow_status", "held") == "unheld" or e.status == "pending_payout":
+            code = "mature_ready"
+            title = "Matured · Ready for Release"
+            detail = "Return window elapsed with zero disputes. Payout is ready for disbursement."
+
+        platform_comm_base = float(e.platform_commission_base) if getattr(e, "platform_commission_base", None) is not None else float(e.gross_amount * (e.platform_fee_percent / Decimal("100")))
+        calc_fee_gst = float((getattr(e, "platform_fee_gst_cgst", 0) or 0) + (getattr(e, "platform_fee_gst_sgst", 0) or 0) + (getattr(e, "platform_fee_gst_igst", 0) or 0))
+        if calc_fee_gst <= 0:
+            calc_fee_gst = float(e.platform_fee) - platform_comm_base
+        platform_fee_gst = max(0.0, calc_fee_gst)
+
+        entry_created_dt = ord.created_at if (ord and ord.created_at) else e.created_at
+        created_at_str = entry_created_dt.isoformat() if entry_created_dt else e.created_at.isoformat()
+
+        serialized_entries.append(
+            LedgerEntryResponse(
+                id=str(e.id),
+                order_id=str(e.order_id),
+                order_number=str(e.order_id)[:8].upper(),
+                created_at=created_at_str,
+                gross_amount=float(e.gross_amount),
+                platform_fee=float(e.platform_fee),
+                platform_fee_percent=float(e.platform_fee_percent),
+                tenant_share=float(e.tenant_share),
+                platform_commission_base=platform_comm_base,
+                platform_fee_gst=platform_fee_gst,
+                total_platform_fee_with_gst=float(getattr(e, "total_platform_fee_with_gst", None) or e.platform_fee),
+                gateway_fee=float(getattr(e, "gateway_fee", 0) or 0),
+                gateway_fee_gst=float(getattr(e, "gateway_fee_gst", 0) or 0),
+                gst_tcs=float(getattr(e, "total_gst_tcs", 0) or 0),
+                tds_194o=float(getattr(e, "income_tax_tds_194o", 0) or 0),
+                tds_rate_applied=float(getattr(e, "tds_rate_applied", 0) or 0),
+                is_cod=bool(is_cod),
+                cod_fee_status=cod_fee_status,
+                cod_fee_deduction_due_at=cod_fee_due_str,
+                cod_fee_deducted_at=cod_fee_deducted_str,
+                cod_buffer_days=2,
+                status=e.status,
+                currency=e.currency,
+                razorpay_transfer_id=e.razorpay_transfer_id,
+                transfer_status=e.transfer_status,
+                escrow_status=getattr(e, "escrow_status", "held"),
+                escrow_release_due_at=e.escrow_release_due_at.isoformat() if e.escrow_release_due_at else None,
+                unheld_at=e.unheld_at.isoformat() if getattr(e, "unheld_at", None) else None,
+                return_window_closes_at=ord.return_window_closes_at.isoformat() if ord and ord.return_window_closes_at else None,
+                settled_at=e.settled_at.isoformat() if e.settled_at else None,
+                order_status=ord.status if ord else None,
+                payment_method=ord.payment_method if ord else None,
+                delivered_at=ord.delivered_at.isoformat() if ord and ord.delivered_at else None,
+                hold_reason_code=code,
+                hold_reason_title=title,
+                hold_reason_detail=detail,
+                blocking_reference=block_ref,
+            )
+        )
 
     commission_percent = get_platform_commission_percent()
 
@@ -2003,6 +2846,18 @@ def get_earnings_summary(
         "pending_payout": float(pending_payout),
         "escrow_balance": float(escrow_balance),
         "settled_payouts": float(settled_payouts),
+        "online_gross_amount": float(online_gross_amount),
+        "online_refunded_amount": float(online_refunded_amount),
+        "online_net_amount": float(online_net_amount),
+        "cod_gross_amount": float(cod_gross_amount),
+        "cod_refunded_amount": float(cod_refunded_amount),
+        "cod_net_amount": float(cod_net_amount),
+        "cod_platform_fees_due": float(cod_platform_fees_due),
+        "cod_platform_fees_cooling": float(cod_platform_fees_cooling),
+        "cod_platform_fees_deducted": float(cod_platform_fees_deducted),
+        "refund_gateway_fees_due": float(refund_gateway_fees_due),
+        "total_dues_owed_to_platform": float(total_dues_owed_to_platform),
+        "net_payable_to_merchant": float(net_payable_to_merchant),
         "platform_commission_percent": float(commission_percent),
         "total_orders_count": total_count,
         "bank_configured": bank_configured,
@@ -2010,6 +2865,253 @@ def get_earnings_summary(
         "total_pages": total_pages,
         "current_page": page,
     }
+
+
+@router.get("/admin/{site_id}/earnings/export-csv")
+@router.get("/admin/{site_id}/earnings-export-csv")
+@router.get("/payments/earnings/{site_id}/export-csv")
+@router.get("/earnings/{site_id}/export-csv")
+def export_earnings_ledger_csv(
+    site_id: UUID,
+    search: Optional[str] = Query(None, description="Search term for order number, ID, transfer ID"),
+    date_filter: Optional[str] = Query("all", description="all, today, last_7_days, last_30_days, custom"),
+    status: Optional[str] = Query("all", description="all, in_escrow, paid, pending_cod, refunded"),
+    from_date: Optional[str] = Query(None),
+    to_date: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query("date_desc", description="date_desc, date_asc, amount_desc, amount_asc"),
+    admin=Depends(require_permission("earnings:view")),
+    ownership=Depends(enforce_site_ownership),
+    session: Session = Depends(get_session),
+):
+    """
+    Exports filtered transaction-level ledger history with statutory fee & tax itemization.
+    Uses memory-efficient chunked batch streaming to prevent server overload on large datasets.
+    """
+    import csv
+    import io
+
+    now = datetime.now(timezone.utc)
+
+    # 1. Parse date boundaries
+    from_dt, to_dt = None, None
+    if from_date:
+        try:
+            from_dt = datetime.fromisoformat(from_date.replace("Z", "+00:00")).astimezone(timezone.utc)
+        except Exception:
+            try:
+                from_dt = datetime.strptime(from_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            except Exception:
+                pass
+    if to_date:
+        try:
+            to_dt = datetime.fromisoformat(to_date.replace("Z", "+00:00")).astimezone(timezone.utc)
+        except Exception:
+            try:
+                to_dt = datetime.strptime(to_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, microsecond=999999, tzinfo=timezone.utc)
+            except Exception:
+                pass
+
+    # 2. Build SQL query joined with Order
+    query = (
+        select(TenantLedgerEntry, Order)
+        .outerjoin(Order, TenantLedgerEntry.order_id == Order.id)
+        .where(
+            TenantLedgerEntry.site_id == site_id,
+            TenantLedgerEntry.status != "unpaid"
+        )
+    )
+
+    if date_filter == "today":
+        cutoff = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        query = query.where(TenantLedgerEntry.created_at >= cutoff)
+    elif date_filter == "last_7_days":
+        cutoff = now - timedelta(days=7)
+        query = query.where(TenantLedgerEntry.created_at >= cutoff)
+    elif date_filter == "last_30_days":
+        cutoff = now - timedelta(days=30)
+        query = query.where(TenantLedgerEntry.created_at >= cutoff)
+    elif date_filter == "custom":
+        if from_dt:
+            query = query.where(TenantLedgerEntry.created_at >= from_dt)
+        if to_dt:
+            query = query.where(TenantLedgerEntry.created_at <= to_dt)
+
+    if status and status != "all":
+        if status == "paid":
+            query = query.where(TenantLedgerEntry.status == "paid")
+        elif status == "refunded":
+            query = query.where(TenantLedgerEntry.status == "refunded")
+        elif status == "in_escrow":
+            query = query.where(TenantLedgerEntry.status.in_(["in_escrow", "held"]))
+        elif status == "pending_cod":
+            query = query.where(
+                or_(
+                    TenantLedgerEntry.status == "pending_cod",
+                    Order.payment_method.ilike("%cod%"),
+                    Order.payment_method.ilike("%cash%"),
+                ),
+                TenantLedgerEntry.status.in_(["in_escrow", "held", "pending_cod"])
+            )
+
+    if sort_by == "date_asc":
+        query = query.order_by(TenantLedgerEntry.created_at.asc())
+    elif sort_by == "amount_desc":
+        query = query.order_by(TenantLedgerEntry.gross_amount.desc())
+    elif sort_by == "amount_asc":
+        query = query.order_by(TenantLedgerEntry.gross_amount.asc())
+    else:  # date_desc
+        query = query.order_by(TenantLedgerEntry.created_at.desc())
+
+    search_q = (search or "").strip().lower().replace("#", "")
+
+    # 3. Stream generator (chunked batching)
+    def iter_csv():
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # Header Row
+        writer.writerow([
+            "Order Number",
+            "Order ID",
+            "Transaction Date",
+            "Payment Method",
+            "Order Status",
+            "Settlement Status",
+            "Gross Order Value (INR)",
+            "Taxable Product Value (INR)",
+            "Product GST (INR)",
+            "Platform Commission Base 3% (INR)",
+            "GST on Platform Fee 18% SAC 9983 (INR)",
+            "Total Platform Fee with GST (INR)",
+            "Payment Gateway Fee Base (INR)",
+            "GST on Gateway Fee 18% (INR)",
+            "Total Payment Gateway Fee (INR)",
+            "GST TCS Sec 52 0.50% (INR)",
+            "Income Tax TDS Sec 194-O (INR)",
+            "Net Merchant Payout (INR)",
+            "Escrow Status",
+            "Razorpay Transfer ID",
+            "Settled At",
+        ])
+        yield output.getvalue()
+        output.seek(0)
+        output.truncate(0)
+
+        BATCH_SIZE = 1000
+        offset = 0
+
+        while True:
+            batch_query = query.offset(offset).limit(BATCH_SIZE)
+            batch = session.exec(batch_query).all()
+            if not batch:
+                break
+
+            for item in batch:
+                if isinstance(item, TenantLedgerEntry):
+                    e = item
+                    order_obj = session.get(Order, e.order_id) if getattr(e, "order_id", None) else None
+                elif hasattr(item, "_mapping"):
+                    e = item._mapping.get(TenantLedgerEntry) or item[0]
+                    order_obj = item._mapping.get(Order) or (item[1] if len(item) > 1 else None)
+                elif isinstance(item, (tuple, list)):
+                    e = item[0]
+                    order_obj = item[1] if len(item) > 1 else None
+                else:
+                    e = getattr(item, "TenantLedgerEntry", item)
+                    order_obj = getattr(item, "Order", None)
+
+                # Ensure e is a valid TenantLedgerEntry
+                if not e or not hasattr(e, "gross_amount"):
+                    continue
+
+                order_id_val = getattr(e, "order_id", None)
+
+                # In-memory search filtering if search term present
+                if search_q:
+                    ord_num = f"ORD-{str(order_id_val)[:8].upper()}" if order_id_val else ""
+                    trf_id = (getattr(e, "razorpay_transfer_id", "") or "").lower()
+                    amt_str = f"{float(e.gross_amount or 0):.2f}"
+                    if (
+                        search_q not in ord_num.lower()
+                        and search_q not in str(order_id_val or "").lower()
+                        and search_q not in trf_id
+                        and search_q not in amt_str
+                        and search_q not in (e.status or "").lower()
+                    ):
+                        continue
+
+                order_num = f"ORD-{str(order_id_val)[:8].upper()}" if order_id_val else "N/A"
+                raw_pm = getattr(order_obj, "payment_method", None) if order_obj else None
+                is_cod = getattr(e, "status", "") == "pending_cod" or (raw_pm and any(k in raw_pm.lower() for k in ("cod", "cash", "offline", "collection")))
+                pm_label = "COD Cash" if is_cod else ("Online (Razorpay)" if (raw_pm or (order_obj and getattr(order_obj, "razorpay_payment_id", None))) else "Online")
+                ord_status = getattr(order_obj, "status", "placed") if order_obj else e.status
+
+                gross_val = float(e.gross_amount or 0.0)
+                taxable_val = float(getattr(e, "taxable_product_value", 0.0) or (gross_val / 1.18 if gross_val > 0 else 0.0))
+                prod_gst = max(0.0, gross_val - taxable_val)
+
+                plat_base = float(getattr(e, "platform_commission_base", 0.0) or (gross_val * 0.03))
+                plat_cgst = float(getattr(e, "platform_fee_gst_cgst", 0.0) or 0.0)
+                plat_sgst = float(getattr(e, "platform_fee_gst_sgst", 0.0) or 0.0)
+                plat_igst = float(getattr(e, "platform_fee_gst_igst", 0.0) or 0.0)
+                plat_gst = plat_cgst + plat_sgst + plat_igst
+                if plat_gst == 0.0:
+                    plat_gst = round(plat_base * 0.18, 2)
+                total_plat = float(getattr(e, "total_platform_fee_with_gst", 0.0) or getattr(e, "platform_fee", 0.0) or (plat_base + plat_gst))
+
+                gw_fee = float(getattr(e, "gateway_fee", 0.0) or (0.0 if is_cod else round(gross_val * 0.02, 2)))
+                gw_gst = float(getattr(e, "gateway_fee_gst", 0.0) or (0.0 if is_cod else round(gw_fee * 0.18, 2)))
+                total_gw = gw_fee + gw_gst
+
+                tcs = float(getattr(e, "total_gst_tcs", 0.0) or (round(taxable_val * 0.005, 2) if not is_cod else 0.0))
+                tds = float(getattr(e, "income_tax_tds_194o", 0.0) or 0.0)
+                net_share = float(getattr(e, "net_merchant_payout", 0.0) or getattr(e, "tenant_share", 0.0) or (gross_val - total_plat - total_gw - tcs - tds))
+
+                created_str = e.created_at.strftime("%Y-%m-%d %H:%M:%S") if isinstance(e.created_at, datetime) else str(e.created_at or "")[:19]
+                settled_str = e.settled_at.strftime("%Y-%m-%d %H:%M:%S") if isinstance(e.settled_at, datetime) else str(e.settled_at or "")[:19]
+
+                writer.writerow([
+                    order_num,
+                    str(e.order_id or ""),
+                    created_str,
+                    pm_label,
+                    ord_status,
+                    e.status,
+                    f"{gross_val:.2f}",
+                    f"{taxable_val:.2f}",
+                    f"{prod_gst:.2f}",
+                    f"{plat_base:.2f}",
+                    f"{plat_gst:.2f}",
+                    f"{total_plat:.2f}",
+                    f"{gw_fee:.2f}",
+                    f"{gw_gst:.2f}",
+                    f"{total_gw:.2f}",
+                    f"{tcs:.2f}",
+                    f"{tds:.2f}",
+                    f"{net_share:.2f}",
+                    getattr(e, "escrow_status", "held"),
+                    e.razorpay_transfer_id or "N/A",
+                    settled_str,
+                ])
+
+            yield output.getvalue()
+            output.seek(0)
+            output.truncate(0)
+
+            offset += len(batch)
+            if len(batch) < BATCH_SIZE:
+                break
+
+    filename = f"Earnings_Ledger_{str(site_id)[:8]}_{now.strftime('%Y%m%d')}.csv"
+    return StreamingResponse(
+        iter_csv(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post("/admin/{site_id}/payouts/create")

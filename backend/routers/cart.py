@@ -73,7 +73,7 @@ def get_cart_item_or_404(
     return item
 
 
-def serialize_cart_item(item: CartItem) -> dict[str, Any]:
+def serialize_cart_item(item: CartItem, product: Optional[Product] = None) -> dict[str, Any]:
     rel_date = getattr(item, "preorder_release_date", None)
     return {
         "id": item.id,
@@ -86,21 +86,29 @@ def serialize_cart_item(item: CartItem) -> dict[str, Any]:
         "product_name": item.product_name,
         "product_image": item.product_image,
         "product_slug": item.product_slug,
+        "hsn_code": (product.hsn_code if product else getattr(item, "hsn_code", None)),
+        "tax_rate_override": decimal_to_float(product.tax_rate_override) if (product and product.tax_rate_override is not None) else None,
         "is_preorder": bool(getattr(item, "is_preorder", False)),
         "preorder_release_date": rel_date.isoformat() if rel_date else None,
         "line_total": float(item.unit_price * item.quantity),
     }
 
 
-def build_cart_response(cart: Cart, items: list[CartItem]) -> dict[str, Any]:
+def build_cart_response(cart: Cart, items: list[CartItem], session: Optional[Session] = None) -> dict[str, Any]:
     subtotal = sum((item.unit_price * item.quantity for item in items), Decimal("0"))
     total_items = sum(item.quantity for item in items)
+
+    prod_map: dict[UUID, Product] = {}
+    if session and items:
+        prod_ids = [it.product_id for it in items]
+        products = session.exec(select(Product).where(Product.id.in_(prod_ids))).all()
+        prod_map = {p.id: p for p in products}
 
     return {
         "id": cart.id,
         "site_id": cart.site_id,
         "user_id": cart.user_id,
-        "items": [serialize_cart_item(item) for item in items],
+        "items": [serialize_cart_item(item, prod_map.get(item.product_id)) for item in items],
         "subtotal": float(subtotal),
         "total_items": total_items,
     }
@@ -207,7 +215,7 @@ def get_cart(
         select(CartItem).where(CartItem.cart_id == cart.id)
     ).all()
 
-    return build_cart_response(cart, items)
+    return build_cart_response(cart, items, session=session)
 
 
 @router.post("/{site_id}/items", response_model=CartResponse)
@@ -302,7 +310,7 @@ def add_cart_item(
         select(CartItem).where(CartItem.cart_id == cart.id)
     ).all()
 
-    return build_cart_response(cart, items)
+    return build_cart_response(cart, items, session=session)
 
 
 @router.patch("/{site_id}/items/{item_id}", response_model=CartResponse)
@@ -360,7 +368,7 @@ def update_cart_item(
         select(CartItem).where(CartItem.cart_id == cart.id)
     ).all()
 
-    return build_cart_response(cart, items)
+    return build_cart_response(cart, items, session=session)
 
 
 @router.delete("/{site_id}/items/{item_id}", response_model=CartResponse)
@@ -387,7 +395,7 @@ def remove_cart_item(
         select(CartItem).where(CartItem.cart_id == cart.id)
     ).all()
 
-    return build_cart_response(cart, items)
+    return build_cart_response(cart, items, session=session)
 
 
 @router.delete("/{site_id}/clear", response_model=CartResponse)

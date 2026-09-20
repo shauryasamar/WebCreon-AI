@@ -3380,31 +3380,38 @@ export const AdminSupportDesk: React.FC = () => {
                             Choose an appropriate resolution action for this customer support case:
                           </p>
 
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                             {(() => {
                               const isCodOrder = ["cod", "cash on delivery", "cash_on_delivery"].includes(String(detailData.order_360?.payment_method || "").trim().toLowerCase());
+                              const isEscrowReleased = !isCodOrder && (detailData.order_360?.escrow_status === "unheld" || detailData.order_360?.escrow_status === "released" || detailData.order_360?.refund_summary?.is_escrow_released);
+                              const remaining = detailData.order_360?.refund_summary?.remaining_refundable ?? detailData.order_360?.total ?? 0;
                               return (
-                                <div style={{ border: isCodOrder ? "1px solid #fde68a" : "1px solid #e2e8f0", borderRadius: "8px", padding: "12px", background: isCodOrder ? "#fffdf5" : "#f8fafc" }}>
+                                <div style={{ border: "1px solid #e2e8f0", borderRadius: "8px", padding: "14px", background: "#ffffff" }}>
                                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                                    <strong style={{ fontSize: "13px", color: "#0f172a" }}>Issue Refund</strong>
-                                    {isCodOrder && (
-                                      <span style={{ fontSize: "10px", fontWeight: 700, background: "#fef3c7", color: "#92400e", padding: "2px 6px", borderRadius: "4px" }}>
-                                        COD (Bank/UPI Payout)
+                                    <strong style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>Issue Refund</strong>
+                                    {isCodOrder ? (
+                                      <span style={{ fontSize: "10.5px", fontWeight: 600, background: "#f1f5f9", color: "#475569", border: "1px solid #e2e8f0", padding: "1px 6px", borderRadius: "4px" }}>
+                                        COD Payout
                                       </span>
-                                    )}
+                                    ) : isEscrowReleased ? (
+                                      <span style={{ fontSize: "10.5px", fontWeight: 600, background: "#f1f5f9", color: "#475569", border: "1px solid #e2e8f0", padding: "1px 6px", borderRadius: "4px" }}>
+                                        Direct Transfer
+                                      </span>
+                                    ) : null}
                                   </div>
-                                  <p style={{ margin: "0 0 10px", fontSize: "11.5px", color: isCodOrder ? "#92400e" : "#64748b" }}>
-                                    {isCodOrder
-                                      ? "Cash on delivery: verify customer UPI/Bank details collected in chat and record payout."
-                                      : detailData.order_360?.refund_summary?.is_fully_refunded
-                                        ? "Order is already fully refunded."
-                                        : `Refund items up to remaining ₹${detailData.order_360?.refund_summary?.remaining_refundable ?? detailData.order_360?.total ?? 0}.`}
+                                  <p style={{ margin: "0 0 10px", fontSize: "12px", color: "#64748b" }}>
+                                    {detailData.order_360?.refund_summary?.is_fully_refunded
+                                      ? "Order is already fully refunded."
+                                      : isEscrowReleased
+                                      ? `Refund items up to remaining ₹${remaining} (settled via direct transfer).`
+                                      : isCodOrder
+                                      ? `Record offline UPI/bank refund for COD order (Max: ₹${remaining}).`
+                                      : `Refund items up to remaining ₹${remaining}.`}
                                   </p>
                                   <button
                                     onClick={openRefundModal}
                                     disabled={!canEdit || detailData.order_360?.refund_summary?.is_fully_refunded}
                                     style={{
-                                      background: detailData.order_360?.refund_summary?.is_fully_refunded ? "#94a3b8" : isCodOrder ? "#d97706" : "#16a34a",
+                                      background: detailData.order_360?.refund_summary?.is_fully_refunded ? "#94a3b8" : "#0f172a",
                                       color: "#ffffff",
                                       border: "none",
                                       padding: "6px 14px",
@@ -3415,7 +3422,7 @@ export const AdminSupportDesk: React.FC = () => {
                                       opacity: !canEdit ? 0.6 : 1,
                                     }}
                                   >
-                                    {detailData.order_360?.refund_summary?.is_fully_refunded ? "View Refund Status" : isCodOrder ? "Process COD Payout" : "Issue Refund"}
+                                    {detailData.order_360?.refund_summary?.is_fully_refunded ? "View Refund Status" : isEscrowReleased ? "Record Refund" : isCodOrder ? "Process COD Payout" : "Issue Refund"}
                                   </button>
                                 </div>
                               );
@@ -3465,7 +3472,6 @@ export const AdminSupportDesk: React.FC = () => {
                               </button>
                             </div>
                           </div>
-                        </div>
                       )}
                     </div>
                   </div>
@@ -3570,15 +3576,19 @@ export const AdminSupportDesk: React.FC = () => {
               );
             })()}
 
-            {/* COD Notice */}
-            {["cod", "cash on delivery", "cash_on_delivery"].includes(String(detailData?.order_360?.payment_method || "").trim().toLowerCase()) && (
+            {/* COD or Escrow Released Notice */}
+            {["cod", "cash on delivery", "cash_on_delivery"].includes(String(detailData?.order_360?.payment_method || "").trim().toLowerCase()) ? (
               <div style={{ padding: "10px 12px", borderRadius: "6px", background: "#f8fafc", border: "1px solid #cbd5e1", color: "#334155", fontSize: "11.5px", marginBottom: "14px", display: "flex", alignItems: "flex-start", gap: "8px" }}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: "2px" }}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
                 <div>
                   <strong>Cash on Delivery Order:</strong> Reversal occurs outside the gateway. Record the disbursal mode (UPI/Bank Transfer) and reference ID below so it is tracked and visible on customer order history.
                 </div>
               </div>
-            )}
+            ) : (detailData?.order_360?.escrow_status === "unheld" || detailData?.order_360?.escrow_status === "released" || detailData?.order_360?.refund_summary?.is_escrow_released) ? (
+              <div style={{ padding: "9px 12px", borderRadius: "6px", background: "#f8fafc", border: "1px solid #e2e8f0", color: "#475569", fontSize: "12px", marginBottom: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontWeight: 600, color: "#0f172a" }}>Note:</span> Payout has settled to merchant bank. Record the direct transfer details below.
+              </div>
+            ) : null}
 
             {/* If order is fully refunded */}
             {detailData?.order_360?.refund_summary?.is_fully_refunded ? (
@@ -3923,8 +3933,11 @@ export const AdminSupportDesk: React.FC = () => {
                   </div>
                 )}
 
-                {/* Payout Details for COD Orders */}
-                {["cod", "cash on delivery", "cash_on_delivery"].includes(String(detailData?.order_360?.payment_method || "").trim().toLowerCase()) && (
+                {/* Payout Details for COD or Released Escrow Orders */}
+                {(["cod", "cash on delivery", "cash_on_delivery"].includes(String(detailData?.order_360?.payment_method || "").trim().toLowerCase()) ||
+                  detailData?.order_360?.escrow_status === "unheld" ||
+                  detailData?.order_360?.escrow_status === "released" ||
+                  detailData?.order_360?.refund_summary?.is_escrow_released) && (
                   <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "6px", padding: "10px 12px", marginBottom: "12px" }}>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "6px" }}>
                       <div>
@@ -3936,7 +3949,7 @@ export const AdminSupportDesk: React.FC = () => {
                           onChange={(e) => setPayoutModeInput(e.target.value)}
                           style={{ ...inputStyle, marginBottom: 0, fontSize: "12px" }}
                         >
-                          <option value="UPI Transfer">UPI Transfer</option>
+                          <option value="UPI Transfer">Direct UPI Transfer</option>
                           <option value="Bank Transfer (NEFT/IMPS)">Bank Account (IMPS/NEFT)</option>
                           <option value="Cash Handover by Delivery Partner">Cash Handover (Rider)</option>
                           <option value="Store Credit / Wallet">Store Credit / Wallet</option>
@@ -4003,7 +4016,15 @@ export const AdminSupportDesk: React.FC = () => {
                   cursor: (detailData?.ticket?.status === "closed" || detailData?.ticket?.status === "resolved" || detailData?.order_360?.refund_summary?.is_fully_refunded) ? "not-allowed" : "pointer",
                 }}
               >
-                {actionProcessing ? "Processing..." : (detailData?.ticket?.status === "closed" || detailData?.ticket?.status === "resolved") ? "Case Closed" : ["cod", "cash on delivery", "cash_on_delivery"].includes(String(detailData?.order_360?.payment_method || "").trim().toLowerCase()) ? `Mark COD Refunded (${refundAmountInput ? '₹' + refundAmountInput : ''})` : `Confirm Refund (${refundAmountInput ? '₹' + refundAmountInput : ''})`}
+                {actionProcessing
+                  ? "Processing..."
+                  : (detailData?.ticket?.status === "closed" || detailData?.ticket?.status === "resolved")
+                  ? "Case Closed"
+                  : ["cod", "cash on delivery", "cash_on_delivery"].includes(String(detailData?.order_360?.payment_method || "").trim().toLowerCase())
+                  ? `Mark COD Refunded (${refundAmountInput ? '₹' + refundAmountInput : ''})`
+                  : (detailData?.order_360?.escrow_status === "unheld" || detailData?.order_360?.escrow_status === "released" || detailData?.order_360?.refund_summary?.is_escrow_released)
+                  ? `Record Manual Refund (${refundAmountInput ? '₹' + refundAmountInput : ''})`
+                  : `Confirm Refund (${refundAmountInput ? '₹' + refundAmountInput : ''})`}
               </button>
             </div>
           </div>

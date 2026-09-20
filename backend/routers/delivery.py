@@ -165,9 +165,12 @@ def _mark_order_delivered(order: Order, session: Session, auto_commit: bool = Tr
         ),
         default=0,
     )
+    MIN_DISPUTE_BUFFER_HOURS = 24
+
     if max_window_days == 0:
-        order.return_window_closes_at = now
-        order.escrow_status = "unheld"
+        # Non-returnable item: enforce minimum 24-hour dispute buffer post-delivery for unboxing inspection
+        order.return_window_closes_at = now + timedelta(hours=MIN_DISPUTE_BUFFER_HOURS)
+        order.escrow_status = "held"
     else:
         order.return_window_closes_at = now + timedelta(days=max_window_days)
         order.escrow_status = "held"
@@ -178,10 +181,7 @@ def _mark_order_delivered(order: Order, session: Session, auto_commit: bool = Tr
     ).first()
     if ledger_entry:
         ledger_entry.escrow_release_due_at = order.return_window_closes_at
-        if max_window_days == 0:
-            ledger_entry.escrow_status = "unheld"
-            ledger_entry.status = "paid"
-            ledger_entry.settled_at = now
+        ledger_entry.escrow_status = "held"
         session.add(ledger_entry)
 
     history = OrderStatusHistory(
@@ -254,6 +254,8 @@ class DeliverySettingsUpdate(BaseModel):
     sender_longitude: Optional[float] = None
     shiprocket_delivery_radius_km: Optional[float] = None
     default_weight_grams: Optional[int] = None
+    enable_cod: Optional[bool] = None
+    max_cod_amount: Optional[float] = None
 
     @field_validator("shiprocket_email")
     @classmethod
@@ -388,6 +390,8 @@ def get_delivery_settings(
         "sender_longitude": getattr(settings, "sender_longitude", None),
         "shiprocket_delivery_radius_km": getattr(settings, "shiprocket_delivery_radius_km", None),
         "default_weight_grams": settings.default_weight_grams,
+        "enable_cod": getattr(settings, "enable_cod", True) if getattr(settings, "enable_cod", None) is not None else True,
+        "max_cod_amount": float(getattr(settings, "max_cod_amount", 5000.0) or 5000.0),
     }
 
 
@@ -489,6 +493,10 @@ def update_delivery_settings(
         settings.shiprocket_delivery_radius_km = body.shiprocket_delivery_radius_km if body.shiprocket_delivery_radius_km > 0 else None
     if body.default_weight_grams is not None:
         settings.default_weight_grams = max(1, body.default_weight_grams)
+    if body.enable_cod is not None:
+        settings.enable_cod = bool(body.enable_cod)
+    if body.max_cod_amount is not None:
+        settings.max_cod_amount = max(0.0, float(body.max_cod_amount))
 
     session.add(settings)
     session.commit()

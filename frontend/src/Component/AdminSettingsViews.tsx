@@ -1216,3 +1216,14 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
     </div>
   );
 };
+
+
+// ==========================================
+// 5. STATUTORY TAX & WITHHOLDING SETTINGS
+// ==========================================
+import { AdminTaxComplianceDesk } from "./AdminTaxComplianceDesk";
+
+export const AdminTaxSettings: React.FC<{ siteId?: string }> = ({ siteId }) => {
+  return <AdminTaxComplianceDesk siteId={siteId} />;
+};
+

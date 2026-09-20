@@ -362,13 +362,13 @@ function sharedInputStyle(): React.CSSProperties {
     maxWidth: "100%",
     minWidth: 0,
     boxSizing: "border-box",
-    height: "26px",
-    padding: "2px 6px",
-    borderRadius: "4px",
+    height: "28px",
+    padding: "3px 8px",
+    borderRadius: "5px",
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
-    fontSize: "11px",
+    fontSize: "11.5px",
     fontWeight: 500,
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
     outline: "none",
@@ -469,14 +469,14 @@ const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
         onClick={() => setOpen(!open)}
         style={{
           width: "100%",
-          height: "26px",
-          padding: "2px 6px",
-          paddingRight: "20px",
-          borderRadius: "4px",
+          height: "28px",
+          padding: "3px 8px",
+          paddingRight: "22px",
+          borderRadius: "5px",
           border: open ? "1px solid #2563eb" : "1px solid #cbd5e1",
           background: "#ffffff",
           color: selectedOption ? "#0f172a" : "#94a3b8",
-          fontSize: "11px",
+          fontSize: "11.5px",
           fontWeight: 500,
           fontFamily: isFontDropdown && selectedOption ? getFontPreviewFamily(selectedOption.value) : "'Inter', -apple-system, sans-serif",
           display: "flex",
@@ -608,11 +608,12 @@ function colorInputStyle(_isLightMode: boolean): React.CSSProperties {
 function sectionCardStyle(_isLightMode: boolean): React.CSSProperties {
   return {
     display: "grid",
-    gap: "4px",
-    padding: "5px 7px",
-    borderRadius: "5px",
+    gap: "10px",
+    padding: "10px 12px",
+    borderRadius: "8px",
     border: "1px solid #e2e8f0",
     background: "#ffffff",
+    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.02)",
     boxSizing: "border-box",
     maxWidth: "100%",
     minWidth: 0,
@@ -623,7 +624,7 @@ function sectionCardStyle(_isLightMode: boolean): React.CSSProperties {
 function blockFieldCardStyle(_isLightMode: boolean): React.CSSProperties {
   return {
     display: "grid",
-    gap: "2px",
+    gap: "5px",
     padding: "0",
     background: "transparent",
     boxSizing: "border-box",
@@ -1242,13 +1243,13 @@ function ModernColorPicker({
   const isValidHex = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(hexVal);
 
   return (
-    <div style={{ display: "grid", gap: "3px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
+    <div style={{ display: "grid", gap: "4px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
       {label && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", boxSizing: "border-box" }}>
-          <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "4px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
+          <label style={{ fontSize: "10px", fontWeight: 600, color: "#475569", letterSpacing: "0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 }} title={label}>
             {label}
           </label>
-          <span style={{ fontSize: "9px", fontFamily: "'Inter', monospace", fontWeight: 800, color: "#475569", background: "rgba(100,116,139,0.08)", padding: "1px 5px", borderRadius: "3px" }}>
+          <span style={{ fontSize: "10px", fontFamily: "'Inter', monospace", fontWeight: 700, color: "#475569", background: "rgba(100,116,139,0.08)", padding: "1px 5px", borderRadius: "3px", flexShrink: 0, lineHeight: 1.2 }}>
             {hexVal.toUpperCase()}
           </span>
         </div>
@@ -1262,7 +1263,7 @@ function ModernColorPicker({
           gap: "8px",
           width: "100%",
           height: "28px",
-          padding: "2px 6px",
+          padding: "3px 8px",
           borderRadius: "5px",
           border: "1px solid #cbd5e1",
           background: "#ffffff",
@@ -1724,40 +1725,56 @@ const NumberStepperField = ({
     }
   };
 
+  const percent = max > min ? Math.max(0, Math.min(100, ((Number(value ?? min) - min) / (max - min)) * 100)) : 0;
+
   return (
     <div
       style={{
         display: "grid",
-        gap: "3px",
+        gap: "4px",
         width: "100%",
         maxWidth: "100%",
         minWidth: 0,
         boxSizing: "border-box",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", boxSizing: "border-box" }}>
-        <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "4px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
+        <label
+          style={{
+            fontSize: "10px",
+            fontWeight: 600,
+            color: "#475569",
+            letterSpacing: "0.01em",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            flex: 1,
+            minWidth: 0,
+          }}
+          title={label}
+        >
           {label}
         </label>
         <span
           style={{
-            fontSize: "9px",
-            fontWeight: 800,
+            fontSize: "10px",
+            fontWeight: 700,
             color: ADMIN_BLUE,
             background: "rgba(37,99,235,0.08)",
             padding: "1px 5px",
             borderRadius: "3px",
             fontVariantNumeric: "tabular-nums",
             textAlign: "right",
-            minWidth: "32px",
+            flexShrink: 0,
             display: "inline-block",
+            lineHeight: 1.2,
           }}
         >
           {value}{unit}
         </span>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: "3px", width: "100%", boxSizing: "border-box" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "3px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
         <button
           type="button"
           onClick={() => {
@@ -1767,19 +1784,20 @@ const NumberStepperField = ({
           }}
           title={`Decrease (${step}${unit})`}
           style={{
-            width: "28px",
+            width: "24px",
             height: "26px",
             borderRadius: "4px",
             border: "1px solid #cbd5e1",
             background: "#f8fafc",
-            color: "#0f172a",
-            fontWeight: 800,
+            color: "#334155",
+            fontWeight: 700,
             fontSize: "13px",
             cursor: "pointer",
             display: "grid",
             placeItems: "center",
             flexShrink: 0,
             lineHeight: 1,
+            transition: "background 0.12s ease",
           }}
         >
           −
@@ -1810,9 +1828,9 @@ const NumberStepperField = ({
             ...sharedInputStyle(),
             flex: 1,
             textAlign: "center",
-            fontWeight: 700,
+            fontWeight: 600,
             fontSize: "11px",
-            padding: "2px 4px",
+            padding: "0 2px",
             height: "26px",
             minWidth: 0,
             color: "#0f172a",
@@ -1829,19 +1847,20 @@ const NumberStepperField = ({
           }}
           title={`Increase (${step}${unit})`}
           style={{
-            width: "28px",
+            width: "24px",
             height: "26px",
             borderRadius: "4px",
             border: "1px solid #cbd5e1",
             background: "#f8fafc",
-            color: "#0f172a",
-            fontWeight: 800,
+            color: "#334155",
+            fontWeight: 700,
             fontSize: "13px",
             cursor: "pointer",
             display: "grid",
             placeItems: "center",
             flexShrink: 0,
             lineHeight: 1,
+            transition: "background 0.12s ease",
           }}
         >
           +
@@ -1851,6 +1870,7 @@ const NumberStepperField = ({
       {/* Smooth micro-slider for continuous sliding */}
       <input
         type="range"
+        className="wc-editor-range"
         min={min}
         max={max}
         step={step}
@@ -1863,11 +1883,10 @@ const NumberStepperField = ({
         style={{
           width: "100%",
           maxWidth: "100%",
-          accentColor: ADMIN_BLUE,
           cursor: "pointer",
-          height: "3px",
-          margin: "1px 0 0 0",
+          margin: "4px 0 2px 0",
           boxSizing: "border-box",
+          background: `linear-gradient(to right, ${ADMIN_BLUE} 0%, ${ADMIN_BLUE} ${percent}%, #e2e8f0 ${percent}%, #e2e8f0 100%)`,
         }}
       />
     </div>
@@ -1875,8 +1894,8 @@ const NumberStepperField = ({
 };
 
 const SectionDivider = ({ title }: { title: string }) => (
-  <div style={{ paddingTop: "6px", marginTop: "2px", borderTop: "1px solid #f1f5f9", display: "grid", gap: "4px", width: "100%", boxSizing: "border-box" }}>
-    <span style={{ fontSize: "8.5px", fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+  <div style={{ paddingTop: "10px", marginTop: "4px", borderTop: "1px solid #f1f5f9", display: "grid", gap: "6px", width: "100%", boxSizing: "border-box" }}>
+    <span style={{ fontSize: "10.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
       {title}
     </span>
   </div>
@@ -2045,15 +2064,15 @@ function HeroSlidesEditor({
   };
 
   return (
-    <div style={{ display: "grid", gap: "6px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
+    <div style={{ display: "grid", gap: "10px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
       {/* 1. Global Sizing & Carousel Controls */}
       <section style={sectionCardStyle(isLightMode)}>
-        <div style={{ fontSize: "9.5px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+        <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", marginBottom: "1px" }}>
           LAYOUT & DIMENSIONS
         </div>
 
         {/* Height & Radius Steppers (2-Column Grid) */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
           <NumberStepperField
             label="Banner Height"
             value={bannerHeightNum}
@@ -2076,8 +2095,8 @@ function HeroSlidesEditor({
         </div>
 
         {/* Max Width */}
-        <div style={{ display: "grid", gap: "2px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-          <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+        <div style={{ display: "grid", gap: "5px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
+          <label style={{ fontSize: "11px", fontWeight: 600, color: "#475569", letterSpacing: "0.01em" }}>
             Max Width
           </label>
           <SegmentedRow
@@ -2094,22 +2113,24 @@ function HeroSlidesEditor({
 
         <SectionDivider title="Carousel Rotation" />
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", width: "100%", minWidth: 0, boxSizing: "border-box", alignItems: "start" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", width: "100%", minWidth: 0, boxSizing: "border-box", alignItems: "start" }}>
           {/* Left: Auto-rotate Toggle with matched label & height */}
-          <div style={{ display: "grid", gap: "2px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: "14px" }}>
-              <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+          <div style={{ display: "grid", gap: "4px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "4px", minWidth: 0, width: "100%" }}>
+              <label style={{ fontSize: "10px", fontWeight: 600, color: "#475569", letterSpacing: "0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 }}>
                 Auto-Rotate
               </label>
               <span
                 style={{
-                  fontSize: "8.5px",
+                  fontSize: "10px",
                   fontWeight: 700,
-                  padding: "0 4px",
+                  padding: "1px 5px",
                   borderRadius: "3px",
-                  background: autoPlay ? "rgba(37,99,235,0.12)" : "#f1f5f9",
-                  color: autoPlay ? ADMIN_BLUE : "#94a3b8",
-                  letterSpacing: "0.02em",
+                  background: autoPlay ? "rgba(37,99,235,0.08)" : "rgba(100,116,139,0.08)",
+                  color: autoPlay ? ADMIN_BLUE : "#64748b",
+                  fontVariantNumeric: "tabular-nums",
+                  flexShrink: 0,
+                  lineHeight: 1.2,
                 }}
               >
                 {autoPlay ? "ON" : "OFF"}
@@ -2127,7 +2148,7 @@ function HeroSlidesEditor({
                 height: "26px",
                 borderRadius: "4px",
                 border: "1px solid #cbd5e1",
-                background: autoPlay ? "rgba(37,99,235,0.06)" : "#f8fafc",
+                background: autoPlay ? "rgba(37,99,235,0.04)" : "#ffffff",
                 cursor: "pointer",
                 userSelect: "none",
                 transition: "all 0.12s ease",
@@ -2135,7 +2156,7 @@ function HeroSlidesEditor({
                 width: "100%",
               }}
             >
-              <span style={{ fontSize: "10.5px", fontWeight: 600, color: autoPlay ? "#0f172a" : "#64748b" }}>
+              <span style={{ fontSize: "11px", fontWeight: 600, color: autoPlay ? "#0f172a" : "#64748b" }}>
                 {autoPlay ? "Enabled" : "Disabled"}
               </span>
               <div
@@ -2198,13 +2219,13 @@ function HeroSlidesEditor({
       {/* 2. Hero Slides Accordion List */}
       <section style={sectionCardStyle(isLightMode)}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ fontSize: "9.5px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+          <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569" }}>
             ACTIVE BANNERS ({slides.length})
           </div>
-          <span style={{ fontSize: "9px", color: "#94a3b8", fontWeight: 500 }}>⋮⋮ Drag to reorder</span>
+          <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 500 }}>⋮⋮ Drag to reorder</span>
         </div>
 
-        <div style={{ display: "grid", gap: "4px", marginTop: "1px" }}>
+        <div style={{ display: "grid", gap: "6px", marginTop: "2px" }}>
           {slides.map((slide, idx) => {
             const isExpanded = expandedSlideIndex === idx;
             const showPrimary = (slide.show_primary_cta !== false && slide.primary_cta?.show !== false);
@@ -2237,7 +2258,7 @@ function HeroSlidesEditor({
                 <div
                   onClick={() => setExpandedSlideIndex(isExpanded ? null : idx)}
                   style={{
-                    padding: "5px 7px",
+                    padding: "6px 8px",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
@@ -12065,7 +12086,7 @@ export default function EditorSidebar({
         top: "auto",
         overflowY: "auto",
         overflowX: "hidden",
-        padding: "6px 8px",
+        padding: "8px 10px",
         boxSizing: "border-box",
         color: "#0f172a",
         background: "#ffffff",
@@ -12081,7 +12102,7 @@ export default function EditorSidebar({
           box-sizing: border-box;
         }
 
-        .wc-editor-sidebar input:focus,
+        .wc-editor-sidebar input:not([type="range"]):focus,
         .wc-editor-sidebar select:focus,
         .wc-editor-sidebar textarea:focus {
           border-color: ${ADMIN_BLUE} !important;
@@ -12089,7 +12110,7 @@ export default function EditorSidebar({
           box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15) !important;
         }
 
-        .wc-editor-sidebar input:hover,
+        .wc-editor-sidebar input:not([type="range"]):hover,
         .wc-editor-sidebar select:hover,
         .wc-editor-sidebar textarea:hover {
           border-color: #94a3b8;
@@ -12112,6 +12133,113 @@ export default function EditorSidebar({
         .wc-editor-sidebar::-webkit-scrollbar-thumb:hover {
           background: #cbd5e1;
         }
+
+        /* Range slider styling */
+        .wc-editor-range,
+        .wc-editor-range:focus,
+        .wc-editor-range:focus-visible,
+        .wc-editor-range:active {
+          -webkit-appearance: none !important;
+          appearance: none !important;
+          width: 100% !important;
+          height: 4px !important;
+          border-radius: 999px !important;
+          outline: none !important;
+          cursor: pointer !important;
+          padding: 0 !important;
+          border: none !important;
+          box-shadow: none !important;
+          -webkit-tap-highlight-color: transparent !important;
+        }
+
+        .wc-editor-range::-webkit-slider-runnable-track {
+          width: 100%;
+          height: 4px;
+          border-radius: 999px;
+          background: transparent !important;
+          cursor: pointer;
+          border: none;
+          outline: none;
+        }
+
+        .wc-editor-range::-webkit-slider-thumb {
+          -webkit-appearance: none !important;
+          appearance: none !important;
+          width: 12px !important;
+          height: 12px !important;
+          border-radius: 50% !important;
+          background: #ffffff !important;
+          border: 2px solid ${ADMIN_BLUE} !important;
+          cursor: pointer !important;
+          box-shadow: none !important;
+          margin-top: -4px !important;
+          outline: none !important;
+          box-sizing: border-box !important;
+          transform: scale(1) !important;
+          transform-origin: center center !important;
+          transition: transform 0.12s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+
+        .wc-editor-range:active::-webkit-slider-thumb,
+        .wc-editor-range::-webkit-slider-thumb:active {
+          -webkit-appearance: none !important;
+          appearance: none !important;
+          width: 12px !important;
+          height: 12px !important;
+          border-radius: 50% !important;
+          background: #ffffff !important;
+          border: 2px solid ${ADMIN_BLUE} !important;
+          box-shadow: none !important;
+          margin-top: -4px !important;
+          outline: none !important;
+          box-sizing: border-box !important;
+          transform: scale(1.25) !important;
+          transform-origin: center center !important;
+        }
+
+        .wc-editor-range::-moz-range-track {
+          width: 100%;
+          height: 4px;
+          border-radius: 999px;
+          background: transparent !important;
+          cursor: pointer;
+          border: none;
+          outline: none;
+        }
+
+        .wc-editor-range::-moz-range-thumb {
+          width: 12px !important;
+          height: 12px !important;
+          border-radius: 50% !important;
+          background: #ffffff !important;
+          border: 2px solid ${ADMIN_BLUE} !important;
+          cursor: pointer !important;
+          box-shadow: none !important;
+          outline: none !important;
+          box-sizing: border-box !important;
+          transform: scale(1) !important;
+          transform-origin: center center !important;
+          transition: transform 0.12s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+
+        .wc-editor-range:active::-moz-range-thumb,
+        .wc-editor-range::-moz-range-thumb:active {
+          width: 12px !important;
+          height: 12px !important;
+          border-radius: 50% !important;
+          background: #ffffff !important;
+          border: 2px solid ${ADMIN_BLUE} !important;
+          box-shadow: none !important;
+          outline: none !important;
+          box-sizing: border-box !important;
+          transform: scale(1.25) !important;
+          transform-origin: center center !important;
+        }
+
+        .wc-editor-range::-moz-focus-outer {
+          border: 0 !important;
+          outline: none !important;
+        }
       `}</style>
 
       {/* Sleek Segmented Pill Tabs */}
@@ -12122,7 +12250,7 @@ export default function EditorSidebar({
           padding: "2px",
           background: "#f1f5f9",
           borderRadius: "5px",
-          marginBottom: "6px",
+          marginBottom: "8px",
           boxSizing: "border-box",
         }}
       >
@@ -12255,16 +12383,25 @@ export default function EditorSidebar({
                     paddingRight: showAllSnapshots ? "2px" : "0",
                   }}
                 >
-                  {(showAllSnapshots ? savedSnapshots : savedSnapshots.slice(0, 3)).map((snap: any) => {
-                    const th = snap.theme || {};
+                  {(() => {
                     const currentTheme = siteDefinition.theme || {};
-                    const isCurrentActive =
-                      appliedSnapshotId === snap.id ||
-                      (!appliedSnapshotId &&
-                        (snap.theme?.mode || "light") === (currentTheme.mode || "light") &&
-                        snap.theme?.primary_bg === currentTheme.primary_bg &&
-                        snap.theme?.accent_color === currentTheme.accent_color &&
-                        (snap.theme?.navbar_bg === currentTheme.navbar_bg || !snap.theme?.navbar_bg));
+                    const activeSnapId =
+                      appliedSnapshotId ||
+                      currentTheme.active_snapshot_id ||
+                      savedSnapshots.find((s: any) => {
+                        return (
+                          (s.theme?.mode || "light") === (currentTheme.mode || "light") &&
+                          s.theme?.primary_bg === currentTheme.primary_bg &&
+                          s.theme?.accent_color === currentTheme.accent_color &&
+                          s.theme?.navbar_bg === currentTheme.navbar_bg &&
+                          s.theme?.text_color === currentTheme.text_color
+                        );
+                      })?.id ||
+                      savedSnapshots[0]?.id;
+
+                    return (showAllSnapshots ? savedSnapshots : savedSnapshots.slice(0, 3)).map((snap: any) => {
+                      const th = snap.theme || {};
+                      const isCurrentActive = snap.id === activeSnapId;
 
                     return (
                       <div
@@ -12364,7 +12501,8 @@ export default function EditorSidebar({
                         </div>
                       </div>
                     );
-                  })}
+                  });
+                })()}
                 </div>
 
                 {savedSnapshots.length > 3 && (

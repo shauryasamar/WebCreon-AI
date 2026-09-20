@@ -45,7 +45,7 @@ from models import (
     SupportAgent, SupportTicket, SupportTicketMessage,
     StorePage, Coupon, CouponUsage, SiteDefinitionHistory,
 )
-from routers import analytics, auth, cart, categories, checkout, checkout_settings, collections, coupons, orders, pages, payments, products, returns, support, users_roles, audit_logs, domains, notifications
+from routers import analytics, auth, cart, categories, checkout, checkout_settings, collections, coupons, orders, pages, payments, products, returns, support, users_roles, audit_logs, domains, notifications, compliance
 from routers import delivery
 
 
@@ -77,12 +77,22 @@ def run_database_security_cleanup():
             ).all()
             test_ids = [s.id for s in test_sites]
             if test_ids:
-                stale_links = session.exec(select(AdminSite).where(AdminSite.site_id.in_(test_ids))).all()
-                for lk in stale_links:
-                    session.delete(lk)
-                for ts in test_sites:
-                    session.delete(ts)
-                session.commit()
+                try:
+                    from models import User, Cart, CartItem
+                    from sqlmodel import delete as sql_delete
+                    # Delete dependent records for test sites before deleting sites
+                    session.exec(sql_delete(CartItem).where(CartItem.cart_id.in_(
+                        select(Cart.id).where(Cart.site_id.in_(test_ids))
+                    )))
+                    session.exec(sql_delete(Cart).where(Cart.site_id.in_(test_ids)))
+                    session.exec(sql_delete(User).where(User.site_id.in_(test_ids)))
+                    session.exec(sql_delete(AdminSite).where(AdminSite.site_id.in_(test_ids)))
+                    for ts in test_sites:
+                        session.delete(ts)
+                    session.commit()
+                except Exception as del_err:
+                    session.rollback()
+                    logger.debug("Test sites cleanup skipped: %s", del_err)
 
             # 2. Scope team members strictly to their respective workspace owners
             all_owners = session.exec(
@@ -385,6 +395,7 @@ app.include_router(checkout.router)
 app.include_router(checkout_settings.router)
 app.include_router(orders.router)
 app.include_router(payments.router)
+app.include_router(payments.router, prefix="/api")
 app.include_router(returns.router)
 app.include_router(delivery.router)
 app.include_router(coupons.router)
@@ -401,6 +412,8 @@ app.include_router(audit_logs.router, prefix="/api")
 app.include_router(domains.router)
 app.include_router(notifications.router)
 app.include_router(notifications.router, prefix="/api")
+app.include_router(compliance.router)
+app.include_router(compliance.router, prefix="/api")
 
 
 # ---------------------------------------------------------------------------

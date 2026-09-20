@@ -5,7 +5,7 @@ import logging
 import math
 import secrets
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
@@ -43,6 +43,7 @@ from auth_utils import (
 )
 from db.database import engine, get_session
 from models import (
+    Admin,
     AdminSite,
     Order,
     OrderItem,
@@ -742,6 +743,7 @@ def support_agent_get_ticket_detail(
             remaining_refundable_dec = max(Decimal("0.00"), total_paid_dec - already_refunded_total)
             is_fully_refunded = remaining_refundable_dec <= Decimal("0.00") or ord.status == "refunded" or ord.payment_status == "refunded"
 
+            is_escrow_released = getattr(ord, "escrow_status", "held") in ("unheld", "released")
             refund_summary = {
                 "total_paid": float(total_paid_dec),
                 "already_refunded": float(already_refunded_total),
@@ -750,6 +752,9 @@ def support_agent_get_ticket_detail(
                 "payment_method": ord.payment_method,
                 "payment_status": ord.payment_status,
                 "razorpay_payment_id": ord.razorpay_payment_id,
+                "escrow_status": getattr(ord, "escrow_status", "held"),
+                "is_escrow_released": is_escrow_released,
+                "escrow_mature_at": ord.escrow_mature_at.isoformat() if getattr(ord, "escrow_mature_at", None) else None,
             }
 
             order_context = {
@@ -758,6 +763,9 @@ def support_agent_get_ticket_detail(
                 "total": float(ord.total),
                 "payment_method": ord.payment_method,
                 "payment_status": ord.payment_status,
+                "escrow_status": getattr(ord, "escrow_status", "held"),
+                "is_escrow_released": is_escrow_released,
+                "escrow_mature_at": ord.escrow_mature_at.isoformat() if getattr(ord, "escrow_mature_at", None) else None,
                 "shipping_address": ord.shipping_address,
                 "delivery_otp": ord.delivery_otp,
                 "created_at": ord.created_at.isoformat() if ord.created_at else None,
@@ -976,9 +984,25 @@ def support_agent_execute_action(
     action_msg = ""
     if payload.action_type == "refund":
         if ticket.order_id:
-            ord = session.get(Order, ticket.order_id)
+            try:
+                ord = session.exec(select(Order).where(Order.id == ticket.order_id).with_for_update()).first()
+            except Exception:
+                ord = session.get(Order, ticket.order_id)
             if ord:
-                is_cod = (ord.payment_method or "").strip().lower() in ("cod", "cash on delivery", "cash_on_delivery")
+                # Double Dip Check: Check if an active replacement has already been dispatched for this order
+                if getattr(ord, "replacement_order_id", None) or getattr(ord, "is_replacement", False) or (ord.status == "confirmed" and "Replacement Authorized" in (ord.cancel_reason or "")):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Cannot issue cash refund. A complimentary replacement has already been authorized/dispatched for Order #{str(ord.id)[:8]}.",
+                    )
+
+                p_method_raw = (ord.payment_method or "").strip().lower()
+                is_cod = (
+                    p_method_raw in ("cod", "cash on delivery", "cash_on_delivery", "cash", "offline", "cash_delivery", "cash on collection")
+                    or "cod" in p_method_raw
+                    or "cash" in p_method_raw
+                    or (not getattr(ord, "razorpay_payment_id", None) and p_method_raw not in ("online", "razorpay", "upi", "card", "prepaid"))
+                )
                 # Calculate all previous refunds
                 pricing_snap = dict(ord.pricing_snapshot or {})
                 prior_refunds = []
@@ -1035,6 +1059,9 @@ def support_agent_execute_action(
                             refund_item_summaries.append(f"{qty}x {oi.product_name}")
                 refunded_items_str = f" for {', '.join(refund_item_summaries)}" if refund_item_summaries else ""
 
+                is_escrow_released = getattr(ord, "escrow_status", "held") in ("unheld", "released")
+                is_manual_payout = is_cod or is_escrow_released
+
                 ticket.resolution_type = "refund_issued"
                 ticket.refund_amount = refund_amount_dec
                 ticket.resolution_note = payload.note or f"Refund of ₹{refund_amount_dec} approved{refunded_items_str}."
@@ -1046,12 +1073,16 @@ def support_agent_execute_action(
                     payout_str = f" via {payload.payout_mode}" if payload.payout_mode else " (Offline/UPI/Bank Transfer)"
                     ref_str = f" [Ref: {payload.reference_id}]" if payload.reference_id else ""
                     action_msg = f"Resolution Approved: COD Refund of ₹{refund_amount_dec} marked as completed{payout_str}{ref_str}{refunded_items_str}. {payload.note or ''}".strip()
+                elif is_escrow_released:
+                    payout_str = f" via {payload.payout_mode}" if payload.payout_mode else " (Merchant Direct Transfer)"
+                    ref_str = f" [Ref: {payload.reference_id}]" if payload.reference_id else ""
+                    action_msg = f"Resolution Approved: Manual Refund of ₹{refund_amount_dec} recorded{payout_str}{ref_str}{refunded_items_str} (Escrow payout was already released to merchant bank). {payload.note or ''}".strip()
                 else:
                     action_msg = f"Resolution Approved: Refund of ₹{refund_amount_dec} initiated{refunded_items_str}. {payload.note or ''}".strip()
 
                 gateway_refund_resp = None
-                # Execute real live Razorpay gateway refund if paid online with real Razorpay ID
-                if not is_cod and ord.razorpay_payment_id and not ord.razorpay_payment_id.startswith("pay_mock_"):
+                # Execute real live Razorpay gateway refund ONLY if paid online AND escrow is still held
+                if not is_manual_payout and ord.razorpay_payment_id and not ord.razorpay_payment_id.startswith("pay_mock_"):
                     try:
                         from routers.payments import get_razorpay_client
                         client = get_razorpay_client()
@@ -1079,6 +1110,37 @@ def support_agent_execute_action(
                             detail=f"Razorpay Gateway Refund Failed: {str(rerr)}"
                         )
 
+                # Record non-refundable gateway fee recovery in tenant ledger (~2% + 18% GST)
+                if not is_manual_payout and isinstance(gateway_refund_resp, dict) and gateway_refund_resp.get("id"):
+                    base_gw = (refund_amount_dec * Decimal("0.02")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    cgst_gw = (base_gw * Decimal("0.09")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    sgst_gw = (base_gw * Decimal("0.09")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    est_gateway_fee = base_gw + cgst_gw + sgst_gw
+                    if est_gateway_fee > Decimal("0.00"):
+                        admin_site = session.exec(select(AdminSite).where(AdminSite.site_id == ord.site_id)).first()
+                        admin_id_to_debit = admin_site.admin_id if admin_site else None
+                        if not admin_id_to_debit:
+                            first_admin = session.exec(select(Admin)).first()
+                            admin_id_to_debit = first_admin.id if first_admin else None
+                        if admin_id_to_debit:
+                            fee_adj = TenantLedgerEntry(
+                                admin_id=admin_id_to_debit,
+                                site_id=ord.site_id,
+                                order_id=ord.id,
+                                gross_amount=Decimal("0.00"),
+                                platform_fee_percent=Decimal("0.00"),
+                                platform_fee=Decimal("0.00"),
+                                tenant_share=-est_gateway_fee,
+                                currency="INR",
+                                entry_type="fee_adjustment_refund",
+                                status="fee_adjustment",
+                                escrow_status="unheld",
+                                transfer_status="completed",
+                                created_at=utc_now(),
+                                updated_at=utc_now(),
+                            )
+                            session.add(fee_adj)
+
                 # Record in refund history
                 snapshot = dict(ord.pricing_snapshot or {})
                 refund_history = list(snapshot.get("refund_history") or [])
@@ -1089,20 +1151,23 @@ def support_agent_execute_action(
                     "refund_id": gateway_refund_resp.get("id") if isinstance(gateway_refund_resp, dict) and gateway_refund_resp.get("id") else (payload.reference_id or f"rf_sup_{str(uuid4())[:8]}"),
                     "status": "processed",
                     "amount": float(refund_amount_dec),
-                    "payout_mode": payload.payout_mode or ("Offline Payout / Cash / UPI" if is_cod else "Online Payment Gateway"),
+                    "payout_mode": payload.payout_mode or ("Offline Payout / Cash / UPI" if is_cod else ("Merchant Direct UPI/Bank" if is_escrow_released else "Online Payment Gateway")),
                     "reference_id": payload.reference_id or None,
                     "is_cod": is_cod,
+                    "is_manual_payout": is_manual_payout,
+                    "escrow_already_released": is_escrow_released,
                     "arn": gateway_refund_resp.get("acquirer_data", {}).get("arn") if isinstance(gateway_refund_resp, dict) and isinstance(gateway_refund_resp.get("acquirer_data"), dict) else None,
                     "created_at": utc_now().isoformat(),
                     "source": "support_desk",
                     "actor_name": agent.name,
-                    "note": payload.note or f"{'COD Refund' if is_cod else 'Refund'} of ₹{refund_amount_dec} recorded by {agent.name}",
+                    "note": payload.note or f"{'COD Refund' if is_cod else ('Merchant Direct Refund (Post-Escrow)' if is_escrow_released else 'Refund')} of ₹{refund_amount_dec} recorded by {agent.name}",
                     "items": [{"order_item_id": str(i.order_item_id), "quantity": i.quantity} for i in payload.items] if payload.items else None,
                 }
                 refund_history.append(refund_tx)
                 snapshot["refund_history"] = refund_history
                 snapshot["refund_details"] = refund_tx
                 ord.pricing_snapshot = snapshot
+                flag_modified(ord, "pricing_snapshot")
                 flag_modified(ord, "pricing_snapshot")
 
                 ord.status = "refunded" if is_full_refund else ord.status
@@ -1762,6 +1827,21 @@ def create_customer_ticket(
         customer_refund_account=payload.customer_refund_account,
     )
     session.add(ticket)
+
+    # Immediately freeze order escrow if an order is linked to this ticket
+    if payload.order_id:
+        disputed_order = session.get(Order, payload.order_id)
+        if disputed_order and disputed_order.status != "cancelled":
+            disputed_order.escrow_status = "held"
+            session.add(disputed_order)
+            ledger_entry = session.exec(
+                select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == payload.order_id)
+            ).first()
+            if ledger_entry and ledger_entry.status not in ("paid", "refunded"):
+                ledger_entry.escrow_status = "held"
+                ledger_entry.status = "in_escrow"
+                session.add(ledger_entry)
+
     session.commit()
     session.refresh(ticket)
 
@@ -2492,6 +2572,7 @@ def admin_get_ticket_detail(
             remaining_refundable_dec = max(Decimal("0.00"), total_paid_dec - already_refunded_total)
             is_fully_refunded = remaining_refundable_dec <= Decimal("0.00") or ord.status == "refunded" or ord.payment_status == "refunded"
 
+            is_escrow_released = getattr(ord, "escrow_status", "held") in ("unheld", "released")
             refund_summary = {
                 "total_paid": float(total_paid_dec),
                 "already_refunded": float(already_refunded_total),
@@ -2500,6 +2581,9 @@ def admin_get_ticket_detail(
                 "payment_method": ord.payment_method,
                 "payment_status": ord.payment_status,
                 "razorpay_payment_id": ord.razorpay_payment_id,
+                "escrow_status": getattr(ord, "escrow_status", "held"),
+                "is_escrow_released": is_escrow_released,
+                "escrow_mature_at": ord.escrow_mature_at.isoformat() if getattr(ord, "escrow_mature_at", None) else None,
             }
 
             order_context = {
@@ -2508,6 +2592,9 @@ def admin_get_ticket_detail(
                 "total": float(ord.total),
                 "payment_method": ord.payment_method,
                 "payment_status": ord.payment_status,
+                "escrow_status": getattr(ord, "escrow_status", "held"),
+                "is_escrow_released": is_escrow_released,
+                "escrow_mature_at": ord.escrow_mature_at.isoformat() if getattr(ord, "escrow_mature_at", None) else None,
                 "shipping_address": ord.shipping_address,
                 "delivery_otp": ord.delivery_otp,
                 "created_at": ord.created_at.isoformat() if ord.created_at else None,
@@ -2875,9 +2962,25 @@ def execute_ticket_resolution_action(
 
     if payload.action_type == "refund":
         if ticket.order_id:
-            ord = session.get(Order, ticket.order_id)
+            try:
+                ord = session.exec(select(Order).where(Order.id == ticket.order_id).with_for_update()).first()
+            except Exception:
+                ord = session.get(Order, ticket.order_id)
             if ord:
-                is_cod = (ord.payment_method or "").strip().lower() in ("cod", "cash on delivery", "cash_on_delivery")
+                # Double Dip Check: Check if an active replacement has already been dispatched for this order
+                if getattr(ord, "replacement_order_id", None) or getattr(ord, "is_replacement", False) or (ord.status == "confirmed" and "Replacement Authorized" in (ord.cancel_reason or "")):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Cannot issue cash refund. A complimentary replacement has already been authorized/dispatched for Order #{str(ord.id)[:8]}.",
+                    )
+
+                p_method_raw = (ord.payment_method or "").strip().lower()
+                is_cod = (
+                    p_method_raw in ("cod", "cash on delivery", "cash_on_delivery", "cash", "offline", "cash_delivery", "cash on collection")
+                    or "cod" in p_method_raw
+                    or "cash" in p_method_raw
+                    or (not getattr(ord, "razorpay_payment_id", None) and p_method_raw not in ("online", "razorpay", "upi", "card", "prepaid"))
+                )
                 # Calculate all previous refunds
                 pricing_snap = dict(ord.pricing_snapshot or {})
                 prior_refunds = []
@@ -2935,6 +3038,9 @@ def execute_ticket_resolution_action(
                             refund_item_summaries.append(f"{qty}x {oi.product_name}")
                 refunded_items_str = f" for {', '.join(refund_item_summaries)}" if refund_item_summaries else ""
 
+                is_escrow_released = getattr(ord, "escrow_status", "held") in ("unheld", "released")
+                is_manual_payout = is_cod or is_escrow_released
+
                 ticket.resolution_type = "refund_issued"
                 ticket.refund_amount = refund_amount_dec
                 ticket.resolution_note = payload.note or f"Refund of ₹{refund_amount_dec} approved{refunded_items_str}."
@@ -2946,12 +3052,16 @@ def execute_ticket_resolution_action(
                     payout_str = f" via {payload.payout_mode}" if payload.payout_mode else " (Offline/UPI/Bank Transfer)"
                     ref_str = f" [Ref: {payload.reference_id}]" if payload.reference_id else ""
                     action_msg = f"Resolution Approved: COD Refund of ₹{refund_amount_dec} marked as completed{payout_str}{ref_str}{refunded_items_str}. {payload.note or ''}".strip()
+                elif is_escrow_released:
+                    payout_str = f" via {payload.payout_mode}" if payload.payout_mode else " (Merchant Direct Transfer)"
+                    ref_str = f" [Ref: {payload.reference_id}]" if payload.reference_id else ""
+                    action_msg = f"Resolution Approved: Manual Refund of ₹{refund_amount_dec} recorded{payout_str}{ref_str}{refunded_items_str} (Escrow payout was already released to merchant bank). {payload.note or ''}".strip()
                 else:
                     action_msg = f"Resolution Approved: Refund of ₹{refund_amount_dec} initiated{refunded_items_str}. {payload.note or ''}".strip()
 
                 gateway_refund_resp = None
-                # Execute real live Razorpay gateway refund if paid online with real Razorpay ID
-                if not is_cod and ord.razorpay_payment_id and not ord.razorpay_payment_id.startswith("pay_mock_"):
+                # Execute real live Razorpay gateway refund ONLY if paid online AND escrow is still held
+                if not is_manual_payout and ord.razorpay_payment_id and not ord.razorpay_payment_id.startswith("pay_mock_"):
                     try:
                         from routers.payments import get_razorpay_client
                         client = get_razorpay_client()
@@ -2979,6 +3089,36 @@ def execute_ticket_resolution_action(
                             detail=f"Razorpay Gateway Refund Failed: {str(rerr)}"
                         )
 
+                # Record non-refundable gateway fee recovery in tenant ledger (~2% + 18% GST)
+                if not is_manual_payout and isinstance(gateway_refund_resp, dict) and gateway_refund_resp.get("id"):
+                    base_gw = (refund_amount_dec * Decimal("0.02")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    cgst_gw = (base_gw * Decimal("0.09")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    sgst_gw = (base_gw * Decimal("0.09")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    est_gateway_fee = base_gw + cgst_gw + sgst_gw
+                    if est_gateway_fee > Decimal("0.00"):
+                        admin_site = session.exec(select(AdminSite).where(AdminSite.site_id == ord.site_id)).first()
+                        admin_id_to_debit = admin_site.admin_id if admin_site else None
+                        if not admin_id_to_debit:
+                            first_admin = session.exec(select(Admin)).first()
+                            admin_id_to_debit = first_admin.id if first_admin else None
+                        if admin_id_to_debit:
+                            fee_adj = TenantLedgerEntry(
+                                admin_id=admin_id_to_debit,
+                                site_id=ord.site_id,
+                                order_id=ord.id,
+                                gross_amount=Decimal("0.00"),
+                                platform_fee_percent=Decimal("0.00"),
+                                platform_fee=Decimal("0.00"),
+                                tenant_share=-est_gateway_fee,
+                                currency="INR",
+                                status="fee_adjustment",
+                                escrow_status="unheld",
+                                transfer_status="completed",
+                                created_at=utc_now(),
+                                updated_at=utc_now(),
+                            )
+                            session.add(fee_adj)
+
                 # Record in refund history
                 snapshot = dict(ord.pricing_snapshot or {})
                 refund_history = list(snapshot.get("refund_history") or [])
@@ -2990,14 +3130,16 @@ def execute_ticket_resolution_action(
                     "refund_id": gateway_refund_resp.get("id") if isinstance(gateway_refund_resp, dict) and gateway_refund_resp.get("id") else (payload.reference_id or f"rf_adm_{str(uuid4())[:8]}"),
                     "status": "processed",
                     "amount": float(refund_amount_dec),
-                    "payout_mode": payload.payout_mode or ("Offline Payout / Cash / UPI" if is_cod else "Online Payment Gateway"),
+                    "payout_mode": payload.payout_mode or ("Offline Payout / Cash / UPI" if is_cod else ("Merchant Direct UPI/Bank" if is_escrow_released else "Online Payment Gateway")),
                     "reference_id": payload.reference_id or None,
                     "is_cod": is_cod,
+                    "is_manual_payout": is_manual_payout,
+                    "escrow_already_released": is_escrow_released,
                     "arn": gateway_refund_resp.get("acquirer_data", {}).get("arn") if isinstance(gateway_refund_resp, dict) and isinstance(gateway_refund_resp.get("acquirer_data"), dict) else None,
                     "created_at": utc_now().isoformat(),
                     "source": "admin_desk",
                     "actor_name": staff_name,
-                    "note": payload.note or f"{'COD Refund' if is_cod else 'Refund'} of ₹{refund_amount_dec} approved by {staff_name}",
+                    "note": payload.note or f"{'COD Refund' if is_cod else ('Merchant Direct Refund (Post-Escrow)' if is_escrow_released else 'Refund')} of ₹{refund_amount_dec} approved by {staff_name}",
                     "items": [{"order_item_id": str(i.order_item_id), "quantity": i.quantity} for i in payload.items] if payload.items else None,
                 }
                 refund_history.append(refund_tx)
@@ -3047,8 +3189,17 @@ def execute_ticket_resolution_action(
 
         replaced_items_str = ""
         if ticket.order_id:
-            ord = session.get(Order, ticket.order_id)
+            try:
+                ord = session.exec(select(Order).where(Order.id == ticket.order_id).with_for_update()).first()
+            except Exception:
+                ord = session.get(Order, ticket.order_id)
             if ord:
+                # Double Dip Check: Block free replacement if the order has already been fully refunded
+                if ord.status == "refunded" or ord.payment_status == "refunded":
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Cannot dispatch free replacement. Order #{str(ord.id)[:8]} has already been fully refunded.",
+                    )
                 order_items = session.exec(select(OrderItem).where(OrderItem.order_id == ord.id)).all()
                 repl_summaries = []
                 if payload.items:

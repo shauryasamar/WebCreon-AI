@@ -66,6 +66,7 @@ export type Product = {
   is_active?: boolean;
   sku?: string | null;
   hsn_code?: string | null;
+  tax_rate_override?: number | string | null;
   video_url?: string | null;
   weight_grams?: number;
   length_cm?: number | null;
@@ -189,6 +190,8 @@ type BackendCartItem = {
   product_name: string;
   product_image?: string | null;
   product_slug?: string | null;
+  hsn_code?: string | null;
+  tax_rate_override?: number | null;
   line_total: number;
 };
 
@@ -217,6 +220,8 @@ const mapBackendCartItemToCartItem = (item: BackendCartItem): CartItem => ({
   images: item.product_image ? [item.product_image] : [],
   selectedVariantValue: item.selected_variant_value ?? null,
   selectedVariantLabel: item.selected_variant_label ?? null,
+  hsn_code: item.hsn_code ?? null,
+  tax_rate_override: item.tax_rate_override ?? null,
   quantity: item.quantity,
 });
 
@@ -315,6 +320,40 @@ export function CartProvider({
       });
     }
   }, [cartItems]);
+
+  // Reconcile and enrich cached cart items with latest product catalog (HSN codes, tax rates, prices)
+  useEffect(() => {
+    if (!products || products.length === 0) return;
+    setCartItems((prevItems) => {
+      if (!prevItems || prevItems.length === 0) return prevItems;
+      let changed = false;
+      const updated = prevItems.map((item) => {
+        const matching = products.find((p) => String(p.id) === String(item.id));
+        if (!matching) return item;
+        const nextHsn = matching.hsn_code ?? item.hsn_code ?? null;
+        const nextTaxOverride = matching.tax_rate_override ?? item.tax_rate_override ?? null;
+        const nextImage = matching.image || matching.imageUrl || item.image;
+        if (
+          item.hsn_code !== nextHsn ||
+          item.tax_rate_override !== nextTaxOverride ||
+          (!item.image && nextImage)
+        ) {
+          changed = true;
+          return {
+            ...item,
+            hsn_code: nextHsn,
+            tax_rate_override: nextTaxOverride,
+            image: nextImage,
+          };
+        }
+        return item;
+      });
+      if (changed && !getCustomerToken(resolvedSiteId)) {
+        writeGuestCart(resolvedSiteId, updated);
+      }
+      return changed ? updated : prevItems;
+    });
+  }, [products, resolvedSiteId]);
 
   const applyCartResponse = useCallback((data: BackendCartResponse) => {
     const mappedItems = data.items.map(mapBackendCartItemToCartItem);

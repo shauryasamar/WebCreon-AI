@@ -1884,36 +1884,44 @@ export const SupportAgentDashboard: React.FC = () => {
                           {/* 1. Issue / Record Refund */}
                           {(() => {
                             const isCodOrder = ["cod", "cash on delivery", "cash_on_delivery"].includes(String(detailData.order_360?.payment_method || "").trim().toLowerCase());
+                            const isEscrowReleased = !isCodOrder && (detailData.order_360?.escrow_status === "unheld" || detailData.order_360?.escrow_status === "released" || detailData.order_360?.refund_summary?.is_escrow_released);
+                            const remaining = detailData.order_360?.refund_summary?.remaining_refundable ?? detailData.order_360?.total ?? 0;
                             return (
-                              <div style={{ border: `1px solid ${isCodOrder ? "#fde68a" : "#e2e8f0"}`, borderRadius: "6px", padding: "12px", background: isTicketClosed ? "#f1f5f9" : isCodOrder ? "#fffbeb" : "#f8fafc", opacity: isTicketClosed ? 0.75 : 1 }}>
+                              <div style={{ border: "1px solid #e2e8f0", borderRadius: "8px", padding: "14px", background: isTicketClosed ? "#f8fafc" : "#ffffff", opacity: isTicketClosed ? 0.75 : 1 }}>
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                                  <h5 style={{ margin: 0, fontSize: "13px", fontWeight: 700, color: isTicketClosed ? "#64748b" : isCodOrder ? "#b45309" : "#166534" }}>
-                                    {isCodOrder ? "Record COD Refund" : "Issue Refund"}
+                                  <h5 style={{ margin: 0, fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
+                                    Issue Refund
                                   </h5>
-                                  {isCodOrder && (
-                                    <span style={{ fontSize: "10px", fontWeight: 700, background: "#fef3c7", color: "#92400e", padding: "2px 6px", borderRadius: "4px" }}>
-                                      COD Order
+                                  {isCodOrder ? (
+                                    <span style={{ fontSize: "10.5px", fontWeight: 600, background: "#f1f5f9", color: "#475569", border: "1px solid #e2e8f0", padding: "1px 6px", borderRadius: "4px" }}>
+                                      COD Payout
                                     </span>
-                                  )}
+                                  ) : isEscrowReleased ? (
+                                    <span style={{ fontSize: "10.5px", fontWeight: 600, background: "#f1f5f9", color: "#475569", border: "1px solid #e2e8f0", padding: "1px 6px", borderRadius: "4px" }}>
+                                      Direct Transfer
+                                    </span>
+                                  ) : null}
                                 </div>
-                                <p style={{ margin: "0 0 8px", fontSize: "12px", color: isCodOrder ? "#92400e" : "#64748b" }}>
+                                <p style={{ margin: "0 0 10px", fontSize: "12px", color: "#64748b" }}>
                                   {isTicketClosed
                                     ? "Disabled while ticket is closed."
                                     : isFullyRefunded
                                     ? "Order is already fully refunded."
+                                    : isEscrowReleased
+                                    ? `Refund items up to remaining ₹${remaining} (settled via direct transfer).`
                                     : isCodOrder
-                                    ? `Record offline/UPI/bank refund for COD order (Max: ₹${detailData.order_360?.refund_summary?.remaining_refundable ?? detailData.order_360?.total ?? 0}).`
-                                    : `Refund items up to remaining ₹${detailData.order_360?.refund_summary?.remaining_refundable ?? detailData.order_360?.total ?? 0}.`}
+                                    ? `Record offline UPI/bank refund for COD order (Max: ₹${remaining}).`
+                                    : `Refund items up to remaining ₹${remaining}.`}
                                 </p>
                                 <button
                                   disabled={isTicketClosed}
                                   onClick={openRefundModal}
                                   style={{
-                                    background: isTicketClosed ? "#94a3b8" : isFullyRefunded ? "#64748b" : isCodOrder ? "#d97706" : "#16a34a",
+                                    background: isTicketClosed ? "#94a3b8" : isFullyRefunded ? "#64748b" : "#0f172a",
                                     color: "#ffffff",
                                     border: "none",
                                     padding: "6px 14px",
-                                    borderRadius: "5px",
+                                    borderRadius: "6px",
                                     fontSize: "12px",
                                     fontWeight: 600,
                                     cursor: isTicketClosed ? "not-allowed" : "pointer",
@@ -1921,7 +1929,7 @@ export const SupportAgentDashboard: React.FC = () => {
                                   }}
                                   title={isTicketClosed ? "Reopen ticket to issue refund" : ""}
                                 >
-                                  {isTicketClosed ? "Refund Locked (Closed)" : isFullyRefunded ? "View Refund Status" : isCodOrder ? "Record COD Refund" : "Open Refund Tool"}
+                                  {isTicketClosed ? "Refund Locked (Closed)" : isFullyRefunded ? "View Refund Status" : isEscrowReleased ? "Record Refund" : isCodOrder ? "Record COD Refund" : "Issue Refund"}
                                 </button>
                               </div>
                             );
@@ -2081,15 +2089,22 @@ export const SupportAgentDashboard: React.FC = () => {
               );
             })()}
 
-            {/* COD Notice */}
-            {["cod", "cash on delivery", "cash_on_delivery"].includes(String(detailData?.order_360?.payment_method || "").trim().toLowerCase()) && (
+            {/* COD or Escrow Released Notice */}
+            {["cod", "cash on delivery", "cash_on_delivery"].includes(String(detailData?.order_360?.payment_method || "").trim().toLowerCase()) ? (
               <div style={{ padding: "10px 12px", borderRadius: "6px", background: "#f8fafc", border: "1px solid #cbd5e1", color: "#334155", fontSize: "11.5px", marginBottom: "14px", display: "flex", alignItems: "flex-start", gap: "8px" }}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: "2px" }}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
                 <div>
                   <strong>Cash on Delivery Order:</strong> Reversal occurs outside the gateway. Record the disbursal mode (UPI/Bank Transfer) and reference ID below so it is tracked and visible on customer order history.
                 </div>
               </div>
-            )}
+            ) : (detailData?.order_360?.escrow_status === "unheld" || detailData?.order_360?.escrow_status === "released" || detailData?.order_360?.refund_summary?.is_escrow_released) ? (
+              <div style={{ padding: "10px 12px", borderRadius: "6px", background: "#fff7ed", border: "1px solid #fed7aa", color: "#9a3412", fontSize: "11.5px", marginBottom: "14px", display: "flex", alignItems: "flex-start", gap: "8px" }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ea580c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: "2px" }}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                <div>
+                  <strong>Merchant Payout Already Released:</strong> Funds for this order have already been disbursed to the merchant bank account. Automated gateway refund is disabled to protect platform escrow. The merchant must transfer the refund manually (via UPI / NEFT / IMPS) and input the transaction reference below.
+                </div>
+              </div>
+            ) : null}
 
             {/* If order is fully refunded */}
             {detailData?.order_360?.refund_summary?.is_fully_refunded ? (
@@ -2434,8 +2449,11 @@ export const SupportAgentDashboard: React.FC = () => {
                   </div>
                 )}
 
-                {/* Payout Details for COD Orders */}
-                {["cod", "cash on delivery", "cash_on_delivery"].includes(String(detailData?.order_360?.payment_method || "").trim().toLowerCase()) && (
+                {/* Payout Details for COD or Released Escrow Orders */}
+                {(["cod", "cash on delivery", "cash_on_delivery"].includes(String(detailData?.order_360?.payment_method || "").trim().toLowerCase()) ||
+                  detailData?.order_360?.escrow_status === "unheld" ||
+                  detailData?.order_360?.escrow_status === "released" ||
+                  detailData?.order_360?.refund_summary?.is_escrow_released) && (
                   <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "6px", padding: "10px 12px", marginBottom: "12px" }}>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "6px" }}>
                       <div>
@@ -2447,7 +2465,7 @@ export const SupportAgentDashboard: React.FC = () => {
                           onChange={(e) => setPayoutModeInput(e.target.value)}
                           style={{ width: "100%", padding: "7px 10px", borderRadius: "6px", border: "1px solid #cbd5e1", marginBottom: 0, boxSizing: "border-box", fontSize: "12px", outline: "none", background: "#ffffff" }}
                         >
-                          <option value="UPI Transfer">UPI Transfer</option>
+                          <option value="UPI Transfer">Direct UPI Transfer</option>
                           <option value="Bank Transfer (NEFT/IMPS)">Bank Account (IMPS/NEFT)</option>
                           <option value="Cash Handover by Delivery Partner">Cash Handover (Rider)</option>
                           <option value="Store Credit / Wallet">Store Credit / Wallet</option>
@@ -2509,7 +2527,15 @@ export const SupportAgentDashboard: React.FC = () => {
                   cursor: (detailData?.ticket?.status === "closed" || detailData?.ticket?.status === "resolved" || detailData?.order_360?.refund_summary?.is_fully_refunded) ? "not-allowed" : "pointer",
                 }}
               >
-                {actionProcessing ? "Processing..." : (detailData?.ticket?.status === "closed" || detailData?.ticket?.status === "resolved") ? "Case Closed" : ["cod", "cash on delivery", "cash_on_delivery"].includes(String(detailData?.order_360?.payment_method || "").trim().toLowerCase()) ? `Mark COD Refunded (${refundAmountInput ? '₹' + refundAmountInput : ''})` : `Confirm Refund (${refundAmountInput ? '₹' + refundAmountInput : ''})`}
+                {actionProcessing
+                  ? "Processing..."
+                  : (detailData?.ticket?.status === "closed" || detailData?.ticket?.status === "resolved")
+                  ? "Case Closed"
+                  : ["cod", "cash on delivery", "cash_on_delivery"].includes(String(detailData?.order_360?.payment_method || "").trim().toLowerCase())
+                  ? `Mark COD Refunded (${refundAmountInput ? '₹' + refundAmountInput : ''})`
+                  : (detailData?.order_360?.escrow_status === "unheld" || detailData?.order_360?.escrow_status === "released" || detailData?.order_360?.refund_summary?.is_escrow_released)
+                  ? `Record Manual Refund (${refundAmountInput ? '₹' + refundAmountInput : ''})`
+                  : `Confirm Gateway Refund (${refundAmountInput ? '₹' + refundAmountInput : ''})`}
               </button>
             </div>
           </div>

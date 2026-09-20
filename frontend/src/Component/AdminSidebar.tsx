@@ -39,15 +39,11 @@ const AdminSidebar = () => {
       to: `/builder/${siteId}/admin/home-sections`,
     },
     {
-      label: "Pages & Policies",
-      to: `/builder/${siteId}/admin/pages`,
-    },
-    {
       label: "Delivery & Shipping",
       to: `/builder/${siteId}/admin/delivery`,
     },
     {
-      label: "Checkout Charges",
+      label: "Taxes & Surcharges",
       to: `/builder/${siteId}/admin/checkout-charges`,
     },
     {
@@ -61,6 +57,10 @@ const AdminSidebar = () => {
     {
       label: "Notifications & Email",
       to: `/builder/${siteId}/admin/notifications`,
+    },
+    {
+      label: "Pages & Policies",
+      to: `/builder/${siteId}/admin/pages`,
     },
   ];
 

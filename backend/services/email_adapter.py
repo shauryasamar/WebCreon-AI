@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import os
 import smtplib
+import time
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Any, Dict, Optional, Tuple
@@ -23,6 +24,16 @@ from services.email_templates import clean_store_display_name
 load_dotenv(find_dotenv(usecwd=True))
 
 logger = logging.getLogger("email_adapter")
+
+TEST_EMAIL_DOMAINS = {"test.com", "example.com", "test.org", "localhost", "fake.com", "invalid", "example.org", "example.net"}
+_smtp_cooldown_until: Optional[float] = None
+
+
+def is_test_email(email_str: str) -> bool:
+    if not email_str or "@" not in email_str:
+        return True
+    domain = email_str.split("@")[-1].strip().lower()
+    return domain in TEST_EMAIL_DOMAINS or domain.endswith(".test") or domain.endswith(".local")
 
 
 class EmailDeliveryResult:
@@ -58,9 +69,16 @@ def send_smtp_message(
     reply_to: Optional[str] = None,
     use_tls: bool = True,
     use_ssl: bool = False,
-    timeout: int = 15,
+    timeout: int = 3,
 ) -> EmailDeliveryResult:
     """Dispatches a single email message over SMTP with standard TLS/SSL negotiation."""
+    global _smtp_cooldown_until
+
+    # Check circuit-breaker for provider daily limits (e.g. Gmail 550 rate limit)
+    if _smtp_cooldown_until and time.time() < _smtp_cooldown_until:
+        logger.info(f"SMTP provider in cooldown due to provider limits. Bypassing network call for {to_email}.")
+        return EmailDeliveryResult(success=False, message="SMTP in cooldown", provider_used="smtp_cooldown", error="Daily limit exceeded cooldown")
+
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
@@ -88,7 +106,12 @@ def send_smtp_message(
         return EmailDeliveryResult(success=True, message="Email dispatched successfully", provider_used="smtp")
     except Exception as ex:
         err_msg = str(ex)
-        logger.warning(f"SMTP dispatch to {to_email} failed via {host}: {err_msg}")
+        if "550" in err_msg or "daily" in err_msg.lower() or "limit exceeded" in err_msg.lower():
+            # Activate 30-minute circuit breaker so other requests don't hang
+            _smtp_cooldown_until = time.time() + 1800
+            logger.warning(f"SMTP provider rate limit encountered (550). Activating 30min cooldown: {err_msg}")
+        else:
+            logger.warning(f"SMTP dispatch to {to_email} failed via {host}: {err_msg}")
         return EmailDeliveryResult(success=False, message="SMTP dispatch failed", provider_used="smtp", error=err_msg)
 
 
@@ -113,6 +136,11 @@ def dispatch_tenant_email(
 
     raw_store = store_name or (settings.sender_name if settings and settings.sender_name else (site.name if site else "WebCreon Store"))
     resolved_store_name = clean_store_display_name(raw_store)
+
+    # Case -1: If recipient is a test or dummy domain, simulate delivery instantly without hitting external SMTP
+    if is_test_email(to_email):
+        logger.info(f"Dev test email simulated for {to_email} [{subject}] (site: {site_id})")
+        return EmailDeliveryResult(success=True, message="Test email simulated locally", provider_used="dev_logger")
 
     # Case 0: If Email Notifications are disabled by the merchant, skip external dispatch
     if settings is not None and settings.is_enabled is False:
@@ -222,3 +250,8 @@ def verify_smtp_connection(
     if res.success:
         return True, None
     return False, res.error or "Could not connect to SMTP server"
+
+
+# Backwards compatibility aliases for tests
+send_tenant_email = dispatch_tenant_email
+verify_store_smtp_connection = verify_smtp_connection

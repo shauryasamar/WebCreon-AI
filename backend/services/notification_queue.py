@@ -310,3 +310,48 @@ def get_dlq_entries() -> List[Dict[str, Any]]:
 def clear_dlq():
     with _DLQ_LOCK:
         NOTIFICATION_DLQ.clear()
+
+
+class NotificationMessage:
+    def __init__(
+        self,
+        order_id: str,
+        site_id: str,
+        channel: str = "email",
+        recipient: str = "",
+        payload: Optional[Dict[str, Any]] = None,
+        max_retries: int = 3,
+    ):
+        self.order_id = order_id
+        self.site_id = site_id
+        self.channel = channel
+        self.recipient = recipient
+        self.payload = payload or {}
+        self.max_retries = max_retries
+        self.attempts = 0
+        self.last_error: Optional[str] = None
+
+
+def _dispatch_worker(msg: NotificationMessage, send_fn: Optional[Callable] = None):
+    backoff = [1, 4, 16]
+    while msg.attempts < msg.max_retries:
+        msg.attempts += 1
+        try:
+            if send_fn:
+                send_fn(msg)
+            return True
+        except Exception as exc:
+            msg.last_error = str(exc)
+            if msg.attempts >= msg.max_retries:
+                with _DLQ_LOCK:
+                    NOTIFICATION_DLQ.append({
+                        "order_id": msg.order_id,
+                        "site_id": msg.site_id,
+                        "recipient": msg.recipient,
+                        "attempts": msg.attempts,
+                        "last_error": msg.last_error,
+                    })
+                return False
+            wait_time = backoff[min(msg.attempts - 1, len(backoff) - 1)]
+            time.sleep(wait_time)
+    return False

@@ -61,7 +61,7 @@ const CATEGORIES = [
   { id: "delivery", label: "Delivery & Shipping" },
   { id: "notifications", label: "Notifications & Emails" },
   { id: "website", label: "Home Sections & Pages" },
-  { id: "settings", label: "Checkout Charges & Policies" },
+  { id: "settings", label: "Taxes & Surcharges" },
   { id: "financial", label: "Earnings & Ledger / Payouts" },
   { id: "user_access", label: "Users & Roles" },
 ];
@@ -253,7 +253,8 @@ function getCategoryTheme(category: string) {
       return { bg: "#f0f9ff", color: "#0284c7", border: "#bae6fd", label: "Pages & Sections" };
     case "settings":
     case "checkout_charges":
-      return { bg: "#fffbeb", color: "#b45309", border: "#fde68a", label: "Checkout Charges" };
+    case "taxes_and_surcharges":
+      return { bg: "#fffbeb", color: "#b45309", border: "#fde68a", label: "Taxes & Surcharges" };
     case "financial":
     case "earnings_ledger":
     case "payouts":

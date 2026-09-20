@@ -32,6 +32,8 @@ export type DeliverySettingsData = {
   sender_longitude?: number | null;
   shiprocket_delivery_radius_km?: number | null;
   default_weight_grams: number;
+  enable_cod?: boolean;
+  max_cod_amount?: number;
 };
 
 export type Agent = {
@@ -216,6 +218,8 @@ export default function DeliverySettingsPage() {
     sender_city: "",
     sender_state: "",
     default_weight_grams: 500,
+    enable_cod: true,
+    max_cod_amount: 5000,
   });
 
   const [srPassword, setSrPassword] = useState("");
@@ -414,6 +418,8 @@ export default function DeliverySettingsPage() {
         sender_longitude: payload.sender_longitude !== undefined ? payload.sender_longitude : null,
         shiprocket_delivery_radius_km: payload.shiprocket_delivery_radius_km !== undefined ? (Number(payload.shiprocket_delivery_radius_km) || null) : null,
         default_weight_grams: Number(payload.default_weight_grams) || 500,
+        enable_cod: payload.enable_cod !== undefined ? Boolean(payload.enable_cod) : true,
+        max_cod_amount: payload.max_cod_amount !== undefined ? (Number(payload.max_cod_amount) || 0) : 5000,
       };
 
       if (srPassword) {
@@ -993,6 +999,95 @@ export default function DeliverySettingsPage() {
             </button>
           )}
         </div>
+      </div>
+
+      {/* Cash on Delivery (COD) Controls Card */}
+      <div
+        style={{
+          background: "#ffffff",
+          borderRadius: "10px",
+          border: "1px solid #e2e8f0",
+          padding: "12px 18px",
+          marginBottom: "16px",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "12px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <ToggleSwitch
+            checked={settings.enable_cod !== false}
+            onChange={(val) => {
+              if (!canEdit) return;
+              setSettings((prev) => ({ ...prev, enable_cod: val }));
+            }}
+            disabled={!canEdit}
+            id="toggle-enable-cod"
+          />
+          <div>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", display: "flex", alignItems: "center", gap: "6px" }}>
+              Accept Cash on Delivery (COD)
+              <span
+                style={{
+                  fontSize: "10px",
+                  fontWeight: 600,
+                  padding: "1px 7px",
+                  borderRadius: "999px",
+                  background: settings.enable_cod !== false ? "#f1f5f9" : "#fee2e2",
+                  color: settings.enable_cod !== false ? "#334155" : "#991b1b",
+                  border: "1px solid #e2e8f0",
+                }}
+              >
+                {settings.enable_cod !== false ? "Active" : "Disabled"}
+              </span>
+            </div>
+            <div style={{ fontSize: "11.5px", color: "#64748b", marginTop: "2px" }}>
+              Allow shoppers to place orders with cash payment upon arrival at their door.
+            </div>
+          </div>
+        </div>
+
+        {settings.enable_cod !== false && (
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>
+              Max COD Order Limit:
+            </label>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+              <span style={{ fontSize: "12px", fontWeight: 700, color: "#64748b" }}>₹</span>
+              <input
+                type="number"
+                min={100}
+                max={100000}
+                step={500}
+                disabled={!canEdit}
+                value={settings.max_cod_amount ?? 5000}
+                onChange={(e) => {
+                  if (!canEdit) return;
+                  setSettings((prev) => ({
+                    ...prev,
+                    max_cod_amount: Math.max(0, Number(e.target.value) || 0),
+                  }));
+                }}
+                style={{
+                  padding: "4px 8px",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  color: "#0f172a",
+                  width: "85px",
+                  background: canEdit ? "#ffffff" : "#f8fafc",
+                  cursor: canEdit ? "text" : "not-allowed",
+                  outline: "none",
+                }}
+              />
+            </div>
+            <InfoTooltip text="Orders exceeding this total will require online prepayment to protect store cash flow." />
+          </div>
+        )}
       </div>
 
       {/* ========================================================================= */}

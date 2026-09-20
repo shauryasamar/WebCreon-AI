@@ -9,7 +9,7 @@ from sqlmodel import Session, select
 
 from auth_middleware import enforce_site_ownership, require_permission
 from db.database import get_session
-from models import Site
+from models import Site, MerchantTaxProfile
 from services.audit_service import AuditService, ActorType, SourceType, AuditCategory
 
 router = APIRouter(
@@ -118,22 +118,19 @@ class TaxSettingsPayload(BaseModel):
         return str(value).strip()
 
     @model_validator(mode="after")
-    def validate_tax(self):
+    def validate_tax_settings(self):
         if not self.label:
             raise ValueError("Tax label is required")
         if self.rate == "":
             raise ValueError("Tax rate is required")
 
         try:
-            rate_value = float(self.rate)
+            rate_val = float(self.rate)
         except ValueError:
             raise ValueError("Tax rate must be a valid number")
 
-        if rate_value < 0:
-            raise ValueError("Tax rate cannot be negative")
-
-        if rate_value > 100:
-            raise ValueError("Tax rate cannot be greater than 100")
+        if rate_val < 0 or rate_val > 100:
+            raise ValueError("Tax rate must be between 0 and 100")
 
         return self
 
@@ -158,14 +155,16 @@ class CheckoutSettingsPayload(BaseModel):
 class CheckoutSettingsResponse(BaseModel):
     taxSettings: TaxSettingsPayload
     charges: list[ChargeRulePayload]
+    isComposition: bool = False
+    isUnregistered: bool = False
 
 
 def build_default_checkout_settings() -> dict[str, Any]:
     return {
         "taxSettings": {
-            "enabled": True,
+            "enabled": False,
             "label": "GST",
-            "rate": "5",
+            "rate": "0",
             "applyOnShipping": False,
         },
         "charges": [
@@ -301,6 +300,27 @@ def build_default_checkout_settings() -> dict[str, Any]:
     }
 
 
+def _enrich_tax_profile_flags(session: Session, site_id: UUID, settings_dict: dict[str, Any]) -> dict[str, Any]:
+    merchant_profile = session.exec(
+        select(MerchantTaxProfile).where(MerchantTaxProfile.site_id == site_id)
+    ).first()
+    is_composition = bool(
+        merchant_profile and (
+            merchant_profile.is_composition_dealer or 
+            str(merchant_profile.registration_type).lower() in ("composition", "composition_scheme")
+        )
+    )
+    is_unregistered = bool(
+        not merchant_profile or 
+        not merchant_profile.gstin or 
+        str(merchant_profile.registration_type).lower() == "unregistered"
+    )
+    res = dict(settings_dict)
+    res["isComposition"] = is_composition
+    res["isUnregistered"] = is_unregistered
+    return res
+
+
 @router.get("/sites/{site_id}/checkout-settings", response_model=CheckoutSettingsResponse)
 def get_checkout_settings(
     site_id: UUID,
@@ -310,7 +330,8 @@ def get_checkout_settings(
 ):
     site = get_site_or_404(session, site_id)
     stored_settings = site.checkout_settings or build_default_checkout_settings()
-    return CheckoutSettingsResponse(**stored_settings)
+    enriched = _enrich_tax_profile_flags(session, site.id, stored_settings)
+    return CheckoutSettingsResponse(**enriched)
 
 
 @router.put("/sites/{site_id}/checkout-settings", response_model=CheckoutSettingsResponse)
@@ -351,7 +372,8 @@ def update_checkout_settings(
     except Exception as log_err:
         pass
 
-    return CheckoutSettingsResponse(**site.checkout_settings)
+    enriched = _enrich_tax_profile_flags(session, site.id, site.checkout_settings)
+    return CheckoutSettingsResponse(**enriched)
 
 
 @router.get("/store/{slug}/checkout-settings", response_model=CheckoutSettingsResponse)
@@ -367,4 +389,5 @@ def get_public_checkout_settings(
         raise HTTPException(status_code=404, detail="Site not found")
 
     stored_settings = site.checkout_settings or build_default_checkout_settings()
-    return CheckoutSettingsResponse(**stored_settings)
+    enriched = _enrich_tax_profile_flags(session, site.id, stored_settings)
+    return CheckoutSettingsResponse(**enriched)

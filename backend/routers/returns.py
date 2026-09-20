@@ -19,7 +19,11 @@ from auth_middleware import (
 )
 from db.database import get_session
 from routers.audit_logs import log_activity
+import os
+from fastapi.responses import FileResponse
 from models import (
+    Admin,
+    AdminSite,
     DeliveryAgent,
     DeliverySettings,
     InventoryMovement,
@@ -30,10 +34,16 @@ from models import (
     ReturnRequest,
     ReturnStatusHistory,
     Site,
+    TaxCreditNote,
+    TaxInvoice,
     TenantLedgerEntry,
     User,
 )
 from services.notification_service import dispatch_customer_event
+from services.pdf_invoice_service import (
+    issue_tax_credit_note_for_return,
+    generate_rule54_credit_note_pdf,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -962,6 +972,17 @@ def create_return_request(
             changed_by_type="customer",
             note=payload.request_note,
         )
+
+        # Immediately freeze order escrow upon return request
+        order.escrow_status = "held"
+        session.add(order)
+        ledger_entry = session.exec(
+            select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
+        ).first()
+        if ledger_entry and ledger_entry.status not in ("paid", "refunded"):
+            ledger_entry.escrow_status = "held"
+            ledger_entry.status = "in_escrow"
+            session.add(ledger_entry)
 
         session.commit()
         session.refresh(return_request)
@@ -2166,7 +2187,19 @@ def refund_return_request(
         raise HTTPException(status_code=403, detail="You do not have permission to process return refunds")
 
     return_request = get_return_request_or_404(session, site_id, return_id)
-    order = get_order_or_404(session, site_id, return_request.order_id)
+    try:
+        order = session.exec(select(Order).where(Order.id == return_request.order_id, Order.site_id == site_id).with_for_update()).first()
+    except Exception:
+        order = get_order_or_404(session, site_id, return_request.order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found for return request")
+
+    # Double Dip Check: Block cash refund if a free replacement has already been dispatched for this order
+    if getattr(order, "replacement_order_id", None) or getattr(order, "is_replacement", False) or (order.status == "confirmed" and "Replacement Authorized" in (order.cancel_reason or "")):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot issue return cash refund. A complimentary replacement order has already been authorized/dispatched for Order #{str(order.id)[:8]}.",
+        )
 
     if return_request.status != "inspected":
         raise HTTPException(status_code=400, detail="Only inspected returns can be refunded")
@@ -2247,8 +2280,9 @@ def refund_return_request(
 
         is_all_returned = is_full_refund or (total_returned_qty >= total_order_qty) or all(getattr(oi, "returnable_quantity", 0) == 0 for oi in order_items)
 
-        # If online payment via Razorpay, trigger gateway refund
-        if order.razorpay_payment_id and not order.razorpay_payment_id.startswith("pay_mock_"):
+        is_escrow_released = getattr(order, "escrow_status", "held") in ("unheld", "released")
+        # If online payment via Razorpay AND escrow is still held, trigger automated gateway refund
+        if not is_escrow_released and order.razorpay_payment_id and not order.razorpay_payment_id.startswith("pay_mock_"):
             try:
                 from routers.payments import get_razorpay_client
                 client = get_razorpay_client()
@@ -2286,11 +2320,43 @@ def refund_return_request(
                         snapshot["refund_history"] = refund_history
                         snapshot["refund_details"] = rf_entry
                         order.pricing_snapshot = snapshot
+
+                        # Record non-refundable gateway fee recovery in tenant ledger (~2% + 18% GST)
+                        if refund_resp.get("id"):
+                            base_gw = (refund_amount_dec * Decimal("0.02")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                            cgst_gw = (base_gw * Decimal("0.09")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                            sgst_gw = (base_gw * Decimal("0.09")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                            est_gateway_fee = base_gw + cgst_gw + sgst_gw
+                            if est_gateway_fee > Decimal("0.00"):
+                                admin_site = session.exec(select(AdminSite).where(AdminSite.site_id == order.site_id)).first()
+                                admin_id_to_debit = admin_site.admin_id if admin_site else None
+                                if not admin_id_to_debit:
+                                    first_admin = session.exec(select(Admin)).first()
+                                    admin_id_to_debit = first_admin.id if first_admin else None
+                                if admin_id_to_debit:
+                                    fee_adj = TenantLedgerEntry(
+                                        admin_id=admin_id_to_debit,
+                                        site_id=order.site_id,
+                                        order_id=order.id,
+                                        gross_amount=Decimal("0.00"),
+                                        platform_fee_percent=Decimal("0.00"),
+                                        platform_fee=Decimal("0.00"),
+                                        tenant_share=-est_gateway_fee,
+                                        currency="INR",
+                                        entry_type="fee_adjustment_refund",
+                                        status="fee_adjustment",
+                                        escrow_status="unheld",
+                                        transfer_status="completed",
+                                        created_at=now,
+                                        updated_at=now,
+                                    )
+                                    session.add(fee_adj)
             except Exception as rerr:
                 print(f"Razorpay refund warning on return refund: {rerr}")
-        else:
-            # Record non-gateway or manual/COD return refund in history
-            snapshot = dict(order.pricing_snapshot or {})
+
+        # Ensure pricing snapshot records the refund trail if gateway call was bypassed or offline
+        snapshot = dict(order.pricing_snapshot or {})
+        if not snapshot.get("refund_details"):
             rf_entry = {
                 "refund_id": f"rf_ret_{str(uuid4())[:8]}",
                 "status": "processed",
@@ -2301,16 +2367,21 @@ def refund_return_request(
                 "note": payload.admin_note or return_request.refund_override_reason or "Customer Return Refund",
             }
             refund_history = list(snapshot.get("refund_history") or [])
-            if not refund_history and snapshot.get("refund_details"):
-                refund_history.append(snapshot.get("refund_details"))
             refund_history.append(rf_entry)
             snapshot["refund_history"] = refund_history
             snapshot["refund_details"] = rf_entry
             order.pricing_snapshot = snapshot
 
         ledger_entry = session.exec(
-            select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
+            select(TenantLedgerEntry).where(
+                TenantLedgerEntry.order_id == order.id,
+                TenantLedgerEntry.entry_type == "order_sale",
+            )
         ).first()
+        if not ledger_entry:
+            ledger_entry = session.exec(
+                select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
+            ).first()
 
         if is_all_returned:
             order.status = "returned"
@@ -2319,6 +2390,8 @@ def refund_return_request(
             if ledger_entry:
                 ledger_entry.status = "refunded"
                 ledger_entry.escrow_status = "reversed"
+                ledger_entry.entry_type = "return_refund"
+                ledger_entry.return_request_id = return_request.id
                 ledger_entry.updated_at = now
                 session.add(ledger_entry)
         else:
@@ -2335,6 +2408,8 @@ def refund_return_request(
                 ledger_entry.gross_amount = new_gross
                 ledger_entry.tenant_share = new_tenant_share
                 ledger_entry.platform_fee = new_fee
+                ledger_entry.entry_type = "return_adjustment"
+                ledger_entry.return_request_id = return_request.id
                 ledger_entry.updated_at = now
                 session.add(ledger_entry)
 
@@ -2349,6 +2424,14 @@ def refund_return_request(
             changed_by_type="admin",
             note=payload.admin_note or return_request.refund_override_reason,
         )
+
+        # Issue Rule 54 Tax Credit Note
+        try:
+            credit_note = issue_tax_credit_note_for_return(session, return_request, save_pdf=True)
+            if credit_note:
+                logger.info(f"Issued Rule 54 Tax Credit Note {credit_note.credit_note_number} for return {return_request.id}")
+        except Exception as cn_err:
+            logger.warning(f"Failed to auto-issue Tax Credit Note for return {return_request.id}: {cn_err}")
 
         session.commit()
 
@@ -2521,3 +2604,120 @@ def close_return_request(
     except Exception:
         session.rollback()
         raise
+
+
+@router.get("/admin/{site_id}/{return_id}/credit-note/pdf")
+def get_admin_return_credit_note_pdf(
+    site_id: UUID,
+    return_id: UUID,
+    admin=Depends(authenticate_admin),
+    ownership=Depends(enforce_site_ownership),
+    session: Session = Depends(get_session),
+):
+    """
+    Downloads the Rule 54 Tax Credit Note PDF for an approved/refunded return request.
+    """
+    return_request = get_return_request_or_404(session, site_id, return_id)
+    credit_note = session.exec(
+        select(TaxCreditNote).where(TaxCreditNote.return_request_id == return_id)
+    ).first()
+
+    if not credit_note:
+        credit_note = issue_tax_credit_note_for_return(session, return_request, save_pdf=True)
+        session.commit()
+
+    pdf_path = credit_note.pdf_storage_path or f"uploads/credit_notes/{return_request.id}.pdf"
+    if not os.path.exists(pdf_path):
+        orig_invoice = session.get(TaxInvoice, credit_note.original_invoice_id)
+        generate_rule54_credit_note_pdf(credit_note, orig_invoice, output_path=pdf_path)
+
+    clean_filename = f"Credit_Note_{credit_note.credit_note_number.replace('/', '_')}.pdf"
+    return FileResponse(
+        path=pdf_path,
+        media_type="application/pdf",
+        filename=clean_filename,
+    )
+
+
+@router.get("/admin/{site_id}/{return_id}/credit-note/json")
+def get_admin_return_credit_note_json(
+    site_id: UUID,
+    return_id: UUID,
+    admin=Depends(authenticate_admin),
+    ownership=Depends(enforce_site_ownership),
+    session: Session = Depends(get_session),
+):
+    """
+    Returns structured statutory Rule 54 Credit Note details for admin view.
+    """
+    return_request = get_return_request_or_404(session, site_id, return_id)
+    credit_note = session.exec(
+        select(TaxCreditNote).where(TaxCreditNote.return_request_id == return_id)
+    ).first()
+
+    if not credit_note:
+        credit_note = issue_tax_credit_note_for_return(session, return_request, save_pdf=True)
+        session.commit()
+
+    orig_invoice = session.get(TaxInvoice, credit_note.original_invoice_id)
+
+    return {
+        "credit_note_id": str(credit_note.id),
+        "return_request_id": str(credit_note.return_request_id),
+        "site_id": str(credit_note.site_id),
+        "original_invoice_id": str(credit_note.original_invoice_id),
+        "original_invoice_number": orig_invoice.invoice_number if orig_invoice else None,
+        "credit_note_number": credit_note.credit_note_number,
+        "financial_year": credit_note.financial_year,
+        "credit_note_date": credit_note.credit_note_date.isoformat(),
+        "reason_for_issuance": credit_note.reason_for_issuance,
+        "taxable_value": float(credit_note.taxable_value),
+        "cgst_amount": float(credit_note.cgst_amount),
+        "sgst_amount": float(credit_note.sgst_amount),
+        "igst_amount": float(credit_note.igst_amount),
+        "cess_amount": float(credit_note.cess_amount),
+        "total_credit_value": float(credit_note.total_credit_value),
+        "items": credit_note.items_snapshot,
+        "pdf_url": f"/returns/admin/{site_id}/{return_id}/credit-note/pdf",
+    }
+
+
+@router.get("/{site_id}/my-returns/{return_id}/credit-note/pdf")
+def get_customer_return_credit_note_pdf(
+    site_id: UUID,
+    return_id: UUID,
+    user=Depends(authenticate_customer),
+    session: Session = Depends(get_session),
+):
+    """
+    Allows customers to download the Rule 54 Tax Credit Note PDF for their refunded return.
+    """
+    return_request = session.exec(
+        select(ReturnRequest).where(
+            ReturnRequest.id == return_id,
+            ReturnRequest.site_id == site_id,
+            ReturnRequest.customer_id == UUID(user["userId"]),
+        )
+    ).first()
+    if not return_request:
+        raise HTTPException(status_code=404, detail="Return request not found")
+
+    credit_note = session.exec(
+        select(TaxCreditNote).where(TaxCreditNote.return_request_id == return_id)
+    ).first()
+
+    if not credit_note:
+        credit_note = issue_tax_credit_note_for_return(session, return_request, save_pdf=True)
+        session.commit()
+
+    pdf_path = credit_note.pdf_storage_path or f"uploads/credit_notes/{return_request.id}.pdf"
+    if not os.path.exists(pdf_path):
+        orig_invoice = session.get(TaxInvoice, credit_note.original_invoice_id)
+        generate_rule54_credit_note_pdf(credit_note, orig_invoice, output_path=pdf_path)
+
+    clean_filename = f"Credit_Note_{credit_note.credit_note_number.replace('/', '_')}.pdf"
+    return FileResponse(
+        path=pdf_path,
+        media_type="application/pdf",
+        filename=clean_filename,
+    )

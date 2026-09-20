@@ -28,10 +28,16 @@ def authenticate_admin(
     admin_token: Optional[str] = Cookie(default=None, alias="admin_token"),
     session: Session = Depends(get_session),
 ):
-    if not admin_token:
+    token = admin_token
+    if not token:
+        auth_header = request.headers.get("Authorization") or request.headers.get("authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ", 1)[1].strip()
+
+    if not token:
         raise _unauthorized("Admin authentication required")
 
-    payload = decode_token(admin_token)
+    payload = decode_token(token)
     if not payload:
         raise _unauthorized("Invalid or expired admin token")
 

@@ -70,7 +70,12 @@ def create_db_and_tables():
                 ALTER TABLE tenant_bank_accounts ADD COLUMN IF NOT EXISTS razorpay_account_id VARCHAR(64);
                 ALTER TABLE tenant_bank_accounts ADD COLUMN IF NOT EXISTS route_status VARCHAR(30) DEFAULT 'pending';
                 ALTER TABLE tenant_bank_accounts ADD COLUMN IF NOT EXISTS route_onboarded_at TIMESTAMPTZ;
+                ALTER TABLE tenant_bank_accounts ADD COLUMN IF NOT EXISTS bank_details_updated_at TIMESTAMPTZ;
+                ALTER TABLE tenant_bank_accounts ADD COLUMN IF NOT EXISTS quarantine_until TIMESTAMPTZ;
                 CREATE INDEX IF NOT EXISTS ix_tenant_bank_accounts_razorpay_account_id ON tenant_bank_accounts(razorpay_account_id);
+
+                ALTER TABLE delivery_settings ADD COLUMN IF NOT EXISTS enable_cod BOOLEAN NOT NULL DEFAULT TRUE;
+                ALTER TABLE delivery_settings ADD COLUMN IF NOT EXISTS max_cod_amount DOUBLE PRECISION NOT NULL DEFAULT 5000.0;
 
                 ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS razorpay_transfer_id VARCHAR(64);
                 ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS transfer_status VARCHAR(30) DEFAULT 'pending';
@@ -175,6 +180,10 @@ def create_db_and_tables():
                 CREATE INDEX IF NOT EXISTS ix_products_sku ON products(sku);
 
                 ALTER TABLE sites ADD COLUMN IF NOT EXISTS default_return_window_days INTEGER DEFAULT 7;
+                ALTER TABLE sites ADD COLUMN IF NOT EXISTS default_hsn_code VARCHAR(50);
+                ALTER TABLE sites ADD COLUMN IF NOT EXISTS default_tax_rate DOUBLE PRECISION;
+                ALTER TABLE merchant_tax_profiles ADD COLUMN IF NOT EXISTS default_hsn_code VARCHAR(50);
+                ALTER TABLE merchant_tax_profiles ADD COLUMN IF NOT EXISTS default_tax_rate DOUBLE PRECISION;
                 ALTER TABLE products ADD COLUMN IF NOT EXISTS return_window_days INTEGER;
                 ALTER TABLE order_items ADD COLUMN IF NOT EXISTS return_window_days INTEGER DEFAULT 7;
 
@@ -385,6 +394,203 @@ def create_db_and_tables():
                 CREATE INDEX IF NOT EXISTS ix_notif_log_site_created ON notification_delivery_logs(site_id, created_at DESC);
                 CREATE INDEX IF NOT EXISTS ix_notif_log_site_status ON notification_delivery_logs(site_id, status);
                 CREATE UNIQUE INDEX IF NOT EXISTS uq_notif_log_site_idempotency ON notification_delivery_logs(site_id, idempotency_key);
+
+                -- =========================================================================
+                -- INDIAN FINTECH & STATUTORY COMPLIANCE DDL EXTENSIONS (GST, TCS, TDS)
+                -- =========================================================================
+                CREATE TABLE IF NOT EXISTS tax_masters (
+                    id UUID PRIMARY KEY,
+                    code VARCHAR(20) NOT NULL UNIQUE,
+                    code_type VARCHAR(10) NOT NULL DEFAULT 'HSN',
+                    description VARCHAR(500) NOT NULL,
+                    gst_rate NUMERIC(5, 2) NOT NULL,
+                    cgst_rate NUMERIC(5, 2) NOT NULL,
+                    sgst_rate NUMERIC(5, 2) NOT NULL,
+                    igst_rate NUMERIC(5, 2) NOT NULL,
+                    cess_rate NUMERIC(5, 2) NOT NULL DEFAULT 0.00,
+                    is_nil_rated BOOLEAN NOT NULL DEFAULT FALSE,
+                    is_exempt BOOLEAN NOT NULL DEFAULT FALSE,
+                    is_non_gst BOOLEAN NOT NULL DEFAULT FALSE,
+                    effective_from TIMESTAMPTZ NOT NULL,
+                    effective_to TIMESTAMPTZ,
+                    ca_approval_status VARCHAR(30) NOT NULL DEFAULT 'APPROVED',
+                    version INTEGER NOT NULL DEFAULT 1,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                CREATE INDEX IF NOT EXISTS ix_tax_masters_code ON tax_masters(code);
+                CREATE INDEX IF NOT EXISTS ix_tax_masters_type ON tax_masters(code_type);
+
+                CREATE TABLE IF NOT EXISTS merchant_tax_profiles (
+                    id UUID PRIMARY KEY,
+                    site_id UUID NOT NULL UNIQUE REFERENCES sites(id) ON DELETE CASCADE,
+                    admin_id UUID REFERENCES admins(id),
+                    legal_business_name VARCHAR(255) NOT NULL,
+                    trade_name VARCHAR(255),
+                    entity_type VARCHAR(50) NOT NULL DEFAULT 'proprietorship',
+                    registration_type VARCHAR(50) NOT NULL DEFAULT 'regular',
+                    pan_number VARCHAR(10) NOT NULL,
+                    pan_holder_name VARCHAR(255),
+                    is_pan_verified BOOLEAN NOT NULL DEFAULT FALSE,
+                    pan_verified_at TIMESTAMPTZ,
+                    pan_verification_source VARCHAR(50),
+                    gstin VARCHAR(15),
+                    enrolment_id VARCHAR(20),
+                    is_gstin_verified BOOLEAN NOT NULL DEFAULT FALSE,
+                    gstin_verified_at TIMESTAMPTZ,
+                    state_code VARCHAR(2) NOT NULL,
+                    state_name VARCHAR(100),
+                    address_line1 VARCHAR(255),
+                    address_line2 VARCHAR(255),
+                    city VARCHAR(100),
+                    pincode VARCHAR(10),
+                    is_composition_dealer BOOLEAN NOT NULL DEFAULT FALSE,
+                    allow_interstate_sales BOOLEAN NOT NULL DEFAULT TRUE,
+                    current_fy VARCHAR(10) NOT NULL DEFAULT '2026-2027',
+                    fy_gross_sales_amount NUMERIC(14, 2) NOT NULL DEFAULT 0.00,
+                    fy_tds_deducted_amount NUMERIC(14, 2) NOT NULL DEFAULT 0.00,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                CREATE INDEX IF NOT EXISTS ix_mtp_site_id ON merchant_tax_profiles(site_id);
+                CREATE INDEX IF NOT EXISTS ix_mtp_pan ON merchant_tax_profiles(pan_number);
+                CREATE INDEX IF NOT EXISTS ix_mtp_gstin ON merchant_tax_profiles(gstin);
+
+                CREATE TABLE IF NOT EXISTS tax_invoices (
+                    id UUID PRIMARY KEY,
+                    site_id UUID NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                    order_id UUID NOT NULL UNIQUE REFERENCES orders(id) ON DELETE CASCADE,
+                    invoice_number VARCHAR(50) NOT NULL,
+                    financial_year VARCHAR(10) NOT NULL,
+                    invoice_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    supplier_legal_name VARCHAR(255) NOT NULL,
+                    supplier_trade_name VARCHAR(255),
+                    supplier_gstin VARCHAR(15),
+                    supplier_pan VARCHAR(10) NOT NULL,
+                    supplier_address JSONB NOT NULL,
+                    supplier_state_code VARCHAR(2) NOT NULL,
+                    recipient_name VARCHAR(255) NOT NULL,
+                    recipient_address JSONB NOT NULL,
+                    recipient_state_code VARCHAR(2) NOT NULL,
+                    place_of_supply_state_code VARCHAR(2) NOT NULL,
+                    eco_legal_name VARCHAR(255) NOT NULL DEFAULT 'WebCreon Technologies Private Limited',
+                    eco_gstin VARCHAR(15) NOT NULL DEFAULT '27AAACW1234F1Z1',
+                    taxable_value NUMERIC(12, 2) NOT NULL,
+                    cgst_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                    sgst_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                    igst_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                    cess_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                    total_tax_amount NUMERIC(12, 2) NOT NULL,
+                    total_invoice_value NUMERIC(12, 2) NOT NULL,
+                    items_snapshot JSONB NOT NULL,
+                    pdf_storage_path VARCHAR(500),
+                    qr_code_data TEXT,
+                    is_cancelled BOOLEAN NOT NULL DEFAULT FALSE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CONSTRAINT uq_tax_invoices_seq UNIQUE (site_id, financial_year, invoice_number)
+                );
+                CREATE INDEX IF NOT EXISTS ix_tax_invoices_order_id ON tax_invoices(order_id);
+                CREATE INDEX IF NOT EXISTS ix_tax_invoices_site_id ON tax_invoices(site_id);
+
+                CREATE TABLE IF NOT EXISTS tax_credit_notes (
+                    id UUID PRIMARY KEY,
+                    site_id UUID NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                    original_invoice_id UUID NOT NULL REFERENCES tax_invoices(id) ON DELETE CASCADE,
+                    return_request_id UUID REFERENCES return_requests(id) ON DELETE SET NULL,
+                    credit_note_number VARCHAR(50) NOT NULL,
+                    financial_year VARCHAR(10) NOT NULL,
+                    credit_note_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    reason_for_issuance VARCHAR(100) NOT NULL DEFAULT 'Goods Returned',
+                    taxable_value NUMERIC(12, 2) NOT NULL,
+                    cgst_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                    sgst_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                    igst_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                    total_credit_value NUMERIC(12, 2) NOT NULL,
+                    items_snapshot JSONB NOT NULL,
+                    pdf_storage_path VARCHAR(500),
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CONSTRAINT uq_tax_credit_notes_seq UNIQUE (site_id, financial_year, credit_note_number)
+                );
+                CREATE INDEX IF NOT EXISTS ix_tax_credit_notes_orig_inv ON tax_credit_notes(original_invoice_id);
+
+                CREATE TABLE IF NOT EXISTS platform_tax_invoices (
+                    id UUID PRIMARY KEY,
+                    site_id UUID NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                    billing_month VARCHAR(7) NOT NULL,
+                    invoice_number VARCHAR(50) NOT NULL UNIQUE,
+                    financial_year VARCHAR(10) NOT NULL,
+                    invoice_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    sac_code VARCHAR(10) NOT NULL DEFAULT '998313',
+                    platform_gstin VARCHAR(15) NOT NULL DEFAULT '27AAACW1234F1Z1',
+                    platform_state_code VARCHAR(2) NOT NULL DEFAULT '27',
+                    merchant_gstin VARCHAR(15),
+                    merchant_state_code VARCHAR(2) NOT NULL,
+                    is_b2b BOOLEAN NOT NULL DEFAULT TRUE,
+                    total_order_gmv NUMERIC(14, 2) NOT NULL,
+                    commission_taxable_base NUMERIC(12, 2) NOT NULL,
+                    subscription_fees NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                    gst_rate NUMERIC(5, 2) NOT NULL DEFAULT 18.00,
+                    cgst_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                    sgst_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                    igst_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                    total_invoice_value NUMERIC(12, 2) NOT NULL,
+                    pdf_storage_path VARCHAR(500),
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CONSTRAINT uq_platform_tax_invoices_month UNIQUE (site_id, billing_month)
+                );
+
+                CREATE TABLE IF NOT EXISTS invoice_sequences (
+                    site_id UUID NOT NULL,
+                    financial_year VARCHAR(10) NOT NULL,
+                    document_type VARCHAR(20) NOT NULL,
+                    current_value INTEGER NOT NULL DEFAULT 0,
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    PRIMARY KEY (site_id, financial_year, document_type)
+                );
+
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS hsn_sac_id UUID REFERENCES tax_masters(id);
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS price_inclusive_of_gst BOOLEAN NOT NULL DEFAULT TRUE;
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS tax_rate_override NUMERIC(5, 2);
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS tax_review_required BOOLEAN NOT NULL DEFAULT FALSE;
+
+                ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS entry_type VARCHAR(40) NOT NULL DEFAULT 'order_sale';
+                ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS return_request_id UUID REFERENCES return_requests(id);
+                ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS gross_order_value NUMERIC(12, 2);
+                ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS taxable_product_value NUMERIC(12, 2);
+                ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS product_cgst NUMERIC(12, 2) DEFAULT 0.00;
+                ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS product_sgst NUMERIC(12, 2) DEFAULT 0.00;
+                ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS product_igst NUMERIC(12, 2) DEFAULT 0.00;
+                ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS product_cess NUMERIC(12, 2) DEFAULT 0.00;
+                ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS platform_commission_base NUMERIC(12, 2);
+                ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS platform_fee_gst_cgst NUMERIC(12, 2) DEFAULT 0.00;
+                ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS platform_fee_gst_sgst NUMERIC(12, 2) DEFAULT 0.00;
+                ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS platform_fee_gst_igst NUMERIC(12, 2) DEFAULT 0.00;
+                ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS total_platform_fee_with_gst NUMERIC(12, 2);
+                ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS gst_tcs_cgst NUMERIC(12, 2) DEFAULT 0.00;
+                ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS gst_tcs_sgst NUMERIC(12, 2) DEFAULT 0.00;
+                ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS gst_tcs_igst NUMERIC(12, 2) DEFAULT 0.00;
+                ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS total_gst_tcs NUMERIC(12, 2) DEFAULT 0.00;
+                ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS tds_rate_applied NUMERIC(5, 2) DEFAULT 0.00;
+                ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS income_tax_tds_194o NUMERIC(12, 2) DEFAULT 0.00;
+                ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS gateway_fee NUMERIC(12, 2) DEFAULT 0.00;
+                ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS gateway_fee_gst NUMERIC(12, 2) DEFAULT 0.00;
+                ALTER TABLE tenant_ledger_entries ADD COLUMN IF NOT EXISTS net_merchant_payout NUMERIC(12, 2);
+
+                -- Ensure order_id index is non-unique to support multiple ledger postings (refunds/adjustments) per order
+                DROP INDEX IF EXISTS ix_tenant_ledger_entries_order_id;
+                CREATE INDEX IF NOT EXISTS ix_tenant_ledger_entries_order_id ON tenant_ledger_entries (order_id);
+
+                -- Seed standard tax masters if empty
+                INSERT INTO tax_masters (id, code, code_type, description, gst_rate, cgst_rate, sgst_rate, igst_rate, cess_rate, is_nil_rated, is_exempt, is_non_gst, effective_from, ca_approval_status, is_active, version, created_at)
+                VALUES 
+                  ('c1091000-0000-0000-0000-000000006109', '61091000', 'HSN', 'T-shirts, singlets and other vests, knitted or crocheted, of cotton', 5.00, 2.50, 2.50, 5.00, 0.00, FALSE, FALSE, FALSE, '2017-07-01 00:00:00+00', 'APPROVED', TRUE, 1, NOW()),
+                  ('c4202221-0000-0000-0000-000000004202', '42022210', 'HSN', 'Handbags with outer surface of leather or composition leather', 18.00, 9.00, 9.00, 18.00, 0.00, FALSE, FALSE, FALSE, '2017-07-01 00:00:00+00', 'APPROVED', TRUE, 1, NOW()),
+                  ('c8517130-0000-0000-0000-000000008517', '85171300', 'HSN', 'Smartphones and other cellular telecommunication apparatus', 18.00, 9.00, 9.00, 18.00, 0.00, FALSE, FALSE, FALSE, '2017-07-01 00:00:00+00', 'APPROVED', TRUE, 1, NOW()),
+                  ('c8471301-0000-0000-0000-000000008471', '84713010', 'HSN', 'Personal computers, laptops, notebooks and sub-notebooks', 18.00, 9.00, 9.00, 18.00, 0.00, FALSE, FALSE, FALSE, '2017-07-01 00:00:00+00', 'APPROVED', TRUE, 1, NOW()),
+                  ('c9983130-0000-0000-0000-000000998313', '998313', 'SAC', 'Information technology (IT) software, consulting, and support services', 18.00, 9.00, 9.00, 18.00, 0.00, FALSE, FALSE, FALSE, '2017-07-01 00:00:00+00', 'APPROVED', TRUE, 1, NOW()),
+                  ('c9983140-0000-0000-0000-000000998314', '998314', 'SAC', 'Internet telecommunication, portal hosting, and marketplace facilitation services', 18.00, 9.00, 9.00, 18.00, 0.00, FALSE, FALSE, FALSE, '2017-07-01 00:00:00+00', 'APPROVED', TRUE, 1, NOW()),
+                  ('c4901101-0000-0000-0000-000000004901', '49011010', 'HSN', 'Printed books, brochures, leaflets, and similar printed matter', 0.00, 0.00, 0.00, 0.00, 0.00, TRUE, FALSE, FALSE, '2017-07-01 00:00:00+00', 'APPROVED', TRUE, 1, NOW())
+                ON CONFLICT (code) DO NOTHING;
             """))
             conn.commit()
     except Exception as e:

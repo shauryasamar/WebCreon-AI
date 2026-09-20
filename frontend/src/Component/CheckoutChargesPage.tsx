@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import GlassToast from "./GlassToast";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import AccessDeniedView from "./AccessDeniedView";
+import { AdminTaxComplianceDesk } from "./AdminTaxComplianceDesk";
 
 export type ChargeCode =
   | "shipping_fee"
@@ -177,9 +178,9 @@ export const createDefaultCharges = (): ChargeRule[] => [
 ];
 
 export const defaultTaxSettings: TaxSettings = {
-  enabled: true,
+  enabled: false,
   label: "GST",
-  rate: "5",
+  rate: "0",
   applyOnShipping: false,
 };
 
@@ -331,19 +332,41 @@ const getCachedCheckoutSettings = (id?: string): CheckoutSettingsResponse | null
   }
 };
 
-const CheckoutChargesPage: React.FC = () => {
-  const { siteId } = useParams<{ siteId: string }>();
+const CheckoutChargesPage: React.FC<{ siteId?: string }> = ({ siteId: propSiteId }) => {
+  const { siteId: paramSiteId } = useParams<{ siteId: string }>();
+  const siteId = propSiteId || paramSiteId || (typeof window !== "undefined" ? localStorage.getItem("last_active_site_id") || "" : "");
   const { hasPermission, isOwner } = useAdminAuth();
   const canView = isOwner || hasPermission("checkout_charges:view");
   const canEdit = isOwner || hasPermission("checkout_charges:edit");
 
   const cachedSettings = getCachedCheckoutSettings(siteId);
 
-  const [mode, setMode] = useState<"standard" | "tax" | "custom">("standard");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const initialMode: "standard" | "tax" | "custom" =
+    tabParam === "standard"
+      ? "standard"
+      : tabParam === "custom"
+        ? "custom"
+        : "tax";
+
+  const [mode, setMode] = useState<"standard" | "tax" | "custom">(initialMode);
+
+  useEffect(() => {
+    if (tabParam === "standard") {
+      setMode("standard");
+    } else if (tabParam === "custom") {
+      setMode("custom");
+    } else if (tabParam === "tax" || tabParam === "compliance") {
+      setMode("tax");
+    }
+  }, [tabParam]);
 
   const [charges, setCharges] = useState<ChargeRule[]>(() => cachedSettings?.charges || createDefaultCharges());
   const [taxSettings, setTaxSettings] = useState<TaxSettings>(() => cachedSettings?.taxSettings || defaultTaxSettings);
   const [initialSnapshot, setInitialSnapshot] = useState<string>(() => cachedSettings ? JSON.stringify(cachedSettings) : "");
+  const [isTaxDirty, setIsTaxDirty] = useState(false);
+  const [isTaxSaving, setIsTaxSaving] = useState(false);
 
   const [toast, setToast] = useState<{ id: number; type: "success" | "error"; text: string } | null>(null);
   const [loading, setLoading] = useState(!cachedSettings);
@@ -459,7 +482,7 @@ const CheckoutChargesPage: React.FC = () => {
     value: string | boolean
   ) => {
     if (!canEdit) {
-      showToast("error", "You do not have permission to modify checkout charges.");
+      showToast("error", "You do not have permission to modify taxes & surcharges.");
       return;
     }
     setCharges((prev) =>
@@ -471,7 +494,7 @@ const CheckoutChargesPage: React.FC = () => {
 
   const addCustomCharge = () => {
     if (!canEdit) {
-      showToast("error", "You do not have permission to create custom charges.");
+      showToast("error", "You do not have permission to create custom surcharges.");
       return;
     }
     const nextId = `custom_${Date.now()}`;
@@ -517,7 +540,7 @@ const CheckoutChargesPage: React.FC = () => {
       return;
     }
     if (!canEdit) {
-      showToast("error", "You do not have permission to save checkout settings.");
+      showToast("error", "You do not have permission to save taxes & surcharges.");
       return;
     }
 
@@ -563,10 +586,10 @@ const CheckoutChargesPage: React.FC = () => {
       setTaxSettings(normalized.taxSettings);
       setCharges(normalized.charges);
       setInitialSnapshot(JSON.stringify(normalized));
-      showToast("success", "Checkout settings saved successfully.");
+      showToast("success", "Taxes & surcharges saved successfully.");
     } catch (error: any) {
       console.error("Error saving checkout settings:", error);
-      showToast("error", error instanceof Error ? error.message : "Failed to save checkout settings.");
+      showToast("error", error instanceof Error ? error.message : "Failed to save taxes & surcharges.");
     } finally {
       setSaving(false);
     }
@@ -575,7 +598,7 @@ const CheckoutChargesPage: React.FC = () => {
   if (!canView) {
     return (
       <AccessDeniedView
-        moduleName="Checkout Charges"
+        moduleName="Taxes & Surcharges"
         requiredPermission="checkout_charges:view"
       />
     );
@@ -620,8 +643,8 @@ const CheckoutChargesPage: React.FC = () => {
         >
           {(
             [
+              { id: "tax", label: "Tax & Compliance" },
               { id: "standard", label: "Standard Charges" },
-              { id: "tax", label: "Tax Settings" },
               { id: "custom", label: "Custom Charges" },
             ] as const
           ).map((tab) => {
@@ -632,6 +655,13 @@ const CheckoutChargesPage: React.FC = () => {
                 type="button"
                 onClick={() => {
                   setMode(tab.id);
+                  if (tab.id === "tax") {
+                    setSearchParams({ tab: "tax" });
+                  } else if (tab.id === "custom") {
+                    setSearchParams({ tab: "custom" });
+                  } else {
+                    setSearchParams({ tab: "standard" });
+                  }
                 }}
                 style={{
                   borderRadius: "6px",
@@ -691,29 +721,57 @@ const CheckoutChargesPage: React.FC = () => {
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={!canEdit || saving}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "7px 16px",
-              borderRadius: "6px",
-              border: "none",
-              background: !canEdit ? "#94a3b8" : (hasUnsavedChanges ? "#2563eb" : "#0f172a"),
-              color: "#ffffff",
-              fontWeight: 700,
-              fontSize: "13px",
-              cursor: !canEdit ? "not-allowed" : saving ? "wait" : "pointer",
-              boxShadow: hasUnsavedChanges && canEdit ? "0 1px 3px rgba(37,99,235,0.3)" : "none",
-              opacity: saving ? 0.7 : 1,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {saving ? "Saving..." : "Save Settings"}
-          </button>
+          {mode === "tax" ? (
+            <button
+              type="submit"
+              form="tax-kyc-form"
+              disabled={!canEdit || isTaxSaving}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "7px 16px",
+                borderRadius: "6px",
+                border: "none",
+                background: !canEdit ? "#94a3b8" : (isTaxDirty ? "#2563eb" : "#0f172a"),
+                color: "#ffffff",
+                fontWeight: 700,
+                fontSize: "13px",
+                cursor: !canEdit ? "not-allowed" : isTaxSaving ? "wait" : "pointer",
+                boxShadow: isTaxDirty && canEdit ? "0 1px 3px rgba(37,99,235,0.3)" : "none",
+                opacity: isTaxSaving ? 0.7 : 1,
+                whiteSpace: "nowrap",
+                transition: "all 0.15s ease",
+              }}
+            >
+              {isTaxSaving ? "Saving..." : "Save Settings"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={!canEdit || saving}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "7px 16px",
+                borderRadius: "6px",
+                border: "none",
+                background: !canEdit ? "#94a3b8" : (hasUnsavedChanges ? "#2563eb" : "#0f172a"),
+                color: "#ffffff",
+                fontWeight: 700,
+                fontSize: "13px",
+                cursor: !canEdit ? "not-allowed" : saving ? "wait" : "pointer",
+                boxShadow: hasUnsavedChanges && canEdit ? "0 1px 3px rgba(37,99,235,0.3)" : "none",
+                opacity: saving ? 0.7 : 1,
+                whiteSpace: "nowrap",
+                transition: "all 0.15s ease",
+              }}
+            >
+              {saving ? "Saving..." : "Save Settings"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -901,129 +959,12 @@ const CheckoutChargesPage: React.FC = () => {
       )}
 
       {mode === "tax" && (
-        <div style={plainCardStyle}>
-          {/* Header */}
-          <div
-            style={{
-              padding: "14px 18px",
-              borderBottom: "1px solid #f1f5f9",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              flexWrap: "wrap",
-              gap: "10px",
-            }}
-          >
-            <div>
-              <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
-                Tax (GST) Settings
-              </div>
-              <div style={{ fontSize: "12.5px", color: "#64748b", marginTop: "2px" }}>
-                Calculated on line items during checkout and automatically prorated on returns.
-              </div>
-            </div>
-
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "8px",
-                cursor: canEdit ? "pointer" : "not-allowed",
-                userSelect: "none",
-              }}
-              onClick={() => {
-                if (!canEdit) return;
-                setTaxSettings((prev) => ({ ...prev, enabled: !prev.enabled }));
-              }}
-            >
-              <span
-                style={{
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  color: taxSettings.enabled ? "#0f172a" : "#64748b",
-                }}
-              >
-                Enable Tax
-              </span>
-              <ToggleSwitch
-                checked={taxSettings.enabled}
-                disabled={!canEdit}
-                onChange={(val) => {
-                  if (!canEdit) return;
-                  setTaxSettings((prev) => ({ ...prev, enabled: val }));
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Form Content */}
-          <div style={{ padding: "18px" }}>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                gap: "16px",
-                maxWidth: "700px",
-              }}
-            >
-              <div>
-                <div style={labelStyle}>Tax Display Label</div>
-                <input
-                  type="text"
-                  disabled={!canEdit}
-                  value={taxSettings.label}
-                  onChange={(e) => {
-                    if (!canEdit) return;
-                    setTaxSettings((prev) => ({ ...prev, label: e.target.value }));
-                  }}
-                  placeholder="e.g. GST"
-                  style={{
-                    ...inputStyle,
-                    background: canEdit ? "#ffffff" : "#f8fafc",
-                    cursor: canEdit ? "text" : "not-allowed",
-                  }}
-                />
-              </div>
-
-              <div>
-                <div style={labelStyle}>Tax Rate (%)</div>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  disabled={!canEdit}
-                  value={taxSettings.rate}
-                  onChange={(e) => {
-                    if (!canEdit) return;
-                    setTaxSettings((prev) => ({ ...prev, rate: e.target.value }));
-                  }}
-                  placeholder="e.g. 5"
-                  style={{
-                    ...inputStyle,
-                    background: canEdit ? "#ffffff" : "#f8fafc",
-                    cursor: canEdit ? "text" : "not-allowed",
-                  }}
-                />
-              </div>
-
-              <div style={{ gridColumn: "1 / -1", paddingTop: "4px" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: canEdit ? "pointer" : "not-allowed", fontSize: "13px", color: "#334155" }}>
-                  <input
-                    type="checkbox"
-                    disabled={!canEdit}
-                    checked={taxSettings.applyOnShipping}
-                    onChange={(e) => {
-                      if (!canEdit) return;
-                      setTaxSettings((prev) => ({ ...prev, applyOnShipping: e.target.checked }));
-                    }}
-                    style={{ width: "15px", height: "15px", cursor: canEdit ? "pointer" : "not-allowed", accentColor: "#2563eb" }}
-                  />
-                  Apply tax on shipping fee as well
-                </label>
-              </div>
-            </div>
-          </div>
+        <div style={{ marginTop: "2px" }}>
+          <AdminTaxComplianceDesk
+            siteId={siteId}
+            onDirtyChange={setIsTaxDirty}
+            onSavingChange={setIsTaxSaving}
+          />
         </div>
       )}
     </div>

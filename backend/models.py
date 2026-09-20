@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal
+from enum import Enum
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, Column, DateTime, Index, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
@@ -97,6 +98,14 @@ class Site(SQLModel, table=True):
     default_return_window_days: int = Field(
         default=7,
         sa_column=Column(Integer, nullable=False, default=7),
+    )
+    default_hsn_code: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String(50), nullable=True),
+    )
+    default_tax_rate: Optional[float] = Field(
+        default=None,
+        sa_column=Column(Float, nullable=True),
     )
     is_online: bool = Field(
         default=True,
@@ -291,6 +300,38 @@ class ProductCollection(SQLModel, table=True):
     )
 
 
+class TaxMaster(SQLModel, table=True):
+    """Configuration-driven HSN/SAC master with statutory GST rates and effective dates."""
+    __tablename__ = "tax_masters"
+    __table_args__ = (
+        Index("ix_tax_masters_code", "code", unique=True),
+        Index("ix_tax_masters_type", "code_type"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    code: str = Field(max_length=20, nullable=False, unique=True)  # e.g., '61091000', '998313'
+    code_type: str = Field(default="HSN", max_length=10)  # 'HSN' (Goods) or 'SAC' (Services)
+    description: str = Field(max_length=500, nullable=False)
+
+    # Standard statutory tax rates (percentages)
+    gst_rate: Decimal = Field(sa_column=Column(Numeric(5, 2), nullable=False))
+    cgst_rate: Decimal = Field(sa_column=Column(Numeric(5, 2), nullable=False))
+    sgst_rate: Decimal = Field(sa_column=Column(Numeric(5, 2), nullable=False))
+    igst_rate: Decimal = Field(sa_column=Column(Numeric(5, 2), nullable=False))
+    cess_rate: Decimal = Field(default=Decimal("0.00"), sa_column=Column(Numeric(5, 2), nullable=False))
+
+    is_nil_rated: bool = Field(default=False, nullable=False)
+    is_exempt: bool = Field(default=False, nullable=False)
+    is_non_gst: bool = Field(default=False, nullable=False)
+
+    effective_from: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    effective_to: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    ca_approval_status: str = Field(default="APPROVED", max_length=30)
+    version: int = Field(default=1, nullable=False)
+    is_active: bool = Field(default=True, nullable=False)
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+
+
 class Product(SQLModel, table=True):
     __tablename__ = "products"
 
@@ -318,6 +359,10 @@ class Product(SQLModel, table=True):
     )
     sku: Optional[str] = Field(default=None, max_length=100, nullable=True, index=True)
     hsn_code: Optional[str] = Field(default=None, max_length=50, nullable=True)
+    hsn_sac_id: Optional[UUID] = Field(default=None, foreign_key="tax_masters.id", nullable=True)
+    price_inclusive_of_gst: bool = Field(default=True, sa_column=Column(Boolean, nullable=False, default=True))
+    tax_rate_override: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(5, 2), nullable=True))
+    tax_review_required: bool = Field(default=False, sa_column=Column(Boolean, nullable=False, default=False))
     video_url: Optional[str] = Field(default=None, nullable=True)
     video_position: Optional[int] = Field(
         default=2,
@@ -911,6 +956,16 @@ class DeliverySettings(SQLModel, table=True):
         sa_column=Column(Boolean, nullable=False, default=True),
     )
 
+    # Cash on Delivery (COD) controls
+    enable_cod: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, default=True),
+    )
+    max_cod_amount: float = Field(
+        default=5000.0,
+        sa_column=Column(Float, nullable=False, default=5000.0),
+    )
+
     # Hybrid mode: orders within this radius use own agents, outside go to courier
     own_delivery_radius_km: float = Field(default=10.0, nullable=False)
 
@@ -1194,6 +1249,16 @@ class TenantBankAccount(SQLModel, table=True):
         sa_column=Column(Boolean, nullable=False, default=False),
     )
 
+    # Cooldown quarantine on credential edits (24h payout hold)
+    bank_details_updated_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    quarantine_until: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+
     created_at: datetime = Field(
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False),
@@ -1213,7 +1278,7 @@ class TenantLedgerEntry(SQLModel, table=True):
     __table_args__ = (
         Index("ix_tenant_ledger_entries_admin_id", "admin_id"),
         Index("ix_tenant_ledger_entries_site_id", "site_id"),
-        Index("ix_tenant_ledger_entries_order_id", "order_id", unique=True),
+        Index("ix_tenant_ledger_entries_order_id", "order_id"),
         Index("ix_tenant_ledger_entries_razorpay_transfer_id", "razorpay_transfer_id"),
         Index("ix_tenant_ledger_entries_status", "status"),
     )
@@ -1231,6 +1296,30 @@ class TenantLedgerEntry(SQLModel, table=True):
     platform_fee: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
     tenant_share: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
     currency: str = Field(default="INR", max_length=10, nullable=False)
+
+    # Multi-component statutory breakdown
+    entry_type: str = Field(default="order_sale", max_length=40, nullable=False)
+    return_request_id: Optional[UUID] = Field(default=None, foreign_key="return_requests.id", nullable=True)
+    gross_order_value: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(12, 2), nullable=True))
+    taxable_product_value: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(12, 2), nullable=True))
+    product_cgst: Optional[Decimal] = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=True, default=Decimal("0.00")))
+    product_sgst: Optional[Decimal] = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=True, default=Decimal("0.00")))
+    product_igst: Optional[Decimal] = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=True, default=Decimal("0.00")))
+    product_cess: Optional[Decimal] = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=True, default=Decimal("0.00")))
+    platform_commission_base: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(12, 2), nullable=True))
+    platform_fee_gst_cgst: Optional[Decimal] = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=True, default=Decimal("0.00")))
+    platform_fee_gst_sgst: Optional[Decimal] = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=True, default=Decimal("0.00")))
+    platform_fee_gst_igst: Optional[Decimal] = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=True, default=Decimal("0.00")))
+    total_platform_fee_with_gst: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(12, 2), nullable=True))
+    gst_tcs_cgst: Optional[Decimal] = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=True, default=Decimal("0.00")))
+    gst_tcs_sgst: Optional[Decimal] = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=True, default=Decimal("0.00")))
+    gst_tcs_igst: Optional[Decimal] = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=True, default=Decimal("0.00")))
+    total_gst_tcs: Optional[Decimal] = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=True, default=Decimal("0.00")))
+    tds_rate_applied: Optional[Decimal] = Field(default=Decimal("0.00"), sa_column=Column(Numeric(5, 2), nullable=True, default=Decimal("0.00")))
+    income_tax_tds_194o: Optional[Decimal] = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=True, default=Decimal("0.00")))
+    gateway_fee: Optional[Decimal] = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=True, default=Decimal("0.00")))
+    gateway_fee_gst: Optional[Decimal] = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=True, default=Decimal("0.00")))
+    net_merchant_payout: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(12, 2), nullable=True))
 
     # status: pending_payout, paid, refunded, held
     status: str = Field(default="pending_payout", max_length=40, nullable=False)
@@ -1651,5 +1740,201 @@ class NotificationDeliveryLog(SQLModel, table=True):
 
     created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
     sent_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+
+
+class LegalEntityType(str, Enum):
+    INDIVIDUAL = "individual"
+    HUF = "huf"
+    PROPRIETORSHIP = "proprietorship"
+    PARTNERSHIP = "partnership"
+    LLP = "llp"
+    COMPANY = "company"
+    PRIVATE_LIMITED = "private_limited"
+    PUBLIC_LIMITED = "public_limited"
+    TRUST_SOCIETY = "trust_society"
+
+
+class GSTRegistrationType(str, Enum):
+    REGULAR = "regular"
+    COMPOSITION = "composition"
+    UNREGISTERED = "unregistered"
+    ENROLLED_ECO = "enrolled_eco"
+
+
+class MerchantTaxProfile(SQLModel, table=True):
+    __tablename__ = "merchant_tax_profiles"
+    __table_args__ = (
+        Index("ix_mtp_site_id", "site_id", unique=True),
+        Index("ix_mtp_pan", "pan_number"),
+        Index("ix_mtp_gstin", "gstin"),
+        Index("ix_mtp_state", "state_code"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    site_id: UUID = Field(foreign_key="sites.id", nullable=False, unique=True)
+    admin_id: Optional[UUID] = Field(default=None, foreign_key="admins.id", nullable=True)
+
+    legal_business_name: str = Field(max_length=255, nullable=False)
+    trade_name: Optional[str] = Field(default=None, max_length=255)
+    entity_type: LegalEntityType = Field(default=LegalEntityType.PROPRIETORSHIP, nullable=False)
+    registration_type: GSTRegistrationType = Field(default=GSTRegistrationType.REGULAR, nullable=False)
+
+    pan_number: str = Field(max_length=10, nullable=False)
+    pan_holder_name: Optional[str] = Field(default=None, max_length=255)
+    is_pan_verified: bool = Field(default=False, nullable=False)
+    pan_verified_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    pan_verification_source: Optional[str] = Field(default=None, max_length=50)
+
+    gstin: Optional[str] = Field(default=None, max_length=15, nullable=True)
+    enrolment_id: Optional[str] = Field(default=None, max_length=20, nullable=True)
+    is_gstin_verified: bool = Field(default=False, nullable=False)
+    gstin_verified_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+
+    state_code: str = Field(max_length=2, nullable=False)
+    state_name: Optional[str] = Field(default=None, max_length=100)
+    address_line1: Optional[str] = Field(default=None, max_length=255)
+    address_line2: Optional[str] = Field(default=None, max_length=255)
+    city: Optional[str] = Field(default=None, max_length=100)
+    pincode: Optional[str] = Field(default=None, max_length=10)
+
+    is_composition_dealer: bool = Field(default=False, nullable=False)
+    allow_interstate_sales: bool = Field(default=True, nullable=False)
+    default_hsn_code: Optional[str] = Field(default=None, max_length=50, nullable=True)
+    default_tax_rate: Optional[float] = Field(default=None, nullable=True)
+
+    current_fy: str = Field(default="2026-2027", max_length=10, nullable=False)
+    fy_gross_sales_amount: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(14, 2), nullable=False, default=Decimal("0.00")),
+    )
+    fy_tds_deducted_amount: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(14, 2), nullable=False, default=Decimal("0.00")),
+    )
+
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False, onupdate=utc_now))
+
+
+class TaxInvoice(SQLModel, table=True):
+    __tablename__ = "tax_invoices"
+    __table_args__ = (
+        UniqueConstraint("site_id", "financial_year", "invoice_number", name="uq_tax_invoices_seq"),
+        Index("ix_tax_invoices_order_id", "order_id", unique=True),
+        Index("ix_tax_invoices_site_id", "site_id"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    site_id: UUID = Field(foreign_key="sites.id", nullable=False)
+    order_id: UUID = Field(sa_column=Column(ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, unique=True))
+
+    invoice_number: str = Field(max_length=50, nullable=False)
+    financial_year: str = Field(max_length=10, nullable=False)
+    invoice_date: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+
+    supplier_legal_name: str = Field(max_length=255, nullable=False)
+    supplier_trade_name: Optional[str] = Field(default=None, max_length=255)
+    supplier_gstin: Optional[str] = Field(default=None, max_length=15)
+    supplier_pan: str = Field(max_length=10, nullable=False)
+    supplier_address: dict[str, Any] = Field(sa_column=Column(JSONB, nullable=False))
+    supplier_state_code: str = Field(max_length=2, nullable=False)
+
+    recipient_name: str = Field(max_length=255, nullable=False)
+    recipient_address: dict[str, Any] = Field(sa_column=Column(JSONB, nullable=False))
+    recipient_state_code: str = Field(max_length=2, nullable=False)
+    place_of_supply_state_code: str = Field(max_length=2, nullable=False)
+
+    eco_legal_name: str = Field(default="WebCreon Technologies Private Limited")
+    eco_gstin: str = Field(default="27AAACW1234F1Z1")
+
+    taxable_value: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
+    cgst_amount: Decimal = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=False))
+    sgst_amount: Decimal = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=False))
+    igst_amount: Decimal = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=False))
+    cess_amount: Decimal = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=False))
+    total_tax_amount: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
+    total_invoice_value: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
+
+    items_snapshot: list[dict[str, Any]] = Field(sa_column=Column(JSONB, nullable=False))
+    pdf_storage_path: Optional[str] = Field(default=None, max_length=500)
+    qr_code_data: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    is_cancelled: bool = Field(default=False, nullable=False)
+
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+
+
+class TaxCreditNote(SQLModel, table=True):
+    __tablename__ = "tax_credit_notes"
+    __table_args__ = (
+        UniqueConstraint("site_id", "financial_year", "credit_note_number", name="uq_tax_credit_notes_seq"),
+        Index("ix_tax_credit_notes_orig_inv", "original_invoice_id"),
+        Index("ix_tax_credit_notes_return_id", "return_request_id"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    site_id: UUID = Field(foreign_key="sites.id", nullable=False)
+    original_invoice_id: UUID = Field(sa_column=Column(ForeignKey("tax_invoices.id", ondelete="CASCADE"), nullable=False))
+    return_request_id: Optional[UUID] = Field(default=None, foreign_key="return_requests.id", nullable=True)
+
+    credit_note_number: str = Field(max_length=50, nullable=False)
+    financial_year: str = Field(max_length=10, nullable=False)
+    credit_note_date: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    reason_for_issuance: str = Field(default="Goods Returned", max_length=100)
+
+    taxable_value: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
+    cgst_amount: Decimal = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=False))
+    sgst_amount: Decimal = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=False))
+    igst_amount: Decimal = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=False))
+    total_credit_value: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
+
+    items_snapshot: list[dict[str, Any]] = Field(sa_column=Column(JSONB, nullable=False))
+    pdf_storage_path: Optional[str] = Field(default=None, max_length=500)
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+
+
+class PlatformTaxInvoice(SQLModel, table=True):
+    __tablename__ = "platform_tax_invoices"
+    __table_args__ = (
+        UniqueConstraint("site_id", "billing_month", name="uq_platform_tax_invoices_month"),
+        Index("ix_platform_invoices_site_month", "site_id", "billing_month"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    site_id: UUID = Field(foreign_key="sites.id", nullable=False)
+    billing_month: str = Field(max_length=7, nullable=False)  # YYYY-MM
+    invoice_number: str = Field(max_length=50, nullable=False, unique=True)
+    financial_year: str = Field(max_length=10, nullable=False)
+    invoice_date: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+
+    sac_code: str = Field(default="998313", max_length=10)
+    platform_gstin: str = Field(default="27AAACW1234F1Z1", max_length=15)
+    platform_state_code: str = Field(default="27", max_length=2)
+
+    merchant_gstin: Optional[str] = Field(default=None, max_length=15)
+    merchant_state_code: str = Field(max_length=2, nullable=False)
+    is_b2b: bool = Field(default=True, nullable=False)
+
+    total_order_gmv: Decimal = Field(sa_column=Column(Numeric(14, 2), nullable=False))
+    commission_taxable_base: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
+    subscription_fees: Decimal = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=False))
+
+    gst_rate: Decimal = Field(default=Decimal("18.00"), sa_column=Column(Numeric(5, 2), nullable=False))
+    cgst_amount: Decimal = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=False))
+    sgst_amount: Decimal = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=False))
+    igst_amount: Decimal = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=False))
+    total_invoice_value: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
+
+    pdf_storage_path: Optional[str] = Field(default=None, max_length=500)
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+
+
+class InvoiceSequence(SQLModel, table=True):
+    __tablename__ = "invoice_sequences"
+
+    site_id: UUID = Field(primary_key=True)
+    financial_year: str = Field(max_length=10, primary_key=True)
+    document_type: str = Field(max_length=20, primary_key=True)  # 'INVOICE', 'CREDIT_NOTE', 'PLATFORM_FEE'
+    current_value: int = Field(default=0, nullable=False)
+    updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False, onupdate=utc_now))
 
 

@@ -50,6 +50,9 @@ def create_admin_token(admin_id: str) -> str:
     )
 
 
+create_access_token = create_admin_token
+
+
 def create_customer_token(user_id: str, site_id: str) -> str:
     return _create_token(
         {"userId": user_id, "siteId": site_id, "tokenType": "customer"},

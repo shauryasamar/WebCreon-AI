@@ -39,7 +39,8 @@ export type AdminNavKey =
   | "earnings"
   | "payment-settings"
   | "checkout-charges"
-  | "notifications";
+  | "notifications"
+  | "tax-compliance";
 
 type AdminNavItem = {
   key: AdminNavKey;
@@ -53,12 +54,12 @@ const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { key: "discounts", label: "Discounts & Promo" },
   { key: "support", label: "Support & CRM" },
   { key: "home-sections", label: "Home Sections" },
-  { key: "pages", label: "Pages & Policies" },
   { key: "delivery", label: "Delivery & Shipping" },
-  { key: "checkout-charges", label: "Checkout Charges" },
+  { key: "checkout-charges", label: "Taxes & Surcharges" },
   { key: "earnings", label: "Earnings & Ledger" },
   { key: "payment-settings", label: "Payout Settings" },
   { key: "notifications", label: "Notifications & Email" },
+  { key: "pages", label: "Pages & Policies" },
 ];
 
 
@@ -465,6 +466,16 @@ function AdminNavIcon({ navKey, isSelected }: { navKey: AdminNavKey; isSelected:
         <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={style}>
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        </svg>
+      );
+    case "tax-compliance":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="9" y1="13" x2="15" y2="13" />
+          <line x1="9" y1="17" x2="13" y2="17" />
+          <line x1="9" y1="9" x2="10" y2="9" />
         </svg>
       );
     default:
@@ -1103,6 +1114,7 @@ export default function BuilderDrawerPanel({
           earnings: "earnings:view",
           "payment-settings": "payout_settings:view",
           notifications: "notifications:view",
+          "tax-compliance": "earnings:view",
         };
         return hasPermission(permMap[item.key]);
       });

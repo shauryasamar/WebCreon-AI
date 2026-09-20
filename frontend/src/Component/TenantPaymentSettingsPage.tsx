@@ -19,6 +19,9 @@ type BankSettingsData = {
   razorpay_account_id?: string | null;
   route_status?: string;
   route_onboarded_at?: string | null;
+  bank_details_updated_at?: string | null;
+  quarantine_until?: string | null;
+  is_quarantined?: boolean;
   updated_at?: string | null;
 };
 
@@ -32,8 +35,9 @@ const getCachedBankSettings = (id?: string): BankSettingsData | null => {
   }
 };
 
-export default function TenantPaymentSettingsPage() {
-  const { siteId } = useParams<{ siteId: string }>();
+export default function TenantPaymentSettingsPage({ siteId: propSiteId }: { siteId?: string } = {}) {
+  const { siteId: paramSiteId } = useParams<{ siteId: string }>();
+  const siteId = propSiteId || paramSiteId || (typeof window !== "undefined" ? localStorage.getItem("last_active_site_id") || "" : "");
   const { hasPermission, isOwner } = useAdminAuth();
   const canView = isOwner || hasPermission("payout_settings:view");
   const canEdit = isOwner || hasPermission("payout_settings:edit");
@@ -438,6 +442,33 @@ export default function TenantPaymentSettingsPage() {
           onClose={() => setErrorMessage("")}
           top="76px"
         />
+      )}
+
+      {/* Security Quarantine Notice */}
+      {settings.is_quarantined && (
+        <div
+          style={{
+            padding: "12px 16px",
+            borderRadius: "8px",
+            background: "#f8fafc",
+            border: "1px solid #cbd5e1",
+            marginBottom: "16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+          }}
+        >
+          <span style={{ fontSize: "16px" }}>🔒</span>
+          <div>
+            <div style={{ fontSize: "12.5px", fontWeight: 700, color: "#1e293b" }}>
+              24-Hour Payout Security Cooldown Active
+            </div>
+            <div style={{ fontSize: "11.5px", color: "#64748b", marginTop: "2px" }}>
+              Bank account credentials were recently modified. Escrow payout releases are held until{" "}
+              <strong>{settings.quarantine_until ? new Date(settings.quarantine_until).toLocaleString() : "24 hours"}</strong> as an anti-takeover safeguard.
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Main Settings Form Container */}

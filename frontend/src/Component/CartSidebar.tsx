@@ -96,6 +96,8 @@ type TaxSettings = {
 type CheckoutSettingsResponse = {
   charges: ChargeRule[];
   taxSettings: TaxSettings;
+  isComposition?: boolean;
+  isUnregistered?: boolean;
 };
 
 type AppliedCharge = ChargeRule & {
@@ -425,6 +427,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
 }) => {
   const {
     cartItems,
+    products,
     updateQuantity,
     removeFromCart,
     clearCart,
@@ -810,17 +813,82 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     shippingCharge +
     nonShippingCharges.reduce((sum, charge) => sum + charge.calculatedAmount, 0);
 
-  const taxSettings = checkoutSettings?.taxSettings;
-  const taxBase = taxSettings?.applyOnShipping
-    ? subtotalAfterDiscount + chargesBeforeTax
-    : subtotalAfterDiscount;
+  // In statutory GST compliance, store prices and ancillary charges are inclusive of GST.
+  // Extract statutory composite GST breakdown from line items and active charges for informative display.
+  const extractedGst = useMemo(() => {
+    // If the merchant is a composition dealer or unregistered, 0% GST is charged to the customer.
+    if (checkoutSettings?.isComposition || checkoutSettings?.isUnregistered) {
+      return 0;
+    }
 
-  const tax =
-    taxSettings?.enabled
-      ? Math.max(0, Math.round((taxBase * toNumber(taxSettings.rate)) / 100))
-      : 0;
+    let sum = 0;
+    let highestRate = 0;
+    for (const item of cartItems) {
+      const lineTotal = (item.price || 0) * (item.quantity || 1);
+      let rate = 0;
 
-  const total = Math.max(subtotalAfterDiscount + chargesBeforeTax + tax, 0);
+      const matchingProd = products?.find(
+        (p) => String(p.id) === String(item.id)
+      );
+      const taxRateOverride =
+        item.tax_rate_override !== undefined && item.tax_rate_override !== null
+          ? item.tax_rate_override
+          : matchingProd?.tax_rate_override;
+      const hsnCode = item.hsn_code || (matchingProd as any)?.hsn_code;
+
+      if (taxRateOverride !== undefined && taxRateOverride !== null) {
+        rate = Number(taxRateOverride);
+      } else if (hsnCode) {
+        const p4 = String(hsnCode).trim().slice(0, 4);
+        if (
+          ["8517", "8518", "8504", "8471", "8528", "8525", "8544", "8501", "8502"].includes(p4)
+        ) {
+          rate = 18;
+        } else if (
+          ["6109", "6203", "6204", "6104", "6105", "6205"].includes(p4)
+        ) {
+          rate = item.price <= 1000 ? 5 : 12;
+        } else if (
+          ["6403", "6404", "6402", "6401"].includes(p4)
+        ) {
+          rate = item.price <= 1000 ? 5 : 18;
+        } else if (
+          ["0801", "0802", "0806", "2106", "0902", "1905", "0402", "0405"].includes(p4)
+        ) {
+          rate = 5;
+        } else if (
+          ["0803", "0804", "0805", "0808", "0810", "0701", "0702", "0703", "0709", "0800"].includes(p4)
+        ) {
+          rate = 0;
+        } else if (
+          ["3304", "3305", "3307", "3401"].includes(p4)
+        ) {
+          rate = 18;
+        } else {
+          // If any other valid HSN code is configured by the merchant, default to standard rate
+          rate = 5;
+        }
+      }
+      if (rate > highestRate) {
+        highestRate = rate;
+      }
+      if (rate > 0 && lineTotal > 0) {
+        const base = lineTotal / (1 + rate / 100);
+        sum += lineTotal - base;
+      }
+    }
+
+    // Include composite GST on all active checkout charges (shipping, handling, packaging, add-ons)
+    if (highestRate > 0 && chargesBeforeTax > 0) {
+      const chargeBase = chargesBeforeTax / (1 + highestRate / 100);
+      sum += chargesBeforeTax - chargeBase;
+    }
+
+    return Math.round(sum * 100) / 100;
+  }, [cartItems, products, chargesBeforeTax, checkoutSettings?.isComposition, checkoutSettings?.isUnregistered]);
+
+  const tax = 0;
+  const total = Math.max(subtotalAfterDiscount + chargesBeforeTax, 0);
 
   const shippingWaived = Boolean(
     shippingRule && isChargeWaived(shippingRule, subtotalAfterDiscount)
@@ -1094,25 +1162,25 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
           );
         })}
 
-        {taxSettings?.enabled ? (
+        {extractedGst > 0 ? (
           <div
             style={{
               display: "flex",
               justifyContent: "space-between",
               gap: "12px",
               color: palette.textMuted,
-              fontSize: "14px",
+              fontSize: "13.5px",
               alignItems: "center",
             }}
           >
             <span style={{ display: "inline-flex", alignItems: "center" }}>
-              {taxSettings.label || fallbackTaxLabel}
+              GST (Included in price)
               <ChargeInfoTooltip
-                text={taxSettings.rate ? `Applied at ${taxSettings.rate}%` : "Calculated at checkout"}
+                text="Statutory GST is already included in item prices and will be itemized on your legal tax invoice."
                 palette={palette}
               />
             </span>
-            <span style={{ color: palette.text }}>₹{tax}</span>
+            <span style={{ color: palette.text }}>₹{extractedGst.toFixed(2)}</span>
           </div>
         ) : null}
 
