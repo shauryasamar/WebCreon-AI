@@ -501,8 +501,8 @@ def serialize_user(
         role_display = role.name if (role and role.name != "Owner") else (admin.role if admin.role not in ("Owner", "super_admin") else "Team Member")
 
     # Website access detail
-    website_access_type = getattr(admin, "website_access_type", "all") or "all"
-    if website_access_type == "all" or is_owner:
+    website_access_type = getattr(admin, "website_access_type", "specific") or "specific"
+    if is_owner:
         website_access_display = "All Websites"
     elif not sites:
         website_access_display = "None"
@@ -605,6 +605,21 @@ def create_role(
     if not check_admin_has_permission(current_admin["adminId"], "users_roles:edit", session):
         raise HTTPException(status_code=403, detail="You do not have permission to manage users and roles")
     name = payload.name.strip()
+
+    # Pro Plan Entitlement: Custom roles is a Pro-exclusive feature
+    curr_adm_id = UUID(current_admin["adminId"])
+    owner_site_links = session.exec(select(AdminSite).where(AdminSite.admin_id == curr_adm_id)).all()
+    owner_site_ids = {l.site_id for l in owner_site_links}
+    from services.team_access_service import is_team_feature_available
+    has_pro_site = any(is_team_feature_available(session, s_id) for s_id in owner_site_ids)
+    if not has_pro_site:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error_code": "TEAM_FEATURE_REQUIRES_PRO",
+                "message": "Custom roles & team access is exclusive to the Pro plan (₹499 / 30 days). Upgrade your website to Pro to create custom roles.",
+            },
+        )
 
     # Ensure role name is unique
     existing = session.exec(select(Role).where(func.lower(Role.name) == name.lower())).first()
@@ -898,21 +913,19 @@ def list_users(
             mem_role = roles_by_name.get("Store Manager") or roles_by_name.get("Support Agent")
 
         # Determine accessible sites strictly within this workspace owner's storefronts
-        if getattr(mem, "website_access_type", "all") == "specific":
-            mem_links = session.exec(
-                select(AdminSite).where(
-                    AdminSite.admin_id == mem.id,
-                    AdminSite.site_id.in_(list(workspace_sites.keys())),
-                )
-            ).all()
-            assigned_dict: Dict[UUID, Site] = {}
-            for link in mem_links:
-                s_mem = workspace_sites.get(link.site_id)
-                if s_mem:
-                    assigned_dict[s_mem.id] = s_mem
-            assigned = list(assigned_dict.values())
-        else:
-            assigned = list(workspace_sites.values())
+        from services.team_access_service import is_team_feature_available
+        mem_links = session.exec(
+            select(AdminSite).where(
+                AdminSite.admin_id == mem.id,
+                AdminSite.site_id.in_(list(workspace_sites.keys())),
+            )
+        ).all()
+        assigned_dict: Dict[UUID, Site] = {}
+        for link in mem_links:
+            s_mem = workspace_sites.get(link.site_id)
+            if s_mem and is_team_feature_available(session, s_mem.id):
+                assigned_dict[s_mem.id] = s_mem
+        assigned = list(assigned_dict.values())
 
         serialized.append(
             serialize_user(
@@ -951,9 +964,38 @@ def invite_user(
     owner_site_links = session.exec(select(AdminSite).where(AdminSite.admin_id == curr_adm_id)).all()
     owner_site_ids = {l.site_id for l in owner_site_links}
     workspace_sites = {s.id: s for s in session.exec(select(Site).where(Site.id.in_(list(owner_site_ids)))).all()}
-    # No fallback to select(Site) — prevents cross-workspace site leakage
 
-    # 3. Check if user already exists
+    # Pro Plan Entitlement: Team members is a Pro-exclusive feature
+    from services.team_access_service import is_team_feature_available
+    pro_workspace_sites = {sid: sobj for sid, sobj in workspace_sites.items() if is_team_feature_available(session, sid)}
+    if not pro_workspace_sites:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error_code": "TEAM_FEATURE_REQUIRES_PRO",
+                "message": "Team members & roles is an exclusive feature of the Pro plan (Rs 499 / 30 days). Upgrade your store to Pro to invite team members.",
+            },
+        )
+
+    # 3. Validate requested site access for Pro entitlement
+    if payload.website_access_type == "specific":
+        if not payload.site_ids:
+            raise HTTPException(
+                status_code=400,
+                detail="Please select at least one Pro-tier store for specific store access.",
+            )
+        for sid in payload.site_ids:
+            if sid not in owner_site_ids:
+                raise HTTPException(status_code=400, detail=f"Website {sid} is not part of your workspace.")
+            if not is_team_feature_available(session, sid):
+                site_rec = session.get(Site, sid)
+                s_name = (site_rec.site_definition or {}).get("site", {}).get("brand_name") or (site_rec.slug if site_rec else str(sid))
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cannot assign access to '{s_name}'. Team members can only be assigned to stores with an active Pro subscription.",
+                )
+
+    # 4. Check if user already exists
     existing = session.exec(select(Admin).where(func.lower(Admin.email) == email)).first()
 
     if existing:
@@ -984,7 +1026,7 @@ def invite_user(
                 detail=f"'{email}' is already a member of your store team. You can edit their role and website access directly in the table.",
             )
 
-    # 4. Prepare permissions and tokens
+    # 5. Prepare permissions and tokens
     valid_additional = [p for p in (payload.additional_permissions or []) if p in ALL_PERMISSION_IDS]
     invite_token = secrets.token_urlsafe(32)
     expires_at = utc_now() + timedelta(days=7)
@@ -1045,13 +1087,13 @@ def invite_user(
         session.refresh(new_admin)
         target_admin = new_admin
 
-    # 5. Link AdminSite for target_admin
+    # 6. Link AdminSite for target_admin strictly to Pro-enabled stores
     accessible_sites = []
     role_site_str = role.name.lower().replace(" ", "_")
 
     if payload.website_access_type == "specific" and payload.site_ids:
         for sid in payload.site_ids:
-            site_record = session.get(Site, sid)
+            site_record = pro_workspace_sites.get(sid)
             if site_record:
                 link = session.exec(
                     select(AdminSite).where(
@@ -1067,8 +1109,8 @@ def invite_user(
                 accessible_sites.append(site_record)
         session.commit()
     else:
-        # All workspace sites belonging to the inviting owner
-        for sid, site_obj in workspace_sites.items():
+        # All Pro-enabled workspace sites belonging to the inviting owner
+        for sid, site_obj in pro_workspace_sites.items():
             link = session.exec(
                 select(AdminSite).where(
                     AdminSite.admin_id == target_admin.id,
@@ -1171,25 +1213,52 @@ def update_user(
     owner_site_links = session.exec(select(AdminSite).where(AdminSite.admin_id == curr_adm_id)).all()
     owner_site_ids = {l.site_id for l in owner_site_links}
     workspace_sites = {s.id: s for s in session.exec(select(Site).where(Site.id.in_(list(owner_site_ids)))).all()}
-    # NOTE: intentionally no fallback to select(Site) with no filter —
-    # if owner has no sites, workspace is empty (no site leakage to other workspaces)
 
-    # Update specific site links
-    if payload.site_ids is not None and admin.website_access_type == "specific":
-        # Remove existing links for this user
-        existing_links = session.exec(
-            select(AdminSite).where(
-                AdminSite.admin_id == admin.id,
-            )
-        ).all()
-        for link in existing_links:
-            session.delete(link)
-        # Add new
-        for sid in payload.site_ids:
-            site_record = session.get(Site, sid)
-            if site_record:
+    from services.team_access_service import is_team_feature_available
+    pro_workspace_sites = {sid: sobj for sid, sobj in workspace_sites.items() if is_team_feature_available(session, sid)}
+
+    # Update site links based on access type and validate Pro subscription
+    if not is_owner:
+        if payload.website_access_type == "specific" or (payload.website_access_type is None and admin.website_access_type == "specific"):
+            if payload.site_ids is not None:
+                # Validate selected site IDs
+                for sid in payload.site_ids:
+                    if sid not in owner_site_ids:
+                        raise HTTPException(status_code=400, detail=f"Website {sid} is not part of your workspace.")
+                    if not is_team_feature_available(session, sid):
+                        site_rec = session.get(Site, sid)
+                        s_name = (site_rec.site_definition or {}).get("site", {}).get("brand_name") or (site_rec.slug if site_rec else str(sid))
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Cannot assign access to '{s_name}'. Team members can only be assigned to stores with an active Pro subscription.",
+                        )
+
+                # Remove existing links for this user
+                existing_links = session.exec(
+                    select(AdminSite).where(
+                        AdminSite.admin_id == admin.id,
+                    )
+                ).all()
+                for link in existing_links:
+                    session.delete(link)
+
+                # Add new links
+                for sid in payload.site_ids:
+                    session.add(AdminSite(admin_id=admin.id, site_id=sid, role_on_site=admin.role.lower().replace(" ", "_")))
+                session.commit()
+        elif payload.website_access_type == "all":
+            # Link to all Pro-enabled stores
+            existing_links = session.exec(
+                select(AdminSite).where(
+                    AdminSite.admin_id == admin.id,
+                )
+            ).all()
+            for link in existing_links:
+                session.delete(link)
+
+            for sid in pro_workspace_sites.keys():
                 session.add(AdminSite(admin_id=admin.id, site_id=sid, role_on_site=admin.role.lower().replace(" ", "_")))
-        session.commit()
+            session.commit()
 
     # Update additional permissions
     if payload.additional_permissions is not None:
@@ -1226,7 +1295,9 @@ def update_user(
     )
 
     # Gather assigned sites in current workspace
-    if admin.website_access_type == "specific":
+    if is_owner:
+        assigned_sites = list(workspace_sites.values())
+    else:
         site_links = session.exec(
             select(AdminSite).where(
                 AdminSite.admin_id == admin.id,
@@ -1236,21 +1307,8 @@ def update_user(
         assigned_sites = []
         for link in site_links:
             s_rec = workspace_sites.get(link.site_id)
-            if s_rec and s_rec not in assigned_sites:
+            if s_rec and is_team_feature_available(session, s_rec.id) and s_rec not in assigned_sites:
                 assigned_sites.append(s_rec)
-    else:
-        # For "all" access type, return only sites within the owner's workspace
-        # (prevents cross-workspace site leakage)
-        user_links = session.exec(
-            select(AdminSite).where(
-                AdminSite.admin_id == admin.id,
-                AdminSite.site_id.in_(list(workspace_sites.keys())),
-            )
-        ).all()
-        user_site_ids = [lnk.site_id for lnk in user_links]
-        assigned_sites = [
-            s for s in workspace_sites.values() if s.id in set(user_site_ids)
-        ] if user_site_ids else list(workspace_sites.values())
 
     origin = request.headers.get("origin", "http://localhost:5173")
     return {

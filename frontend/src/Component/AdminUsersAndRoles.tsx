@@ -68,6 +68,8 @@ export type SiteOption = {
   id: string;
   slug: string;
   brand_name: string;
+  plan?: string;
+  is_pro?: boolean;
 };
 
 // ---------------------------------------------------------------------------
@@ -129,10 +131,6 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const filterPopoverRef = useRef<HTMLDivElement | null>(null);
 
-  // Three-dot Action Menu Popup
-  const [openMenuUserId, setOpenMenuUserId] = useState<string | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-
   // Confirmation Modals
   const [deactivateModalUser, setDeactivateModalUser] = useState<TeamUser | null>(null);
   const [removeModalUser, setRemoveModalUser] = useState<TeamUser | null>(null);
@@ -161,12 +159,9 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
   const [rolePermissions, setRolePermissions] = useState<string[]>([]);
   const [expandedCategoryKey, setExpandedCategoryKey] = useState<string>("store_control");
 
-  // Close menus and filter popovers on outside click
+  // Close filter popover on outside click
   useEffect(() => {
     const handleOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setOpenMenuUserId(null);
-      }
       if (filterPopoverRef.current && !filterPopoverRef.current.contains(e.target as Node)) {
         setIsFilterOpen(false);
       }
@@ -179,16 +174,20 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
   // DATA FETCHING
   // ---------------------------------------------------------------------------
 
+  const [activeSitePlan, setActiveSitePlan] = useState<string>("FREE");
+  const [planLoaded, setPlanLoaded] = useState<boolean>(false);
+
   const fetchData = async () => {
     try {
       setLoading(true);
       const userUrl = `${API_BASE_URL}/users-roles/users`;
 
-      const [usersRes, rolesRes, catalogRes, sitesRes] = await Promise.all([
+      const [usersRes, rolesRes, catalogRes, sitesRes, billingRes] = await Promise.all([
         fetch(userUrl, { credentials: "include" }),
         fetch(`${API_BASE_URL}/users-roles/roles`, { credentials: "include" }),
         fetch(`${API_BASE_URL}/users-roles/permissions-catalog`, { credentials: "include" }),
         fetch(`${API_BASE_URL}/auth/admin/sites`, { credentials: "include" }).catch(() => null),
+        fetch(`${API_BASE_URL}/api/billing/websites`, { credentials: "include" }).catch(() => null),
       ]);
 
       if (usersRes.ok) {
@@ -203,15 +202,59 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
         const cData = await catalogRes.json();
         setPermissionCatalog(cData.catalog || []);
       }
+      const billingMap = new Map<string, { plan: string; is_pro: boolean }>();
+      if (billingRes && billingRes.ok) {
+        const bData = await billingRes.json();
+        const targetSite = bData.websites?.find(
+          (w: any) => String(w.website_id).toLowerCase() === String(effectiveSiteId).toLowerCase()
+        );
+        if (targetSite) {
+          setActiveSitePlan(String(targetSite.current_plan || "FREE").toUpperCase());
+        } else if (bData.websites?.length > 0) {
+          const hasPro = bData.websites.some((w: any) => {
+            const p = String(w.current_plan || "").toUpperCase();
+            const s = String(w.subscription_status || w.status || "ACTIVE").toUpperCase();
+            return p === "PRO" && (s === "ACTIVE" || s === "GRACE_PERIOD");
+          });
+          setActiveSitePlan(hasPro ? "PRO" : String(bData.websites[0].current_plan || "FREE").toUpperCase());
+        }
+        (bData.websites || []).forEach((w: any) => {
+          const p = String(w.current_plan || "FREE").toUpperCase();
+          const s = String(w.subscription_status || w.status || "ACTIVE").toUpperCase();
+          const isPro = p === "PRO" && (s === "ACTIVE" || s === "GRACE_PERIOD");
+          if (w.website_id) {
+            billingMap.set(String(w.website_id).toLowerCase(), {
+              plan: p,
+              is_pro: isPro,
+            });
+          }
+          if (w.slug) {
+            billingMap.set(String(w.slug).toLowerCase(), {
+              plan: p,
+              is_pro: isPro,
+            });
+          }
+        });
+      }
+
       if (sitesRes && sitesRes.ok) {
         const sData = await sitesRes.json();
-        const mapped = (sData || []).map((s: any) => ({
-          id: strId(s.id),
-          slug: s.slug,
-          brand_name: s.site_definition?.site?.brand_name || s.slug || "Store",
-        }));
+        const mapped = (sData || []).map((s: any) => {
+          const sId = strId(s.id);
+          const bInfo =
+            billingMap.get(sId.toLowerCase()) ||
+            billingMap.get(String(s.slug || "").toLowerCase());
+          return {
+            id: sId,
+            slug: s.slug,
+            brand_name: s.site_definition?.site?.brand_name || s.slug || "Store",
+            plan: bInfo?.plan || "FREE",
+            is_pro: Boolean(bInfo?.is_pro),
+          };
+        });
         setSites(mapped);
       }
+      setPlanLoaded(true);
     } catch (err: any) {
       console.error("Failed to load users & roles data", err);
       setToast({ message: "Could not load users & roles data", type: "error" });
@@ -317,6 +360,9 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
     });
   }, [roles, searchQuery, roleTypeFilter]);
 
+  // Pro-enabled websites
+  const proSites = useMemo(() => sites.filter((s) => s.is_pro), [sites]);
+
   // Selected role in user drawer (for inherited permissions)
   const currentSelectedRole = useMemo(() => {
     return roles.find((r) => r.id === userRoleId) || null;
@@ -337,13 +383,18 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
     // Default to Store Manager or first non-owner role
     const defaultRole = roles.find((r) => r.name === "Store Manager") || roles.find((r) => r.name !== "Owner") || roles[0];
     setUserRoleId(defaultRole ? defaultRole.id : "");
+    const currentProSites = sites.filter((s) => s.is_pro);
     if (effectiveSiteId) {
-      setUserWebsiteAccessType("specific");
-      setUserSelectedSiteIds([effectiveSiteId]);
+      const currentSiteObj = sites.find((s) => String(s.id).toLowerCase() === String(effectiveSiteId).toLowerCase());
+      if (currentSiteObj?.is_pro) {
+        setUserSelectedSiteIds([currentSiteObj.id]);
+      } else {
+        setUserSelectedSiteIds(currentProSites.length > 0 ? [currentProSites[0].id] : []);
+      }
     } else {
-      setUserWebsiteAccessType("all");
-      setUserSelectedSiteIds(sites.map((s) => s.id));
+      setUserSelectedSiteIds(currentProSites.map((s) => s.id));
     }
+    setUserWebsiteAccessType("specific");
     setUserAdditionalPerms([]);
     setShowAdditionalPermPicker(false);
     setDrawerMode("add-user");
@@ -354,11 +405,15 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
     setUserName(u.name);
     setUserEmail(u.email);
     setUserRoleId(u.role_id || "");
+    const proSiteIds = new Set(sites.filter((s) => s.is_pro).map((s) => s.id));
+    if (u.website_access_type === "all" || u.is_owner) {
+      setUserSelectedSiteIds(Array.from(proSiteIds));
+    } else {
+      setUserSelectedSiteIds(u.accessible_sites.map((s) => s.id).filter((id) => proSiteIds.has(id)));
+    }
     setUserWebsiteAccessType(u.website_access_type);
-    setUserSelectedSiteIds(u.accessible_sites.map((s) => s.id));
     setUserAdditionalPerms([...u.additional_permissions]);
     setShowAdditionalPermPicker(false);
-    setOpenMenuUserId(null);
     setDrawerMode("edit-user");
   };
 
@@ -377,6 +432,14 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
       return;
     }
 
+    const currentProSites = sites.filter((s) => s.is_pro);
+    if (currentProSites.length > 0 && userSelectedSiteIds.length === 0) {
+      setToast({ message: "Please select at least one Pro website for this team member", type: "error" });
+      return;
+    }
+
+    const accessType = "specific";
+
     setDrawerSubmitting(true);
     try {
       if (drawerMode === "add-user") {
@@ -384,10 +447,8 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
           name: userName.trim(),
           email: userEmail.trim(),
           role_id: userRoleId,
-          website_access_type: userWebsiteAccessType,
-          site_ids: userWebsiteAccessType === "specific"
-            ? (userSelectedSiteIds.length > 0 ? userSelectedSiteIds : (effectiveSiteId ? [effectiveSiteId] : []))
-            : [],
+          website_access_type: accessType,
+          site_ids: userSelectedSiteIds,
           additional_permissions: userAdditionalPerms,
         };
 
@@ -412,8 +473,8 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
         const payload = {
           name: userName.trim(),
           role_id: userRoleId,
-          website_access_type: userWebsiteAccessType,
-          site_ids: userWebsiteAccessType === "specific" ? userSelectedSiteIds : [],
+          website_access_type: accessType,
+          site_ids: userSelectedSiteIds,
           additional_permissions: userAdditionalPerms,
         };
 
@@ -472,7 +533,6 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
 
       setUsers((prev) => prev.map((item) => (item.id === u.id ? data.user : item)));
       setToast({ message: `${u.name} is now Active!`, type: "success" });
-      setOpenMenuUserId(null);
     } catch (err: any) {
       setToast({ message: err.message || "Unable to reactivate user", type: "error" });
     }
@@ -488,7 +548,6 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
       if (!res.ok) throw new Error(data.detail || "Failed to resend invite");
 
       setUsers((prev) => prev.map((item) => (item.id === u.id ? data.user : item)));
-      setOpenMenuUserId(null);
       setToast({ message: `Fresh invitation created for ${u.name}!`, type: "success" });
       if (data.invite_url) {
         setCopiedInviteUrl(data.invite_url);
@@ -663,6 +722,16 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
     return <AccessDeniedView moduleName="Users & Roles" requiredPermission="users_roles:view" />;
   }
 
+  if (planLoaded && activeSitePlan !== "PRO") {
+    return (
+      <AccessDeniedView
+        title="Pro Plan Exclusive Feature"
+        message="Inviting team members, assigning staff access, and configuring custom roles is available exclusively on the Pro plan."
+        requiredPermission="Pro Subscription Plan"
+      />
+    );
+  }
+
   return (
     <div
       style={{
@@ -718,7 +787,6 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                   type="button"
                   onClick={() => {
                     setActiveTab(value);
-                    setOpenMenuUserId(null);
                     setSearchQuery("");
                   }}
                   style={{
@@ -1422,128 +1490,45 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
 
                         {/* Actions */}
                         <td style={{ ...tdStyle, textAlign: "right", position: "relative" }}>
-                          {canManageUsers ? (
-                            <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                              <button
-                                type="button"
-                                onClick={() => openEditUserDrawer(u)}
-                                style={{
-                                  padding: "4px 10px",
-                                  borderRadius: "6px",
-                                  border: "1px solid #cbd5e1",
-                                  background: "#ffffff",
-                                  color: "#334155",
-                                  fontSize: "12px",
-                                  fontWeight: 600,
-                                  cursor: "pointer",
-                                }}
-                              >
-                                Edit
-                              </button>
-
-                              {/* Three-dot Trigger */}
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setOpenMenuUserId(openMenuUserId === u.id ? null : u.id);
-                                }}
-                                style={{
-                                  width: "28px",
-                                  height: "28px",
-                                  borderRadius: "6px",
-                                  border: "1px solid transparent",
-                                  background: openMenuUserId === u.id ? "#f1f5f9" : "transparent",
-                                  color: "#64748b",
-                                  cursor: "pointer",
-                                  display: "grid",
-                                  placeItems: "center",
-                                }}
-                                title="More actions"
-                              >
-                                <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 15, height: 15 }}>
-                                  <circle cx="12" cy="5" r="2" />
-                                  <circle cx="12" cy="12" r="2" />
-                                  <circle cx="12" cy="19" r="2" />
-                                </svg>
-                              </button>
-                            </div>
-                          ) : (
-                            <span style={{ fontSize: "12px", color: "#94a3b8" }}>View only</span>
-                          )}
-
-                          {/* Dropdown Menu */}
-                          {openMenuUserId === u.id && (
-                            <div
-                              ref={menuRef}
+                          {isOwnerUser ? (
+                            <span
                               style={{
-                                position: "absolute",
-                                right: "12px",
-                                top: "42px",
-                                width: "170px",
-                                background: "#ffffff",
-                                border: "1px solid #e2e8f0",
-                                borderRadius: "8px",
-                                boxShadow: "0 8px 24px rgba(15,23,42,0.12)",
-                                padding: "4px",
-                                zIndex: 50,
-                                textAlign: "left",
+                                fontSize: "11.5px",
+                                color: "#94a3b8",
+                                fontWeight: 500,
+                                paddingRight: "6px",
                               }}
                             >
-                              <button
-                                type="button"
-                                onClick={() => openEditUserDrawer(u)}
-                                style={menuItemStyle}
-                              >
-                                Edit
-                              </button>
-
-                              {isPending && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleResendInvite(u)}
-                                  style={menuItemStyle}
-                                >
-                                  Resend Invitation
-                                </button>
-                              )}
-
-                              {!isOwnerUser && isActive && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setOpenMenuUserId(null);
-                                    setDeactivateModalUser(u);
-                                  }}
-                                  style={{ ...menuItemStyle, color: "#d97706" }}
-                                >
-                                  Deactivate
-                                </button>
-                              )}
-
-                              {!isOwnerUser && !isActive && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleReactivate(u)}
-                                  style={{ ...menuItemStyle, color: "#16a34a" }}
-                                >
-                                  Reactivate
-                                </button>
-                              )}
-
-                              {!isOwnerUser && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setOpenMenuUserId(null);
-                                    setRemoveModalUser(u);
-                                  }}
-                                  style={{ ...menuItemStyle, color: "#ef4444" }}
-                                >
-                                  Remove User
-                                </button>
-                              )}
-                            </div>
+                              Owner Account
+                            </span>
+                          ) : canManageUsers ? (
+                            <button
+                              type="button"
+                              onClick={() => openEditUserDrawer(u)}
+                              style={{
+                                padding: "5px 12px",
+                                borderRadius: "6px",
+                                border: "1px solid #cbd5e1",
+                                background: "#ffffff",
+                                color: "#334155",
+                                fontSize: "12px",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                transition: "all 0.12s ease",
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.borderColor = "#94a3b8";
+                                e.currentTarget.style.background = "#f8fafc";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.borderColor = "#cbd5e1";
+                                e.currentTarget.style.background = "#ffffff";
+                              }}
+                            >
+                              Edit
+                            </button>
+                          ) : (
+                            <span style={{ fontSize: "12px", color: "#94a3b8" }}>View only</span>
                           )}
                         </td>
                       </tr>
@@ -1905,66 +1890,82 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                   </select>
                 </div>
 
-                {/* Website Access */}
+                {/* Website Access (Only Pro websites are available) */}
                 <div>
-                  <label style={labelStyle}>Storefront Access</label>
-                  <div style={{ display: "flex", gap: "20px", marginBottom: "8px" }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", cursor: "pointer" }}>
-                      <input
-                        type="radio"
-                        name="website_access_type"
-                        checked={userWebsiteAccessType === "all"}
-                        onChange={() => setUserWebsiteAccessType("all")}
-                        disabled={selectedUser?.is_owner}
-                      />
-                      <span>All Websites</span>
-                    </label>
-
-                    <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", cursor: "pointer" }}>
-                      <input
-                        type="radio"
-                        name="website_access_type"
-                        checked={userWebsiteAccessType === "specific"}
-                        onChange={() => setUserWebsiteAccessType("specific")}
-                        disabled={selectedUser?.is_owner}
-                      />
-                      <span>Specific Websites Only</span>
-                    </label>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                    <label style={{ ...labelStyle, margin: 0 }}>Website Access</label>
+                    {proSites.length > 1 && !selectedUser?.is_owner && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (userSelectedSiteIds.length === proSites.length) {
+                            setUserSelectedSiteIds([]);
+                          } else {
+                            setUserSelectedSiteIds(proSites.map((s) => s.id));
+                          }
+                        }}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#2563eb",
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          padding: 0,
+                        }}
+                      >
+                        {userSelectedSiteIds.length === proSites.length ? "Deselect All" : "Select All"}
+                      </button>
+                    )}
                   </div>
 
-                  {userWebsiteAccessType === "specific" && (
+                  {proSites.length === 0 ? (
                     <div
                       style={{
-                        padding: "10px 12px",
+                        padding: "12px",
                         borderRadius: "8px",
                         border: "1px solid #e2e8f0",
                         background: "#f8fafc",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "8px",
-                        maxHeight: "140px",
-                        overflowY: "auto",
+                        fontSize: "12.5px",
+                        color: "#64748b",
+                        lineHeight: "1.5",
                       }}
                     >
-                      {sites.length === 0 ? (
-                        <div style={{ fontSize: "12px", color: "#64748b" }}>No websites registered yet.</div>
-                      ) : (
-                        sites.map((s) => {
-                          const isChecked = userSelectedSiteIds.includes(s.id);
-                          return (
-                            <label
-                              key={s.id}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "8px",
-                                fontSize: "12.5px",
-                                color: "#0f172a",
-                                cursor: "pointer",
-                              }}
-                            >
+                      No Pro-tier websites available in this workspace. Upgrade a website to the Pro plan to assign team members.
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "6px",
+                        maxHeight: "180px",
+                        overflowY: "auto",
+                        padding: "2px 0",
+                      }}
+                    >
+                      {proSites.map((s) => {
+                        const isChecked = userSelectedSiteIds.includes(s.id);
+
+                        return (
+                          <label
+                            key={s.id}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              padding: "8px 12px",
+                              borderRadius: "7px",
+                              background: isChecked ? "#eff6ff" : "#ffffff",
+                              border: isChecked ? "1px solid #93c5fd" : "1px solid #e2e8f0",
+                              cursor: selectedUser?.is_owner ? "default" : "pointer",
+                              transition: "all 0.12s ease",
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
                               <input
                                 type="checkbox"
+                                disabled={selectedUser?.is_owner}
                                 checked={isChecked}
                                 onChange={(e) => {
                                   if (e.target.checked) {
@@ -1974,12 +1975,31 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                                   }
                                 }}
                               />
-                              <span>{s.brand_name}</span>
-                              <span style={{ fontSize: "11px", color: "#64748b" }}>({s.slug})</span>
-                            </label>
-                          );
-                        })
-                      )}
+                              <span style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a" }}>
+                                {s.brand_name}
+                              </span>
+                              <span style={{ fontSize: "11.5px", color: "#64748b" }}>
+                                ({s.slug})
+                              </span>
+                            </div>
+
+                            <span
+                              style={{
+                                fontSize: "10.5px",
+                                fontWeight: 700,
+                                padding: "2px 7px",
+                                borderRadius: "4px",
+                                background: "#dbeafe",
+                                color: "#1e40af",
+                                border: "1px solid #bfdbfe",
+                                letterSpacing: "0.03em",
+                              }}
+                            >
+                              PRO
+                            </span>
+                          </label>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -2194,41 +2214,82 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
               }}
             >
               {drawerMode === "edit-user" && !selectedUser?.is_owner && (
-                selectedUser?.is_active ? (
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  {selectedUser?.invitation_pending || selectedUser?.status === "pending" ? (
+                    <button
+                      type="button"
+                      onClick={() => selectedUser && handleResendInvite(selectedUser)}
+                      style={{
+                        padding: "7px 13px",
+                        borderRadius: "6px",
+                        border: "1px solid #93c5fd",
+                        background: "#ffffff",
+                        color: "#2563eb",
+                        fontSize: "12.5px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Resend Invite
+                    </button>
+                  ) : selectedUser?.is_active ? (
+                    <button
+                      type="button"
+                      onClick={() => setDeactivateModalUser(selectedUser)}
+                      style={{
+                        padding: "7px 13px",
+                        borderRadius: "6px",
+                        border: "1px solid #fca5a5",
+                        background: "#ffffff",
+                        color: "#dc2626",
+                        fontSize: "12.5px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Deactivate User
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => selectedUser && handleReactivate(selectedUser)}
+                      style={{
+                        padding: "7px 13px",
+                        borderRadius: "6px",
+                        border: "1px solid #86efac",
+                        background: "#ffffff",
+                        color: "#16a34a",
+                        fontSize: "12.5px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Reactivate User
+                    </button>
+                  )}
+
                   <button
                     type="button"
-                    onClick={() => setDeactivateModalUser(selectedUser)}
+                    onClick={() => {
+                      if (selectedUser) {
+                        setDrawerMode(null);
+                        setRemoveModalUser(selectedUser);
+                      }
+                    }}
                     style={{
-                      padding: "7px 13px",
+                      padding: "7px 12px",
                       borderRadius: "6px",
-                      border: "1px solid #fca5a5",
+                      border: "1px solid #e2e8f0",
                       background: "#ffffff",
-                      color: "#dc2626",
+                      color: "#64748b",
                       fontSize: "12.5px",
                       fontWeight: 600,
                       cursor: "pointer",
                     }}
                   >
-                    Deactivate User
+                    Remove
                   </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => selectedUser && handleReactivate(selectedUser)}
-                    style={{
-                      padding: "7px 13px",
-                      borderRadius: "6px",
-                      border: "1px solid #86efac",
-                      background: "#ffffff",
-                      color: "#16a34a",
-                      fontSize: "12.5px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Reactivate User
-                  </button>
-                )
+                </div>
               )}
 
               <div style={{ display: "flex", gap: "8px" }}>

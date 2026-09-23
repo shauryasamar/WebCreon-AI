@@ -5,6 +5,7 @@ import { Pagination } from "./Pagination";
 import { optimizeImageUrl, getThumbnailUrl, compressImageFile } from "../utils/imageOptimizer";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import { AccessDeniedView } from "./AccessDeniedView";
+import { GlassToast } from "./GlassToast";
 
 
 type VariantValue = {
@@ -541,6 +542,21 @@ const errorStyle: React.CSSProperties = {
   fontSize: "12px",
 };
 
+export const extractErrorMessage = (errData: any, fallback: string = "An error occurred"): string => {
+  if (!errData) return fallback;
+  if (typeof errData === "string") return errData;
+  if (typeof errData.detail === "string") return errData.detail;
+  if (errData.detail && typeof errData.detail === "object") {
+    if (typeof errData.detail.message === "string") return errData.detail.message;
+    if (typeof errData.detail.detail === "string") return errData.detail.detail;
+    if (Array.isArray(errData.detail)) {
+      return errData.detail.map((d: any) => d.msg || d.message || JSON.stringify(d)).join(", ");
+    }
+  }
+  if (typeof errData.message === "string") return errData.message;
+  return fallback;
+};
+
 const AdminProducts = () => {
   const { siteId } = useParams();
   const { hasPermission, isOwner } = useAdminAuth();
@@ -649,6 +665,9 @@ const AdminProducts = () => {
     updated_count?: number;
     errors?: Array<{ row: number; error: string }>;
   } | null>(null);
+
+  // Toast notification state
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
   const [formValues, setFormValues] = useState<ProductFormValues>({
     name: "",
@@ -1534,23 +1553,17 @@ const AdminProducts = () => {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        const msg =
-          typeof err.detail === "string"
-            ? err.detail
-            : Array.isArray(err.detail)
-            ? err.detail.map((d: any) => d.msg || JSON.stringify(d)).join(", ")
-            : typeof err.message === "string"
-            ? err.message
-            : "Failed to execute bulk action";
+        const msg = extractErrorMessage(err, "Failed to execute bulk action");
         throw new Error(msg);
       }
 
       setSelectedProductIds(new Set());
       invalidateAdminProductsCache(siteId);
       await loadProducts();
+      setToast({ message: `Bulk action '${action}' completed successfully`, type: "success" });
     } catch (err: any) {
       console.error("Bulk action failed", err);
-      alert(err.message || "Bulk action failed");
+      setToast({ message: extractErrorMessage(err, "Bulk action failed"), type: "error" });
     } finally {
       setBulkActionLoading(false);
     }
@@ -1607,13 +1620,14 @@ const AdminProducts = () => {
         setQuickEditProduct(null);
         invalidateAdminProductsCache(siteId);
         await loadProducts();
+        setToast({ message: "Variants updated successfully", type: "success" });
       } else {
-        const err = await res.json();
-        alert(err.detail || "Failed to update variants");
+        const err = await res.json().catch(() => ({}));
+        setToast({ message: extractErrorMessage(err, "Failed to update variants"), type: "error" });
       }
     } catch (err: any) {
       console.error("Variant quick edit failed", err);
-      alert(err.message || "Variant quick edit failed");
+      setToast({ message: extractErrorMessage(err, "Variant quick edit failed"), type: "error" });
     } finally {
       setIsQuickSaving(false);
     }
@@ -1639,11 +1653,14 @@ const AdminProducts = () => {
         setInlineEditingId(null);
         invalidateAdminProductsCache(siteId);
         await loadProducts();
+        setToast({ message: "Product details saved", type: "success" });
       } else {
-        alert("Failed to update product details");
+        const err = await res.json().catch(() => ({}));
+        setToast({ message: extractErrorMessage(err, "Failed to update product details"), type: "error" });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Quick edit failed", err);
+      setToast({ message: extractErrorMessage(err, "Quick edit failed"), type: "error" });
     } finally {
       setIsQuickSaving(false);
     }
@@ -1828,9 +1845,10 @@ const AdminProducts = () => {
 
       invalidateAdminProductsCache(siteId);
       await loadProducts();
+      setToast({ message: "Product duplicated as draft", type: "success" });
     } catch (err: any) {
       console.error("Duplicate failed", err);
-      alert(err.message || "Failed to duplicate product");
+      setToast({ message: extractErrorMessage(err, "Failed to duplicate product"), type: "error" });
     }
   };
 
@@ -1931,10 +1949,14 @@ const AdminProducts = () => {
             localStorage.removeItem(`wc_admin_products_${siteId}`);
           } catch (_) {}
           await loadProducts();
+          setShowForm(false);
+          resetForm();
+          setToast({ message: "Product updated successfully", type: "success" });
         } else {
           console.error("Failed to update product", res.status);
           const errData = await res.json().catch(() => ({}));
-          alert(errData.detail || "Failed to update product");
+          const errMsg = extractErrorMessage(errData, "Failed to update product");
+          setToast({ message: errMsg, type: "error" });
         }
       } else {
         const res = await fetch(`${API_BASE_URL}/sites/${siteId}/products`, {
@@ -1949,17 +1971,19 @@ const AdminProducts = () => {
             localStorage.removeItem(`wc_admin_products_${siteId}`);
           } catch (_) {}
           await loadProducts();
+          setShowForm(false);
+          resetForm();
+          setToast({ message: "Product created successfully", type: "success" });
         } else {
           console.error("Failed to create product", res.status);
           const errData = await res.json().catch(() => ({}));
-          alert(errData.detail || "Failed to create product");
+          const errMsg = extractErrorMessage(errData, "Failed to create product");
+          setToast({ message: errMsg, type: "error" });
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error saving product", err);
-    } finally {
-      setShowForm(false);
-      resetForm();
+      setToast({ message: extractErrorMessage(err, "Error saving product"), type: "error" });
     }
   };
 
@@ -1974,11 +1998,14 @@ const AdminProducts = () => {
       if (res.ok) {
         invalidateAdminProductsCache(siteId);
         await loadProducts();
+        setToast({ message: "Product deleted successfully", type: "success" });
       } else {
-        console.error("Failed to delete product", res.status);
+        const err = await res.json().catch(() => ({}));
+        setToast({ message: extractErrorMessage(err, "Failed to delete product"), type: "error" });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error deleting product", err);
+      setToast({ message: extractErrorMessage(err, "Error deleting product"), type: "error" });
     }
   };
 
@@ -2002,6 +2029,14 @@ const AdminProducts = () => {
           100% { background-position: -200% 0; }
         }
       `}</style>
+      {/* Standard GlassToast Notification */}
+      {toast && (
+        <GlassToast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
       {/* Top Header Card (Mode Switcher + Search & Filter Button) */}
       <div
         style={{

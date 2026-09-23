@@ -40,6 +40,7 @@ from services.domain_service import (
     utc_now,
     validate_and_normalize_slug,
 )
+from services.plan_service import get_or_create_website_subscription, PLAN_METADATA
 
 logger = logging.getLogger(__name__)
 
@@ -183,11 +184,33 @@ def get_domains_overview(
 
     overview_items = []
     for site in sites:
+        sub = get_or_create_website_subscription(session, site.id)
+        sub_plan = (sub.plan or "FREE").upper().strip()
+        sub_status = (sub.status or "ACTIVE").upper().strip()
+        can_custom_domain = (sub_plan in ("STARTER", "PRO")) and (sub_status not in ("CANCELLED", "EXPIRED", "SUSPENDED"))
+
         domains = session.exec(
             select(SiteDomain)
             .where(SiteDomain.site_id == site.id)
             .order_by(SiteDomain.is_primary.desc(), SiteDomain.created_at.desc())
         ).all()
+
+        # Automatic sync: if store is paid (Starter/Pro), reactivate any deactivated domain
+        if can_custom_domain:
+            for d in domains:
+                if d.status in ("deactivated", "inactive"):
+                    d.status = "connected" if d.last_verified_at else "dns_required"
+                    d.ssl_status = "ssl_active" if d.last_verified_at else "ssl_pending"
+                    session.add(d)
+            if domains:
+                session.commit()
+        else:
+            for d in domains:
+                if d.status in ("connected", "dns_required"):
+                    d.status = "inactive"
+                    session.add(d)
+            if domains:
+                session.commit()
 
         active_primary = next((d for d in domains if d.is_primary and d.status == "connected"), None)
         has_dns_required = any(d.status in ("dns_required", "dns_failed") for d in domains)
@@ -196,6 +219,8 @@ def get_domains_overview(
 
         if not domains:
             health_status = "subdomain_only"
+        elif not can_custom_domain:
+            health_status = "attention_needed"
         elif all_connected:
             health_status = "connected"
         elif has_dns_required:
@@ -209,6 +234,9 @@ def get_domains_overview(
             "site_id": str(site.id),
             "site_name": _format_display_name(site),
             "slug": site.slug,
+            "plan": sub_plan,
+            "subscription_status": sub.status,
+            "custom_domain_allowed": can_custom_domain,
             "is_published": site.is_published,
             "webcreon_url": f"https://{site.slug}.{PLATFORM_BASE_DOMAIN}",
             "custom_domains_count": len(domains),
@@ -242,16 +270,40 @@ def get_site_domains(
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
 
+    sub = get_or_create_website_subscription(session, site_id)
+    sub_plan = (sub.plan or "FREE").upper().strip()
+    sub_status = (sub.status or "ACTIVE").upper().strip()
+    can_custom_domain = (sub_plan in ("STARTER", "PRO")) and (sub_status not in ("CANCELLED", "EXPIRED", "SUSPENDED"))
+
     domains = session.exec(
         select(SiteDomain)
         .where(SiteDomain.site_id == site_id)
         .order_by(SiteDomain.is_primary.desc(), SiteDomain.created_at.desc())
     ).all()
 
+    if can_custom_domain:
+        for d in domains:
+            if d.status in ("deactivated", "inactive"):
+                d.status = "connected" if d.last_verified_at else "dns_required"
+                d.ssl_status = "ssl_active" if d.last_verified_at else "ssl_pending"
+                session.add(d)
+        if domains:
+            session.commit()
+    else:
+        for d in domains:
+            if d.status in ("connected", "dns_required"):
+                d.status = "inactive"
+                session.add(d)
+        if domains:
+            session.commit()
+
     return {
         "site_id": str(site.id),
         "site_name": site.name or "Untitled Store",
         "slug": site.slug,
+        "plan": sub_plan,
+        "subscription_status": sub.status,
+        "custom_domain_allowed": can_custom_domain,
         "is_published": site.is_published,
         "webcreon_subdomain": f"{site.slug}.{PLATFORM_BASE_DOMAIN}",
         "webcreon_url": f"https://{site.slug}.{PLATFORM_BASE_DOMAIN}",
@@ -271,12 +323,23 @@ def add_custom_domain(
 ):
     """
     Connects a new custom domain to the store.
-    Validates formatting, rejects bare apex domains in V1, checks global uniqueness,
+    Validates plan eligibility (Starter or Pro required), formatting,
+    rejects bare apex domains in V1, checks global uniqueness,
     and returns required CNAME and TXT verification records.
     """
     site = session.get(Site, site_id)
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
+
+    # Enforce Plan Tier Eligibility
+    sub = get_or_create_website_subscription(session, site_id)
+    sub_plan = (sub.plan or "FREE").upper().strip()
+    sub_status = (sub.status or "ACTIVE").upper().strip()
+    if sub_plan == "FREE" or sub_status in ("CANCELLED", "EXPIRED", "SUSPENDED"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Custom domain connection is a paid feature available on Starter and Pro plans. Please upgrade your store plan to connect a custom domain.",
+        )
 
     try:
         normalized_domain, domain_type = normalize_custom_domain(payload.domain)
@@ -367,6 +430,15 @@ def verify_domain(
     dom = session.get(SiteDomain, domain_id)
     if not dom or dom.site_id != site_id:
         raise HTTPException(status_code=404, detail="Domain not found for this store.")
+
+    sub = get_or_create_website_subscription(session, site_id)
+    sub_plan = (sub.plan or "FREE").upper().strip()
+    sub_status = (sub.status or "ACTIVE").upper().strip()
+    if sub_plan == "FREE" or sub_status in ("CANCELLED", "EXPIRED", "SUSPENDED"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Custom domain verification requires an active Starter or Pro plan. Please upgrade your store plan.",
+        )
 
     # 1. Verify DNS records
     dns_result = verify_domain_dns(
@@ -500,6 +572,13 @@ def set_domain_primary(
     """
     Atomically marks a connected domain as the primary domain for the store.
     """
+    sub = get_or_create_website_subscription(session, site_id)
+    if sub.plan == "FREE" or sub.status not in ("ACTIVE", "GRACE_PERIOD"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Setting a custom domain as primary requires an active Starter or Pro plan. Please upgrade your store plan.",
+        )
+
     try:
         target = set_primary_domain(site_id, domain_id, session)
     except DomainValidationError as e:
@@ -751,7 +830,6 @@ def resolve_edge_domain(
                 "slug": site.slug,
                 "site_name": site.name,
                 "is_published": site.is_published,
-                "is_online": getattr(site, "is_online", True),
                 "routing_type": "webcreon_subdomain",
                 "custom_domain": None,
                 "canonical_url": f"https://{site.slug}.{PLATFORM_BASE_DOMAIN}",
@@ -774,7 +852,6 @@ def resolve_edge_domain(
                 "slug": site.slug,
                 "site_name": site.name,
                 "is_published": site.is_published,
-                "is_online": getattr(site, "is_online", True),
                 "routing_type": "custom_domain",
                 "custom_domain": dom.domain,
                 "is_primary": dom.is_primary,

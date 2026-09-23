@@ -361,6 +361,13 @@ def enforce_site_ownership(
             raise HTTPException(status_code=404, detail="Website not found")
         raise _forbidden("You do not have access to this website")
 
+    # If the user is NOT the workspace owner, they are a team member accessing this store.
+    # Team member access requires the store to have an active PRO plan subscription.
+    if not is_owner:
+        from services.team_access_service import is_team_feature_available
+        if not is_team_feature_available(session, site_id):
+            raise _forbidden("Team member access is restricted because this store requires an active Pro subscription.")
+
     return {
         "adminId": admin_id,
         "siteId": str(site_id),

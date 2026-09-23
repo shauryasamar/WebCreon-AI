@@ -45,7 +45,7 @@ from models import (
     SupportAgent, SupportTicket, SupportTicketMessage,
     StorePage, Coupon, CouponUsage, SiteDefinitionHistory,
 )
-from routers import analytics, auth, cart, categories, checkout, checkout_settings, collections, coupons, orders, pages, payments, products, returns, support, users_roles, audit_logs, domains, notifications, compliance
+from routers import analytics, auth, cart, categories, checkout, checkout_settings, collections, coupons, orders, pages, payments, products, returns, support, users_roles, audit_logs, domains, notifications, compliance, billing
 from routers import delivery
 
 
@@ -414,6 +414,7 @@ app.include_router(notifications.router)
 app.include_router(notifications.router, prefix="/api")
 app.include_router(compliance.router)
 app.include_router(compliance.router, prefix="/api")
+app.include_router(billing.router)
 
 
 # ---------------------------------------------------------------------------
@@ -822,12 +823,30 @@ async def copilot_chat_endpoint(
     if not (check_admin_has_permission(admin["adminId"], "chat:access", session) or check_admin_has_permission(admin["adminId"], "chat:send", session)):
         raise HTTPException(status_code=403, detail="You do not have permission to access AI Copilot.")
 
-    from agents.copilot_agent import process_copilot_request
-    result = await process_copilot_request(
-        message=req.message,
-        site_id=req.site_id,
-        chat_history=req.chat_history,
-        draft_definition=req.draft_definition,
+    admin_id = UUID(str(admin["adminId"]))
+    site_uuid = None
+    if req.site_id:
+        try:
+            site_uuid = UUID(req.site_id)
+        except Exception:
+            pass
+
+    from services.ai_metering import call_ai_with_metering
+
+    async def _run_copilot():
+        from agents.copilot_agent import process_copilot_request
+        return await process_copilot_request(
+            message=req.message,
+            site_id=req.site_id,
+            chat_history=req.chat_history,
+            draft_definition=req.draft_definition,
+        )
+
+    result = await call_ai_with_metering(
+        admin_id=admin_id,
+        website_id=site_uuid,
+        feature_name="copilot_chat",
+        ai_call_fn=_run_copilot,
     )
     return result
 

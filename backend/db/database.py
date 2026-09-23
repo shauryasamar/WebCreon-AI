@@ -591,6 +591,45 @@ def create_db_and_tables():
                   ('c9983140-0000-0000-0000-000000998314', '998314', 'SAC', 'Internet telecommunication, portal hosting, and marketplace facilitation services', 18.00, 9.00, 9.00, 18.00, 0.00, FALSE, FALSE, FALSE, '2017-07-01 00:00:00+00', 'APPROVED', TRUE, 1, NOW()),
                   ('c4901101-0000-0000-0000-000000004901', '49011010', 'HSN', 'Printed books, brochures, leaflets, and similar printed matter', 0.00, 0.00, 0.00, 0.00, 0.00, TRUE, FALSE, FALSE, '2017-07-01 00:00:00+00', 'APPROVED', TRUE, 1, NOW())
                 ON CONFLICT (code) DO NOTHING;
+
+                -- Subscription & Billing Hardened Schema Migrations
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS draft_reason VARCHAR(50);
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS drafted_at TIMESTAMPTZ;
+                CREATE INDEX IF NOT EXISTS ix_products_draft_reason ON products (draft_reason);
+
+                ALTER TABLE website_subscriptions ADD COLUMN IF NOT EXISTS provider_name VARCHAR(50) DEFAULT 'razorpay';
+                ALTER TABLE website_subscriptions ADD COLUMN IF NOT EXISTS provider_customer_id VARCHAR(128);
+                ALTER TABLE website_subscriptions ADD COLUMN IF NOT EXISTS provider_subscription_id VARCHAR(128);
+                ALTER TABLE website_subscriptions ADD COLUMN IF NOT EXISTS provider_plan_id VARCHAR(128);
+                ALTER TABLE website_subscriptions ADD COLUMN IF NOT EXISTS provider_payment_method_id VARCHAR(128);
+                ALTER TABLE website_subscriptions ADD COLUMN IF NOT EXISTS current_provider_status VARCHAR(50);
+                ALTER TABLE website_subscriptions ADD COLUMN IF NOT EXISTS latest_provider_event_id VARCHAR(128);
+                ALTER TABLE website_subscriptions ADD COLUMN IF NOT EXISTS latest_provider_event_created_at TIMESTAMPTZ;
+                ALTER TABLE website_subscriptions ADD COLUMN IF NOT EXISTS latest_provider_sequence INTEGER;
+                ALTER TABLE website_subscriptions ADD COLUMN IF NOT EXISTS latest_provider_state_version INTEGER;
+                ALTER TABLE website_subscriptions ADD COLUMN IF NOT EXISTS last_reconciled_at TIMESTAMPTZ;
+                ALTER TABLE website_subscriptions ADD COLUMN IF NOT EXISTS last_reconciliation_status VARCHAR(50);
+
+                ALTER TABLE ai_credit_batches ADD COLUMN IF NOT EXISTS batch_type VARCHAR(50) DEFAULT 'FREE_BASE';
+                ALTER TABLE ai_credit_batches ADD COLUMN IF NOT EXISTS cycle_start_at TIMESTAMPTZ DEFAULT NOW();
+
+                -- Immutability trigger for append-only audit events (PostgreSQL)
+                DO $$
+                BEGIN
+                    IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'website_subscription_events') THEN
+                        CREATE OR REPLACE FUNCTION prevent_audit_update_delete()
+                        RETURNS TRIGGER AS $audit_func$
+                        BEGIN
+                            RAISE EXCEPTION 'Audit records in website_subscription_events are strictly immutable and cannot be updated or deleted.';
+                        END;
+                        $audit_func$ LANGUAGE plpgsql;
+
+                        DROP TRIGGER IF EXISTS trg_immutable_sub_events_update ON website_subscription_events;
+                        CREATE TRIGGER trg_immutable_sub_events_update
+                        BEFORE UPDATE OR DELETE ON website_subscription_events
+                        FOR EACH ROW EXECUTE FUNCTION prevent_audit_update_delete();
+                    END IF;
+                END $$;
             """))
             conn.commit()
     except Exception as e:

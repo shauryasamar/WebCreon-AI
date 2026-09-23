@@ -35,6 +35,7 @@ from models import (
     OrderItem,
     Product,
     ProductCollection,
+    ProductDraftReason,
     ProductReview,
     ReturnItem,
     Site,
@@ -1921,6 +1922,13 @@ async def import_products_csv(
             col_map[k] = v
 
     # 3. Process Products in Enterprise Chunks (CHUNK_SIZE = 1000 for high-speed commits)
+    from services.product_limit_service import get_available_active_product_slots
+    available_active_slots = get_available_active_product_slots(session, site_id)
+    imported_active_count = 0
+    drafted_limit_count = 0
+    imported_draft_count = 0
+    now = utc_now()
+
     CHUNK_SIZE = 1000
     created_count = 0
     updated_count = 0
@@ -1981,13 +1989,40 @@ async def import_products_csv(
         cat_key = cat_name.lower()
         cat_obj = cat_map.get(cat_key)
 
+        # Plan limit enforcement for active status
         if default_status == "draft":
-            is_active = False
+            requested_active = False
         elif default_status == "active":
-            is_active = True
+            requested_active = True
         else:
             is_active_val = (row.get("is_active") or "true").strip().lower()
-            is_active = is_active_val in {"true", "1", "yes", "active"}
+            requested_active = is_active_val in {"true", "1", "yes", "active"}
+
+        if requested_active:
+            if available_active_slots is None:
+                # Pro tier - unlimited active products
+                is_active = True
+                draft_reason_val = None
+                drafted_at_val = None
+                imported_active_count += 1
+            elif available_active_slots > 0:
+                # Within Free (200 pool) or Starter (1,000 dedicated) limit
+                is_active = True
+                draft_reason_val = None
+                drafted_at_val = None
+                available_active_slots -= 1
+                imported_active_count += 1
+            else:
+                # Plan limit reached! Safely import as draft with SYSTEM_LIMIT_EXCEEDED
+                is_active = False
+                draft_reason_val = ProductDraftReason.SYSTEM_LIMIT_EXCEEDED.value
+                drafted_at_val = now
+                drafted_limit_count += 1
+        else:
+            is_active = False
+            draft_reason_val = ProductDraftReason.MERCHANT_MANUAL.value
+            drafted_at_val = now
+            imported_draft_count += 1
 
         hl_raw = (row.get("highlights") or "").strip()
         highlights_list: list[str] = []
@@ -2136,6 +2171,8 @@ async def import_products_csv(
             existing_p.stock = stock
             existing_p.in_stock = stock > 0
             existing_p.is_active = is_active
+            existing_p.draft_reason = draft_reason_val
+            existing_p.drafted_at = drafted_at_val
             if row_sku:
                 existing_p.sku = row_sku
             if (row.get("hsn_code") or "").strip():
@@ -2188,6 +2225,8 @@ async def import_products_csv(
                 stock=stock,
                 in_stock=stock > 0,
                 is_active=is_active,
+                draft_reason=draft_reason_val,
+                drafted_at=drafted_at_val,
                 sku=row_sku or None,
                 hsn_code=(row.get("hsn_code") or "").strip() or None,
                 video_url=row_video_url,
@@ -2241,7 +2280,7 @@ async def import_products_csv(
             session=session,
             action="product.bulk_import",
             category="products",
-            description=f"Bulk imported {created_count + updated_count} products ({created_count} created, {updated_count} updated)",
+            description=f"Bulk imported {created_count + updated_count} products ({created_count} created, {updated_count} updated, {imported_active_count} active, {drafted_limit_count} drafted by plan limit)",
             site_id=site_id,
             admin_id=admin_id,
             resource_type="Product",
@@ -2250,6 +2289,8 @@ async def import_products_csv(
             changes={
                 "created_count": created_count,
                 "updated_count": updated_count,
+                "active_count": imported_active_count,
+                "drafted_limit_count": drafted_limit_count,
                 "error_count": len(errors),
                 "filename": file.filename,
                 "default_status": default_status,
@@ -2258,11 +2299,18 @@ async def import_products_csv(
     except Exception:
         pass
 
+    msg = f"Bulk imported {created_count + updated_count} products."
+    if drafted_limit_count > 0:
+        msg += f" Note: {drafted_limit_count} products were placed in Draft because the plan product limit was reached. Upgrade to Starter or Pro to activate more products."
+
     return {
         "success": True,
         "created_count": created_count,
         "updated_count": updated_count,
+        "active_count": imported_active_count,
+        "drafted_limit_count": drafted_limit_count,
         "errors": errors,
+        "message": msg,
     }
 
 
@@ -2502,6 +2550,21 @@ def create_product(
     if admin_id and not check_admin_has_permission(admin_id, "products:create", session):
         raise HTTPException(status_code=403, detail="You do not have permission to create products")
 
+    if product_in.is_active:
+        from services.product_limit_service import can_activate_product
+        allowed, reason = can_activate_product(session, site_id)
+        if not allowed:
+            raise HTTPException(
+                status_code=403,
+                detail={"error_code": "PRODUCT_LIMIT_REACHED", "message": reason},
+            )
+        draft_reason_val = None
+        drafted_at_val = None
+    else:
+        from models import ProductDraftReason
+        draft_reason_val = ProductDraftReason.MERCHANT_MANUAL.value
+        drafted_at_val = utc_now()
+
     slug_value = product_in.slug or make_slug(product_in.name)
 
     product = Product(
@@ -2517,6 +2580,8 @@ def create_product(
         stock=product_in.stock,
         in_stock=product_in.in_stock,
         is_active=product_in.is_active,
+        draft_reason=draft_reason_val,
+        drafted_at=drafted_at_val,
         sku=product_in.sku,
         hsn_code=product_in.hsn_code,
         video_url=product_in.video_url,
@@ -2604,7 +2669,26 @@ def update_product(
     product.compare_price = product_in.compare_price
     product.stock = product_in.stock
     product.in_stock = product_in.in_stock
-    product.is_active = product_in.is_active
+
+    if product_in.is_active and not old_is_active:
+        from services.product_limit_service import can_activate_product
+        allowed, reason = can_activate_product(session, site_id, product_id)
+        if not allowed:
+            raise HTTPException(
+                status_code=403,
+                detail={"error_code": "PRODUCT_LIMIT_REACHED", "message": reason},
+            )
+        product.is_active = True
+        product.draft_reason = None
+        product.drafted_at = None
+    elif not product_in.is_active and old_is_active:
+        from models import ProductDraftReason
+        product.is_active = False
+        product.draft_reason = ProductDraftReason.MERCHANT_MANUAL.value
+        product.drafted_at = utc_now()
+    else:
+        product.is_active = product_in.is_active
+
     product.sku = product_in.sku
     product.hsn_code = product_in.hsn_code
     product.video_url = product_in.video_url
@@ -2790,11 +2874,18 @@ def bulk_action_products(
 
     try:
         if action in {"make_active", "activate", "publish", "active"}:
+            from services.product_limit_service import can_activate_product
+            allowed, reason = can_activate_product(session, site_id)
+            if not allowed:
+                raise HTTPException(
+                    status_code=403,
+                    detail={"error_code": "PRODUCT_LIMIT_REACHED", "message": reason},
+                )
             for chunk in chunk_list(unique_ids, CHUNK_SIZE):
                 stmt = (
                     update(Product)
                     .where(Product.site_id == site_id, Product.id.in_(chunk))
-                    .values(is_active=True)
+                    .values(is_active=True, draft_reason=None, drafted_at=None)
                 )
                 result = session.exec(stmt)
                 affected_count += getattr(result, "rowcount", len(chunk))

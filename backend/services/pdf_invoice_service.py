@@ -23,13 +23,16 @@ from reportlab.platypus import (
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
+from reportlab.graphics.shapes import Drawing, Rect, Circle, Polygon, PolyLine, String, Group
 
 from sqlmodel import Session, select
 from models import (
+    Admin,
     Order,
     OrderItem,
     Site,
     MerchantTaxProfile,
+    SubscriptionInvoice,
     TaxInvoice,
     TaxCreditNote,
     ReturnRequest,
@@ -1933,5 +1936,685 @@ def generate_platform_fee_invoice_pdf(
             f.write(pdf_bytes)
 
     return pdf_bytes
+
+
+def generate_subscription_invoice_pdf(
+    inv: SubscriptionInvoice,
+    site: Optional[Site] = None,
+    admin: Optional[Admin] = None,
+    output_path: Optional[str] = None,
+    session: Optional[Session] = None,
+) -> bytes:
+    """
+    Renders the official Statutory B2B Tax Invoice for WebCreon Platform Subscriptions & Cloud Hosting.
+    Compliant with Section 31 and Rule 46 of CGST Rules, 2017 (SAC 998313).
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=10 * mm,
+        leftMargin=10 * mm,
+        topMargin=8 * mm,
+        bottomMargin=8 * mm,
+    )
+
+    styles = getSampleStyleSheet()
+
+    title_main_center = ParagraphStyle(
+        "SubTitleMain",
+        parent=styles["Normal"],
+        fontSize=15,
+        leading=18,
+        textColor=colors.HexColor("#0f172a"),
+        fontName="Helvetica-Bold",
+        alignment=1,
+    )
+    title_sub_center = ParagraphStyle(
+        "SubTitleSub",
+        parent=styles["Normal"],
+        fontSize=7,
+        leading=9.5,
+        textColor=colors.HexColor("#64748b"),
+        fontName="Helvetica-Oblique",
+        alignment=1,
+    )
+    seller_title = ParagraphStyle(
+        "SubSellerTitle",
+        parent=styles["Normal"],
+        fontSize=8.5,
+        leading=11.5,
+        textColor=colors.HexColor("#0f172a"),
+        fontName="Helvetica-Bold",
+    )
+    seller_body = ParagraphStyle(
+        "SubSellerBody",
+        parent=styles["Normal"],
+        fontSize=7.2,
+        leading=9.5,
+        textColor=colors.HexColor("#334155"),
+    )
+    inv_box_title = ParagraphStyle(
+        "SubInvBoxTitle",
+        parent=styles["Normal"],
+        fontSize=7.5,
+        leading=10,
+        textColor=colors.HexColor("#64748b"),
+        alignment=1,
+    )
+    inv_box_num = ParagraphStyle(
+        "SubInvBoxNum",
+        parent=styles["Normal"],
+        fontSize=8.5,
+        leading=11,
+        textColor=colors.HexColor("#0f172a"),
+        fontName="Helvetica-Bold",
+        alignment=1,
+    )
+    meta_head = ParagraphStyle(
+        "SubMetaHead",
+        parent=styles["Normal"],
+        fontSize=8,
+        leading=10.5,
+        textColor=colors.HexColor("#0f172a"),
+        fontName="Helvetica-Bold",
+    )
+    meta_text = ParagraphStyle(
+        "SubMetaText",
+        parent=styles["Normal"],
+        fontSize=7,
+        leading=9.5,
+        textColor=colors.HexColor("#334155"),
+    )
+    th_style = ParagraphStyle(
+        "SubTHStyle",
+        parent=styles["Normal"],
+        fontSize=7,
+        leading=9,
+        textColor=colors.HexColor("#0f172a"),
+        fontName="Helvetica-Bold",
+        alignment=0,
+    )
+    th_right = ParagraphStyle(
+        "SubTHRight",
+        parent=styles["Normal"],
+        fontSize=7,
+        leading=9,
+        textColor=colors.HexColor("#0f172a"),
+        fontName="Helvetica-Bold",
+        alignment=2,
+    )
+    td_product = ParagraphStyle(
+        "SubTDProduct",
+        parent=styles["Normal"],
+        fontSize=6.8,
+        leading=8.5,
+        textColor=colors.HexColor("#1e293b"),
+    )
+    td_title = ParagraphStyle(
+        "SubTDTitle",
+        parent=styles["Normal"],
+        fontSize=7.2,
+        leading=9.2,
+        textColor=colors.HexColor("#0f172a"),
+        fontName="Helvetica-Bold",
+    )
+    td_right = ParagraphStyle(
+        "SubTDRight",
+        parent=styles["Normal"],
+        fontSize=7,
+        leading=9,
+        textColor=colors.HexColor("#1e293b"),
+        alignment=2,
+    )
+    td_bold_right = ParagraphStyle(
+        "SubTDBoldRight",
+        parent=styles["Normal"],
+        fontSize=7,
+        leading=9,
+        textColor=colors.HexColor("#0f172a"),
+        fontName="Helvetica-Bold",
+        alignment=2,
+    )
+    footer_text = ParagraphStyle(
+        "SubFooterText",
+        parent=styles["Normal"],
+        fontSize=6.5,
+        leading=8.5,
+        textColor=colors.HexColor("#64748b"),
+        alignment=1,
+    )
+
+def make_webcreon_brand_drawing(width: float = 65 * mm, height: float = 14 * mm) -> Drawing:
+    """
+    Renders the exact vector WebCreon brand logo matching the top panel of the application:
+    Store building emblem with flared awning & 'W' crest + WEBCREON typography in official brand colors.
+    """
+    d = Drawing(width, height)
+
+    # Scale and place the exact building emblem from WebCreonAnimatedLogo
+    # transform=[sx, 0, 0, sy, tx, ty]
+    g = Group(transform=[0.09, 0, 0, 0.09, 0, 1])
+
+    # 1. Ground shadow
+    g.add(Rect(60, 40, 280, 10, rx=5, ry=5, fillColor=colors.HexColor("#091a38"), strokeColor=None))
+    g.add(PolyLine([40, 45, 360, 45], strokeColor=colors.HexColor("#091a38"), strokeWidth=8, strokeLineCap=1))
+
+    # 2. Store Building Body
+    g.add(Rect(75, 50, 250, 150, rx=16, ry=16, fillColor=colors.HexColor("#155f9f"), strokeColor=colors.HexColor("#091a38"), strokeWidth=4))
+
+    # 3. Inner Window
+    g.add(Rect(100, 70, 200, 110, rx=10, ry=10, fillColor=colors.HexColor("#dde6ef"), strokeColor=colors.HexColor("#091a38"), strokeWidth=3))
+    g.add(PolyLine([104, 174, 296, 174], strokeColor=colors.HexColor("#091a38"), strokeWidth=3))
+
+    # 4. Shopping Bag
+    g.add(PolyLine([152, 140, 152, 155, 178, 155, 178, 140], strokeColor=colors.HexColor("#c45a08"), strokeWidth=4, strokeLineCap=1, strokeLineJoin=1))
+    g.add(Polygon([144, 142, 186, 142, 192, 92, 138, 92], fillColor=colors.HexColor("#d87d13"), strokeColor=colors.HexColor("#091a38"), strokeWidth=4, strokeLineJoin=1))
+    g.add(Circle(154, 132, 3, fillColor=colors.HexColor("#FFFFFF"), strokeColor=None))
+    g.add(Circle(176, 132, 3, fillColor=colors.HexColor("#FFFFFF"), strokeColor=None))
+
+    # 5. Gear
+    gear_rl = [
+        260, 164, 265, 164, 267, 158, 273, 156, 278, 160, 281, 157, 279, 151,
+        283, 147, 289, 148, 290, 143, 285, 140, 285, 134, 290, 131, 289, 126,
+        283, 127, 279, 123, 281, 117, 278, 114, 273, 118, 267, 116, 265, 110,
+        260, 110, 258, 116, 252, 118, 247, 114, 244, 117, 246, 123, 242, 127,
+        236, 126, 235, 131, 240, 134, 240, 140, 235, 143, 236, 148, 242, 147,
+        246, 151, 244, 157, 247, 160, 252, 156, 258, 158
+    ]
+    g.add(Polygon(gear_rl, fillColor=colors.HexColor("#2487c9"), strokeColor=colors.HexColor("#091a38"), strokeWidth=3, strokeLineJoin=1))
+    g.add(Circle(260, 136, 10, fillColor=colors.HexColor("#dde6ef"), strokeColor=colors.HexColor("#091a38"), strokeWidth=3))
+
+    # 6. Exact 5-stripe flared awning
+    g.add(Polygon([80, 250, 128, 250, 101, 210, 101, 205, 68, 185, 35, 205, 35, 210], fillColor=colors.HexColor("#4fa4e6"), strokeColor=colors.HexColor("#091a38"), strokeWidth=4, strokeLineJoin=1))
+    g.add(Polygon([128, 250, 176, 250, 167, 210, 167, 205, 134, 185, 101, 205, 101, 210], fillColor=colors.HexColor("#1b417d"), strokeColor=colors.HexColor("#091a38"), strokeWidth=4, strokeLineJoin=1))
+    g.add(Polygon([176, 250, 224, 250, 233, 210, 233, 205, 200, 185, 167, 205, 167, 210], fillColor=colors.HexColor("#4fa4e6"), strokeColor=colors.HexColor("#091a38"), strokeWidth=4, strokeLineJoin=1))
+    g.add(Polygon([224, 250, 272, 250, 299, 210, 299, 205, 266, 185, 233, 205, 233, 210], fillColor=colors.HexColor("#1b417d"), strokeColor=colors.HexColor("#091a38"), strokeWidth=4, strokeLineJoin=1))
+    g.add(Polygon([272, 250, 320, 250, 365, 210, 365, 205, 332, 185, 299, 205, 299, 210], fillColor=colors.HexColor("#4fa4e6"), strokeColor=colors.HexColor("#091a38"), strokeWidth=4, strokeLineJoin=1))
+
+    # 7. Top Support Bar
+    g.add(Rect(70, 246, 260, 18, rx=9, ry=9, fillColor=colors.HexColor("#155f9f"), strokeColor=colors.HexColor("#091a38"), strokeWidth=4))
+
+    # 8. Shadow under W
+    g.add(Rect(176, 258, 48, 6, rx=3, ry=3, fillColor=colors.HexColor("#091a38"), strokeColor=None))
+
+    # 9. Yellow/Orange 'W' with blue outline
+    w_pts = [140, 325, 168, 260, 200, 300, 232, 260, 260, 325]
+    g.add(PolyLine(w_pts, strokeColor=colors.HexColor("#091a38"), strokeWidth=30, strokeLineJoin=1, strokeLineCap=1))
+    g.add(PolyLine(w_pts, strokeColor=colors.HexColor("#ffaa00"), strokeWidth=20, strokeLineJoin=1, strokeLineCap=1))
+
+    d.add(g)
+
+    # Typography matching top panel: "WEB" (#0f62ab) + "CREON" (#ffaa00)
+    d.add(String(40, 11, "WEB", fontName="Helvetica-Bold", fontSize=16, fillColor=colors.HexColor("#0f62ab")))
+    d.add(String(79, 11, "CREON", fontName="Helvetica-Bold", fontSize=16, fillColor=colors.HexColor("#ffaa00")))
+
+    return d
+
+
+def generate_subscription_invoice_pdf(
+    inv: SubscriptionInvoice,
+    site: Optional[Site] = None,
+    admin: Optional[Admin] = None,
+    output_path: Optional[str] = None,
+    session: Optional[Session] = None,
+) -> bytes:
+    """
+    Renders an official, legally compliant Rule 46 B2B Tax Invoice for WebCreon cloud subscriptions.
+    Includes vector brand logo, corporate environment variables, dynamic place of supply,
+    exact 9%+9% CGST/SGST or 18% IGST calculation, SAC 998313, QR code, and digital authentication.
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=10 * mm,
+        leftMargin=10 * mm,
+        topMargin=8 * mm,
+        bottomMargin=8 * mm,
+    )
+
+    styles = getSampleStyleSheet()
+
+    title_main_center = ParagraphStyle(
+        "SubTitleMain",
+        parent=styles["Normal"],
+        fontSize=13,
+        leading=16,
+        textColor=colors.HexColor("#0f172a"),
+        fontName="Helvetica-Bold",
+        alignment=1,
+    )
+    title_sub_center = ParagraphStyle(
+        "SubTitleSub",
+        parent=styles["Normal"],
+        fontSize=7,
+        leading=9.5,
+        textColor=colors.HexColor("#64748b"),
+        fontName="Helvetica-Oblique",
+        alignment=1,
+    )
+    seller_title = ParagraphStyle(
+        "SubSellerTitle",
+        parent=styles["Normal"],
+        fontSize=8.5,
+        leading=11.5,
+        textColor=colors.HexColor("#0f172a"),
+        fontName="Helvetica-Bold",
+    )
+    seller_body = ParagraphStyle(
+        "SubSellerBody",
+        parent=styles["Normal"],
+        fontSize=7.2,
+        leading=9.5,
+        textColor=colors.HexColor("#334155"),
+    )
+    inv_box_title = ParagraphStyle(
+        "SubInvBoxTitle",
+        parent=styles["Normal"],
+        fontSize=7.5,
+        leading=10,
+        textColor=colors.HexColor("#64748b"),
+        alignment=1,
+    )
+    inv_box_num = ParagraphStyle(
+        "SubInvBoxNum",
+        parent=styles["Normal"],
+        fontSize=8.5,
+        leading=11,
+        textColor=colors.HexColor("#0f172a"),
+        fontName="Helvetica-Bold",
+        alignment=1,
+    )
+    meta_head = ParagraphStyle(
+        "SubMetaHead",
+        parent=styles["Normal"],
+        fontSize=8,
+        leading=10.5,
+        textColor=colors.HexColor("#0f172a"),
+        fontName="Helvetica-Bold",
+    )
+    meta_text = ParagraphStyle(
+        "SubMetaText",
+        parent=styles["Normal"],
+        fontSize=7,
+        leading=9.5,
+        textColor=colors.HexColor("#334155"),
+    )
+    th_style = ParagraphStyle(
+        "SubTHStyle",
+        parent=styles["Normal"],
+        fontSize=7,
+        leading=9,
+        textColor=colors.HexColor("#0f172a"),
+        fontName="Helvetica-Bold",
+        alignment=0,
+    )
+    th_right = ParagraphStyle(
+        "SubTHRight",
+        parent=styles["Normal"],
+        fontSize=7,
+        leading=9,
+        textColor=colors.HexColor("#0f172a"),
+        fontName="Helvetica-Bold",
+        alignment=2,
+    )
+    td_product = ParagraphStyle(
+        "SubTDProduct",
+        parent=styles["Normal"],
+        fontSize=6.8,
+        leading=8.5,
+        textColor=colors.HexColor("#1e293b"),
+    )
+    td_title = ParagraphStyle(
+        "SubTDTitle",
+        parent=styles["Normal"],
+        fontSize=7.2,
+        leading=9.2,
+        textColor=colors.HexColor("#0f172a"),
+        fontName="Helvetica-Bold",
+    )
+    td_right = ParagraphStyle(
+        "SubTDRight",
+        parent=styles["Normal"],
+        fontSize=7,
+        leading=9,
+        textColor=colors.HexColor("#1e293b"),
+        alignment=2,
+    )
+    td_bold_right = ParagraphStyle(
+        "SubTDBoldRight",
+        parent=styles["Normal"],
+        fontSize=7,
+        leading=9,
+        textColor=colors.HexColor("#0f172a"),
+        fontName="Helvetica-Bold",
+        alignment=2,
+    )
+    footer_text = ParagraphStyle(
+        "SubFooterText",
+        parent=styles["Normal"],
+        fontSize=6.5,
+        leading=8.5,
+        textColor=colors.HexColor("#64748b"),
+        alignment=1,
+    )
+
+    elements = []
+
+    # 1. Header Details with WebCreon Brand Vector Logo
+    elements.append(Paragraph("<b>TAX INVOICE - SUBSCRIPTION SERVICES</b>", title_main_center))
+    elements.append(Paragraph("<i>Issued under Section 31 read with Rule 46 of CGST Rules, 2017 (B2B Tax Invoice)</i>", title_sub_center))
+    elements.append(Spacer(1, 2 * mm))
+
+    # WebCreon Corporate Details (Configurable via Environment Variables)
+    webcreon_name = os.getenv("WEBCREON_LEGAL_NAME", "WebCreon Technologies Private Limited")
+    webcreon_addr = os.getenv("WEBCREON_ADDRESS", "WebCreon Tech Hub, Bandra-Kurla Complex, Mumbai - 400051, Maharashtra")
+    webcreon_gstin = os.getenv("WEBCREON_GSTIN", "27AAACW1234F1Z1")
+    webcreon_pan = os.getenv("WEBCREON_PAN", "AAACW1234F")
+    webcreon_cin = os.getenv("WEBCREON_CIN", "U72900MH2026PTC123456")
+    webcreon_state_code = os.getenv("WEBCREON_STATE_CODE", "27")
+
+    logo_drawing = make_webcreon_brand_drawing(width=65 * mm, height=13 * mm)
+
+    webcreon_info = [
+        logo_drawing,
+        Spacer(1, 1 * mm),
+        Paragraph(f"<b>Service Provider:</b> {webcreon_name}", seller_title),
+        Paragraph(f"<b>Registered Office:</b> {webcreon_addr} (State Code: {webcreon_state_code})", seller_body),
+        Paragraph(f"<b>GSTIN:</b> {webcreon_gstin} | <b>PAN:</b> {webcreon_pan}", seller_body),
+        Paragraph(f"<b>CIN:</b> {webcreon_cin}", seller_body),
+    ]
+
+    inv_date = inv.invoice_date or datetime.now(timezone.utc)
+    inv_date_str = inv_date.strftime("%d-%m-%Y")
+    inv_number = inv.invoice_number
+
+    qr_payload = f"INVOICE:{inv_number},SELLER:{webcreon_name},DATE:{inv_date_str},TOTAL:Rs.{float(inv.total_amount):.2f},GSTIN:{webcreon_gstin}"
+    qr_drawing = make_qr_code(qr_payload, size=22 * mm)
+
+    inv_num_box = Table(
+        [
+            [Paragraph("Tax Invoice Number #", inv_box_title)],
+            [Paragraph(f"<b>{inv_number}</b>", inv_box_num)],
+        ],
+        colWidths=[62 * mm],
+    )
+    inv_num_box.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.75, colors.HexColor("#94a3b8")),
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f8fafc")),
+        ("TOPPADDING", (0, 0), (-1, -1), 1.5 * mm),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5 * mm),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2 * mm),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2 * mm),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+    ]))
+
+    qr_and_inv = Table(
+        [[qr_drawing, inv_num_box]],
+        colWidths=[24 * mm, 63 * mm],
+    )
+    qr_and_inv.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+
+    top_header_table = Table(
+        [[webcreon_info, qr_and_inv]],
+        colWidths=[102 * mm, 88 * mm],
+    )
+    top_header_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1 * mm),
+    ]))
+    elements.append(top_header_table)
+    elements.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cbd5e1"), spaceBefore=1.5 * mm, spaceAfter=2 * mm))
+
+    # Buyer & Merchant Recipient Info (Query MerchantTaxProfile if available)
+    profile = None
+    if session and inv.website_id:
+        try:
+            profile = session.exec(
+                select(MerchantTaxProfile).where(MerchantTaxProfile.site_id == inv.website_id)
+            ).first()
+        except Exception:
+            profile = None
+
+    site_clean_name = site.name if site else (inv.buyer_business_name or "WebCreon Store")
+
+    if profile:
+        buyer_legal = profile.legal_business_name or inv.buyer_name
+        buyer_email = inv.buyer_email or (admin.email if admin else "merchant@webcreon.store")
+        buyer_gstin = profile.gstin or inv.buyer_gstin or "Unregistered / Consumer"
+        buyer_pan = profile.pan_number or "Not Provided"
+        buyer_state_code = str(profile.state_code or (profile.gstin[:2] if profile.gstin else "27")).strip()
+        buyer_state_name = profile.state_name or "Maharashtra"
+        addr_parts = [profile.address_line1, profile.address_line2, profile.city, f"{profile.state_name or ''} {profile.pincode or ''}".strip()]
+        buyer_address = ", ".join([p for p in addr_parts if p]) or f"Maharashtra - {profile.pincode or '400001'}"
+    else:
+        buyer_legal = inv.buyer_name or (admin.name if admin and admin.name else site_clean_name)
+        buyer_email = inv.buyer_email or (admin.email if admin else "subscriber@webcreon.store")
+        buyer_gstin = inv.buyer_gstin or "Unregistered / Consumer"
+        buyer_pan = "Not Provided"
+        raw_pos = str(inv.buyer_state_code or inv.place_of_supply or "27").strip()
+        if "-" in raw_pos:
+            buyer_state_code = raw_pos.split("-")[0].strip()
+            buyer_state_name = raw_pos.split("-")[1].strip()
+        else:
+            buyer_state_code = raw_pos
+            buyer_state_name = "Maharashtra" if raw_pos == "27" else "Delhi" if raw_pos == "07" else f"State {raw_pos}"
+        buyer_address = f"Registered Store Office, {buyer_state_name}"
+
+    is_interstate = (str(buyer_state_code).strip() != str(webcreon_state_code).strip())
+
+    col1_sub_terms = [
+        Paragraph("<b>Subscription Terms:</b>", meta_head),
+        Paragraph(f"<b>Plan Tier:</b> {inv.plan_name or inv.plan}", meta_text),
+        Paragraph(f"<b>Billing Frequency:</b> {inv.billing_interval.capitalize() if inv.billing_interval else 'Monthly'}", meta_text),
+        Paragraph(f"<b>Cycle:</b> {inv.billing_cycle_start.strftime('%d-%m-%Y')} to {inv.billing_cycle_end.strftime('%d-%m-%Y')}", meta_text),
+        Paragraph("<b>SAC Code:</b> 998313 (IT & Cloud SaaS Services)", meta_text),
+        Paragraph("<b>Reverse Charge (RCM):</b> No", meta_text),
+    ]
+
+    col2_buyer_to = [
+        Paragraph("<b>Billed To (Subscriber):</b>", meta_head),
+        Paragraph(f"<b>{buyer_legal}</b>", meta_text),
+        Paragraph(f"Email: {buyer_email}", meta_text),
+        Paragraph(f"Store: {site_clean_name}", meta_text),
+        Paragraph(f"<b>Place of Supply:</b> State Code {buyer_state_code} - {buyer_state_name}", meta_text),
+        Paragraph(f"<b>Buyer GSTIN:</b> {buyer_gstin}", meta_text),
+    ]
+
+    try:
+        from services.subscription_invoice_service import format_payment_method_display
+        pay_method_display = format_payment_method_display(inv.payment_method)
+    except Exception:
+        pay_method_display = inv.payment_method or "Online Payment"
+
+    col3_payment_info = [
+        Paragraph("<b>Payment Confirmation:</b>", meta_head),
+        Paragraph(f"<b>Status:</b> <font color='#059669'><b>PAID (Captured & Settled)</b></font>", meta_text),
+        Paragraph(f"<b>Method:</b> {pay_method_display}", meta_text),
+        Paragraph(f"<b>Payment ID:</b> {inv.razorpay_payment_id or 'pay_online'}", meta_text),
+        Paragraph(f"<b>Order Ref:</b> {inv.razorpay_order_id or 'ord_online'}", meta_text),
+        Paragraph(f"<b>Invoice Date:</b> {inv_date_str}", meta_text),
+    ]
+
+    meta_3col_table = Table(
+        [[col1_sub_terms, col2_buyer_to, col3_payment_info]],
+        colWidths=[63 * mm, 64 * mm, 63 * mm],
+    )
+    meta_3col_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 1 * mm),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 1 * mm),
+        ("TOPPADDING", (0, 0), (-1, -1), 1 * mm),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5 * mm),
+    ]))
+    elements.append(meta_3col_table)
+    elements.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cbd5e1"), spaceBefore=1 * mm, spaceAfter=2 * mm))
+
+    # Financial Itemized Breakdown (Mathematically Consistent at 18% GST)
+    total_val = Decimal(str(inv.total_amount))
+    subtotal_val = Decimal(str(inv.subtotal))
+    if total_val > Decimal("0.00") and subtotal_val <= Decimal("0.00"):
+        subtotal_val = (total_val / Decimal("1.18")).quantize(Decimal("0.01"))
+    
+    tax_amt = (total_val - subtotal_val).quantize(Decimal("0.01"))
+
+    if is_interstate:
+        igst_val = tax_amt
+        cgst_val = Decimal("0.00")
+        sgst_val = Decimal("0.00")
+    else:
+        cgst_val = (tax_amt / Decimal("2.00")).quantize(Decimal("0.01"))
+        sgst_val = tax_amt - cgst_val
+        igst_val = Decimal("0.00")
+
+    interval_label = "1 Year (365 Days)" if inv.billing_interval == "yearly" else "3 Months (90 Days)" if inv.billing_interval == "3months" else "30 Days (Monthly)"
+
+    if is_interstate:
+        col_widths = [30 * mm, 58 * mm, 26 * mm, 26 * mm, 25 * mm, 25 * mm]
+        header_row = [
+            Paragraph("<b>Service Code</b>", th_style),
+            Paragraph("<b>Service Description</b>", th_style),
+            Paragraph("<b>Interval</b>", th_style),
+            Paragraph("<b>Taxable Subtotal</b>", th_right),
+            Paragraph("<b>IGST (18%)</b>", th_right),
+            Paragraph("<b>Total Amount (Rs.)</b>", th_right),
+        ]
+        items_rows = [
+            header_row,
+            [
+                Paragraph("<b>SAC: 998313</b>", td_product),
+                Paragraph(f"<b>WebCreon {inv.plan_name or inv.plan} Cloud Subscription</b><br/><i>Information technology cloud hosting, AI copilot credits & platform infrastructure</i>", td_title),
+                Paragraph(interval_label, td_product),
+                Paragraph(f"Rs. {subtotal_val:,.2f}", td_right),
+                Paragraph(f"Rs. {igst_val:,.2f}", td_right),
+                Paragraph(f"Rs. {total_val:,.2f}", td_bold_right),
+            ],
+            [
+                Paragraph("<b>Total</b>", th_style),
+                Paragraph("", th_style),
+                Paragraph("", th_style),
+                Paragraph(f"<b>Rs. {subtotal_val:,.2f}</b>", th_right),
+                Paragraph(f"<b>Rs. {igst_val:,.2f}</b>", th_right),
+                Paragraph(f"<b>Rs. {total_val:,.2f}</b>", th_right),
+            ]
+        ]
+    else:
+        col_widths = [26 * mm, 50 * mm, 22 * mm, 24 * mm, 22 * mm, 22 * mm, 24 * mm]
+        header_row = [
+            Paragraph("<b>Service Code</b>", th_style),
+            Paragraph("<b>Service Description</b>", th_style),
+            Paragraph("<b>Interval</b>", th_style),
+            Paragraph("<b>Taxable Subtotal</b>", th_right),
+            Paragraph("<b>CGST (9%)</b>", th_right),
+            Paragraph("<b>SGST (9%)</b>", th_right),
+            Paragraph("<b>Total Amount (Rs.)</b>", th_right),
+        ]
+        items_rows = [
+            header_row,
+            [
+                Paragraph("<b>SAC: 998313</b>", td_product),
+                Paragraph(f"<b>WebCreon {inv.plan_name or inv.plan} Cloud Subscription</b><br/><i>Information technology cloud hosting, AI copilot credits & platform infrastructure</i>", td_title),
+                Paragraph(interval_label, td_product),
+                Paragraph(f"Rs. {subtotal_val:,.2f}", td_right),
+                Paragraph(f"Rs. {cgst_val:,.2f}", td_right),
+                Paragraph(f"Rs. {sgst_val:,.2f}", td_right),
+                Paragraph(f"Rs. {total_val:,.2f}", td_bold_right),
+            ],
+            [
+                Paragraph("<b>Total</b>", th_style),
+                Paragraph("", th_style),
+                Paragraph("", th_style),
+                Paragraph(f"<b>Rs. {subtotal_val:,.2f}</b>", th_right),
+                Paragraph(f"<b>Rs. {cgst_val:,.2f}</b>", th_right),
+                Paragraph(f"<b>Rs. {sgst_val:,.2f}</b>", th_right),
+                Paragraph(f"<b>Rs. {total_val:,.2f}</b>", th_right),
+            ]
+        ]
+
+    items_table = Table(items_rows, colWidths=col_widths)
+    items_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LINEBELOW", (0, 0), (-1, 0), 1, colors.HexColor("#0f172a")),
+        ("LINEABOVE", (0, 0), (-1, 0), 1, colors.HexColor("#0f172a")),
+        ("LINEABOVE", (0, -1), (-1, -1), 1, colors.HexColor("#0f172a")),
+        ("LINEBELOW", (0, -1), (-1, -1), 1, colors.HexColor("#0f172a")),
+        ("TOPPADDING", (0, 0), (-1, -1), 2.5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 1.5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 1.5),
+    ]))
+    elements.append(items_table)
+    elements.append(Spacer(1, 3 * mm))
+
+    # Summary & Amount in Words
+    words_inr = amount_to_words_inr(total_val)
+    if is_interstate:
+        tax_summary_lines = [
+            Paragraph(f"• Integrated GST (IGST 18%): <b>Rs. {igst_val:,.2f}</b>", seller_body),
+        ]
+    else:
+        tax_summary_lines = [
+            Paragraph(f"• Central GST (CGST 9%): <b>Rs. {cgst_val:,.2f}</b>", seller_body),
+            Paragraph(f"• State GST (SGST 9%): <b>Rs. {sgst_val:,.2f}</b>", seller_body),
+        ]
+
+    bottom_left = [
+        Paragraph("<b>FINANCIAL SUMMARY:</b>", meta_head),
+        Paragraph(f"• Taxable Subscription Value: <b>Rs. {subtotal_val:,.2f}</b>", seller_body),
+        *tax_summary_lines,
+        Paragraph(f"• Total Applicable GST (18%): <b>Rs. {tax_amt:,.2f}</b>", seller_body),
+        Paragraph(f"• Net Total Amount Paid: <b>Rs. {total_val:,.2f}</b>", seller_title),
+        Spacer(1, 2 * mm),
+        Paragraph(f"<b>Invoice Amount in Words:</b><br/>{words_inr}", seller_body),
+    ]
+
+    bottom_right = [
+        Paragraph("<b>For WebCreon Technologies Private Limited</b>", ParagraphStyle("SubWBCSignHead", parent=styles["Normal"], fontSize=8, leading=10, fontName="Helvetica-Bold", alignment=2)),
+        Spacer(1, 8 * mm),
+        Paragraph("<b>Authorized Signatory</b>", ParagraphStyle("SubWBCSignSub", parent=styles["Normal"], fontSize=7.5, leading=9.5, textColor=colors.HexColor("#475569"), alignment=2)),
+        Paragraph("<font size='5.8' color='#94a3b8'>Digitally Signed & Certified • Authenticated PSS/GSTN</font>", ParagraphStyle("SubWBCSignDig", parent=styles["Normal"], fontSize=5.8, leading=7.5, alignment=2)),
+    ]
+
+    bottom_summary_table = Table(
+        [[bottom_left, bottom_right]],
+        colWidths=[120 * mm, 70 * mm],
+    )
+    bottom_summary_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 1 * mm),
+    ]))
+    elements.append(bottom_summary_table)
+    elements.append(Spacer(1, 3 * mm))
+
+    elements.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#e2e8f0"), spaceAfter=1 * mm))
+    elements.append(Paragraph(
+        "This official B2B Tax Invoice is digitally generated by WebCreon Technologies Private Limited under Rule 46 of CGST Rules, 2017. Input Tax Credit (ITC) is available subject to Section 16 & 17(5) of the CGST Act.",
+        footer_text,
+    ))
+
+    doc.build(elements)
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+
+    if output_path:
+        os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+        with open(output_path, "wb") as f:
+            f.write(pdf_bytes)
+
+    return pdf_bytes
+
 
 

@@ -801,12 +801,8 @@ def get_admin_sites(
         ).all()
 
     owner_site_ids = [s.id for s in owner_sites]
-    website_access_type = getattr(admin_obj, "website_access_type", "all") or "all"
-
-    if website_access_type == "all":
-        return owner_sites
-
-    # "specific" access: return only sites assigned to this member that belong to the owner's workspace
+    # Team member: scope strictly to assigned Pro storefronts
+    from services.team_access_service import is_team_feature_available
     if owner_site_ids:
         member_sites = session.exec(
             select(Site)
@@ -823,7 +819,7 @@ def get_admin_sites(
             )
             .order_by(Site.created_at.desc())
         ).all()
-        return member_sites
+        return [s for s in member_sites if is_team_feature_available(session, s.id)]
 
     return []
 

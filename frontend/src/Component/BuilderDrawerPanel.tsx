@@ -1119,18 +1119,49 @@ export default function BuilderDrawerPanel({
         return hasPermission(permMap[item.key]);
       });
 
-  const visibleSettingsNavItems = isOwner
-    ? SETTINGS_NAV_ITEMS
-    : SETTINGS_NAV_ITEMS.filter((item) => {
-        if (item.key === "profile" || item.key === "help-support") return true;
-        const permMap: Record<string, string> = {
-          domain: "domain_settings:view",
-          "users-roles": "users_roles:view",
-          billing: "billing:view",
-          "audit-logs": "audit_logs:view",
-        };
-        return permMap[item.key] ? hasPermission(permMap[item.key]) : true;
-      });
+  const [activeSitePlan, setActiveSitePlan] = useState<string>("FREE");
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchPlan = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/billing/websites`, { credentials: "include" });
+        if (res.ok) {
+          const data = await res.json();
+          const targetSite = data.websites?.find((w: any) => w.website_id === selectedSiteId);
+          if (isMounted && targetSite) {
+            setActiveSitePlan(targetSite.current_plan || "FREE");
+          } else if (isMounted && data.websites?.length > 0) {
+            const hasPro = data.websites.some((w: any) => w.current_plan === "PRO");
+            setActiveSitePlan(hasPro ? "PRO" : (data.websites[0].current_plan || "FREE"));
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to fetch site plan for drawer:", err);
+      }
+    };
+    fetchPlan();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedSiteId]);
+
+  const isProPlan = activeSitePlan === "PRO";
+
+  const visibleSettingsNavItems = SETTINGS_NAV_ITEMS.filter((item) => {
+    // Users & Roles only appears when the user is on the PRO tier!
+    if (item.key === "users-roles" && !isProPlan) return false;
+
+    if (isOwner) return true;
+    if (item.key === "profile" || item.key === "help-support") return true;
+    const permMap: Record<string, string> = {
+      domain: "domain_settings:view",
+      "users-roles": "users_roles:view",
+      billing: "billing:view",
+      "audit-logs": "audit_logs:view",
+    };
+    return permMap[item.key] ? hasPermission(permMap[item.key]) : true;
+  });
 
   const [selectedAssetCategory, setSelectedAssetCategory] =
     useState<ComponentAssetCategory>("navbar");

@@ -357,6 +357,16 @@ class Product(SQLModel, table=True):
         default=True,
         sa_column=Column(Boolean, nullable=False, default=True),
     )
+    draft_reason: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        nullable=True,
+        index=True,
+    )
+    drafted_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
     sku: Optional[str] = Field(default=None, max_length=100, nullable=True, index=True)
     hsn_code: Optional[str] = Field(default=None, max_length=50, nullable=True)
     hsn_sac_id: Optional[UUID] = Field(default=None, foreign_key="tax_masters.id", nullable=True)
@@ -1936,5 +1946,357 @@ class InvoiceSequence(SQLModel, table=True):
     document_type: str = Field(max_length=20, primary_key=True)  # 'INVOICE', 'CREDIT_NOTE', 'PLATFORM_FEE'
     current_value: int = Field(default=0, nullable=False)
     updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False, onupdate=utc_now))
+
+
+# ===========================================================================
+# SUBSCRIPTION & BILLING HARDENED MODELS (STRICT 30-DAY CYCLES, UTC)
+# ===========================================================================
+
+class SubscriptionPlan(str, Enum):
+    FREE = "FREE"
+    STARTER = "STARTER"
+    PRO = "PRO"
+
+
+class SubscriptionStatus(str, Enum):
+    ACTIVE = "ACTIVE"
+    GRACE_PERIOD = "GRACE_PERIOD"
+    EXPIRED = "EXPIRED"
+    CANCELLED = "CANCELLED"
+
+
+class AICreditBatchStatus(str, Enum):
+    ACTIVE = "ACTIVE"
+    EXPIRED_LAPSED = "EXPIRED_LAPSED"
+    EXPIRED_FULLY_USED = "EXPIRED_FULLY_USED"
+    RENEWED = "RENEWED"
+
+
+class AICreditBatchType(str, Enum):
+    FREE_BASE = "FREE_BASE"
+    PAID_STARTER = "PAID_STARTER"
+    PAID_PRO = "PAID_PRO"
+
+
+class ProductDraftReason(str, Enum):
+    MERCHANT_MANUAL = "MERCHANT_MANUAL"
+    SYSTEM_LIMIT_EXCEEDED = "SYSTEM_LIMIT_EXCEEDED"
+
+
+class WebsiteSubscription(SQLModel, table=True):
+    __tablename__ = "website_subscriptions"
+    __table_args__ = (
+        UniqueConstraint("website_id", name="uq_website_subscriptions_website_id"),
+        Index("ix_website_subscriptions_admin_plan", "admin_id", "plan", "status"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    website_id: UUID = Field(foreign_key="sites.id", index=True, nullable=False)
+    admin_id: UUID = Field(foreign_key="admins.id", index=True, nullable=False)
+    plan: str = Field(default="FREE", nullable=False)
+    status: str = Field(default="ACTIVE", nullable=False)
+
+    billing_cycle_start_date: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    billing_cycle_end_date: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    grace_period_started_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    grace_period_ends_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    is_auto_renew: bool = Field(default=True, nullable=False)
+
+    # Monotonic provider state tracking
+    provider_name: str = Field(default="razorpay", nullable=False)
+    provider_customer_id: Optional[str] = Field(default=None, nullable=True)
+    provider_subscription_id: Optional[str] = Field(default=None, index=True, nullable=True)
+    provider_plan_id: Optional[str] = Field(default=None, nullable=True)
+    provider_payment_method_id: Optional[str] = Field(default=None, nullable=True)
+    current_provider_status: Optional[str] = Field(default=None, nullable=True)
+
+    latest_provider_event_id: Optional[str] = Field(default=None, nullable=True)
+    latest_provider_event_created_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    latest_provider_sequence: Optional[int] = Field(default=None, nullable=True)
+    latest_provider_state_version: Optional[int] = Field(default=None, nullable=True)
+
+    last_reconciled_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    last_reconciliation_status: Optional[str] = Field(default=None, nullable=True)
+
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False, onupdate=utc_now))
+
+
+class AICreditBatch(SQLModel, table=True):
+    __tablename__ = "ai_credit_batches"
+    __table_args__ = (
+        UniqueConstraint("admin_id", "batch_type", "cycle_start_at", name="uq_ai_credit_batches_admin_type_cycle"),
+        Index("ix_ai_credit_batches_fifo", "admin_id", "status", "expiry_date"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    admin_id: UUID = Field(foreign_key="admins.id", index=True, nullable=False)
+    source_website_id: Optional[UUID] = Field(default=None, foreign_key="sites.id", index=True, nullable=True)
+    batch_type: str = Field(default="FREE_BASE", nullable=False)  # FREE_BASE, PAID_STARTER, PAID_PRO
+    cycle_start_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+
+    allocated_amount: int = Field(default=0, nullable=False)
+    remaining_amount: int = Field(default=0, nullable=False)
+    expiry_date: datetime = Field(sa_column=Column(DateTime(timezone=True), index=True, nullable=False))
+    status: str = Field(default="ACTIVE", nullable=False)  # ACTIVE, EXPIRED_LAPSED, EXPIRED_FULLY_USED, RENEWED
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+
+
+class BillingIdempotencyKey(SQLModel, table=True):
+    __tablename__ = "billing_idempotency_keys"
+    __table_args__ = (
+        UniqueConstraint("operation_type", "idempotency_key", name="uq_billing_idempotency_type_key"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    admin_id: Optional[UUID] = Field(default=None, index=True, nullable=True)
+    website_id: Optional[UUID] = Field(default=None, index=True, nullable=True)
+    idempotency_key: str = Field(index=True, nullable=False)
+    operation_type: str = Field(index=True, nullable=False)  # UPGRADE, DOWNGRADE, ACTIVATE_PRODUCT
+    request_fingerprint: str = Field(nullable=False)
+    response_status: Optional[int] = Field(default=None, nullable=True)
+    response_body: Optional[dict[str, Any]] = Field(default=None, sa_column=Column(JSONB, nullable=True))
+    status: str = Field(default="STARTED", nullable=False)  # STARTED, SUCCEEDED, FAILED
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    completed_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+
+
+class ProcessedBillingWebhookEvent(SQLModel, table=True):
+    __tablename__ = "processed_billing_webhook_events"
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_event_id", name="uq_processed_webhook_provider_event_id"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    provider: str = Field(default="razorpay", nullable=False)
+    provider_event_id: str = Field(index=True, nullable=False)
+    event_type: str = Field(index=True, nullable=False)
+    payload_hash: str = Field(nullable=False)
+    raw_payload: dict[str, Any] = Field(default={}, sa_column=Column(JSONB, nullable=False))
+    processing_status: str = Field(default="RECEIVED", index=True, nullable=False)  # RECEIVED, PROCESSING, PROCESSED, RETRYABLE_FAILURE, DEAD_LETTER, DUPLICATE, STALE
+    provider_event_created_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    provider_sequence: Optional[int] = Field(default=None, nullable=True)
+    error_message: Optional[str] = Field(default=None, nullable=True)
+    last_error_code: Optional[str] = Field(default=None, nullable=True)
+    retry_count: int = Field(default=0, nullable=False)
+    max_retry_count: int = Field(default=5, nullable=False)
+    next_retry_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    locked_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    locked_by: Optional[str] = Field(default=None, nullable=True)
+    dead_lettered_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    resolved_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    resolved_by: Optional[str] = Field(default=None, nullable=True)
+    received_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    processed_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+
+
+class WebsiteSubscriptionEvent(SQLModel, table=True):
+    __tablename__ = "website_subscription_events"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    website_id: UUID = Field(index=True, nullable=False)
+    admin_id: UUID = Field(index=True, nullable=False)
+    event_type: str = Field(index=True, nullable=False)  # UPGRADE, DOWNGRADE, RENEWAL, GRACE_STARTED, GRACE_CANCELLED, EXPIRED, CANCELLED
+    previous_plan: Optional[str] = Field(default=None, nullable=True)
+    new_plan: Optional[str] = Field(default=None, nullable=True)
+    previous_status: Optional[str] = Field(default=None, nullable=True)
+    new_status: Optional[str] = Field(default=None, nullable=True)
+    source: str = Field(default="USER", nullable=False)  # USER, PAYMENT_WEBHOOK, CRON, ADMIN, RECONCILIATION
+    idempotency_key: Optional[str] = Field(default=None, index=True, nullable=True)
+    metadata_json: dict[str, Any] = Field(default={}, sa_column=Column(JSONB, nullable=False))
+
+    previous_event_hash: Optional[str] = Field(default=None, nullable=True)
+    event_hash: str = Field(nullable=False)
+    hash_algorithm: str = Field(default="sha256", nullable=False)
+    chain_scope: str = Field(default="website_subscription", nullable=False)
+    hash_version: int = Field(default=1, nullable=False)
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+
+
+class AICreditReservation(SQLModel, table=True):
+    __tablename__ = "ai_credit_reservations"
+
+    reservation_id: UUID = Field(default_factory=uuid4, primary_key=True)
+    idempotency_key: str = Field(unique=True, index=True, nullable=False)
+    admin_id: UUID = Field(index=True, nullable=False)
+    website_id: Optional[UUID] = Field(default=None, index=True, nullable=True)
+    feature_name: str = Field(nullable=False)
+    estimated_credits: int = Field(nullable=False)
+    reserved_credits: int = Field(nullable=False)
+    committed_credits: int = Field(default=0, nullable=False)
+    released_credits: int = Field(default=0, nullable=False)
+    batch_allocation_details: list[dict[str, Any]] = Field(default=[], sa_column=Column(JSONB, nullable=False))
+
+    provider_request_id: Optional[str] = Field(default=None, index=True, nullable=True)
+    provider_model: Optional[str] = Field(default=None, nullable=True)
+    input_tokens: Optional[int] = Field(default=None, nullable=True)
+    output_tokens: Optional[int] = Field(default=None, nullable=True)
+    total_tokens: Optional[int] = Field(default=None, nullable=True)
+    usage_mode: str = Field(default="EXACT_TOKEN_METADATA", nullable=False)  # EXACT_TOKEN_METADATA, FALLBACK_ESTIMATE
+    status: str = Field(default="RESERVED", index=True, nullable=False)  # RESERVED, COMMITTED, RELEASED, UNKNOWN, EXPIRED
+
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    expires_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    committed_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    released_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+
+
+class AICreditUsageEvent(SQLModel, table=True):
+    __tablename__ = "ai_credit_usage_events"
+    __table_args__ = (
+        UniqueConstraint("admin_id", "idempotency_key", name="uq_ai_credit_usage_admin_idemp"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    admin_id: UUID = Field(foreign_key="admins.id", index=True, nullable=False)
+    website_id: Optional[UUID] = Field(default=None, foreign_key="sites.id", index=True, nullable=True)
+    batch_id: Optional[UUID] = Field(default=None, foreign_key="ai_credit_batches.id", index=True, nullable=True)
+    amount_deducted: int = Field(nullable=False)
+    feature_used: str = Field(nullable=False)
+    idempotency_key: str = Field(index=True, nullable=False)
+
+    provider_request_id: Optional[str] = Field(default=None, nullable=True)
+    provider_model: Optional[str] = Field(default=None, nullable=True)
+    input_tokens: Optional[int] = Field(default=None, nullable=True)
+    output_tokens: Optional[int] = Field(default=None, nullable=True)
+    total_tokens: Optional[int] = Field(default=None, nullable=True)
+    calculated_credit_amount: int = Field(default=0, nullable=False)
+    event_status: str = Field(default="COMMITTED", nullable=False)  # RESERVED, COMMITTED, RELEASED, FAILED
+    error_message: Optional[str] = Field(default=None, nullable=True)
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+
+
+class SubscriptionPayment(SQLModel, table=True):
+    __tablename__ = "subscription_payments"
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_payment_id", name="uq_sub_payments_provider_payment_id"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    provider: str = Field(default="razorpay", nullable=False)
+    provider_payment_id: str = Field(index=True, nullable=False)
+    provider_order_id: Optional[str] = Field(default=None, nullable=True)
+    provider_invoice_id: Optional[str] = Field(default=None, nullable=True)
+    provider_subscription_id: Optional[str] = Field(default=None, index=True, nullable=True)
+    website_id: UUID = Field(foreign_key="sites.id", index=True, nullable=False)
+    admin_id: UUID = Field(foreign_key="admins.id", index=True, nullable=False)
+
+    amount: int = Field(nullable=False)  # Amount in paisa
+    currency: str = Field(default="INR", nullable=False)
+    billing_period_start: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    billing_period_end: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    payment_status: str = Field(default="CAPTURED", nullable=False)  # CAPTURED, FAILED, REFUNDED
+
+    provider_created_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    received_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    raw_metadata: dict[str, Any] = Field(default={}, sa_column=Column(JSONB, nullable=False))
+
+
+class GracePeriodReminderEvent(SQLModel, table=True):
+    __tablename__ = "grace_period_reminder_events"
+    __table_args__ = (
+        UniqueConstraint("subscription_id", "reminder_day", name="uq_grace_reminder_sub_day"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    subscription_id: UUID = Field(foreign_key="website_subscriptions.id", index=True, nullable=False)
+    reminder_day: int = Field(nullable=False)  # 1, 4, 7
+    sent_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    channel: str = Field(default="IN_APP", nullable=False)
+
+
+class BillingJobRun(SQLModel, table=True):
+    __tablename__ = "billing_job_runs"
+    __table_args__ = (
+        UniqueConstraint("job_name", "execution_id", name="uq_billing_job_execution"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    job_name: str = Field(index=True, nullable=False)
+    execution_id: str = Field(index=True, nullable=False)
+    lock_key: str = Field(nullable=False)
+    started_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    heartbeat: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    completed_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    status: str = Field(default="RUNNING", nullable=False)  # RUNNING, COMPLETED, FAILED
+    records_processed: int = Field(default=0, nullable=False)
+    error_details: Optional[str] = Field(default=None, nullable=True)
+
+
+class WebsiteTeamMember(SQLModel, table=True):
+    __tablename__ = "website_team_members"
+    __table_args__ = (
+        UniqueConstraint("website_id", "user_id", name="uq_website_team_members_site_user"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    website_id: UUID = Field(foreign_key="sites.id", index=True, nullable=False)
+    user_id: UUID = Field(foreign_key="admins.id", index=True, nullable=False)
+    role: str = Field(default="STAFF", nullable=False)  # OWNER, MANAGER, STAFF
+    is_active: bool = Field(default=True, nullable=False)
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False, onupdate=utc_now))
+
+
+class SubscriptionInvoice(SQLModel, table=True):
+    __tablename__ = "subscription_invoices"
+    __table_args__ = (
+        UniqueConstraint("invoice_number", name="uq_subscription_invoices_number"),
+        Index("ix_subscription_invoices_website", "website_id", "created_at"),
+        Index("ix_subscription_invoices_admin", "admin_id", "created_at"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    invoice_number: str = Field(index=True, nullable=False)
+    website_id: UUID = Field(foreign_key="sites.id", index=True, nullable=False)
+    admin_id: UUID = Field(foreign_key="admins.id", index=True, nullable=False)
+
+    plan: str = Field(nullable=False)  # STARTER, PRO
+    plan_name: str = Field(default="WebCreon Subscription", nullable=False)
+    billing_interval: str = Field(default="monthly", nullable=False)  # monthly, 3months, yearly
+    billing_cycle_start: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    billing_cycle_end: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+
+    # Statutory Tax Breakdown (SAC 998313 - SaaS / Cloud Software Service)
+    sac_code: str = Field(default="998313", nullable=False)
+    subtotal: Decimal = Field(default=Decimal("0.00"), max_digits=12, decimal_places=2, nullable=False)
+    tax_rate: Decimal = Field(default=Decimal("18.00"), max_digits=5, decimal_places=2, nullable=False)
+    cgst_amount: Decimal = Field(default=Decimal("0.00"), max_digits=12, decimal_places=2, nullable=False)
+    sgst_amount: Decimal = Field(default=Decimal("0.00"), max_digits=12, decimal_places=2, nullable=False)
+    igst_amount: Decimal = Field(default=Decimal("0.00"), max_digits=12, decimal_places=2, nullable=False)
+    total_tax: Decimal = Field(default=Decimal("0.00"), max_digits=12, decimal_places=2, nullable=False)
+    total_amount: Decimal = Field(default=Decimal("0.00"), max_digits=12, decimal_places=2, nullable=False)
+    currency: str = Field(default="INR", nullable=False)
+
+    # Payment & Transaction Audit
+    payment_status: str = Field(default="PAID", nullable=False)  # PAID, FAILED, REFUNDED
+    payment_method: str = Field(default="Net Banking", nullable=False)
+    razorpay_payment_id: Optional[str] = Field(default=None, nullable=True)
+    razorpay_order_id: Optional[str] = Field(default=None, nullable=True)
+
+    # Seller Snapshot (Statutory Rule 46)
+    seller_legal_name: str = Field(default="WebCreon Technologies Private Limited", nullable=False)
+    seller_trade_name: str = Field(default="WebCreon", nullable=False)
+    seller_gstin: str = Field(default="27AAACW1234F1Z1", nullable=False)
+    seller_pan: str = Field(default="AAACW1234F", nullable=False)
+    seller_cin: str = Field(default="U72900MH2026PTC123456", nullable=False)
+    seller_address: dict[str, Any] = Field(default={}, sa_column=Column(JSONB, nullable=False))
+    seller_state: str = Field(default="Maharashtra", nullable=False)
+    seller_state_code: str = Field(default="27", nullable=False)
+
+    # Buyer Snapshot
+    buyer_name: str = Field(nullable=False)
+    buyer_email: str = Field(nullable=False)
+    buyer_business_name: Optional[str] = Field(default=None, nullable=True)
+    buyer_gstin: Optional[str] = Field(default=None, nullable=True)
+    buyer_state: str = Field(default="Maharashtra", nullable=False)
+    buyer_state_code: str = Field(default="27", nullable=False)
+    place_of_supply: str = Field(default="27-Maharashtra", nullable=False)
+
+    # Invoice Metadata & Event Chaining
+    invoice_date: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+
+
 
 

@@ -123,8 +123,21 @@ def test_domain_api_full_lifecycle():
     assert site_doms_data["slug"] == slug
     assert len(site_doms_data["custom_domains"]) == 0
 
-    # 5. Add Custom Domain (shop.brand<test_id>.com)
+    # 5. Add Custom Domain on Free Tier -> Blocked (403)
     custom_dom = f"shop.testbrand{test_id}.com"
+    free_add_res = client.post(f"/api/sites/{site_id}/domains", json={"domain": custom_dom})
+    assert free_add_res.status_code == 403
+    assert free_add_res.json()["detail"]["error_code"] == "CUSTOM_DOMAIN_REQUIRES_PAID_PLAN"
+
+    # Upgrade Site to Starter plan
+    from db.database import engine
+    from uuid import UUID
+    from sqlmodel import Session
+    from services.plan_service import upgrade_website_plan
+    with Session(engine) as session:
+        upgrade_website_plan(session, UUID(site_id), "STARTER")
+
+    # Add Custom Domain on Starter Plan -> Success (201)
     add_res = client.post(f"/api/sites/{site_id}/domains", json={"domain": custom_dom})
     assert add_res.status_code == 201
     added_data = add_res.json()
