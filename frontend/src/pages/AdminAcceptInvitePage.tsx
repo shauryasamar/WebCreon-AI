@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import React, { FormEvent, useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { useAdminAuth } from "../context/AdminAuthContext";
+import WebCreonAnimatedLogo from "../Component/WebCreonAnimatedLogo";
 import { GlassToast } from "../Component/GlassToast";
 
 export default function AdminAcceptInvitePage() {
@@ -20,6 +21,8 @@ export default function AdminAcceptInvitePage() {
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
@@ -33,9 +36,9 @@ export default function AdminAcceptInvitePage() {
     const verifyToken = async () => {
       try {
         const res = await fetch(`${API_BASE_URL}/users-roles/invitation/${token}`);
-        const data = await res.json();
+        const data = await res.json().catch(() => null);
         if (!res.ok) {
-          throw new Error(data.detail || "Invalid or expired invitation link");
+          throw new Error(data?.detail || "Invalid or expired invitation link");
         }
         setInvitationData(data);
       } catch (err: any) {
@@ -48,7 +51,7 @@ export default function AdminAcceptInvitePage() {
     verifyToken();
   }, [token]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!password) {
       setToast({ message: "Password is required", type: "error" });
@@ -72,9 +75,9 @@ export default function AdminAcceptInvitePage() {
         body: JSON.stringify({ token, password }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error(data.detail || "Failed to set up account");
+        throw new Error(data?.detail || "Failed to set up account");
       }
 
       const authedUser = await refreshAdmin();
@@ -94,197 +97,375 @@ export default function AdminAcceptInvitePage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div style={containerStyle}>
-        <div style={cardStyle}>
-          <div style={{ textAlign: "center", color: "#64748b", fontSize: "14px", padding: "20px" }}>
-            Verifying your workspace invitation...
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !invitationData) {
-    return (
-      <div style={containerStyle}>
-        <div style={cardStyle}>
-          <div style={{ textAlign: "center", padding: "20px" }}>
-            <div
-              style={{
-                width: "48px",
-                height: "48px",
-                borderRadius: "50%",
-                background: "#fef2f2",
-                color: "#ef4444",
-                display: "grid",
-                placeItems: "center",
-                margin: "0 auto 16px",
-              }}
-            >
-              ✕
-            </div>
-            <h3 style={{ margin: "0 0 8px 0", fontSize: "18px", fontWeight: 700, color: "#0f172a" }}>
-              Invitation Invalid
-            </h3>
-            <p style={{ margin: "0 0 20px 0", fontSize: "13.5px", color: "#64748b", lineHeight: 1.5 }}>
-              {error || "This invitation link is invalid or has expired."}
-            </p>
-            <button
-              type="button"
-              onClick={() => navigate("/admin/login")}
-              style={primaryButtonStyle}
-            >
-              Go to Login
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div style={containerStyle}>
+    <div
+      style={{
+        height: "100vh",
+        maxHeight: "100vh",
+        width: "100vw",
+        display: "flex",
+        overflow: "hidden",
+        background: "#ffffff",
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      }}
+    >
+      <style>{`
+        @media (max-width: 860px) {
+          .wn-invite-split-container {
+            flex-direction: column !important;
+            overflow-y: auto !important;
+          }
+          .wn-invite-left-panel {
+            flex: 0 0 auto !important;
+            width: 100% !important;
+            padding: 24px 16px 12px 16px !important;
+            border-right: none !important;
+            border-bottom: 1px solid #e2e8f0 !important;
+          }
+          .wn-invite-right-panel {
+            flex: 1 1 auto !important;
+            width: 100% !important;
+            padding: 24px 20px !important;
+          }
+        }
+      `}</style>
+
       {toast && <GlassToast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-      <div style={cardStyle}>
-        <div style={{ textAlign: "center", marginBottom: "20px" }}>
-          <div
-            style={{
-              width: "44px",
-              height: "44px",
-              borderRadius: "10px",
-              background: "#eff6ff",
-              color: "#2563eb",
-              display: "grid",
-              placeItems: "center",
-              margin: "0 auto 12px",
-            }}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 22, height: 22 }}>
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-          </div>
-
-          <h2 style={{ margin: "0 0 6px 0", fontSize: "20px", fontWeight: 700, color: "#0f172a" }}>
-            Accept Invitation
-          </h2>
-          <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
-            Welcome, <strong>{invitationData.name}</strong>! You have been invited to join Webcreon as{" "}
-            <span style={{ color: "#2563eb", fontWeight: 600 }}>{invitationData.role}</span>.
-          </p>
-        </div>
-
+      <div
+        className="wn-invite-split-container"
+        style={{
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          boxSizing: "border-box",
+        }}
+      >
+        {/* LEFT SIDE: BRAND ANIMATED HERO */}
         <div
+          className="wn-invite-left-panel"
           style={{
+            flex: "1 1 58%",
             background: "#f8fafc",
-            border: "1px solid #e2e8f0",
-            borderRadius: "8px",
-            padding: "10px 14px",
-            fontSize: "12.5px",
-            color: "#475569",
-            marginBottom: "18px",
+            backgroundImage: `
+              radial-gradient(at 50% 0%, rgba(37, 99, 235, 0.04) 0px, transparent 50%),
+              radial-gradient(at 100% 100%, rgba(249, 128, 18, 0.03) 0px, transparent 50%)
+            `,
+            borderRight: "1px solid #e2e8f0",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "32px",
+            boxSizing: "border-box",
+            position: "relative",
           }}
         >
-          Email: <strong>{invitationData.email}</strong>
+          <div style={{ width: "100%", maxWidth: "420px" }}>
+            <WebCreonAnimatedLogo showText={true} />
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-          <div>
-            <label style={labelStyle}>Create Password</label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Minimum 8 characters"
-              style={inputStyle}
-            />
-          </div>
-
-          <div>
-            <label style={labelStyle}>Confirm Password</label>
-            <input
-              type="password"
-              required
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Re-enter password"
-              style={inputStyle}
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={submitting}
+        {/* RIGHT SIDE: INVITATION ACCEPT FORM */}
+        <div
+          className="wn-invite-right-panel"
+          style={{
+            flex: "1 1 42%",
+            maxWidth: "480px",
+            minWidth: "320px",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: "32px 40px",
+            background: "#ffffff",
+            boxSizing: "border-box",
+          }}
+        >
+          <div
             style={{
-              ...primaryButtonStyle,
               width: "100%",
-              marginTop: "8px",
-              opacity: submitting ? 0.7 : 1,
+              maxWidth: "340px",
+              display: "flex",
+              flexDirection: "column",
             }}
           >
-            {submitting ? "Setting Password..." : "Activate Account & Sign In"}
-          </button>
-        </form>
+            {loading ? (
+              <div style={{ textAlign: "center", padding: "40px 0", color: "#64748b" }}>
+                <div
+                  style={{
+                    width: "28px",
+                    height: "28px",
+                    border: "3px solid #e2e8f0",
+                    borderTopColor: "#2563eb",
+                    borderRadius: "50%",
+                    animation: "spin 0.8s linear infinite",
+                    margin: "0 auto 12px auto",
+                  }}
+                />
+                <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+                <div style={{ fontSize: "13px", fontWeight: 600, color: "#334155" }}>
+                  Verifying workspace invitation...
+                </div>
+              </div>
+            ) : error || !invitationData ? (
+              <div style={{ textAlign: "center", padding: "20px 0" }}>
+                <div
+                  style={{
+                    width: "44px",
+                    height: "44px",
+                    borderRadius: "50%",
+                    background: "#fef2f2",
+                    color: "#ef4444",
+                    display: "grid",
+                    placeItems: "center",
+                    margin: "0 auto 14px",
+                    fontSize: "18px",
+                    fontWeight: 700,
+                  }}
+                >
+                  ✕
+                </div>
+                <h2 style={{ margin: "0 0 6px 0", fontSize: "19px", fontWeight: 700, color: "#0f172a" }}>
+                  Invitation Invalid
+                </h2>
+                <p style={{ margin: "0 0 20px 0", fontSize: "12.5px", color: "#64748b", lineHeight: 1.5 }}>
+                  {error || "This invitation link is invalid or has expired."}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate("/admin/login")}
+                  style={{
+                    width: "100%",
+                    height: "40px",
+                    borderRadius: "8px",
+                    border: "none",
+                    background: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
+                    color: "#ffffff",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    boxShadow: "0 2px 8px rgba(37, 99, 235, 0.2)",
+                  }}
+                >
+                  Back to Login
+                </button>
+              </div>
+            ) : (
+              <>
+                <div style={{ marginBottom: "18px" }}>
+                  <h2
+                    style={{
+                      margin: 0,
+                      fontSize: "20px",
+                      fontWeight: 700,
+                      color: "#0f172a",
+                      letterSpacing: "-0.01em",
+                    }}
+                  >
+                    Accept Invitation
+                  </h2>
+                  <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#64748b" }}>
+                    Create your password to join the workspace
+                  </p>
+                </div>
+
+                {/* USER & ROLE BADGE */}
+                <div
+                  style={{
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "10px",
+                    padding: "12px 14px",
+                    marginBottom: "16px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "4px",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
+                      {invitationData.name}
+                    </span>
+                    <span
+                      style={{
+                        padding: "2px 8px",
+                        borderRadius: "999px",
+                        background: "#eff6ff",
+                        color: "#2563eb",
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        border: "1px solid #bfdbfe",
+                      }}
+                    >
+                      {invitationData.role}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: "11.5px", color: "#64748b" }}>
+                    {invitationData.email}
+                  </div>
+                </div>
+
+                {/* PASSWORD SETUP FORM */}
+                <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+                    <label
+                      htmlFor="invite-password"
+                      style={{
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        color: "#334155",
+                      }}
+                    >
+                      Create Password
+                    </label>
+                    <div style={{ position: "relative", width: "100%" }}>
+                      <input
+                        id="invite-password"
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        required
+                        autoComplete="new-password"
+                        style={{
+                          width: "100%",
+                          height: "40px",
+                          borderRadius: "8px",
+                          border: "1px solid #cbd5e1",
+                          padding: "0 36px 0 12px",
+                          fontSize: "13px",
+                          color: "#0f172a",
+                          background: "#ffffff",
+                          outline: "none",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                        style={{
+                          position: "absolute",
+                          right: "8px",
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          background: "none",
+                          border: "none",
+                          color: "#64748b",
+                          fontSize: "12px",
+                          cursor: "pointer",
+                          padding: "4px",
+                        }}
+                        title={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? "Hide" : "Show"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+                    <label
+                      htmlFor="invite-confirm-password"
+                      style={{
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        color: "#334155",
+                      }}
+                    >
+                      Confirm Password
+                    </label>
+                    <div style={{ position: "relative", width: "100%" }}>
+                      <input
+                        id="invite-confirm-password"
+                        type={showConfirmPassword ? "text" : "password"}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="••••••••"
+                        required
+                        autoComplete="new-password"
+                        style={{
+                          width: "100%",
+                          height: "40px",
+                          borderRadius: "8px",
+                          border: "1px solid #cbd5e1",
+                          padding: "0 36px 0 12px",
+                          fontSize: "13px",
+                          color: "#0f172a",
+                          background: "#ffffff",
+                          outline: "none",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword((prev) => !prev)}
+                        style={{
+                          position: "absolute",
+                          right: "8px",
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          background: "none",
+                          border: "none",
+                          color: "#64748b",
+                          fontSize: "12px",
+                          cursor: "pointer",
+                          padding: "4px",
+                        }}
+                        title={showConfirmPassword ? "Hide password" : "Show password"}
+                      >
+                        {showConfirmPassword ? "Hide" : "Show"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    style={{
+                      width: "100%",
+                      height: "40px",
+                      borderRadius: "8px",
+                      border: "none",
+                      background: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
+                      color: "#ffffff",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      cursor: submitting ? "not-allowed" : "pointer",
+                      marginTop: "6px",
+                      opacity: submitting ? 0.75 : 1,
+                      boxShadow: "0 2px 8px rgba(37, 99, 235, 0.2)",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    {submitting ? "Activating Account..." : "Join Workspace"}
+                  </button>
+                </form>
+
+                <div
+                  style={{
+                    marginTop: "20px",
+                    textAlign: "center",
+                    fontSize: "12px",
+                    color: "#64748b",
+                  }}
+                >
+                  Already accepted?{" "}
+                  <Link
+                    to="/admin/login"
+                    style={{
+                      color: "#2563eb",
+                      textDecoration: "none",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Sign In
+                  </Link>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
 }
-
-const containerStyle: React.CSSProperties = {
-  minHeight: "100vh",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  background: "#f8fafc",
-  padding: "24px",
-  fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-};
-
-const cardStyle: React.CSSProperties = {
-  width: "100%",
-  maxWidth: "420px",
-  background: "#ffffff",
-  borderRadius: "14px",
-  padding: "28px 24px",
-  boxShadow: "0 4px 20px rgba(0, 0, 0, 0.06)",
-  border: "1px solid #e2e8f0",
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: "12.5px",
-  fontWeight: 600,
-  color: "#334155",
-  marginBottom: "5px",
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  height: "38px",
-  padding: "0 12px",
-  borderRadius: "8px",
-  border: "1px solid #cbd5e1",
-  background: "#ffffff",
-  fontSize: "13px",
-  color: "#0f172a",
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const primaryButtonStyle: React.CSSProperties = {
-  padding: "9px 18px",
-  borderRadius: "8px",
-  border: "none",
-  background: "#2563eb",
-  color: "#ffffff",
-  fontSize: "13.5px",
-  fontWeight: 600,
-  cursor: "pointer",
-  transition: "background 0.15s ease",
-};

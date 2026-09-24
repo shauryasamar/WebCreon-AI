@@ -20,7 +20,7 @@ def is_team_feature_available(session: Session, website_id: UUID) -> bool:
     ).first()
     if not sub:
         return False
-    return sub.plan == SubscriptionPlan.PRO.value and sub.status in ("ACTIVE", "GRACE_PERIOD")
+    return sub.plan == SubscriptionPlan.PRO.value and sub.status == "ACTIVE"
 
 
 def deactivate_all_team_members(session: Session, website_id: UUID) -> int:

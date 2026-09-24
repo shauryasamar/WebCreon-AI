@@ -9,14 +9,15 @@ from models import (
     AICreditBatchType,
     AICreditReservation,
     AICreditUsageEvent,
+    WebsiteSubscription,
     utc_now,
 )
 
 
 CYCLE_DURATION_DAYS = 30
-FREE_BASE_ALLOCATION = 20
-STARTER_ALLOCATION = 100
-PRO_ALLOCATION = 500
+FREE_BASE_ALLOCATION = 300  # ₹3 allocation (100 credits per ₹1)
+STARTER_ALLOCATION = 1000   # ₹10 allocation
+PRO_ALLOCATION = 2000       # ₹20 allocation
 
 
 def ensure_utc(dt: datetime) -> datetime:
@@ -38,6 +39,84 @@ class InsufficientCreditsError(Exception):
     def __init__(self, message: str = "Insufficient AI credits remaining in account pool"):
         super().__init__(message)
         self.message = message
+
+
+def sync_and_cleanup_account_batches(session: Session, admin_id: UUID) -> None:
+    """
+    Cleans up and synchronizes credit batches for an account:
+    1. Lapses expired batches (expiry_date <= now).
+    2. Lapses paid batches whose source website is no longer on an active paid plan (e.g. downgraded to FREE or cancelled).
+    3. Consolidates multiple duplicate FREE_BASE batches (keeps only the freshest unexpired one, ensuring 300 credits).
+    4. Ensures exactly one active FREE_BASE batch exists.
+    """
+    now = utc_now()
+    all_batches = session.exec(
+        select(AICreditBatch).where(
+            AICreditBatch.admin_id == admin_id,
+            AICreditBatch.status == AICreditBatchStatus.ACTIVE.value,
+        )
+    ).all()
+
+    free_batches: List[AICreditBatch] = []
+    has_changes = False
+
+    for b in all_batches:
+        # 1. Expire passed expiry date
+        if b.expiry_date <= now:
+            b.status = (
+                AICreditBatchStatus.EXPIRED_LAPSED.value
+                if b.remaining_amount > 0
+                else AICreditBatchStatus.EXPIRED_FULLY_USED.value
+            )
+            session.add(b)
+            has_changes = True
+            continue
+
+        # 2. Check if paid batch belongs to a site that is not on an active paid plan
+        if b.batch_type != AICreditBatchType.FREE_BASE.value:
+            if b.source_website_id:
+                sub = session.exec(
+                    select(WebsiteSubscription).where(
+                        WebsiteSubscription.website_id == b.source_website_id
+                    )
+                ).first()
+                if not sub or (sub.plan or "").upper() == "FREE" or (sub.status or "").upper() != "ACTIVE":
+                    b.status = AICreditBatchStatus.EXPIRED_LAPSED.value
+                    session.add(b)
+                    has_changes = True
+                    continue
+            else:
+                b.status = AICreditBatchStatus.EXPIRED_LAPSED.value
+                session.add(b)
+                has_changes = True
+                continue
+        else:
+            free_batches.append(b)
+
+    # 3. Consolidate duplicate free base batches
+    if len(free_batches) > 1:
+        # Sort by expiry_date descending (keep freshest)
+        free_batches.sort(key=lambda x: x.expiry_date, reverse=True)
+        for old_free in free_batches[1:]:
+            old_free.status = AICreditBatchStatus.EXPIRED_LAPSED.value
+            session.add(old_free)
+            has_changes = True
+
+    # 4. If single active free batch has older default allocation (e.g. 50), upgrade it to 300
+    if len(free_batches) >= 1:
+        primary_free = free_batches[0]
+        if primary_free.allocated_amount < FREE_BASE_ALLOCATION:
+            diff = FREE_BASE_ALLOCATION - primary_free.allocated_amount
+            primary_free.allocated_amount = FREE_BASE_ALLOCATION
+            primary_free.remaining_amount = min(FREE_BASE_ALLOCATION, primary_free.remaining_amount + diff)
+            session.add(primary_free)
+            has_changes = True
+
+    if has_changes:
+        session.commit()
+
+    # 5. Ensure at least one active free base batch
+    ensure_free_base_batch(session, admin_id)
 
 
 def ensure_free_base_batch(
@@ -136,8 +215,9 @@ def get_account_credit_balance(session: Session, admin_id: UUID) -> Dict[str, An
     """
     Returns account-wide pooled AI credit balance:
     total_remaining, total_monthly_allocation, and individual active batches with expiry.
+    Excludes any expired batches or revoked batches from the active list.
     """
-    ensure_free_base_batch(session, admin_id)
+    sync_and_cleanup_account_batches(session, admin_id)
     now = utc_now()
 
     # Query all active batches where expiry_date > now
@@ -152,6 +232,12 @@ def get_account_credit_balance(session: Session, admin_id: UUID) -> Dict[str, An
     total_remaining = sum(b.remaining_amount for b in active_batches)
     total_allocated = sum(b.allocated_amount for b in active_batches)
 
+    # Filter out expired or 0 remaining batches (unless active free base) so only truly active batches appear in the dropdown
+    visible_batches = [
+        b for b in active_batches 
+        if b.expiry_date > now and (b.remaining_amount > 0 or b.batch_type == AICreditBatchType.FREE_BASE.value)
+    ]
+
     batches_data = [
         {
             "batch_id": str(b.id),
@@ -164,17 +250,32 @@ def get_account_credit_balance(session: Session, admin_id: UUID) -> Dict[str, An
             "status": b.status,
             "is_free_base": b.batch_type == AICreditBatchType.FREE_BASE.value,
         }
-        for b in active_batches
+        for b in visible_batches
     ]
 
     return {
         "admin_id": str(admin_id),
         "total_remaining": total_remaining,
         "total_monthly_allocation": total_allocated,
-        "batches_count": len(active_batches),
+        "batches_count": len(visible_batches),
         "batches": batches_data,
         "cycle_policy": "Strict 30-day fixed cycle (30 x 24h UTC). Unused credits lapse at batch expiry.",
     }
+
+
+def check_account_has_credits(session: Session, admin_id: UUID) -> Tuple[bool, int, Optional[str]]:
+    """
+    Pre-flight Gatekeeper Check:
+    Verifies if the admin account has at least 1 active AI credit available.
+    Returns: (has_credits: bool, total_remaining: int, next_reset_date: Optional[str])
+    """
+    balance = get_account_credit_balance(session, admin_id)
+    total_remaining = balance.get("total_remaining", 0)
+    batches = balance.get("batches", [])
+    next_reset_date = None
+    if batches:
+        next_reset_date = batches[0].get("expiry_date")
+    return (total_remaining > 0, total_remaining, next_reset_date)
 
 
 def reserve_credits(
@@ -428,3 +529,81 @@ def expire_batches_job(session: Session) -> Dict[str, Any]:
         "fully_used_count": fully_used_count,
         "total_lapsed_credits": total_lapsed_credits,
     }
+
+
+def revoke_website_ai_credit_batches(session: Session, website_id: UUID) -> int:
+    """
+    When a website subscription expires or is downgraded to Free,
+    revokes/lapses any active paid credit batches originating from this website.
+    """
+    batches = session.exec(
+        select(AICreditBatch).where(
+            AICreditBatch.source_website_id == website_id,
+            AICreditBatch.status == AICreditBatchStatus.ACTIVE.value,
+        )
+    ).all()
+    count = 0
+    for b in batches:
+        b.status = AICreditBatchStatus.EXPIRED_LAPSED.value
+        session.add(b)
+        count += 1
+    session.commit()
+    return count
+
+
+def deduct_tokens_from_account(
+    session: Session,
+    admin_id: UUID,
+    total_tokens: int,
+    feature_name: str,
+    website_id: Optional[UUID] = None,
+    model_name: Optional[str] = None,
+) -> int:
+    """
+    Unified FIFO Credit Metering for all LLM Token Usage:
+    Converts raw tokens from Onboarding Agent or Copilot Agent to credits (1 credit = 400 tokens)
+    and directly debits from the user's active credit pool.
+    """
+    if total_tokens <= 0:
+        return 0
+
+    credits_to_debit = max(1, round(total_tokens / 400))
+    ensure_free_base_batch(session, admin_id)
+    now = utc_now()
+
+    eligible_batches = session.exec(
+        select(AICreditBatch).where(
+            AICreditBatch.admin_id == admin_id,
+            AICreditBatch.status == AICreditBatchStatus.ACTIVE.value,
+            AICreditBatch.expiry_date > now,
+            AICreditBatch.remaining_amount > 0,
+        ).order_by(AICreditBatch.expiry_date.asc()).with_for_update()
+    ).all()
+
+    remaining_to_deduct = credits_to_debit
+    for batch in eligible_batches:
+        if remaining_to_deduct <= 0:
+            break
+        deduct_amt = min(remaining_to_deduct, batch.remaining_amount)
+        batch.remaining_amount -= deduct_amt
+        remaining_to_deduct -= deduct_amt
+        session.add(batch)
+
+        usage_event = AICreditUsageEvent(
+            id=uuid4(),
+            admin_id=admin_id,
+            website_id=website_id,
+            batch_id=batch.id,
+            amount_deducted=deduct_amt,
+            feature_used=feature_name,
+            idempotency_key=f"tok_{uuid4().hex[:12]}",
+            calculated_credit_amount=deduct_amt,
+            event_status="COMMITTED",
+            error_message=f"Model: {model_name or 'LLM'}, Tokens: {total_tokens}",
+            created_at=now,
+        )
+        session.add(usage_event)
+
+    session.commit()
+    return credits_to_debit
+

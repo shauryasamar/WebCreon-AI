@@ -591,9 +591,14 @@ async def subscription_payment_webhook(
                         provider_subscription_id=payment_entity.get("subscription_id"),
                         event_timestamp=now,
                     )
-                elif event_type in ("payment.failed", "subscription.halted"):
-                    # Involuntary failure: start 7-day grace period
-                    start_grace_period(session, website_id, failure_timestamp=now)
+                elif event_type in ("payment.failed", "subscription.halted", "subscription.cancelled"):
+                    # Involuntary failure or cancellation: Immediate cascade downgrade to FREE (Zero free days)
+                    downgrade_website_plan(
+                        session=session,
+                        website_id=website_id,
+                        target_plan=SubscriptionPlan.FREE.value,
+                        is_voluntary=False,
+                    )
 
         webhook_rec.processing_status = "PROCESSED"
         webhook_rec.processed_at = utc_now()

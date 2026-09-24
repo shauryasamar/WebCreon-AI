@@ -139,12 +139,13 @@ type ChatMessage = {
   text: string;
   time: string;
   status?: "loading" | "done" | "error";
-  type?: "text" | "palette_choice" | "choice_list" | "choice" | "generating_animation";
+  type?: "text" | "palette_choice" | "choice_list" | "choice" | "generating_animation" | "paywall";
   palette_options?: any[];
   choices?: { id: string; label: string; description?: string }[];
   progress?: number;
   currentStepMessage?: string;
   brandName?: string;
+  paywall_reset_date?: string | null;
 };
 
 function slugify(value: string) {
@@ -206,6 +207,8 @@ function AdminSitesPage() {
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [collectedState, setCollectedState] = useState<Record<string, any>>({});
+  const [isOnboardingPaywallLocked, setIsOnboardingPaywallLocked] = useState(false);
+  const [onboardingPaywallResetDate, setOnboardingPaywallResetDate] = useState<string | null>(null);
 
   // Sync state with current admin ID
   useEffect(() => {
@@ -413,7 +416,11 @@ function AdminSitesPage() {
     }
 
     setMessages((prev) => {
-      const cleanPrev = prev.filter((m) => m.type !== "generating_animation");
+      const cleanPrev = prev.filter(
+        (m) =>
+          m.type !== "generating_animation" &&
+          (m.sender === "user" || (m.text && m.text.trim().length > 0 && m.text !== "Processing...") || m.type === "paywall" || (m.palette_options && m.palette_options.length > 0) || (m.choices && m.choices.length > 0))
+      );
       return [
         ...cleanPrev,
         {
@@ -434,12 +441,18 @@ function AdminSitesPage() {
 
       // Try streaming progress first
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 35000);
+
         const streamResponse = await fetch(`${API_BASE_URL}/site-definition/stream`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
+          signal: controller.signal,
           body: JSON.stringify({ session_id: currentSessionId }),
         });
+
+        clearTimeout(timeoutId);
 
         if (streamResponse.ok && streamResponse.body) {
           const reader = streamResponse.body.getReader();
@@ -532,7 +545,7 @@ function AdminSitesPage() {
         {
           id: `done-${Date.now()}`,
           sender: "assistant",
-          text: `🎉 Created ${brandName}! Opening builder... \n\nRemember: You can customize theme, colors, and component assets anytime in the builder. Click 'Publish' at the bottom to save live updates!`,
+          text: `Created ${brandName}! Opening builder... \n\nRemember: You can customize theme, colors, and component assets anytime in the builder. Click 'Publish' at the bottom to save live updates!`,
           time: currentTime,
           status: "done",
         },
@@ -589,12 +602,18 @@ function AdminSitesPage() {
         ? { prompt: trimmed }
         : { session_id: sessionId, reply: trimmed };
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
+
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
+        signal: controller.signal,
         body: JSON.stringify(requestBody),
       });
+
+      clearTimeout(timeoutId);
 
       const updateAssistantMsg = (payload: {
         text?: string;
@@ -625,6 +644,43 @@ function AdminSitesPage() {
           )
         );
       };
+
+      if (response.status === 402) {
+        try {
+          const errData = await response.json();
+          const rDate = errData?.detail?.reset_date || null;
+          setIsOnboardingPaywallLocked(true);
+          setOnboardingPaywallResetDate(rDate);
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMsgId
+                ? {
+                    ...msg,
+                    text: errData?.detail?.message || "Monthly AI credit limit reached. Please upgrade your plan to continue using AI.",
+                    type: "paywall",
+                    paywall_reset_date: rDate,
+                    status: "done",
+                  }
+                : msg
+            )
+          );
+        } catch {
+          setIsOnboardingPaywallLocked(true);
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMsgId
+                ? {
+                    ...msg,
+                    text: "Monthly AI credit limit reached. Please upgrade your plan to continue using AI.",
+                    type: "paywall",
+                    status: "done",
+                  }
+                : msg
+            )
+          );
+        }
+        return;
+      }
 
       if (response.status === 404 && sessionId) {
         // Rehydrate session seamlessly if server restarted
@@ -681,7 +737,24 @@ function AdminSitesPage() {
               if (trimmedBlock.startsWith("data: ")) {
                 try {
                   const event = JSON.parse(trimmedBlock.slice(6));
-                  if (event.type === "token") {
+                  if (event.type === "paywall_exhausted" || event.error_code === "AI_CREDIT_LIMIT_REACHED") {
+                    setIsOnboardingPaywallLocked(true);
+                    setOnboardingPaywallResetDate(event.reset_date || null);
+                    setMessages((prev) =>
+                      prev.map((msg) =>
+                        msg.id === assistantMsgId
+                          ? {
+                              ...msg,
+                              text: event.message || "Monthly AI credit limit reached. Please upgrade your plan for higher monthly credit limits.",
+                              type: "paywall",
+                              paywall_reset_date: event.reset_date || null,
+                              status: "done",
+                            }
+                          : msg
+                      )
+                    );
+                    return;
+                  } else if (event.type === "token") {
                     streamedText += event.content || "";
                     setMessages((prev) =>
                       prev.map((msg) =>
@@ -1016,6 +1089,26 @@ function AdminSitesPage() {
           .onboarding-agent-root h3 {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
           }
+
+          .onboarding-thinking-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: #64748b;
+            display: inline-block;
+            animation: onboardingDotPulse 1.4s ease-in-out infinite both;
+          }
+
+          @keyframes onboardingDotPulse {
+            0%, 80%, 100% {
+              transform: scale(0.65);
+              opacity: 0.35;
+            }
+            40% {
+              transform: scale(1);
+              opacity: 0.95;
+            }
+          }
         `}</style>
         {/* Chat Content Area */}
         <div
@@ -1061,6 +1154,7 @@ function AdminSitesPage() {
             >
               {messages.map((msg) => {
                 const isUser = msg.sender === "user";
+                const isGeneratingActive = messages.some((m) => m.type === "generating_animation");
 
                 if (msg.type === "generating_animation") {
                   return (
@@ -1080,6 +1174,12 @@ function AdminSitesPage() {
                       />
                     </div>
                   );
+                }
+
+                // If assistant message is empty and we are not in an active loading turn or generating animation is active, don't render an empty bubble
+                const isEmptyAssistant = !isUser && (!msg.text || msg.text === "Processing..." || !msg.text.trim());
+                if (isEmptyAssistant && (!loading || isGeneratingActive)) {
+                  return null;
                 }
 
                 return (
@@ -1126,7 +1226,72 @@ function AdminSitesPage() {
                             : "0 2px 10px rgba(15,23,42,0.04)",
                         }}
                       >
-                        <div style={{ whiteSpace: "pre-wrap" }}>{msg.text}</div>
+                        {msg.type !== "paywall" && (
+                          !isUser && (!msg.text || msg.text === "Processing..." || (msg.status === "loading" && !msg.text.trim())) ? (
+                            <div
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "5px",
+                                padding: "4px 2px",
+                              }}
+                            >
+                              <span className="onboarding-thinking-dot" style={{ animationDelay: "0s" }} />
+                              <span className="onboarding-thinking-dot" style={{ animationDelay: "0.2s" }} />
+                              <span className="onboarding-thinking-dot" style={{ animationDelay: "0.4s" }} />
+                            </div>
+                          ) : (
+                            <div style={{ whiteSpace: "pre-wrap" }}>{msg.text}</div>
+                          )
+                        )}
+
+                        {/* Paywall Banner Card */}
+                        {msg.type === "paywall" && (
+                          <div
+                            style={{
+                              padding: "12px 14px",
+                              borderRadius: "10px",
+                              background: "#ffffff",
+                              border: "1px solid #e2e8f0",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "6px",
+                            }}
+                          >
+                            <div style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a" }}>
+                              AI Credit Limit Reached
+                            </div>
+                            <div style={{ fontSize: "12px", color: "#64748b", lineHeight: 1.5 }}>
+                              You have used all credits in your monthly pool. Upgrade your plan to continue building and generating stores.
+                            </div>
+                            {msg.paywall_reset_date && (
+                              <div style={{ fontSize: "11px", color: "#94a3b8" }}>
+                                Resets on: {new Date(msg.paywall_reset_date).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}
+                              </div>
+                            )}
+                            <div style={{ marginTop: "4px" }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveDrawer("settings");
+                                  setActiveSettingsNavKey("billing");
+                                }}
+                                style={{
+                                  padding: "6px 14px",
+                                  background: "#2563eb",
+                                  color: "#ffffff",
+                                  border: "none",
+                                  borderRadius: "6px",
+                                  fontSize: "12px",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                Upgrade Plan
+                              </button>
+                            </div>
+                          </div>
+                        )}
 
                         {/* Palette Options Card Selection */}
                         {msg.palette_options && msg.palette_options.length > 0 && (
@@ -1289,44 +1454,7 @@ function AdminSitesPage() {
                           </div>
                         )}
 
-                        {msg.status === "loading" && (
-                          <div
-                            style={{
-                              marginTop: "8px",
-                              display: "flex",
-                              gap: "5px",
-                              alignItems: "center",
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: "6px",
-                                height: "6px",
-                                borderRadius: "50%",
-                                background: "#2563eb",
-                                animation: "pulse 1.2s infinite ease-in-out",
-                              }}
-                            />
-                            <div
-                              style={{
-                                width: "6px",
-                                height: "6px",
-                                borderRadius: "50%",
-                                background: "#2563eb",
-                                animation: "pulse 1.2s infinite ease-in-out 0.2s",
-                              }}
-                            />
-                            <div
-                              style={{
-                                width: "6px",
-                                height: "6px",
-                                borderRadius: "50%",
-                                background: "#2563eb",
-                                animation: "pulse 1.2s infinite ease-in-out 0.4s",
-                              }}
-                            />
-                          </div>
-                        )}
+
                       </div>
                     </div>
                   </div>
@@ -1403,15 +1531,19 @@ function AdminSitesPage() {
               value={prompt}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder="Describe the website or reply to questions..."
+              placeholder={
+                isOnboardingPaywallLocked
+                  ? `Monthly limit reached. ${onboardingPaywallResetDate ? `Resets on ${new Date(onboardingPaywallResetDate).toLocaleDateString("en-IN", { month: "short", day: "numeric" })} or upgrade plan.` : "Upgrade plan to continue."}`
+                  : "Describe the website or reply to questions..."
+              }
               rows={1}
-              disabled={loading}
+              disabled={loading || isOnboardingPaywallLocked}
               style={{
                 flex: 1,
                 background: "transparent",
                 border: "none",
                 outline: "none",
-                color: "#0f172a",
+                color: isOnboardingPaywallLocked ? "#94a3b8" : "#0f172a",
                 fontSize: "14px",
                 lineHeight: 1.4,
                 resize: "none",
@@ -1419,30 +1551,31 @@ function AdminSitesPage() {
                 minHeight: "26px",
                 maxHeight: "160px",
                 padding: "6px 4px",
+                cursor: isOnboardingPaywallLocked ? "not-allowed" : "text",
               }}
             />
 
             <button
               type="button"
               onClick={() => handleSendReply(prompt)}
-              disabled={loading || !prompt.trim()}
-              title="Send message"
+              disabled={loading || !prompt.trim() || isOnboardingPaywallLocked}
+              title={isOnboardingPaywallLocked ? "Limit reached" : "Send message"}
               style={{
                 width: "38px",
                 height: "38px",
                 borderRadius: "12px",
                 border: "none",
                 background:
-                  loading || !prompt.trim()
+                  loading || !prompt.trim() || isOnboardingPaywallLocked
                     ? "#e2e8f0"
                     : "linear-gradient(135deg, #2563eb, #1d4ed8)",
-                color: loading || !prompt.trim() ? "#94a3b8" : "#ffffff",
-                cursor: loading || !prompt.trim() ? "not-allowed" : "pointer",
+                color: loading || !prompt.trim() || isOnboardingPaywallLocked ? "#94a3b8" : "#ffffff",
+                cursor: loading || !prompt.trim() || isOnboardingPaywallLocked ? "not-allowed" : "pointer",
                 display: "grid",
                 placeItems: "center",
                 flexShrink: 0,
                 boxShadow:
-                  loading || !prompt.trim()
+                  loading || !prompt.trim() || isOnboardingPaywallLocked
                     ? "none"
                     : "0 3px 10px rgba(37,99,235,0.3)",
                 transition: "all 0.15s ease",

@@ -73,6 +73,39 @@ export type SiteOption = {
 };
 
 // ---------------------------------------------------------------------------
+// ERROR MESSAGE EXTRACTOR (Parses string, object, and FastAPI 422 array errors)
+// ---------------------------------------------------------------------------
+
+const extractErrorMessage = (data: any, defaultMsg = "An error occurred"): string => {
+  if (!data) return defaultMsg;
+  if (typeof data === "string") return data;
+  if (typeof data.detail === "string") return data.detail;
+  if (Array.isArray(data.detail) && data.detail.length > 0) {
+    return data.detail
+      .map((err: any) => {
+        if (typeof err === "string") return err;
+        if (err && typeof err.msg === "string") {
+          const locArr = Array.isArray(err.loc) ? err.loc : [];
+          const field = locArr.length > 0 && locArr[locArr.length - 1] !== "body" ? `${locArr[locArr.length - 1]}: ` : "";
+          const cleanMsg = err.msg
+            .replace(/^value is not a valid email address:\s*/i, "")
+            .replace(/^value is not a valid\s*/i, "Invalid ")
+            .replace(/^Value error,\s*/i, "");
+          return `${field}${cleanMsg}`;
+        }
+        return typeof err === "object" ? JSON.stringify(err) : String(err);
+      })
+      .join("; ");
+  }
+  if (data.detail && typeof data.detail === "object") {
+    if (typeof data.detail.message === "string") return data.detail.message;
+    return JSON.stringify(data.detail);
+  }
+  if (data.message && typeof data.message === "string") return data.message;
+  return defaultMsg;
+};
+
+// ---------------------------------------------------------------------------
 // ICONS
 // ---------------------------------------------------------------------------
 
@@ -423,9 +456,16 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
       setToast({ message: "Full name is required", type: "error" });
       return;
     }
-    if (drawerMode === "add-user" && !userEmail.trim()) {
-      setToast({ message: "Email address is required", type: "error" });
-      return;
+    if (drawerMode === "add-user") {
+      if (!userEmail.trim()) {
+        setToast({ message: "Email address is required", type: "error" });
+        return;
+      }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(userEmail.trim())) {
+        setToast({ message: "Please enter a valid email address (e.g. name@example.com)", type: "error" });
+        return;
+      }
     }
     if (!userRoleId) {
       setToast({ message: "Please select a role", type: "error" });
@@ -459,8 +499,8 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
           body: JSON.stringify(payload),
         });
 
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || "Failed to invite user");
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(extractErrorMessage(data, "Failed to invite user"));
 
         setUsers((prev) => [data.user, ...prev]);
         setDrawerMode(null);
@@ -485,8 +525,8 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
           body: JSON.stringify(payload),
         });
 
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || "Failed to update user");
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(extractErrorMessage(data, "Failed to update user"));
 
         setUsers((prev) => prev.map((u) => (u.id === selectedUser.id ? data.user : u)));
         setDrawerMode(null);
@@ -510,8 +550,8 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
         method: "POST",
         credentials: "include",
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Failed to deactivate user");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(extractErrorMessage(data, "Failed to deactivate user"));
 
       setUsers((prev) => prev.map((u) => (u.id === deactivateModalUser.id ? data.user : u)));
       setToast({ message: `${deactivateModalUser.name} has been deactivated.`, type: "info" });
@@ -528,8 +568,8 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
         method: "POST",
         credentials: "include",
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Failed to reactivate user");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(extractErrorMessage(data, "Failed to reactivate user"));
 
       setUsers((prev) => prev.map((item) => (item.id === u.id ? data.user : item)));
       setToast({ message: `${u.name} is now Active!`, type: "success" });
@@ -544,8 +584,8 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
         method: "POST",
         credentials: "include",
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Failed to resend invite");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(extractErrorMessage(data, "Failed to resend invite"));
 
       setUsers((prev) => prev.map((item) => (item.id === u.id ? data.user : item)));
       setToast({ message: `Fresh invitation created for ${u.name}!`, type: "success" });
@@ -564,8 +604,8 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
         method: "DELETE",
         credentials: "include",
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Failed to remove user");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(extractErrorMessage(data, "Failed to remove user"));
 
       setUsers((prev) => prev.filter((u) => u.id !== removeModalUser.id));
       setToast({ message: `${removeModalUser.name} was removed from workspace.`, type: "info" });
@@ -617,8 +657,8 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
             permissions: rolePermissions,
           }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || "Failed to create role");
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(extractErrorMessage(data, "Failed to create role"));
 
         setRoles((prev) => [...prev, data.role]);
         setDrawerMode(null);
@@ -634,8 +674,8 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
             permissions: rolePermissions,
           }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || "Failed to update role");
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(extractErrorMessage(data, "Failed to update role"));
 
         setRoles((prev) => prev.map((r) => (r.id === selectedRole.id ? data.role : r)));
         // Refresh users list since users assigned this role now inherit updated permissions!
@@ -674,8 +714,8 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
         method: "DELETE",
         credentials: "include",
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Failed to delete role");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(extractErrorMessage(data, "Failed to delete role"));
 
       setRoles((prev) => prev.filter((r) => r.id !== deleteRoleModal.id));
       setToast({ message: `Role '${deleteRoleModal.name}' deleted.`, type: "info" });
@@ -2753,8 +2793,11 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
             <h4 style={{ margin: "0 0 8px 0", fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
               Remove team member?
             </h4>
-            <p style={{ margin: "0 0 18px 0", fontSize: "13px", color: "#64748b", lineHeight: 1.45 }}>
-              Are you sure you want to remove <strong>{removeModalUser.name}</strong> from your workspace? Their permissions will be immediately revoked.
+            <p style={{ margin: "0 0 8px 0", fontSize: "13px", color: "#64748b", lineHeight: 1.45 }}>
+              Are you sure you want to remove <strong>{removeModalUser.name}</strong> from your workspace? Their store access will be immediately revoked.
+            </p>
+            <p style={{ margin: "0 0 18px 0", fontSize: "12px", color: "#059669", lineHeight: 1.4, background: "#ecfdf5", padding: "8px 10px", borderRadius: "6px", border: "1px solid #a7f3d0" }}>
+              🔒 <strong>Audit Logs Preserved:</strong> All past actions, orders, and activity history performed by this user remain safely stored in your Activity log.
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
               <button

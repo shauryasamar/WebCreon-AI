@@ -1096,13 +1096,8 @@ def finalize_order_fulfillment(
     ).first()
 
     if not existing_ledger:
-        admin_site = session.exec(
-            select(AdminSite).where(AdminSite.site_id == site_id)
-        ).first()
-        admin_id = admin_site.admin_id if admin_site else None
-        if not admin_id:
-            first_admin = session.exec(select(Admin)).first()
-            admin_id = first_admin.id if first_admin else None
+        from services.product_limit_service import get_website_admin_id
+        admin_id = get_website_admin_id(session, site_id)
 
         if admin_id:
             commission_percent = get_platform_commission_percent()
@@ -2157,15 +2152,8 @@ def get_earnings_summary(
         except Exception:
             pass
     if not admin_id:
-        admin_site_link = session.exec(
-            select(AdminSite).where(AdminSite.site_id == site_id)
-        ).first()
-        if admin_site_link:
-            admin_id = admin_site_link.admin_id
-    if not admin_id:
-        first_admin = session.exec(select(Admin)).first()
-        if first_admin:
-            admin_id = first_admin.id
+        from services.product_limit_service import get_website_admin_id
+        admin_id = get_website_admin_id(session, site_id)
 
     now = utc_now()
     has_mutations = False

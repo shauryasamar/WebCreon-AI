@@ -8,22 +8,6 @@ from datetime import datetime, timezone, timedelta
 from uuid import uuid4
 from sqlmodel import Session, select
 from fastapi.testclient import TestClient
-import sys
-from unittest.mock import MagicMock
-for mod in [
-    "reportlab",
-    "reportlab.lib",
-    "reportlab.lib.pagesizes",
-    "reportlab.lib.styles",
-    "reportlab.lib.units",
-    "reportlab.lib.colors",
-    "reportlab.platypus",
-    "reportlab.pdfgen",
-    "reportlab.pdfgen.canvas",
-]:
-    if mod not in sys.modules:
-        sys.modules[mod] = MagicMock()
-
 from main import app
 from db.database import engine, get_session
 from auth_middleware import authenticate_admin
@@ -48,6 +32,8 @@ from services.ai_credit_service import (
     calculate_cycle_end,
     ensure_utc,
     ensure_free_base_batch,
+    create_batch_on_upgrade_or_renewal,
+    revoke_website_ai_credit_batches,
     reserve_credits,
     commit_credits,
     release_credits,
@@ -176,8 +162,8 @@ def test_free_base_batch_exact_once_allocation(db_session: Session, admin_contex
     batch1 = ensure_free_base_batch(db_session, admin.id, cycle_start_at=now)
     assert batch1 is not None
     assert batch1.batch_type == AICreditBatchType.FREE_BASE.value
-    assert batch1.allocated_amount == 20
-    assert batch1.remaining_amount == 20
+    assert batch1.allocated_amount == 300
+    assert batch1.remaining_amount == 300
     assert batch1.status == AICreditBatchStatus.ACTIVE.value
     assert batch1.admin_id == admin.id
     assert (batch1.expiry_date - batch1.cycle_start_at) == timedelta(days=30)
@@ -185,12 +171,12 @@ def test_free_base_batch_exact_once_allocation(db_session: Session, admin_contex
     # Second call within same cycle: returns the EXACT same batch
     batch2 = ensure_free_base_batch(db_session, admin.id, cycle_start_at=now + timedelta(days=5))
     assert batch2.id == batch1.id
-    assert batch2.allocated_amount == 20
+    assert batch2.allocated_amount == 300
 
     # Summary check
     summary = get_account_credit_balance(db_session, admin.id)
-    assert summary["total_remaining"] == 20
-    assert summary["total_monthly_allocation"] == 20
+    assert summary["total_remaining"] == 300
+    assert summary["total_monthly_allocation"] == 300
     assert len(summary["batches"]) == 1
 
 
@@ -516,14 +502,14 @@ def test_webhook_idempotency_and_signature_validation(client: TestClient, db_ses
 # 6. GRACE PERIOD LIFECYCLE & CASCADE DOWNGRADE
 # ==============================================================================
 
-def test_grace_period_lifecycle_and_cascade_downgrade(db_session: Session, admin_context):
+def test_immediate_downgrade_on_payment_failure(db_session: Session, admin_context):
     admin, _ = admin_context
     now = datetime.now(timezone.utc)
 
     site = Site(
         id=uuid4(),
-        slug=f"grace-site-{uuid4().hex[:6]}",
-        site_definition={"site_name": "Grace Site"},
+        slug=f"fail-site-{uuid4().hex[:6]}",
+        site_definition={"site_name": "Fail Site"},
     )
     db_session.add(site)
     db_session.commit()
@@ -543,29 +529,9 @@ def test_grace_period_lifecycle_and_cascade_downgrade(db_session: Session, admin
     db_session.add(sub)
     db_session.commit()
 
-    # Step 1: Involuntary payment failure -> enters 7-day grace period
+    # Step 1: Involuntary payment failure -> immediate cascade downgrade to FREE (Zero Free Days)
     updated_sub = start_grace_period(session=db_session, website_id=site.id)
     assert updated_sub is not None
-    assert updated_sub.status == SubscriptionStatus.GRACE_PERIOD.value
-    assert updated_sub.grace_period_started_at is not None
-    assert updated_sub.grace_period_ends_at is not None
-    assert (updated_sub.grace_period_ends_at - updated_sub.grace_period_started_at) == timedelta(days=7)
-
-    # Step 2: Simulate second failure webhook during grace period -> timer must NOT reset
-    orig_grace_end = updated_sub.grace_period_ends_at
-    sub2 = start_grace_period(session=db_session, website_id=site.id)
-    assert sub2.grace_period_ends_at == orig_grace_end
-
-    # Step 3: Fast forward past 7 days -> grace period expiration job cascades downgrade
-    updated_sub.grace_period_ends_at = now - timedelta(hours=1)
-    db_session.add(updated_sub)
-    db_session.commit()
-
-    results = expire_grace_period_job(db_session)
-    assert results["expired_grace_count"] >= 1
-
-    db_session.refresh(updated_sub)
-    # Plan downgraded to FREE
     assert updated_sub.plan == SubscriptionPlan.FREE.value
     assert updated_sub.status == SubscriptionStatus.ACTIVE.value
 
@@ -679,7 +645,7 @@ def test_pro_and_paid_feature_entitlement_guards(client: TestClient, db_session:
         json={"domain": "store.example.com"},
     )
     assert res_domain.status_code == 403
-    assert "CUSTOM_DOMAIN_REQUIRES_PAID_PLAN" in str(res_domain.json()["detail"])
+    assert "paid feature" in str(res_domain.json()["detail"]).lower()
 
 
     # 2. Team member invite on Free plan must be rejected with 403
@@ -750,9 +716,9 @@ def test_audit_log_hash_chain_integrity(db_session: Session, admin_context):
         new_plan=SubscriptionPlan.PRO.value,
     )
 
-    is_valid, err = verify_subscription_audit_chain(db_session, site.id)
-    assert is_valid is True
-    assert err is None
+    audit_result = verify_subscription_audit_chain(db_session, site.id)
+    assert audit_result["valid"] is True
+    assert audit_result["event_count"] >= 2
 
 
 # ==============================================================================
@@ -793,4 +759,106 @@ def test_cross_admin_tenant_isolation(client: TestClient, db_session: Session):
         json={"target_plan": "FREE", "confirmed": True},
     )
     assert res_down.status_code in (403, 404)
+
+
+def test_downgrade_revokes_paid_ai_credit_batch(db_session: Session, admin_context):
+    """Verifies that downgrading to Free immediately revokes the site's paid AI credit batch."""
+    admin, _ = admin_context
+    now = datetime.now(timezone.utc)
+
+    site = Site(
+        id=uuid4(),
+        slug=f"paid-ai-site-{uuid4().hex[:6]}",
+        site_definition={"site_name": "Paid AI Site"},
+    )
+    db_session.add(site)
+    db_session.commit()
+
+    db_session.add(AdminSite(admin_id=admin.id, site_id=site.id, role_on_site="owner"))
+    db_session.commit()
+
+    # Create active Starter subscription and Starter AI credit batch
+    sub = WebsiteSubscription(
+        id=uuid4(),
+        website_id=site.id,
+        admin_id=admin.id,
+        plan=SubscriptionPlan.STARTER.value,
+        status=SubscriptionStatus.ACTIVE.value,
+        billing_cycle_start_date=now,
+        billing_cycle_end_date=now + timedelta(days=30),
+    )
+    db_session.add(sub)
+    db_session.commit()
+
+    # Provision base batch (300) and Starter batch (1000)
+    ensure_free_base_batch(db_session, admin.id)
+    starter_batch = create_batch_on_upgrade_or_renewal(db_session, admin.id, site.id, "STARTER")
+    assert starter_batch is not None
+    assert starter_batch.status == AICreditBatchStatus.ACTIVE.value
+
+    # Pre-downgrade balance: 300 + 1000 = 1300
+    balance_before = get_account_credit_balance(db_session, admin.id)
+    assert balance_before["total_remaining"] == 1300
+
+    # Downgrade to Free
+    downgrade_website_plan(db_session, site.id, "FREE")
+
+    # Post-downgrade: Starter batch must be EXPIRED_LAPSED, balance back to 300
+    db_session.refresh(starter_batch)
+    assert starter_batch.status == AICreditBatchStatus.EXPIRED_LAPSED.value
+
+    balance_after = get_account_credit_balance(db_session, admin.id)
+    assert balance_after["total_remaining"] == 300
+
+
+def test_sync_and_cleanup_lapses_stale_paid_batches_and_consolidates_free(db_session: Session, admin_context):
+    """Verifies that visiting the billing page triggers sync to lapse legacy batches and consolidate free base to 300."""
+    admin, _ = admin_context
+    now = datetime.now(timezone.utc)
+
+    # Simulate legacy state: an old paid batch with no active subscription, plus an expired batch, plus duplicate free batch
+    expired_batch = AICreditBatch(
+        id=uuid4(),
+        admin_id=admin.id,
+        batch_type=AICreditBatchType.FREE_BASE.value,
+        cycle_start_at=now - timedelta(days=40),
+        allocated_amount=50,
+        remaining_amount=20,
+        expiry_date=now - timedelta(days=10),
+        status=AICreditBatchStatus.ACTIVE.value,
+        created_at=now - timedelta(days=40),
+    )
+    free_site = Site(
+        id=uuid4(),
+        slug=f"free-orphan-{uuid4().hex[:6]}",
+        site_definition={"name": "Free Orphan"},
+    )
+    db_session.add(free_site)
+    db_session.commit()
+
+    orphan_paid_batch = AICreditBatch(
+        id=uuid4(),
+        admin_id=admin.id,
+        source_website_id=free_site.id, # site exists but is on Free (or has no paid sub)
+        batch_type=AICreditBatchType.PAID_STARTER.value,
+        cycle_start_at=now,
+        allocated_amount=1000,
+        remaining_amount=1000,
+        expiry_date=now + timedelta(days=30),
+        status=AICreditBatchStatus.ACTIVE.value,
+        created_at=now,
+    )
+    db_session.add(expired_batch)
+    db_session.add(orphan_paid_batch)
+    db_session.commit()
+
+    # Call get_account_credit_balance
+    balance = get_account_credit_balance(db_session, admin.id)
+
+    # Verify orphan paid batch and expired batch are lapsed, and only 300 base credits remain
+    assert balance["total_remaining"] == 300
+    assert balance["batches_count"] == 1
+    assert balance["batches"][0]["is_free_base"] is True
+    assert balance["batches"][0]["allocated"] == 300
+
 

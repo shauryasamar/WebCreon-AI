@@ -80,12 +80,28 @@ function loadGoogleMapsScript(apiKey: string): Promise<void> {
       }
 
       if (window.google?.maps && typeof (window.google.maps as any).importLibrary === "function") {
-        await Promise.all([
+        const [mapsLib, placesLib, geocodingLib, markerLib] = await Promise.all([
           (window.google.maps as any).importLibrary("maps"),
           (window.google.maps as any).importLibrary("places"),
           (window.google.maps as any).importLibrary("geocoding"),
           (window.google.maps as any).importLibrary("marker"),
         ]);
+        if (geocodingLib?.Geocoder) {
+          (window.google.maps as any).Geocoder = geocodingLib.Geocoder;
+        }
+        if (mapsLib?.Map) {
+          (window.google.maps as any).Map = mapsLib.Map;
+        }
+        if (placesLib?.AutocompleteService) {
+          (window.google.maps as any).places = (window.google.maps as any).places || {};
+          (window.google.maps as any).places.AutocompleteService = placesLib.AutocompleteService;
+          if (placesLib.PlacesServiceStatus) {
+            (window.google.maps as any).places.PlacesServiceStatus = placesLib.PlacesServiceStatus;
+          }
+        }
+        if (markerLib?.Marker) {
+          (window.google.maps as any).Marker = markerLib.Marker;
+        }
       }
       resolve();
     } catch (err) {
@@ -471,9 +487,19 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
   // Initialize Map
   useEffect(() => {
     if (!mapsLoaded || !isOpen || !mapRef.current) return;
-    if (mapInstanceRef.current) return;
+    const GeocoderClass = (window.google?.maps as any)?.Geocoder;
+    if (GeocoderClass) {
+      geocoderRef.current = new GeocoderClass();
+    } else if (typeof (window.google?.maps as any)?.importLibrary === "function") {
+      (window.google.maps as any).importLibrary("geocoding").then((geoLib: any) => {
+        if (geoLib?.Geocoder) {
+          (window.google.maps as any).Geocoder = geoLib.Geocoder;
+          geocoderRef.current = new geoLib.Geocoder();
+        }
+      });
+    }
 
-    geocoderRef.current = new google.maps.Geocoder();
+    if (mapInstanceRef.current) return;
 
     const startCenter =
       initialLat && initialLng

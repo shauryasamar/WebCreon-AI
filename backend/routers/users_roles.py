@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
+from collections import defaultdict
 from uuid import UUID, uuid4
 import secrets
 
@@ -567,28 +568,160 @@ def get_permissions_catalog():
     }
 
 
+def get_workspace_admins_and_owner(
+    current_admin_id: UUID,
+    session: Session,
+    target_site_id: Optional[UUID] = None,
+) -> Tuple[Optional[Admin], List[Admin], Dict[UUID, Site]]:
+    """Resolve the workspace owner, all team members belonging to this workspace, and workspace sites."""
+    curr_admin_obj = session.get(Admin, current_admin_id)
+    if not curr_admin_obj:
+        return None, [], {}
+
+    # Determine Site Owner & Workspace Sites
+    curr_is_owner = (
+        getattr(curr_admin_obj, "is_owner", False)
+        or curr_admin_obj.role in ("Owner", "super_admin")
+        or not curr_admin_obj.invited_by_admin_id
+    )
+
+    if curr_is_owner:
+        site_owner = curr_admin_obj
+    elif curr_admin_obj.invited_by_admin_id:
+        site_owner = session.get(Admin, curr_admin_obj.invited_by_admin_id) or curr_admin_obj
+    else:
+        site_owner = curr_admin_obj
+
+    workspace_sites: Dict[UUID, Site] = {}
+
+    # Collect all workspace sites owned by this owner
+    owner_links = session.exec(
+        select(AdminSite).where(AdminSite.admin_id == site_owner.id)
+    ).all()
+    for ol in owner_links:
+        s = session.get(Site, ol.site_id)
+        if s:
+            workspace_sites[s.id] = s
+
+    if target_site_id:
+        site_obj = session.get(Site, target_site_id)
+        if site_obj:
+            workspace_sites[site_obj.id] = site_obj
+
+    # Collect ALL team members belonging to this owner's workspace / team:
+    member_ids: Set[UUID] = set()
+
+    # 1. Any active admin explicitly invited by this workspace owner
+    invited = session.exec(
+        select(Admin).where(
+            Admin.invited_by_admin_id == site_owner.id,
+            Admin.id != site_owner.id,
+            Admin.is_active != False,
+        )
+    ).all()
+    for u in invited:
+        if u.is_active is not False and u.status != "inactive":
+            member_ids.add(u.id)
+
+    # 2. Any active admin linked via AdminSite to ANY of the owner's workspace sites
+    # (provided they are not another workspace owner)
+    if workspace_sites:
+        site_members = session.exec(
+            select(AdminSite).where(
+                AdminSite.site_id.in_(list(workspace_sites.keys())),
+                AdminSite.admin_id != site_owner.id,
+            )
+        ).all()
+        for sm in site_members:
+            adm_obj = session.get(Admin, sm.admin_id)
+            if adm_obj and adm_obj.is_active is not False and adm_obj.status != "inactive" and not getattr(adm_obj, "is_owner", False) and adm_obj.role != "Owner":
+                if not adm_obj.invited_by_admin_id or adm_obj.invited_by_admin_id == site_owner.id:
+                    member_ids.add(sm.admin_id)
+
+    team_members: List[Admin] = []
+    for mid in member_ids:
+        adm = session.get(Admin, mid)
+        if adm and adm.id != site_owner.id:
+            team_members.append(adm)
+
+    # Sort team members by created_at
+    team_members.sort(key=lambda m: m.created_at or datetime.min)
+
+    return site_owner, team_members, workspace_sites
+
+
 # ---------------------------------------------------------------------------
 # ROLES ENDPOINTS
 # ---------------------------------------------------------------------------
 
 @router.get("/roles")
 def list_roles(
+    site_id: Optional[str] = None,
     current_admin=Depends(authenticate_admin),
     session: Session = Depends(get_session),
 ):
-    """List all available system and custom roles."""
+    """List all available system and custom roles with workspace-scoped user counts."""
     ensure_default_roles_and_users(session)
     if not check_admin_has_permission(current_admin["adminId"], "users_roles:view", session):
         raise HTTPException(status_code=403, detail="You do not have permission to view users and roles")
 
     roles = session.exec(select(Role).order_by(Role.created_at.asc())).all()
+    roles_by_id = {r.id: r for r in roles}
+    roles_by_name = {r.name: r for r in roles}
+    owner_role = roles_by_name.get("Owner")
 
-    # Pre-calculate assigned users count for each role
+    target_site_uuid: Optional[UUID] = None
+    if site_id:
+        try:
+            target_site_uuid = UUID(site_id)
+        except Exception:
+            target_site_uuid = None
+
+    site_owner, team_members, workspace_sites = get_workspace_admins_and_owner(
+        UUID(current_admin["adminId"]), session, target_site_uuid
+    )
+
+    role_user_counts: Dict[UUID, int] = defaultdict(int)
+
+    # 1. Site owner counts towards Owner role
+    if site_owner and owner_role:
+        role_user_counts[owner_role.id] += 1
+
+    # 2. Team members count towards their assigned roles
+    for mem in team_members:
+        mem_role = None
+        if target_site_uuid:
+            s_link = session.exec(
+                select(AdminSite).where(
+                    AdminSite.admin_id == mem.id,
+                    AdminSite.site_id == target_site_uuid,
+                )
+            ).first()
+            if s_link and s_link.role_on_site and s_link.role_on_site.lower() != "owner":
+                matched_role = next(
+                    (r for r in roles_by_id.values() if r.name.lower().replace(" ", "_") == s_link.role_on_site.lower()),
+                    None,
+                )
+                if matched_role:
+                    mem_role = matched_role
+
+        if not mem_role and mem.role_id and mem.role_id in roles_by_id:
+            role_cand = roles_by_id[mem.role_id]
+            if role_cand.name != "Owner":
+                mem_role = role_cand
+
+        if not mem_role and mem.role and mem.role in roles_by_name and mem.role != "Owner":
+            mem_role = roles_by_name[mem.role]
+
+        if not mem_role:
+            mem_role = roles_by_name.get("Store Manager") or roles_by_name.get("Support Agent")
+
+        if mem_role:
+            role_user_counts[mem_role.id] += 1
+
     result = []
     for r in roles:
-        count = session.exec(
-            select(func.count(Admin.id)).where(Admin.role_id == r.id)
-        ).one()
+        count = role_user_counts.get(r.id, 0)
         result.append(serialize_role(r, user_count=count))
 
     return {"roles": result}
@@ -714,8 +847,16 @@ def update_role(
         request=request,
     )
 
-    # Count assigned users
-    count = session.exec(select(func.count(Admin.id)).where(Admin.role_id == role.id)).one()
+    # Count assigned users in this workspace
+    site_owner, team_members, _ = get_workspace_admins_and_owner(
+        UUID(current_admin["adminId"]), session
+    )
+    count = 0
+    if role.name == "Owner" and site_owner:
+        count += 1
+    for m in team_members:
+        if m.role_id == role.id or (m.role and m.role.lower() == role.name.lower()):
+            count += 1
 
     return {"role": serialize_role(role, user_count=count), "message": f"Role '{role.name}' updated successfully"}
 
@@ -737,7 +878,13 @@ def delete_role(
     if role.is_system:
         raise HTTPException(status_code=400, detail="System default roles cannot be deleted")
 
-    user_count = session.exec(select(func.count(Admin.id)).where(Admin.role_id == role.id)).one()
+    site_owner, team_members, _ = get_workspace_admins_and_owner(
+        UUID(current_admin["adminId"]), session
+    )
+    user_count = sum(
+        1 for m in team_members
+        if m.role_id == role.id or (m.role and m.role.lower() == role.name.lower())
+    )
     if user_count > 0:
         raise HTTPException(
             status_code=400,
@@ -780,10 +927,6 @@ def list_users(
         raise HTTPException(status_code=403, detail="You do not have permission to view users and roles")
 
     curr_admin_id = UUID(current_admin["adminId"])
-    curr_admin_obj = session.get(Admin, curr_admin_id)
-    if not curr_admin_obj:
-        raise HTTPException(status_code=401, detail="Current admin user not found")
-
     roles_by_id = {r.id: r for r in session.exec(select(Role)).all()}
     roles_by_name = {r.name: r for r in roles_by_id.values()}
     origin = request.headers.get("origin", "http://localhost:5173")
@@ -795,75 +938,11 @@ def list_users(
         except Exception:
             target_site_id = None
 
-    site_obj = session.get(Site, target_site_id) if target_site_id else None
-
-    # Determine Site Owner & Workspace Sites
-    curr_is_owner = (
-        getattr(curr_admin_obj, "is_owner", False)
-        or curr_admin_obj.role in ("Owner", "super_admin")
-        or not curr_admin_obj.invited_by_admin_id
+    site_owner, team_members, workspace_sites = get_workspace_admins_and_owner(
+        curr_admin_id, session, target_site_id
     )
-
-    if curr_is_owner:
-        site_owner = curr_admin_obj
-    elif curr_admin_obj.invited_by_admin_id:
-        site_owner = session.get(Admin, curr_admin_obj.invited_by_admin_id) or curr_admin_obj
-    else:
-        site_owner = curr_admin_obj
-
-    workspace_sites: Dict[UUID, Site] = {}
-
-    # Collect all workspace sites owned by this owner
-    owner_links = session.exec(
-        select(AdminSite).where(AdminSite.admin_id == site_owner.id)
-    ).all()
-    for ol in owner_links:
-        s = session.get(Site, ol.site_id)
-        if s:
-            workspace_sites[s.id] = s
-
-    if site_obj:
-        workspace_sites[site_obj.id] = site_obj
-
-    if not workspace_sites:
-        pass  # No sites in this workspace; team members will show with empty site list
-
-    # Collect ALL team members belonging to this owner's workspace / team:
-    member_ids: Set[UUID] = set()
-
-    # 1. Any admin explicitly invited by this workspace owner
-    invited = session.exec(
-        select(Admin).where(
-            Admin.invited_by_admin_id == site_owner.id,
-            Admin.id != site_owner.id
-        )
-    ).all()
-    for u in invited:
-        member_ids.add(u.id)
-
-    # 2. Any admin linked via AdminSite to ANY of the owner's workspace sites
-    # (provided they are not another workspace owner)
-    if workspace_sites:
-        site_members = session.exec(
-            select(AdminSite).where(
-                AdminSite.site_id.in_(list(workspace_sites.keys())),
-                AdminSite.admin_id != site_owner.id
-            )
-        ).all()
-        for sm in site_members:
-            adm_obj = session.get(Admin, sm.admin_id)
-            if adm_obj and not getattr(adm_obj, "is_owner", False) and adm_obj.role != "Owner":
-                if not adm_obj.invited_by_admin_id or adm_obj.invited_by_admin_id == site_owner.id:
-                    member_ids.add(sm.admin_id)
-
-    team_members: List[Admin] = []
-    for mid in member_ids:
-        adm = session.get(Admin, mid)
-        if adm and adm.id != site_owner.id:
-            team_members.append(adm)
-
-    # Sort team members by created_at
-    team_members.sort(key=lambda m: m.created_at or datetime.min)
+    if not site_owner:
+        raise HTTPException(status_code=401, detail="Current admin user not found")
 
     # Build response:
     serialized = []
@@ -886,11 +965,11 @@ def list_users(
     for mem in team_members:
         mem_role = None
         # Check role on specific site first if site context exists
-        if site_id and site_obj:
+        if target_site_id:
             s_link = session.exec(
                 select(AdminSite).where(
                     AdminSite.admin_id == mem.id,
-                    AdminSite.site_id == site_obj.id,
+                    AdminSite.site_id == target_site_id,
                 )
             ).first()
             if s_link and s_link.role_on_site and s_link.role_on_site.lower() != "owner":
@@ -1499,27 +1578,44 @@ def remove_user(
     # Determine workspace sites belonging to current admin
     owner_site_links = session.exec(select(AdminSite).where(AdminSite.admin_id == curr_adm_id)).all()
     owner_site_ids = {l.site_id for l in owner_site_links}
-    # No fallback to select(Site) — prevents cross-workspace site leakage
 
-    # Remove site links for this workspace only
+    # 1. Remove site links for this workspace and commit first
     member_site_links = session.exec(select(AdminSite).where(AdminSite.admin_id == admin.id)).all()
     for link in member_site_links:
         if link.site_id in owner_site_ids:
             session.delete(link)
+    session.commit()
 
     name = admin.name or admin.email
 
-    # Check remaining site links outside this workspace
-    remaining_links = [l for l in member_site_links if l.site_id not in owner_site_ids]
+    # 2. Check remaining site links outside this workspace
+    remaining_links = session.exec(select(AdminSite).where(AdminSite.admin_id == admin.id)).all()
     if admin.invited_by_admin_id == curr_adm_id and not remaining_links:
         try:
+            # Nullify any foreign-key AuditLog references
+            from models import AuditLog
+            audit_logs = session.exec(select(AuditLog).where(AuditLog.admin_id == admin.id)).all()
+            for al in audit_logs:
+                al.admin_id = None
+                session.add(al)
+            session.commit()
+
             session.delete(admin)
             session.commit()
         except Exception:
             session.rollback()
-            admin.invited_by_admin_id = None
-            admin.is_active = False
-            session.add(admin)
+            fresh_admin = session.get(Admin, user_id)
+            if fresh_admin:
+                fresh_admin.invited_by_admin_id = None
+                fresh_admin.is_active = False
+                fresh_admin.status = "inactive"
+                fresh_admin.role_id = None
+                fresh_admin.role = "inactive"
+                session.add(fresh_admin)
+            lingering = session.exec(select(AdminSite).where(AdminSite.admin_id == user_id)).all()
+            for l in lingering:
+                if l.site_id in owner_site_ids:
+                    session.delete(l)
             session.commit()
     else:
         if admin.invited_by_admin_id == curr_adm_id:

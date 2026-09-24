@@ -1924,6 +1924,7 @@ export default function BuilderDrawerPanel({
             siteId={selectedSiteId || siteDefinition?.id || ""}
             siteDefinition={siteDefinition}
             onSiteDefinitionChange={onSiteDefinitionChange}
+            onOpenBilling={() => onSelectSettingsNav?.("billing")}
           />
         ) : activeDrawer === "settings" ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>

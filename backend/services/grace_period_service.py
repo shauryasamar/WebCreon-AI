@@ -25,22 +25,17 @@ def start_grace_period(
     failure_timestamp: Optional[datetime] = None,
 ) -> WebsiteSubscription:
     """
-    Initiates a 7-day grace period following a recurring payment failure.
-    The store remains on its active plan during the 7-day grace window.
+    Immediate Downgrade Policy (Zero Free Days):
+    Upon recurring payment failure or cancellation, the store is immediately cascaded
+    down to the FREE tier to prevent exploitation of free days.
     """
-    sub = get_or_create_website_subscription(session, website_id)
-    now = failure_timestamp or utc_now()
-    ends_at = now + timedelta(days=GRACE_PERIOD_DAYS)
-
-    sub.status = SubscriptionStatus.GRACE_PERIOD.value
-    sub.grace_period_started_at = now
-    sub.grace_period_ends_at = ends_at
-    sub.updated_at = now
-    session.add(sub)
-    session.commit()
-    session.refresh(sub)
-
-    return sub
+    downgrade_website_plan(
+        session=session,
+        website_id=website_id,
+        target_plan=SubscriptionPlan.FREE.value,
+        is_voluntary=False,
+    )
+    return get_or_create_website_subscription(session, website_id)
 
 
 def cancel_grace_period(

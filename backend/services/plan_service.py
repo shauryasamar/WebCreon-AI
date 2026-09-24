@@ -22,6 +22,7 @@ from models import (
 from services.ai_credit_service import (
     create_batch_on_upgrade_or_renewal,
     ensure_free_base_batch,
+    revoke_website_ai_credit_batches,
 )
 from services.product_limit_service import (
     draft_all_products_for_website,
@@ -44,13 +45,13 @@ PLAN_METADATA: Dict[str, Dict[str, Any]] = {
         "monthly_price_inr": 0,
         "product_limit": 200,
         "is_product_limit_pooled": True,
-        "ai_credits_monthly": 20,
+        "ai_credits_monthly": 300,
         "custom_domain_allowed": False,
         "max_team_members": 1,
         "features": [
             "Up to 200 Products (Shared pool across free stores)",
             "WebCreon Subdomain (yourbrand.webcreon.in)",
-            "20 AI Copilot Requests / month",
+            "300 AI Credits / month",
             "Standard Checkout & Storefront",
         ],
     },
@@ -59,14 +60,14 @@ PLAN_METADATA: Dict[str, Dict[str, Any]] = {
         "monthly_price_inr": 199,
         "product_limit": 1000,
         "is_product_limit_pooled": False,
-        "ai_credits_monthly": 100,
+        "ai_credits_monthly": 1000,
         "custom_domain_allowed": True,
         "max_team_members": 1,
         "features": [
             "Up to 1,000 Products (Dedicated per store)",
             "Custom Domain Support (shop.yourbrand.com / www.yourbrand.com)",
             "Free Automated SSL Certificate",
-            "100 AI Copilot Requests / month",
+            "1,000 AI Credits / month",
             "Standard Checkout & Storefront",
         ],
     },
@@ -75,14 +76,14 @@ PLAN_METADATA: Dict[str, Dict[str, Any]] = {
         "monthly_price_inr": 499,
         "product_limit": None,
         "is_product_limit_pooled": False,
-        "ai_credits_monthly": 500,
+        "ai_credits_monthly": 2000,
         "custom_domain_allowed": True,
         "max_team_members": 10,
         "features": [
             "Unlimited Products (Full capacity catalog)",
             "Custom Domain Support + Automatic Free SSL",
             "Multi-User Team Roles & Access Control (Up to 10 members)",
-            "500 AI Copilot Requests / month",
+            "2,000 AI Credits / month",
             "Priority CDN & Zero Platform Watermark",
             "Advanced Analytics & CSV Reports",
         ],
@@ -131,6 +132,7 @@ def compute_subscription_event_hash(
 def get_or_create_website_subscription(
     session: Session,
     website_id: UUID,
+    admin_id: Optional[UUID] = None,
 ) -> WebsiteSubscription:
     """
     Retrieves the existing subscription for a website or provisions a default FREE subscription.
@@ -143,13 +145,16 @@ def get_or_create_website_subscription(
         return sub
 
     # Find owner admin
-    admin_id = get_website_admin_id(session, website_id)
     if not admin_id:
-        # Fallback to any super_admin or first admin in db
-        first_admin = session.exec(select(Admin)).first()
-        if not first_admin:
-            raise ValueError("No admin accounts exist in database to own website subscription")
-        admin_id = first_admin.id
+        admin_id = get_website_admin_id(session, website_id)
+
+    if not admin_id:
+        admin_site = session.exec(select(AdminSite).where(AdminSite.site_id == website_id)).first()
+        if admin_site:
+            admin_id = admin_site.admin_id
+
+    if not admin_id:
+        raise ValueError(f"No admin accounts found to own website subscription for website {website_id}")
 
     now = utc_now()
     cycle_start = now
@@ -572,6 +577,9 @@ def downgrade_website_plan(
             website_id=website_id,
             up_to_limit=available_free_slots_for_this_site,
         )
+
+        # 4. Revoke/expire paid AI credit batches associated with this website
+        revoke_website_ai_credit_batches(session, website_id)
     elif target == SubscriptionPlan.STARTER.value and prev_plan == SubscriptionPlan.PRO.value:
         # 1. Team access is Pro exclusive; deactivate team members on downgrade to Starter
         deactivated_team = deactivate_all_team_members(session, website_id)
@@ -583,6 +591,10 @@ def downgrade_website_plan(
             max_active_limit=STARTER_DEDICATED_LIMIT,
             reason=ProductDraftReason.SYSTEM_LIMIT_EXCEEDED.value,
         )
+
+        # 3. Transition AI credit batch from Pro to Starter
+        revoke_website_ai_credit_batches(session, website_id)
+        create_batch_on_upgrade_or_renewal(session, sub.admin_id, website_id, "STARTER")
 
     session.commit()
 

@@ -1117,11 +1117,8 @@ def support_agent_execute_action(
                     sgst_gw = (base_gw * Decimal("0.09")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
                     est_gateway_fee = base_gw + cgst_gw + sgst_gw
                     if est_gateway_fee > Decimal("0.00"):
-                        admin_site = session.exec(select(AdminSite).where(AdminSite.site_id == ord.site_id)).first()
-                        admin_id_to_debit = admin_site.admin_id if admin_site else None
-                        if not admin_id_to_debit:
-                            first_admin = session.exec(select(Admin)).first()
-                            admin_id_to_debit = first_admin.id if first_admin else None
+                        from services.product_limit_service import get_website_admin_id
+                        admin_id_to_debit = get_website_admin_id(session, ord.site_id)
                         if admin_id_to_debit:
                             fee_adj = TenantLedgerEntry(
                                 admin_id=admin_id_to_debit,
@@ -3096,11 +3093,8 @@ def execute_ticket_resolution_action(
                     sgst_gw = (base_gw * Decimal("0.09")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
                     est_gateway_fee = base_gw + cgst_gw + sgst_gw
                     if est_gateway_fee > Decimal("0.00"):
-                        admin_site = session.exec(select(AdminSite).where(AdminSite.site_id == ord.site_id)).first()
-                        admin_id_to_debit = admin_site.admin_id if admin_site else None
-                        if not admin_id_to_debit:
-                            first_admin = session.exec(select(Admin)).first()
-                            admin_id_to_debit = first_admin.id if first_admin else None
+                        from services.product_limit_service import get_website_admin_id
+                        admin_id_to_debit = get_website_admin_id(session, ord.site_id)
                         if admin_id_to_debit:
                             fee_adj = TenantLedgerEntry(
                                 admin_id=admin_id_to_debit,

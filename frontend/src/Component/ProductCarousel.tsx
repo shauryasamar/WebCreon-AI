@@ -833,7 +833,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
     const getImgContainerStyle = (defaultAspect: string): React.CSSProperties => {
       const chosenAspect = image_aspect_ratio
         ? (image_aspect_ratio === "auto" ? undefined : formatAspectRatio(image_aspect_ratio))
-        : isMobile ? "1 / 1.12" : formatAspectRatio(defaultAspect);
+        : formatAspectRatio(defaultAspect);
 
       return {
         position: "relative",
@@ -1209,7 +1209,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
         onClick={() => handleProductClick(product)}
         style={cardBaseStyle}
       >
-        <div style={getImgContainerStyle("1 / 1.35")}>
+        <div style={getImgContainerStyle("1 / 1")}>
           {renderDiscountBadge()}
           {renderCollectionBadges(isMobile)}
           {product.normalizedImage ? (

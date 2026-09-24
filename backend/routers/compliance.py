@@ -225,13 +225,8 @@ def submit_merchant_tax_kyc(
     if not profile:
         effective_admin_id = UUID(str(admin["adminId"])) if isinstance(admin, dict) and "adminId" in admin else (admin.id if hasattr(admin, "id") else None)
         if not effective_admin_id:
-            admin_site = session.exec(select(AdminSite).where(AdminSite.site_id == payload.site_id)).first()
-            if admin_site:
-                effective_admin_id = admin_site.admin_id
-            else:
-                first_admin = session.exec(select(Admin)).first()
-                if first_admin:
-                    effective_admin_id = first_admin.id
+            from services.product_limit_service import get_website_admin_id
+            effective_admin_id = get_website_admin_id(session, payload.site_id)
 
         profile = MerchantTaxProfile(
             site_id=payload.site_id,
@@ -356,36 +351,21 @@ def get_merchant_tax_kyc(
     ).first()
 
     if not profile:
-        effective_admin_id = None
-        if admin:
-            if isinstance(admin, dict) and "adminId" in admin:
-                effective_admin_id = UUID(str(admin["adminId"]))
-            elif hasattr(admin, "id"):
-                effective_admin_id = admin.id
-
-        if not effective_admin_id:
-            admin_site = session.exec(select(AdminSite).where(AdminSite.site_id == site_id)).first()
-            if admin_site:
-                effective_admin_id = admin_site.admin_id
-            else:
-                first_admin = session.exec(select(Admin)).first()
-                if first_admin:
-                    effective_admin_id = first_admin.id
-
-        profile = MerchantTaxProfile(
-            site_id=site_id,
-            admin_id=effective_admin_id,
-            legal_business_name="GreenHarvest Enterprises Private Limited",
-            trade_name="GreenHarvest Store",
-            entity_type="proprietorship",
-            registration_type="regular",
-            pan_number="",
-            state_code="27",
-            current_fy=get_financial_year(),
-        )
-        session.add(profile)
-        session.commit()
-        session.refresh(profile)
+        cumulative_sales = float(compute_live_fy_gross_sales(session, site_id, get_financial_year()))
+        return {
+            "has_profile": False,
+            "site_id": str(site_id),
+            "profile": None,
+            "section_194o": {
+                "threshold": float(TDS_194O_INDIVIDUAL_THRESHOLD),
+                "cumulative_sales": cumulative_sales,
+                "is_threshold_exceeded": True,
+                "progress_percent": 100.0 if cumulative_sales > 0 else 0.0,
+                "applicable_rate": float(TDS_194O_HIGHER_RATE),
+                "is_individual_or_huf": True,
+                "has_pan": False,
+            },
+        }
 
     ent_type = profile.entity_type.value if hasattr(profile.entity_type, "value") else str(profile.entity_type).lower()
     is_individual = ent_type in ("individual", "proprietorship", "sole_proprietorship", "huf")

@@ -12,19 +12,19 @@ from services.ai_credit_service import (
     reserve_credits,
 )
 
-# Configurable Credit Cost Lookup Table per Feature
+# Configurable Credit Cost Lookup Table per Feature (scaled to 1 credit = 400 tokens / 100 credits = ₹1 real OpenAI compute)
 FEATURE_CREDIT_COSTS: Dict[str, int] = {
     "product_description_gen": 1,
-    "bulk_image_gen": 5,
-    "analytics_summary": 2,
+    "bulk_image_gen": 4,
+    "analytics_summary": 3,
     "seo_optimization": 1,
-    "copilot_chat": 1,
-    "store_generation": 5,
+    "copilot_chat": 2,
+    "store_generation": 6,
     "default": 1,
 }
 
-# Configurable conversion factor: 1 credit per ~2,000 tokens (or tuned per model)
-TOKENS_PER_CREDIT = 2000
+# Configurable conversion factor: 1 credit per 400 tokens (gives exact true ₹1 = 40,000 tokens pricing for GPT-4o-mini)
+TOKENS_PER_CREDIT = 400
 
 
 def get_feature_credit_cost(feature_name: str) -> int:

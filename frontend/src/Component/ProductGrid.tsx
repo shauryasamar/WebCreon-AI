@@ -929,7 +929,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
               borderRadius: resolvedImageRadius,
               overflow: "hidden",
               background: resolvedImageBg,
-              aspectRatio: image_aspect_ratio || (isMobile ? "1 / 1.12" : defaultAspect),
+              aspectRatio: image_aspect_ratio || defaultAspect,
             });
 
             const imageLoadingMode: "eager" | "lazy" = cardIndex < 8 ? "eager" : "lazy";
@@ -1107,7 +1107,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
 
             return (
               <article key={product.id} {...commonArticleProps} style={cardBaseStyle}>
-                <div style={getImgContainerStyle("1 / 1.35")}>
+                <div style={getImgContainerStyle("1 / 1")}>
                   {renderDiscountBadge()}
                   {renderCollectionBadges(isMobile)}
                   {product.normalizedImage ? (

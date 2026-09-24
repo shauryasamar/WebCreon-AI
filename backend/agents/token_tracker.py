@@ -136,6 +136,17 @@ class TokenTrackerState:
                 f"Cost: ${call_cost:.6f} | Session Total: ${sess_rec['total_cost_usd']:.5f} ({sess_rec['total_calls']} calls)"
             )
 
+            # 4. Debit unified AI Credits pool (1 credit = 100 tokens)
+            try:
+                _sync_deduct_credits(
+                    session_id=session_id,
+                    total_tokens=total_toks,
+                    agent_name=agent_name,
+                    model_name=model_name,
+                )
+            except Exception as debit_err:
+                print("Token Tracker Credit debit warning:", debit_err)
+
             return {
                 "call_cost_usd": call_cost,
                 "session_cost_usd": sess_rec["total_cost_usd"],
@@ -158,6 +169,66 @@ class TokenTrackerState:
     def get_global_summary(self) -> Dict[str, Any]:
         with self._lock:
             return dict(self.global_stats)
+
+
+def _sync_deduct_credits(
+    session_id: Optional[str],
+    total_tokens: int,
+    agent_name: str,
+    model_name: str,
+) -> None:
+    """Safely looks up the admin context and executes FIFO credit deduction."""
+    if total_tokens <= 0:
+        return
+
+    try:
+        from db.database import engine
+        from sqlmodel import Session, select
+        from models import Admin, AdminSite
+        from uuid import UUID
+        from services.ai_credit_service import deduct_tokens_from_account
+
+        with Session(engine) as db:
+            admin_id = None
+            website_id = None
+
+            # 1. Try to parse session_id as site UUID or lookup site
+            if session_id:
+                try:
+                    site_uuid = UUID(session_id)
+                    from services.product_limit_service import get_website_admin_id
+                    admin_id = get_website_admin_id(db, site_uuid)
+                    if admin_id:
+                        website_id = site_uuid
+                except Exception:
+                    pass
+
+                # 2. Try onboarding conversation sessions
+                if not admin_id:
+                    try:
+                        from agents.conversation_agent import SESSIONS
+                        conv_sess = SESSIONS.get(session_id)
+                        if conv_sess and conv_sess.admin_email:
+                            admin = db.exec(
+                                select(Admin).where(Admin.email == conv_sess.admin_email.lower().strip())
+                            ).first()
+                            if admin:
+                                admin_id = admin.id
+                    except Exception:
+                        pass
+
+            if admin_id:
+                debited = deduct_tokens_from_account(
+                    session=db,
+                    admin_id=admin_id,
+                    total_tokens=total_tokens,
+                    feature_name=agent_name,
+                    website_id=website_id,
+                    model_name=model_name,
+                )
+                print(f"💳 [CREDIT DEDUCTED] -{debited} credits for Admin {admin_id} (Tokens: {total_tokens}, Agent: {agent_name})")
+    except Exception as e:
+        print("Credit deduction sync error:", e)
 
 
 # Singleton Instance
@@ -223,3 +294,4 @@ def track_manual_usage(
 def get_token_tracker() -> TokenTrackerState:
     """Returns the singleton TokenTrackerState instance."""
     return _tracker
+

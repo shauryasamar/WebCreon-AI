@@ -133,11 +133,8 @@ export const AiWebpageGeneratingAnimation: React.FC<AiWebpageGeneratingAnimation
           backdropFilter: "blur(8px)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#ef4444" }} />
-          <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#f59e0b" }} />
-          <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#10b981" }} />
-          <span style={{ marginLeft: "6px", fontSize: "11px", color: subtextColor, fontWeight: 600 }}>
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <span style={{ fontSize: "11px", color: subtextColor, fontWeight: 600 }}>
             WebCreon AI Engine
           </span>
         </div>

@@ -573,7 +573,7 @@ def set_domain_primary(
     Atomically marks a connected domain as the primary domain for the store.
     """
     sub = get_or_create_website_subscription(session, site_id)
-    if sub.plan == "FREE" or sub.status not in ("ACTIVE", "GRACE_PERIOD"):
+    if sub.plan == "FREE" or sub.status != "ACTIVE":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Setting a custom domain as primary requires an active Starter or Pro plan. Please upgrade your store plan.",

@@ -231,6 +231,34 @@ export const AdminTaxComplianceDesk: React.FC<{
             formDefaultHsn: (data.profile.default_hsn_code || "").trim(),
           });
           setInitialSnapshot(snap);
+        } else {
+          setTaxProfile(null);
+          setFormLegalName("");
+          setFormTradeName("");
+          setFormEntityType("proprietorship");
+          setFormRegType("regular");
+          setFormPan("");
+          setFormGstin("");
+          setFormStateCode("27");
+          setFormCity("");
+          setFormPincode("");
+          setFormIsComposition(false);
+          setFormDefaultHsn("");
+
+          const snap = JSON.stringify({
+            formLegalName: "",
+            formTradeName: "",
+            formEntityType: "proprietorship",
+            formRegType: "regular",
+            formPan: "",
+            formGstin: "",
+            formStateCode: "27",
+            formCity: "",
+            formPincode: "",
+            formIsComposition: false,
+            formDefaultHsn: "",
+          });
+          setInitialSnapshot(snap);
         }
         if (data.section_194o) {
           setSec194O(data.section_194o);
@@ -531,7 +559,7 @@ export const AdminTaxComplianceDesk: React.FC<{
                     required
                     value={formLegalName}
                     onChange={(e) => setFormLegalName(e.target.value)}
-                    placeholder="e.g. GreenHarvest Enterprises Pvt Ltd"
+                    placeholder="e.g. Acme Retail Pvt Ltd"
                     style={inputStyle}
                   />
                 </div>
@@ -542,7 +570,7 @@ export const AdminTaxComplianceDesk: React.FC<{
                     type="text"
                     value={formTradeName}
                     onChange={(e) => setFormTradeName(e.target.value)}
-                    placeholder="e.g. GreenHarvest Store"
+                    placeholder="e.g. My Brand Store"
                     style={inputStyle}
                   />
                 </div>

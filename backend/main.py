@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(usecwd=True))
@@ -170,8 +170,22 @@ def run_database_security_cleanup():
                     for bl in bad_member_links:
                         session.delete(bl)
 
+            # 3. Set test AI credit for shauryasmr@gmail.com and shauryasamar@gmail.com (300 used, 0 remaining for testing exhaustion)
+            target_emails = ["shauryasmr@gmail.com", "shauryasamar@gmail.com"]
+            for target_email in target_emails:
+                target_admin = session.exec(
+                    select(Admin).where(func.lower(Admin.email) == target_email)
+                ).first()
+                if target_admin:
+                    from services.ai_credit_service import ensure_free_base_batch, AICreditBatch
+                    batch = ensure_free_base_batch(session, target_admin.id)
+                    if batch:
+                        batch.allocated_amount = 300
+                        batch.remaining_amount = 0  # 0 credits remaining to test exhaustion immediately
+                        session.add(batch)
+
             session.commit()
-            logger.info("SECURITY RECONCILIATION: Database permissions and isolation verified.")
+            logger.info("SECURITY RECONCILIATION: Database permissions and security verified.")
     except Exception as cleanup_err:
         logger.warning("Could not complete security cleanup: %s", cleanup_err)
 
@@ -663,18 +677,31 @@ async def conversation_start_endpoint(
     req: StartConversationRequest,
     request: Request,
     owner=Depends(enforce_owner_role),
+    db: Session = Depends(get_session),
 ):
     admin_name = "Creator"
     admin_email = None
+    admin_id = UUID(str(owner["adminId"]))
     try:
-        cookie_val = request.cookies.get("admin_session")
-        if cookie_val:
-            decoded = json.loads(cookie_val)
-            admin_email = decoded.get("email")
-            if admin_email:
-                admin_name = admin_email.split("@")[0].title()
+        admin_obj = db.get(Admin, admin_id)
+        if admin_obj and admin_obj.email:
+            admin_email = admin_obj.email
+            admin_name = (admin_obj.name or admin_email.split("@")[0]).title()
     except Exception:
         pass
+
+    from services.ai_credit_service import check_account_has_credits
+    has_credits, total_rem, reset_date = check_account_has_credits(db, admin_id)
+    if not has_credits:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error_code": "AI_CREDIT_LIMIT_REACHED",
+                "message": "Monthly AI credit limit reached. Please upgrade your plan to continue using AI.",
+                "total_remaining": 0,
+                "reset_date": reset_date,
+            },
+        )
 
     from agents.conversation_agent import start_session
     session = await start_session(initial_prompt=req.prompt, admin_name=admin_name, admin_email=admin_email)
@@ -686,18 +713,34 @@ async def conversation_start_stream_endpoint(
     req: StartConversationRequest,
     request: Request,
     owner=Depends(enforce_owner_role),
+    db: Session = Depends(get_session),
 ):
     admin_name = "Creator"
     admin_email = None
+    admin_id = UUID(str(owner["adminId"]))
     try:
-        cookie_val = request.cookies.get("admin_session")
-        if cookie_val:
-            decoded = json.loads(cookie_val)
-            admin_email = decoded.get("email")
-            if admin_email:
-                admin_name = admin_email.split("@")[0].title()
+        admin_obj = db.get(Admin, admin_id)
+        if admin_obj and admin_obj.email:
+            admin_email = admin_obj.email
+            admin_name = (admin_obj.name or admin_email.split("@")[0]).title()
     except Exception:
         pass
+
+    from services.ai_credit_service import check_account_has_credits
+    has_credits, total_rem, reset_date = check_account_has_credits(db, admin_id)
+    if not has_credits:
+        async def paywall_generator():
+            paywall_event = {
+                "type": "paywall_exhausted",
+                "error_code": "AI_CREDIT_LIMIT_REACHED",
+                "message": "Monthly AI credit limit reached. Please upgrade your plan for higher monthly credit limits.",
+                "total_remaining": 0,
+                "reset_date": reset_date,
+                "phase": "paywall",
+                "is_complete": False,
+            }
+            yield f"data: {json.dumps(paywall_event)}\n\n"
+        return StreamingResponse(paywall_generator(), media_type="text/event-stream")
 
     from agents.conversation_agent import start_session_stream
 
@@ -721,7 +764,22 @@ async def conversation_start_stream_endpoint(
 async def conversation_reply_endpoint(
     req: ReplyConversationRequest,
     owner=Depends(enforce_owner_role),
+    db: Session = Depends(get_session),
 ):
+    admin_id = UUID(str(owner["adminId"]))
+    from services.ai_credit_service import check_account_has_credits
+    has_credits, total_rem, reset_date = check_account_has_credits(db, admin_id)
+    if not has_credits:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error_code": "AI_CREDIT_LIMIT_REACHED",
+                "message": "Monthly AI credit limit reached. Please upgrade your plan to continue using AI.",
+                "total_remaining": 0,
+                "reset_date": reset_date,
+            },
+        )
+
     from agents.conversation_agent import reply_session
     try:
         session = await reply_session(session_id=req.session_id, user_reply=req.reply)
@@ -734,12 +792,39 @@ async def conversation_reply_endpoint(
 async def conversation_reply_stream_endpoint(
     req: ReplyConversationRequest,
     owner=Depends(enforce_owner_role),
+    db: Session = Depends(get_session),
 ):
     from agents.conversation_agent import reply_session_stream, SESSIONS
 
     session = SESSIONS.get(req.session_id)
     if not session:
         raise HTTPException(status_code=404, detail=f"Session {req.session_id} not found")
+
+    admin_id = UUID(str(owner["adminId"]))
+    from services.ai_credit_service import check_account_has_credits
+    has_credits, total_rem, reset_date = check_account_has_credits(db, admin_id)
+    if not has_credits:
+        async def paywall_generator():
+            paywall_event = {
+                "type": "paywall_exhausted",
+                "error_code": "AI_CREDIT_LIMIT_REACHED",
+                "message": "Monthly AI credit limit reached. Please upgrade your plan for higher monthly credit limits.",
+                "total_remaining": 0,
+                "reset_date": reset_date,
+                "phase": "paywall",
+                "is_complete": False,
+            }
+            yield f"data: {json.dumps(paywall_event)}\n\n"
+        return StreamingResponse(paywall_generator(), media_type="text/event-stream")
+
+    # Ensure admin_email is set on session if missing
+    if not session.admin_email:
+        try:
+            admin_obj = db.get(Admin, admin_id)
+            if admin_obj and admin_obj.email:
+                session.admin_email = admin_obj.email
+        except Exception:
+            pass
 
     async def event_generator():
         try:
@@ -781,16 +866,16 @@ async def conversation_rehydrate_endpoint(
     req: RehydrateConversationRequest,
     request: Request,
     owner=Depends(enforce_owner_role),
+    db: Session = Depends(get_session),
 ):
     admin_name = "Creator"
     admin_email = None
     try:
-        cookie_val = request.cookies.get("admin_session")
-        if cookie_val:
-            decoded = json.loads(cookie_val)
-            admin_email = decoded.get("email")
-            if admin_email:
-                admin_name = admin_email.split("@")[0].title()
+        admin_id = UUID(str(owner["adminId"]))
+        admin_obj = db.get(Admin, admin_id)
+        if admin_obj and admin_obj.email:
+            admin_email = admin_obj.email
+            admin_name = (admin_obj.name or admin_email.split("@")[0]).title()
     except Exception:
         pass
 
@@ -831,6 +916,19 @@ async def copilot_chat_endpoint(
         except Exception:
             pass
 
+    from services.ai_credit_service import check_account_has_credits
+    has_credits, total_rem, reset_date = check_account_has_credits(session, admin_id)
+    if not has_credits:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error_code": "AI_CREDIT_LIMIT_REACHED",
+                "message": "Monthly AI credit limit reached. Please upgrade your plan to continue using AI Copilot.",
+                "total_remaining": 0,
+                "reset_date": reset_date,
+            },
+        )
+
     from services.ai_metering import call_ai_with_metering
 
     async def _run_copilot():
@@ -859,9 +957,42 @@ async def copilot_chat_stream_endpoint(
 ):
     if not (check_admin_has_permission(admin["adminId"], "chat:access", session) or check_admin_has_permission(admin["adminId"], "chat:send", session)):
         raise HTTPException(status_code=403, detail="You do not have permission to access AI Copilot.")
+
+    admin_id = UUID(str(admin["adminId"]))
+    site_uuid = None
+    if req.site_id:
+        try:
+            site_uuid = UUID(req.site_id)
+        except Exception:
+            pass
+
+    from services.ai_credit_service import check_account_has_credits
+    has_credits, total_rem, reset_date = check_account_has_credits(session, admin_id)
+    if not has_credits:
+        async def paywall_generator():
+            paywall_event = {
+                "type": "paywall_exhausted",
+                "error_code": "AI_CREDIT_LIMIT_REACHED",
+                "assistant_reply": "",
+                "total_remaining": 0,
+                "reset_date": reset_date,
+                "data_cards": [{
+                    "type": "paywall_card",
+                    "title": "AI Credit Limit Reached",
+                    "description": "You have used all credits in your monthly pool. Upgrade your plan to continue using AI Copilot.",
+                    "reset_date": reset_date,
+                }],
+                "design_modified": False,
+                "updated_draft_definition": None,
+            }
+            yield f"data: {json.dumps(paywall_event)}\n\n"
+        return StreamingResponse(paywall_generator(), media_type="text/event-stream")
+
     from agents.copilot_agent import process_copilot_request_stream
 
     async def event_generator():
+        prompt_chars = len(req.message or "") + sum(len(str(h.get("content") or h.get("text") or "")) for h in (req.chat_history or []))
+        total_output_chars = 0
         try:
             async for event in process_copilot_request_stream(
                 message=req.message,
@@ -869,7 +1000,27 @@ async def copilot_chat_stream_endpoint(
                 chat_history=req.chat_history,
                 draft_definition=req.draft_definition,
             ):
+                if event.get("type") == "token":
+                    total_output_chars += len(str(event.get("content", "")))
+                elif event.get("type") == "done":
+                    reply_txt = str(event.get("assistant_reply", ""))
+                    if reply_txt:
+                        total_output_chars = max(total_output_chars, len(reply_txt))
                 yield f"data: {json.dumps(event)}\n\n"
+
+            # Commit token credit deduction at end of stream
+            input_toks = max(10, round(prompt_chars / 3.5))
+            output_toks = max(10, round(total_output_chars / 3.5))
+            from services.ai_credit_service import deduct_tokens_from_account
+            with Session(engine) as db_sess:
+                deduct_tokens_from_account(
+                    session=db_sess,
+                    admin_id=admin_id,
+                    total_tokens=input_toks + output_toks,
+                    feature_name="copilot_chat",
+                    website_id=site_uuid,
+                    model_name="gpt-4o-mini",
+                )
         except Exception as e:
             error_payload = {
                 "type": "done",
@@ -881,6 +1032,7 @@ async def copilot_chat_stream_endpoint(
             yield f"data: {json.dumps(error_payload)}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
 
 
 @app.post("/understanding", response_model=RequirementsResponse)
@@ -919,7 +1071,22 @@ class CustomSiteDefinitionRequest(BaseModel):
 async def generate_site_definition_endpoint(
     req: CustomSiteDefinitionRequest,
     owner=Depends(enforce_owner_role),
+    db: Session = Depends(get_session),
 ):
+    admin_id = UUID(str(owner["adminId"]))
+    from services.ai_credit_service import check_account_has_credits
+    has_credits, total_rem, reset_date = check_account_has_credits(db, admin_id)
+    if not has_credits:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error_code": "AI_CREDIT_LIMIT_REACHED",
+                "message": "Monthly AI credit limit reached. Please upgrade your plan to generate stores.",
+                "total_remaining": 0,
+                "reset_date": reset_date,
+            },
+        )
+
     prompt_text = req.prompt or ""
     collected_reqs = {}
     session = None
@@ -1000,7 +1167,23 @@ async def generate_site_definition_endpoint(
 async def generate_site_definition_stream_endpoint(
     req: CustomSiteDefinitionRequest,
     owner=Depends(enforce_owner_role),
+    db: Session = Depends(get_session),
 ):
+    admin_id = UUID(str(owner["adminId"]))
+    from services.ai_credit_service import check_account_has_credits
+    has_credits, total_rem, reset_date = check_account_has_credits(db, admin_id)
+    if not has_credits:
+        async def paywall_generator():
+            paywall_event = {
+                "step": "error",
+                "progress": 0,
+                "error_code": "AI_CREDIT_LIMIT_REACHED",
+                "message": "Monthly AI credit limit reached. Please upgrade your plan to generate stores.",
+                "total_remaining": 0,
+                "reset_date": reset_date,
+            }
+            yield f"data: {json.dumps(paywall_event)}\n\n"
+        return StreamingResponse(paywall_generator(), media_type="text/event-stream")
     async def event_generator():
         try:
             yield f"data: {json.dumps({'step': 'start', 'progress': 10, 'message': 'Initializing AI generation pipeline...'})}\n\n"
@@ -1805,10 +1988,51 @@ def delete_site(
     # 15. Audit Logs
     session.exec(delete(AuditLog).where(AuditLog.site_id == site_id))
 
-    # 16. AdminSite associations
+    # 16. Billing, Subscriptions, Invoices & Team Access
+    from models import (
+        WebsiteSubscription,
+        WebsiteSubscriptionEvent,
+        WebsiteTeamMember,
+        SubscriptionInvoice,
+        SubscriptionPayment,
+        GracePeriodReminderEvent,
+        BillingIdempotencyKey,
+        AICreditBatch,
+        AICreditReservation,
+        AICreditUsageEvent,
+        MerchantTaxProfile,
+        TaxCreditNote,
+        TaxInvoice,
+        PlatformTaxInvoice,
+        InvoiceSequence,
+    )
+
+    # Clean up associated AI credit batches, reservations & events
+    session.exec(delete(AICreditUsageEvent).where(AICreditUsageEvent.website_id == site_id))
+    session.exec(delete(AICreditReservation).where(AICreditReservation.website_id == site_id))
+    session.exec(delete(AICreditBatch).where(AICreditBatch.source_website_id == site_id))
+
+    # Clean up grace reminders and subscriptions
+    sub_ids = session.exec(select(WebsiteSubscription.id).where(WebsiteSubscription.website_id == site_id)).all()
+    if sub_ids:
+        session.exec(delete(GracePeriodReminderEvent).where(GracePeriodReminderEvent.subscription_id.in_(sub_ids)))
+
+    session.exec(delete(WebsiteSubscriptionEvent).where(WebsiteSubscriptionEvent.website_id == site_id))
+    session.exec(delete(WebsiteSubscription).where(WebsiteSubscription.website_id == site_id))
+    session.exec(delete(WebsiteTeamMember).where(WebsiteTeamMember.website_id == site_id))
+    session.exec(delete(SubscriptionInvoice).where(SubscriptionInvoice.website_id == site_id))
+    session.exec(delete(SubscriptionPayment).where(SubscriptionPayment.website_id == site_id))
+    session.exec(delete(BillingIdempotencyKey).where(BillingIdempotencyKey.website_id == site_id))
+    session.exec(delete(TaxCreditNote).where(TaxCreditNote.site_id == site_id))
+    session.exec(delete(TaxInvoice).where(TaxInvoice.site_id == site_id))
+    session.exec(delete(PlatformTaxInvoice).where(PlatformTaxInvoice.site_id == site_id))
+    session.exec(delete(InvoiceSequence).where(InvoiceSequence.site_id == site_id))
+    session.exec(delete(MerchantTaxProfile).where(MerchantTaxProfile.site_id == site_id))
+
+    # 17. AdminSite associations
     session.exec(delete(AdminSite).where(AdminSite.site_id == site_id))
 
-    # 17. Delete Site entity
+    # 18. Delete Site entity
     session.delete(site)
     session.commit()
 

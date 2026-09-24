@@ -715,10 +715,13 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
     );
   }
 
-  // AI credits & progress bar calculation
-  const aiRemaining = aiCredits?.total_remaining ?? 1720;
-  const aiTotal = Math.max(aiCredits?.total_monthly_allocation ?? 1720, 1);
-  const aiPct = Math.min(100, Math.round((aiRemaining / aiTotal) * 100));
+  // AI credits & progress bar calculation (Increasing format: Used / Total)
+  const aiTotal = aiCredits?.total_monthly_allocation ?? 300;
+  const aiRemaining = aiCredits?.total_remaining ?? aiTotal;
+  const aiUsed = Math.max(0, aiTotal - aiRemaining);
+  const aiUsagePct = aiTotal > 0 ? Math.min(100, Math.max(0, Math.round((aiUsed / aiTotal) * 100))) : 0;
+  const aiBarColor = aiUsagePct >= 100 ? "#ef4444" : aiUsagePct >= 90 ? "#f59e0b" : "#2563eb";
+  const aiCounterTextColor = aiUsagePct >= 100 ? "#ef4444" : aiUsagePct >= 90 ? "#d97706" : "#0f172a";
 
   // Current website clean name and initial
   const currentSiteCleanName = selectedDetails ? formatSiteName(selectedDetails.website_name) : "";
@@ -853,10 +856,12 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
 
           <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
             <div style={{ textAlign: "right" }}>
-              <span style={{ fontSize: "16px", fontWeight: 800, color: "#0f172a" }}>
-                {aiRemaining.toLocaleString()} / {aiTotal.toLocaleString()}
+              <span style={{ fontSize: "16px", fontWeight: 800, color: aiCounterTextColor }}>
+                {aiUsed.toLocaleString()} / {aiTotal.toLocaleString()}
               </span>
-              <span style={{ fontSize: "12.5px", color: "#64748b", marginLeft: "6px" }}>credits left</span>
+              <span style={{ fontSize: "12.5px", color: "#64748b", marginLeft: "6px" }}>
+                credits used ({aiRemaining.toLocaleString()} left)
+              </span>
             </div>
 
             <button
@@ -896,58 +901,68 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
         >
           <div
             style={{
-              width: `${aiPct}%`,
+              width: `${aiUsagePct}%`,
               height: "100%",
-              background: aiPct < 15 ? "#ef4444" : aiPct < 40 ? "#f59e0b" : "#2563eb",
+              background: aiBarColor,
               borderRadius: "4px",
-              transition: "width 0.4s ease",
+              transition: "width 0.4s ease, background-color 0.3s ease",
             }}
           />
         </div>
 
-          {showBatchDrawer && (
-            <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px solid #f1f5f9" }}>
-              <div style={{ fontSize: "12px", fontWeight: 700, color: "#475569", marginBottom: "8px" }}>
-                Active Credit Batches (FIFO Order):
-              </div>
-              {aiCredits?.batches && aiCredits.batches.length > 0 ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  {aiCredits.batches.map((b) => (
-                    <div
-                      key={b.batch_id}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        background: "#f8fafc",
-                        padding: "8px 12px",
-                        borderRadius: "7px",
-                        fontSize: "12px",
-                        border: "1px solid #f1f5f9",
-                      }}
-                    >
-                      <div>
-                        <span style={{ fontWeight: 600, color: "#0f172a" }}>
-                          {b.is_free_base ? "Base Free Batch" : `${b.batch_type.replace("PAID_", "")} Website Batch`}
-                        </span>
-                        <span style={{ color: "#64748b", marginLeft: "8px" }}>
-                          ({b.allocated} credits)
-                        </span>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <span style={{ fontWeight: 700, color: "#2563eb" }}>{b.remaining} remaining</span>
-                        <span style={{ fontSize: "11px", color: "#64748b", marginLeft: "10px" }}>
-                          Expires {formatRenewalDate(b.expiry_date)}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+          {showBatchDrawer && (() => {
+            const activeBatches = (aiCredits?.batches || []).filter((b) => {
+              if (!b.expiry_date) return true;
+              const isExpired = new Date(b.expiry_date).getTime() <= Date.now();
+              return !isExpired && (b.remaining > 0 || b.is_free_base);
+            });
+
+            return (
+              <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px solid #f1f5f9" }}>
+                <div style={{ fontSize: "12px", fontWeight: 700, color: "#475569", marginBottom: "8px" }}>
+                  Active Credit Batches (FIFO Order):
                 </div>
-              ) : (
-                <div style={{ fontSize: "12px", color: "#64748b" }}>No active credit batches found.</div>
-              )}
-            </div>
-          )}
+                {activeBatches.length > 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    {activeBatches.map((b) => (
+                      <div
+                        key={b.batch_id}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          background: "#f8fafc",
+                          padding: "8px 12px",
+                          borderRadius: "7px",
+                          fontSize: "12px",
+                          border: "1px solid #f1f5f9",
+                        }}
+                      >
+                        <div>
+                          <span style={{ fontWeight: 600, color: "#0f172a" }}>
+                            {b.is_free_base ? "Base Free Batch" : `${b.batch_type.replace("PAID_", "")} Website Batch`}
+                          </span>
+                          <span style={{ color: "#64748b", marginLeft: "8px" }}>
+                            ({b.allocated.toLocaleString()} credits)
+                          </span>
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <span style={{ fontWeight: 700, color: b.remaining === 0 ? "#ef4444" : "#2563eb" }}>
+                            {b.remaining.toLocaleString()} left
+                          </span>
+                          <span style={{ fontSize: "11px", color: "#64748b", marginLeft: "10px" }}>
+                            Expires {formatRenewalDate(b.expiry_date)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: "12px", color: "#64748b" }}>No active credit batches found.</div>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
       {/* ========================================================================= */}
@@ -1770,10 +1785,10 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                           <CheckIcon /> <span>200 products (shared pool)</span>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                          <CheckIcon /> <span>20 AI credits / 30 days</span>
+                          <CheckIcon /> <span>300 AI credits / 30 days</span>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                          <CheckIcon /> <span>5% WebCreon fee</span>
+                          <CheckIcon /> <span>5% Platform fee</span>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
                           <CrossIcon /> <span style={{ color: "#64748b" }}>Custom domain</span>
@@ -1899,7 +1914,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                           <CheckIcon /> <span>1,000 dedicated products</span>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                          <CheckIcon /> <span>100 AI credits / 30 days</span>
+                          <CheckIcon /> <span>1,000 AI credits / 30 days</span>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
                           <CheckIcon /> <span>2.5% Platform fee</span>
@@ -2056,7 +2071,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                           <CheckIcon /> <span>Unlimited products</span>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                          <CheckIcon /> <span>500 AI credits / 30 days</span>
+                          <CheckIcon /> <span>2,000 AI credits / 30 days</span>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
                           <CheckIcon /> <span>1% Platform fee</span>
