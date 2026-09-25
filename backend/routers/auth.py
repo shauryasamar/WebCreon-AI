@@ -27,7 +27,7 @@ from auth_utils import (
     verify_password,
 )
 from db.database import get_session
-from models import Admin, AdminSite, Site, User
+from models import Admin, AdminSite, CustomerNotification, Order, ReturnRequest, Site, User, UserAddress
 from services.email_service import (
     send_admin_password_reset_email,
     send_customer_password_reset_email,
@@ -830,6 +830,164 @@ def admin_logout(response: Response):
     return {"message": "Admin logged out"}
 
 
+@router.delete("/admin/account")
+def admin_delete_account(
+    response: Response,
+    request: Request,
+    admin=Depends(authenticate_admin),
+    session: Session = Depends(get_session),
+):
+    admin_id = admin["adminId"]
+    try:
+        a_uuid = UUID(str(admin_id))
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid admin ID in token",
+        )
+
+    admin_obj = session.get(Admin, a_uuid)
+    if not admin_obj:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Admin not found",
+        )
+
+    # Log audit event before deletion
+    client_ip = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "unknown")
+    try:
+        log_audit_event(
+            session=session,
+            site_id=None,
+            action="admin.account_deleted",
+            category="user_access",
+            description=f"Admin {admin_obj.name or admin_obj.email} deleted their account",
+            admin_id=admin_obj.id,
+            actor_email=admin_obj.email,
+            actor_name=admin_obj.name,
+            actor_role=admin_obj.role,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            details={"target_type": "admin", "target_id": str(admin_obj.id)},
+        )
+    except Exception as e:
+        logger.warning(f"Could not log audit event for admin deletion: {e}")
+
+    # If invited staff/team member: only workspace owner can remove team members
+    if admin_obj.invited_by_admin_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Staff and team accounts created by an administrator cannot self-delete. Only the workspace owner can manage team members.",
+        )
+
+    # 1. Find all sites owned by this admin
+    admin_sites = session.exec(select(AdminSite).where(AdminSite.admin_id == a_uuid)).all()
+    owned_site_ids = [as_link.site_id for as_link in admin_sites]
+
+    # 2. Fraud & Scam Prevention: Block deletion if any owned store has active, unfulfilled orders or pending returns
+    if owned_site_ids:
+        terminal_order_statuses = ["delivered", "cancelled", "partially_cancelled", "refunded"]
+        active_orders = session.exec(
+            select(Order).where(
+                Order.site_id.in_(owned_site_ids),
+                Order.status.notin_(terminal_order_statuses),
+            )
+        ).all()
+
+        terminal_return_statuses = ["resolved", "rejected", "refund_issued", "replacement_delivered", "cancelled"]
+        active_returns = session.exec(
+            select(ReturnRequest).where(
+                ReturnRequest.site_id.in_(owned_site_ids),
+                ReturnRequest.status.notin_(terminal_return_statuses),
+            )
+        ).all()
+
+        if active_orders or active_returns:
+            issues = []
+            if active_orders:
+                issues.append(f"{len(active_orders)} active/unfulfilled order(s)")
+            if active_returns:
+                issues.append(f"{len(active_returns)} pending return request(s)")
+            issues_text = " and ".join(issues)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot delete account with active customer orders or pending returns. You have {issues_text} across your store(s). Please fulfill, deliver, cancel, or resolve all open orders and returns before deleting your account.",
+            )
+
+    # 3. Take all owned storefronts offline and remove all staff associations
+    for s_id in owned_site_ids:
+        site_obj = session.get(Site, s_id)
+        if site_obj:
+            site_obj.is_online = False
+            session.add(site_obj)
+        other_site_links = session.exec(select(AdminSite).where(AdminSite.site_id == s_id)).all()
+        for link in other_site_links:
+            session.delete(link)
+
+    # 3. Purge sensitive merchant bank account records (PAN, GST, bank account numbers)
+    try:
+        from models import TenantBankAccount
+        banks = session.exec(select(TenantBankAccount).where(TenantBankAccount.admin_id == a_uuid)).all()
+        for b in banks:
+            session.delete(b)
+    except Exception as e:
+        logger.warning(f"Error purging tenant bank accounts: {e}")
+
+    # 4. Release custom domains so they are not permanently locked in DB
+    try:
+        from models import SiteDomain
+        for s_id in owned_site_ids:
+            domains = session.exec(select(SiteDomain).where(SiteDomain.site_id == s_id)).all()
+            for d in domains:
+                session.delete(d)
+    except Exception as e:
+        logger.warning(f"Error releasing site domains: {e}")
+
+    # 5. Cancel active paid subscriptions and expire unconsumed AI credits
+    try:
+        from models import WebsiteSubscription, AICreditBatch, WebsiteTeamMember, StoreEmailSettings
+        subs = session.exec(select(WebsiteSubscription).where(WebsiteSubscription.admin_id == a_uuid)).all()
+        for sub in subs:
+            sub.status = "CANCELLED"
+            sub.is_auto_renew = False
+            session.add(sub)
+        batches = session.exec(select(AICreditBatch).where(AICreditBatch.admin_id == a_uuid)).all()
+        for batch in batches:
+            batch.status = "EXPIRED_LAPSED"
+            batch.remaining_amount = 0
+            session.add(batch)
+        for s_id in owned_site_ids:
+            members = session.exec(select(WebsiteTeamMember).where(WebsiteTeamMember.website_id == s_id)).all()
+            for mem in members:
+                session.delete(mem)
+            email_configs = session.exec(select(StoreEmailSettings).where(StoreEmailSettings.site_id == s_id)).all()
+            for ec in email_configs:
+                session.delete(ec)
+    except Exception as e:
+        logger.warning(f"Error cleaning subscriptions and merchant settings: {e}")
+
+    # 6. For workspace owner / merchant: clean credentials and anonymize PII cleanly
+    admin_obj.name = "Deleted Merchant"
+    admin_obj.email = f"deleted_{admin_obj.id}@deleted.webcreon.local"
+    admin_obj.phone = None
+    admin_obj.gender = None
+    admin_obj.avatar_url = None
+    admin_obj.password_hash = None
+    admin_obj.google_id = None
+    admin_obj.reset_token = None
+    admin_obj.reset_token_expires_at = None
+    admin_obj.status = "deleted"
+    admin_obj.is_active = False
+    session.add(admin_obj)
+
+    session.commit()
+
+    # Clear auth cookie
+    clear_auth_cookie(response, ADMIN_COOKIE_NAME)
+    return {"message": "Admin account successfully deleted"}
+
+
 @router.post("/customer/signup/{website_name}")
 def customer_signup(
     website_name: str,
@@ -980,6 +1138,86 @@ def customer_logout(
         clear_auth_cookie(response, f"customer_token_{clean_base}")
         clear_auth_cookie(response, f"customer_token_{target}")
     return {"message": "Customer logged out"}
+
+
+@router.delete("/customer/account/{website_name}")
+def customer_delete_account(
+    website_name: str,
+    response: Response,
+    request: Request,
+    auth_user=Depends(authenticate_customer),
+    session: Session = Depends(get_session),
+):
+    site = resolve_site_by_slug_or_404(website_name, session)
+
+    if str(site.id) != auth_user["siteId"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Customer token does not match requested site",
+        )
+
+    try:
+        user_uuid = UUID(str(auth_user["userId"]))
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid customer ID in token",
+        )
+
+    user = session.get(User, user_uuid)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Customer not found",
+        )
+
+    # 1. Delete associated customer addresses
+    addresses = session.exec(select(UserAddress).where(UserAddress.user_id == user_uuid)).all()
+    for addr in addresses:
+        session.delete(addr)
+
+    # 2. Delete customer notifications
+    try:
+        notifs = session.exec(select(CustomerNotification).where(CustomerNotification.customer_id == user_uuid)).all()
+        for n in notifs:
+            session.delete(n)
+    except Exception as e:
+        logger.warning(f"Error cleaning customer notifications: {e}")
+
+    # 3. Check if user has orders
+    orders = session.exec(select(Order).where(Order.customer_id == user_uuid)).all()
+    if not orders:
+        # Clean hard delete if user has no orders
+        session.delete(user)
+    else:
+        # Anonymize PII for accounting / regulatory compliance
+        user.name = "Deleted Customer"
+        user.email = f"deleted_{user.id}@anonymized.local"
+        user.phone = None
+        user.gender = None
+        user.date_of_birth = None
+        user.avatar_url = None
+        user.password_hash = None
+        user.google_id = None
+        user.reset_token = None
+        user.reset_token_expires_at = None
+        user.is_active = False
+        user.auth_provider = "deleted"
+        session.add(user)
+
+    session.commit()
+
+    # 4. Clear auth cookies
+    clear_auth_cookie(response, CUSTOMER_COOKIE_NAME)
+    target = website_name or request.headers.get("X-Site-Id")
+    if target:
+        clean_target = str(target).strip().lower()
+        clean_base = clean_target.split("-")[0]
+        clear_auth_cookie(response, f"customer_token_{clean_target}")
+        clear_auth_cookie(response, f"customer_token_{clean_base}")
+        clear_auth_cookie(response, f"customer_token_{target}")
+
+    return {"message": "Account deleted successfully"}
 
 
 @router.put("/customer/profile/{website_name}")

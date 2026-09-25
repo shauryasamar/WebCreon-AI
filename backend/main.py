@@ -45,7 +45,7 @@ from models import (
     SupportAgent, SupportTicket, SupportTicketMessage,
     StorePage, Coupon, CouponUsage, SiteDefinitionHistory,
 )
-from routers import analytics, auth, cart, categories, checkout, checkout_settings, collections, coupons, orders, pages, payments, products, returns, support, users_roles, audit_logs, domains, notifications, compliance, billing
+from routers import analytics, auth, cart, categories, checkout, checkout_settings, collections, coupons, orders, pages, payments, products, returns, support, users_roles, audit_logs, domains, notifications, compliance, billing, merchant_support
 from routers import delivery
 
 
@@ -377,7 +377,6 @@ app = FastAPI(title="AI Website Builder Backend", lifespan=lifespan)
 
 # CORS: reads comma-separated origins from CORS_ORIGINS env var.
 # Defaults to ["*"] for local dev. Set to specific domains in production.
-# Example: CORS_ORIGINS=https://yourdomain.com,https://admin.yourdomain.com
 _cors_raw = os.getenv("CORS_ORIGINS", "*").strip()
 _cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()] or ["*"]
 
@@ -429,6 +428,7 @@ app.include_router(notifications.router, prefix="/api")
 app.include_router(compliance.router)
 app.include_router(compliance.router, prefix="/api")
 app.include_router(billing.router)
+app.include_router(merchant_support.router)
 
 
 # ---------------------------------------------------------------------------
@@ -2037,3 +2037,8 @@ def delete_site(
     session.commit()
 
     return {"message": "Site deleted successfully", "site_id": str(site_id)}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

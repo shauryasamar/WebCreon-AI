@@ -31,6 +31,7 @@ type AdminAuthContextType = {
   setAdmin: (admin: AdminUser | null) => void;
   refreshAdmin: () => Promise<AdminUser | null>;
   logoutAdmin: () => Promise<void>;
+  deleteAdminAccount: () => Promise<void>;
 };
 
 const AdminAuthContext = createContext<AdminAuthContextType | undefined>(undefined);
@@ -179,6 +180,47 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     [admin, isOwner]
   );
 
+  const deleteAdminAccount = useCallback(async () => {
+    const response = await fetch(`${API_BASE_URL}/auth/admin/account`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || data.message || "Failed to delete account");
+    }
+
+    // Only clear local session and auth state on successful deletion
+    try {
+      if (typeof window !== "undefined") {
+        Object.keys(sessionStorage).forEach((key) => {
+          if (
+            key.startsWith("webnirmaan_copilot_chat_") ||
+            key.startsWith("webnirmaan_onboarding_") ||
+            key.startsWith("wc_onboarding_")
+          ) {
+            sessionStorage.removeItem(key);
+          }
+        });
+        Object.keys(localStorage).forEach((key) => {
+          if (
+            key.startsWith("webnirmaan_copilot_chat_") ||
+            key.startsWith("webnirmaan_onboarding_") ||
+            key.startsWith("wc_onboarding_") ||
+            key.startsWith("wc_site_snapshot_") ||
+            key.startsWith("wc_theme_") ||
+            key.startsWith("wc_admin_")
+          ) {
+            localStorage.removeItem(key);
+          }
+        });
+        localStorage.removeItem("wc_admin_saved_sites");
+        clearSavedSitesMemoryCache();
+      }
+    } catch {}
+    setAdmin(null);
+  }, [setAdmin]);
+
   return (
     <AdminAuthContext.Provider
       value={{
@@ -189,6 +231,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setAdmin,
         refreshAdmin,
         logoutAdmin,
+        deleteAdminAccount,
       }}
     >
       {children}

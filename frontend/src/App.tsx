@@ -25,8 +25,8 @@ import {
   AdminDomainSettings,
   AdminBillingSettings,
   AdminIntegrationsSettings,
-  AdminHelpAndSupport,
 } from "./Component/AdminSettingsViews";
+import { AdminHelpSupport } from "./Component/AdminHelpSupport";
 import { AiWebpageGeneratingAnimation } from "./Component/AiWebpageGeneratingAnimation";
 import { AiAvatar } from "./Component/AiAvatar";
 import { UserAvatar } from "./Component/UserAvatar";
@@ -911,7 +911,7 @@ function AdminSitesPage() {
         </div>
       ) : activeSettingsNavKey === "help-support" ? (
         <div style={{ height: "100%", overflowY: "auto", background: "#ffffff", padding: "24px", boxSizing: "border-box" }}>
-          <AdminHelpAndSupport />
+          <AdminHelpSupport />
         </div>
       ) : !isOwner ? (
         <div

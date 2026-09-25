@@ -59,30 +59,6 @@ export type SiteDomainOverviewItem = {
 };
 
 // ---------------------------------------------------------------------------
-// COLOR PALETTES FOR AVATARS (IDENTICAL TO BILLING)
-// ---------------------------------------------------------------------------
-
-const AVATAR_PALETTES = [
-  { bg: "#eff6ff", color: "#2563eb" }, // Blue
-  { bg: "#eef2ff", color: "#4f46e5" }, // Indigo
-  { bg: "#fff1f2", color: "#e11d48" }, // Rose
-  { bg: "#ecfdf5", color: "#059669" }, // Emerald
-  { bg: "#faf5ff", color: "#9333ea" }, // Purple
-  { bg: "#fffbeb", color: "#d97706" }, // Amber
-  { bg: "#f0fdfa", color: "#0d9488" }, // Teal
-  { bg: "#fdf4ff", color: "#c026d3" }, // Fuchsia
-];
-
-function getAvatarPalette(str: string) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const index = Math.abs(hash) % AVATAR_PALETTES.length;
-  return AVATAR_PALETTES[index];
-}
-
-// ---------------------------------------------------------------------------
 // ICONS
 // ---------------------------------------------------------------------------
 
@@ -458,8 +434,6 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
 
   // Active Store Display Properties
   const activeCleanName = activeStore ? formatSiteName(activeStore.site_name) : "";
-  const activePalette = getAvatarPalette(activeCleanName);
-  const activeInitial = activeCleanName ? activeCleanName[0].toUpperCase() : "S";
   const primaryLiveUrl = activeCustomDomain && activeCustomDomain.status === "connected" && activeStore?.custom_domain_allowed
     ? `https://${activeCustomDomain.domain}`
     : `https://${activeStore?.slug}.${platformBaseDomain}`;
@@ -757,80 +731,121 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
           )}
 
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            {/* TOP STORE BANNER CARD (Identical to Billing Top Store Card) */}
+            {/* TOP STORE BANNER CARD */}
             <div
               style={{
                 background: "#ffffff",
                 borderRadius: "10px",
                 border: "1px solid #e2e8f0",
-                padding: "12px 18px",
+                padding: "16px 20px",
                 boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
                 flexWrap: "wrap",
-                gap: "12px",
+                gap: "14px",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <div
-                  style={{
-                    width: "40px",
-                    height: "40px",
-                    borderRadius: "10px",
-                    background: activePalette.bg,
-                    color: activePalette.color,
-                    fontSize: "16px",
-                    fontWeight: 800,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                  }}
-                >
-                  {activeInitial}
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                  <h2 style={{ margin: 0, fontSize: "16.5px", fontWeight: 700, color: "#0f172a", letterSpacing: "-0.01em" }}>
+                    {activeCleanName}
+                  </h2>
+                  {activeCustomDomain && activeCustomDomain.is_primary && (
+                    <span
+                      title="Primary Custom Domain Active"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        color: "#059669",
+                        background: "#ecfdf5",
+                        border: "1px solid #a7f3d0",
+                        padding: "2px 7px",
+                        borderRadius: "5px",
+                      }}
+                    >
+                      <StarIcon /> Primary Domain
+                    </span>
+                  )}
                 </div>
 
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
-                      {activeCleanName}
-                    </h2>
-                    {activeCustomDomain && activeCustomDomain.is_primary && (
-                      <span title="Primary Custom Domain Active" style={{ display: "inline-flex", alignItems: "center" }}>
-                        <StarIcon />
-                      </span>
-                    )}
-                  </div>
-
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "3px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      background: "#f8fafc",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "6px",
+                      padding: "4px 8px 4px 10px",
+                    }}
+                  >
                     <a
                       href={primaryLiveUrl}
                       target="_blank"
                       rel="noreferrer"
+                      title="Open storefront in new tab"
                       style={{
-                        fontSize: "12px",
+                        fontSize: "12.5px",
                         fontFamily: "monospace",
                         color: "#2563eb",
                         textDecoration: "none",
+                        fontWeight: 600,
                         display: "inline-flex",
                         alignItems: "center",
-                        gap: "4px",
+                        gap: "5px",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.textDecoration = "underline";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.textDecoration = "none";
                       }}
                     >
                       <span>{primaryLiveUrl.replace("https://", "")}</span>
                       <ExternalLinkIcon />
                     </a>
+
+                    <button
+                      type="button"
+                      onClick={() => copyText(primaryLiveUrl, "Storefront URL")}
+                      title="Copy storefront URL"
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: "#64748b",
+                        cursor: "pointer",
+                        padding: "2px 4px",
+                        borderRadius: "4px",
+                        display: "flex",
+                        alignItems: "center",
+                        transition: "color 0.15s, background 0.15s",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = "#0f172a";
+                        e.currentTarget.style.background = "#e2e8f0";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = "#64748b";
+                        e.currentTarget.style.background = "transparent";
+                      }}
+                    >
+                      <CopyIcon />
+                    </button>
                   </div>
                 </div>
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                 <span
                   style={{
                     fontSize: "11px",
                     fontWeight: 700,
-                    padding: "3px 9px",
+                    padding: "4px 10px",
                     borderRadius: "6px",
                     background: (activeStore.plan || "").toUpperCase() === "PRO" ? "#f3e8ff" : (activeStore.plan || "").toUpperCase() === "STARTER" ? "#eff6ff" : "#f1f5f9",
                     color: (activeStore.plan || "").toUpperCase() === "PRO" ? "#7e22ce" : (activeStore.plan || "").toUpperCase() === "STARTER" ? "#1d4ed8" : "#475569",
@@ -846,7 +861,7 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                   style={{
                     fontSize: "11px",
                     fontWeight: 700,
-                    padding: "3px 9px",
+                    padding: "4px 10px",
                     borderRadius: "12px",
                     background: activeStore.is_published ? "#ecfdf5" : "#f8fafc",
                     color: activeStore.is_published ? "#059669" : "#64748b",
@@ -1255,8 +1270,6 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
             >
               {filteredStores.map((s) => {
                 const cleanName = formatSiteName(s.site_name);
-                const palette = getAvatarPalette(cleanName);
-                const initial = cleanName[0].toUpperCase();
                 const customDom = s.domains && s.domains.length > 0 ? s.domains[0] : null;
 
                 return (
@@ -1277,34 +1290,14 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                     }}
                   >
                     <div>
-                      {/* Top: Avatar, Name & Plan Badge */}
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                          <div
-                            style={{
-                              width: "36px",
-                              height: "36px",
-                              borderRadius: "8px",
-                              background: palette.bg,
-                              color: palette.color,
-                              fontSize: "15px",
-                              fontWeight: 800,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              flexShrink: 0,
-                            }}
-                          >
-                            {initial}
+                      {/* Top: Name & Plan Badge */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px", gap: "10px" }}>
+                        <div>
+                          <div style={{ fontSize: "14.5px", fontWeight: 700, color: "#0f172a", lineHeight: 1.2 }}>
+                            {cleanName}
                           </div>
-
-                          <div>
-                            <div style={{ fontSize: "14.5px", fontWeight: 700, color: "#0f172a", lineHeight: 1.2 }}>
-                              {cleanName}
-                            </div>
-                            <div style={{ fontSize: "11.5px", fontFamily: "monospace", color: "#64748b", marginTop: "2px" }}>
-                              {s.slug}.{platformBaseDomain}
-                            </div>
+                          <div style={{ fontSize: "11.5px", fontFamily: "monospace", color: "#64748b", marginTop: "3px" }}>
+                            {s.slug}.{platformBaseDomain}
                           </div>
                         </div>
 
@@ -1319,6 +1312,7 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                             border: `1px solid ${(s.plan || "").toUpperCase() === "PRO" ? "#d8b4fe" : (s.plan || "").toUpperCase() === "STARTER" ? "#bfdbfe" : "#cbd5e1"}`,
                             letterSpacing: "0.04em",
                             textTransform: "uppercase",
+                            flexShrink: 0,
                           }}
                         >
                           {s.plan || "FREE"}

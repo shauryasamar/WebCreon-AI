@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { isColorDarkHex } from "../context/ThemeContext";
 import { useDeviceMode } from "../context/DeviceModeContext";
+import { useCart } from "../CartContext";
 
 type ThemeInput =
   | "dark"
@@ -192,23 +193,91 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
   onContinue,
   continueDisabled = false,
 }) => {
+  let cartItems: any[] = [];
+  let storeProducts: any[] = [];
+  let cartTotal = 0;
+  let storeEnableCod = true;
+  let maxCodLimit = 5000;
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const cart = useCart();
+    cartItems = cart?.cartItems || [];
+    storeProducts = cart?.products || [];
+    cartTotal = cart?.cartTotal ?? 0;
+    if (cart?.enableCod !== undefined) {
+      storeEnableCod = Boolean(cart.enableCod);
+    }
+    if (cart?.maxCodAmount !== undefined) {
+      maxCodLimit = Number(cart.maxCodAmount);
+    }
+  } catch {
+    // outside CartProvider
+  }
+
+  // Calculate gross subtotal from items if cartTotal is not yet computed
+  const calculatedTotal = useMemo(() => {
+    if (cartTotal > 0) return cartTotal;
+    if (!cartItems || cartItems.length === 0) return 0;
+    return cartItems.reduce(
+      (sum, it) => sum + (Number(it.price || it.unit_price || 0) * (it.quantity || 1)),
+      0
+    );
+  }, [cartTotal, cartItems]);
+
   const isUpiEnabled = enable_upi !== false;
   const isCardEnabled = enable_card !== false;
   const isNetbankingEnabled = enable_netbanking !== false;
-  const isCodEnabled = enable_cod !== false;
+  const isCodGloballyEnabled = enable_cod !== false && storeEnableCod !== false;
+
+  // Check if order total exceeds store max COD limit (when limit > 0)
+  const isOrderExceedingCodLimit = maxCodLimit > 0 && calculatedTotal > maxCodLimit;
+
+  const codIneligibleProducts = useMemo(() => {
+    if (!cartItems || cartItems.length === 0) return [];
+    return cartItems.filter((it) => {
+      const matching = storeProducts.find(
+        (p) =>
+          String(p.id) === String(it.id) ||
+          (it.slug && p.slug && String(p.slug) === String(it.slug)) ||
+          (p.id && it.slug && String(p.id) === String(it.slug)) ||
+          (p.slug && it.id && String(p.slug) === String(it.id))
+      );
+      // Explicit product exception overrides store default
+      if (matching && typeof matching.is_cod_allowed === "boolean") {
+        return matching.is_cod_allowed === false;
+      }
+      if (typeof it.is_cod_allowed === "boolean") {
+        return it.is_cod_allowed === false;
+      }
+      // Product inherits store overall default
+      return !isCodGloballyEnabled;
+    });
+  }, [cartItems, storeProducts, isCodGloballyEnabled]);
+
+  const isCodBlockedByProducts = codIneligibleProducts.length > 0;
+  const isCodAllowedForOrder = isCodGloballyEnabled && !isCodBlockedByProducts && !isOrderExceedingCodLimit;
 
   const methodsToDisplay = useMemo(() => {
     const list: string[] = [];
     if (isUpiEnabled) list.push("UPI");
     if (isCardEnabled) list.push("CARD");
     if (isNetbankingEnabled) list.push("NETBANKING");
-    if (isCodEnabled) list.push("COD");
+    if (isCodAllowedForOrder) {
+      list.push("COD");
+    }
     return list;
-  }, [isUpiEnabled, isCardEnabled, isNetbankingEnabled, isCodEnabled]);
+  }, [isUpiEnabled, isCardEnabled, isNetbankingEnabled, isCodAllowedForOrder]);
 
-  const [selectedMethod, setSelectedMethod] = useState(
-    paymentData.method || methodsToDisplay[0] || "COD"
-  );
+  const initialMethod = useMemo(() => {
+    if (paymentData.method) {
+      if (methodsToDisplay.includes(paymentData.method)) {
+        return paymentData.method;
+      }
+    }
+    return methodsToDisplay[0] || "UPI";
+  }, [paymentData.method, methodsToDisplay]);
+
+  const [selectedMethod, setSelectedMethod] = useState(initialMethod);
   const [upiId, setUpiId] = useState(paymentData.upiId || "");
   const deviceMode = useDeviceMode();
   const [innerIsMobile, setInnerIsMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < 768 : false);
@@ -216,7 +285,7 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
 
   useEffect(() => {
     if (methodsToDisplay.length > 0 && !methodsToDisplay.includes(selectedMethod)) {
-      const fallback = methodsToDisplay[0];
+      const fallback = methodsToDisplay[0] || "UPI";
       setSelectedMethod(fallback);
       onPaymentDataChange?.({
         method: fallback,
@@ -474,7 +543,9 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
               </div>
             ) : (
               methodsToDisplay.map((methodKey) => {
-                const isSelected = (selectedMethod || "").toUpperCase() === methodKey.toUpperCase();
+                const isCodMethod = methodKey.toUpperCase() === "COD" || methodKey.toUpperCase() === "CASH_ON_DELIVERY";
+                const isMethodDisabled = isCodMethod && isCodBlockedByProducts;
+                const isSelected = !isMethodDisabled && (selectedMethod || "").toUpperCase() === methodKey.toUpperCase();
                 const inputId = `payment-method-${methodKey.toLowerCase()}`;
                 
                 let methodLabel = methodKey;
@@ -491,15 +562,17 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
                 } else if (methodKey.toUpperCase() === "NETBANKING" || methodKey.toUpperCase() === "NET_BANKING") {
                   methodLabel = netbanking_title || "Netbanking";
                   methodDesc = netbanking_subtitle || "HDFC, SBI, ICICI, Axis & 50+ Indian banks";
-                } else if (methodKey.toUpperCase() === "COD" || methodKey.toUpperCase() === "CASH_ON_DELIVERY") {
+                } else if (isCodMethod) {
                   methodLabel = cod_title || "Cash on Delivery (COD)";
-                  methodDesc = cod_subtitle || "Pay with cash upon package delivery";
+                  methodDesc = isMethodDisabled
+                    ? `Unavailable: ${codIneligibleProducts.map((p) => p.name).slice(0, 2).join(", ")}${codIneligibleProducts.length > 2 ? " and other items" : ""} require online prepaid payment.`
+                    : cod_subtitle || "Pay with cash upon package delivery";
                 }
 
                 return (
                   <label
                     key={methodKey}
-                    htmlFor={inputId}
+                    htmlFor={isMethodDisabled ? undefined : inputId}
                     style={{
                       display: "flex",
                       flexDirection: "column",
@@ -512,7 +585,8 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
                       background: isSelected
                         ? palette.optionSelectedBg
                         : palette.optionBg,
-                      cursor: "pointer",
+                      cursor: isMethodDisabled ? "not-allowed" : "pointer",
+                      opacity: isMethodDisabled ? 0.65 : 1,
                       boxShadow: isSelected ? palette.selectedRing : "none",
                       transition: "all 180ms ease",
                     }}
@@ -538,14 +612,20 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
                           id={inputId}
                           type="radio"
                           name="payment-method"
+                          disabled={isMethodDisabled}
                           checked={isSelected}
-                          onChange={() => handleMethodChange(methodKey)}
+                          onChange={() => {
+                            if (!isMethodDisabled) {
+                              handleMethodChange(methodKey);
+                            }
+                          }}
                           style={{
                             accentColor: resolvedAccent,
                             width: "16px",
                             height: "16px",
                             margin: 0,
                             flexShrink: 0,
+                            cursor: isMethodDisabled ? "not-allowed" : "pointer",
                           }}
                         />
 
@@ -562,7 +642,21 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
                             }}
                           >
                             <span>{methodLabel}</span>
-                            {tag && (
+                            {isMethodDisabled ? (
+                              <span
+                                style={{
+                                  fontSize: "10px",
+                                  fontWeight: 600,
+                                  padding: "2px 6px",
+                                  borderRadius: `${resolvedBadgeRadius}px`,
+                                  background: "#f1f5f9",
+                                  color: "#475569",
+                                  border: "1px solid #e2e8f0",
+                                }}
+                              >
+                                Prepaid Only
+                              </span>
+                            ) : tag ? (
                               <span
                                 style={{
                                   fontSize: "10px",
@@ -576,7 +670,7 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
                               >
                                 {tag}
                               </span>
-                            )}
+                            ) : null}
                           </div>
                           {methodDesc && (
                             <div

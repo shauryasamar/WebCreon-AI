@@ -54,7 +54,7 @@ export function getDefaultAvatarForGender(gender?: string | null): string {
 }
 
 export default function AdminProfileSettings() {
-  const { admin, refreshAdmin, hasPermission, isOwner } = useAdminAuth();
+  const { admin, refreshAdmin, hasPermission, isOwner, deleteAdminAccount } = useAdminAuth();
   const canView = isOwner || hasPermission("profile:view");
   const canEdit = isOwner || hasPermission("profile:edit");
 
@@ -82,6 +82,8 @@ export default function AdminProfileSettings() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -211,6 +213,22 @@ export default function AdminProfileSettings() {
       setToast({ message: err.message || "Unable to save profile changes.", type: "error" });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeletingAccount(true);
+    try {
+      await deleteAdminAccount();
+      setToast({ message: "Your account has been deleted.", type: "info" });
+      setTimeout(() => {
+        window.location.href = "/admin/login";
+      }, 1000);
+    } catch (err: any) {
+      console.error("Delete account error:", err);
+      setToast({ message: err.message || "Failed to delete account.", type: "error" });
+      setDeletingAccount(false);
+      setIsDeleteModalOpen(false);
     }
   };
 
@@ -677,41 +695,174 @@ export default function AdminProfileSettings() {
               </span>
             </div>
 
-            {/* Dynamic Save Button */}
-            <button
-              type="submit"
-              disabled={saving || !canEdit}
-              style={{
-                height: "38px",
-                padding: "0 24px",
-                borderRadius: "8px",
-                border: "none",
-                background: !canEdit ? "#94a3b8" : isDirty ? "#2563eb" : "#0f172a",
-                color: "#ffffff",
-                fontSize: "13px",
-                fontWeight: 700,
-                cursor: saving || !canEdit ? "not-allowed" : "pointer",
-                boxShadow: isDirty && canEdit
-                  ? "0 2px 8px rgba(37, 99, 235, 0.3)"
-                  : "0 1px 3px rgba(15, 23, 42, 0.15)",
-                transition: "all 0.15s ease",
-              }}
-              onMouseEnter={(e) => {
-                if (!saving && canEdit) {
-                  e.currentTarget.style.background = isDirty ? "#1d4ed8" : "#1e293b";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!saving && canEdit) {
-                  e.currentTarget.style.background = isDirty ? "#2563eb" : "#0f172a";
-                }
-              }}
-            >
-              {saving ? "Saving Changes..." : !canEdit ? "View-Only" : "Save Profile"}
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+              {isOwner && (
+                <button
+                  type="button"
+                  onClick={() => setIsDeleteModalOpen(true)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#dc2626",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    padding: "6px 8px",
+                    textDecoration: "none",
+                    transition: "opacity 0.15s ease",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.75")}
+                  onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+                >
+                  Delete Account
+                </button>
+              )}
+
+              {/* Dynamic Save Button */}
+              <button
+                type="submit"
+                disabled={saving || !canEdit}
+                style={{
+                  height: "38px",
+                  padding: "0 24px",
+                  borderRadius: "8px",
+                  border: "none",
+                  background: !canEdit ? "#94a3b8" : isDirty ? "#2563eb" : "#0f172a",
+                  color: "#ffffff",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  cursor: saving || !canEdit ? "not-allowed" : "pointer",
+                  boxShadow: isDirty && canEdit
+                    ? "0 2px 8px rgba(37, 99, 235, 0.3)"
+                    : "0 1px 3px rgba(15, 23, 42, 0.15)",
+                  transition: "all 0.15s ease",
+                }}
+                onMouseEnter={(e) => {
+                  if (!saving && canEdit) {
+                    e.currentTarget.style.background = isDirty ? "#1d4ed8" : "#1e293b";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!saving && canEdit) {
+                    e.currentTarget.style.background = isDirty ? "#2563eb" : "#0f172a";
+                  }
+                }}
+              >
+                {saving ? "Saving Changes..." : !canEdit ? "View-Only" : "Save Profile"}
+              </button>
+            </div>
           </div>
         </div>
       </form>
+
+      {/* CONFIRM DELETE MODAL */}
+      {isDeleteModalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(15, 23, 42, 0.5)",
+            backdropFilter: "blur(3px)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+          onClick={() => !deletingAccount && setIsDeleteModalOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "#ffffff",
+              borderRadius: "16px",
+              width: "100%",
+              maxWidth: "440px",
+              padding: "24px",
+              boxShadow: "0 20px 40px -10px rgba(0, 0, 0, 0.25)",
+              border: "1px solid #e2e8f0",
+              display: "flex",
+              flexDirection: "column",
+              gap: "16px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <div
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "10px",
+                  background: "#fee2e2",
+                  color: "#dc2626",
+                  display: "grid",
+                  placeItems: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+                  Delete Admin Account?
+                </h3>
+                <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: "#64748b" }}>
+                  This action is permanent and cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <p style={{ margin: 0, fontSize: "13px", color: "#475569", lineHeight: 1.5 }}>
+              Are you sure you want to permanently delete your account (<strong>{admin?.email}</strong>)? Your administrator access will be revoked immediately.
+            </p>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "8px" }}>
+              <button
+                type="button"
+                disabled={deletingAccount}
+                onClick={() => setIsDeleteModalOpen(false)}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  background: "#ffffff",
+                  color: "#475569",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingAccount}
+                onClick={handleDeleteAccount}
+                style={{
+                  padding: "8px 18px",
+                  borderRadius: "8px",
+                  border: "none",
+                  background: "#dc2626",
+                  color: "#ffffff",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: deletingAccount ? "not-allowed" : "pointer",
+                  opacity: deletingAccount ? 0.75 : 1,
+                  boxShadow: "0 2px 8px rgba(220, 38, 38, 0.25)",
+                }}
+              >
+                {deletingAccount ? "Deleting..." : "Yes, Delete Account"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AVATAR PICKER MODAL (HIDDEN BY DEFAULT) */}
       {isAvatarModalOpen && (

@@ -1887,6 +1887,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
 
     const productToAdd: Product = {
       ...product,
+      is_cod_allowed: typeof product.is_cod_allowed === "boolean" ? product.is_cod_allowed : (product.is_cod_allowed != null ? Boolean(product.is_cod_allowed) : null),
       price: effectivePrice,
       compare_price: showOriginal ? effectiveOriginalPrice ?? null : null,
       in_stock: true,

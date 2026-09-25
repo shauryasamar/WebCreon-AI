@@ -83,6 +83,7 @@ type CustomerAuthContextValue = {
     payload: CustomerChangePasswordPayload
   ) => Promise<{ message: string; user?: CustomerUser }>;
   logout: (websiteName?: string) => Promise<void>;
+  deleteAccount: (websiteName: string) => Promise<void>;
   clearUser: (targetTenant?: string) => void;
 };
 
@@ -585,6 +586,43 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user]);
 
+  const deleteAccount = useCallback(async (websiteName: string) => {
+    setLoading(true);
+    const target = websiteName || user?.siteSlug || user?.siteId;
+    try {
+      const token = getTenantToken(target);
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+        headers["X-Customer-Token"] = token;
+      }
+      const response = await fetch(`${API_BASE_URL}/auth/customer/account/${encodeURIComponent(target)}`, {
+        method: "DELETE",
+        headers,
+        credentials: "include",
+      });
+      const data = await parseJsonSafely(response);
+      if (!response.ok) {
+        throw new Error(getErrorMessage(data, "Failed to delete account."));
+      }
+      if (target) clearTenantToken(target);
+      if (user?.siteSlug) clearTenantToken(user.siteSlug);
+      if (user?.siteId) clearTenantToken(user.siteId);
+      setUser(null);
+    } catch (error) {
+      console.error("Error deleting customer account:", error);
+      if (target) clearTenantToken(target);
+      if (user?.siteSlug) clearTenantToken(user.siteSlug);
+      if (user?.siteId) clearTenantToken(user.siteId);
+      setUser(null);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
   // Sync customer authentication across tabs automatically
   useEffect(() => {
     // Snapshot the token at the time we last checked so we can detect real changes on focus.
@@ -659,6 +697,7 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
       updateProfile,
       changePassword,
       logout,
+      deleteAccount,
       clearUser,
     }),
     [
@@ -673,6 +712,7 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
       updateProfile,
       changePassword,
       logout,
+      deleteAccount,
       clearUser,
     ]
   );

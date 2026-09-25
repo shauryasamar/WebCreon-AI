@@ -189,3 +189,104 @@ def send_customer_password_reset_email(
         print(f"[EMAIL FAILED] Could not send via SMTP ({e}). Fallback OTP is {otp_code}")
         logger.error(f"Failed to send customer password reset email to {to_email}: {e}")
         return False
+
+
+def send_merchant_support_acknowledgment_email(
+    to_email: str,
+    to_name: str,
+    ticket_number: str,
+    subject: str,
+    message_body: str,
+) -> bool:
+    """
+    Sends a confirmation acknowledgment email for a newly created merchant support ticket.
+    First checks dedicated SUPPORT_SMTP_* configuration.
+    If not provided, falls back to the common platform SMTP_* configuration.
+    If neither is configured, prints the dev fallback box.
+    """
+    # 1. Check dedicated Support SMTP first, fallback to common platform SMTP
+    smtp_host = os.getenv("SUPPORT_SMTP_HOST", "").strip() or os.getenv("SMTP_HOST", "").strip()
+    smtp_port = int(os.getenv("SUPPORT_SMTP_PORT", "").strip() or os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SUPPORT_SMTP_USER", "").strip() or os.getenv("SMTP_USER", "").strip()
+    smtp_password = os.getenv("SUPPORT_SMTP_PASSWORD", "").strip() or os.getenv("SMTP_PASSWORD", "").strip()
+    smtp_from = (
+        os.getenv("SUPPORT_SMTP_FROM", "").strip()
+        or os.getenv("SMTP_FROM", "").strip()
+        or (smtp_user or "support@webcreon.ai")
+    )
+
+    token_subject = f"[{ticket_number}] {subject}"
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><title>Support Ticket Confirmation</title></head>
+    <body style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; margin: 0; padding: 32px 16px;">
+      <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.04);">
+        <div style="background: #0f172a; padding: 24px 28px; border-bottom: 2px solid #2563eb;">
+          <h2 style="color: #ffffff; margin: 0; font-size: 19px; font-weight: 700;">WebCreon Merchant Support</h2>
+          <p style="color: #94a3b8; margin: 4px 0 0 0; font-size: 13px;">Ticket #{ticket_number}</p>
+        </div>
+        <div style="padding: 28px; color: #334155;">
+          <p style="margin-top: 0; font-size: 15px; color: #0f172a;">Hi <strong>{to_name or 'there'}</strong>,</p>
+          <p style="font-size: 14px; line-height: 1.5; color: #475569;">We have received your support request regarding <strong>"{subject}"</strong>. Our support engineering team has been notified and is reviewing your inquiry.</p>
+          
+          <div style="background: #f1f5f9; border-radius: 8px; border-left: 4px solid #2563eb; padding: 14px 16px; margin: 20px 0;">
+            <div style="font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 4px;">Ticket Number</div>
+            <div style="font-size: 16px; font-weight: 700; color: #0f172a;">#{ticket_number}</div>
+            <div style="font-size: 12px; color: #64748b; margin-top: 6px;">Estimated SLA Response: <strong>Within 2 hours</strong></div>
+          </div>
+
+          <div style="background: #fafafa; border: 1px solid #f1f5f9; border-radius: 8px; padding: 14px; margin-bottom: 20px;">
+            <div style="font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 6px;">Your Message:</div>
+            <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #334155; white-space: pre-wrap;">{message_body}</p>
+          </div>
+
+          <p style="font-size: 13px; color: #64748b; line-height: 1.5;">You can reply directly to this email with any additional details or screenshots.</p>
+        </div>
+        <div style="background: #f8fafc; padding: 16px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0;">
+          &copy; WebCreon AI Autonomous Storefront Engine. All rights reserved.
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+
+    if not smtp_host or not smtp_user or not smtp_password:
+        dev_box = f"""
+================================================================================
+ [DEV FALLBACK SUPPORT EMAIL DISPATCHER]
+ TO: {to_email} ({to_name})
+ TICKET: #{ticket_number}
+ SUBJECT: {token_subject}
+ MESSAGE: {message_body[:200]}...
+ (Configure SMTP_HOST/SMTP_USER/SMTP_PASSWORD or SUPPORT_SMTP_* in .env for live delivery)
+================================================================================
+"""
+        print(dev_box)
+        logger.info(f"Dev fallback support email logged for ticket #{ticket_number} to {to_email}")
+        return True
+
+    try:
+        print(f"[EMAIL] Connecting to SMTP server {smtp_host}:{smtp_port} for {to_email} (Ticket #{ticket_number})...")
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = token_subject
+        msg["From"] = smtp_from
+        msg["To"] = to_email
+        msg.attach(MIMEText(html_content, "html"))
+
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=12) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(smtp_user, smtp_password)
+            server.sendmail(smtp_from, [to_email], msg.as_string())
+
+        print(f"[EMAIL SUCCESS] Ticket acknowledgment #{ticket_number} successfully emailed to {to_email}")
+        logger.info(f"Support ticket acknowledgment emailed to {to_email}")
+        return True
+    except Exception as e:
+        print(f"[EMAIL FAILED] Could not send support email via SMTP ({e})")
+        logger.error(f"Failed to send support email to {to_email}: {e}")
+        return False
+

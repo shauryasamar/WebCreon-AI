@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { Pagination } from "./Pagination";
@@ -66,6 +66,7 @@ type Product = {
   slug?: string | null;
   variant_option?: ProductVariantOption | null;
   return_window_days?: number | null;
+  is_cod_allowed?: boolean | null;
   is_preorder?: boolean;
   preorder_release_date?: string | null;
   preorder_message?: string | null;
@@ -108,6 +109,7 @@ type ProductFormValues = {
   optionName: string;
   optionValuesText: string;
   return_window_days: string;
+  is_cod_allowed: boolean | null;
   is_preorder: boolean;
   preorder_release_date: string;
   preorder_message: string;
@@ -161,6 +163,7 @@ const normalizeProduct = (p: any): Product => ({
   slug: p.slug ?? null,
   variant_option: p.variant_option ?? null,
   return_window_days: p.return_window_days != null ? Number(p.return_window_days) : null,
+  is_cod_allowed: typeof p.is_cod_allowed === "boolean" ? p.is_cod_allowed : (p.is_cod_allowed != null ? Boolean(p.is_cod_allowed) : null),
   is_preorder: Boolean(p.is_preorder),
   preorder_release_date: p.preorder_release_date ?? null,
   preorder_message: p.preorder_message ?? null,
@@ -212,13 +215,16 @@ export const ToggleSwitch = ({
   checked,
   onChange,
   disabled = false,
+  id,
 }: {
   checked: boolean;
   onChange: (val: boolean) => void;
   disabled?: boolean;
+  id?: string;
 }) => {
   return (
     <div
+      id={id}
       role="switch"
       aria-checked={checked}
       onClick={() => {
@@ -608,6 +614,7 @@ const AdminProducts = () => {
   const [filterMaxPrice, setFilterMaxPrice] = useState<string>("");
   const [filterDiscount, setFilterDiscount] = useState<"all" | "discounted" | "regular">("all");
   const [filterReturnPolicy, setFilterReturnPolicy] = useState<"all" | "non_returnable" | "returnable">("all");
+  const [filterCod, setFilterCod] = useState<"all" | "cod_allowed" | "prepaid_only">("all");
   const [filterHasVideo, setFilterHasVideo] = useState<"all" | "with_video" | "images_only">("all");
   const [filterSortBy, setFilterSortBy] = useState<string>("newest");
   const [showActionsMenu, setShowActionsMenu] = useState(false);
@@ -653,6 +660,19 @@ const AdminProducts = () => {
   const [defaultReturnWindowDays, setDefaultReturnWindowDays] = useState<number>(7);
   const [isUpdatingReturnPolicy, setIsUpdatingReturnPolicy] = useState(false);
 
+  // COD Settings & Bulk Operations State
+  const [showCodSettingsModal, setShowCodSettingsModal] = useState(false);
+  const [storeEnableCod, setStoreEnableCod] = useState<boolean>(true);
+  const [tempStoreEnableCod, setTempStoreEnableCod] = useState<boolean>(true);
+  const [maxCodLimit, setMaxCodLimit] = useState<number>(5000);
+  const [tempMaxCodLimit, setTempMaxCodLimit] = useState<string>("5000");
+  const [isUpdatingCodLimit, setIsUpdatingCodLimit] = useState(false);
+  const [isUpdatingBulkCod, setIsUpdatingBulkCod] = useState(false);
+
+  const exceptionCount = useMemo(() => {
+    return products.filter((p) => p.is_cod_allowed !== null && p.is_cod_allowed !== undefined && p.is_cod_allowed !== storeEnableCod).length;
+  }, [products, storeEnableCod]);
+
   // CSV Import / Export States
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -697,6 +717,7 @@ const AdminProducts = () => {
     optionName: "",
     optionValuesText: "",
     return_window_days: "",
+    is_cod_allowed: null,
     is_preorder: false,
     preorder_release_date: "",
     preorder_message: "",
@@ -890,6 +911,7 @@ const AdminProducts = () => {
       optionName: "",
       optionValuesText: "",
       return_window_days: "",
+      is_cod_allowed: null,
       is_preorder: false,
       preorder_release_date: "",
       preorder_message: "",
@@ -952,6 +974,7 @@ const AdminProducts = () => {
       optionName: product.variant_option?.optionName ?? "",
       optionValuesText: optionValues.map((v) => v.value).join(", "),
       return_window_days: product.return_window_days != null ? String(product.return_window_days) : "",
+      is_cod_allowed: product.is_cod_allowed !== undefined ? product.is_cod_allowed : null,
       is_preorder: Boolean(product.is_preorder),
       preorder_release_date: product.preorder_release_date ? product.preorder_release_date.slice(0, 16) : "",
       preorder_message: product.preorder_message ?? "",
@@ -1079,6 +1102,7 @@ const AdminProducts = () => {
     if (filterMaxPrice) count++;
     if (filterDiscount !== "all") count++;
     if (filterReturnPolicy !== "all") count++;
+    if (filterCod !== "all") count++;
     if (filterHasVideo !== "all") count++;
     if (filterSortBy !== "newest") count++;
     return count;
@@ -1090,6 +1114,7 @@ const AdminProducts = () => {
     filterMaxPrice,
     filterDiscount,
     filterReturnPolicy,
+    filterCod,
     filterHasVideo,
     filterSortBy,
   ]);
@@ -1106,6 +1131,7 @@ const AdminProducts = () => {
     maxP?: string;
     discount?: "all" | "discounted" | "regular";
     retPol?: "all" | "non_returnable" | "returnable";
+    codPol?: "all" | "cod_allowed" | "prepaid_only";
     hasVid?: "all" | "with_video" | "images_only";
     sortB?: string;
   }) => {
@@ -1122,10 +1148,11 @@ const AdminProducts = () => {
     const maxP = customParams?.maxP !== undefined ? customParams.maxP : filterMaxPrice;
     const discount = customParams?.discount !== undefined ? customParams.discount : filterDiscount;
     const retPol = customParams?.retPol !== undefined ? customParams.retPol : filterReturnPolicy;
+    const codPol = customParams?.codPol !== undefined ? customParams.codPol : filterCod;
     const hasVid = customParams?.hasVid !== undefined ? customParams.hasVid : filterHasVideo;
     const sortB = customParams?.sortB !== undefined ? customParams.sortB : filterSortBy;
 
-    const cacheKey = `${siteId}:${status}:${page}:${limit}:${search}:${catId}:${colId}:${brand}:${minP}:${maxP}:${discount}:${retPol}:${hasVid}:${sortB}`;
+    const cacheKey = `${siteId}:${status}:${page}:${limit}:${search}:${catId}:${colId}:${brand}:${minP}:${maxP}:${discount}:${retPol}:${codPol}:${hasVid}:${sortB}`;
     const cached = adminProductsQueryCache.get(cacheKey);
 
     if (cached) {
@@ -1164,6 +1191,8 @@ const AdminProducts = () => {
       else if (discount === "regular") qParams.set("has_discount", "false");
       if (retPol === "non_returnable") qParams.set("return_policy", "non_returnable");
       else if (retPol === "returnable") qParams.set("return_policy", "returnable");
+      if (codPol === "cod_allowed") qParams.set("cod_policy", "cod_allowed");
+      else if (codPol === "prepaid_only") qParams.set("cod_policy", "prepaid_only");
       if (hasVid === "with_video") qParams.set("has_video", "true");
       else if (hasVid === "images_only") qParams.set("has_video", "false");
       if (sortB && sortB !== "newest") qParams.set("sort_by", sortB);
@@ -1260,6 +1289,27 @@ const AdminProducts = () => {
     }
   };
 
+  const loadDeliverySettings = useCallback(async () => {
+    if (!siteId) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/delivery/settings/${siteId}`, { credentials: "include" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.enable_cod !== undefined) {
+          setStoreEnableCod(Boolean(data.enable_cod));
+          setTempStoreEnableCod(Boolean(data.enable_cod));
+        }
+        if (data.max_cod_amount !== undefined) {
+          const limitVal = Number(data.max_cod_amount) || 5000;
+          setMaxCodLimit(limitVal);
+          setTempMaxCodLimit(String(limitVal));
+        }
+      }
+    } catch (err) {
+      console.error("Error loading delivery settings", err);
+    }
+  }, [siteId]);
+
   useEffect(() => {
     if (!siteId) return;
     const timer = setTimeout(async () => {
@@ -1294,8 +1344,9 @@ const AdminProducts = () => {
       }
     }, categories.length > 0 ? 120 : 0);
 
+    loadDeliverySettings();
     return () => clearTimeout(timer);
-  }, [siteId]);
+  }, [siteId, loadDeliverySettings]);
 
   useEffect(() => {
     if (!siteId) return;
@@ -1332,6 +1383,134 @@ const AdminProducts = () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [showFilterPopover]);
+
+  const openCodSettingsModal = () => {
+    setTempMaxCodLimit(String(maxCodLimit));
+    setTempStoreEnableCod(storeEnableCod);
+    setShowCodSettingsModal(true);
+  };
+
+  const handleSaveAllCodSettings = async () => {
+    if (!siteId) return;
+    const newLimit = Number(tempMaxCodLimit);
+    if (isNaN(newLimit) || newLimit < 0) {
+      alert("Please enter a valid positive number for Max COD Limit");
+      return;
+    }
+
+    setIsUpdatingCodLimit(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/delivery/settings/${siteId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          enable_cod: tempStoreEnableCod,
+          max_cod_amount: newLimit,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to update COD settings");
+      }
+      setStoreEnableCod(tempStoreEnableCod);
+      setMaxCodLimit(newLimit);
+
+      // Invalidate products cache and refresh so any inherited products immediately show new policy
+      invalidateAdminProductsCache(siteId);
+      await loadProducts({ page: currentPage });
+
+      setToast({ message: "Store COD settings saved successfully", type: "success" });
+      setShowCodSettingsModal(false);
+    } catch (err: any) {
+      setToast({ message: extractErrorMessage(err, "Failed to save COD settings"), type: "error" });
+    } finally {
+      setIsUpdatingCodLimit(false);
+    }
+  };
+
+  const handleResetAllCodExceptions = async () => {
+    if (!siteId || (!canEditProducts && !isOwner)) return;
+    setIsUpdatingBulkCod(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/sites/${siteId}/products/bulk-cod`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ is_cod_allowed: null, product_ids: null }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to reset product exceptions");
+      }
+      invalidateAdminProductsCache(siteId);
+      await loadProducts({ page: currentPage });
+      setToast({ message: "All product exceptions reset to store default", type: "success" });
+    } catch (err: any) {
+      setToast({ message: extractErrorMessage(err, "Failed to reset exceptions"), type: "error" });
+    } finally {
+      setIsUpdatingBulkCod(false);
+    }
+  };
+
+  const handleSaveMaxCodLimit = async (newLimit: number) => {
+    if (!siteId) return;
+    setIsUpdatingCodLimit(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/delivery/settings/${siteId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ max_cod_amount: newLimit }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to update Max COD Order Limit");
+      }
+      setMaxCodLimit(newLimit);
+      setToast({ message: `Max COD Order Limit set to ₹${newLimit.toLocaleString("en-IN")}`, type: "success" });
+      setShowCodSettingsModal(false);
+    } catch (err: any) {
+      setToast({ message: extractErrorMessage(err, "Failed to update COD limit"), type: "error" });
+    } finally {
+      setIsUpdatingCodLimit(false);
+    }
+  };
+
+  const handleBulkCod = async (isAllowed: boolean, targetProductIds?: string[]) => {
+    if (!siteId || (!canEditProducts && !isOwner)) return;
+    setIsUpdatingBulkCod(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/sites/${siteId}/products/bulk-cod`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          is_cod_allowed: isAllowed,
+          product_ids: targetProductIds && targetProductIds.length > 0 ? targetProductIds : null,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to bulk update COD");
+      }
+      const data = await res.json();
+      invalidateAdminProductsCache(siteId);
+      await loadProducts({ page: currentPage });
+      setSelectedProductIds(new Set());
+      setToast({
+        message: `${isAllowed ? "Enabled" : "Disabled"} COD for ${data.updated_count || 0} product(s)`,
+        type: "success",
+      });
+      if (showCodSettingsModal) {
+        setShowCodSettingsModal(false);
+      }
+    } catch (err: any) {
+      setToast({ message: extractErrorMessage(err, "Failed to update COD status"), type: "error" });
+    } finally {
+      setIsUpdatingBulkCod(false);
+    }
+  };
 
   const handleUpdateDefaultReturnPolicy = async (days: number) => {
     if (!siteId || !canEditProducts) return;
@@ -1926,6 +2105,7 @@ const AdminProducts = () => {
       images: parseImages(formValues.imagesText),
       variant_option: hasVariantOptions ? buildVariantOption(finalVariantRows) : null,
       return_window_days: formValues.return_window_days === "" ? null : Number(formValues.return_window_days),
+      is_cod_allowed: formValues.is_cod_allowed,
       is_preorder: formValues.is_preorder,
       preorder_release_date: formValues.is_preorder && formValues.preorder_release_date ? formValues.preorder_release_date : null,
       preorder_message: formValues.is_preorder && formValues.preorder_message.trim() ? formValues.preorder_message.trim() : null,
@@ -2254,6 +2434,7 @@ const AdminProducts = () => {
                         setFilterMaxPrice("");
                         setFilterDiscount("all");
                         setFilterReturnPolicy("all");
+                        setFilterCod("all");
                         setFilterHasVideo("all");
                         setFilterSortBy("newest");
                         setCurrentPage(1);
@@ -2266,6 +2447,7 @@ const AdminProducts = () => {
                           maxP: "",
                           discount: "all",
                           retPol: "all",
+                          codPol: "all",
                           hasVid: "all",
                           sortB: "newest",
                         });
@@ -2389,6 +2571,20 @@ const AdminProducts = () => {
                   </select>
                 </div>
 
+                {/* COD Payment Policy Filter */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Cash on Delivery (COD)</label>
+                  <select
+                    value={filterCod}
+                    onChange={(e) => setFilterCod(e.target.value as any)}
+                    style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}
+                  >
+                    <option value="all">All (COD & Prepaid)</option>
+                    <option value="cod_allowed">COD Allowed</option>
+                    <option value="prepaid_only">Prepaid Only (COD Disabled)</option>
+                  </select>
+                </div>
+
                 {/* Video Media Filter */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                   <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Media / Video</label>
@@ -2437,6 +2633,7 @@ const AdminProducts = () => {
                         maxP: filterMaxPrice,
                         discount: filterDiscount,
                         retPol: filterReturnPolicy,
+                        codPol: filterCod,
                         hasVid: filterHasVideo,
                         sortB: filterSortBy,
                       });
@@ -2650,6 +2847,36 @@ const AdminProducts = () => {
                     setFilterReturnPolicy("all");
                     setCurrentPage(1);
                     loadProducts({ page: 1, retPol: "all" });
+                  }}
+                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0 }}
+                >
+                  <XMarkIcon />
+                </button>
+              </span>
+            )}
+
+            {filterCod !== "all" && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  fontSize: "11.5px",
+                  fontWeight: 600,
+                  padding: "2px 8px",
+                  borderRadius: "4px",
+                  background: "#eff6ff",
+                  color: "#1d4ed8",
+                  border: "1px solid #bfdbfe",
+                }}
+              >
+                <span>COD: {filterCod === "cod_allowed" ? "COD Allowed" : "Prepaid Only"}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterCod("all");
+                    setCurrentPage(1);
+                    loadProducts({ page: 1, codPol: "all" });
                   }}
                   style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0 }}
                 >
@@ -3650,6 +3877,105 @@ const AdminProducts = () => {
                     </span>
                   </div>
 
+                  {/* Card 5a: Cash on Delivery (COD) Setup */}
+                  <div
+                    style={{
+                      background: "#ffffff",
+                      borderRadius: "8px",
+                      border: "1px solid #e2e8f0",
+                      padding: "12px 14px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "12px",
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
+                        Cash on Delivery (COD)
+                      </div>
+                      <div style={{ fontSize: "11.5px", color: "#64748b", marginTop: "2px" }}>
+                        {formValues.is_cod_allowed === null
+                          ? `Store default (${storeEnableCod ? "COD active" : "Prepaid only"})`
+                          : formValues.is_cod_allowed
+                          ? "Custom: Allow COD"
+                          : "Custom: Prepaid only"}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        background: "#f1f5f9",
+                        padding: "3px",
+                        borderRadius: "8px",
+                        border: "1px solid #e2e8f0",
+                        gap: "2px",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleFormChange("is_cod_allowed", null)}
+                        style={{
+                          padding: "5px 12px",
+                          borderRadius: "6px",
+                          border: "none",
+                          background: formValues.is_cod_allowed === null ? "#ffffff" : "transparent",
+                          color: formValues.is_cod_allowed === null ? "#0f172a" : "#64748b",
+                          fontSize: "12px",
+                          fontWeight: formValues.is_cod_allowed === null ? 700 : 500,
+                          boxShadow: formValues.is_cod_allowed === null ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        Default
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleFormChange("is_cod_allowed", true)}
+                        style={{
+                          padding: "5px 12px",
+                          borderRadius: "6px",
+                          border: "none",
+                          background: formValues.is_cod_allowed === true ? "#ffffff" : "transparent",
+                          color: formValues.is_cod_allowed === true ? "#0f172a" : "#64748b",
+                          fontSize: "12px",
+                          fontWeight: formValues.is_cod_allowed === true ? 700 : 500,
+                          boxShadow: formValues.is_cod_allowed === true ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        Allow COD
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleFormChange("is_cod_allowed", false)}
+                        style={{
+                          padding: "5px 12px",
+                          borderRadius: "6px",
+                          border: "none",
+                          background: formValues.is_cod_allowed === false ? "#ffffff" : "transparent",
+                          color: formValues.is_cod_allowed === false ? "#0f172a" : "#64748b",
+                          fontSize: "12px",
+                          fontWeight: formValues.is_cod_allowed === false ? 700 : 500,
+                          boxShadow: formValues.is_cod_allowed === false ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        Prepaid Only
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Card 5b: Pre-Order Setup */}
                   <div
                     style={{
@@ -4242,7 +4568,7 @@ const AdminProducts = () => {
                   setStatusFilter(nextStatus);
                   setCurrentPage(1);
 
-                  const cacheKey = `${siteId}:${nextStatus}:1:${pageSize}:${searchQuery}:${filterCategory}:${filterCollection}:${filterBrand}:${filterMinPrice}:${filterMaxPrice}:${filterDiscount}:${filterReturnPolicy}:${filterHasVideo}:${filterSortBy}`;
+                  const cacheKey = `${siteId}:${nextStatus}:1:${pageSize}:${searchQuery}:${filterCategory}:${filterCollection}:${filterBrand}:${filterMinPrice}:${filterMaxPrice}:${filterDiscount}:${filterReturnPolicy}:${filterCod}:${filterHasVideo}:${filterSortBy}`;
                   const cached = adminProductsQueryCache.get(cacheKey);
                   if (cached) {
                     setProducts(cached.products);
@@ -4380,6 +4706,60 @@ const AdminProducts = () => {
                 >
                   <EyeOffIcon />
                   <span>{bulkActionLoading ? "Drafting..." : "Draft"}</span>
+                </button>
+              )}
+
+              {/* Bulk COD Enable */}
+              {canEditProducts && (
+                <button
+                  type="button"
+                  disabled={isUpdatingBulkCod}
+                  onClick={() => handleBulkCod(true, Array.from(selectedProductIds))}
+                  title="Enable Cash on Delivery for selected products"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "5px 10px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    borderRadius: "5px",
+                    border: "1px solid #bbf7d0",
+                    background: "#f0fdf4",
+                    color: "#15803d",
+                    cursor: isUpdatingBulkCod ? "not-allowed" : "pointer",
+                    whiteSpace: "nowrap",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <span>{isUpdatingBulkCod ? "Updating..." : "COD: Enable"}</span>
+                </button>
+              )}
+
+              {/* Bulk COD Disable */}
+              {canEditProducts && (
+                <button
+                  type="button"
+                  disabled={isUpdatingBulkCod}
+                  onClick={() => handleBulkCod(false, Array.from(selectedProductIds))}
+                  title="Disable COD (Set to Prepaid Only) for selected products"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "5px 10px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    borderRadius: "5px",
+                    border: "1px solid #e2e8f0",
+                    background: "#f8fafc",
+                    color: "#64748b",
+                    cursor: isUpdatingBulkCod ? "not-allowed" : "pointer",
+                    whiteSpace: "nowrap",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <span>{isUpdatingBulkCod ? "Updating..." : "COD: Disable"}</span>
                 </button>
               )}
 
@@ -4544,6 +4924,33 @@ const AdminProducts = () => {
                 </select>
               </div>
 
+              {/* COD Max Limit Quick Button */}
+              <button
+                type="button"
+                onClick={openCodSettingsModal}
+                title="Configure store-wide Cash on Delivery (COD) settings & Max Order Limit"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  background: "#ffffff",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "6px",
+                  padding: "4px 8px",
+                  whiteSpace: "nowrap",
+                  height: "32px",
+                  fontSize: "11.5px",
+                  fontWeight: 600,
+                  color: "#334155",
+                  cursor: "pointer",
+                  boxSizing: "border-box",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <span style={{ color: "#334155", fontWeight: 700 }}>COD:</span>
+                <span>{!storeEnableCod ? "Prepaid Only" : `Max ₹${maxCodLimit.toLocaleString("en-IN")}`}</span>
+              </button>
+
               {/* Actions Dropdown (Compact) */}
               {(canCreateProducts || canEditProducts) && (
                 <div style={{ position: "relative" }}>
@@ -4617,6 +5024,75 @@ const AdminProducts = () => {
                         type="button"
                         onClick={() => {
                           setShowActionsMenu(false);
+                          openCodSettingsModal();
+                        }}
+                        style={{
+                          width: "100%",
+                          padding: "8px 14px",
+                          background: "none",
+                          border: "none",
+                          textAlign: "left",
+                          fontSize: "13px",
+                          color: "#1e293b",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          borderTop: "1px solid #f1f5f9",
+                        }}
+                      >
+                        ⚙️ COD Settings & Limit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowActionsMenu(false);
+                          handleBulkCod(true);
+                        }}
+                        disabled={isUpdatingBulkCod}
+                        style={{
+                          width: "100%",
+                          padding: "8px 14px",
+                          background: "none",
+                          border: "none",
+                          textAlign: "left",
+                          fontSize: "13px",
+                          color: "#15803d",
+                          cursor: isUpdatingBulkCod ? "not-allowed" : "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        ✓ Enable COD for All
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowActionsMenu(false);
+                          handleBulkCod(false);
+                        }}
+                        disabled={isUpdatingBulkCod}
+                        style={{
+                          width: "100%",
+                          padding: "8px 14px",
+                          background: "none",
+                          border: "none",
+                          textAlign: "left",
+                          fontSize: "13px",
+                          color: "#64748b",
+                          cursor: isUpdatingBulkCod ? "not-allowed" : "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        ✕ Disable COD for All
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowActionsMenu(false);
                           handleExportCSV();
                         }}
                         disabled={isExportingCSV}
@@ -4632,6 +5108,7 @@ const AdminProducts = () => {
                           display: "flex",
                           alignItems: "center",
                           gap: "8px",
+                          borderTop: "1px solid #f1f5f9",
                         }}
                       >
                         <DownloadIcon />{" "}
@@ -4795,6 +5272,7 @@ const AdminProducts = () => {
                               setFilterMaxPrice("");
                               setFilterDiscount("all");
                               setFilterReturnPolicy("all");
+                              setFilterCod("all");
                               setFilterHasVideo("all");
                               setFilterSortBy("newest");
                               setCurrentPage(1);
@@ -4808,6 +5286,7 @@ const AdminProducts = () => {
                                 maxP: "",
                                 discount: "all",
                                 retPol: "all",
+                                codPol: "all",
                                 hasVid: "all",
                                 sortB: "newest",
                               });
@@ -5108,7 +5587,8 @@ const AdminProducts = () => {
                           ))}
                         </div>
                       )}
-                      <div style={{ marginTop: "3px" }}>
+                      <div style={{ marginTop: "3px", display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                        {/* Return window exception badges */}
                         {product.return_window_days === 0 ? (
                           <span
                             style={{
@@ -5138,6 +5618,41 @@ const AdminProducts = () => {
                             }}
                           >
                             {product.return_window_days}d Return
+                          </span>
+                        ) : null}
+
+                        {/* COD manual exception badges */}
+                        {product.is_cod_allowed === false && storeEnableCod ? (
+                          <span
+                            style={{
+                              display: "inline-block",
+                              padding: "1px 5px",
+                              borderRadius: "4px",
+                              fontSize: "10px",
+                              fontWeight: 600,
+                              background: "#fef2f2",
+                              color: "#991b1b",
+                              border: "1px solid #fecaca",
+                            }}
+                            title="Product has manual exception: Prepaid Only (Store overall accepts COD)"
+                          >
+                            Prepaid Only
+                          </span>
+                        ) : product.is_cod_allowed === true && !storeEnableCod ? (
+                          <span
+                            style={{
+                              display: "inline-block",
+                              padding: "1px 5px",
+                              borderRadius: "4px",
+                              fontSize: "10px",
+                              fontWeight: 600,
+                              background: "#f0fdf4",
+                              color: "#166534",
+                              border: "1px solid #bbf7d0",
+                            }}
+                            title="Product has manual exception: COD Allowed (Store overall is Prepaid Only)"
+                          >
+                            COD Allowed
                           </span>
                         ) : null}
                       </div>
@@ -5855,6 +6370,257 @@ const AdminProducts = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* COD Settings & Max Limit Modal */}
+      {showCodSettingsModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(15, 23, 42, 0.6)",
+            zIndex: 1100,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowCodSettingsModal(false);
+            }
+          }}
+        >
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: "12px",
+              width: "100%",
+              maxWidth: "440px",
+              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)",
+              border: "1px solid #e2e8f0",
+              overflow: "hidden",
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "14px 18px",
+                borderBottom: "1px solid #e2e8f0",
+                background: "#f8fafc",
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
+                Cash on Delivery (COD) Settings
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowCodSettingsModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "#94a3b8",
+                  padding: "4px",
+                  display: "grid",
+                  placeItems: "center",
+                }}
+              >
+                <XMarkIcon />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+              {/* Max COD Amount Input */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "12.5px", fontWeight: 600, color: "#1e293b" }}>
+                  Max COD Order Limit
+                </label>
+                <div style={{ position: "relative" }}>
+                  <span
+                    style={{
+                      position: "absolute",
+                      left: "12px",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      fontSize: "14px",
+                      fontWeight: 700,
+                      color: "#64748b",
+                    }}
+                  >
+                    ₹
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={100}
+                    value={tempMaxCodLimit}
+                    onChange={(e) => setTempMaxCodLimit(e.target.value)}
+                    placeholder="5000"
+                    style={{
+                      ...inputStyle,
+                      paddingLeft: "28px",
+                      fontSize: "14px",
+                      fontWeight: 600,
+                      height: "38px",
+                      borderRadius: "7px",
+                    }}
+                  />
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "4px" }}>
+                  {[2000, 5000, 10000, 25000].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setTempMaxCodLimit(String(preset))}
+                      style={{
+                        padding: "3px 9px",
+                        borderRadius: "5px",
+                        border: Number(tempMaxCodLimit) === preset ? "1.5px solid #2563eb" : "1px solid #e2e8f0",
+                        background: Number(tempMaxCodLimit) === preset ? "#eff6ff" : "#f8fafc",
+                        color: Number(tempMaxCodLimit) === preset ? "#1d4ed8" : "#475569",
+                        fontSize: "11.5px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      ₹{preset.toLocaleString("en-IN")}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Store Default Policy */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <label style={{ fontSize: "12.5px", fontWeight: 600, color: "#1e293b" }}>
+                  Store Default COD Policy
+                </label>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                  <button
+                    type="button"
+                    onClick={() => setTempStoreEnableCod(true)}
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      border: tempStoreEnableCod ? "2px solid #16a34a" : "1px solid #e2e8f0",
+                      background: tempStoreEnableCod ? "#f0fdf4" : "#ffffff",
+                      color: tempStoreEnableCod ? "#15803d" : "#334155",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <div style={{ fontSize: "13px", fontWeight: 700 }}>
+                      {tempStoreEnableCod ? "✓ " : ""}Accept COD by Default
+                    </div>
+                    <div style={{ fontSize: "11px", color: tempStoreEnableCod ? "#166534" : "#64748b", marginTop: "2px" }}>
+                      Orders accept COD (unless product is an exception)
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTempStoreEnableCod(false)}
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      border: !tempStoreEnableCod ? "2px solid #2563eb" : "1px solid #e2e8f0",
+                      background: !tempStoreEnableCod ? "#eff6ff" : "#ffffff",
+                      color: !tempStoreEnableCod ? "#1d4ed8" : "#334155",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <div style={{ fontSize: "13px", fontWeight: 700 }}>
+                      {!tempStoreEnableCod ? "✓ " : ""}Prepaid Only by Default
+                    </div>
+                    <div style={{ fontSize: "11px", color: !tempStoreEnableCod ? "#1e40af" : "#64748b", marginTop: "2px" }}>
+                      All default orders require online payment
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Product Exceptions Status & Reset */}
+              {exceptionCount > 0 && (
+                <div
+                  style={{
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "8px",
+                    padding: "10px 12px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "10px",
+                  }}
+                >
+                  <div style={{ fontSize: "12px", color: "#475569" }}>
+                    <strong style={{ color: "#0f172a" }}>{exceptionCount} product(s)</strong> have manual exceptions preserved.
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isUpdatingBulkCod}
+                    onClick={handleResetAllCodExceptions}
+                    style={{
+                      background: "none",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: "5px",
+                      padding: "4px 8px",
+                      fontSize: "11.5px",
+                      fontWeight: 600,
+                      color: "#dc2626",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {isUpdatingBulkCod ? "Resetting..." : "Reset Exceptions"}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                alignItems: "center",
+                gap: "10px",
+                padding: "12px 18px",
+                borderTop: "1px solid #e2e8f0",
+                background: "#f8fafc",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setShowCodSettingsModal(false)}
+                style={ghostButtonStyle}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isUpdatingCodLimit}
+                onClick={handleSaveAllCodSettings}
+                style={{
+                  ...primaryButtonStyle,
+                  padding: "8px 18px",
+                  fontSize: "13px",
+                }}
+              >
+                {isUpdatingCodLimit ? "Saving..." : "Save Settings"}
+              </button>
+            </div>
           </div>
         </div>
       )}

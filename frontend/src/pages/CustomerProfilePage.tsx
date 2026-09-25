@@ -74,7 +74,7 @@ export default function CustomerProfilePage({
     Boolean(restProps.editMode) ||
     (typeof window !== "undefined" && window.location.pathname.startsWith("/builder/"));
 
-  const { user: realUser, isAuthenticated, loading: authLoading, refreshMe, updateProfile, changePassword, logout } =
+  const { user: realUser, isAuthenticated, loading: authLoading, refreshMe, updateProfile, changePassword, logout, deleteAccount } =
     useCustomerAuth();
   const { siteData } = usePublicSiteTheme(activeSlug);
 
@@ -101,6 +101,24 @@ export default function CustomerProfilePage({
   const [changingPass, setChangingPass] = useState(false);
   const [passSuccess, setPassSuccess] = useState("");
   const [passError, setPassError] = useState("");
+
+  // Delete Account State
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
+  const handleDeleteCustomerAccount = async () => {
+    if (!activeSlug) return;
+    setDeletingAccount(true);
+    try {
+      await deleteAccount(activeSlug);
+      navigate(`/store/${activeSlug}`);
+    } catch (err: any) {
+      console.error("Delete customer account error:", err);
+      setProfileError(err?.message || "Failed to delete account.");
+      setDeletingAccount(false);
+      setShowDeleteModal(false);
+    }
+  };
 
   // Load user data into form
   useEffect(() => {
@@ -893,27 +911,48 @@ export default function CustomerProfilePage({
                 </button>
               )}
 
-              <button
-                type="submit"
-                disabled={savingProfile}
-                style={{
-                  height: "44px",
-                  padding: "0 28px",
-                  borderRadius: buttonRadius,
-                  border: "none",
-                  background: accentColor,
-                  color: buttonTextColor,
-                  fontWeight: 700,
-                  fontSize: "14px",
-                  cursor: savingProfile ? "not-allowed" : "pointer",
-                  opacity: savingProfile ? 0.75 : 1,
-                  boxShadow: `0 4px 14px ${accentColor}35`,
-                  transition: "all 0.15s ease",
-                  marginLeft: showPasswordSectionToggle ? undefined : "auto",
-                }}
-              >
-                {savingProfile ? "Saving Changes..." : (customProps.save_button_label || "Save Profile Details")}
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: "18px", marginLeft: showPasswordSectionToggle ? undefined : "auto" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteModal(true)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#ef4444",
+                    fontSize: "13.5px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    padding: "6px 8px",
+                    textDecoration: "none",
+                    transition: "opacity 0.15s ease",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.75")}
+                  onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+                >
+                  Delete Account
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={savingProfile}
+                  style={{
+                    height: "44px",
+                    padding: "0 28px",
+                    borderRadius: buttonRadius,
+                    border: "none",
+                    background: accentColor,
+                    color: buttonTextColor,
+                    fontWeight: 700,
+                    fontSize: "14px",
+                    cursor: savingProfile ? "not-allowed" : "pointer",
+                    opacity: savingProfile ? 0.75 : 1,
+                    boxShadow: `0 4px 14px ${accentColor}35`,
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  {savingProfile ? "Saving Changes..." : (customProps.save_button_label || "Save Profile Details")}
+                </button>
+              </div>
             </div>
           </form>
         </div>
@@ -1198,77 +1237,112 @@ export default function CustomerProfilePage({
           </div>
         )}
 
-        {/* HELP & SUPPORT DESK CARD */}
-        {isCrmEnabled && (
+        {/* CUSTOMER CONFIRM DELETE MODAL */}
+        {showDeleteModal && (
           <div
             style={{
-              marginTop: "24px",
-              background: cardBg,
-              borderRadius: cardRadius,
-              border: `1px solid ${borderColor}`,
-              padding: cardPadding,
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(15, 23, 42, 0.55)",
+              backdropFilter: "blur(3px)",
+              zIndex: 9999,
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between",
-              flexWrap: "wrap",
-              gap: "16px",
+              justifyContent: "center",
+              padding: "20px",
             }}
+            onClick={() => !deletingAccount && setShowDeleteModal(false)}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-              <div
-                style={{
-                  width: "44px",
-                  height: "44px",
-                  borderRadius: "10px",
-                  background: `${accentColor}15`,
-                  color: accentColor,
-                  display: "grid",
-                  placeItems: "center",
-                  flexShrink: 0,
-                }}
-              >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                </svg>
-              </div>
-              <div>
-                <div style={{ fontSize: "14.5px", fontWeight: 700, color: textColor }}>
-                  Need Help or Have an Issue with an Order?
-                </div>
-                <div style={{ fontSize: "12.5px", color: subtextColor, marginTop: "2px" }}>
-                  Chat with our support specialists, report order issues, or track existing inquiries.
-                </div>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                const isStore = typeof window !== "undefined" && window.location.pathname.startsWith("/store/");
-                const isBuilder = typeof window !== "undefined" && window.location.pathname.startsWith("/builder/");
-                const prefix = isStore
-                  ? `/store/${activeSlug || propSiteSlug || ""}`
-                  : isBuilder
-                  ? `/builder/${propSiteId || activeSlug || propSiteSlug || ""}`
-                  : (activeSlug || propSiteSlug ? `/store/${activeSlug || propSiteSlug}` : "");
-                const targetPath = `${prefix}/support`;
-                navigate(targetPath);
-              }}
+            <div
+              onClick={(e) => e.stopPropagation()}
               style={{
-                padding: "10px 20px",
-                borderRadius: buttonRadius,
-                border: `1px solid ${accentColor}`,
-                background: "transparent",
-                color: accentColor,
-                fontSize: "13.5px",
-                fontWeight: 700,
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
+                background: isLight ? "#ffffff" : "#1e293b",
+                borderRadius: "16px",
+                width: "100%",
+                maxWidth: "440px",
+                padding: "24px",
+                boxShadow: "0 20px 40px -10px rgba(0, 0, 0, 0.35)",
+                border: isLight ? "1px solid #e2e8f0" : "1px solid #334155",
+                display: "flex",
+                flexDirection: "column",
+                gap: "16px",
               }}
             >
-              Visit Support Desk →
-            </button>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "10px",
+                    background: "rgba(239, 68, 68, 0.12)",
+                    color: "#ef4444",
+                    display: "grid",
+                    placeItems: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 800, color: textColor }}>
+                    Delete Your Account?
+                  </h3>
+                  <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: subtextColor }}>
+                    This action is permanent and cannot be reversed.
+                  </p>
+                </div>
+              </div>
+
+              <p style={{ margin: 0, fontSize: "13px", color: subtextColor, lineHeight: 1.5 }}>
+                Are you sure you want to delete your customer account (<strong>{user?.email}</strong>)? Your saved addresses and account details will be permanently removed.
+              </p>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "8px" }}>
+                <button
+                  type="button"
+                  disabled={deletingAccount}
+                  onClick={() => setShowDeleteModal(false)}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: buttonRadius,
+                    border: `1px solid ${borderColor}`,
+                    background: "transparent",
+                    color: textColor,
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingAccount}
+                  onClick={handleDeleteCustomerAccount}
+                  style={{
+                    padding: "8px 18px",
+                    borderRadius: buttonRadius,
+                    border: "none",
+                    background: "#ef4444",
+                    color: "#ffffff",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    cursor: deletingAccount ? "not-allowed" : "pointer",
+                    opacity: deletingAccount ? 0.75 : 1,
+                    boxShadow: "0 2px 8px rgba(239, 68, 68, 0.3)",
+                  }}
+                >
+                  {deletingAccount ? "Deleting..." : "Yes, Delete Account"}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

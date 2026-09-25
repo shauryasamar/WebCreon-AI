@@ -44,9 +44,10 @@ import {
   AdminDomainSettings,
   AdminBillingSettings,
   AdminIntegrationsSettings,
-  AdminHelpAndSupport,
   AdminTaxSettings,
 } from "./Component/AdminSettingsViews";
+import { AdminHelpSupport } from "./Component/AdminHelpSupport";
+import { AdminFaqFullView } from "./Component/AdminFaqFullView";
 import AccessDeniedView from "./Component/AccessDeniedView";
 import StorefrontCustomPage from "./Component/StorefrontCustomPage";
 import StoreMaintenancePage from "./Component/StoreMaintenancePage";
@@ -3084,7 +3085,17 @@ function BuilderPageContent() {
                         path="help-support"
                         element={
                           hasPermission("support:view") ? (
-                            <AdminHelpAndSupport siteId={resolvedSiteId || siteId} />
+                            <AdminHelpSupport siteId={resolvedSiteId || siteId} />
+                          ) : (
+                            <AccessDeniedView requiredPermission="support:view" />
+                          )
+                        }
+                      />
+                      <Route
+                        path="help-support/faq"
+                        element={
+                          hasPermission("support:view") ? (
+                            <AdminHelpSupport siteId={resolvedSiteId || siteId} initialView="faq" />
                           ) : (
                             <AccessDeniedView requiredPermission="support:view" />
                           )

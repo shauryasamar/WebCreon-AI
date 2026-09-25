@@ -108,6 +108,12 @@ export function normalizeStorefrontProduct(raw: any): Product {
       raw?.review_count != null ? Number(raw.review_count) : undefined,
     return_window_days:
       raw?.return_window_days != null ? Number(raw.return_window_days) : null,
+    is_cod_allowed:
+      typeof raw?.is_cod_allowed === "boolean"
+        ? raw.is_cod_allowed
+        : raw?.is_cod_allowed != null
+        ? Boolean(raw.is_cod_allowed)
+        : null,
     is_preorder: Boolean(raw?.is_preorder),
     is_preorder_active:
       typeof raw?.is_preorder_active === "boolean"

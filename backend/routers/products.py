@@ -471,6 +471,7 @@ def to_product_responses_batch(
             "highlights": getattr(product, "highlights", []) or [],
             "variant_option": product.variant_option,
             "return_window_days": product.return_window_days,
+            "is_cod_allowed": getattr(product, "is_cod_allowed", None),
             "is_preorder": bool(getattr(product, "is_preorder", False)),
             "is_preorder_active": bool(getattr(product, "is_preorder", False)) and (getattr(product, "preorder_release_date", None) is None or getattr(product, "preorder_release_date", None) > utc_now()),
             "preorder_release_date": getattr(product, "preorder_release_date", None).isoformat() if getattr(product, "preorder_release_date", None) else None,
@@ -591,6 +592,7 @@ class ProductCreate(BaseModel):
     images: list[str] = Field(default_factory=list)
     variant_option: Optional[ProductVariantOption] = None
     return_window_days: Optional[int] = None
+    is_cod_allowed: Optional[bool] = None
     is_preorder: bool = False
     preorder_release_date: Optional[datetime] = None
     preorder_message: Optional[str] = None
@@ -680,6 +682,7 @@ class ProductUpdate(BaseModel):
     images: list[str] = Field(default_factory=list)
     variant_option: Optional[ProductVariantOption] = None
     return_window_days: Optional[int] = None
+    is_cod_allowed: Optional[bool] = None
     is_preorder: bool = False
     preorder_release_date: Optional[datetime] = None
     preorder_message: Optional[str] = None
@@ -771,6 +774,7 @@ class ProductResponse(BaseModel):
     highlights: list[str] = Field(default_factory=list)
     variant_option: Optional[dict[str, Any]] = None
     return_window_days: Optional[int] = None
+    is_cod_allowed: Optional[bool] = None
     is_preorder: bool = False
     is_preorder_active: bool = False
     preorder_release_date: Optional[Any] = None
@@ -839,12 +843,14 @@ def list_products(
     max_price: Optional[Decimal] = Query(None, description="Maximum price"),
     has_discount: Optional[bool] = Query(None, description="Filter products with discount / MRP strike"),
     return_policy: Optional[str] = Query(None, description="Filter by return policy: non_returnable, returnable"),
+    cod_policy: Optional[str] = Query(None, description="Filter by COD policy: cod_allowed, prepaid_only"),
+    cod_allowed: Optional[bool] = Query(None, description="Filter by COD allowed"),
     has_video: Optional[bool] = Query(None, description="Filter products with video"),
     sort_by: Optional[str] = Query(None, description="Sort order"),
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
-    cache_key = f"site:{site_id}:admin_list:{page}:{page_size}:{search}:{status}:{category_id}:{collection_id}:{brand}:{min_price}:{max_price}:{has_discount}:{return_policy}:{has_video}:{sort_by}"
+    cache_key = f"site:{site_id}:admin_list:{page}:{page_size}:{search}:{status}:{category_id}:{collection_id}:{brand}:{min_price}:{max_price}:{has_discount}:{return_policy}:{cod_policy}:{cod_allowed}:{has_video}:{sort_by}"
     cached_data = catalog_cache.get(cache_key)
     if cached_data is not None:
         return cached_data
@@ -876,6 +882,10 @@ def list_products(
         conditions.append(Product.return_window_days == 0)
     elif return_policy == "returnable":
         conditions.append((Product.return_window_days.is_(None)) | (Product.return_window_days > 0))
+    if cod_policy == "cod_allowed" or cod_allowed is True:
+        conditions.append(Product.is_cod_allowed == True)
+    elif cod_policy == "prepaid_only" or cod_allowed is False:
+        conditions.append(Product.is_cod_allowed == False)
     if has_video is True:
         conditions.append(Product.video_url.isnot(None))
         conditions.append(Product.video_url != "")
@@ -1295,6 +1305,7 @@ CSV_HEADERS = [
     "sibling_group",
     "sibling_label",
     "return_window_days",
+    "is_cod_allowed",
     "weight_grams",
     "length_cm",
     "width_cm",
@@ -1534,6 +1545,7 @@ def export_products_csv(
             getattr(p, "sibling_group", "") or "",
             getattr(p, "sibling_label", "") or "",
             getattr(p, "return_window_days", "") if getattr(p, "return_window_days", None) is not None else "",
+            "DEFAULT" if getattr(p, "is_cod_allowed", None) is None else ("TRUE" if p.is_cod_allowed else "FALSE"),
             p.weight_grams or 500,
             float(p.length_cm) if p.length_cm is not None else "",
             float(p.width_cm) if p.width_cm is not None else "",
@@ -2150,6 +2162,17 @@ async def import_products_csv(
                     except Exception:
                         preorder_limit = None
 
+        is_cod_allowed_str = row.get("is_cod_allowed")
+        is_cod_allowed = None
+        if is_cod_allowed_str is not None and str(is_cod_allowed_str).strip():
+            raw_cod = str(is_cod_allowed_str).strip().lower()
+            if raw_cod in {"true", "1", "yes", "cod", "enable", "enabled", "allowed"}:
+                is_cod_allowed = True
+            elif raw_cod in {"false", "0", "no", "prepaid", "disable", "disabled"}:
+                is_cod_allowed = False
+            elif raw_cod in {"default", "inherit", "none", "null"}:
+                is_cod_allowed = None
+
         # Check for existing product match (Duplicate Detection & Upsert)
         existing_p: Optional[Product] = None
         if row_sku and row_sku.lower() in sku_map:
@@ -2186,6 +2209,8 @@ async def import_products_csv(
             existing_p.video_position = row_video_pos
             if row_return_window is not None:
                 existing_p.return_window_days = row_return_window
+            if is_cod_allowed_str is not None:
+                existing_p.is_cod_allowed = is_cod_allowed
             if is_preorder_str is not None:
                 existing_p.is_preorder = is_preorder
                 existing_p.preorder_release_date = preorder_release_date
@@ -2234,6 +2259,7 @@ async def import_products_csv(
                 sibling_group=row_sibling_group,
                 sibling_label=row_sibling_label,
                 return_window_days=row_return_window,
+                is_cod_allowed=is_cod_allowed,
                 is_preorder=is_preorder,
                 preorder_release_date=preorder_release_date,
                 preorder_message=preorder_message,
@@ -2593,6 +2619,7 @@ def create_product(
         width_cm=Decimal(str(product_in.width_cm)) if product_in.width_cm is not None else None,
         height_cm=Decimal(str(product_in.height_cm)) if product_in.height_cm is not None else None,
         return_window_days=product_in.return_window_days,
+        is_cod_allowed=product_in.is_cod_allowed,
         is_preorder=product_in.is_preorder,
         preorder_release_date=product_in.preorder_release_date,
         preorder_message=product_in.preorder_message,
@@ -2700,6 +2727,7 @@ def update_product(
     product.width_cm = Decimal(str(product_in.width_cm)) if product_in.width_cm is not None else None
     product.height_cm = Decimal(str(product_in.height_cm)) if product_in.height_cm is not None else None
     product.return_window_days = product_in.return_window_days
+    product.is_cod_allowed = product_in.is_cod_allowed
     product.is_preorder = product_in.is_preorder
     product.preorder_release_date = product_in.preorder_release_date
     product.preorder_message = product_in.preorder_message
@@ -2932,6 +2960,7 @@ def bulk_action_products(
                     images=deepcopy(product.images) if product.images else [],
                     variant_option=deepcopy(product.variant_option) if product.variant_option else None,
                     return_window_days=product.return_window_days,
+                    is_cod_allowed=product.is_cod_allowed,
                 )
                 session.add(cloned_product)
                 session.flush()
@@ -3218,6 +3247,7 @@ def duplicate_product(
         images=deepcopy(product.images) if product.images else [],
         variant_option=deepcopy(product.variant_option) if product.variant_option else None,
         return_window_days=product.return_window_days,
+        is_cod_allowed=product.is_cod_allowed,
     )
 
     session.add(cloned_product)
@@ -3238,3 +3268,55 @@ def duplicate_product(
     catalog_cache.invalidate_site(site_id)
 
     return to_product_response(cloned_product, session)
+
+
+class BulkCodUpdateRequest(BaseModel):
+    is_cod_allowed: Optional[bool] = None  # None resets to store default, True/False sets manual exception
+    product_ids: Optional[list[UUID]] = None
+    preserve_exceptions: bool = False  # When true, only products without existing manual exceptions are updated
+
+
+@router.patch("/bulk-cod")
+def bulk_update_cod(
+    site_id: UUID,
+    payload: BulkCodUpdateRequest,
+    ownership=Depends(enforce_site_ownership),
+    session: Session = Depends(get_session),
+):
+    get_site_or_404(session, site_id)
+    admin_id = ownership.get("adminId") if isinstance(ownership, dict) else None
+
+    stmt = select(Product).where(Product.site_id == site_id)
+    if payload.product_ids:
+        stmt = stmt.where(Product.id.in_(payload.product_ids))
+    elif payload.preserve_exceptions:
+        # Only update products that currently inherit store default
+        stmt = stmt.where(Product.is_cod_allowed.is_(None))
+
+    products = session.exec(stmt).all()
+    count = 0
+    for p in products:
+        p.is_cod_allowed = payload.is_cod_allowed
+        p.updated_at = utc_now()
+        session.add(p)
+        count += 1
+
+    session.commit()
+    catalog_cache.invalidate_site(site_id)
+
+    action_label = "Reset to store default" if payload.is_cod_allowed is None else ("Enabled" if payload.is_cod_allowed else "Disabled")
+    log_activity(
+        session=session,
+        action="products.bulk_cod_updated",
+        category="products",
+        description=f"{action_label} COD for {count} product(s)",
+        site_id=site_id,
+        admin_id=admin_id,
+    )
+
+    return {
+        "success": True,
+        "updated_count": count,
+        "is_cod_allowed": payload.is_cod_allowed,
+        "scope": "selected" if payload.product_ids else ("default_only" if payload.preserve_exceptions else "all"),
+    }

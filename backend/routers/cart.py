@@ -10,7 +10,7 @@ from sqlmodel import Session, select
 
 from auth_middleware import authenticate_customer, resolve_site_by_slug_or_404
 from db.database import get_session
-from models import Cart, CartItem, Product, Site, User
+from models import Cart, CartItem, DeliverySettings, Product, Site, User
 
 
 router = APIRouter(
@@ -145,6 +145,7 @@ def serialize_cart_item(item: CartItem, product: Optional[Product] = None) -> di
         "product_slug": item.product_slug,
         "hsn_code": (product.hsn_code if product else getattr(item, "hsn_code", None)),
         "tax_rate_override": decimal_to_float(product.tax_rate_override) if (product and product.tax_rate_override is not None) else None,
+        "is_cod_allowed": getattr(product, "is_cod_allowed", None) if product else None,
         "is_preorder": is_preorder,
         "preorder_release_date": rel_date.isoformat() if rel_date else None,
         "line_total": float(item.unit_price * item.quantity),
@@ -169,6 +170,15 @@ def build_cart_response(cart: Cart, items: list[CartItem], session: Optional[Ses
         products = session.exec(select(Product).where(Product.id.in_(prod_ids))).all()
         prod_map = {p.id: p for p in products}
 
+    del_settings = None
+    if session and cart.site_id:
+        del_settings = session.exec(
+            select(DeliverySettings).where(DeliverySettings.site_id == cart.site_id)
+        ).first()
+
+    enable_cod = getattr(del_settings, "enable_cod", True) if del_settings else True
+    max_cod_amount = float(getattr(del_settings, "max_cod_amount", 5000.0) or 5000.0) if del_settings else 5000.0
+
     serialized_items = [serialize_cart_item(item, prod_map.get(item.product_id)) for item in items]
     has_unavailable_items = any(it.get("is_blocking", False) for it in serialized_items)
     unavailable_count = sum(1 for it in serialized_items if it.get("is_blocking", False))
@@ -185,6 +195,8 @@ def build_cart_response(cart: Cart, items: list[CartItem], session: Optional[Ses
         "items": serialized_items,
         "subtotal": float(subtotal),
         "total_items": total_items,
+        "enable_cod": enable_cod,
+        "max_cod_amount": max_cod_amount,
         "has_unavailable_items": has_unavailable_items,
         "unavailable_items_count": unavailable_count,
         "blocking_summary": blocking_summary,
@@ -282,6 +294,8 @@ class CartResponse(BaseModel):
     items: list[CartItemResponse]
     subtotal: float
     total_items: int
+    enable_cod: bool = True
+    max_cod_amount: float = 5000.0
 
     # Live cart health status
     has_unavailable_items: bool = False
@@ -405,6 +419,7 @@ def add_cart_item(
     return build_cart_response(cart, items, session=session)
 
 
+@router.put("/{site_id}/items/{item_id}", response_model=CartResponse)
 @router.patch("/{site_id}/items/{item_id}", response_model=CartResponse)
 def update_cart_item(
     site_id: str,
@@ -420,7 +435,17 @@ def update_cart_item(
 
     customer = get_user_for_site_or_404(session, site.id, UUID(user["userId"]))
     cart = get_or_create_cart(session, site.id, customer.id)
-    item = get_cart_item_or_404(session, cart.id, item_id)
+    
+    item = session.exec(
+        select(CartItem).where(CartItem.id == item_id, CartItem.cart_id == cart.id)
+    ).first()
+
+    if not item:
+        # Item may have already been deleted/removed; return current live cart
+        items = session.exec(
+            select(CartItem).where(CartItem.cart_id == cart.id)
+        ).all()
+        return build_cart_response(cart, items, session=session)
 
     product = get_product_for_site_or_404(session, site.id, item.product_id)
 
@@ -449,12 +474,15 @@ def update_cart_item(
                 detail="Requested quantity exceeds available stock",
             )
 
-    item.quantity = payload.quantity
-    item.is_preorder = is_preorder_active
-    item.preorder_release_date = product.preorder_release_date if is_preorder_active else None
-    session.add(item)
-    session.commit()
-    session.refresh(cart)
+    try:
+        item.quantity = payload.quantity
+        item.is_preorder = is_preorder_active
+        item.preorder_release_date = product.preorder_release_date if is_preorder_active else None
+        session.add(item)
+        session.commit()
+        session.refresh(cart)
+    except Exception:
+        session.rollback()
 
     items = session.exec(
         select(CartItem).where(CartItem.cart_id == cart.id)
@@ -477,11 +505,18 @@ def remove_cart_item(
 
     customer = get_user_for_site_or_404(session, site.id, UUID(user["userId"]))
     cart = get_or_create_cart(session, site.id, customer.id)
-    item = get_cart_item_or_404(session, cart.id, item_id)
+    
+    item = session.exec(
+        select(CartItem).where(CartItem.id == item_id, CartItem.cart_id == cart.id)
+    ).first()
 
-    session.delete(item)
-    session.commit()
-    session.refresh(cart)
+    if item:
+        try:
+            session.delete(item)
+            session.commit()
+            session.refresh(cart)
+        except Exception:
+            session.rollback()
 
     items = session.exec(
         select(CartItem).where(CartItem.cart_id == cart.id)

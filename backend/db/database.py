@@ -87,6 +87,8 @@ def create_db_and_tables():
                 ALTER TABLE products ADD COLUMN IF NOT EXISTS video_position INTEGER DEFAULT 2;
                 ALTER TABLE products ADD COLUMN IF NOT EXISTS sibling_group VARCHAR(100);
                 ALTER TABLE products ADD COLUMN IF NOT EXISTS sibling_label VARCHAR(100);
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS is_cod_allowed BOOLEAN;
+                ALTER TABLE products ALTER COLUMN is_cod_allowed DROP NOT NULL;
                 CREATE INDEX IF NOT EXISTS ix_products_sibling_group ON products(sibling_group);
 
                 CREATE TABLE IF NOT EXISTS audit_logs (
@@ -592,6 +594,56 @@ def create_db_and_tables():
                   ('c4901101-0000-0000-0000-000000004901', '49011010', 'HSN', 'Printed books, brochures, leaflets, and similar printed matter', 0.00, 0.00, 0.00, 0.00, 0.00, TRUE, FALSE, FALSE, '2017-07-01 00:00:00+00', 'APPROVED', TRUE, 1, NOW())
                 ON CONFLICT (code) DO NOTHING;
 
+                -- Seed Merchant Support FAQ Categories
+                INSERT INTO merchant_support_faq_categories (id, name, slug, icon_name, sort_order, is_active, created_at)
+                VALUES
+                  ('c1a2b3c4-0001-0000-0000-000000000001', 'Billing & Plans', 'billing-plans', 'CreditCard', 1, TRUE, NOW()),
+                  ('c1a2b3c4-0002-0000-0000-000000000002', 'Domains & SSL', 'domains-ssl', 'Globe', 2, TRUE, NOW()),
+                  ('c1a2b3c4-0003-0000-0000-000000000003', 'Storefront & Products', 'storefront-products', 'Store', 3, TRUE, NOW()),
+                  ('c1a2b3c4-0004-0000-0000-000000000004', 'Orders & Delivery', 'orders-delivery', 'Package', 4, TRUE, NOW()),
+                  ('c1a2b3c4-0005-0000-0000-000000000005', 'Payments & Payouts', 'payments-payouts', 'Banknote', 5, TRUE, NOW()),
+                  ('c1a2b3c4-0006-0000-0000-000000000006', 'AI Credits & Co-Pilot', 'ai-credits-copilot', 'Sparkles', 6, TRUE, NOW())
+                ON CONFLICT (slug) DO NOTHING;
+
+                -- Seed Comprehensive Merchant Support FAQ Items
+                INSERT INTO merchant_support_faq_items (id, category_id, question, answer_rich_text, sort_order, is_published, is_featured_inline, view_count, helpful_count, not_helpful_count, created_at, updated_at)
+                VALUES
+                  -- Storefront & Products
+                  ('f1a2b3c4-0001-0000-0000-000000000001', 'c1a2b3c4-0003-0000-0000-000000000003', 'Why did my products become draft?', 'Products are placed in Draft if your active catalog exceeds your plan limit (200 on Free, 1,000 on Starter, Unlimited on Pro) or if saved with missing required attributes (title or selling price). You can edit and re-activate products anytime once active slot capacity is available.', 1, TRUE, TRUE, 120, 14, 0, NOW(), NOW()),
+                  ('f1a2b3c4-0007-0000-0000-000000000003', 'c1a2b3c4-0003-0000-0000-000000000003', 'How do product variants and product families work?', 'Variants (such as sizes or colors) are configured directly on the product without requiring separate SKUs. If you offer multiple products that share the same design style, you can link them to the same Product Family so customers can switch between options on your product page.', 2, TRUE, FALSE, 84, 10, 0, NOW(), NOW()),
+                  ('f1a2b3c4-0010-0000-0000-000000000003', 'c1a2b3c4-0003-0000-0000-000000000003', 'Will editing or drafting a product alter past orders or invoices?', 'No. Past orders maintain immutable legal snapshots of product details, prices, and tax rates at the exact time of purchase. Editing or drafting an item in your active catalog will not alter past invoices or customer receipts.', 3, TRUE, FALSE, 65, 8, 0, NOW(), NOW()),
+                  
+                  -- AI Credits & Visual Canvas
+                  ('f1a2b3c4-0003-0000-0000-000000000006', 'c1a2b3c4-0006-0000-0000-000000000006', 'How do canvas snapshots and publishing work?', 'In the Visual Editor, you can save Version Snapshots at any design milestone. You can preview and apply any previous snapshot at any time. When you are ready to make changes live to customers, clicking Publish Changes deploys the latest layout to WebCreon global CDN edge network.', 4, TRUE, TRUE, 142, 22, 0, NOW(), NOW()),
+                  ('f1a2b3c4-0009-0000-0000-000000000006', 'c1a2b3c4-0006-0000-0000-000000000006', 'How are AI generation credits allocated and used?', 'AI credits power storefront generation, product copy, and AI Co-Pilot synthesis. Free accounts receive 300 base credits monthly, Starter includes 1,000 credits/mo, and Pro includes 2,000 credits/mo. Credits remain valid throughout your active billing cycle.', 5, TRUE, FALSE, 105, 15, 0, NOW(), NOW()),
+                  ('f1a2b3c4-0011-0000-0000-000000000006', 'c1a2b3c4-0006-0000-0000-000000000006', 'How does the AI Storefront Generator work?', 'Provide your brand name, industry, and desired aesthetic. The AI engine synthesizes high-converting layouts, responsive color palettes, typography pairings, and placeholder banners in under 30 seconds using your available AI credits.', 6, TRUE, FALSE, 90, 11, 0, NOW(), NOW()),
+                  
+                  -- Domains & SSL
+                  ('f1a2b3c4-0004-0000-0000-000000000002', 'c1a2b3c4-0002-0000-0000-000000000002', 'How do I connect my custom domain?', 'Navigate to Settings → Domains, enter your custom domain (e.g. shop.yourbrand.com), and copy the provided CNAME / A DNS records into your domain registrar (GoDaddy, Cloudflare, Namecheap). SSL provisioning and DNS routing activate within 10–15 minutes.', 7, TRUE, TRUE, 88, 11, 0, NOW(), NOW()),
+                  ('f1a2b3c4-0012-0000-0000-000000000002', 'c1a2b3c4-0002-0000-0000-000000000002', 'What happens to my custom domain if my plan expires?', 'Custom domain routing requires an active Starter or Pro subscription. If your plan expires, domain routing pauses and your store safely falls back to your free WebCreon subdomain until your subscription is renewed.', 8, TRUE, FALSE, 72, 7, 0, NOW(), NOW()),
+                  
+                  -- Orders & Delivery
+                  ('f1a2b3c4-0006-0000-0000-000000000004', 'c1a2b3c4-0004-0000-0000-000000000004', 'How does Shiprocket shipping & fulfillment work?', 'WebCreon integrates with Shiprocket to automate courier label printing, scheduled pickups, and customer live delivery tracking. Dispatched courier freight is non-reversible, and refunding customer shipping fees on returns is at your sole discretion.', 9, TRUE, TRUE, 110, 18, 1, NOW(), NOW()),
+                  ('f1a2b3c4-0013-0000-0000-000000000004', 'c1a2b3c4-0004-0000-0000-000000000004', 'How do customer return requests work?', 'Customers can initiate return requests from their live order tracking page. You can review customer reasons and submitted photos in Orders & Returns, and either approve a reverse courier pickup or reject with an explanation.', 10, TRUE, FALSE, 83, 9, 0, NOW(), NOW()),
+                  ('f1a2b3c4-0014-0000-0000-000000000004', 'c1a2b3c4-0004-0000-0000-000000000004', 'What are the stages of an order lifecycle?', 'Orders progress through Pending (checkout in progress) → Paid (confirmed & ready to pack) → Shipped (AWB generated & in transit) → Delivered (handover confirmed) → Completed (escrow matured).', 11, TRUE, FALSE, 78, 10, 0, NOW(), NOW()),
+                  
+                  -- Payments & Payouts
+                  ('f1a2b3c4-0008-0000-0000-000000000005', 'c1a2b3c4-0005-0000-0000-000000000005', 'When are order earnings released to my bank account?', 'Order earnings are held in compliant escrow until courier delivery confirmation plus dispute window (T+2 days). Once matured, available balances are transferred to your verified bank account or UPI VPA configured in Payout Settings.', 12, TRUE, FALSE, 92, 12, 0, NOW(), NOW()),
+                  ('f1a2b3c4-0015-0000-0000-000000000005', 'c1a2b3c4-0005-0000-0000-000000000005', 'What deductions are applied to my gross sales?', 'Your net payout equals Gross Order Total minus Razorpay transaction fees (approx 2%), minus courier shipping costs (if fulfilled via Shiprocket), and statutory TCS withholding if applicable under GST.', 13, TRUE, FALSE, 86, 11, 0, NOW(), NOW()),
+                  
+                  -- Billing & Plans
+                  ('f1a2b3c4-0002-0000-0000-000000000001', 'c1a2b3c4-0001-0000-0000-000000000001', 'What happens when my paid plan expires?', 'When a paid subscription plan expires or is cancelled, your store transitions immediately to the Free tier with zero grace period charges. Your first 200 products remain active while additional products are safely preserved in Draft status. Custom domain connections and team roles are paused until renewed.', 14, TRUE, TRUE, 95, 8, 1, NOW(), NOW()),
+                  ('f1a2b3c4-0005-0000-0000-000000000001', 'c1a2b3c4-0001-0000-0000-000000000001', 'How does the 7-day money-back guarantee work?', 'All first-time paid plan upgrades (Starter and Pro) are protected by a 100% money-back guarantee within 7 calendar days of your upgrade. To request a refund, submit a support inquiry under Billing & Plans or email billing@webcreon.com.', 15, TRUE, TRUE, 76, 9, 0, NOW(), NOW()),
+                  ('f1a2b3c4-0016-0000-0000-000000000001', 'c1a2b3c4-0001-0000-0000-000000000001', 'Where can I download official GST tax invoices for my subscription?', 'In Admin → Billing Settings → Invoices & Receipts, each subscription charge has a downloadable B2B Tax Invoice (PDF) with your GSTIN, WebCreon GSTIN, SAC code 998313, and statutory CGST/SGST/IGST breakdowns.', 16, TRUE, FALSE, 98, 14, 0, NOW(), NOW())
+                ON CONFLICT (id) DO UPDATE SET 
+                  category_id = EXCLUDED.category_id,
+                  question = EXCLUDED.question,
+                  answer_rich_text = EXCLUDED.answer_rich_text,
+                  sort_order = EXCLUDED.sort_order,
+                  is_published = EXCLUDED.is_published,
+                  is_featured_inline = EXCLUDED.is_featured_inline,
+                  updated_at = NOW();
+
                 -- Subscription & Billing Hardened Schema Migrations
                 ALTER TABLE products ADD COLUMN IF NOT EXISTS draft_reason VARCHAR(50);
                 ALTER TABLE products ADD COLUMN IF NOT EXISTS drafted_at TIMESTAMPTZ;
@@ -638,4 +690,4 @@ def create_db_and_tables():
 
 def get_session():
     with Session(engine) as session:
-        yield session
+        yield session

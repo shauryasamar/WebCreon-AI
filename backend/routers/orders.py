@@ -2745,14 +2745,24 @@ def place_order(
             del_settings = session.exec(
                 select(DeliverySettings).where(DeliverySettings.site_id == site_id)
             ).first()
+            store_cod_enabled = getattr(del_settings, "enable_cod", True) if del_settings else True
+
+            # Check product-level COD eligibility (explicit False, or None when store COD disabled)
+            ineligible_products = [
+                p.name for p in product_map.values()
+                if (p.is_cod_allowed is False or (p.is_cod_allowed is None and not store_cod_enabled))
+            ]
+            if ineligible_products:
+                names_str = ", ".join(f"'{n}'" for n in ineligible_products[:3])
+                if len(ineligible_products) > 3:
+                    names_str += f" and {len(ineligible_products) - 3} other items"
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cash on Delivery (COD) is not available for {names_str}. Please choose Online Payment (UPI, Card, Netbanking).",
+                )
             if del_settings:
-                if getattr(del_settings, "enable_cod", True) is False:
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Cash on Delivery is currently disabled by the store. Please choose Online Payment.",
-                    )
                 max_cod = float(getattr(del_settings, "max_cod_amount", 5000.0) or 5000.0)
-                if float(gross_amount) > max_cod:
+                if max_cod > 0 and float(gross_amount) > max_cod:
                     raise HTTPException(
                         status_code=400,
                         detail=f"Cash on Delivery is only available for orders up to ₹{max_cod:,.2f}. Please choose Online Payment.",

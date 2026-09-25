@@ -54,8 +54,10 @@ When you interact with our storefront or place an order, we may collect:
 ### 3. Payment Security
 We never store complete credit or debit card numbers on our servers. All transactions are securely tokenized and processed via certified PCI-DSS compliant payment gateways.
 
-### 4. Your Rights
-You may request access to, correction of, or deletion of your personal data at any time by contacting our support team.
+### 4. Your Data Rights & One-Click Deletion
+You maintain full control over your personal data:
+- **Instant Account Erasure:** You can delete your customer profile, saved delivery addresses, active cart, and notification history anytime directly through your **Account Profile > Delete Account**.
+- **Data Access & Inquiries:** You may request access to or updates of your personal data by reaching out to our customer care team.
 `,
   },
   terms: {

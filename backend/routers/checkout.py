@@ -485,4 +485,20 @@ def check_deliverability(
         "reason": "manual_delivery",
     }
 
+
+@router.get("/{site_id}/settings")
+def get_public_checkout_settings(
+    site_id: str,
+    session: Session = Depends(get_session),
+):
+    site = get_site_or_404(session, site_id)
+    settings = session.exec(
+        select(DeliverySettings).where(DeliverySettings.site_id == site.id)
+    ).first()
+    return {
+        "enable_cod": getattr(settings, "enable_cod", True) if settings else True,
+        "max_cod_amount": float(getattr(settings, "max_cod_amount", 5000.0) or 5000.0) if settings else 5000.0,
+    }
+
+
 

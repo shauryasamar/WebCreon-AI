@@ -101,6 +101,7 @@ export type Product = {
   sales_count?: number | null;
   salesCount?: number | null;
   return_window_days?: number | null;
+  is_cod_allowed?: boolean | null;
   is_preorder?: boolean;
   preorder_release_date?: string | null;
   preorder_message?: string | null;
@@ -118,7 +119,7 @@ export function isProductPreorderActive(product?: Partial<Product> | null): bool
   try {
     return new Date(product.preorder_release_date).getTime() > Date.now();
   } catch {
-    return true;
+    return false;
   }
 }
 
@@ -174,6 +175,8 @@ type CartContextType = {
   clearCart: () => Promise<void>;
   refreshCart: () => Promise<void>;
   defaultReturnWindowDays?: number;
+  enableCod?: boolean;
+  maxCodAmount?: number;
 };
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -203,6 +206,7 @@ type BackendCartItem = {
   product_slug?: string | null;
   hsn_code?: string | null;
   tax_rate_override?: number | null;
+  is_cod_allowed?: boolean | null;
   line_total: number;
   is_available?: boolean;
   is_out_of_stock?: boolean;
@@ -221,6 +225,8 @@ type BackendCartResponse = {
   items: BackendCartItem[];
   subtotal: number;
   total_items: number;
+  enable_cod?: boolean;
+  max_cod_amount?: number;
   has_unavailable_items?: boolean;
   unavailable_items_count?: number;
   blocking_summary?: string | null;
@@ -244,6 +250,7 @@ const mapBackendCartItemToCartItem = (item: BackendCartItem): CartItem => ({
   selectedVariantLabel: item.selected_variant_label ?? null,
   hsn_code: item.hsn_code ?? null,
   tax_rate_override: item.tax_rate_override ?? null,
+  is_cod_allowed: item.is_cod_allowed !== undefined ? item.is_cod_allowed : null,
   quantity: item.quantity,
   is_available: item.is_available ?? true,
   is_out_of_stock: item.is_out_of_stock ?? false,
@@ -321,11 +328,27 @@ export function CartProvider({
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartItemIds, setCartItemIds] = useState<Record<string, string>>({});
   const [isCartLoading, setIsCartLoading] = useState(false);
+  const [enableCod, setEnableCod] = useState<boolean>(true);
+  const [maxCodAmount, setMaxCodAmount] = useState<number>(5000);
   const [appliedCoupon, setAppliedCouponState] = useState<ValidatedCoupon | null>(() =>
     readPersistedCoupon(siteId)
   );
 
   const resolvedSiteId = siteId;
+
+  // Initialize delivery & COD policy from public checkout settings
+  useEffect(() => {
+    if (!resolvedSiteId) return;
+    fetch(`${API_BASE_URL}/checkout/${resolvedSiteId}/settings`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) {
+          if (data.enable_cod !== undefined) setEnableCod(Boolean(data.enable_cod));
+          if (data.max_cod_amount !== undefined) setMaxCodAmount(Number(data.max_cod_amount) || 5000);
+        }
+      })
+      .catch(() => {});
+  }, [resolvedSiteId]);
 
   const setAppliedCoupon = useCallback((coupon: ValidatedCoupon | null) => {
     setAppliedCouponState(coupon);
@@ -351,21 +374,29 @@ export function CartProvider({
     }
   }, [cartItems]);
 
-  // Reconcile and enrich cached cart items with latest product catalog (HSN codes, tax rates, prices)
+  // Reconcile and enrich cached cart items with latest product catalog (HSN codes, tax rates, prices, COD status)
   useEffect(() => {
     if (!products || products.length === 0) return;
     setCartItems((prevItems) => {
       if (!prevItems || prevItems.length === 0) return prevItems;
       let changed = false;
       const updated = prevItems.map((item) => {
-        const matching = products.find((p) => String(p.id) === String(item.id));
+        const matching = products.find(
+          (p) =>
+            String(p.id) === String(item.id) ||
+            (p.slug && item.slug && String(p.slug) === String(item.slug)) ||
+            (p.id && item.slug && String(p.id) === String(item.slug)) ||
+            (p.slug && item.id && String(p.slug) === String(item.id))
+        );
         if (!matching) return item;
         const nextHsn = matching.hsn_code ?? item.hsn_code ?? null;
         const nextTaxOverride = matching.tax_rate_override ?? item.tax_rate_override ?? null;
         const nextImage = matching.image || matching.imageUrl || item.image;
+        const nextCod = matching.is_cod_allowed !== undefined ? Boolean(matching.is_cod_allowed) : Boolean(item.is_cod_allowed);
         if (
           item.hsn_code !== nextHsn ||
           item.tax_rate_override !== nextTaxOverride ||
+          item.is_cod_allowed !== nextCod ||
           (!item.image && nextImage)
         ) {
           changed = true;
@@ -373,6 +404,7 @@ export function CartProvider({
             ...item,
             hsn_code: nextHsn,
             tax_rate_override: nextTaxOverride,
+            is_cod_allowed: nextCod,
             image: nextImage,
           };
         }
@@ -392,6 +424,13 @@ export function CartProvider({
     for (const item of data.items) {
       const key = `${String(item.product_id)}::${item.selected_variant_value ?? ""}`;
       nextItemIds[key] = item.id;
+    }
+
+    if (data.enable_cod !== undefined) {
+      setEnableCod(Boolean(data.enable_cod));
+    }
+    if (data.max_cod_amount !== undefined) {
+      setMaxCodAmount(Number(data.max_cod_amount) || 5000);
     }
 
     setCartItems(mappedItems);
@@ -523,11 +562,13 @@ export function CartProvider({
           if (existingIndex >= 0) {
             nextItems[existingIndex] = {
               ...nextItems[existingIndex],
+              is_cod_allowed: product.is_cod_allowed !== undefined ? Boolean(product.is_cod_allowed) : nextItems[existingIndex].is_cod_allowed,
               quantity: nextItems[existingIndex].quantity + safeQuantity,
             };
           } else {
             nextItems.push({
               ...product,
+              is_cod_allowed: Boolean(product.is_cod_allowed),
               selectedVariantValue,
               quantity: safeQuantity,
             });
@@ -560,11 +601,13 @@ export function CartProvider({
         if (existingIndex >= 0) {
           nextItems[existingIndex] = {
             ...nextItems[existingIndex],
+            is_cod_allowed: product.is_cod_allowed !== undefined ? Boolean(product.is_cod_allowed) : nextItems[existingIndex].is_cod_allowed,
             quantity: nextItems[existingIndex].quantity + safeQuantity,
           };
         } else {
           nextItems.push({
             ...product,
+            is_cod_allowed: Boolean(product.is_cod_allowed),
             selectedVariantValue,
             quantity: safeQuantity,
           });
@@ -585,6 +628,22 @@ export function CartProvider({
       const key = `${String(productId)}::${variantValue ?? ""}`;
       const itemId = cartItemIds[key];
 
+      // Optimistic removal from UI & clean up key immediately
+      setCartItems((prev) =>
+        prev.filter(
+          (item) =>
+            !(
+              String(item.id) === String(productId) &&
+              (item.selectedVariantValue ?? null) === (variantValue ?? null)
+            )
+        )
+      );
+      setCartItemIds((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+
       if (!itemId) {
         const nextItems = readGuestCart(resolvedSiteId).filter(
           (item) =>
@@ -594,8 +653,6 @@ export function CartProvider({
             )
         );
         writeGuestCart(resolvedSiteId, nextItems);
-        setCartItems(nextItems);
-        setCartItemIds({});
         return;
       }
 
@@ -618,8 +675,6 @@ export function CartProvider({
               )
           );
           writeGuestCart(resolvedSiteId, nextItems);
-          setCartItems(nextItems);
-          setCartItemIds({});
           return;
         }
 
@@ -664,6 +719,16 @@ export function CartProvider({
         setCartItemIds({});
         return;
       }
+
+      // Optimistic update for immediate responsiveness
+      setCartItems((prev) =>
+        prev.map((item) =>
+          String(item.id) === String(productId) &&
+          (item.selectedVariantValue ?? null) === (variantValue ?? null)
+            ? { ...item, quantity }
+            : item
+        )
+      );
 
       try {
         const res = await fetch(
@@ -805,6 +870,8 @@ export function CartProvider({
       clearCart,
       refreshCart,
       defaultReturnWindowDays,
+      enableCod,
+      maxCodAmount,
     }),
     [
       products,
@@ -825,6 +892,8 @@ export function CartProvider({
       clearCart,
       refreshCart,
       defaultReturnWindowDays,
+      enableCod,
+      maxCodAmount,
     ]
   );
 

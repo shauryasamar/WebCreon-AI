@@ -426,6 +426,10 @@ class Product(SQLModel, table=True):
         default=None,
         sa_column=Column(Integer, nullable=True),
     )
+    is_cod_allowed: Optional[bool] = Field(
+        default=None,
+        sa_column=Column(Boolean, nullable=True),
+    )
 
     created_at: datetime = Field(
         default_factory=utc_now,
@@ -2298,5 +2302,192 @@ class SubscriptionInvoice(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
 
 
+# ===========================================================================
+# MERCHANT HELP & SUPPORT SYSTEM MODELS (STRICT ISOLATION)
+# ===========================================================================
 
+class MerchantSupportTicket(SQLModel, table=True):
+    __tablename__ = "merchant_support_tickets"
+    __table_args__ = (
+        UniqueConstraint("admin_id", "client_request_id", name="uq_merchant_support_tickets_admin_client_req"),
+        Index("ix_mst_admin_status_updated", "admin_id", "status", "updated_at"),
+        Index("ix_mst_site_status", "website_id", "status"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    ticket_number: str = Field(max_length=40, nullable=False, unique=True, index=True)
+    admin_id: UUID = Field(foreign_key="admins.id", index=True, nullable=False)
+    website_id: Optional[UUID] = Field(default=None, foreign_key="sites.id", index=True, nullable=True)
+    client_request_id: UUID = Field(index=True, nullable=False)
+    request_fingerprint: str = Field(max_length=64, nullable=False, index=True)
+    page_context_key: Optional[str] = Field(default=None, max_length=60, nullable=True)
+    category: str = Field(default="other", max_length=60, nullable=False, index=True)
+    subject: str = Field(max_length=255, nullable=False)
+    status: str = Field(default="open", max_length=40, nullable=False, index=True)
+    priority: str = Field(default="normal", max_length=30, nullable=False, index=True)
+    source: str = Field(default="in_app", max_length=30, nullable=False)
+    requester_email: str = Field(max_length=255, nullable=False)
+    requester_name: str = Field(max_length=255, nullable=False)
+    assigned_to: Optional[str] = Field(default=None, max_length=100, nullable=True)
+    last_message_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    last_message_from: str = Field(default="admin", max_length=30, nullable=False)
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False, index=True))
+    updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False, onupdate=utc_now))
+    resolved_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    closed_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True, index=True))
+
+
+class MerchantSupportTicketMessage(SQLModel, table=True):
+    __tablename__ = "merchant_support_ticket_messages"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    ticket_id: UUID = Field(foreign_key="merchant_support_tickets.id", index=True, nullable=False)
+    sender_type: str = Field(max_length=30, nullable=False)  # admin, support_agent, system
+    sender_admin_id: Optional[UUID] = Field(default=None, foreign_key="admins.id", nullable=True)
+    sender_name: str = Field(default="Admin", max_length=255, nullable=False)
+    channel: str = Field(default="in_app", max_length=30, nullable=False)  # in_app, email, webhook
+    body_text: str = Field(nullable=False)
+    body_html_raw: Optional[str] = Field(default=None, nullable=True)
+    email_message_id: Optional[str] = Field(default=None, max_length=255, unique=True, index=True, nullable=True)
+    in_reply_to_message_id: Optional[str] = Field(default=None, max_length=255, nullable=True)
+    references_header: Optional[str] = Field(default=None, nullable=True)
+    is_internal_note: bool = Field(default=False, nullable=False)
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False, index=True))
+
+
+class MerchantSupportTicketContextSnapshot(SQLModel, table=True):
+    __tablename__ = "merchant_support_ticket_context_snapshots"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    ticket_id: UUID = Field(foreign_key="merchant_support_tickets.id", unique=True, nullable=False)
+    website_id: Optional[UUID] = Field(default=None, foreign_key="sites.id", nullable=True)
+    module_key: Optional[str] = Field(default=None, max_length=60, nullable=True)
+    page_key: Optional[str] = Field(default=None, max_length=60, nullable=True)
+    current_url: Optional[str] = Field(default=None, max_length=1024, nullable=True)
+    route_name: Optional[str] = Field(default=None, max_length=120, nullable=True)
+    user_agent: Optional[str] = Field(default=None, max_length=512, nullable=True)
+    app_version: Optional[str] = Field(default="1.0.0", max_length=40, nullable=True)
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+
+
+class MerchantSupportTicketEmailThread(SQLModel, table=True):
+    __tablename__ = "merchant_support_ticket_email_threads"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    ticket_id: UUID = Field(foreign_key="merchant_support_tickets.id", index=True, nullable=False)
+    provider_event_id: str = Field(max_length=255, unique=True, index=True, nullable=False)
+    direction: str = Field(max_length=20, nullable=False)  # inbound, outbound
+    email_message_id: str = Field(max_length=255, unique=True, index=True, nullable=False)
+    in_reply_to_message_id: Optional[str] = Field(default=None, max_length=255, nullable=True)
+    references_header: Optional[str] = Field(default=None, nullable=True)
+    mailbox_address: str = Field(max_length=255, nullable=False)
+    sender_email: str = Field(max_length=255, nullable=False)
+    received_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+
+
+class MerchantSupportTicketAttachment(SQLModel, table=True):
+    __tablename__ = "merchant_support_ticket_attachments"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    ticket_id: UUID = Field(foreign_key="merchant_support_tickets.id", index=True, nullable=False)
+    message_id: Optional[UUID] = Field(default=None, foreign_key="merchant_support_ticket_messages.id", nullable=True)
+    file_name: str = Field(max_length=255, nullable=False)
+    content_type: str = Field(max_length=100, nullable=False)
+    file_size_bytes: int = Field(nullable=False)
+    storage_key: str = Field(max_length=512, unique=True, nullable=False)
+    checksum_sha256: str = Field(max_length=64, nullable=False)
+    malware_scan_status: str = Field(default="clean", max_length=30, nullable=False)
+    is_purged: bool = Field(default=False, index=True, nullable=False)
+    purged_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+
+
+class MerchantSupportTicketEvent(SQLModel, table=True):
+    __tablename__ = "merchant_support_ticket_events"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    ticket_id: UUID = Field(foreign_key="merchant_support_tickets.id", index=True, nullable=False)
+    event_type: str = Field(max_length=60, nullable=False)
+    actor_type: str = Field(max_length=30, nullable=False)  # admin, support_agent, system, webhook
+    actor_id: Optional[str] = Field(default=None, max_length=64, nullable=True)
+    metadata_json: dict[str, Any] = Field(default={}, sa_column=Column(JSONB, nullable=False))
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False, index=True))
+
+
+class MerchantSupportOutboxJob(SQLModel, table=True):
+    __tablename__ = "merchant_support_outbox_jobs"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    job_type: str = Field(max_length=60, nullable=False, index=True)
+    ticket_id: Optional[UUID] = Field(default=None, foreign_key="merchant_support_tickets.id", nullable=True)
+    idempotency_key: str = Field(max_length=128, unique=True, index=True, nullable=False)
+    payload: dict[str, Any] = Field(default={}, sa_column=Column(JSONB, nullable=False))
+    status: str = Field(default="pending", max_length=30, nullable=False, index=True)  # pending, processing, completed, failed
+    attempt_count: int = Field(default=0, nullable=False)
+    max_attempt_count: int = Field(default=4, nullable=False)
+    next_attempt_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False, index=True))
+    locked_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    locked_by: Optional[str] = Field(default=None, max_length=100, nullable=True)
+    last_error_code: Optional[str] = Field(default=None, max_length=60, nullable=True)
+    last_error_message: Optional[str] = Field(default=None, nullable=True)
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    completed_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+
+
+class MerchantSupportDeadLetter(SQLModel, table=True):
+    __tablename__ = "merchant_support_dead_letters"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    job_type: str = Field(max_length=60, nullable=False, index=True)
+    ticket_id: Optional[UUID] = Field(default=None, foreign_key="merchant_support_tickets.id", nullable=True)
+    payload_json: dict[str, Any] = Field(default={}, sa_column=Column(JSONB, nullable=False))
+    error_message: str = Field(nullable=False)
+    attempt_count: int = Field(default=0, nullable=False)
+    status: str = Field(default="exhausted", max_length=30, nullable=False, index=True)  # exhausted, replayed, discarded
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    last_attempt_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+
+
+class MerchantSupportFAQCategory(SQLModel, table=True):
+    __tablename__ = "merchant_support_faq_categories"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    name: str = Field(max_length=100, nullable=False)
+    slug: str = Field(max_length=100, unique=True, index=True, nullable=False)
+    icon_name: Optional[str] = Field(default=None, max_length=50, nullable=True)
+    sort_order: int = Field(default=0, nullable=False)
+    is_active: bool = Field(default=True, nullable=False)
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+
+
+class MerchantSupportFAQItem(SQLModel, table=True):
+    __tablename__ = "merchant_support_faq_items"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    category_id: UUID = Field(foreign_key="merchant_support_faq_categories.id", index=True, nullable=False)
+    question: str = Field(max_length=500, nullable=False)
+    answer_rich_text: str = Field(nullable=False)
+    sort_order: int = Field(default=0, nullable=False)
+    is_published: bool = Field(default=True, index=True, nullable=False)
+    is_featured_inline: bool = Field(default=False, index=True, nullable=False)
+    view_count: int = Field(default=0, nullable=False)
+    helpful_count: int = Field(default=0, nullable=False)
+    not_helpful_count: int = Field(default=0, nullable=False)
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False, onupdate=utc_now))
+
+
+class MerchantSupportFAQFeedback(SQLModel, table=True):
+    __tablename__ = "merchant_support_faq_feedback"
+    __table_args__ = (
+        UniqueConstraint("faq_id", "admin_id", name="uq_mst_faq_feedback_admin"),
+        UniqueConstraint("faq_id", "ip_hash", name="uq_mst_faq_feedback_ip"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    faq_id: UUID = Field(foreign_key="merchant_support_faq_items.id", index=True, nullable=False)
+    admin_id: Optional[UUID] = Field(default=None, foreign_key="admins.id", nullable=True)
+    ip_hash: str = Field(max_length=64, nullable=False, index=True)
+    is_helpful: bool = Field(nullable=False)
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
 
